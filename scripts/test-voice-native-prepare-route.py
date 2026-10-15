@@ -256,7 +256,7 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertEqual([],self.calls)
         self.assertFalse(self.whole.exists())
 
-    def test_saved_draft_continuous_prepare_apply_keeps_one_original_fd(self):
+    def test_saved_draft_prepares_only_under_one_original_fd(self):
         import shutil
         shutil.rmtree(self.build)
         renderer = self.config.parent / "render-fixed.sh"
@@ -313,14 +313,6 @@ class OperatorPrepareRouteTests(unittest.TestCase):
             return {"state": "native-voice-original-lock-prepared",
                     "safe_to_enable_voice": False, "public_voice_apply": False}
 
-        def apply(*, locked_config_fd):
-            self.assertEqual(original_fd[0], locked_config_fd)
-            _locked_config(self.config, locked_config_fd,
-                           (os.geteuid(), os.getegid()))
-            sequence.append("guarded-forward-COMMIT")
-            return {"state": "native-forward-five-resources-committed",
-                    "whole_phase": "committed", "public_voice_apply": False,
-                    "media_pass": False}
         with patch.object(route, "RENDER_WORKER", renderer), \
              patch.object(route, "prepare_saved_draft_candidate",
                           side_effect=saved_draft), \
@@ -329,28 +321,26 @@ class OperatorPrepareRouteTests(unittest.TestCase):
              patch.object(route, "stage_native_operator_input",
                           side_effect=stage), \
              patch.object(route, "prepare_native_voice_one_lock",
-                          side_effect=prepared), \
-             patch.object(route, "execute_operator_prepared",
-                          side_effect=apply):
+                          side_effect=prepared):
             out = route.prepare_operator_prebuilt(
                 "vtnet1", 989, from_draft=True,
                 draft_mask="10000", expected_config_sha="a" * 64,
-                apply_continuously=True,
             )
-        self.assertEqual("native-forward-five-resources-committed", out["state"])
+        self.assertEqual("native-voice-original-lock-prepared", out["state"])
         self.assertEqual(
             ["saved-off-candidate", "real-opnsense-renderer",
              "native-orchestrator", "qualified-operator-input",
-             "schema4-PREPARED", "guarded-forward-COMMIT"],
+             "schema4-PREPARED"],
             sequence,
         )
         self.assertEqual("<opnsense/>", self.config.read_text())
 
-    def test_continuous_apply_requires_saved_off_draft_and_attested_commit(self):
-        with self.assertRaises(route.NativePrepareRouteError):
-            route.prepare_operator_prebuilt(
-                "vtnet1", 989, from_release=True, apply_continuously=True,
-            )
+    def test_retired_python_prepare_and_apply_cli_refused_without_mutation(self):
+        self.assertEqual(64, route.main([
+            "prepare-from-draft-and-apply", "vtnet1", "989",
+            "10000", "a" * 64,
+        ]))
+        self.assertEqual(64, route.main(["prepare-from-draft-and-apply"]))
         self.assertFalse(self.whole.exists())
         self.assertFalse(self.ledger.exists())
 
@@ -411,12 +401,13 @@ class OperatorPrepareRouteTests(unittest.TestCase):
         self.assertIn("native-voice-prepare-release)",service)
         self.assertIn("native-voice-prepare-saved)",service)
         self.assertIn("native-voice-prepare-draft)",service)
-        self.assertIn("native-voice-prepare-apply-draft)",service)
-        self.assertIn("prepare-from-draft-and-apply",service)
+        self.assertNotIn("native-voice-prepare-apply-draft)",service)
+        self.assertNotIn("prepare-from-draft-and-apply",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-saved",service)
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",service)
         locked=service.split("case \"${1:-}\" in",1)[-1]
-        self.assertIn("native-voice-prepare-prebuilt|native-voice-apply-prepared",locked)
+        self.assertIn("native-voice-prepare-prebuilt|native-voice-prepare-release",locked)
+        self.assertNotIn("native-voice-apply-prepared",locked)
         self.assertNotIn("[voice_prepare_prebuilt]",configd)
         self.assertNotIn("native-voice-prepare-prebuilt",configd)
         self.assertNotIn("native-voice-prepare-release",configd)

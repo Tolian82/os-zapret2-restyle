@@ -133,19 +133,15 @@ def execute_operator_prepared(*, locked_config_fd: int | None = None) -> dict:
 
 
 def main(argv: list[str]) -> int:
+    # Deliberately refuse the retired standalone mutating operator CLI.
+    # Helpers remain importable for isolated migration/recovery evidence only.
     if argv != ["execute-prepared"]:
-        print("usage: voice_native_apply_route.py execute-prepared", file=sys.stderr)
+        print("usage: voice_native_apply_route.py execute-prepared (retired)",
+              file=sys.stderr)
         return 64
-    try:
-        result = execute_operator_prepared()
-        if result.get("state") != "native-forward-five-resources-committed" or result.get("whole_phase") != "committed":
-            raise NativeVoiceApplyRouteError("five-resource forward COMMIT not attested")
-        print("native-voice-whole-apply=committed")
-        print("native-voice-public-apply=disabled")
-        return 0
-    except (OSError, ValueError, RuntimeError):
-        print("ERROR: native Voice Apply refused; inspect durable rollback evidence", file=sys.stderr)
-        return 69
+    print("ERROR: retired private Voice Apply; use shared Voice/Strategies Apply",
+          file=sys.stderr)
+    return 69
 
 
 if __name__ == "__main__":

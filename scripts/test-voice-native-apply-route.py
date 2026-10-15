@@ -95,14 +95,11 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
             sealed_prepared_handoff(self.fx.whole, self.stage)
 
     def test_native_entrypoint_is_nonpublic_and_refuses_unattested_result(self):
-        with patch("voice_native_apply_route.execute_operator_prepared",
-                   return_value={"state": "prepared", "whole_phase": "prepared"}):
+        # Even the direct module CLI must not activate the old private owner.
+        with patch("voice_native_apply_route.execute_operator_prepared") as executor:
             self.assertEqual(main(["execute-prepared"]), 69)
-        with patch("voice_native_apply_route.execute_operator_prepared",
-                   return_value={"state": "native-forward-five-resources-committed",
-                                 "whole_phase": "committed"}):
-            self.assertEqual(main(["execute-prepared"]), 0)
-        self.assertEqual(main([]), 64)
+            self.assertEqual(main([]), 64)
+            executor.assert_not_called()
 
     def test_retired_private_forward_apply_has_no_service_or_configd_route(self):
         sh = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
