@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_142`. `VERSION=0.5.2`; `PLUGIN_REVISION=142`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_143`. `VERSION=0.5.2`; `PLUGIN_REVISION=143`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,16 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Доказано на предыдущем HEAD `098b5e8` (`_141`):** [Validate Project, Validate Voice candidates и фактическая FreeBSD 15 package build — SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38741301128). Это не owner-live.
+**Предыдущая ревизия v0.5.2_142, HEAD 3a35817:** [Validate Project, Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38744245903). Это CI/пакет, не owner-live.
 
-**Изменение `_142`:** обычный legacy Start/Reconfigure больше не строит вложенный и неиспользуемый `voice-native-candidate`. Сохраняются Phase-B helper для старой установки, операторский `native-detached` и штатный общий `shared-candidate`. Старый PoC не удалён: он ещё участвует в совместимости/миграции. Существующий build-wire тест скорректирован; новых recovery-слоёв нет.
+**Реализация v0.5.2_143:** общий status для committed Voice/Strategies использует существующий read-only voice_live_inspect.py и проверяет source/state/exit. Ready даёт started, verified stopped — stopped; pending/corrupt/installed common без журнала — incomplete. Старый unowned legacy сохраняет прежний статус. GUI, Apply и восстановление не переделываются.
 
-**Следующее конкретное действие:** проверить full CI и FreeBSD 15 build на новом HEAD, затем только оставшиеся вызываемые legacy CLI/configd/package пути без массового удаления сохранённых для миграции файлов. Общий STUN/dvtws2/IPFW/Apply уже реализован, повторно не создавать.
-
-Source implemented, CI/package verified и owner-live confirmed — разные доказательства; живых MEDIA/CALL PASS нет.
+**Следующее действие:** добавить targeted regression к существующему shared lifecycle test и завершить документационную сверку в этом PR без следующего изменения версии. Затем latest-HEAD CI и FreeBSD 15 build; не создавать повторно STUN/IPFW/Apply. Релиза и живых MEDIA/CALL тестов ещё нет.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_142` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_143` не опубликована.

@@ -1903,6 +1903,71 @@ shared_apply_record_service()
         record "$1" "$2" "$3" "$4" "$5" "$6"
 }
 
+# Native committed owners need the existing read-only full-runtime/IPFW
+# witness, never legacy PID-plus-any-divert status.
+shared_apply_status_observe_service()
+{
+    _status_python=/usr/local/bin/python3.13
+    _status_inspector="${BACKEND_DIR}/voice_live_inspect.py"
+    [ -x "$_status_python" ] && [ -r "$_status_inspector" ] || return 69
+    if _status_json=$("$_status_python" "$_status_inspector" 2>/dev/null); then
+        _status_rc=0
+    else
+        _status_rc=$?
+    fi
+    case "$_status_rc" in 0|2) ;; *) return 69 ;; esac
+    _status_state=$(printf '%s\n' "$_status_json" | "$_status_python" -c '
+import json, sys
+try:
+    x = json.load(sys.stdin)
+except (TypeError, ValueError):
+    sys.exit(69)
+if not isinstance(x, dict) or x.get("source") != "native-common":
+    sys.exit(69)
+s = x.get("state")
+if s not in ("ready", "stopped"):
+    sys.exit(69)
+print(s)
+' 2>/dev/null) || return 69
+    case "$_status_state:$_status_rc" in
+        ready:0|stopped:2) printf '%s\n' "$_status_state" ;;
+        *) return 69 ;;
+    esac
+}
+
+shared_apply_status_service()
+{
+    if shared_apply_has_record_service; then
+        _status_owner=$(shared_apply_inspect_service) || {
+            echo "zapret is in an incomplete runtime state"
+            return 2
+        }
+        case "$_status_owner" in
+            committed\ *)
+                _status_verified=$(shared_apply_status_observe_service) || {
+                    echo "zapret is in an incomplete runtime state"
+                    return 2
+                }
+                case "$_status_verified" in
+                    ready) echo "zapret is running"; return 0 ;;
+                    stopped) echo "zapret is not running"; return 1 ;;
+                    *) echo "zapret is in an incomplete runtime state"; return 2 ;;
+                esac
+                ;;
+            none|restored) ;;
+            *) echo "zapret is in an incomplete runtime state"; return 2 ;;
+        esac
+    fi
+    if [ -e "$ACTIVE_DIR/voice-plan.json" ] ||
+       [ -L "$ACTIVE_DIR/voice-plan.json" ]; then
+        echo "zapret is in an incomplete runtime state"
+        return 2
+    fi
+    orchestrator_native_status \
+        "$CHILD_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" \
+        "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR"
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -1916,9 +1981,7 @@ service_dispatch()
             reconfigure_service
             ;;
         status)
-            orchestrator_native_status \
-                "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
-                "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}"
+            shared_apply_status_service
             ;;
         telegram-voice-enable)
             native_voice_legacy_poc_preflight_service || return 69
