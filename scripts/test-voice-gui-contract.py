@@ -180,13 +180,46 @@ def main() -> None:
             r"    function refreshVoiceHealthSettled\(\) \{.*?^    \}",
             match.group(1), re.DOTALL | re.MULTILINE,
         )
-        check(aligned is not None and settled is not None,
-              "Voice needs shared native/runtime status and settled health join")
+        verified = re.search(
+            r"    function voiceProfilesVerified\(reply\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(aligned is not None and settled is not None and verified is not None,
+              "Voice needs native profile proof, runtime status and settled health join")
         js_test = (
             "let runtimeInstalled = true, runtimeState = 'started', "
             "voiceInspectionState = 'ready';\n"
             + aligned.group(0) + "\n"
+            + verified.group(0) + "\n"
             + "function check(ok, message) { if (!ok) throw Error(message); }\n"
+            + "const names = ['telegram', 'discord', 'x', 'sip', 'custom'];\n"
+            + "const disabled = () => ({saved_enabled:false,runtime:'disabled',"
+              "media_verified:false,call_verified:false});\n"
+            + "const allOff = () => Object.fromEntries(names.map(n => [n,disabled()]));\n"
+            + "const ready = {state:'ready',profiles:allOff()};\n"
+            + "check(voiceProfilesVerified(ready), 'valid native five OFF rejected');\n"
+            + "const on = {...ready,profiles:allOff()};\n"
+            + "on.profiles.telegram = {saved_enabled:true,runtime:'active',"
+              "media_verified:false,call_verified:false,profile_id:'voice-telegram',"
+              "profile_revision:'123456abcdef',wan:'vtnet1',udp_ports:'3478-3481',"
+              "ipset_entries:2};\n"
+            + "check(voiceProfilesVerified(on), 'verified ON profile rejected');\n"
+            + "const stopped = structuredClone(on); stopped.state='stopped';"
+              "stopped.profiles.telegram.runtime='stopped';\n"
+            + "check(voiceProfilesVerified(stopped), 'stopped ON profile rejected');\n"
+            + "const invalid = (mutate) => { const copy=structuredClone(on);"
+              "mutate(copy);check(!voiceProfilesVerified(copy),"
+              "'contradictory five-profile observation accepted'); };\n"
+            + "invalid(x => { delete x.profiles.telegram; x.profiles.ghost=disabled(); });\n"
+            + "invalid(x => { x.profiles.telegram.runtime='disabled'; });\n"
+            + "invalid(x => { x.profiles.telegram.profile_id='voice-sip'; });\n"
+            + "invalid(x => { x.profiles.telegram.ipset_entries=0; });\n"
+            + "invalid(x => { x.profiles.telegram.media_verified=true; });\n"
+            + "invalid(x => { x.profiles.sip.runtime='active'; });\n"
+            + "invalid(x => { x.profiles.extra=disabled(); });\n"
+            + "invalid(x => { x.state='stopped'; });\n"
+            + "check(!voiceProfilesVerified({state:'ready',profiles:[]}),"
+              "'array profiles accepted');\n"
             + "check(voiceRuntimeAligned(), 'ready running not recognized');\n"
             + "voiceInspectionState = 'stopped';\n"
             + "check(!voiceRuntimeAligned(), 'started with stopped IPFW falsely green');\n"
@@ -224,6 +257,9 @@ def main() -> None:
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
     check("voiceRuntimeAligned()" in view and
+          "!voiceProfilesVerified(reply)" in view and
+          "unverified ? 'unverified-profiles' : reportedState" in view and
+          "showVoiceProfileObservations(unverified ? null : reply)" in view and
           "voiceControlPending = true" in view and
           "voiceInspectionState = null" in view and
           "voiceMutationPending = true" in view and

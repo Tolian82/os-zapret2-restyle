@@ -493,6 +493,39 @@ $(document).ready(function () {
             observed.text(' · ' + saved + ' — ' + state + details);
         });
     }
+    // A terminal native status is actionable only with the five exact
+    // saved/installed profiles, not merely an object with five keys. Keep
+    // malformed or contradictory observations from turning IPFW green or
+    // authorizing a second Start/Stop while Config/runtime may disagree.
+    function voiceProfilesVerified(reply) {
+        var names = ['telegram', 'discord', 'x', 'sip', 'custom'];
+        var profiles = reply && reply.profiles;
+        if (!reply || !['ready', 'stopped'].includes(reply.state) ||
+            !profiles || typeof profiles !== 'object' ||
+            Array.isArray(profiles) || Object.keys(profiles).length !== names.length) {
+            return false;
+        }
+        var requiredRuntime = reply.state === 'ready' ? 'active' : 'stopped';
+        return names.every(function (name) {
+            if (!Object.prototype.hasOwnProperty.call(profiles, name)) return false;
+            var profile = profiles[name];
+            if (!profile || typeof profile !== 'object' || Array.isArray(profile) ||
+                typeof profile.saved_enabled !== 'boolean' ||
+                profile.media_verified !== false || profile.call_verified !== false) {
+                return false;
+            }
+            if (!profile.saved_enabled) return profile.runtime === 'disabled';
+            return profile.runtime === requiredRuntime &&
+                profile.profile_id === 'voice-' + name &&
+                /^[a-f0-9]{12}$/.test(profile.profile_revision || '') &&
+                typeof profile.wan === 'string' &&
+                /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(profile.wan) &&
+                typeof profile.udp_ports === 'string' &&
+                /^[0-9,-]{1,1024}$/.test(profile.udp_ports) &&
+                Number.isInteger(profile.ipset_entries) &&
+                profile.ipset_entries >= 1 && profile.ipset_entries <= 4096;
+        });
+    }
     function refreshVoiceIPFW() {
         var epoch = ++voiceInspectionEpoch;
         voiceInspectionState = null;
@@ -500,7 +533,10 @@ $(document).ready(function () {
         return $.ajax({type:'POST',url:'/api/zapret/voice/inspect',dataType:'json',timeout:30000})
             .done(function (reply) {
                 if (epoch !== voiceInspectionEpoch) return;
-                var state = reply && reply.state;
+                var reportedState = reply && reply.state;
+                var unverified = ['ready', 'stopped'].includes(reportedState) &&
+                    !voiceProfilesVerified(reply);
+                var state = unverified ? 'unverified-profiles' : reportedState;
                 var label = state === 'ready' ? text.ipfwReady :
                             state === 'stopped' ? text.ipfwStopped :
                             state === 'uninitialized' ? text.ipfwEmpty :
@@ -515,17 +551,16 @@ $(document).ready(function () {
                     'common-profile-unverified': text.commonProfileUnverified
                 };
                 $('#voiceIPFWDetail').text(
+                    unverified ? text.commonProfileUnverified :
                     state === 'interrupted' && reply &&
                     typeof reply.condition === 'string' &&
                     Object.prototype.hasOwnProperty.call(details, reply.condition)
                         ? details[reply.condition] : ''
                 );
-                showVoiceProfileObservations(reply);
-                // A ready/stopped code without the five verified profiles
-                // (legacy or partial owner) never authorizes Start/Stop.
-                voiceInspectionState = reply && reply.profiles &&
-                    Object.keys(reply.profiles).length === 5 &&
-                    ['ready', 'stopped'].includes(state) ? state : null;
+                showVoiceProfileObservations(unverified ? null : reply);
+                // A ready/stopped code without all five matching attested
+                // profiles (legacy, stale or partial owner) is not actionable.
+                voiceInspectionState = ['ready', 'stopped'].includes(state) ? state : null;
                 reconcileVoiceServiceStatus();
                 $('#voiceIPFWState')
                     .removeClass('label-success label-default label-danger')
