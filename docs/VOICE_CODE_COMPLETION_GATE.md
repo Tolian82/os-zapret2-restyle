@@ -1,27 +1,30 @@
-# «Передача голоса» — порядок завершения без преждевременного релиза
+# «Передача голоса» — контроль завершения без преждевременного релиза
 
-**Решение владельца от 15.10.2026:** сперва довести код и интеграцию страницы до функциональной готовности на feature branch, затем провести один контролируемый цикл испытаний на OPNsense. До закрытия этапа программирования **не выпускать новый stable/testing GitHub Release**, не ставить незавершённый PR на живой OPNsense и не переводить PR #328 из Draft в Ready/Merged. Предыдущая очередность «выпустить для очередной проверки» отменена.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_140` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
-**Действующая база:** `v0.5.2_140` в Draft PR #328, `VERSION=0.5.2`. Это НЕ опубликованная версия. Ранее опубликованный testing `v0.5.0_3` — отдельная старая линия; текущее состояние старого установленного пакета не подтверждает готовность нового кода. Каждая отправка изменённого production-кода увеличивает `PLUGIN_REVISION`; doc-only изменения могут сохранить её.
+## Реализовано в коде (не равно live PASS)
 
-**Проверка в _140:** статус двух наблюдений допускает управление Start/Stop только при точном составе Telegram/Discord/X/SIP/Custom, согласованных saved ON/OFF и active/stopped/disabled, verified metadata WAN/UDP/IPSET/revision и неподтверждённых MEDIA/CALL. Неполное свидетельство показывается как неподтверждённое вместо зелёного IPFW. Проверяется существующим исполняемым Node GUI-тестом. Это не live MEDIA/CALL PASS.
+| Поведение | Источник проверки |
+|---|---|
+| Пять Voice-профилей, IPv4 IPSET, native Config и stale snapshots | `VoiceController.php`, `SettingsApply.php`, `test-voice-gui-contract.py` |
+| Один генератор полного Voice+Strategies runtime и port/IPSET files | `backend/orchestrator.sh`, `test-voice-common-runtime.py` |
+| Соответствие STUN-args/портов/WAN/IPSET/divert реальному IPFW manifest | `voice_ipfw_adapter._verify_shared_voice_engine`, `test-voice-common-runtime.py` |
+| FD9 общий Apply двух страниц, Config save/commit/rollback | `zapret_service.sh`, `apply_runtime.sh`, `test-shared-apply-{run,execute}.sh` |
+| Normal Stop/Start/boot и truthful inspect/GUI status | `zapret_service.sh`, `voice.volt`, `test-shared-apply-{stop,boot}.sh` |
 
-## Сначала — готовый код (без живого устройства)
+Эти функции **уже существуют**, повторная разработка запрещена без конкретного нового дефекта. Изолированная проверка не доказывает реальный STUN или звонок.
 
-1. **Полная функциональная цепочка GUI → Config → общий runtime.** В рамках неизменного [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и неизменного внешнего вида страницы проверить пять Voice-профилей, включая all-OFF, сохранение без Apply, проверки/preview, ON/OFF/update/reapply, устаревшие snapshot/concurrency, реальные configd команды и возврат результата в GUI. Voice и «Стратегии» используют одну реализацию backend, один `dvtws2`, одно штатное управление процессами и одну модель Config; сторонние поля OPNsense не затрагиваются.
-2. **Функциональная сборка Telegram STUN.** Проверить от сохранённой GUI-модели до фактических `traffic.conf`, `dvtws.args`, managed IPSET, `tcp-ports.txt`, `udp-ports.txt` и подписанного release: порядок Voice и обычных профилей, WAN и интерфейс `vtnet1` в лабораторной базе, отсутствие двойного capture, корректные UDP selectors и IPFW destination table. Обычный non-STUN остаётся в «Стратегиях». Режимы fake/IPfrag ограничены теми, для которых установленный native dvtws2 и его аргументы имеют подтверждённый контракт.
-3. **Одна lifecycle-транзакция.** На existing FD9 + Config flock должны быть закрыты preflight, activate, saved Config, commit, rollback, normal stop/start/restart, normal reboot и отказ на неизвестных/чужих IPFW/process ownership. Не создавать второй daemon, второй Config writer, отдельный Voice Apply backend либо новые журналы; убрать или отложить obsolete Telegram PoC там, где он больше не нужен, **не удаляя** обязательные средства безопасного возврата уже установленного старого владельца.
-4. **Проверки, которые действительно доказывают кодовую интеграцию.** Предпочитать небольшие end-to-end тесты на существующих production entrypoints: GUI/API → Config candidate → real generator → IPFW manifest → common Apply → status/rollback/boot. Негативные проверки: противоречивый STUN, смена IPSET/argv, чужой процесс/IPFW, сбой сохранения Config. Существующие проверки расширять по доказанному дефекту; **не** добавлять новый слой recovery и десятки тестов ради числа тестов.
-5. **Финишная ревизия перед тестовым пакетом.** Устранить все CI failures, проверить package content, Python/PHP/sh syntax, версию и RU/EN/help, удалить противоречивые инструкции из активной очереди, обновить один актуальный checklist. После этого написать «кодовая часть готова к испытаниям», **не** «STUN/MEDIA/CALL PASS».
+## Оставшаяся работа перед testing package
 
-## Только после кодовой готовности
+1. **Последний CI:** на `f6825bf` Voice candidates SUCCESS; общий Validate Project FAILURE на stale `v0.5.2_140` в `docs/ROADMAP.md`. Исправляется этой документационной сверкой. Требуется latest-HEAD CI без failure.
+2. **FreeBSD:** job на том же HEAD был SKIPPED; необходим действительный успешный FreeBSD 15 package build (SKIPPED не считать PASS).
+3. **Legacy PoC:** проверить, какие отдельные скрипты/команды действительно устанавливаются и вызываются. Сохранить необходимую совместимость/rollback; удалить лишь доказанное дублирование, не создавать новый recovery.
+4. **Финальная приёмка кода:** соотнести GUI/API → native Config → generator → IPFW → Apply → Stop/Start/boot, RU/EN/help и содержимое пакета. Исправлять только выявленные разрывы существующими компонентами.
 
-1. Подготовить **одну** согласованную тестовую поставку (GitHub prerelease/testing) с соответствием версии, pkg manifest, репозитория и инструкции установки. Отдельно проверить причину пометки `misconfigured / unknown-repository` на существующем `v0.5.0_3`; это состояние установленного старого пакета и настройки источника, не доказательство ошибки нового Voice.
-2. На OPNsense выполнить приёмку штатного GUI/CONFIG/BOOT/Stop/Restart и независимых статусов одного engine/IPFW. Для фактического UDP применить [read-only измерение](VOICE_LIVE_TRIAL.md) до/после ручного звонка; оно **не** объявляет STUN/MEDIA/CALL PASS по одним счётчикам.
-3. Подтвердить реальную установку Telegram-звонка, STUN и двустороннее аудио, корректность маршрута и отказоустойчивость в контролируемой лаборатории; при дефектах вернуться к коду и выпустить только новую исправленную тестовую сборку. Ни merge, ни stable релиз до этих фактов не разрешены.
+После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.
 
-## Управление работой
+## После кодовой готовности
 
-Следующий цикл разработки всегда выбирает **один конкретный функциональный пробел** из первых четырёх пунктов, исправляет его через общий backend, повышает версию при изменении кода, запускает CI и сообщает текущий открытый остаток. Документация и тесты — сопровождение исправления, а не самостоятельная цель. Не требовать от владельца устанавливать каждую промежуточную ревизию.
+Одна согласованная GitHub testing поставка, затем OPNsense GUI/CONFIG/BOOT и фактический UDP/STUN, двусторонний MEDIA/CALL тест. Старый `v0.5.0_3` и `misconfigured / unknown-repository` не являются проверкой новой ветки. Без merge/stable до согласованных результатов.
 
-Последняя инструкция владельца выше имеет приоритет над устаревшими фразами старых handoff/ledger о немедленной FreeBSD live квалификации. Исторические записи оставлены как история, а не текущая очередь.
+Точная очередь — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md).
