@@ -49,6 +49,26 @@ if git cat-file -e "$CORRECTIVE_REVISION_106^{commit}" 2>/dev/null &&
    [[ "$(git diff --name-only "$CORRECTIVE_REVISION_106^" "$CORRECTIVE_REVISION_106")" == "Makefile" ]]; then
   immutable_106_correction=1
 fi
+# Immutable exact correction for ONE docs-only commit at the _121 tip.
+# This commit introduced the owner's release-after-code-completion order and
+# fixed two relative documentation links. Its immutable subject accidentally
+# starts with "docs:" rather than the required "v0.5.2_121:".
+# GH-014 prohibits rewriting this already-pushed object. Never broadly
+# accept 'docs:' subjects: bind parent, SHA, identical package revision,
+# exact previous message and all six documentation-only paths. All new
+# commits, including later docs-only ones, still require versioned subjects.
+DOCS_121_SUBJECT=a78658d735e69f2bcc71ecf2e083258a267e9ac6
+DOCS_121_PARENT=ed5356712ac1e8d361fbc1b83a15030dbca8b49a
+immutable_121_docs_subject=0
+if git cat-file -e "$DOCS_121_SUBJECT^{commit}" 2>/dev/null &&
+   git merge-base --is-ancestor "$DOCS_121_SUBJECT" "$HEAD_SHA" &&
+   [[ "$(git rev-parse "$DOCS_121_SUBJECT^")" == "$DOCS_121_PARENT" ]] &&
+   [[ "$(identity_at "$DOCS_121_SUBJECT")" == "v0.5.2_121" ]] &&
+   [[ "$(identity_at "$DOCS_121_PARENT")" == "v0.5.2_121" ]] &&
+   [[ "$(git show -s --format=%s "$DOCS_121_SUBJECT")" == "docs: Freeze live trial until Voice code completion; fix v0.5.2_121 CI links" ]] &&
+   [[ "$(git diff --name-only "$DOCS_121_PARENT" "$DOCS_121_SUBJECT")" == "$(printf '%s\n' docs/PROJECT_STATE.md docs/ROADMAP.md docs/START_HERE.md docs/VOICE_CODE_COMPLETION_GATE.md docs/history/current/v0.5.x.md docs/releases/v0.5.2.md)" ]]; then
+  immutable_121_docs_subject=1
+fi
 expected="$(identity_at "$HEAD_SHA")"
 if [[ "$PR_TITLE" != "$expected: "* ]]; then
   echo "Invalid PR title: $PR_TITLE; required $expected: ..." >&2; exit 1
@@ -66,6 +86,10 @@ while IFS= read -r commit; do
   fi
   if (( immutable_106_correction )) && [[ "$commit" == "$MISLABELED_SOURCE_106" || "$commit" == "$MISLABELED_TEST_106" ]]; then
     # Only the two immutable, exact already-published objects above.
+    continue
+  fi
+  if (( immutable_121_docs_subject )) && [[ "$commit" == "$DOCS_121_SUBJECT" ]]; then
+    # EXACT one-object documentation exception; no global title relaxation.
     continue
   fi
   actual="$(git show -s --format=%s "$commit")"
