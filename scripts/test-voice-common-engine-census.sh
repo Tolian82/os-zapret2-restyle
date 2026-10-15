@@ -70,6 +70,15 @@ mkdir -p "$TMP/owner/release" "$TMP/active"
 ACTIVE_DIR="$TMP/active"
 SUPERVISOR_MONITOR_PIDFILE="$TMP/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$TMP/daemon.pid"
+SUPERVISOR_LOOP="$TMP/supervisor_loop.sh"
+UNTRACKED_MONITOR=0
+# The production Stop retains the old monitor PID even if its helper
+# unlinks the PID file. Model both a clean stop and an orphan survivor.
+supervisor_pidfile_read() { [ "$MONITOR" = 1 ] && printf '777\n'; }
+common_process_matches() {
+    [ "$1" = 777 ] && [ "$2" = "$SUPERVISOR_LOOP" ] &&
+    [ "$UNTRACKED_MONITOR" = 1 ]
+}
 preflight_voice_cutover_journals() { :; }
 shared_apply_require_tools() { :; }
 shared_apply_bundle_service() { :; }
@@ -128,6 +137,20 @@ fi
 if grep -q '^install ' "$TMP/firewall.log"; then
     fail "firewall removed despite live process"
 fi
+
+# Supervisor may vanish from its PID file but remain alive. The common
+# Stop must refuse to remove IPFW based on the pinned original monitor PID.
+launcher_stop() { PROCESS=0; : > "$FIXTURE"; }
+PROCESS=1 MONITOR=1 UNTRACKED_MONITOR=1
+printf '%s\n' " 542 $DVTWS_BIN --filter-udp=443" > "$FIXTURE"
+: > "$TMP/firewall.log"
+if shared_apply_stop_service "$STOP_OWNER" > "$TMP/stop.out"; then
+    fail "Stop accepted orphan previous supervisor after PID unlink"
+fi
+if grep -q '^install ' "$TMP/firewall.log"; then
+    fail "orphan supervisor incorrectly removed IPFW"
+fi
+UNTRACKED_MONITOR=0
 
 # Exact previous owner with no survivor still takes normal Stop path.
 launcher_stop() { PROCESS=0; : > "$FIXTURE"; }

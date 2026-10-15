@@ -1,6 +1,8 @@
 # os-zapret2-restyle — START HERE
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_136` остаётся Draft/неопубликованным кандидатом. Общий native Stop после IPFW COMMIT перепроверяет процессы, установленный release и IPFW.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_137` остаётся Draft/неопубликованным кандидатом. Восполнен monitor PID mock общего Stop/census, проверен отказ от выжившего monitor.
+
+**`v0.5.2_137` — общий stop/census CI теперь моделирует прежний supervisor PID при проверке реального Stop.** После добавления в `_136` проверки пережившего сигнал monitor существующий `test-voice-common-engine-census.sh` не предоставлял `supervisor_pidfile_read` и ошибочно отвергал валидный Stop. Его isolated mock дополнен проверяемой старой monitor PID и отрицательным кейсом: отсутствие monitor PID-файла при оставшемся живом процессе не должно приводить к удалению IPFW. Production-Stop из `_136` не менялся, дополнительной архитектуры и релиза нет.
 
 **`v0.5.2_136` — точное завершение общего Voice/Strategies Stop после IPFW COMMIT.** В прежнем `shared_apply_stop_service` native Stop уже проверял Config, весь release и IPFW до остановки, но после удаления IPFW возвращал `native-common-stopped` без повторной инвентаризации процессов/установленного дерева. Теперь исполнитель под тем же FD9 сохраняет исходный monitor PID до `supervisor_stop`, предотвращает осиротевший supervisor при удалённом PID-файле, повторно проверяет всё установленное дерево `traffic.conf`/IPSET/argv, пустое состояние движка через оригинальный census и фактический пустой IPFW **после** commit. Появившиеся заново child/monitor, orphan dvtws2, выживший старый supervisor, drift release/IPFW дают `70` без ложного Stop receipt или неподтверждённого отката. Расширена прежняя матрица `test-shared-apply-stop.sh` для каждого такого сбоя; интерфейс Voice и общий runtime не менялись. Релиз не создавался.
 
@@ -142,7 +144,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_136`. `VERSION=0.5.2`; `PLUGIN_REVISION=136`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_137`. `VERSION=0.5.2`; `PLUGIN_REVISION=137`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 

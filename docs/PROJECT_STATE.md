@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_136` остаётся Draft/неопубликованным кандидатом. Общий native Stop после IPFW COMMIT перепроверяет процессы, установленный release и IPFW.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_137` остаётся Draft/неопубликованным кандидатом. Восполнен monitor PID mock общего Stop/census, проверен отказ от выжившего monitor.
+
+**`v0.5.2_137` — общий stop/census CI теперь моделирует прежний supervisor PID при проверке реального Stop.** После добавления в `_136` проверки пережившего сигнал monitor существующий `test-voice-common-engine-census.sh` не предоставлял `supervisor_pidfile_read` и ошибочно отвергал валидный Stop. Его isolated mock дополнен проверяемой старой monitor PID и отрицательным кейсом: отсутствие monitor PID-файла при оставшемся живом процессе не должно приводить к удалению IPFW. Production-Stop из `_136` не менялся, дополнительной архитектуры и релиза нет.
 
 **`v0.5.2_136` — точное завершение общего Voice/Strategies Stop после IPFW COMMIT.** В прежнем `shared_apply_stop_service` native Stop уже проверял Config, весь release и IPFW до остановки, но после удаления IPFW возвращал `native-common-stopped` без повторной инвентаризации процессов/установленного дерева. Теперь исполнитель под тем же FD9 сохраняет исходный monitor PID до `supervisor_stop`, предотвращает осиротевший supervisor при удалённом PID-файле, повторно проверяет всё установленное дерево `traffic.conf`/IPSET/argv, пустое состояние движка через оригинальный census и фактический пустой IPFW **после** commit. Появившиеся заново child/monitor, orphan dvtws2, выживший старый supervisor, drift release/IPFW дают `70` без ложного Stop receipt или неподтверждённого отката. Расширена прежняя матрица `test-shared-apply-stop.sh` для каждого такого сбоя; интерфейс Voice и общий runtime не менялись. Релиз не создавался.
 
@@ -186,13 +188,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_136`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_137`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=136` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_136.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=137` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_137.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
