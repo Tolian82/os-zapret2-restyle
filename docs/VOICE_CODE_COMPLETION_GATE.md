@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_142` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_143` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,9 +16,9 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** предыдущий HEAD `098b5e8` (`_141`) получил Validate Project SUCCESS, Voice candidates SUCCESS и FreeBSD 15 package build SUCCESS (Actions `38741301128`). Для `_142` проверять собственный latest-HEAD CI; успешная сборка `_141` не является результатом `_142`.
-2. **FreeBSD:** подтвердить FreeBSD 15 package build на `_142`; предыдущая `_141` сборка уже PASS, но не доказывает текущий пакет.
-3. **Legacy PoC:** старые enable/disable защищены от native ownership. Устранён отдельный инертный `voice-native-candidate` в ordinary runtime; настоящий Phase-B helper, operator `native-detached` и один `shared-candidate` остаются. Дальнейшее удаление упакованных legacy/recovery файлов запрещено без доказанной безопасной миграции.
+1. **CI:** HEAD `3a35817` (`_142`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38744245903`). Для `_143` требуется независимое latest-HEAD подтверждение и проверка shared status.
+2. **FreeBSD:** подтвердить настоящую сборку для `_143`; успешный пакет `_142` не доказывает новый source HEAD.
+3. **Legacy PoC:** старые enable/disable ограждены от native owner, ordinary больше не создаёт инертный bundle. Generic status committed Voice/Strategies использует строгий read-only native inspector, настоящий legacy сохраняет прежний статус. Пакетные rollback/migration файлы не удалять без доказанной безопасной миграции.
 4. **Финальная приёмка кода:** соотнести GUI/API → native Config → generator → IPFW → Apply → Stop/Start/boot, RU/EN/help и содержимое пакета. Исправлять только выявленные разрывы существующими компонентами.
 
 После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.

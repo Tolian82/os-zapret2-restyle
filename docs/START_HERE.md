@@ -16,7 +16,7 @@
 
 **Реализация v0.5.2_143:** общий status для committed Voice/Strategies использует существующий read-only voice_live_inspect.py и проверяет source/state/exit. Ready даёт started, verified stopped — stopped; pending/corrupt/installed common без журнала — incomplete. Старый unowned legacy сохраняет прежний статус. GUI, Apply и восстановление не переделываются.
 
-**Следующее действие:** добавить targeted regression к существующему shared lifecycle test и завершить документационную сверку в этом PR без следующего изменения версии. Затем latest-HEAD CI и FreeBSD 15 build; не создавать повторно STUN/IPFW/Apply. Релиза и живых MEDIA/CALL тестов ещё нет.
+**Следующее действие:** подтвердить latest-HEAD CI и FreeBSD 15 build после native status и регрессии в прежнем `test-shared-apply-boot.sh`; затем только фактические GUI/API/runtime/package разрывы. Не повторять STUN/IPFW/Apply. Релиза и живых MEDIA/CALL тестов ещё нет.
 
 ## Минимальное чтение
 
