@@ -209,6 +209,47 @@ def inspect_common_runtime(release: Path, manifest: dict, *,
                 raise VoiceInspectError("untrusted common STUN scope evidence")
     if set(voice_hashes) != set(profile_names):
         raise VoiceInspectError("common Voice IPSET scope differs from enabled profiles")
+    # Display metadata comes ONLY from the same already-sealed release and
+    # manifest whose IPFW was separately verified by examine_shared().
+    # Do not recompute a prospective profile from editable GUI values.
+    logical_wan = capture.get("logical_wan")
+    physical_wan = capture.get("wan")
+    if not all(isinstance(wan, str) and
+               re.fullmatch(r"[A-Za-z][A-Za-z0-9_.:-]{0,63}", wan)
+               for wan in (logical_wan, physical_wan)):
+        raise VoiceInspectError("untrusted common Voice capture interface")
+    details = {}
+    for profile, owned in zip(profiles, rows):
+        name = profile["service"]
+        ports = owned.get("ports") if isinstance(owned, dict) else None
+        targets = manifest["tables"].get(TABLE_PREFIX + name)
+        revision = profile.get("profile_sha256")
+        if (not isinstance(owned, dict) or owned.get("service") != name
+            or profile.get("wan") != logical_wan
+            or not isinstance(revision, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", revision)
+            or not isinstance(targets, list) or not 1 <= len(targets) <= 4096
+            or type(profile.get("target_count")) is not int
+            or profile["target_count"] != len(targets)
+            or owned.get("destination_count") != len(targets)
+            or profile.get("ports") != ports
+            or not isinstance(ports, list) or not 1 <= len(ports) <= 128):
+            raise VoiceInspectError("common Voice profile metadata differs from IPFW")
+        port_text = []
+        for interval in ports:
+            if (not isinstance(interval, list) or len(interval) != 2
+                or type(interval[0]) is not int or type(interval[1]) is not int
+                or not 1 <= interval[0] <= interval[1] <= 65535):
+                raise VoiceInspectError("invalid common Voice UDP scope")
+            lo, hi = interval
+            port_text.append(str(lo) if lo == hi else f"{lo}-{hi}")
+        details[name] = {
+            "profile_id": "voice-" + name,
+            "profile_revision": revision[:12],
+            "wan": physical_wan,
+            "udp_ports": ",".join(port_text),
+            "ipset_entries": len(targets),
+        }
     names = ["voice-plan.json", "dvtws.args", "traffic.conf"]
     names += [f"managed/ipset-{service}.txt" for service in SERVICES
               if service in voice_hashes or service in ordinary_hashes]
@@ -233,6 +274,7 @@ def inspect_common_runtime(release: Path, manifest: dict, *,
                 else "engine-not-confirmed"
             ) if name in expected else "disabled",
             "media_verified": False,
+            **(details[name] if name in details and active_source else {}),
         }
         for name in SERVICES
     }

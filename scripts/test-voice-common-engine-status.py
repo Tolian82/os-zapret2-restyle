@@ -39,8 +39,17 @@ class CommonRuntimeEvidence(unittest.TestCase):
         ordinary_hashes={"custom":hashlib.sha256(raw).hexdigest()}
         (release/"voice-plan.json").write_text(json.dumps({
             "schema":1,
-            "profiles":[{"service":x,"enabled":True} for x in selected],
-            "capture":{"voice":[{"service":x} for x in selected]},
+            "profiles":[{
+                "service":x,"enabled":True,"wan":"WAN",
+                "target_count":1,"ports":[[443,443]],
+                "profile_sha256":hashlib.sha256(("voice-"+x).encode()).hexdigest(),
+            } for x in selected],
+            "capture":{
+                "logical_wan":"WAN","wan":"vtnet1",
+                "voice":[{
+                    "service":x,"destination_count":1,"ports":[[443,443]]
+                } for x in selected],
+            },
             "source":{"ipset_sha256":voice_hashes,
                       "ordinary_scope_ipset_sha256":ordinary_hashes},
         }))
@@ -75,6 +84,11 @@ class CommonRuntimeEvidence(unittest.TestCase):
                 self.assertTrue(report["capture_verified"])
                 self.assertEqual("engine-present",report["runtime_state"])
                 self.assertFalse(report["media_verified"])
+                self.assertEqual("voice-"+service,report["profile_id"])
+                self.assertEqual("vtnet1",report["wan"])
+                self.assertEqual("443",report["udp_ports"])
+                self.assertEqual(1,report["ipset_entries"])
+                self.assertRegex(report["profile_revision"],r"^[0-9a-f]{12}$")
 
     def test_disabled_four_services_are_not_running_daemons(self):
         with tempfile.TemporaryDirectory() as root:
@@ -86,6 +100,31 @@ class CommonRuntimeEvidence(unittest.TestCase):
                     self.assertEqual("disabled",result["services"][name]["runtime_state"])
                     self.assertFalse(result["services"][name]["configured"])
                     self.assertFalse(result["services"][name]["media_verified"])
+                    self.assertNotIn("profile_id",result["services"][name])
+                    self.assertNotIn("udp_ports",result["services"][name])
+
+    def test_tampered_profile_scope_metadata_is_never_displayed(self):
+        with tempfile.TemporaryDirectory() as root:
+            rel,manifest=self.plan(root)
+            path=rel/"voice-plan.json"
+            original=json.loads(path.read_text())
+            changes=(
+                lambda p: p["capture"]["voice"][0].update({"ports":[[3478,3478]]}),
+                lambda p: p["capture"].update({"wan":"unsafe interface"}),
+                lambda p: p["profiles"][0].update({"target_count":2}),
+                lambda p: p["profiles"][0].update({"profile_sha256":"bad"}),
+            )
+            for alter in changes:
+                with self.subTest(alter=changes.index(alter)):
+                    plan=json.loads(json.dumps(original))
+                    alter(plan)
+                    path.write_text(json.dumps(plan))
+                    with self.assertRaises(VoiceInspectError):
+                        self.run_probe(rel,manifest,True,True)
+            path.write_text(json.dumps(original))
+            report=self.run_probe(rel,manifest,False,False)
+            self.assertEqual("stopped",report["state"])
+            self.assertEqual("vtnet1",report["services"]["telegram"]["wan"])
 
     def test_stopped_or_partial_engine_cannot_claim_voice(self):
         with tempfile.TemporaryDirectory() as root:

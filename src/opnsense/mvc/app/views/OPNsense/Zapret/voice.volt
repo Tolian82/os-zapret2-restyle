@@ -33,6 +33,8 @@ $(document).ready(function () {
         voiceStopped: 'Служба остановлена; профиль сохранён',
         voiceDisabled: 'Дополнительный Voice-перехват выключен',
         voiceUnverified: 'Активность профиля не подтверждена',
+        voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET записей',
+        voiceProfileId: 'Применённый профиль',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
@@ -66,6 +68,8 @@ $(document).ready(function () {
         voiceStopped: 'Service stopped; profile saved',
         voiceDisabled: 'Additional Voice interception disabled',
         voiceUnverified: 'Profile activation not verified',
+        voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET entries',
+        voiceProfileId: 'Applied profile',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
@@ -426,7 +430,25 @@ $(document).ready(function () {
             var state = profile.runtime === 'active' ? text.voiceActive :
                         profile.runtime === 'stopped' ? text.voiceStopped :
                         text.voiceDisabled;
-            observed.text(' · ' + saved + ' — ' + state);
+            var details = '';
+            if (profile.saved_enabled && (profile.runtime === 'active' || profile.runtime === 'stopped') &&
+                profile.profile_id === 'voice-' + name &&
+                /^[a-f0-9]{12}$/.test(profile.profile_revision || '') &&
+                typeof profile.wan === 'string' &&
+                /^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/.test(profile.wan) &&
+                typeof profile.udp_ports === 'string' &&
+                /^[0-9,-]{1,1024}$/.test(profile.udp_ports) &&
+                Number.isInteger(profile.ipset_entries) &&
+                profile.ipset_entries >= 1 && profile.ipset_entries <= 4096) {
+                // These are confirmed release/IPFW scopes, not traffic
+                // measurements. Use text(), never inject native data as HTML.
+                details = ' · ' + text.voiceEffectiveWan + ': ' + profile.wan +
+                    ' · ' + text.voiceUdpPorts + ': ' + profile.udp_ports +
+                    ' · ' + text.voiceIpsetCount + ': ' + profile.ipset_entries +
+                    ' · ' + text.voiceProfileId + ': ' +
+                    profile.profile_id + '@' + profile.profile_revision;
+            }
+            observed.text(' · ' + saved + ' — ' + state + details);
         });
     }
     function refreshVoiceIPFW() {

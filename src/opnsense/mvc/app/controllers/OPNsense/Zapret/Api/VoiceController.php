@@ -526,7 +526,7 @@ class VoiceController extends ApiControllerBase
                             'condition' => 'common-profile-unverified',
                         ];
                     }
-                    $result['profiles'][$name] = [
+                    $status = [
                         'saved_enabled' => $enabled,
                         'runtime' => !$enabled ? 'disabled' :
                             ($expectedState === 'running' ? 'active' : 'stopped'),
@@ -535,6 +535,32 @@ class VoiceController extends ApiControllerBase
                         'media_verified' => false,
                         'call_verified' => false,
                     ];
+                    if ($enabled) {
+                        $id = $report['profile_id'] ?? null;
+                        $revision = $report['profile_revision'] ?? null;
+                        $wan = $report['wan'] ?? null;
+                        $ports = $report['udp_ports'] ?? null;
+                        $count = $report['ipset_entries'] ?? null;
+                        if ($id !== 'voice-' . $name ||
+                            !is_string($revision) ||
+                            !preg_match('/^[a-f0-9]{12}$/D', $revision) ||
+                            !is_string($wan) ||
+                            !preg_match('/^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/D', $wan) ||
+                            !is_string($ports) || strlen($ports) > 1024 ||
+                            !preg_match('/^[0-9,-]{1,1024}$/D', $ports) ||
+                            !is_int($count) || $count < 1 || $count > 4096) {
+                            return [
+                                'state' => 'interrupted', 'can_activate' => false,
+                                'condition' => 'common-profile-unverified',
+                            ];
+                        }
+                        $status['profile_id'] = $id;
+                        $status['profile_revision'] = $revision;
+                        $status['wan'] = $wan;
+                        $status['udp_ports'] = $ports;
+                        $status['ipset_entries'] = $count;
+                    }
+                    $result['profiles'][$name] = $status;
                 }
             } catch (\Throwable $error) {
                 return ['state' => 'inspection-error', 'can_activate' => false,

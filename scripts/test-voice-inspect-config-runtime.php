@@ -60,7 +60,13 @@ namespace {
             'configured' => $enabled, 'capture_verified' => $enabled,
             'runtime_state' => $enabled ? 'engine-present' : 'disabled',
             'media_verified' => false,
-        ];
+        ] + ($enabled ? [
+            'profile_id' => 'voice-telegram',
+            'profile_revision' => '012345abcdef',
+            'wan' => 'vtnet1',
+            'udp_ports' => '3478,10000-20000',
+            'ipset_entries' => 2,
+        ] : []);
     }
     $native = [
         'state' => 'ready', 'source' => 'native-common',
@@ -86,9 +92,13 @@ namespace {
     verify($ok['profiles']['telegram'] === [
         'saved_enabled'=>true, 'runtime'=>'active',
         'media_verified'=>false, 'call_verified'=>false,
+        'profile_id'=>'voice-telegram', 'profile_revision'=>'012345abcdef',
+        'wan'=>'vtnet1', 'udp_ports'=>'3478,10000-20000',
+        'ipset_entries'=>2,
     ], 'Telegram was not separately and truthfully reported');
     verify($ok['profiles']['discord']['runtime'] === 'disabled' &&
-        $ok['profiles']['discord']['saved_enabled'] === false,
+        $ok['profiles']['discord']['saved_enabled'] === false &&
+        !isset($ok['profiles']['discord']['wan'], $ok['profiles']['discord']['ipset_entries']),
         'disabled Voice service was fabricated as active');
     verify(!isset($ok['config_digest'], $ok['runtime']),
         'private/native inspector contents leaked to GUI');
@@ -119,6 +129,25 @@ namespace {
         $mismatch['condition'] === 'common-profile-unverified' &&
         !isset($mismatch['profiles']),
         'runtime/Config disagreement must fail closed');
+
+    foreach ([
+        ['wan'=>'external iface'],
+        ['udp_ports'=>'443;rm'],
+        ['ipset_entries'=>0],
+        ['ipset_entries'=>4097],
+        ['profile_revision'=>'uncertain'],
+        ['profile_id'=>'voice-discord'],
+    ] as $invalid) {
+        $tampered = $native;
+        foreach ($invalid as $field=>$value) {
+            $tampered['runtime']['services']['telegram'][$field] = $value;
+        }
+        $rejected = $inspect($tampered);
+        verify($rejected['state'] === 'interrupted' &&
+            $rejected['condition'] === 'common-profile-unverified' &&
+            !isset($rejected['profiles']),
+            'untrusted profile capture metadata reached GUI');
+    }
 
     $legacy = $native;
     $legacy['source'] = 'old-ledger';

@@ -85,8 +85,15 @@ def main() -> None:
           "STUN profile, dvtws2 and IPFW verified; call untested" in view and
           "refreshVoiceIPFW(); updateServiceControlUI('zapret')" in view and
           "hash_equals($committedDigest, $savedDigest)" in status_php and
-          "'saved_enabled' => $enabled" in status_php,
-          "Voice GUI must show independent saved ON/OFF and attested five-service runtime")
+          "'saved_enabled' => $enabled" in status_php and
+          "voiceEffectiveWan: 'WAN'" in view and
+          "voiceUdpPorts: 'UDP'" in view and
+          "voiceIpsetCount: 'IPSET записей'" in view and
+          "voiceProfileId: 'Applied profile'" in view and
+          "profile.profile_id + '@' + profile.profile_revision" in view and
+          "'profile_id' => $id" in status_php and
+          "'ipset_entries' => $count" in status_php,
+          "Voice GUI must show saved ON/OFF, applied profile, physical WAN, UDP and IPSET")
     check("voiceIPFWDetail" in view and
           "prepared-needs-previous-verification" in view and
           "interrupted-needs-kernel-runtime-review" in view and
