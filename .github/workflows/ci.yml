@@ -222,7 +222,7 @@ jobs:
         run: python3.13 scripts/test-voice-native-forward-stop.py
       - name: Native Voice candidate engine-only start and kernel process witness
         run: python3.13 scripts/test-voice-native-candidate-engine-start.py
-      - name: Native Voice candidate engine-only IPFW PRECOMMIT and rollback
+      - name: Shared IPFW PRECOMMIT regression fixture for legacy Voice supervisor
         run: python3.13 scripts/test-voice-native-forward-ipfw.py
       - name: Native Voice candidate supervisor after IPFW PRECOMMIT
         run: python3.13 scripts/test-voice-native-forward-supervisor.py
@@ -748,8 +748,8 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
-          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare)[.]py$' "${contents}"; then
-            echo "ERROR: retired private Voice PREPARED backend leaked into installable FreeBSD package" >&2
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw)[.]py$' "${contents}"; then
+            echo "ERROR: retired private Voice backend leaked into installable FreeBSD package" >&2
             exit 1
           fi
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
