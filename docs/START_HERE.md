@@ -1,6 +1,8 @@
 # os-zapret2-restyle — START HERE
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_129` остаётся Draft/неопубликованным кандидатом. После общего IPFW COMMIT повторно подтверждаются installed runtime, engine/supervisor и kernel.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_130` остаётся Draft/неопубликованным кандидатом. Исправлен изолированный mock postcommit проверки из `_129` (параметры PID/active).
+
+**`v0.5.2_130` — восстановлены параметры изолированного CI-макета после введения финальной проверки Apply.** `v0.5.2_129` выполнил новую ветку postcommit, но `scripts/test-shared-apply-execute.sh` завершался из-за `set -u` при неинициализированном `CHILD_PIDFILE` до проверки логики. В mock теперь объявлены приватные `CHILD_PIDFILE`, `SUPERVISOR_MONITOR_PIDFILE`, `ACTIVE_DIR` в временном каталоге теста. Production логика и защита IPFW/процессов из `_129` не меняются; итоговый результат CI для `_130` ещё предстоит подтвердить. Без релиза.
 
 **`v0.5.2_129` — после native Config::save и IPFW COMMIT общий Apply больше не объявляет успех до финального read-only подтверждения live release.** Исполнитель под исходным FD9 повторно проверяет seal кандидатного bundle, точное установленное дерево (включая `traffic.conf`, managed IPSET, native args), существующий `apply_runtime_probe` для актуального IPFW/argv/процессного census и строгую пару engine/supervisor согласно сохранённому global ON/OFF. Если после очистки stage исчез `dvtws2`/monitor, изменилось дерево или IPFW, вместо ложного `applied-id` записывается `requires-review`; откат за COMMIT не имитируется. Расширена существующая shell fault-injection matrix: success, tree drift, native probe drift, engine/monitor missing. Архитектура, GUI и frontend по ТЗ не менялись, новый recovery не добавлялся. Релиз не создавался.
 
@@ -128,7 +130,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_129`. `VERSION=0.5.2`; `PLUGIN_REVISION=129`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_130`. `VERSION=0.5.2`; `PLUGIN_REVISION=130`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 

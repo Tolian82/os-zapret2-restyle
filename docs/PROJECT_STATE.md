@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_129` остаётся Draft/неопубликованным кандидатом. После общего IPFW COMMIT повторно подтверждаются installed runtime, engine/supervisor и kernel.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_130` остаётся Draft/неопубликованным кандидатом. Исправлен изолированный mock postcommit проверки из `_129` (параметры PID/active).
+
+**`v0.5.2_130` — восстановлены параметры изолированного CI-макета после введения финальной проверки Apply.** `v0.5.2_129` выполнил новую ветку postcommit, но `scripts/test-shared-apply-execute.sh` завершался из-за `set -u` при неинициализированном `CHILD_PIDFILE` до проверки логики. В mock теперь объявлены приватные `CHILD_PIDFILE`, `SUPERVISOR_MONITOR_PIDFILE`, `ACTIVE_DIR` в временном каталоге теста. Production логика и защита IPFW/процессов из `_129` не меняются; итоговый результат CI для `_130` ещё предстоит подтвердить. Без релиза.
 
 **`v0.5.2_129` — после native Config::save и IPFW COMMIT общий Apply больше не объявляет успех до финального read-only подтверждения live release.** Исполнитель под исходным FD9 повторно проверяет seal кандидатного bundle, точное установленное дерево (включая `traffic.conf`, managed IPSET, native args), существующий `apply_runtime_probe` для актуального IPFW/argv/процессного census и строгую пару engine/supervisor согласно сохранённому global ON/OFF. Если после очистки stage исчез `dvtws2`/monitor, изменилось дерево или IPFW, вместо ложного `applied-id` записывается `requires-review`; откат за COMMIT не имитируется. Расширена существующая shell fault-injection matrix: success, tree drift, native probe drift, engine/monitor missing. Архитектура, GUI и frontend по ТЗ не менялись, новый recovery не добавлялся. Релиз не создавался.
 
@@ -172,13 +174,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_129`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_130`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=129` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_129.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=130` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_130.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;

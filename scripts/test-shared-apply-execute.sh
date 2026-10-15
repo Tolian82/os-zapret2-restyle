@@ -14,6 +14,11 @@ mkdir -p "$ROOT/work/release"
 : > "$ROOT/work/plan.json"
 : > "$ROOT/work/candidate.xml"
 LOG="$ROOT/steps.log"
+# The production FD9 executor uses fixed PID paths. This isolated mock
+# supplies disposable equivalents so the new final process check is run.
+CHILD_PIDFILE="$ROOT/dvtws.pid"
+SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
+ACTIVE_DIR="$ROOT/active"
 preflight_voice_cutover_journals() { [ "$1" = common-apply ]; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 shared_apply_inspect_service() {
