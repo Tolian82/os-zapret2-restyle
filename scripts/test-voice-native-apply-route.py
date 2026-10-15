@@ -29,6 +29,7 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             "voice_native_forward_prepare.py",
             "voice_native_forward_ipfw.py",
             "voice_native_forward_supervisor.py",
+            "voice_native_candidate_engine_start.py",
         )
         for name in retired:
             with self.subTest(name=name):
@@ -61,6 +62,8 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
                 self.assertNotIn(command, configd)
         actuator = (BACKEND / "voice_native_process_lifecycle.sh").read_text()
         self.assertNotIn("start-candidate-supervisor", actuator)
+        self.assertNotIn("start-candidate-engine", actuator)
+        self.assertIn("    stop-candidate-engine)", actuator)
         # Existing rollback and shared lifecycle still need the fixed
         # old-process stop/restart shell functions.
         self.assertIn("    stop)", actuator)

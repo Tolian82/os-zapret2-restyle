@@ -30,8 +30,8 @@ def source(name, mod):
     return obj
 
 
-previous = source("test-voice-native-candidate-engine-start.py",
-                  "forward_ipfw_engine_fixture")
+previous = source("test-voice-native-forward-prepare.py",
+                  "shared_ipfw_schema4_fixture")
 transaction = source("test-voice-firewall-transaction.py",
                      "forward_ipfw_kernel_fixture")
 
@@ -76,13 +76,17 @@ class SimulatedNativeIPFW(FreeBSDIPFWAdapter):
 class ForwardIPFWTests(unittest.TestCase):
     """Exercise the shared IPFW transaction with historical sealed inputs."""
     def setUp(self):
-        self.phase = previous.CandidateEngineStartTests()
+        self.phase = previous.NativeForwardPrepareTests()
         self.phase.setUp()
         self.addCleanup(self.phase.doCleanups)
-        self.phase.call()
+        self.phase.prepare()
         self.fx = self.phase.fx
+        # Shared IPFW PRECOMMIT only needs the sealed whole intent and its
+        # original owned firewall. Do not run the retired private engine
+        # launcher, stop previous processes, or replace runtime files.
+        self.fx.whole.mark_mutating()
         self.old = self.fx.ipfw.owned()
-        self.desired = self.phase.previous.parent.manifest
+        self.desired = self.phase.manifest
         self.kernel = transaction.FakeIPFW(self.old["rules"], self.old["tables"])
         self.read = SimulatedNativeIPFW(self.kernel)
         self.write = SimulatedNativeIPFW(self.kernel, mutable=True)
@@ -116,15 +120,11 @@ class ForwardIPFWTests(unittest.TestCase):
         self.assertIsNotNone(
             self.kernel.get_table("zapret2_voice_telegram_stage"))
         plan_postcommit_cleanup(self.write, self.old, self.desired)
-        self.assertEqual("engine-only",
-                         self.phase.probe.observe_candidate_engine_only()["state"])
 
-    def test_shared_ipfw_precommit_rolls_back_after_candidate_stop(self):
+    def test_shared_ipfw_precommit_rolls_back_with_whole_intent(self):
         self.call()
-        self.phase.engine_pid = None
-        self.phase.reader.commands = {}
-        self.assertEqual("stopped",
-                         self.phase.probe.observe_candidate_engine_only()["state"])
+        # The production outer coordinator owns process quiescence; this
+        # shared IPFW helper checks the sealed whole operation and ledger.
         result = rollback_precommit_verified(
             self.fx.ipfw, self.write, self.fx.whole, self.proof())
         self.assertEqual("restored-previous", result)
