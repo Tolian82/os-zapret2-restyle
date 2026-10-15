@@ -141,9 +141,13 @@ class NativeXmlProducerTests(unittest.TestCase):
         self.assertNotIn("configctl template reload",commands)
         service=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         configd=(ROOT/"src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
-        self.assertIn("native-voice-prepare-xml)",service)
-        self.assertIn("native-voice-prepare-xml",service.split("start|stop|restart|reconfigure",1)[-1])
+        # Old isolated XML producer remains source-testable but its retired
+        # operator command is not shipped or exposed by the normal service.
+        self.assertNotIn("native-voice-prepare-xml)",service)
+        self.assertNotIn("native-voice-prepare-xml",service.split("start|stop|restart|reconfigure",1)[-1])
         self.assertNotIn("native-voice-prepare-xml",configd)
+        build=(ROOT/"scripts/build-pkg.sh").read_text()
+        self.assertIn('rm "${PREPARE_ROUTE}"',build)
 
 
 if __name__=="__main__":
