@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_143` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_144` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,10 +16,10 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** HEAD `3a35817` (`_142`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38744245903`). Для `_143` требуется независимое latest-HEAD подтверждение и проверка shared status.
-2. **FreeBSD:** подтвердить настоящую сборку для `_143`; успешный пакет `_142` не доказывает новый source HEAD.
+1. **CI:** HEAD `39f771f` (`_143`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38747912361`). Для `_144` требуется отдельный полный CI с проверкой пяти XML tooltip и действующего RU/EN Apply; старый PASS не переносится.
+2. **FreeBSD:** получить успешную реальную package-сборку для `_144`; `_143` уже был SUCCESS, но не доказывает новый HEAD.
 3. **Legacy PoC:** старые enable/disable ограждены от native owner, ordinary больше не создаёт инертный bundle. Generic status committed Voice/Strategies использует строгий read-only native inspector, настоящий legacy сохраняет прежний статус. Пакетные rollback/migration файлы не удалять без доказанной безопасной миграции.
-4. **Финальная приёмка кода:** соотнести GUI/API → native Config → generator → IPFW → Apply → Stop/Start/boot, RU/EN/help и содержимое пакета. Исправлять только выявленные разрывы существующими компонентами.
+4. **Финальная приёмка кода:** пять XML checkbox и info подсказок уже исправлены для Validate / OFF draft / native Apply; существующий RU/EN view согласован. Проверить только оставшиеся реальные GUI/API → Config → generator/IPFW → Apply → Stop/Start/boot и состав пакета, исправляя конкретные разрывы.
 
 После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.
 
