@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_146` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_147` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** предыдущий HEAD `c7f51bf` (`_145`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38761330203`). Новый `_146` с Telegram native configctl адаптерами проверяется отдельно.
-2. **FreeBSD:** подтвердить настоящую package-сборку для `_146`; предыдущий `_145` PASS не доказывает новый HEAD.
+1. **CI:** `_146` Voice candidates FAILED из-за stale _compat_owner/orphan release (Actions `38765199721`); `_147` исправил ошибку и проходит независимый CI. `_145` был последним доказанным full CI + FreeBSD PASS.
+2. **FreeBSD:** подтвердить FreeBSD 15 package build на `_147`; предыдущий `_145` PASS не заменяет проверку нового пакета.
 3. **Legacy PoC:** `_146` привязал публичные Telegram enable/disable/status к native Config/FD9/Apply/inspect. Работающий Phase-B блокирует автоматическое переключение до квалифицированной миграции; исторические rollback/migration файлы пока сохранены. Живая миграция ещё не проверена.
 4. **Финальная приёмка кода:** исправлены XML подсказки Validate / all-OFF draft / Apply (`_144`) и ложная API/RU ошибка о недоступности ON (`_145`). При этом all-OFF draft не подменяет native Apply. Далее только реальные GUI/API → Config → generator/IPFW → lifecycle и package разрывы.
 
