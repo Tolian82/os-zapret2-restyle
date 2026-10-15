@@ -75,6 +75,8 @@ def main() -> None:
           "Previous Telegram PoC recovery" in view and
           "recoveryReceipt" in view and "recoveryIncomplete" in view,
           "Old PoC read-only bilingual GUI status is not present")
+    status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
+    status_php = status_api.read_text(encoding="utf-8")
     check("showVoiceProfileObservations(reply)" in view and
           "voice-profile-observation" in view and
           "common-config-mismatch" in view and
@@ -95,8 +97,6 @@ def main() -> None:
     for term in ("'Общий движок и правила подтверждены'", "'Shared engine and IPFW verified'",
                  "'Новая Voice-конфигурация не активирована'", "'New Voice configuration not activated'"):
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")
-    status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
-    status_php = status_api.read_text(encoding="utf-8")
     shared_php = (SRC / "controllers/OPNsense/Zapret/Api/SettingsApply.php").read_text(encoding="utf-8")
     check("public function inspectAction()" in status_php and
           "configdRun('zapret voice_inspect'" in status_php and

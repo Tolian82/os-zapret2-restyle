@@ -1,6 +1,8 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_131` остаётся Draft/неопубликованным кандидатом. Добавлен проверенный статус пяти Voice-сервисов в существующей форме GUI.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_132` остаётся Draft/неопубликованным кандидатом. Исправлен порядок инициализации статического GUI-теста статусов пяти сервисов.
+
+**`v0.5.2_132` — устранена ошибка порядка инициализации в новом GUI-контракте `_131`.** Новый статический тест обращался к `status_php` до загрузки PHP-контроллера, что давало ложный `UnboundLocalError` вместо проверки состояния пяти сервисов. Контроллер теперь читается до первого утверждения о сохранённом Config/runtime/IPFW; production API, native inspector и frontend остаются как в `_131`. Релиз не создавался; CI `_132` проверяется отдельно.
 
 **`v0.5.2_131` — фактический статус пяти Voice-сервисов в неизменённой форме GUI.** Нативный read-only `voice_live_inspect.py` для terminal `ready/stopped` передаёт хеш committed-кандидата общего владельца. `VoiceController::inspectAction` под штатным Config lock сверяет digest с текущей сохранённой моделью, проверяет полную наблюдаемость `traffic.conf`/IPSET, engine, supervisor и соответствие пяти профилей сохранённым ON/OFF. При несовпадении вместо зелёного IPFW — `interrupted/common-config-mismatch` или `common-profile-unverified`; во внешнем API выдаются только минимальные проверенные `profiles.{service}.saved_enabled/runtime/media_verified/call_verified`, без native runtime/seal/хеша. Существующий GUI добавляет короткий RU/EN статус в справку у каждой галочки без изменений полей, порядка и верстки; после Start/Stop/IPFW/Apply данные освежаются. `active` значит только профиль+dvtws2+IPFW, **не** успешный STUN/MEDIA/CALL. Прямой изолированный PHP-контракт контроллера и Python/GUI проверки добавлены в существующий CI. Без релиза и второго runtime.
 
@@ -176,13 +178,13 @@
 
 **`_47` — тестируемый quiescent legacy→common migration.** Добавлен интеграционный shell-сценарий на существующем `apply_runtime.sh`: при полностью остановленных dvtws2/supervisor и пустом owned IPFW прежняя legacy-директория (без нового `voice-plan.json`) сохраняется штатным atomic backup, запускается общий runtime, а отказ до Config save восстанавливает именно прежнюю директорию и пустой kernel. Успешный повторный Apply оставляет старый backup доступным; работающий legacy-процесс по-прежнему отвергается. Это **не** автоматическая остановка и не эксперимент над живым OPNsense; API GUI и утверждённое ТЗ не менялись. Переход с running legacy требует отдельного доказанного live-owner handoff; FreeBSD owner-live и реальный STUN/call acceptance всё ещё не завершены.
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_131`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_132`**, открыт владельцем 13.10.2026 без релиза. Поток состояния: `START_HERE -> PROJECT_STATE -> version-line archive`; смена третьего компонента не закрывает линию `v0.5.x`.
 
 ## Версия и поставка
 
 - repository: `Tolian82/os-zapret2-restyle`; primary branch: `main`; internal service key: `zapret`;
-- `VERSION=0.5.2`, `PLUGIN_REVISION=131` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
-- package candidate: `os-zapret2-restyle-0.5.2_131.pkg` — имя кандидата, пакет не опубликован;
+- `VERSION=0.5.2`, `PLUGIN_REVISION=132` — только незавершённая feature branch / Draft PR [#328](https://github.com/Tolian82/os-zapret2-restyle/pull/328);
+- package candidate: `os-zapret2-restyle-0.5.2_132.pkg` — имя кандидата, пакет не опубликован;
 - stable Web/pkg: `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`;
 - опубликованный testing: `v0.5.0_3` / `os-zapret2-restyle-0.5.0_3.pkg`;
 - последний owner-live принятый corrective: `v0.5.0_2`;
