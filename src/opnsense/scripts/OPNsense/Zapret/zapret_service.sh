@@ -2039,6 +2039,9 @@ telegram_voice_native_status_service()
     _compat_ports=none
     _compat_wan=none
     _compat_entries=0
+    _compat_rule=unavailable
+    _compat_rule_packets=unavailable
+    _compat_rule_bytes=unavailable
     if [ "$_compat_profile" = on ]; then
         _compat_revision=$(printf '%s\n' "$_compat_report" |
             shared_apply_json_field '.runtime.services.telegram.profile_revision|
@@ -2052,6 +2055,19 @@ telegram_voice_native_status_service()
         _compat_entries=$(printf '%s\n' "$_compat_report" |
             shared_apply_json_field '.runtime.services.telegram.ipset_entries|
                                      select(type=="number" and .>=1 and .<=4096)') || return 2
+        if [ "$_compat_state" = ready ]; then
+            _compat_rule=$(printf '%s\n' "$_compat_report" |
+                shared_apply_json_field '.runtime.services.telegram.rule|
+                                         select(type=="number" and .>=1 and .<=65534)') || return 2
+            _compat_rule_packets=$(printf '%s\n' "$_compat_report" |
+                shared_apply_json_field '.runtime.services.telegram.rule_packets|
+                                         select(type=="number" and .>=0)' ||
+                printf 'unavailable\n')
+            _compat_rule_bytes=$(printf '%s\n' "$_compat_report" |
+                shared_apply_json_field '.runtime.services.telegram.rule_bytes|
+                                         select(type=="number" and .>=0)' ||
+                printf 'unavailable\n')
+        fi
     fi
     _compat_effective=off
     _compat_table_present=no
@@ -2077,9 +2093,9 @@ telegram_voice_native_status_service()
         "telegram_voice_poc.table_entries=$_compat_table_entries" \
         "telegram_voice_poc.stage_table=zapret2_voice_telegram_stage" \
         "telegram_voice_poc.stage_table_present=no" \
-        "telegram_voice_poc.rule=unavailable" \
-        "telegram_voice_poc.rule_packets=unavailable" \
-        "telegram_voice_poc.rule_bytes=unavailable" \
+        "telegram_voice_poc.rule=$_compat_rule" \
+        "telegram_voice_poc.rule_packets=$_compat_rule_packets" \
+        "telegram_voice_poc.rule_bytes=$_compat_rule_bytes" \
         "telegram_voice_poc.source=native-common" \
         "telegram_voice_poc.wan=$_compat_wan" \
         "telegram_voice_poc.udp_ports=$_compat_ports" \

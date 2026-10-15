@@ -53,7 +53,13 @@ class CommonRuntimeEvidence(unittest.TestCase):
             "source":{"ipset_sha256":voice_hashes,
                       "ordinary_scope_ipset_sha256":ordinary_hashes},
         }))
-        manifest={"tables":{f"zapret2_voice_{x}":["91.108.13.10"] for x in selected}}
+        manifest={
+            "tables":{f"zapret2_voice_{x}":["91.108.13.10"] for x in selected},
+            "rules":{19000+i: ["divert","989","udp","from","any","to",
+                                f"table(zapret2_voice_{x})","443","out",
+                                "not","diverted","not","sockarg","xmit","vtnet1"]
+                     for i,x in enumerate(selected)},
+        }
         return release,manifest
 
     def run_probe(self, release,manifest,engine,monitor,matched=True):
@@ -87,8 +93,23 @@ class CommonRuntimeEvidence(unittest.TestCase):
                 self.assertEqual("voice-"+service,report["profile_id"])
                 self.assertEqual("vtnet1",report["wan"])
                 self.assertEqual("443",report["udp_ports"])
+                self.assertEqual(19000+SERVICES.index(service),report["rule"])
                 self.assertEqual(1,report["ipset_entries"])
                 self.assertRegex(report["profile_revision"],r"^[0-9a-f]{12}$")
+
+    def test_rule_identity_must_match_sealed_voice_manifest(self):
+        with tempfile.TemporaryDirectory() as root:
+            release, manifest = self.plan(root)
+            manifest["rules"] = {}
+            with self.assertRaisesRegex(VoiceInspectError, "exactly one"):
+                self.run_probe(release, manifest, True, True)
+            manifest["rules"] = {
+                19000: ["divert","989","udp","from","any","to",
+                        "table(zapret2_voice_discord)","443","out",
+                        "not","diverted","not","sockarg","xmit","vtnet1"]
+            }
+            with self.assertRaisesRegex(VoiceInspectError, "exactly one"):
+                self.run_probe(release, manifest, True, True)
 
     def test_disabled_four_services_are_not_running_daemons(self):
         with tempfile.TemporaryDirectory() as root:
@@ -102,6 +123,7 @@ class CommonRuntimeEvidence(unittest.TestCase):
                     self.assertFalse(result["services"][name]["media_verified"])
                     self.assertNotIn("profile_id",result["services"][name])
                     self.assertNotIn("udp_ports",result["services"][name])
+                    self.assertNotIn("rule",result["services"][name])
 
     def test_tampered_profile_scope_metadata_is_never_displayed(self):
         with tempfile.TemporaryDirectory() as root:

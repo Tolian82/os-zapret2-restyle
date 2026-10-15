@@ -36,6 +36,7 @@ MAX_LINES = 8192
 MAX_TABLE_ENTRIES = 4096
 MAX_ARGS = 24
 RULE_LINE = re.compile(r"^\s*([0-9]{1,5})\s+(.+?)\s*$")
+RULE_COUNTER_LINE = re.compile(r"^\s*([0-9]{1,5})\s+([0-9]{1,20})\s+([0-9]{1,20})\s+(.+?)\s*$")
 TABLE_ENTRY = re.compile(r"^\s*(\S+)(?:\s+([0-9]+))?\s*$")
 INTERFACE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
 NUMERIC_PORTS = re.compile(r"^[0-9,-]{1,1024}$")
@@ -204,6 +205,29 @@ class FreeBSDIPFWAdapter:
             raise IPFWAdapterError("Voice requested rules outside owned range")
         output = self._run("-q", "list")
         return self._parse_rule_listing(output)
+
+    def rule_counters(self, number: int, expected: list[str]) -> tuple[int, int]:
+        """Read only one already-attested owned IPFW rule's packet/byte counts.
+
+        The caller verifies the whole rule manifest first. Even at that
+        point, refuse swapped/malformed show output rather than attribute
+        another kernel rule's counters to this Voice profile.
+        """
+        checked_rule_number(number, self.rule_base, self.rule_max)
+        if checked_rule_argv(expected) != expected:
+            raise IPFWAdapterError("untrusted expected IPFW counter rule")
+        output = self._run("show", str(number))
+        lines = [line for line in output.splitlines() if line.strip()]
+        if len(lines) != 1:
+            raise IPFWAdapterError("ambiguous IPFW rule counter listing")
+        match = RULE_COUNTER_LINE.fullmatch(lines[0])
+        if match is None or int(match.group(1)) != number or \
+           checked_rule_argv(match.group(4).split()) != expected:
+            raise IPFWAdapterError("IPFW rule changed while reading counters")
+        packets, bytes_ = int(match.group(2)), int(match.group(3))
+        if packets > 2**64 - 1 or bytes_ > 2**64 - 1:
+            raise IPFWAdapterError("IPFW counters out of range")
+        return packets, bytes_
 
     def get_table(self, name: str) -> list[str] | None:
         name = checked_table_name(name)

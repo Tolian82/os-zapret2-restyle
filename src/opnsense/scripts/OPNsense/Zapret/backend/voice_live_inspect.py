@@ -243,7 +243,16 @@ def inspect_common_runtime(release: Path, manifest: dict, *,
                 raise VoiceInspectError("invalid common Voice UDP scope")
             lo, hi = interval
             port_text.append(str(lo) if lo == hi else f"{lo}-{hi}")
+        # The only trustworthy rule number comes from the sealed IPFW
+        # manifest, never an inferred slot or a configurable GUI value.
+        matches = [
+            number for number, argv in manifest["rules"].items()
+            if argv[2] == "udp" and argv[6] == f"table({TABLE_PREFIX}{name})"
+        ]
+        if len(matches) != 1 or type(matches[0]) is not int:
+            raise VoiceInspectError("Voice profile does not own exactly one manifest rule")
         details[name] = {
+            "rule": matches[0],
             "profile_id": "voice-" + name,
             "profile_revision": revision[:12],
             "wan": physical_wan,
@@ -368,6 +377,25 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
             "can_activate": False, "remedy": "manual-inspection",
             "runtime": runtime,
         }
+    # Optional observational counters: use the same read-only IPFW adapter
+    # *after* exact manifest verification. If FreeBSD show is unsupported,
+    # ambiguous or racing, do not invent packet/byte counts or mark CALL PASS.
+    counter_reader = getattr(adapter, "rule_counters", None)
+    if callable(counter_reader):
+        for detail in runtime.get("services", {}).values():
+            if not isinstance(detail, dict) or not detail.get("configured"):
+                continue
+            rule = detail.get("rule")
+            if type(rule) is not int or rule not in manifest["rules"]:
+                raise VoiceInspectError("native status missing an attested Voice rule")
+            try:
+                packets, bytes_ = counter_reader(rule, manifest["rules"][rule])
+            except IPFWAdapterError:
+                continue
+            if type(packets) is int and type(bytes_) is int and \
+               0 <= packets <= 2**64 - 1 and 0 <= bytes_ <= 2**64 - 1:
+                detail["rule_packets"] = packets
+                detail["rule_bytes"] = bytes_
     return {
         "state": "ready", "source": "native-common",
         # The GUI must independently re-read native Config under its lock

@@ -35,6 +35,11 @@ class FakeAdapter:
     def get_table(self, name):
         self.operations.append("read-table")
         return self.tables.get(name)
+    def rule_counters(self, number, expected):
+        self.operations.append("read-counters")
+        if number not in self.rules or self.rules[number] != expected:
+            raise VoiceFirewallError("counter rule drift")
+        return 7, 280
 
 class InspectionTests(unittest.TestCase):
     def states(self, tmp):
@@ -187,8 +192,13 @@ class InspectionTests(unittest.TestCase):
                                  bundle_verify=lambda path: self.assertEqual(path,work),
                                  manifest_reader=lambda release: old,
                                  adapter_factory=factory,
-                                 runtime_probe=lambda *args: {"state":"running","services":{}})
+                                 runtime_probe=lambda *args: {
+                                     "state":"running",
+                                     "services":{"telegram":{"configured":True,"rule":19000}}
+                                 })
             self.assertEqual("ready",result["state"])
+            self.assertEqual(7,result["runtime"]["services"]["telegram"]["rule_packets"])
+            self.assertEqual(280,result["runtime"]["services"]["telegram"]["rule_bytes"])
             self.assertEqual("native-common",result["source"])
             self.assertEqual(identity["candidate"], result["config_digest"])
             self.assertFalse(result["can_activate"],"IPFW read-only is not permission for Apply")

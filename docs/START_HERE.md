@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_147`. `VERSION=0.5.2`; `PLUGIN_REVISION=147`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_148`. `VERSION=0.5.2`; `PLUGIN_REVISION=148`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Кодовый этап v0.5.2_146:** публичные Telegram configctl enable/disable/status подключены к native Config/FD9/shared Apply и read-only inspect. Старый Phase-B marker и отдельный reconfigure больше не вызываются из публичного интерфейса; работающий старый PoC требует отдельной квалифицированной миграции.
+**Предыдущий HEAD `9a6ccf5` (`v0.5.2_147`):** [Validate Project, Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38766216983). Это CI/пакет, не owner-live.
 
-**Исправление v0.5.2_147:** CI для _146 (https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38765199721) выявил использование stale committed _compat_owner между двумя вызовами shell-функции. Это могло разрешить orphan native manifest без durable журнала. Теперь _compat_owner сбрасывается перед каждой проверкой. Дефект уже воспроизведён существующим shared boot/lifecycle тестом.
+**Реальное изменение `_148`:** в историческом `telegram_voice_status` committed native runtime раньше всегда выдавались `rule=unavailable`, `rule_packets/bytes=unavailable`, хотя запечатанный Voice manifest содержит настоящие scoped IPFW rule. Теперь native live inspector связывает Telegram с точным правилом через verified manifest, существующий FreeBSD IPFW adapter только читает `ipfw show <rule>` и сверяет номер+аргументы. При ошибке/гонке counters честно unavailable, неподтверждённое правило не показывается активным. Публичные команды не получают второй Config/IPFW runtime путь. Адресные проверки добавлены к текущим adapter/runtime/inspect регрессиям.
 
-**Доказательства:** предыдущий квалифицированный _145 (HEAD c7f51bf) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38761330203). _146 Voice candidates FAILED; _147 требует нового full CI и FreeBSD 15 сборки. Релиза, установки и owner-live MEDIA/CALL пока нет. Следующее действие — проверить точный HEAD _147, затем только действительные оставшиеся требования.
+**Следующее действие:** полный CI и FreeBSD 15 на точном `_148` HEAD; затем только подтверждённые остаточные разрывы ТЗ, перед одной testing поставкой после кодовой готовности. Работающий Phase-B не мигрируется автоматически, живые STUN/MEDIA/CALL тесты пока не проводились.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_147` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_148` не опубликована.

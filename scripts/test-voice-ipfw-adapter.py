@@ -35,6 +35,7 @@ class SimulateFreeBSD:
         self.table_output = None
         self.missing = False
         self.error = False
+        self.counter_output = None
 
     def __call__(self, argv, **kwargs):
         self.operations.append(tuple(argv))
@@ -46,6 +47,11 @@ class SimulateFreeBSD:
         command = tuple(argv[1:])
         if command == ("-q", "list"):
             return subprocess.CompletedProcess(argv, 0, stdout=self.rule_listing, stderr="")
+        if command == ("show", "19000"):
+            output = self.counter_output
+            if output is None:
+                output = "19000 7 280 " + " ".join(VOICE) + "\\n"
+            return subprocess.CompletedProcess(argv, 0, stdout=output.replace("\\n", "\n"), stderr="")
         if len(command) == 3 and command[:2] == ("table", "zapret2_voice_telegram"):
             if command[-1] == "info":
                 if self.missing:
@@ -67,6 +73,24 @@ class IPFWAdapterTests(unittest.TestCase):
         self.assertEqual({19000: VOICE, 19001: TCP, 19002: UDP},
                          adapter.list_rules(19000, 19010))
         self.assertEqual(("/sbin/ipfw", "-q", "list"), fake.operations[0])
+
+    def test_verified_rule_counters_are_read_only_and_not_foreign(self):
+        fake=SimulateFreeBSD()
+        adapter=FreeBSDIPFWAdapter(19000,19010,runner=fake)
+        self.assertEqual((7,280),adapter.rule_counters(19000,VOICE))
+        self.assertEqual(("/sbin/ipfw","show","19000"),fake.operations[-1])
+        for output in (
+            "19001 7 280 " + " ".join(VOICE) + "\n",
+            "19000 7 280 " + " ".join(TCP) + "\n",
+            "19000 7 280 " + " ".join(VOICE) + "\n19000 9 900 " + " ".join(VOICE),
+            "19000 not_a_number 280 " + " ".join(VOICE),
+        ):
+            fake.counter_output=output
+            with self.subTest(output=output),self.assertRaises(IPFWAdapterError):
+                adapter.rule_counters(19000,VOICE)
+        with self.assertRaises(IPFWAdapterError):
+            adapter.rule_counters(19012,VOICE)
+        self.assertTrue(all(x[1] == "show" for x in fake.operations))
 
     def test_reads_bounded_known_ipv4_table(self):
         fake = SimulateFreeBSD()
