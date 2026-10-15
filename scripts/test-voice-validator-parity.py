@@ -87,6 +87,8 @@ class ParserParity(unittest.TestCase):
             ('invalid IPv6',enabled(form(),ips='2001:db8::1')),
             ('missing IPSET',enabled(form(),ips='')),
             ('repeated -l7',enabled(form(),args=ARGS+'--filter-l7=stun\n')),
+            ('repeated out-range',enabled(form(),args=ARGS+'--out-range=n1-n10\n--out-range=n11-n20\n')),
+            ('repeated Lua fake',enabled(form(),args=ARGS+FAKE+'\n'+FAKE)),
             ('illegal shell',enabled(form(),args=ARGS+'--new\n')),
             ('fake duplicated options',enabled(form(),args=ARGS+FAKE+':ip_ttl=3:ip_ttl=4')),
             ('out of bounds ports',enabled(form(),args=ARGS.replace('596-599','65536'))),

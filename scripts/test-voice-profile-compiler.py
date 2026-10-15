@@ -102,6 +102,8 @@ class VoiceCandidateTests(unittest.TestCase):
         invalid = [
             (BASE_ARGS + "\n--new", "forbidden"),
             (BASE_ARGS + "\n--filter-tcp=443", "forbidden"),
+            (BASE_ARGS + "\n--lua-desync=fake:blob=0x12", "duplicate --lua-desync"),
+            (BASE_ARGS + "\n--out-range=n1-n10\n--out-range=n11-n20", "duplicate --out-range"),
             (BASE_ARGS + "\n--ipset=/etc/passwd", "forbidden"),
             (BASE_ARGS + "\n--name=system", "forbidden"),
             (BASE_ARGS + "\n--port=989", "forbidden"),

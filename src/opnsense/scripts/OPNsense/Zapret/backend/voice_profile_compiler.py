@@ -158,6 +158,10 @@ def validate_arguments(source: str, service: str) -> tuple[list[str], list[tuple
         if len(item) > 9000 or not item.isascii() or any(ord(ch) < 33 or ord(ch) > 126 for ch in item):
             fail(field, "only printable single-token ASCII native arguments are permitted")
         option = item.split("=", 1)[0]
+        # Match the GUI precheck at the privileged candidate compilation gate.
+        # In particular, repeated out-range/fake actions must not reach dvtws2.
+        if option in seen:
+            fail(field, f"duplicate {option}")
         if option == "--filter-udp":
             if option in seen or "=" not in item:
                 fail(field, "only one --filter-udp= is allowed")
