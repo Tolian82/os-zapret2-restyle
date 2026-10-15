@@ -309,6 +309,8 @@ jobs:
         run: sh scripts/test-voice-staged-runtime-guard.sh
       - name: Voice read-only live IPFW ownership inspector
         run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice saved Config and five-profile GUI status API
+        run: php scripts/test-voice-inspect-config-runtime.php
       - name: Voice one-engine five-profile runtime attestation
         run: python3.13 scripts/test-voice-common-engine-status.py
       - name: Read-only FreeBSD Voice trial counter evidence

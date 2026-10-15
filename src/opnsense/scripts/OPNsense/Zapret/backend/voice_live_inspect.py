@@ -304,6 +304,7 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
             }
         return {
             "state": "stopped", "source": "native-common",
+            "config_digest": owner["candidate"],
             "condition": "common-runtime-stopped",
             "can_activate": False, "rule_count": 0, "table_count": 0,
             "runtime": runtime,
@@ -327,6 +328,9 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
         }
     return {
         "state": "ready", "source": "native-common",
+        # The GUI must independently re-read native Config under its lock
+        # before declaring that these running profile bytes are SAVED ON.
+        "config_digest": owner["candidate"],
         "condition": "common-runtime-and-ipfw-verified", "can_activate": False,
         "rule_count": len(manifest["rules"]),
         "table_count": len(manifest["tables"]),

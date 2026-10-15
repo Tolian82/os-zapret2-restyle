@@ -26,6 +26,13 @@ $(document).ready(function () {
         cutoverPrepared: 'Незавершённая подготовка — проверьте прежнее состояние',
         cutoverMutating: 'Прервано переключение — требуется проверка служб и IPFW',
         cutoverCommitted: 'Переключение зафиксировано — проверьте завершение очистки',
+        commonConfigMismatch: 'Сохранённый Config не совпадает с активным профилем — требуется проверка',
+        commonProfileUnverified: 'Профиль не подтверждён — проверьте Config и runtime',
+        savedVoiceOn: 'Сохранено: ВКЛ', savedVoiceOff: 'Сохранено: ВЫКЛ',
+        voiceActive: 'STUN-профиль, dvtws2 и IPFW подтверждены; звонок не проверен',
+        voiceStopped: 'Служба остановлена; профиль сохранён',
+        voiceDisabled: 'Дополнительный Voice-перехват выключен',
+        voiceUnverified: 'Активность профиля не подтверждена',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
@@ -52,6 +59,13 @@ $(document).ready(function () {
         cutoverPrepared: 'Interrupted preparation — verify previous runtime',
         cutoverMutating: 'Interrupted cutover — inspect services and IPFW',
         cutoverCommitted: 'Cutover committed — verify cleanup completion',
+        commonConfigMismatch: 'Saved Config differs from active profile — review required',
+        commonProfileUnverified: 'Profile not verified — inspect Config and runtime',
+        savedVoiceOn: 'Saved: ON', savedVoiceOff: 'Saved: OFF',
+        voiceActive: 'STUN profile, dvtws2 and IPFW verified; call untested',
+        voiceStopped: 'Service stopped; profile saved',
+        voiceDisabled: 'Additional Voice interception disabled',
+        voiceUnverified: 'Profile activation not verified',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
@@ -353,6 +367,7 @@ $(document).ready(function () {
         formatTokenizersUI();
         $('.selectpicker').selectpicker('refresh');
         localizeForm();
+        refreshVoiceIPFW();
     });
     var runtimeState = 'error', runtimeInstalled = false, runtimeBusy = false;
     function setServiceControlsBusy(busy) {
@@ -388,6 +403,32 @@ $(document).ready(function () {
                 setServiceControlsBusy(true);
             });
     }
+    // Append read-only observations to existing checkbox help text, without
+    // moving or replacing any of the five approved form fields/help icons.
+    function showVoiceProfileObservations(reply) {
+        ['telegram', 'discord', 'x', 'sip', 'custom'].forEach(function (name) {
+            var id = 'zapret.voice.' + name + '.enabled';
+            var input = document.getElementById(id) || document.getElementById(id.replace(/\\./g, '_'));
+            if (!input) return;
+            var help = $(input).closest('tr').find('.help-block').first();
+            if (!help.length) return;
+            var observed = help.find('.voice-profile-observation');
+            if (!observed.length) {
+                observed = $('<span class="voice-profile-observation"></span>').appendTo(help);
+            }
+            var profile = reply && reply.profiles && reply.profiles[name];
+            if (!profile || typeof profile.saved_enabled !== 'boolean' ||
+                !['active', 'stopped', 'disabled'].includes(profile.runtime)) {
+                observed.text(' · ' + text.voiceUnverified);
+                return;
+            }
+            var saved = profile.saved_enabled ? text.savedVoiceOn : text.savedVoiceOff;
+            var state = profile.runtime === 'active' ? text.voiceActive :
+                        profile.runtime === 'stopped' ? text.voiceStopped :
+                        text.voiceDisabled;
+            observed.text(' · ' + saved + ' — ' + state);
+        });
+    }
     function refreshVoiceIPFW() {
         return $.ajax({type:'POST',url:'/api/zapret/voice/inspect',dataType:'json',timeout:30000})
             .done(function (reply) {
@@ -401,7 +442,9 @@ $(document).ready(function () {
                 var details = {
                     'prepared-needs-previous-verification': text.cutoverPrepared,
                     'interrupted-needs-kernel-runtime-review': text.cutoverMutating,
-                    'committed-needs-cleanup-review': text.cutoverCommitted
+                    'committed-needs-cleanup-review': text.cutoverCommitted,
+                    'common-config-mismatch': text.commonConfigMismatch,
+                    'common-profile-unverified': text.commonProfileUnverified
                 };
                 $('#voiceIPFWDetail').text(
                     state === 'interrupted' && reply &&
@@ -409,6 +452,7 @@ $(document).ready(function () {
                     Object.prototype.hasOwnProperty.call(details, reply.condition)
                         ? details[reply.condition] : ''
                 );
+                showVoiceProfileObservations(reply);
                 $('#voiceIPFWState')
                     .removeClass('label-success label-default label-danger')
                     .addClass(state === 'ready' ? 'label-success' :
@@ -416,6 +460,7 @@ $(document).ready(function () {
                                   ? 'label-default' : 'label-danger')
                     .text(label);
             }).fail(function () {
+                showVoiceProfileObservations(null);
                 $('#voiceIPFWState').removeClass('label-success label-default')
                     .addClass('label-danger').text(text.ipfwUnknown);
                 $('#voiceIPFWDetail').text('');
@@ -474,7 +519,7 @@ $(document).ready(function () {
         var action = runtimeState === 'started' ? 'stop' : 'start';
         setServiceControlsBusy(true);
         $.ajax({type:'POST',url:'/api/zapret/service/' + action,dataType:'json',timeout:600000})
-            .always(function () { refreshRuntime(); updateServiceControlUI('zapret'); });
+            .always(function () { refreshRuntime(); refreshVoiceIPFW(); updateServiceControlUI('zapret'); });
     });
     $('#voiceReleaseApply').on('click', function () {
         var version = $('#voiceReleaseSelect').val();

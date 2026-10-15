@@ -454,7 +454,7 @@ class VoiceController extends ApiControllerBase
             return ['state' => 'inspection-error', 'can_activate' => false,
                     'remedy' => 'invalid-status'];
         }
-        return [
+        $result = [
             'state' => $payload['state'],
             'can_activate' => $payload['can_activate'] === true,
             'condition' => (string)($payload['condition'] ?? ''),
@@ -462,5 +462,85 @@ class VoiceController extends ApiControllerBase
             'rule_count' => (int)($payload['rule_count'] ?? 0),
             'table_count' => (int)($payload['table_count'] ?? 0),
         ];
+        // Only a committed native-common owner may associate five runtime
+        // profiles with saved Voice checkboxes. The read-only inspector
+        // witnessed exact release bytes, processes and kernel IPFW; confirm
+        // its SEALED candidate digest against freshly locked native Config.
+        // A stale browser form, standalone legacy ledger, or incomplete
+        // native operation can never fabricate an active service.
+        if (in_array($payload['state'], ['ready', 'stopped'], true) &&
+            ($payload['source'] ?? null) === 'native-common') {
+            try {
+                $config = Config::getInstance();
+                $config->lock();
+                try {
+                    $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                    $savedDigest = VoiceSettingsSnapshot::digest($current);
+                } finally {
+                    $config->unlock();
+                }
+                $committedDigest = $payload['config_digest'] ?? null;
+                if (!is_string($committedDigest) ||
+                    !preg_match('/^[a-f0-9]{64}$/D', $committedDigest) ||
+                    !hash_equals($committedDigest, $savedDigest)) {
+                    return [
+                        'state' => 'interrupted', 'can_activate' => false,
+                        'condition' => 'common-config-mismatch',
+                    ];
+                }
+                $runtime = $payload['runtime'] ?? null;
+                $services = is_array($runtime) ? ($runtime['services'] ?? null) : null;
+                $expectedState = $payload['state'] === 'ready' ? 'running' : 'stopped';
+                if (!is_array($runtime) || !is_array($services) ||
+                    ($runtime['state'] ?? null) !== $expectedState ||
+                    ($runtime['source_verified'] ?? null) !== true ||
+                    ($runtime['engine_verified'] ?? null) !== ($expectedState === 'running') ||
+                    ($runtime['supervisor_verified'] ?? null) !== ($expectedState === 'running')) {
+                    return [
+                        'state' => 'interrupted', 'can_activate' => false,
+                        'condition' => 'common-profile-unverified',
+                    ];
+                }
+                $result['profiles'] = [];
+                foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $name) {
+                    $enabled = ($current['voice'][$name]['enabled'] ?? '0') === '1';
+                    $report = $services[$name] ?? null;
+                    if (!is_array($report) ||
+                        !is_bool($report['configured'] ?? null) ||
+                        !is_bool($report['capture_verified'] ?? null) ||
+                        !is_string($report['runtime_state'] ?? null)) {
+                        return [
+                            'state' => 'interrupted', 'can_activate' => false,
+                            'condition' => 'common-profile-unverified',
+                        ];
+                    }
+                    $configured = $report['configured'];
+                    $expectedProfileState = $enabled
+                        ? ($expectedState === 'running' ? 'engine-present' : 'engine-not-confirmed')
+                        : 'disabled';
+                    if ($configured !== $enabled ||
+                        $report['capture_verified'] !== $enabled ||
+                        $report['runtime_state'] !== $expectedProfileState) {
+                        return [
+                            'state' => 'interrupted', 'can_activate' => false,
+                            'condition' => 'common-profile-unverified',
+                        ];
+                    }
+                    $result['profiles'][$name] = [
+                        'saved_enabled' => $enabled,
+                        'runtime' => !$enabled ? 'disabled' :
+                            ($expectedState === 'running' ? 'active' : 'stopped'),
+                        // Readiness of engine/IPFW is never evidence of a
+                        // STUN response, media passage, or a working call.
+                        'media_verified' => false,
+                        'call_verified' => false,
+                    ];
+                }
+            } catch (\Throwable $error) {
+                return ['state' => 'inspection-error', 'can_activate' => false,
+                        'remedy' => 'status-unavailable'];
+            }
+        }
+        return $result;
     }
 }
