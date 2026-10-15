@@ -419,35 +419,40 @@ orchestrator_build_release()
                 return 1
             }
     fi
-    # The detached shared build feeds the ordinary generator directly.
-    # Legacy callers retain their old layout until common IPFW/Apply replaces
-    # that lifecycle; no build variant itself activates a candidate.
-    _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
-    if [ "${_orchestrator_build_variant}" = "shared-candidate" ]; then
-        _orchestrator_build_voice_native="${_orchestrator_build_release}"
-        _orchestrator_build_voice_layout=common
-    else
-        _orchestrator_build_voice_layout=private
+    # Ordinary legacy runtime uses its original traffic.conf and Phase-B
+    # helper, not a second inert native Voice candidate. Keep the native
+    # compiler only for explicitly requested detached/shared candidates.
+    if [ "${_orchestrator_build_variant}" != "ordinary" ]; then
+        # The detached shared build feeds the ordinary generator directly.
+        # Legacy callers retain their old layout until common IPFW/Apply replaces
+        # that lifecycle; no build variant itself activates a candidate.
+        _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
+        if [ "${_orchestrator_build_variant}" = "shared-candidate" ]; then
+            _orchestrator_build_voice_native="${_orchestrator_build_release}"
+            _orchestrator_build_voice_layout=common
+        else
+            _orchestrator_build_voice_layout=private
+        fi
+        : > "${_orchestrator_build_error}"
+        orchestrator_stage_native_voice \
+            "${_orchestrator_build_voice_xml}" \
+            "${_orchestrator_build_managed_source}" \
+            "${_orchestrator_build_active_dir}" \
+            "${WAN_IF}" \
+            "${RULE_BASE:-19000}" \
+            "${RULE_MAX:-19010}" \
+            "${DIVERT_PORT}" \
+            "${_orchestrator_build_user_traffic}" \
+            "${_orchestrator_build_voice_native}" "${_orchestrator_build_voice_layout}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 4 \
+                    "${_orchestrator_build_total}" blobs \
+                    "${_orchestrator_build_error}" \
+                    "native Voice candidate compilation failed"
+                return 1
+            }
     fi
-    : > "${_orchestrator_build_error}"
-    orchestrator_stage_native_voice \
-        "${_orchestrator_build_voice_xml}" \
-        "${_orchestrator_build_managed_source}" \
-        "${_orchestrator_build_active_dir}" \
-        "${WAN_IF}" \
-        "${RULE_BASE:-19000}" \
-        "${RULE_MAX:-19010}" \
-        "${DIVERT_PORT}" \
-        "${_orchestrator_build_user_traffic}" \
-        "${_orchestrator_build_voice_native}" "${_orchestrator_build_voice_layout}" \
-        2>"${_orchestrator_build_error}" || {
-            orchestrator_fail_from_log \
-                "${_orchestrator_build_stage_file}" 4 \
-                "${_orchestrator_build_total}" blobs \
-                "${_orchestrator_build_error}" \
-                "native Voice candidate compilation failed"
-            return 1
-        }
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"
     _orchestrator_build_extra="${_orchestrator_build_release}/extra.conf"
     common_write_text_file \
@@ -517,11 +522,9 @@ orchestrator_build_release()
                 "argument generation failed"
             return 1
         }
-    # Produce the ACTUAL combined Voice + Strategies argv, using the very
-    # same generator, divert socket, Lua initializers and global exclusions
-    # as the currently active single-engine runtime. The candidate is not
-    # installed or used for live divert until native ON cutover is qualified.
-    if [ "${_orchestrator_build_variant}" != "shared-candidate" ]; then
+    # Only explicit native-detached evidence needs a private argv/IPFW
+    # handoff; shared-candidate uses its one ordinary release generator.
+    if [ "${_orchestrator_build_variant}" = "native-detached" ]; then
         _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
         : > "${_orchestrator_build_error}"
         generator_build_args_mapped \

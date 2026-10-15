@@ -67,24 +67,26 @@ orchestrator_stage_native_voice "$2" "$3" "$4" "$5" \
 
 
 class ActualRuntimeWire(unittest.TestCase):
-    def test_normal_build_calls_native_stage_on_real_ordinary_output(self):
+    def test_ordinary_build_keeps_native_voice_bundle_detached(self):
         shell = ORCH.read_text(encoding="utf-8")
         source = shell[shell.index("orchestrator_build_release()"):
                        shell.index("orchestrator_cleanup_runtime()")]
-        self.assertIn('orchestrator_stage_native_voice \\', source)
-        self.assertIn('"${_orchestrator_build_voice_xml}" \\', source)
-        self.assertIn('orchestrator_voice_build_preflight \\', source)
-        self.assertIn('"${_orchestrator_build_user_traffic}" \\', source)
-        self.assertIn('"${_orchestrator_build_managed_source}" \\', source)
-        self.assertIn('"${_orchestrator_build_voice_native}"', source)
+        self.assertIn('if [ "${_orchestrator_build_variant}" != "ordinary" ]; then', source)
+        stage = source[source.index("# Ordinary legacy runtime uses"):
+                       source.index("_orchestrator_build_extra_input=")]
+        self.assertIn("orchestrator_stage_native_voice", stage)
+        self.assertIn('"${_orchestrator_build_user_traffic}"', stage)
+        self.assertIn('"${_orchestrator_build_managed_source}"', stage)
+        self.assertIn('if [ "${_orchestrator_build_variant}" = "native-detached" ]; then', source)
+        self.assertIn("telegram_voice_build_effective_traffic", source)
         guard = shell[shell.index("orchestrator_voice_build_preflight()"):
                       shell.index("orchestrator_build_release()")]
         self.assertIn("config_voice_staged_only_guard", guard)
         self.assertLess(source.index("orchestrator_voice_build_preflight"),
-                        source.index("orchestrator_stage_native_voice"))
-        # Old PoC still builds real traffic.conf until full IPFW cutover.
+                        source.index("telegram_voice_build_effective_traffic"))
         self.assertLess(source.index("telegram_voice_build_effective_traffic"),
                         source.index("orchestrator_stage_native_voice"))
+
 
     def test_native_voice_on_is_built_in_single_engine_traffic_candidate(self):
         with tempfile.TemporaryDirectory() as d:

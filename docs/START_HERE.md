@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_141`. `VERSION=0.5.2`; `PLUGIN_REVISION=141`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_142`. `VERSION=0.5.2`; `PLUGIN_REVISION=142`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,16 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Реализовано в `_141`:** под исходным FD9 старые mutating `telegram-voice-enable/disable` теперь не заходят в старый reconfigure при committed/pending native shared Apply или установленном native `voice-plan.json` без журнала. Реальные legacy режимы и read-only status сохранены; добавлена регрессия к существующему shared boot/lifecycle тесту.
+**Доказано на предыдущем HEAD `098b5e8` (`_141`):** [Validate Project, Validate Voice candidates и фактическая FreeBSD 15 package build — SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38741301128). Это не owner-live.
 
-**Следующее действие:** проверить latest-HEAD общий CI и настоящий FreeBSD 15 package build, затем целенаправленно проверить ещё установленные и используемые legacy PoC entrypoints и package content. Только доказанные остатки удалять с сохранением совместимости. Общий STUN/dvtws2/IPFW/Apply не переписывать.
+**Изменение `_142`:** обычный legacy Start/Reconfigure больше не строит вложенный и неиспользуемый `voice-native-candidate`. Сохраняются Phase-B helper для старой установки, операторский `native-detached` и штатный общий `shared-candidate`. Старый PoC не удалён: он ещё участвует в совместимости/миграции. Существующий build-wire тест скорректирован; новых recovery-слоёв нет.
 
-**Последний CI до изменения:** HEAD `efec440`: [Validate Voice candidates SUCCESS, Validate Project FAILURE](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38734179205), `test-repository-hygiene.sh` требует `START_HERE -> PROJECT_STATE -> version-line archive` в state; FreeBSD SKIPPED. Это документальное требование исправлено; новый HEAD пока не объявлять PASS. Source / CI / owner-live доказательства различать.
+**Следующее конкретное действие:** проверить full CI и FreeBSD 15 build на новом HEAD, затем только оставшиеся вызываемые legacy CLI/configd/package пути без массового удаления сохранённых для миграции файлов. Общий STUN/dvtws2/IPFW/Apply уже реализован, повторно не создавать.
+
+Source implemented, CI/package verified и owner-live confirmed — разные доказательства; живых MEDIA/CALL PASS нет.
 
 ## Минимальное чтение
 
-После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология `_1…_140` — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
+После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_141` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_142` не опубликована.
