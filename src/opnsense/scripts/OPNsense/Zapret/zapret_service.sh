@@ -2287,7 +2287,29 @@ service_with_lifecycle_lock()
                 fi
                 preflight_voice_cutover_journals || return 69
                 ;;
-            native-voice-checkpoint|telegram-voice-enable|telegram-voice-disable|strategy-lab|strategy-lab-circular|strategy-lab-recover)
+            telegram-voice-enable|telegram-voice-disable)
+                # Old PoC enable/disable can call legacy reconfigure.
+                # Check the shared owner read-only under the original FD9.
+                if shared_apply_has_record_service; then
+                    _legacy_poc_owner=$(shared_apply_inspect_service) || return 69
+                    case "$_legacy_poc_owner" in
+                        none|restored) ;;
+                        *)
+                            echo "ERROR: legacy Telegram PoC cannot mutate the shared native owner" >&2
+                            return 69
+                            ;;
+                    esac
+                fi
+                # Native release without its durable journal is ownership
+                # drift, never permission to fall back to legacy.
+                if [ -e "$ACTIVE_DIR/voice-plan.json" ] ||
+                   [ -L "$ACTIVE_DIR/voice-plan.json" ]; then
+                    echo "ERROR: installed native runtime blocks legacy PoC mutation" >&2
+                    return 69
+                fi
+                preflight_voice_cutover_journals || return 69
+                ;;
+            native-voice-checkpoint|strategy-lab|strategy-lab-circular|strategy-lab-recover)
                 preflight_voice_cutover_journals || return 69
                 ;;
         esac

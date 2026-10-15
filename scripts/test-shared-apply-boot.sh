@@ -308,6 +308,37 @@ check_route 0 restart
 check_route 0 start
 [ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
+# Old Telegram PoC actions must never fall through to legacy reconfigure
+# while the common Voice/Strategies runtime belongs to shared Apply.
+for legacy_action in telegram-voice-enable telegram-voice-disable; do
+    HAS_RECORD=1 OWNER_OK=1
+    for blocked in "committed $ID voice" "committed $ID strategies" \
+        "prepared $ID voice" "activated $ID voice" "config-saved $ID voice" pending; do
+        OWNER="$blocked"
+        check_route 69 "$legacy_action"
+        [ ! -s "$LOG" ] || fail "$legacy_action entered old runtime with shared owner"
+    done
+    OWNER_OK=0
+    check_route 69 "$legacy_action"
+    [ ! -s "$LOG" ] || fail "corrupt shared ownership ignored"
+    OWNER_OK=1 OWNER=restored
+    check_route 0 "$legacy_action"
+    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$legacy_action " ] ||
+        fail "restored genuine legacy action blocked"
+    HAS_RECORD=0
+    check_route 0 "$legacy_action"
+    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$legacy_action " ] ||
+        fail "genuine no-journal legacy action blocked"
+    printf 'native\n' > "$ACTIVE_DIR/voice-plan.json"
+    check_route 69 "$legacy_action"
+    [ ! -s "$LOG" ] || fail "unowned native release reached legacy"
+    rm -f "$ACTIVE_DIR/voice-plan.json"
+    ln -s "$ROOT/missing-plan" "$ACTIVE_DIR/voice-plan.json"
+    check_route 69 "$legacy_action"
+    [ ! -s "$LOG" ] || fail "native owner symlink reached legacy"
+    rm -f "$ACTIVE_DIR/voice-plan.json"
+done
+HAS_RECORD=0 OWNER_OK=1 OWNER=restored
 # Recover the narrow phase where the previous committed release was never
 # displaced. Use the production service recovery function and mock only
 # its root-only terminal CLI; no kernel, Config or files are touched.
