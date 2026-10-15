@@ -9,7 +9,7 @@
 | 1. Общий Voice + ordinary generator | Реализован в коде и isolated tests |
 | 2. Общий scoped STUN/IPFW | Реализован, включая точную сверку engine/UDP/IPSET/WAN/divert |
 | 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
-| 4. Lifecycle и legacy миграция | Normal Stop/Start/boot в коде; live-миграция старого PoC не принята |
+| 4. Lifecycle и legacy миграция | Normal Stop/Start/boot в коде; mutating legacy PoC запрещён при native Apply ownership; live-миграция старого PoC не принята |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
 | 6. Удаление дублирования | Проверить актуальные legacy entrypoints и содержимое пакета |
 | 7. Приёмка | Full CI/FreeBSD ещё не подтверждены; owner-live GUI/STUN/MEDIA/CALL впереди |
