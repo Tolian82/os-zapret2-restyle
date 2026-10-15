@@ -1548,10 +1548,19 @@ shared_apply_stop_service()
     fi
     # Verify the exact installed owner BEFORE stopping its process.
     firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+    # supervisor_stop_one unlinks a PID file after signaling even if the
+    # original process remains alive. Pin its exact old identity so Stop
+    # cannot silently strand the monitor after losing its PID file.
+    _shared_stop_old_monitor_pid=
+    if [ "$_shared_stop_monitor" = 1 ]; then
+        _shared_stop_old_monitor_pid=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || return 69
+    fi
     supervisor_stop "$SUPERVISOR_DAEMON_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" || return 70
     launcher_stop "$CHILD_PIDFILE" 5 || return 70
     if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
-       launcher_is_running "$CHILD_PIDFILE"; then
+       launcher_is_running "$CHILD_PIDFILE" ||
+       { [ -n "$_shared_stop_old_monitor_pid" ] &&
+         common_process_matches "$_shared_stop_old_monitor_pid" "$SUPERVISOR_LOOP"; }; then
         return 70
     fi
     # Do not remove the firewall and announce STOP when another dvtws2
@@ -1563,6 +1572,21 @@ shared_apply_stop_service()
     # Failure retains committed ownership; no blind rule/table sweep.
     firewall_shared_runtime install "$ACTIVE_DIR" - || return 70
     firewall_shared_runtime commit "$ACTIVE_DIR" - || return 70
+    # COMMIT removed the reversible kernel stage; do not report successful
+    # Stop if an old monitor survives, a child respawns, the installed
+    # traffic/IPSET release drifts, or IPFW changes at this boundary.
+    # No blind retry or fabricated rollback after the irreversible commit.
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 70
+    atomic_verify_tree "$_shared_stop_dir/release" "$ACTIVE_DIR" || return 70
+    if supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" ||
+       launcher_is_running "$CHILD_PIDFILE" ||
+       { [ -n "$_shared_stop_old_monitor_pid" ] &&
+         common_process_matches "$_shared_stop_old_monitor_pid" "$SUPERVISOR_LOOP"; }; then
+        common_error "native common Stop: process survived IPFW commit"
+        return 70
+    fi
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$ACTIVE_DIR" - || return 70
     printf "native-common-stopped=%s\n" "$_shared_stop_id"
 }

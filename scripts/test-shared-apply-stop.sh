@@ -12,6 +12,7 @@ ACTIVE_DIR="$ROOT/active"
 CHILD_PIDFILE="$ROOT/child.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$ROOT/daemon.pid"
+SUPERVISOR_LOOP="$ROOT/monitor-loop"
 mkdir -p "$ROOT/work/release" "$ACTIVE_DIR"
 LOG="$ROOT/events"
 preflight_voice_cutover_journals() { echo "guard:$1" >> "$LOG"; [ "$GUARD_OK" = 1 ]; }
@@ -27,13 +28,22 @@ shared_apply_workspace() { echo "$ROOT/work"; }
 atomic_verify_tree() { echo tree-verify >> "$LOG"; [ "$TREE_OK" = 1 ]; }
 launcher_is_running() { [ "$ENGINE_RUNNING" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR_RUNNING" = 1 ]; }
+supervisor_pidfile_read() { [ "$MONITOR_RUNNING" = 1 ] && printf '%s\n' 777; }
+common_process_matches() {
+    [ "$1" = 777 ] && [ "$2" = "$SUPERVISOR_LOOP" ] &&
+    [ "$OLD_MONITOR_SURVIVED" = 1 ]
+}
+common_error() { echo "error:$*" >> "$LOG"; }
 # This fixture models one exact registered engine; the separate real-census
 # regression covers orphan/duplicate/surviving PID scenarios.
-apply_runtime_attest_engine_inventory() { [ "$_apply_engine" = "$ENGINE_RUNNING" ]; }
+apply_runtime_attest_engine_inventory() {
+    [ "$_apply_engine" = "$ENGINE_RUNNING" ] && [ "$ORPHAN_ENGINE" = 0 ]
+}
 supervisor_stop() {
     echo supervisor-stop >> "$LOG"
     [ "$STOP_OK" = 1 ] || return 1
     MONITOR_RUNNING=0
+    [ "$STUCK_MONITOR" = 0 ] || OLD_MONITOR_SURVIVED=1
 }
 launcher_stop() {
     echo launcher-stop >> "$LOG"
@@ -46,7 +56,15 @@ firewall_shared_runtime() {
     case "$1" in
         verify) [ "$KERNEL_OK" = 1 ] ;;
         install) [ "$INSTALL_OK" = 1 ] ;;
-        commit) [ "$COMMIT_OK" = 1 ] ;;
+        commit)
+            [ "$COMMIT_OK" = 1 ] || return 1
+            [ "$POST_TREE_DRIFT" = 0 ] || TREE_OK=0
+            [ "$POST_ENGINE_RESPAWN" = 0 ] || ENGINE_RUNNING=1
+            [ "$POST_MONITOR_RESPAWN" = 0 ] || MONITOR_RUNNING=1
+            [ "$POST_ORPHAN_ENGINE" = 0 ] || ORPHAN_ENGINE=1
+            [ "$POST_OLD_MONITOR_SURVIVE" = 0 ] || OLD_MONITOR_SURVIVED=1
+            [ "$POST_KERNEL_DRIFT" = 0 ] || KERNEL_OK=0
+            ;;
         *) return 1 ;;
     esac
 }
@@ -54,6 +72,10 @@ reset() {
     GUARD_OK=1; SEAL_OK=1; CONFIG_OK=1; TREE_OK=1
     ENGINE_RUNNING=1; MONITOR_RUNNING=1
     STOP_OK=1; KERNEL_OK=1; INSTALL_OK=1; COMMIT_OK=1
+    OLD_MONITOR_SURVIVED=0; STUCK_MONITOR=0; ORPHAN_ENGINE=0
+    POST_TREE_DRIFT=0; POST_ENGINE_RESPAWN=0
+    POST_MONITOR_RESPAWN=0; POST_ORPHAN_ENGINE=0
+    POST_OLD_MONITOR_SURVIVE=0; POST_KERNEL_DRIFT=0
     : > "$LOG"
 }
 check() {
@@ -67,11 +89,40 @@ check() {
     [ "$got" = "$*" ] || fail "steps: $got"
 }
 reset
-check 0 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- ipfw:verify:$ACTIVE_DIR:- "
+check 0 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify ipfw:verify:$ACTIVE_DIR:- "
 grep -Fqx "native-common-stopped=$ID" "$ROOT/receipt" || fail "stop receipt"
 [ "$ENGINE_RUNNING" = 0 ] && [ "$MONITOR_RUNNING" = 0 ] || fail "processes still alive"
 reset; ENGINE_RUNNING=0; MONITOR_RUNNING=0
 check 0 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:$ACTIVE_DIR:- "
+# Native supervisor_stop_one may discard its PID file after a failed
+# signal. The original monitor identity must still block IPFW removal.
+reset; STUCK_MONITOR=1
+check 70 "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop "
+[ ! -s "$ROOT/receipt" ] || fail "surviving old monitor claimed Stop"
+# COMMIT destroys the reversible stage. Every post-COMMIT check must
+# fail closed rather than claim Stop if the active release or process/IPFW
+# state changes at this precise boundary.
+for fault in tree child monitor orphan old-monitor kernel; do
+    reset
+    case "$fault" in
+        tree) POST_TREE_DRIFT=1 ;;
+        child) POST_ENGINE_RESPAWN=1 ;;
+        monitor) POST_MONITOR_RESPAWN=1 ;;
+        orphan) POST_ORPHAN_ENGINE=1 ;;
+        old-monitor) POST_OLD_MONITOR_SURVIVE=1 ;;
+        kernel) POST_KERNEL_DRIFT=1 ;;
+    esac
+    case "$fault" in
+        tree) expected="guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify " ;;
+        child|monitor|old-monitor)
+            expected="guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify error:native common Stop: process survived IPFW commit "
+            ;;
+        orphan) expected="guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify " ;;
+        kernel) expected="guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify ipfw:verify:$ACTIVE_DIR:- " ;;
+    esac
+    check 70 "$expected"
+    [ ! -s "$ROOT/receipt" ] || fail "$fault post-COMMIT drift claimed Stop"
+done
 reset; GUARD_OK=0
 check 69 "guard:common-apply "
 reset; SEAL_OK=0
@@ -101,7 +152,7 @@ code=$?
 set -e
 [ "$code" -eq 0 ] || fail "dead common engine callback could not retire exact owner: $code"
 [ "$ENGINE_RUNNING" = 0 ] && [ "$MONITOR_RUNNING" = 0 ] || fail "callback left native monitor running"
-[ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- ipfw:verify:$ACTIVE_DIR:- " ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply seal:verify config:saved tree-verify ipfw:verify:-:$ACTIVE_DIR supervisor-stop launcher-stop ipfw:install:$ACTIVE_DIR:- ipfw:commit:$ACTIVE_DIR:- tree-verify ipfw:verify:$ACTIVE_DIR:- " ] ||
     fail "callback did not use the verified common Stop transaction"
 reset; ENGINE_RUNNING=0; MONITOR_RUNNING=1
 if shared_apply_stop_service "committed $ID voice" 541 > /dev/null; then
