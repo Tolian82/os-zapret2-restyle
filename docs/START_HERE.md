@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_149`. `VERSION=0.5.2`; `PLUGIN_REVISION=149`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_150`. `VERSION=0.5.2`; `PLUGIN_REVISION=150`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,16 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Подтверждение `_148`:** HEAD `f4da990` прошёл [Validate Project, Validate Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38776094281). Это CI и пакет, а не работа звонка на OPNsense.
+**Предыдущий квалифицированный HEAD f4da990 (_148):** Validate Project, Voice candidates и FreeBSD 15 package SUCCESS (Actions 38776094281). Это не owner-live.
 
-**Функциональный `_149`:** при _148 native inspector и historical Telegram configctl уже знали точные IPFW rule/packet/byte counters, но `VoiceController::inspectAction` отбрасывал их для всех пяти профилей, а страница не могла их показать. Теперь API безопасно передаёт номер проверенного правила (только у реально running ON), проверяет допустимый диапазон/уникальность, принимает только неотрицательные JS-safe integer counters; другие значения скрываются, а не округляются. Существующие RU/EN подсказки каждой галочки дополняются конкретным rule и доступными счетчиками; при stopped/per-profile OFF правила нет, неизвестные packets не подменяют MEDIA/CALL PASS. Компоновка и ТЗ прежние, backend/IPFW/FD9 не менялись.
+**Функциональный _149:** новые verified IPFW rule/packet/byte поля теперь проходят весь путь native inspector → VoiceController::inspectAction → существующая RU/EN GUI-строка пяти профилей. Только подтверждённые running ON имеют live rule; counters передаются только как JS-safe integers, без ложного MEDIA/CALL PASS.
 
-**Следующее действие:** полный CI и FreeBSD package на итоговом `_149` HEAD, затем только доказанные незакрытые требования. Один testing release после кодовой готовности, старый Phase-B не мигрирует автоматически, owner-live STUN/MEDIA/CALL ещё не проводились.
+**Корректировка _150:** CI _149 (run 38779258568) нашёл старую PHP-фикстуру test-voice-inspect-config-runtime.php, показывавшую якобы готовый активный профиль без теперь обязательного правила. Фикстура обновлена реальным rule/counters; Stop не показывает активное правило, повреждённые rule отвергаются, oversized/отсутствующие counters не выдумываются. Производственный код не ослаблен, тест остался существующим.
+
+**Следующее действие:** независимый latest-HEAD CI и FreeBSD 15 package build для _150, затем только подтверждённые остаточные требования ТЗ. Релиза, установки на OPNsense, owner-live STUN/MEDIA/CALL пока нет.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_149` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_150` не опубликована.

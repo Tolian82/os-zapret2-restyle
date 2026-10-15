@@ -66,6 +66,7 @@ namespace {
             'wan' => 'vtnet1',
             'udp_ports' => '3478,10000-20000',
             'ipset_entries' => 2,
+            'rule' => 19000, 'rule_packets' => 7, 'rule_bytes' => 280,
         ] : []);
     }
     $native = [
@@ -95,6 +96,7 @@ namespace {
         'profile_id'=>'voice-telegram', 'profile_revision'=>'012345abcdef',
         'wan'=>'vtnet1', 'udp_ports'=>'3478,10000-20000',
         'ipset_entries'=>2,
+        'rule'=>19000, 'rule_packets'=>7, 'rule_bytes'=>280,
     ], 'Telegram was not separately and truthfully reported');
     verify($ok['profiles']['discord']['runtime'] === 'disabled' &&
         $ok['profiles']['discord']['saved_enabled'] === false &&
@@ -111,8 +113,21 @@ namespace {
     $stopped['runtime']['services']['telegram']['runtime_state'] = 'engine-not-confirmed';
     $halted = $inspect($stopped);
     verify($halted['state'] === 'stopped' &&
-        $halted['profiles']['telegram']['runtime'] === 'stopped',
-        'saved ON must survive normal Stop without claiming live engine');
+        $halted['profiles']['telegram']['runtime'] === 'stopped' &&
+        !isset($halted['profiles']['telegram']['rule']) &&
+        !isset($halted['profiles']['telegram']['rule_packets']) &&
+        !isset($halted['profiles']['telegram']['rule_bytes']),
+        'saved ON must survive Stop without claiming live rules or counters');
+
+    $unknown = $native;
+    unset($unknown['runtime']['services']['telegram']['rule_packets']);
+    $unknown['runtime']['services']['telegram']['rule_bytes'] = 9007199254740992;
+    $unknownReport = $inspect($unknown);
+    verify($unknownReport['state'] === 'ready' &&
+        $unknownReport['profiles']['telegram']['rule'] === 19000 &&
+        !isset($unknownReport['profiles']['telegram']['rule_packets']) &&
+        !isset($unknownReport['profiles']['telegram']['rule_bytes']),
+        'unavailable or oversized counters must not be rounded/fabricated');
 
     $changed = $native;
     $changed['config_digest'] = str_repeat('0', 64);
@@ -137,6 +152,9 @@ namespace {
         ['ipset_entries'=>4097],
         ['profile_revision'=>'uncertain'],
         ['profile_id'=>'voice-discord'],
+        ['rule'=>0],
+        ['rule'=>65535],
+        ['rule'=>'19000'],
     ] as $invalid) {
         $tampered = $native;
         foreach ($invalid as $field=>$value) {
