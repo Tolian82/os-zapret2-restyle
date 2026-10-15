@@ -1615,6 +1615,27 @@ shared_apply_boot_service()
     # legacy Telegram Voice service.
     apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || return 70
     apply_runtime_commit || return 70
+    # A successful IPFW commit is not a running service receipt. The
+    # cold-boot path must meet the same post-COMMIT guarantee as normal
+    # Voice/Strategies Apply: the installed profile/traffic.conf/IPSET
+    # match the sealed release, the exact process census is correct, and
+    # kernel rules are still owned. Check both global ON and OFF.
+    _shared_boot_final_engine=0
+    _shared_boot_final_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _shared_boot_final_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_boot_final_monitor=1
+    if ! {
+        [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+        atomic_verify_tree "$_shared_boot_dir/release" "$ACTIVE_DIR" &&
+        apply_runtime_probe "$_shared_boot_dir/release" "$_shared_boot_mode" &&
+        [ "$_shared_boot_final_engine" = "$_shared_boot_mode" ] &&
+        [ "$_shared_boot_final_monitor" = "$_shared_boot_mode" ]
+    }; then
+        # Config and committed IPFW have already changed. Do not claim
+        # rollback or print a successful boot receipt after uncertain state.
+        common_error "native common boot: committed runtime or IPFW not verified"
+        return 70
+    fi
     printf "native-common-boot=%s\n" "$_shared_boot_id"
 }
 # Seal/attest the exact native XML, plan and all generated release bytes.

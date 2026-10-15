@@ -13,20 +13,41 @@ ACTIVE_DIR="$ROOT/active"
 CHILD_PIDFILE="$ROOT/child.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
+common_error() { echo "ERROR: $*" >&2; }
 preflight_voice_cutover_journals() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
 shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
 shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;; *) return 1 ;; esac; }
 shared_apply_workspace() { echo "$ROOT/work"; }
-apply_runtime_activate() { echo activate >> "$LOG"; [ "$ACTIVE" -eq 0 ]; }
-apply_runtime_commit() { echo commit >> "$LOG"; [ "$COMMIT" -eq 0 ]; }
+apply_runtime_activate() {
+  echo activate >> "$LOG"
+  [ "$ACTIVE" -eq 0 ] || return 1
+  # Native cold boot starts the exact selected common ON/OFF mode.
+  ENGINE="$BOOT_ENABLED"
+  MONITOR="$BOOT_ENABLED"
+}
+apply_runtime_commit() {
+  echo commit >> "$LOG"
+  [ "$COMMIT" -eq 0 ] || return 1
+  # Fault injection AFTER the irreversible IPFW COMMIT, not before it.
+  [ "$POST_ENGINE_LOST" -eq 0 ] || ENGINE=0
+  [ "$POST_MONITOR_LOST" -eq 0 ] || MONITOR=0
+}
 launcher_is_running() { [ "$ENGINE" -eq 1 ]; }
 supervisor_is_running() { [ "$MONITOR" -eq 1 ]; }
-atomic_verify_tree() { echo tree-verify >> "$LOG"; [ "$TREE_OK" -eq 1 ]; }
-apply_runtime_probe() { echo probe:$2 >> "$LOG"; [ "$PROBE_OK" -eq 1 ]; }
+atomic_verify_tree() {
+  echo tree-verify >> "$LOG"
+  [ "$TREE_OK" -eq 1 ] && [ "$POST_TREE_DRIFT" -eq 0 ]
+}
+apply_runtime_probe() {
+  echo probe:$2 >> "$LOG"
+  [ "$PROBE_OK" -eq 1 ] && [ "$POST_PROBE_DRIFT" -eq 0 ]
+}
 reset() {
   GUARD=0; SEAL=0; CONFIG=0; ACTIVE=0; COMMIT=0
   ENGINE=0; MONITOR=0; TREE_OK=1; PROBE_OK=1; BOOT_ENABLED=1
+  POST_TREE_DRIFT=0; POST_PROBE_DRIFT=0
+  POST_ENGINE_LOST=0; POST_MONITOR_LOST=0
   : > "$LOG"
 }
 expect() {
@@ -40,8 +61,30 @@ expect() {
   [ "$got" = "$*" ] || fail "boot steps: $got"
 }
 reset
-expect 0 'guard:common-apply seal:verify config:saved activate commit '
+expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
+# Global OFF still commits the saved common profile release without a
+# daemon and must prove the new IPFW scope empty after commit.
+reset; BOOT_ENABLED=0
+expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:0 '
+grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "OFF boot receipt"
+# A cold start must never print a success receipt if its installed release
+# changes, the kernel/argv proof fails or a process dies AFTER IPFW commit.
+for fault in tree probe child monitor; do
+  reset
+  case "$fault" in
+    tree) POST_TREE_DRIFT=1 ;;
+    probe) POST_PROBE_DRIFT=1 ;;
+    child) POST_ENGINE_LOST=1 ;;
+    monitor) POST_MONITOR_LOST=1 ;;
+  esac
+  case "$fault" in
+    tree) expected='guard:common-apply seal:verify config:saved activate commit tree-verify ' ;;
+    *) expected='guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 ' ;;
+  esac
+  expect 70 "$expected"
+  [ ! -s "$ROOT/output" ] || fail "$fault post-COMMIT drift claimed boot"
+done
 # Repeated Start/reconfigure on already verified shared Voice ON must not
 # stop, launch or replace the engine; a mismatched release/kernel refuses.
 reset; ENGINE=1; MONITOR=1

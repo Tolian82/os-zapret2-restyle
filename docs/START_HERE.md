@@ -1,6 +1,8 @@
 # os-zapret2-restyle — START HERE
 
-**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_134` остаётся Draft/неопубликованным кандидатом. Исправлен статический тест подтверждения WAN/UDP/IPSET и идентификатора.
+**Решение владельца 15.10.2026: сначала завершить программирование по ТЗ, потом один тестовый релиз и живые испытания.** Новый [короткий контроль завершения](VOICE_CODE_COMPLETION_GATE.md) — текущая очередь проекта; **не выпускать** тестовый/stable release и не устанавливать промежуточные ревизии на OPNsense. Пункт «проводить FreeBSD live испытания сейчас» в старых заметках больше не является немедленным следующим действием. `v0.5.2_135` остаётся Draft/неопубликованным кандидатом. Холодный native boot после IPFW COMMIT проверяет Config/runtime/IPFW перед успехом.
+
+**`v0.5.2_135` — завершающая проверка native common Start после reboot и IPFW COMMIT.** При холодном старте уже проверенные committed Config и sealed release запускаются штатным `apply_runtime_activate`/`apply_runtime_commit`; прежде процесс безусловно возвращал `native-common-boot` без финальной проверки. Теперь общий исходный FD9-путь перед успехом сверяет полное установленное дерево (включая `traffic.conf`, STUN/IPSET и `dvtws.args`) и запускает существующий read-only `apply_runtime_probe` для реального `dvtws2`, supervisor, IPFW и строгого глобального ON/OFF. Изменение дерева, kernel drift или гибель child/monitor после COMMIT дают ошибку 70 без ложного boot receipt или фиктивного отката. Идемпотентный уже запущенный Start использует прежний защитный путь. В существующий `test-shared-apply-boot.sh` добавлены успешные холодные ON/OFF и четыре postcommit failure-injections; новых runtime/recovery слоёв нет, релиза нет.
 
 **`v0.5.2_134` — исправлена точность статического GUI-контракта по проверенным WAN/UDP/IPSET и идентификатору Voice-профиля.** CI `_133` подтвердил native Python metadata и прямой PHP-controller test, но GUI static assertion ошибочно ожидал `$status` как inline array (`'profile_id' =>`), хотя тот по штатному API дополняется записью `$status['profile_id'] =`. Проверка приведена к реальному контракту PHP, production файлы `_133` не менялись. CI `_134` должен подтвердить полную матрицу; релиз не создавался.
 
@@ -138,7 +140,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_134`. `VERSION=0.5.2`; `PLUGIN_REVISION=134`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
+**Current handoff identity:** `v0.5.2_135`. `VERSION=0.5.2`; `PLUGIN_REVISION=135`. Линия состояния — `v0.5.x`. 13.10.2026 владелец поручил открыть новый этап общего Voice/Strategies backend без релиза и перенести старые отчёты из активной документации в историю.
 
 ## Текущая граница
 
