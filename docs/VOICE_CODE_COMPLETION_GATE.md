@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_160`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_161`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_159` HEAD `6de03e6` прошёл Voice candidates, Project и FreeBSD 15 package на второй попытке ([Actions #38801461001](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38801461001)). В первоначальной попытке Strategy Lab e2e получил `RESTORE_FAILED`, повтор на том же SHA — PASS. Для `_160` нужны самостоятельные три job и отсутствие retired private PREPARED files в pkg.
-2. **Этап 6:** `_152–_160` убрали отдельные private Apply/operator PREPARED пути. `_160` удаляет неиспользуемые forward-stage PREPARED, previous-evidence и one-time IPFW seed modules и их obsolete tests; проверка отсутствия private entrypoints остаётся. Общий Voice/Strategies Apply, native draft preview и миграционная диагностика сохранены. Следующая orphan ветка — `voice_native_forward_prepare.py` и зависящие от его fixture тесты.
+1. **CI/FreeBSD:** `_160` HEAD `5c54aba` подтвердил все три обязательных job Voice candidates, Project и FreeBSD 15 package ([Actions #38804868113](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38804868113)). `_161` должен пройти полную матрицу с новым historical test fixture и отсутствие old forward PREPARED executor в FreeBSD package.
+2. **Этап 6:** `_152–_161` удалили private Apply/operator PREPARED; `_161` снимает последнюю standalone native forward PREPARED source-функцию, но не ломает дочерние legacy Stop/IPFW/supervisor/Config tests: их fixture использует существующий schema-4 journal API. В дальнейшем приоритет — фактические незакрытые требования и минимизация избыточной архитектуры, без добавления новых recovery-слоёв.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 

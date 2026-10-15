@@ -216,8 +216,6 @@ jobs:
         run: python3.13 scripts/test-voice-native-legacy-process-restart.py
       - name: Execute original-FD9 five-domain legacy rollback end-to-end with power-cut resume
         run: python3.13 scripts/test-voice-native-legacy-five-domain-coordinator.py
-      - name: Native Voice forward Apply PREPARED schema-4 journal with full rollback witnesses
-        run: python3.13 scripts/test-voice-native-forward-prepare.py
       - name: Native Voice forward runtime installation and rollback after power loss
         run: python3.13 scripts/test-voice-native-forward-runtime.py
       - name: Native Voice previous process stop and forward runtime handoff
@@ -750,7 +748,7 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
-          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed)[.]py$' "${contents}"; then
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare)[.]py$' "${contents}"; then
             echo "ERROR: retired private Voice PREPARED backend leaked into installable FreeBSD package" >&2
             exit 1
           fi
