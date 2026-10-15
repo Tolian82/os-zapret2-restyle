@@ -267,12 +267,6 @@ jobs:
         run: python3.13 scripts/test-voice-native-lifecycle-router.py
       - name: Native Voice operator-only PREPARED Apply routing
         run: python3.13 scripts/test-voice-native-apply-route.py
-      - name: Native Voice write-once stage and five-resource PREPARED handoff
-        run: python3.13 scripts/test-voice-native-forward-stage-prepare.py
-      - name: Native Voice five previous evidence domains to PREPARED
-        run: python3.13 scripts/test-voice-native-previous-evidence-prepare.py
-      - name: Native Voice audited ordinary IPFW initial owner bootstrap
-        run: python3.13 scripts/test-voice-native-initial-ipfw-seed.py
       - name: Native Voice saved XML and rendered OPNsense template generation parity
         run: python3.13 scripts/test-voice-native-saved-pair-guard.py
       - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
@@ -756,8 +750,8 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
-          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply)[.]py$' "${contents}"; then
-            echo "ERROR: retired operator Voice CLI leaked into installable FreeBSD package" >&2
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed)[.]py$' "${contents}"; then
+            echo "ERROR: retired private Voice PREPARED backend leaked into installable FreeBSD package" >&2
             exit 1
           fi
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
