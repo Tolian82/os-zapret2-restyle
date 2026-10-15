@@ -202,8 +202,8 @@ class VoiceController extends ApiControllerBase
      * OFF. This is the first real write path for the Voice GUI, but is NOT
      * Apply: it never invokes configd, dvtws2, IPFW or a service restart.
      *
-     * Saving ON would make the existing staged-only runtime guard reject a
-     * later reboot, so it MUST remain impossible until native cutover ships.
+     * Saving ON through this draft-only path would bypass shared Apply;
+     * enabled profiles use applyAction with native runtime commit.
      */
     public function saveDraftAction(): array
     {

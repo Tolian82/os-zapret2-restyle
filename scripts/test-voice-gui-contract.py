@@ -38,6 +38,25 @@ def main() -> None:
           "Voice form is missing the native section headers")
     check(any(f.findtext("type") == "info" for f in form.findall("./field")),
           "Voice inline help/info is missing")
+    info = next((f.findtext("text", default="") for f in form.findall("./field")
+                 if f.findtext("type") == "info"), "")
+    check("Use Apply to validate, save and activate" in info and
+          "Save inactive draft only stores all-OFF" in info and
+          "Validate checks syntax without saving" in info,
+          "Voice info contradicts implemented Apply/draft/validate")
+    for service in SERVICES:
+        checkbox = next((f for f in form.findall("./field")
+                         if f.findtext("id") == f"zapret.voice.{service}.enabled"), None)
+        help_text = checkbox.findtext("help", default="") if checkbox is not None else ""
+        check("Apply validates, saves and activates" in help_text and
+              "Save inactive draft requires all Voice services OFF" in help_text and
+              "future activation" not in help_text,
+              f"{service}: checkbox help contradicts the shared Apply")
+    check("Включённый STUN-профиль применяется" in view and
+          "Enabled STUN profiles use the shared Apply button" in view and
+          "help.text(text.enableHelp)" in view and
+          "info.text(text.infoText)" in view,
+          "RU/EN dynamic help differs from actual shared Apply")
     for name in SERVICES:
         enable = model.find(f"./items/voice/{name}/enabled")
         args = model.find(f"./items/voice/{name}/args")
@@ -108,7 +127,7 @@ def main() -> None:
     check("public function inspectAction()" in status_php and
           "configdRun('zapret voice_inspect'" in status_php and
           "public function applyAction()" in status_php,
-          "Voice diagnostics and OFF-only native Apply must both be available")
+          "Voice diagnostics and shared native Apply must both be available")
     configd = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text(encoding="utf-8")
     check("[voice_recovery_status]" in configd and
           "zapret_service.sh native-voice-legacy-boot-review" in configd and
