@@ -1753,6 +1753,27 @@ shared_apply_execute_service()
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
+    # COMMIT discarded the reversible IPFW stage. Only now can the final
+    # exact installed state (not verify-staged) be inspected. A dead process,
+    # changed traffic.conf/IPSET, or modified scoped rules after Config save
+    # MUST NOT be reported to the GUI as a successful Apply.
+    _shared_apply_final_engine=0
+    _shared_apply_final_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _shared_apply_final_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _shared_apply_final_monitor=1
+    if ! {
+        shared_apply_bundle_service verify "$_shared_apply_id" &&
+        atomic_verify_tree "$_shared_apply_root/release" "$ACTIVE_DIR" &&
+        apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode" &&
+        [ "$_shared_apply_final_engine" = "$_shared_apply_mode" ] &&
+        [ "$_shared_apply_final_monitor" = "$_shared_apply_mode" ]
+    }; then
+        # No rollback after IPFW COMMIT / native Config::save: retain the
+        # durable transaction and force review instead of false success.
+        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+        return 70
+    fi
     shared_apply_record_service committed "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
     printf "applied-id=%s\n" "$_shared_apply_id"

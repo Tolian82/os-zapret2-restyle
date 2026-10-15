@@ -77,7 +77,15 @@ shared_apply_record_service() {
     printf "record:%s\n" "$1" >> "$LOG"
     [ "$1" != "$BAD_RECORD" ]
 }
-apply_runtime_probe() { echo runtime-probe >> "$LOG"; [ "$PROBE_RC" -eq 0 ]; }
+apply_runtime_probe() {
+    echo runtime-probe >> "$LOG"
+    PROBE_COUNT=$((PROBE_COUNT + 1))
+    [ "$PROBE_RC" -eq 0 ] &&
+    { [ "$FINAL_PROBE_FAIL" -eq 0 ] || [ "$PROBE_COUNT" -ne 2 ]; }
+}
+atomic_verify_tree() { echo runtime-tree >> "$LOG"; [ "$FINAL_TREE_OK" -eq 1 ]; }
+launcher_is_running() { [ "$FINAL_ENGINE" -eq 1 ]; }
+supervisor_is_running() { [ "$FINAL_MONITOR" -eq 1 ]; }
 apply_runtime_activate() { echo runtime-activate >> "$LOG"; [ "$ACTIVATE_RC" -eq 0 ] || return 1; [ "$TAMPER_DURING_ACTIVATION" = 0 ] || BAD_BUNDLE=1; }
 apply_runtime_restore() { echo runtime-restore >> "$LOG"; [ "$RESTORE_RC" -eq 0 ]; }
 apply_runtime_attest_activated() {
@@ -91,7 +99,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; COMMIT_OWNER=0; FINAL_RC=0; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -103,8 +111,20 @@ expect_status() {
     [ "$actual_steps" = "$*" ] || fail "steps: $actual_steps"
 }
 reset
-expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit record:committed '
+expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+# The final proof is AFTER native Config + IPFW commit: neither an
+# altered installed traffic/IPSET tree, nor dead engine, nor a changed
+# committed rule set may produce the GUI's applied-id receipt.
+reset; FINAL_TREE_OK=0
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree record:requires-review '
+[ ! -s "$ROOT/response.txt" ] || fail "postcommit tree drift confirmed Apply"
+reset; FINAL_PROBE_FAIL=1
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:requires-review '
+reset; FINAL_ENGINE=0
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:requires-review '
+reset; FINAL_MONITOR=0
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:requires-review '
 reset; BAD_BUNDLE=1
 expect_status 69 'bundle:verify '
 reset; SAVE_RC=69
