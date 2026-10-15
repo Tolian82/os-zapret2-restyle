@@ -97,6 +97,10 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         backend = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
         self.assertFalse((backend / "voice_native_apply_route.py").exists())
         self.assertFalse((backend / "voice_native_forward_apply.py").exists())
+        self.assertFalse((backend / "voice_native_prepare_route.py").exists())
+        workers = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
+        self.assertFalse((workers / "voice_native_render_saved.sh").exists())
+        self.assertFalse((workers / "voice_native_build_release.sh").exists())
 
     def test_retired_private_forward_apply_has_no_service_or_configd_route(self):
         sh = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
@@ -114,7 +118,7 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         stage = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_forward_stage_prepare.py").read_text()
         self.assertNotIn('APPLY_ROUTE=', pkg)
         self.assertNotIn('FORWARD_EXECUTOR=', pkg)
-        self.assertIn('rm "${PREPARE_ROUTE}"', pkg)
+        self.assertNotIn('PREPARE_ROUTE=', pkg)
         self.assertIn("def sealed_prepared_handoff(", stage)
         self.assertNotIn("from voice_native_apply_route import", stage)
 

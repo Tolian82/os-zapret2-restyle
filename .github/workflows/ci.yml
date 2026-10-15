@@ -281,14 +281,10 @@ jobs:
         run: python3.13 scripts/test-voice-native-operator-input-stage.py
       - name: Native Voice saved XML and rendered OPNsense template generation parity
         run: python3.13 scripts/test-voice-native-saved-pair-guard.py
-      - name: Native Voice original OPNsense template isolated XML producer
-        run: python3.13 scripts/test-voice-native-xml-render-route.py
       - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
         run: python3.13 scripts/test-voice-native-saved-draft-candidate.py
       - name: Native Voice saved GUI read-only FD9 preflight contract
         run: python3.13 scripts/test-voice-native-draft-preview-route.py
-      - name: Native Voice operator-only fixed-input service PREPARED route
-        run: python3.13 scripts/test-voice-native-prepare-route.py
       - name: Voice non-destructive atomic runtime rollback preflight
         run: sh scripts/test-voice-atomic-rollback-preflight.sh
       - name: Voice IPSET integration with shared production Targets normalizer
@@ -768,6 +764,10 @@ jobs:
           head -30 "${contents}"
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply)[.]py$' "${contents}"; then
             echo "ERROR: retired operator Voice CLI leaked into installable FreeBSD package" >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
+            echo "ERROR: retired operator Voice workers leaked into FreeBSD package" >&2
             exit 1
           fi
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh' "${contents}"

@@ -1,12 +1,12 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_157`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_158`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=157` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_157.pkg` — **не опубликован**.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=158` — пакет только в feature branch.
+- package candidate: `os-zapret2-restyle-0.5.2_158.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 
@@ -17,7 +17,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_157`** (fe
 3. `VoiceController::applyAction` и `SettingsController::applyAction` идут через один `zapret shared_apply`, FD9 + штатный Config worker, sealed candidate, native save/readback, rollback и commit. Отдельный normal Voice writer/dvtws2 не добавлен.
 4. В `zapret_service.sh` и `apply_runtime.sh` реализованы normal Stop/Start/boot и проверки installed release/процессов/IPFW. `voice_live_inspect.py` и `voice.volt` используют независимые свидетельства; `_138–_140` убрали ложный зелёный статус и проверяют пять профилей.
 5. `_146–_147` направили исторический Telegram configctl в общий Config/FD9/Apply/inspect и устранили stale owner. `_148` добавил реальные IPFW rules/counters в read-only native inspector; `_149` безопасно передаёт их через API в существующую RU/EN GUI-строку всех пяти сервисов. Unknown/oversized counters не считаются доказательством MEDIA/CALL; старый Phase-B требует явной миграции.
-6. `_152–_157` закрыли второй mutating private Apply путь. `_157` удаляет из source tree `voice_native_apply_route.py` и `voice_native_forward_apply.py` и их два obsolete mutating тестовых набора; эти файлы уже не входили в пакет с `_156`. Old `voice_native_prepare_route.py` остаётся source-only для legacy tests, без production entrypoint или package payload. Credential и sealed PREPARED проверяющие функции перенесены в действующие helpers; boot/recovery read-only evidence tests сохранены. Общий FD9 Apply/Telegram compatibility GUI/IPFW не менялись. Остальная old инфраструктура требует доказательного keep/fold/delete.
+6. `_152–_158` вывели из установленного backend и исходников старые отдельные Voice Apply и операторский PREPARED route. `_158` удаляет `voice_native_prepare_route.py`, два его private shell workers и два obsolete test suites; credentials helper перенесён в прежний native process-security module ещё в `_154`. Общий FD9 Voice/Strategies Apply, Config/runtime/IPFW, sealed PREPARED witness, boot read-only evidence и guarded legacy migration не меняются. Остальная old infrastructure требует адресного keep/fold/delete.
 7. Изолированные проверки находятся в `test-voice-common-runtime.py`, `test-shared-apply-{run,execute,stop,boot}.sh`, `test-voice-gui-contract.py`. **Owner-live GUI/CONFIG/BOOT, UDP/STUN/MEDIA/CALL не подтверждены**. Старый PoC остаётся только объектом ограниченного cleanup/совместимость-аудита.
 
 Границы: неизменное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), один обычный dvtws2, общий lifecycle и конфигурация; отдельный TCP Squid/sing-box, маршруты и Docker остаются вне plugin. Выбор несовместимого Voice WAN отвергается; не делать глобальный UDP-to-any. Не развивать прежний recovery без конкретного нового дефекта.

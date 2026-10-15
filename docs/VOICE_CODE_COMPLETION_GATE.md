@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_157`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_158`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_156` HEAD `5ce7c49` подтвердил Voice candidates, Project и FreeBSD 15 package ([Actions #38795297308](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38795297308)). `_157` требует собственного CI: в т.ч. boot read-only matrix после удаления old mutating executor tests и FreeBSD tar absence.
-2. **Этап 6:** `_152–_157` отключили private Apply routes и исключили old executor из package, а `_157` удаляет два obsolete mutating Python modules и две тестовые матрицы из source. Boot read-only tests и sealed stage verifier сохранены; CI больше не требует tests удалённого private Apply. Остальной legacy code — по keep/fold/delete без расширения recovery.
+1. **CI/FreeBSD:** `_157` HEAD `6b4efcf` полностью прошёл Voice candidates, Project и FreeBSD 15 package ([Actions #38797108434](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38797108434)). `_158` требует отдельной проверки обоих CI job и tar-inventory отсутствия old Python Prepare и двух retired shell workers.
+2. **Этап 6:** `_152–_158` закрыли private Apply и source-only operator PREPARED routes. `_158` удаляет оставшийся old Prepare route, два его shell workers и два legacy-only тестовых набора; сохранены shared runtime/FD9 Apply, sealed stage witness и read-only миграционная диагностика. Остальные legacy modules — только caller-driven keep/fold/delete.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 
