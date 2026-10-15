@@ -1,30 +1,26 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_151` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_152`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
 | Поведение | Источник проверки |
 |---|---|
 | Пять Voice-профилей, IPv4 IPSET, native Config и stale snapshots | `VoiceController.php`, `SettingsApply.php`, `test-voice-gui-contract.py` |
-| Один генератор полного Voice+Strategies runtime и port/IPSET files | `backend/orchestrator.sh`, `test-voice-common-runtime.py` |
-| Соответствие STUN-args/портов/WAN/IPSET/divert реальному IPFW manifest | `voice_ipfw_adapter._verify_shared_voice_engine`, `test-voice-common-runtime.py` |
-| FD9 общий Apply двух страниц, Config save/commit/rollback | `zapret_service.sh`, `apply_runtime.sh`, `test-shared-apply-{run,execute}.sh` |
-| Normal Stop/Start/boot и truthful inspect/GUI status | `zapret_service.sh`, `voice.volt`, `test-shared-apply-{stop,boot}.sh` |
+| Один генератор полного Voice+Strategies runtime | `backend/orchestrator.sh`, `test-voice-common-runtime.py` |
+| Соответствие STUN/UDP/ports/WAN/IPSET/divert/IPFW | `voice_ipfw_adapter._verify_shared_voice_engine` |
+| Один FD9 Apply обеих страниц, Config save/rollback | `zapret_service.sh`, `apply_runtime.sh`, `test-shared-apply-{run,execute}.sh` |
+| Normal Stop/Start/boot, verified GUI status/IPFW rule/counters | `zapret_service.sh`, `voice.volt`, `test-shared-apply-{stop,boot}.sh` |
 
-Эти функции **уже существуют**, повторная разработка запрещена без конкретного нового дефекта. Изолированная проверка не доказывает реальный STUN или звонок.
+Повторная разработка этих функций запрещена без воспроизводимого нового дефекта. Автоматическая проверка не доказывает STUN/MEDIA/CALL.
 
-## Оставшаяся работа перед testing package
+## Открытые границы перед testing package
 
-1. **CI:** `_149` Voice candidates FAILED из-за старой PHP fixture (run 38779258568). `_150` исправил PHP, но Voice candidates FAILED на второй старой Node fixture без rule (run 38780223641). `_151` исправил оба подтверждённых тестовых контракта, требует независимого полного CI.
-2. **FreeBSD:** последний проверенный `_148` FreeBSD 15 package build SUCCESS (run 38776094281). Для `_151` требуется своя реальная сборка.
-3. **Legacy PoC:** `_146` привязал публичные Telegram enable/disable/status к native Config/FD9/Apply/inspect. Работающий Phase-B блокирует автоматическое переключение до квалифицированной миграции; исторические rollback/migration файлы пока сохранены. Живая миграция ещё не проверена.
-4. **Финальная приёмка кода:** `_144–_145` — GUI Apply/draft, `_146–_147` — Telegram native configctl, `_148–_149` — реальные per-service IPFW rule/counters от инспектора до GUI. `_150` исправляет устаревший PHP fixture без ослабления API. Далее — только подтверждённые остаточные требования.
+1. **CI/FreeBSD:** квалифицированный HEAD `_151` (`688d291`) прошёл Validate Project, Validate Voice candidates и Build FreeBSD 15 package: [Actions #38780979267](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38780979267). Для `_152` нужны собственные результаты.
+2. **Этап 6:** Telegram enable/disable/status уже адаптированы к native Config/FD9/Apply/inspect. `_152` удаляет два old mutating private CLI маршрута и обновляет существующий тест. Остальные old CLI/manual routes, Python cutover modules и package content требуют inventory callers и keep/transition/delete до удаления. Нужные аварийные гарантии не обрезать.
+3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
+4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 
-После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.
+После кодовой готовности — одна GitHub testing-поставка, затем owner-live. Не делать stable или merge преждевременно. Для каждого пункта различать **source implemented**, **CI/package verified** и **owner-live confirmed**.
 
-## После кодовой готовности
-
-Одна согласованная GitHub testing поставка, затем OPNsense GUI/CONFIG/BOOT и фактический UDP/STUN, двусторонний MEDIA/CALL тест. Старый `v0.5.0_3` и `misconfigured / unknown-repository` не являются проверкой новой ветки. Без merge/stable до согласованных результатов.
-
-Для каждого требования отдельно фиксируются **source implemented**, **CI/package verified**, **owner-live confirmed**. Новую разработку начинать только после проверки production entrypoint и конкретного отсутствующего/сломавшегося поведения. Точная очередь — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md).
+Точное действие — [START_HERE](START_HERE.md); факты — [PROJECT_STATE](PROJECT_STATE.md); хронология — [ledger](history/current/v0.5.x.md).

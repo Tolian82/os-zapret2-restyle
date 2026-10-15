@@ -251,6 +251,8 @@ class LifecycleRouterTests(unittest.TestCase):
         )
         self.assertNotIn("voice-native-apply", action)
         self.assertNotIn("native-voice-apply)", shell)
+        self.assertNotIn("native-voice-apply-prepared)", shell)
+        self.assertNotIn("native-voice-prepare-apply-draft)", shell)
 
 
 if __name__ == "__main__":

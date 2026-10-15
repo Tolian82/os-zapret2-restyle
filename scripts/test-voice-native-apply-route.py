@@ -104,13 +104,17 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
             self.assertEqual(main(["execute-prepared"]), 0)
         self.assertEqual(main([]), 64)
 
-    def test_service_has_one_fd9_route_no_configd_apply(self):
+    def test_retired_private_forward_apply_has_no_service_or_configd_route(self):
         sh = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         cfg = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
-        self.assertIn("native-voice-apply-prepared)", sh)
-        self.assertIn("native_voice_apply_prepared_service()", sh)
-        self.assertIn('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}"', sh)
+        self.assertNotIn("native-voice-apply-prepared)", sh)
+        self.assertNotIn("native_voice_apply_prepared_service()", sh)
+        self.assertNotIn("native-voice-prepare-apply-draft)", sh)
+        self.assertNotIn("prepare-from-draft-and-apply", sh)
         self.assertNotIn("native-voice-apply-prepared", cfg)
+        self.assertNotIn("native-voice-prepare-apply-draft", cfg)
+        self.assertIn("shared_apply_run_service voice", sh)
+        self.assertIn("[shared_apply]", cfg)
         self.assertNotIn("[voice_apply]", cfg)
 
 

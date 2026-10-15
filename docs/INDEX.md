@@ -18,7 +18,7 @@
 
 ## Level 2 — этап v0.5.2 и текущая линия
 
-- [Контроль готовности к испытаниям v0.5.2_140](VOICE_CODE_COMPLETION_GATE.md) — кодовые факты, CI/FreeBSD и отдельная live-приёмка.
+- [Контроль готовности к испытаниям v0.5.2](VOICE_CODE_COMPLETION_GATE.md) — кодовые факты, CI/FreeBSD и отдельная live-приёмка.
 - [Подробный план v0.5.2](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — критерии семи этапов; общий generator/IPFW/Apply/lifecycle и GUI status реализованы; следующий рубеж — проверка пакета/legacy deprecation, CI/FreeBSD.
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — неизменные frontend/функции пяти сервисов и утверждённый общий backend.
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [Zapret2 Service](architecture/ZAPRET2_SERVICE.md) — действующие общие контракты.
