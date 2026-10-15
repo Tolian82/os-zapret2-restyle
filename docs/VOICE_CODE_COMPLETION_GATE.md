@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_144` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
+Решение владельца 15.10.2026: сначала закончить код, затем **одна** testing поставка и живые испытания. Действующая база `v0.5.2_145` в [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза. GUI/ТЗ не менять.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,10 +16,10 @@
 
 ## Оставшаяся работа перед testing package
 
-1. **CI:** HEAD `39f771f` (`_143`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38747912361`). Для `_144` требуется отдельный полный CI с проверкой пяти XML tooltip и действующего RU/EN Apply; старый PASS не переносится.
-2. **FreeBSD:** получить успешную реальную package-сборку для `_144`; `_143` уже был SUCCESS, но не доказывает новый HEAD.
+1. **CI:** HEAD `271400b` (`_144`) прошёл Validate Project, Voice candidates и FreeBSD 15 package build (Actions `38750147882`). Текущий `_145` с исправленной ошибкой inactive draft требует отдельного latest-HEAD CI.
+2. **FreeBSD:** подтвердить настоящую package-сборку `_145`; предыдущий `_144` PASS не доказывает новый HEAD.
 3. **Legacy PoC:** старые enable/disable ограждены от native owner, ordinary больше не создаёт инертный bundle. Generic status committed Voice/Strategies использует строгий read-only native inspector, настоящий legacy сохраняет прежний статус. Пакетные rollback/migration файлы не удалять без доказанной безопасной миграции.
-4. **Финальная приёмка кода:** пять XML checkbox и info подсказок уже исправлены для Validate / OFF draft / native Apply; существующий RU/EN view согласован. Проверить только оставшиеся реальные GUI/API → Config → generator/IPFW → Apply → Stop/Start/boot и состав пакета, исправляя конкретные разрывы.
+4. **Финальная приёмка кода:** исправлены XML подсказки Validate / all-OFF draft / Apply (`_144`) и ложная API/RU ошибка о недоступности ON (`_145`). При этом all-OFF draft не подменяет native Apply. Далее только реальные GUI/API → Config → generator/IPFW → lifecycle и package разрывы.
 
 После фактического закрытия — «код готов к испытаниям», **не** `MEDIA_PASS/CALL_PASS`.
 
