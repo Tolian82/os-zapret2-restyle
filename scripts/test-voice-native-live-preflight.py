@@ -279,18 +279,19 @@ class LivePreflightTests(unittest.TestCase):
         script=(ROOT/"src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh").read_text()
         self.assertIn("native_voice_live_preflight_service()",script)
         self.assertIn("native_voice_prepare_prebuilt_service()",script)
-        self.assertIn("native_voice_apply_prepared_service()",script)
+        self.assertNotIn("native_voice_apply_prepared_service()",script)
         self.assertIn('native-voice-live-preflight)',script)
         self.assertIn('native-voice-prepare-prebuilt)',script)
         self.assertIn('native-voice-prepare-release)',script)
         self.assertIn('native-voice-prepare-saved)',script)
         self.assertIn('native-voice-prepare-xml)',script)
         self.assertIn('native-voice-prepare-draft)',script)
-        self.assertIn('native-voice-prepare-apply-draft)',script)
+        self.assertNotIn('native-voice-prepare-apply-draft)',script)
+        self.assertNotIn('native-voice-apply-prepared)',script)
         self.assertIn('native-voice-preview-draft)',script)
         self.assertIn('native_voice_preview_draft_service()',script)
         self.assertIn(
-            "native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-apply-prepared|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-prepare-apply-draft|native-voice-preview-draft|native-voice-ipfw-seed",
+            "native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-prepare-prebuilt|native-voice-prepare-release|native-voice-prepare-saved|native-voice-prepare-xml|native-voice-prepare-draft|native-voice-preview-draft|native-voice-ipfw-seed",
             script,
         )
         self.assertIn("native_voice_prepare_prebuilt_service prepare-from-release",script)
