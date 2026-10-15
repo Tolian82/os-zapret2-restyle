@@ -772,7 +772,7 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
-          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_(prepare|apply)_route[.]py$' "${contents}"; then
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply)[.]py$' "${contents}"; then
             echo "ERROR: retired operator Voice CLI leaked into installable FreeBSD package" >&2
             exit 1
           fi

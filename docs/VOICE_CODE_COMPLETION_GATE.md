@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_155`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_156`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_154` HEAD `ade226e`, [Actions #38790543857](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38790543857): Voice candidates SUCCESS, Project FAIL из-за неверного executable mode файла `scripts/build-pkg.sh`, FreeBSD package SKIPPED. `_155` исправляет git mode и требует собственного полного CI/FreeBSD, включая проверку отсутствия обоих старых operator scripts в tar.
-2. **Этап 6:** `_152–_155` закрыли старые CLI routes. `_154` удалил operator PREPARED entrypoint из payload и перенёс legacy credentials witness; `_155` переносит sealed handoff в forward-stage observer и исключает old Apply operator router из пакета. Проверка фактического tar в FreeBSD CI запрещает оба старых файла. Остальная old infrastructure требует caller/keep/fold/delete, не создавать нового recovery.
+1. **CI/FreeBSD:** `_155` HEAD `2e06dbb` полностью подтвердил Voice candidates, Project и FreeBSD 15 package ([Actions #38792544501](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38792544501)). `_156` требует своего полного CI и tar-inventory отсутствия трёх retired private файлов.
+2. **Этап 6:** `_152–_156` отключили второй old Apply, исключили CLI Prepare/Apply из installable package и после проверки всех 118 backend sources убирают оттуда сам old five-resource mutating `voice_native_forward_apply.py`. Historical source tests остаются вне поставки. Следующая задача — продолжить keep/fold/delete остальных legacy dependencies, не добавляя recovery.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 

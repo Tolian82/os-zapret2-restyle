@@ -117,6 +117,7 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         pkg = (ROOT / "scripts/build-pkg.sh").read_text()
         stage = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_forward_stage_prepare.py").read_text()
         self.assertIn('rm "${APPLY_ROUTE}"', pkg)
+        self.assertIn('rm "${FORWARD_EXECUTOR}"', pkg)
         self.assertIn('rm "${PREPARE_ROUTE}"', pkg)
         self.assertIn("def sealed_prepared_handoff(", stage)
         self.assertNotIn("from voice_native_apply_route import", stage)
