@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_154`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_155`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_153` HEAD `db20ef0` прошёл Validate Voice candidates, Validate Project и Build FreeBSD 15 package ([Actions 38786982877](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38786982877)). На новом `_154` нужны самостоятельные три job и package inventory отсутствие retired PREPARED script.
-2. **Этап 6:** `_152–_153` закрыли private mutating Apply; `_154` снимает пять operator PREPARED shell dispatch, исключает route из пакета и переносит security credential helper для действующей legacy migration. `voice_native_apply_route.py` ещё импортируется старым forward-stage witness, потому не исключается вслепую. Прочая old private инфраструктура требует проверки callers/keep/fold/delete.
+1. **CI/FreeBSD:** `_154` HEAD `ade226e`, [Actions #38790543857](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38790543857): Voice candidates SUCCESS, Project FAIL из-за неверного executable mode файла `scripts/build-pkg.sh`, FreeBSD package SKIPPED. `_155` исправляет git mode и требует собственного полного CI/FreeBSD, включая проверку отсутствия обоих старых operator scripts в tar.
+2. **Этап 6:** `_152–_155` закрыли старые CLI routes. `_154` удалил operator PREPARED entrypoint из payload и перенёс legacy credentials witness; `_155` переносит sealed handoff в forward-stage observer и исключает old Apply operator router из пакета. Проверка фактического tar в FreeBSD CI запрещает оба старых файла. Остальная old infrastructure требует caller/keep/fold/delete, не создавать нового recovery.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 

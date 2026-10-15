@@ -14,8 +14,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
-from voice_native_apply_route import (
-    sealed_prepared_handoff, NativeVoiceApplyRouteError, main,
+from voice_native_apply_route import main
+from voice_native_forward_stage_prepare import (
+    sealed_prepared_handoff, NativeVoiceStagePrepareError,
 )
 from voice_firewall_ledger import canonical_manifest
 from voice_cutover_journal import VoiceCutoverJournal
@@ -113,7 +114,12 @@ class NativePreparedApplyRouteTests(unittest.TestCase):
         self.assertIn("shared_apply_run_service voice", sh)
         self.assertIn("[shared_apply]", cfg)
         self.assertNotIn("[voice_apply]", cfg)
-
+        pkg = (ROOT / "scripts/build-pkg.sh").read_text()
+        stage = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_native_forward_stage_prepare.py").read_text()
+        self.assertIn('rm "${APPLY_ROUTE}"', pkg)
+        self.assertIn('rm "${PREPARE_ROUTE}"', pkg)
+        self.assertIn("def sealed_prepared_handoff(", stage)
+        self.assertNotIn("from voice_native_apply_route import", stage)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

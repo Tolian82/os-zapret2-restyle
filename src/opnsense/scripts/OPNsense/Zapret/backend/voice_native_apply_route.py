@@ -7,15 +7,11 @@ The imported executor holds the original Config inode flock through mutation.
 """
 from __future__ import annotations
 
-import hashlib
-import os
 from pathlib import Path
 import sys
 
-from voice_cutover_backup import _private_dir
-from voice_cutover_journal import VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD, RUNTIME_FIELD
-from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, decode_manifest, fingerprint
-from voice_native_file_observer import observe_live_files
+from voice_cutover_journal import VoiceCutoverJournal
+from voice_firewall_ledger import VoiceOwnershipStore
 from voice_security_policy_evidence import SUPERVISOR_BOUND_POLICY_SCHEMA, inspect_security_policy
 from voice_native_process_probe import FreeBSDVoiceProcessProbe
 from voice_native_kernel_argv import FreeBSDKernelArgvReader
@@ -24,44 +20,12 @@ from voice_native_process_actions import FreeBSDVoiceProcessActions
 from voice_freebsd_process_security import FreeBSDProcessSecurityReader
 from voice_native_forward_apply import execute_prepared_voice_apply
 from voice_ipfw_adapter import FreeBSDIPFWAdapter
-from voice_ipfw_runtime import _json_file
 import voice_ipfw_runtime as native
 
-STAGE = "forward-candidate"
-
-
-class NativeVoiceApplyRouteError(RuntimeError):
-    pass
-
-
-def sealed_prepared_handoff(journal: VoiceCutoverJournal, stage: Path) -> dict:
-    """Accept no unsealed stage or ambiguous five-resource journal state."""
-    record = journal.read()
-    if record is None or record["schema"] != RUNTIME_BOUND_SCHEMA or record["phase"] != "prepared":
-        raise NativeVoiceApplyRouteError("only sealed PREPARED schema-4 eligible")
-    stage = Path(stage)
-    _private_dir(stage.parent)
-    _private_dir(stage)
-    if set(os.listdir(stage)) != {"desired-ipfw.json", "config.xml", "runtime"}:
-        raise NativeVoiceApplyRouteError("unexpected forward candidate files")
-    desired = decode_manifest(_json_file(stage / "desired-ipfw.json"))
-    if (desired["rule_base"], desired["rule_max"]) != (19000, 19010) or (
-        not desired["rules"] or not desired["tables"]
-    ) or fingerprint(canonical_manifest(desired)) != record["candidate"][BOUND_FIELD]:
-        raise NativeVoiceApplyRouteError("candidate IPFW differs from journal")
-    files = observe_live_files(stage / "config.xml", stage / "runtime")
-    if files["runtime"] != record["candidate"][RUNTIME_FIELD]:
-        raise NativeVoiceApplyRouteError("candidate runtime tree differs from journal")
-    if files["config"] != record["candidate"]["saved_xml_sha256"]:
-        raise NativeVoiceApplyRouteError("candidate Config differs from journal")
-    args = stage / "runtime" / "dvtws.args"
-    if args.is_symlink() or not args.is_file():
-        raise NativeVoiceApplyRouteError("candidate engine argv absent")
-    with args.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    if digest != record["candidate"]["native_argv_sha256"]:
-        raise NativeVoiceApplyRouteError("candidate engine argv differs from journal")
-    return desired
+from voice_native_forward_stage_prepare import (
+    STAGE, sealed_prepared_handoff,
+    NativeVoiceStagePrepareError as NativeVoiceApplyRouteError,
+)
 
 
 def execute_operator_prepared(*, locked_config_fd: int | None = None) -> dict:

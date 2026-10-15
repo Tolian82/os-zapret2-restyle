@@ -9,6 +9,7 @@ do not auto-delete an unknown partial forward candidate.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -16,16 +17,17 @@ import stat
 import tempfile
 
 from voice_cutover_backup import _copy_regular, _private_dir, _sync_dir
-from voice_cutover_journal import VoiceCutoverJournal
+from voice_cutover_journal import VoiceCutoverJournal, RUNTIME_BOUND_SCHEMA, BOUND_FIELD, RUNTIME_FIELD
 from voice_cutover_restore_stage import prepare_restore_stage
 from voice_cutover_install_image import prepare_installable_restore
-from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest
+from voice_firewall_ledger import VoiceOwnershipStore, canonical_manifest, decode_manifest, fingerprint
 from voice_native_file_observer import observe_live_files
 from voice_native_forward_runtime import _copy_candidate
 from voice_native_recovery_quiescence import _locked_config
 from voice_native_forward_prepare import prepare_forward_voice_intent
-from voice_native_apply_route import sealed_prepared_handoff, STAGE
+from voice_ipfw_runtime import _json_file
 
+STAGE = "forward-candidate"
 MANIFEST_FILE = "desired-ipfw.json"
 TEMP_PREFIX = ".forward-candidate-"
 RESTORE_STAGE = "restore-stage"
@@ -34,6 +36,36 @@ RESTORE_IMAGE = "restore-install-image"
 
 class NativeVoiceStagePrepareError(RuntimeError):
     pass
+
+
+def sealed_prepared_handoff(journal: VoiceCutoverJournal, stage: Path) -> dict:
+    """Accept no unsealed stage or ambiguous five-resource journal state."""
+    record = journal.read()
+    if record is None or record["schema"] != RUNTIME_BOUND_SCHEMA or record["phase"] != "prepared":
+        raise NativeVoiceStagePrepareError("only sealed PREPARED schema-4 eligible")
+    stage = Path(stage)
+    _private_dir(stage.parent)
+    _private_dir(stage)
+    if set(os.listdir(stage)) != {"desired-ipfw.json", "config.xml", "runtime"}:
+        raise NativeVoiceStagePrepareError("unexpected forward candidate files")
+    desired = decode_manifest(_json_file(stage / "desired-ipfw.json"))
+    if (desired["rule_base"], desired["rule_max"]) != (19000, 19010) or (
+        not desired["rules"] or not desired["tables"]
+    ) or fingerprint(canonical_manifest(desired)) != record["candidate"][BOUND_FIELD]:
+        raise NativeVoiceStagePrepareError("candidate IPFW differs from journal")
+    files = observe_live_files(stage / "config.xml", stage / "runtime")
+    if files["runtime"] != record["candidate"][RUNTIME_FIELD]:
+        raise NativeVoiceStagePrepareError("candidate runtime tree differs from journal")
+    if files["config"] != record["candidate"]["saved_xml_sha256"]:
+        raise NativeVoiceStagePrepareError("candidate Config differs from journal")
+    args = stage / "runtime" / "dvtws.args"
+    if args.is_symlink() or not args.is_file():
+        raise NativeVoiceStagePrepareError("candidate engine argv absent")
+    with args.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    if digest != record["candidate"]["native_argv_sha256"]:
+        raise NativeVoiceStagePrepareError("candidate engine argv differs from journal")
+    return desired
 
 
 def prepare_staged_forward_voice_intent(
