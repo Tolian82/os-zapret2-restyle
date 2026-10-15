@@ -91,8 +91,8 @@ def main() -> None:
           "voiceIpsetCount: 'IPSET записей'" in view and
           "voiceProfileId: 'Applied profile'" in view and
           "profile.profile_id + '@' + profile.profile_revision" in view and
-          "'profile_id' => $id" in status_php and
-          "'ipset_entries' => $count" in status_php,
+          "$status['profile_id'] = $id" in status_php and
+          "$status['ipset_entries'] = $count" in status_php,
           "Voice GUI must show saved ON/OFF, applied profile, physical WAN, UDP and IPSET")
     check("voiceIPFWDetail" in view and
           "prepared-needs-previous-verification" in view and
