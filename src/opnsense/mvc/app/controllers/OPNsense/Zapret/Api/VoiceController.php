@@ -502,6 +502,7 @@ class VoiceController extends ApiControllerBase
                     ];
                 }
                 $result['profiles'] = [];
+                $seenRules = [];
                 foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $name) {
                     $enabled = ($current['voice'][$name]['enabled'] ?? '0') === '1';
                     $report = $services[$name] ?? null;
@@ -559,6 +560,33 @@ class VoiceController extends ApiControllerBase
                         $status['wan'] = $wan;
                         $status['udp_ports'] = $ports;
                         $status['ipset_entries'] = $count;
+                        // The shared inspector has already verified the
+                        // sealed manifest and exact kernel IPFW rules. Only
+                        // expose one uniquely owned live rule while RUNNING;
+                        // stopped profiles retain their saved identity but
+                        // have no installed IPFW rule or live counters.
+                        if ($expectedState === 'running') {
+                            $rule = $report['rule'] ?? null;
+                            if (!is_int($rule) || $rule < 1 || $rule > 65534 ||
+                                isset($seenRules[$rule])) {
+                                return [
+                                    'state' => 'interrupted', 'can_activate' => false,
+                                    'condition' => 'common-profile-unverified',
+                                ];
+                            }
+                            $seenRules[$rule] = true;
+                            $status['rule'] = $rule;
+                            // JS numbers above 2^53-1 may be rounded; omit
+                            // unrepresentable counters rather than invent
+                            // or truncate packets/bytes.
+                            foreach (['rule_packets', 'rule_bytes'] as $counterName) {
+                                $value = $report[$counterName] ?? null;
+                                if (is_int($value) && $value >= 0 &&
+                                    $value <= 9007199254740991) {
+                                    $status[$counterName] = $value;
+                                }
+                            }
+                        }
                     }
                     $result['profiles'][$name] = $status;
                 }

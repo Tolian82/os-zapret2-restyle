@@ -286,6 +286,23 @@ def main() -> None:
           "voiceApplyNeedsReview || !releasesAvailable" in view and
           "reconcileVoiceServiceStatus()" in view,
           "Voice Start/Stop, Apply and installer must share the two-witness gate")
+    # Both read-only inspector and GUI must expose the same verified,
+    # per-profile IPFW rule identity. Counters may be unavailable on FreeBSD
+    # but must never be fabricated or rounded in browser JavaScript.
+    check("$seenRules = []" in status_php and
+          "isset($seenRules[$rule])" in status_php and
+          "$status['rule'] = $rule" in status_php and
+          "['rule_packets', 'rule_bytes']" in status_php and
+          "$value <= 9007199254740991" in status_php and
+          "voiceRule: 'Правило IPFW'" in view and
+          "voiceRule: 'IPFW rule'" in view and
+          "voicePackets: 'Пакеты'" in view and
+          "voiceBytes: 'Bytes'" in view and
+          "Number.isSafeInteger(profile.rule_packets)" in view and
+          "Number.isSafeInteger(profile.rule_bytes)" in view and
+          "reply.state === 'stopped'" in view and
+          "Number.isInteger(profile.rule)" in view,
+          "Voice GUI must display only verified native IPFW rules and safe counters")
     # The optional OFF-only draft save remains separate from the real
     # ON/OFF native Apply, with the existing GUI layout unchanged.
     check('id="voiceSaveDraft"' in view and

@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_148`. `VERSION=0.5.2`; `PLUGIN_REVISION=148`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
+**Current handoff identity:** `v0.5.2_149`. `VERSION=0.5.2`; `PLUGIN_REVISION=149`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца 15.10.2026: сначала завершить код по ТЗ, затем один testing release и живые испытания; пока **без релиза и установки на OPNsense**.
 
 ## Текущее состояние и доказательства
 
@@ -12,14 +12,14 @@
 
 ## Точный следующий шаг и уровень доказательств
 
-**Предыдущий HEAD `9a6ccf5` (`v0.5.2_147`):** [Validate Project, Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38766216983). Это CI/пакет, не owner-live.
+**Подтверждение `_148`:** HEAD `f4da990` прошёл [Validate Project, Validate Voice candidates и FreeBSD 15 package build SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38776094281). Это CI и пакет, а не работа звонка на OPNsense.
 
-**Реальное изменение `_148`:** в историческом `telegram_voice_status` committed native runtime раньше всегда выдавались `rule=unavailable`, `rule_packets/bytes=unavailable`, хотя запечатанный Voice manifest содержит настоящие scoped IPFW rule. Теперь native live inspector связывает Telegram с точным правилом через verified manifest, существующий FreeBSD IPFW adapter только читает `ipfw show <rule>` и сверяет номер+аргументы. При ошибке/гонке counters честно unavailable, неподтверждённое правило не показывается активным. Публичные команды не получают второй Config/IPFW runtime путь. Адресные проверки добавлены к текущим adapter/runtime/inspect регрессиям.
+**Функциональный `_149`:** при _148 native inspector и historical Telegram configctl уже знали точные IPFW rule/packet/byte counters, но `VoiceController::inspectAction` отбрасывал их для всех пяти профилей, а страница не могла их показать. Теперь API безопасно передаёт номер проверенного правила (только у реально running ON), проверяет допустимый диапазон/уникальность, принимает только неотрицательные JS-safe integer counters; другие значения скрываются, а не округляются. Существующие RU/EN подсказки каждой галочки дополняются конкретным rule и доступными счетчиками; при stopped/per-profile OFF правила нет, неизвестные packets не подменяют MEDIA/CALL PASS. Компоновка и ТЗ прежние, backend/IPFW/FD9 не менялись.
 
-**Следующее действие:** полный CI и FreeBSD 15 на точном `_148` HEAD; затем только подтверждённые остаточные разрывы ТЗ, перед одной testing поставкой после кодовой готовности. Работающий Phase-B не мигрируется автоматически, живые STUN/MEDIA/CALL тесты пока не проводились.
+**Следующее действие:** полный CI и FreeBSD package на итоговом `_149` HEAD, затем только доказанные незакрытые требования. Один testing release после кодовой готовности, старый Phase-B не мигрирует автоматически, owner-live STUN/MEDIA/CALL ещё не проводились.
 
 ## Минимальное чтение
 
 После AGENTS и Level-1 rule books: [контроль завершения](VOICE_CODE_COMPLETION_GATE.md), [семиэтапный план и критерии](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md), [утверждённое ТЗ, включая раздел 12](architecture/VOICE_TRANSMISSION_GUI.md). Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), вся ревизионная хронология — [working ledger](history/current/v0.5.x.md). Старые «next steps» из истории не имеют силы актуальной очереди.
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_148` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_149` не опубликована.

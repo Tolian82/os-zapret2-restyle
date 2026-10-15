@@ -34,7 +34,8 @@ $(document).ready(function () {
         voiceDisabled: 'Дополнительный Voice-перехват выключен',
         voiceUnverified: 'Активность профиля не подтверждена',
         voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET записей',
-        voiceProfileId: 'Применённый профиль',
+        voiceProfileId: 'Применённый профиль', voiceRule: 'Правило IPFW',
+        voicePackets: 'Пакеты', voiceBytes: 'Байты',
         wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
@@ -69,7 +70,8 @@ $(document).ready(function () {
         voiceDisabled: 'Additional Voice interception disabled',
         voiceUnverified: 'Profile activation not verified',
         voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET entries',
-        voiceProfileId: 'Applied profile',
+        voiceProfileId: 'Applied profile', voiceRule: 'IPFW rule',
+        voicePackets: 'Packets', voiceBytes: 'Bytes',
         wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
@@ -488,6 +490,22 @@ $(document).ready(function () {
                     ' · ' + text.voiceIpsetCount + ': ' + profile.ipset_entries +
                     ' · ' + text.voiceProfileId + ': ' +
                     profile.profile_id + '@' + profile.profile_revision;
+                // The rule belongs to the already-attested native common
+                // manifest; packet counters are observational, not proof of
+                // bidirectional media or a successful call.
+                if (profile.runtime === 'active' &&
+                    Number.isInteger(profile.rule) &&
+                    profile.rule >= 1 && profile.rule <= 65534) {
+                    details += ' · ' + text.voiceRule + ': ' + profile.rule;
+                    if (Number.isSafeInteger(profile.rule_packets) &&
+                        profile.rule_packets >= 0) {
+                        details += ' · ' + text.voicePackets + ': ' + profile.rule_packets;
+                    }
+                    if (Number.isSafeInteger(profile.rule_bytes) &&
+                        profile.rule_bytes >= 0) {
+                        details += ' · ' + text.voiceBytes + ': ' + profile.rule_bytes;
+                    }
+                }
             }
             observed.text(' · ' + saved + ' — ' + state + details);
         });
@@ -522,7 +540,10 @@ $(document).ready(function () {
                 typeof profile.udp_ports === 'string' &&
                 /^[0-9,-]{1,1024}$/.test(profile.udp_ports) &&
                 Number.isInteger(profile.ipset_entries) &&
-                profile.ipset_entries >= 1 && profile.ipset_entries <= 4096;
+                profile.ipset_entries >= 1 && profile.ipset_entries <= 4096 &&
+                (reply.state === 'stopped' ||
+                    (Number.isInteger(profile.rule) &&
+                     profile.rule >= 1 && profile.rule <= 65534));
         });
     }
     function refreshVoiceIPFW() {
