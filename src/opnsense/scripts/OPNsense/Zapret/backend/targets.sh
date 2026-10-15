@@ -115,10 +115,27 @@ targets_normalize_ipset()
         return 1
     }
 
-    python_bin=$(command -v python3 2>/dev/null) || {
-        common_error "python3 is required for strict IPv4/CIDR validation"
-        return 1
-    }
+    # Production OPNsense declares python313, which does not guarantee an
+    # unversioned /usr/local/bin/python3 alias. Use the same pinned native
+    # interpreter as the Voice release builder on an installed appliance.
+    python_bin=/usr/local/bin/python3.13
+    if [ ! -x "${python_bin}" ]; then
+        case "${BACKEND_DIR:-}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                common_error "pinned Python 3.13 is required for managed IPv4/CIDR targets"
+                return 1
+                ;;
+            *)
+                # Only an uninstalled repository test runner may use its
+                # own Python. Do not silently change appliance semantics.
+                python_bin=$(command -v python3.13 2>/dev/null) ||
+                    python_bin=$(command -v python3 2>/dev/null) || {
+                        common_error "Python 3.13 or test Python is required for IPv4/CIDR targets"
+                        return 1
+                    }
+                ;;
+        esac
+    fi
 
     "${python_bin}" - "${input_file}" "${output_file}.tmp" "${label}" <<'PY'
 import ipaddress
