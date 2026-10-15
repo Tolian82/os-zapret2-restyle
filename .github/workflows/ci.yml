@@ -222,11 +222,9 @@ jobs:
         run: python3.13 scripts/test-voice-native-forward-stop.py
       - name: Native Voice candidate engine-only start and kernel process witness
         run: python3.13 scripts/test-voice-native-candidate-engine-start.py
-      - name: Shared IPFW PRECOMMIT regression fixture for legacy Voice supervisor
+      - name: Shared IPFW PRECOMMIT/rollback regression with legacy journal fixtures
         run: python3.13 scripts/test-voice-native-forward-ipfw.py
-      - name: Native Voice candidate supervisor after IPFW PRECOMMIT
-        run: python3.13 scripts/test-voice-native-forward-supervisor.py
-      - name: Read-only historical Voice Config redo verification and foreign-state refusal
+      - name:       - name: Read-only historical Voice Config redo verification and foreign-state refusal
         run: python3.13 scripts/test-voice-native-forward-config.py
       - name: Voice durable previous engine/supervisor process evidence
         run: python3.13 scripts/test-voice-process-recovery-evidence.py
@@ -715,7 +713,6 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-process-probe.py
             /usr/local/bin/python3.13 scripts/test-voice-native-file-observer.py
             /usr/local/bin/python3.13 scripts/test-voice-native-ipfw-ownership.py
-            /usr/local/bin/python3.13 scripts/test-voice-native-forward-supervisor.py
             /usr/local/bin/python3.13 scripts/test-voice-native-forward-config.py
             /usr/local/bin/python3.13 -m py_compile \
               src/opnsense/scripts/OPNsense/Zapret/backend/voice_security_policy_evidence.py \
@@ -748,7 +745,7 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
-          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw)[.]py$' "${contents}"; then
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw|forward_supervisor)[.]py$' "${contents}"; then
             echo "ERROR: retired private Voice backend leaked into installable FreeBSD package" >&2
             exit 1
           fi

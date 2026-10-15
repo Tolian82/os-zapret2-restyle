@@ -6,7 +6,7 @@
 set -eu
 
 [ "$#" -eq 1 ] || exit 64
-case "$1" in stop|stop-candidate-engine|start|start-candidate-engine|start-candidate-supervisor) ;; *) exit 64 ;; esac
+case "$1" in stop|stop-candidate-engine|start|start-candidate-engine) ;; *) exit 64 ;; esac
 [ "$(id -u)" -eq 0 ] || exit 69
 # Fail closed when the Python coordinator did not inherit FD9.
 : <&9 || exit 69
@@ -43,20 +43,6 @@ case "$1" in
             "${CHILD_PIDFILE}" "${DVTWS_LOG}" 5 || exit 1
         # Intentionally DO NOT start supervisor here. The next stage must
         # first transition the saved IPFW owner to desired native rules.
-        ;;
-    start-candidate-supervisor)
-        # After _74 IPFW PRECOMMIT, NEVER relaunch the candidate engine.
-        # Original FD9 + Config lock and kernel witnesses belong to Python.
-        [ -e "${CHILD_PIDFILE}" ] && [ ! -L "${CHILD_PIDFILE}" ] || exit 69
-        for file in "${SUPERVISOR_DAEMON_PIDFILE}" \
-            "${SUPERVISOR_MONITOR_PIDFILE}"; do
-            [ ! -e "${file}" ] && [ ! -L "${file}" ] || exit 69
-        done
-        supervisor_start "${SUPERVISOR_LOOP}" \
-            "${SUPERVISOR_DAEMON_PIDFILE}" \
-            "${SUPERVISOR_MONITOR_PIDFILE}" \
-            "${CHILD_PIDFILE}" "${VOICE_SERVICE}" \
-            "${DVTWS_BIN}" "${SUPERVISOR_LOG}" || exit 1
         ;;
     stop-candidate-engine)
         # Native coordinator proves sole engine PID/start and kernel argv.

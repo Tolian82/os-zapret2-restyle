@@ -28,6 +28,7 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             "voice_native_initial_ipfw_seed.py",
             "voice_native_forward_prepare.py",
             "voice_native_forward_ipfw.py",
+            "voice_native_forward_supervisor.py",
         )
         for name in retired:
             with self.subTest(name=name):
@@ -58,6 +59,13 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotIn(command, service)
                 self.assertNotIn(command, configd)
+        actuator = (BACKEND / "voice_native_process_lifecycle.sh").read_text()
+        self.assertNotIn("start-candidate-supervisor", actuator)
+        # Existing rollback and shared lifecycle still need the fixed
+        # old-process stop/restart shell functions.
+        self.assertIn("    stop)", actuator)
+        self.assertIn("    start)", actuator)
+        self.assertIn("supervisor_start", actuator)
         pkg = (ROOT / "scripts/build-pkg.sh").read_text()
         self.assertNotIn('PREPARE_ROUTE=', pkg)
         self.assertNotIn('APPLY_ROUTE=', pkg)

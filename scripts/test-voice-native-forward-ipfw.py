@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared IPFW PRECOMMIT fixture used by historical forward supervisor tests.
+"""Shared IPFW PRECOMMIT regression with historical schema-4 inputs.
 
 The independent forward-IPFW executor was never a normal entrypoint and is
 retired. Reuse the existing production IPFW transaction API, exercising its
@@ -74,7 +74,7 @@ class SimulatedNativeIPFW(FreeBSDIPFWAdapter):
 
 
 class ForwardIPFWTests(unittest.TestCase):
-    """Fixture API retained for supervisor/Config historical test consumers."""
+    """Exercise the shared IPFW transaction with historical sealed inputs."""
     def setUp(self):
         self.phase = previous.CandidateEngineStartTests()
         self.phase.setUp()

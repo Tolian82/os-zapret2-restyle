@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_163`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_164`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_162` HEAD `1d7e3d5` успешно прошёл Voice, Project и FreeBSD 15 package ([Actions #38810202894](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38810202894)). Для `_163` необходим latest-head PASS и проверка отсутствия старого forward IPFW executor в пакете.
-2. **Этап 6:** `_152–_163` закрыли второй Apply/PREPARED, отдельную Config-запись и private forward IPFW. Исторический IPFW test fixture теперь строит PRECOMMIT через действующий `voice_ipfw_runtime.activate_verified`; Config redo reader и необходимые rollback witnesses остаются. Дальше только проверенные зависимости и остаточные требования.
+1. **CI/FreeBSD:** `_163` HEAD `24dc0c4` успешно прошёл Voice, Project и FreeBSD 15 package ([Actions #38811642907](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38811642907)). `_164` требует отдельного latest-head PASS, включая FreeBSD package guard отсутствия retired forward supervisor executor.
+2. **Этап 6:** `_152–_164` убрали независимый Apply/PREPARED, forward Config writer/IPFW executor и orphan forward supervisor. Старый процессный actuator лишён только команды `start-candidate-supervisor`; обычный lifecycle и проверяемый previous rollback сохранены. Тесты shared IPFW PRECOMMIT и Config redo остаются; другие legacy зависимости удалять только после caller-аудита.
 3. **Миграция:** работающий Phase-B блокирует автоматическое native переключение до отдельной проверенной миграции. Чистая установка, старый marker и OFF имеют разные критерии.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 
