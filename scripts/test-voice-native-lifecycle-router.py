@@ -13,9 +13,9 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 from voice_native_lifecycle_router import (
-    inspect_lifecycle, inspect_candidate, check_legacy_poc_compatibility, VoiceLifecycleRouteError,
+    inspect_lifecycle, inspect_candidate, VoiceLifecycleRouteError,
 )
-from voice_cutover_journal import VoiceCutoverJournal
+from shared_apply_operation import SharedApplyOperation
 
 SERVICE = ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 ACTIONS = ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf"
@@ -109,59 +109,12 @@ class LifecycleRouterTests(unittest.TestCase):
         self.config.write_bytes(config_xml())
         result = self.candidate()
         self.assertEqual(result["state"], "native-voice-candidate-not-eligible")
-        self.assertEqual(result["reason"], "voice-saved-off-legacy-guard-still-authoritative")
+        self.assertEqual(result["reason"], "voice-saved-off-common-apply-available")
         self.assertIs(result["public_voice_apply"], False)
 
-    def legacy_guard(self):
-        fd = os.open(self.config, os.O_RDWR)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return check_legacy_poc_compatibility(
-                self.config, self.whole, self.ledger,
-                config_fd=fd, config_owner=self.owner,
-                require_lifecycle_owner=lambda: None,
-            )
-        finally:
-            os.close(fd)
-
-    def test_legacy_poc_allows_saved_five_off(self):
-        self.assertIsNone(self.legacy_guard())
-        self.assertFalse(self.whole.exists())
-
-    def test_legacy_poc_refuses_any_saved_native_on_even_with_global_off(self):
-        for settings in (
-            config_xml(profiles={"telegram": "1"}),
-            config_xml(profiles={"custom": "1"}, global_enabled="0"),
-            config_xml(profiles={"discord": "1"}, voice_wan="vtnet2"),
-        ):
-            with self.subTest(xml=settings[:80]):
-                self.config.write_bytes(settings)
-                with self.assertRaises(VoiceLifecycleRouteError):
-                    self.legacy_guard()
-        self.assertFalse(self.whole.exists())
-        self.assertFalse(self.ledger.exists())
-
-    def test_legacy_poc_refuses_pending_journal_and_corrupt_config(self):
-        self.config.write_bytes(b"<incomplete")
-        with self.assertRaises(VoiceLifecycleRouteError):
-            self.legacy_guard()
-        self.config.write_bytes(config_xml())
-        self.whole.mkdir(mode=0o700)
-        journal = VoiceCutoverJournal(self.whole)
-        old = {key: str(i) * 64 for i, key in enumerate(
-            ("config", "runtime", "engine", "firewall", "supervisor"),
-        )}
-        proof = {key: ("a" if i == 0 else "b" if i == 1 else "c") * 64
-                 for i, key in enumerate(
-                     ("saved_xml_sha256", "merged_sha256", "native_argv_sha256"))}
-        journal.begin(old, proof)
-        with self.assertRaises(VoiceLifecycleRouteError):
-            self.legacy_guard()
-        self.assertIsNotNone(journal.read())
-
-    def test_five_off_profiles_preserve_existing_legacy_guard(self):
+    def test_five_off_profiles_remain_read_only_under_shared_apply(self):
         report = self.inspect()
-        self.assertEqual(report["state"], "voice-saved-off-legacy-guard-still-authoritative")
+        self.assertEqual(report["state"], "voice-saved-off-common-apply-available")
         self.assertEqual(report["saved_voice_profiles"], dict.fromkeys(
             ("telegram", "discord", "x", "sip", "custom"), False,
         ))
@@ -171,7 +124,7 @@ class LifecycleRouterTests(unittest.TestCase):
     def test_saved_voice_on_is_not_an_activation_authority(self):
         self.config.write_bytes(config_xml(profiles={"telegram": "1"}))
         report = self.inspect()
-        self.assertEqual(report["state"], "voice-saved-on-native-apply-not-wired")
+        self.assertEqual(report["state"], "voice-saved-on-common-apply-configured")
         self.assertIs(report["saved_voice_on"], True)
         self.assertIs(report["safe_to_enable_voice"], False)
 
@@ -181,21 +134,26 @@ class LifecycleRouterTests(unittest.TestCase):
         self.config.write_bytes(config_xml(profiles={"discord":"1"}, voice_wan="vtnet2"))
         self.assertEqual(self.inspect()["state"], "voice-saved-on-wan-mismatch")
 
-    def test_native_pending_preempts_even_corrupt_saved_xml(self):
-        self.whole.mkdir(mode=0o700)
-        journal = VoiceCutoverJournal(self.whole)
-        old = {key: str(i) * 64 for i, key in enumerate(
-            ("config", "runtime", "engine", "firewall", "supervisor"),
-        )}
-        proof = {key: ("a" if i == 0 else "b" if i == 1 else "c") * 64
-                 for i, key in enumerate(
-                     ("saved_xml_sha256","merged_sha256","native_argv_sha256"))}
-        journal.begin(old, proof)
+    def test_shared_pending_preempts_corrupt_saved_xml_without_poc_reads(self):
+        common = SharedApplyOperation(self.root / "shared-apply")
+        item = {"id":"a"*32, "page":"voice", "base":"b"*64,
+                "candidate":"c"*64, "changed_fields":[]}
+        common.advance("prepared",item)
+        # No private old root exists; only shared Apply may block inspection.
         self.config.write_bytes(b"<incomplete")
         status = self.inspect()
-        self.assertEqual(status["state"], "native-transaction-review-required")
-        self.assertEqual(status["reason"], "whole-runtime-intent")
+        self.assertEqual("native-transaction-review-required", status["state"])
+        self.assertEqual("shared-apply-pending", status["reason"])
         self.assertIsNone(status["saved_voice_on"])
+        self.assertFalse(self.whole.exists())
+        self.assertFalse(self.ledger.exists())
+
+    def test_retired_cutover_evidence_cannot_block_common_saved_config(self):
+        self.whole.write_text("stale old PoC marker, not common authority")
+        self.ledger.write_text("retired private IPFW ledger")
+        status = self.inspect()
+        self.assertEqual("voice-saved-off-common-apply-available", status["state"])
+        self.assertFalse((self.root / "shared-apply").exists())
 
     def test_invalid_xml_and_invalid_boolean_never_assume_voice_off(self):
         for body in (

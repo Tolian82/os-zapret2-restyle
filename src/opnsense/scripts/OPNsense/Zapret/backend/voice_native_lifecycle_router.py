@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Stage-3 read-only Voice Config/journal routing under the EXISTING FD9 owner.
+"""Read-only saved Voice model and candidate preview under the common FD9 owner.
 
-The normal service, not this module, still controls ordinary start/stop.
-This is a strictly non-activating bridge from the saved OPNsense XML voice
-model to the same native cutover journal authority. There is no Apply command,
-no autonomous daemon or boot hook. All results explicitly deny mutation.
+There is exactly one common Voice+Strategies Apply journal. Neither old PoC
+cutover roots nor private Voice IPFW journals can authorize this route.
+The inspector never changes Config, runtime, processes or kernel IPFW.
 """
 from __future__ import annotations
 
+import errno
 import fcntl
 import hashlib
 import json
@@ -17,10 +17,8 @@ import stat
 import sys
 import xml.etree.ElementTree as ET
 
-from voice_cutover_guard import check_pending
-from voice_native_recovery_quiescence import _locked_config
-from voice_cutover_config_restore import _pinned_regular
-import voice_ipfw_runtime as native
+from shared_apply_operation import native_lifecycle_gate
+from voice_ipfw_adapter import require_lifecycle_lock
 from voice_profile_compiler import compile_candidate
 
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
@@ -29,6 +27,45 @@ MAX_CONFIG = 128 * 1048576
 
 class VoiceLifecycleRouteError(RuntimeError):
     pass
+
+
+CONFIG = Path("/conf/config.xml")
+
+
+def _pinned_regular(path: Path, fd: int, *, owner: tuple[int, int]) -> os.stat_result:
+    """Read only the locked original Config inode, never follow a replacement."""
+    by_path, opened = os.lstat(path), os.fstat(fd)
+    if (not stat.S_ISREG(by_path.st_mode) or
+        not stat.S_ISREG(opened.st_mode) or
+        by_path.st_nlink != 1 or opened.st_nlink != 1 or
+        (by_path.st_dev, by_path.st_ino) != (opened.st_dev, opened.st_ino) or
+        (opened.st_uid, opened.st_gid) != owner):
+        raise VoiceLifecycleRouteError("unsafe or replaced native Config inode")
+    return opened
+
+
+def _locked_config(path: Path, fd: int, owner: tuple[int, int]) -> None:
+    _pinned_regular(path, fd, owner=owner)
+    # A separate open must contend with the caller's original exclusive flock.
+    probe = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (errno.EWOULDBLOCK, errno.EAGAIN):
+                raise
+        else:
+            fcntl.flock(probe, fcntl.LOCK_UN)
+            raise VoiceLifecycleRouteError("OPNsense Config exclusive flock not held")
+    finally:
+        os.close(probe)
+
+
+def _shared_gate(whole_root: Path) -> dict:
+    # whole_root is a historical argument retained for independent callers;
+    # only the adjacent COMMON journal is read, never old cutover evidence.
+    return native_lifecycle_gate("common-apply", root=whole_root.with_name("shared-apply"))
+
 
 
 def _read_saved_config(config_path: Path, fd: int, owner: tuple[int, int],
@@ -125,7 +162,7 @@ def inspect_lifecycle(config_path: Path, whole_root: Path, ledger_root: Path,
     """One FD9/Config-flock read-only policy decision; no implicit activation."""
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
-    pending = check_pending(whole_root, ledger_root)
+    pending = _shared_gate(whole_root)
     if not pending["safe_to_mutate"]:
         # Config can be a partially-written XML prefix after power loss:
         # do not parse it before showing the retained durable journal.
@@ -139,16 +176,16 @@ def inspect_lifecycle(config_path: Path, whole_root: Path, ledger_root: Path,
     saved = _read_saved_config(config_path, config_fd, config_owner)
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
-    if check_pending(whole_root, ledger_root) != pending:
-        raise VoiceLifecycleRouteError("Voice journal changed during lifecycle inspect")
+    if _shared_gate(whole_root) != pending:
+        raise VoiceLifecycleRouteError("shared Apply journal changed during lifecycle inspect")
     if saved["saved_voice_on"] and not saved["global_enabled"]:
         state = "voice-saved-on-global-service-off"
     elif saved["saved_voice_on"] and not saved["wan_matches"]:
         state = "voice-saved-on-wan-mismatch"
     elif saved["saved_voice_on"]:
-        state = "voice-saved-on-native-apply-not-wired"
+        state = "voice-saved-on-common-apply-configured"
     else:
-        state = "voice-saved-off-legacy-guard-still-authoritative"
+        state = "voice-saved-off-common-apply-available"
     return {
         "state": state,
         **saved,
@@ -172,7 +209,7 @@ def inspect_candidate(config_path: Path, whole_root: Path, ledger_root: Path,
         config_owner=config_owner,
         require_lifecycle_owner=require_lifecycle_owner,
     )
-    if status["state"] != "voice-saved-on-native-apply-not-wired":
+    if status["state"] != "voice-saved-on-common-apply-configured":
         return {
             "state": "native-voice-candidate-not-eligible",
             "reason": status["state"],
@@ -195,10 +232,10 @@ def inspect_candidate(config_path: Path, whole_root: Path, ledger_root: Path,
         raise VoiceLifecycleRouteError("enabled Voice has no compiled profiles")
     require_lifecycle_owner()
     _locked_config(config_path, config_fd, config_owner)
-    if check_pending(whole_root, ledger_root) != {
+    if _shared_gate(whole_root) != {
         "state": "clear", "safe_to_mutate": True,
     }:
-        raise VoiceLifecycleRouteError("native Voice journal changed during candidate compilation")
+        raise VoiceLifecycleRouteError("common Apply journal changed during candidate compilation")
     return {
         "state": "native-voice-candidate-syntax-qualified",
         "profile_count": len(plan["profiles"]),
@@ -212,53 +249,23 @@ def inspect_candidate(config_path: Path, whole_root: Path, ledger_root: Path,
     }
 
 
-def check_legacy_poc_compatibility(config_path: Path, whole_root: Path,
-                                   ledger_root: Path, *, config_fd: int,
-                                   config_owner: tuple[int, int],
-                                   require_lifecycle_owner) -> None:
-    """Retire competing legacy mutations as soon as ANY native Voice is saved.
-
-    Old configurations without Voice stay compatible. This check takes place
-    under the already-held ordinary FD9 and the same locked Config inode,
-    BEFORE old Telegram PoC marker, engine, or IPFW actions. It never changes
-    the saved choice or performs migration. A pending whole/IPFW journal,
-    corrupt Config, or a new ON request always refuses.
-    """
-    status = inspect_lifecycle(
-        config_path, whole_root, ledger_root, config_fd=config_fd,
-        config_owner=config_owner,
-        require_lifecycle_owner=require_lifecycle_owner,
-    )
-    if status["state"] != "voice-saved-off-legacy-guard-still-authoritative":
-        raise VoiceLifecycleRouteError(
-            "legacy Telegram Voice PoC conflicts with native Voice selection "
-            "or pending cutover; migration/recovery required"
-        )
-
-
 def main(argv: list[str]) -> int:
-    if argv not in (["inspect"], ["candidate-preflight"],
-                    ["legacy-poc-preflight"]):
-        print("usage: voice_native_lifecycle_router.py {inspect|candidate-preflight|legacy-poc-preflight}", file=sys.stderr)
+    if argv not in (["inspect"], ["candidate-preflight"]):
+        print("usage: voice_native_lifecycle_router.py {inspect|candidate-preflight}", file=sys.stderr)
         return 64
     fd = None
     try:
-        native.require_native_lock()
-        fd = os.open(native.CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
-        _pinned_regular(native.CONFIG, fd, owner=(0, 0))
+        require_lifecycle_lock()
+        fd = os.open(CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        _pinned_regular(CONFIG, fd, owner=(0, 0))
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         arguments = dict(
             config_fd=fd, config_owner=(0, 0),
-            require_lifecycle_owner=native.require_native_lock,
+            require_lifecycle_owner=require_lifecycle_lock,
         )
-        if argv == ["legacy-poc-preflight"]:
-            check_legacy_poc_compatibility(
-                native.CONFIG, native.WHOLE, native.LEDGER, **arguments,
-            )
-            return 0
         route = inspect_lifecycle if argv == ["inspect"] else inspect_candidate
         result = route(
-            native.CONFIG, native.WHOLE, native.LEDGER, **arguments,
+            CONFIG, Path("/var/db/zapret2/shared-apply"), Path("/var/db/zapret2/shared-apply"), **arguments,
         )
         prefix = "native-voice-lifecycle=" if argv == ["inspect"] else "native-voice-candidate="
         print(prefix + json.dumps(
