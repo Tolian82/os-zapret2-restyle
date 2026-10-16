@@ -134,5 +134,3 @@ def preview_saved_draft_candidate(
         "safe_to_enable_voice": False,
         "public_voice_apply": False,
     }
-
-
