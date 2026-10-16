@@ -2,11 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_182`. `VERSION=0.5.2`; `PLUGIN_REVISION=182`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_183`. `VERSION=0.5.2`; `PLUGIN_REVISION=183`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
-`_181` HEAD `3405301`, [CI #38913309729](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38913309729): **Voice/Project/FreeBSD 15 PASS**; package delivery contract и актуальный PR title — PASS. Это не подтверждение STUN/MEDIA/CALL на OPNsense.
+`_182` HEAD `10e9652`, [CI #38920675327](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38920675327): **Voice/Project/FreeBSD 15 PASS**, testing package delivery contract — PASS. Это не подтверждение STUN/MEDIA/CALL на OPNsense.
 
 ## Окончательное решение владельца — 16.10.2026
 
@@ -36,8 +36,10 @@
 
 **`_182`:** найден и исправлен реальный дефект действующего GUI: инспектор сообщает фазы `shared-apply-*`, но страница раньше показывала подсказки только для удалённого PoC cutover. Теперь в RU/EN отображается конкретная фаза общего Apply; из текущей справки убрано требование миграции старого Telegram PoC. Поля, порядок, кнопки, пять профилей и общий backend не менялись. Контрактный тест привязан к фактическим фазам инспектора. **Далее:** квалифицировать `_182` exact-HEAD (Voice/Project/FreeBSD), затем итоговая проверка ТЗ перед одной testing-поставкой. Live звонки пока не подтверждены.
 
+**`_183`:** исправлен наблюдаемый недочёт GUI-предвалидации: ошибочный IPSET одного профиля раньше прекращал разбор следующих строк его STUN-параметров, а ошибка Telegram мешала проверить Discord. В `VoiceCandidateValidator.php` прекращаем разбор только при ошибке текущего `*.args`; существующая форма одновременно показывает ошибки IPSET и STUN разных профилей. Добавлены две локальные PHP-регрессии. Python release compiler/общий Apply не менялись. Следующий шаг — квалифицировать точный `_183` (Voice, Project, FreeBSD 15), затем зафиксировать кодовую готовность и передать одну testing-поставку без повторной перестройки backend.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_182` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_183` не опубликована.

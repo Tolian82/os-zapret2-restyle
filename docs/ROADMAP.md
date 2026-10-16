@@ -11,10 +11,10 @@
 | 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
 | 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
-| 6. Удаление дублирования | Основной PoC rollback/migration/private IPFW-граф удалён в `_168–_180` и прошёл Voice/Project/FreeBSD 15 CI. `_181` удаляет остаточный частный shell-исполнитель и квалифицирует отсутствие в пакете |
-| 7. Приёмка | `_180` Voice/Project/FreeBSD 15 PASS; `_181` требует новой квалификации. Одна testing-поставка только после закрытия программных требований; owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL ещё не проведена |
+| 6. Удаление дублирования | Завершено в коде и проверено CI/FreeBSD: удалён private PoC recovery/rollback/IPFW/process graph и его entrypoints; единый shared Apply сохранён |
+| 7. Приёмка | Последняя квалификация code/package — `_182` Voice/Project/FreeBSD 15 PASS; `_183` проверяется отдельно. После закрытия точечных ошибок — одна testing-поставка и owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL |
 
-**Остаточный рубеж:** квалифицировать `_181` на точном HEAD, проверить пакет и отсутствие последнего старого process entrypoint, затем оценить готовность неизменного ТЗ к одной testing-поставке и owner-live приёмке. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
+**Остаточный рубеж:** квалифицировать текущий точный HEAD, завершить только воспроизводимые ошибки GUI/Apply, затем оценить кодовую готовность ТЗ к одной testing-поставке и owner-live приёмке. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 
 ## Основной завершённый путь
 

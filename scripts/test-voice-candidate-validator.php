@@ -67,6 +67,24 @@ foreach (["91.108.13.10/24","2001:db8::1","1.2.3.4/33","127.0.0.1;echo foo"] as 
 }
 invalid(active(data(),'telegram',''),'zapret.hostlist.telegramips','empty IPSET forbidden for enabled service');
 
+ // Separate invalid fields must be reported together: the earlier IPSET
+ // error must not stop parsing later STUN arguments of that same profile.
+$both = active(data(), 'telegram', 'not-an-ip',
+    "--filter-udp=3478\n--filter-l7=stun\n--payload=bogus");
+$problems = VoiceCandidateValidator::check($both);
+check(isset($problems['zapret.hostlist.telegramips']) &&
+      isset($problems['zapret.voice.telegram.args']),
+      'Malformed IPSET must not hide the later invalid STUN payload: ' .
+      json_encode($problems));
+// An error in Telegram must not suppress Discord argument validation either.
+$both = active($both, 'discord', '203.0.113.0/24',
+    "--filter-udp=5000\n--filter-l7=stun\n--payload=invalid");
+$problems = VoiceCandidateValidator::check($both);
+check(isset($problems['zapret.voice.telegram.args']) &&
+      isset($problems['zapret.voice.discord.args']),
+      'Each enabled Voice service must report its own STUN error: ' .
+      json_encode($problems));
+
 $base = "--filter-udp=596-599\n--filter-l7=stun\n--payload=stun\n";
 $allowed = [
     '--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2:ip_ttl=4',

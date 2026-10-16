@@ -205,7 +205,10 @@ final class VoiceCandidateValidator
             } else {
                 self::error($errors, $field, 'Forbidden or unverified dvtws2 parameter at line ' . ($index + 1));
             }
-            if ($errors) {
+            // A different service's IPSET/argument error must not suppress
+            // validation of THIS service's later STUN options. Only an error
+            // reported for this exact args field stops its parser.
+            if (isset($errors[$field])) {
                 return [];
             }
         }
