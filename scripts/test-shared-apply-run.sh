@@ -11,7 +11,7 @@ sh -n "$TMP/runner.sh" || fail "native runner syntax"
 . "$TMP/runner.sh"
 LOG="$TMP/log"
 ID=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-preflight_voice_cutover_journals() {
+preflight_shared_apply_journal() {
     echo "guard:$1" >> "$LOG"
     [ "$GUARD_OK" = 1 ]
 }

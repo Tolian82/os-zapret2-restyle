@@ -15,7 +15,7 @@ SUPERVISOR_DAEMON_PIDFILE="$ROOT/daemon.pid"
 SUPERVISOR_LOOP="$ROOT/monitor-loop"
 mkdir -p "$ROOT/work/release" "$ACTIVE_DIR"
 LOG="$ROOT/events"
-preflight_voice_cutover_journals() { echo "guard:$1" >> "$LOG"; [ "$GUARD_OK" = 1 ]; }
+preflight_shared_apply_journal() { echo "guard:$1" >> "$LOG"; [ "$GUARD_OK" = 1 ]; }
 shared_apply_require_tools() { return 0; }
 shared_apply_bundle_service() { echo "seal:$1" >> "$LOG"; [ "$SEAL_OK" = 1 ]; }
 shared_apply_native_config() {

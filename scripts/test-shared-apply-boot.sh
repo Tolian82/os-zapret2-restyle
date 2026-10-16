@@ -14,7 +14,7 @@ CHILD_PIDFILE="$ROOT/child.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
 common_error() { echo "ERROR: $*" >&2; }
-preflight_voice_cutover_journals() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
+preflight_shared_apply_journal() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
 shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
 shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;; *) return 1 ;; esac; }
@@ -164,7 +164,7 @@ shared_apply_stop_service() {
     fi
     [ "$STOP_OK" = 0 ] || return 70
 }
-preflight_voice_cutover_journals() { echo "legacy-guard" >> "$LOG"; }
+preflight_shared_apply_journal() { echo "shared-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
 
 check_route() {
@@ -203,11 +203,11 @@ check_route 69 runtime-failure "exited" 542
 [ ! -s "$LOG" ] || fail "pending native owner was torn down by callback"
 OWNER=restored
 check_route 0 start
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:start ' ] ||
     fail "restored owner did not use ordinary legacy lifecycle"
 OWNER="prepared $ID voice"
 check_route 0 start
-[ "$(tr '\n' ' ' < "$LOG")" = 'prepared-recovered legacy-guard legacy:start ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'prepared-recovered shared-guard legacy:start ' ] ||
     fail "prepared recovery did not resume ordinary runtime"
 RECOVER_OWNER="committed bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb voice"
 OWNER="prepared $ID voice"
@@ -271,18 +271,18 @@ check_route 69 reconfigure
 [ ! -s "$LOG" ] || fail "corrupt owner was ignored"
 HAS_RECORD=0 OWNER_OK=1
 check_route 0 stop
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:stop ' ] || fail "legacy stop lost"
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:stop ' ] || fail "legacy stop lost"
 check_route 0 restart
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:restart ' ] || fail "legacy restart lost"
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:restart ' ] || fail "legacy restart lost"
 check_route 0 start
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard legacy:start ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard legacy:start ' ] ||
     fail "no common journal changed ordinary legacy startup"
 # The original FD9 wrapper delegates compatibility names only after the
 # common journal preflight; owner/marker checks now live in their real adapter.
 for compat_action in telegram-voice-enable telegram-voice-disable; do
     HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
     check_route 0 "$compat_action"
-    [ "$(tr '\n' ' ' < "$LOG")" = "legacy-guard legacy:$compat_action " ] ||
+    [ "$(tr '\n' ' ' < "$LOG")" = "shared-guard legacy:$compat_action " ] ||
         fail "compatibility command skipped original FD9 preflight"
 done
 
@@ -325,10 +325,10 @@ compat_run() {
 }
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
 compat_run 0 enable
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:enable native:voice:c2FmZQ ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard envelope:enable native:voice:c2FmZQ ' ] ||
     fail "Telegram enable missed native shared Voice Apply"
 compat_run 0 disable
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:disable native:voice:c2FmZQ ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard envelope:disable native:voice:c2FmZQ ' ] ||
     fail "Telegram disable missed native shared Voice Apply"
 for forbidden in "prepared $ID voice" "activated $ID strategies" pending; do
     OWNER="$forbidden"
@@ -352,7 +352,7 @@ ln -s "$ROOT/missing-native" "$ACTIVE_DIR/voice-plan.json"
 compat_run 69 enable
 rm -f "$ACTIVE_DIR/voice-plan.json"
 compat_run 0 disable
-[ "$(tr '\n' ' ' < "$LOG")" = 'legacy-guard envelope:disable native:voice:c2FmZQ ' ] ||
+[ "$(tr '\n' ' ' < "$LOG")" = 'shared-guard envelope:disable native:voice:c2FmZQ ' ] ||
     fail "native compatibility unexpectedly bypassed shared Apply"
 
 # Old configctl status keys always reflect native inspection, not retired PoC.

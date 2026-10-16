@@ -17,7 +17,7 @@ LOG="$ROOT/steps.log"
 CHILD_PIDFILE="$ROOT/dvtws.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 ACTIVE_DIR="$ROOT/active"
-preflight_voice_cutover_journals() { [ "$1" = common-apply ]; }
+preflight_shared_apply_journal() { [ "$1" = common-apply ]; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 shared_apply_inspect_service() {
     if [ "$BAD_OWNER" = 1 ]; then echo "legacy-common-activated $ID voice"

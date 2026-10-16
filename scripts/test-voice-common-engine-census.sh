@@ -79,7 +79,7 @@ common_process_matches() {
     [ "$1" = 777 ] && [ "$2" = "$SUPERVISOR_LOOP" ] &&
     [ "$UNTRACKED_MONITOR" = 1 ]
 }
-preflight_voice_cutover_journals() { :; }
+preflight_shared_apply_journal() { :; }
 shared_apply_require_tools() { :; }
 shared_apply_bundle_service() { :; }
 shared_apply_native_config() { printf '%s\n' '{"result":"committed"}'; }

@@ -12,7 +12,6 @@ import unittest
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
 from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate
-from voice_cutover_guard import check_pending
 
 def detail(ident="1"*32):
     return {"id":ident,"page":"voice","base":"a"*64,
@@ -79,7 +78,7 @@ class TestJournal(unittest.TestCase):
 
     def test_production_service_uses_shared_gate_without_old_cutover(self):
         service=(BACKEND.parent/"zapret_service.sh").read_text()
-        gate=service.split("preflight_voice_cutover_journals()\n{",1)[1].split("\n}\n",1)[0]
+        gate=service.split("preflight_shared_apply_journal()\n{",1)[1].split("\n}\n",1)[0]
         self.assertIn("shared_apply_operation.py",gate)
         self.assertIn('native-gate "$@"',gate)
         self.assertNotIn("voice_cutover_guard.py",gate)
@@ -106,7 +105,7 @@ class TestJournal(unittest.TestCase):
             for phase in ("prepared","activating","activated","config-saved"):
                 j.advance(phase,detail())
                 snapshot=(j.root/"operation.json").read_bytes()
-                guard=check_pending(root/"voice-cutover",root/"voice-ipfw")
+                guard=native_lifecycle_gate(root=root/"shared-apply")
                 self.assertEqual(("blocked","shared-apply-pending",phase),
                                  (guard["state"],guard["reason"],guard["phase"]))
                 self.assertEqual(snapshot,(j.root/"operation.json").read_bytes())
@@ -115,9 +114,8 @@ class TestJournal(unittest.TestCase):
             j.advance("committed",detail())
             self.assertTrue(j.advisory()["safe_to_mutate"])
             self.assertEqual("shared-runtime-owned",
-                             check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
-            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
-                                          native_scope=True)["safe_to_mutate"])
+                             native_lifecycle_gate(root=root/"shared-apply")["reason"])
+            self.assertTrue(native_lifecycle_gate("common-apply", root=root/"shared-apply")["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 j.advance("prepared",detail())
             j.advance("prepared",detail("2"*32))
@@ -192,15 +190,14 @@ class TestJournal(unittest.TestCase):
             prepared=store.advance("prepared",next_owner)
             self.assertEqual(initial,prepared["previous"])
             self.assertEqual("shared-apply-pending",
-                             check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
+                             native_lifecycle_gate(root=root/"shared-apply")["reason"])
             restored=store.recover_prepared(next_owner["id"],lambda: True)
             self.assertEqual(initial,restored["previous"])
             self.assertEqual(initial,committed_owner(store.read()))
-            old=check_pending(root/"voice-cutover",root/"voice-ipfw")
+            old=native_lifecycle_gate(root=root/"shared-apply")
             self.assertEqual("shared-runtime-owned",old["reason"])
             self.assertFalse(old["safe_to_mutate"])
-            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
-                                          native_scope=True)["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("common-apply", root=root/"shared-apply")["safe_to_mutate"])
             with self.assertRaisesRegex(SharedOperationError,"predecessor ID"):
                 store.advance("prepared",initial)
             third=detail("c"*32)
@@ -230,8 +227,8 @@ class TestJournal(unittest.TestCase):
             record=json.loads(path.read_text())
             record["previous"]=detail("b"*32)
             path.write_text(json.dumps(record))
-            self.assertEqual("invalid-or-untrusted-journal",
-                check_pending(root/"voice-cutover",root/"voice-ipfw")["reason"])
+            with self.assertRaises(SharedOperationError):
+                native_lifecycle_gate(root=root/"shared-apply")
 
     def test_pristine_activating_recovery_requires_previous_owner_and_attestation(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -330,11 +327,9 @@ class TestJournal(unittest.TestCase):
             d=detail("4"*32)
             for phase in ("prepared","activating","activated","config-saved"):
                 j.advance(phase,d)
-            self.assertFalse(check_pending(root/"voice-cutover",root/"voice-ipfw")["safe_to_mutate"])
-            self.assertFalse(check_pending(root/"voice-cutover",root/"voice-ipfw",
-                                           native_scope=True)["safe_to_mutate"])
-            self.assertTrue(check_pending(root/"voice-cutover",root/"voice-ipfw",
-                                         native_scope=True,recover_saved=True)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate(root=root/"shared-apply")["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate("common-apply", root=root/"shared-apply")["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("common-recover-saved", root=root/"shared-apply")["safe_to_mutate"])
             with self.assertRaisesRegex(SharedOperationError,"attestation"):
                 j.finish_saved(d["id"],lambda: False)
             self.assertEqual("config-saved",j.read()["phase"])
@@ -411,9 +406,8 @@ class TestJournal(unittest.TestCase):
                         (j.root/"tmp").write_text("unexpected")
                     elif issue=="bad-mode":
                         j.root.chmod(0o755)
-                status=check_pending(root/"voice-cutover",root/"voice-ipfw")
-                self.assertEqual("invalid-or-untrusted-journal",status["reason"])
-                self.assertFalse(status["safe_to_mutate"])
+                with self.assertRaises(SharedOperationError):
+                    native_lifecycle_gate(root=root/"shared-apply")
 
     def test_cli_refuses_nonfreebsd_or_missing_fd9(self):
         cli=BACKEND/"shared_apply_operation.py"
