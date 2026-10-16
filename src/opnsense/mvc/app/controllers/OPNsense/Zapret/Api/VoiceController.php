@@ -280,7 +280,10 @@ class VoiceController extends ApiControllerBase
                 'zapret.voice.waninterface' => $error->getMessage()
             ]];
         } catch (\Throwable $error) {
-            return ['result' => 'failed', 'validations' => [
+            // Serialization or Config::save may have changed persistent
+            // settings before a subsequent error. An indeterminate write
+            // requires a fresh Config load, never an automatic retry.
+            return ['result' => 'failed', 'requires_review' => true, 'validations' => [
                 'zapret.voice.waninterface' => 'Voice draft could not be saved'
             ]];
         } finally {

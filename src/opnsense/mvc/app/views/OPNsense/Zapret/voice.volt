@@ -10,7 +10,7 @@ $(document).ready(function () {
         infoTitle: 'Как работают голосовые профили',
         infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
@@ -44,7 +44,7 @@ $(document).ready(function () {
         infoTitle: 'About Voice Profiles',
         infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
@@ -295,11 +295,22 @@ $(document).ready(function () {
                 // On a conflict, do not advance the token or erase user edits.
                 voiceSnapshot.val(reply.snapshot);
                 $('#voiceValidationStatus').text(text.draftSaved);
-            } else {
+            } else if (reply && reply.result === 'failed' &&
+                reply.requires_review !== true && reply.validations &&
+                typeof reply.validations === 'object' &&
+                !Array.isArray(reply.validations) &&
+                Object.keys(reply.validations).length > 0) {
+                // Explicit pre-write validation rejection is safe to edit.
                 $('#voiceValidationStatus').text(text.draftFailed);
+            } else {
+                // A malformed/ambiguous response may follow a Config write.
+                voiceApplyNeedsReview = true;
+                $('#voiceValidationStatus').text(text.draftReview);
             }
         }).fail(function () {
-            $('#voiceValidationStatus').text(text.draftFailed);
+            // A browser timeout does not prove that Config::save failed.
+            voiceApplyNeedsReview = true;
+            $('#voiceValidationStatus').text(text.draftReview);
         }).always(function () {
             voiceMutationPending = false;
             reconcileVoiceServiceStatus();

@@ -259,6 +259,72 @@ def main() -> None:
         )
         check(gate_run.returncode == 0,
               "Voice GUI Config mutation regression: " + gate_run.stderr)
+        # Drive the actual Save Draft event handler with a minimal AJAX
+        # harness. A rejected validation permits correction, but an unknown
+        # result, network failure or post-write error must block retries.
+        save_handler = re.search(
+            r"    \$\('#voiceSaveDraft'\)\.on\('click', function \(\) \{.*?^    \}\);",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(save_handler is not None, "Voice Save Draft handler missing")
+        save_script = (
+            "let click,calls,voiceMutationPending=false,voiceControlPending=false,"
+              "voiceApplyNeedsReview=false;\n"
+            + "const text={loading:'loading',draftSaved:'saved',"
+              "draftFailed:'failed',draftReview:'review'};\n"
+            + "const button={disabled:false,prop(name,value){"
+              "if(name!=='disabled')throw Error('bad property');"
+              "if(value===undefined)return this.disabled;"
+              "this.disabled=!!value;return this;}};\n"
+            + "const display={value:'',text(value){if(value===undefined)"
+              "return this.value;this.value=value;return this;}};\n"
+            + "const voiceSnapshot={value:'a'.repeat(64),val(value){"
+              "if(value!==undefined)this.value=value;return this.value;}};\n"
+            + "function $(item){if(item===button)return button;"
+              "if(item==='#voiceSaveDraft')return {on:(ev,fn)=>{click=fn;}};"
+              "if(item==='#voiceValidationStatus')return display;"
+              "throw Error('unexpected DOM target '+item);}\n"
+            + "$.ajax=()=>{calls={};return {done(fn){calls.done=fn;return this;},"
+              "fail(fn){calls.fail=fn;return this;},"
+              "always(fn){calls.always=fn;return this;}};};\n"
+            + "function getFormData(){return {};}"
+              "function handleFormValidation(){}"
+              "function localizeVoiceErrors(x){return x;}\n"
+            + "function reconcileVoiceServiceStatus(){"
+              "button.disabled=voiceMutationPending||voiceControlPending||"
+              "voiceApplyNeedsReview;}\n"
+            + save_handler.group(0) + "\n"
+            + "function check(ok,why){if(!ok)throw Error(why);}\n"
+            + "function start(){voiceMutationPending=false;"
+              "voiceApplyNeedsReview=false;button.disabled=false;"
+              "click.call(button);check(voiceMutationPending&&button.disabled,"
+              "'save did not lock Config');}\n"
+            + "start();calls.done({result:'failed',validations:{"
+              "'zapret.voice.telegram.args':'invalid'}});calls.always();"
+              "check(!voiceApplyNeedsReview&&!button.disabled,"
+              "'pre-write validation rejection locked the form');\n"
+            + "start();calls.fail();calls.always();"
+              "check(voiceApplyNeedsReview&&button.disabled&&display.value==='review',"
+              "'network failure allowed blind draft retry');\n"
+            + "start();calls.done({result:'failed',requires_review:true,"
+              "validations:{'zapret.voice.waninterface':'save failed'}});calls.always();"
+              "check(voiceApplyNeedsReview&&button.disabled,"
+              "'post-write error allowed blind draft retry');\n"
+            + "start();calls.done(null);calls.always();"
+              "check(voiceApplyNeedsReview&&button.disabled,"
+              "'malformed result permitted Config write');\n"
+            + "start();calls.done({result:'saved',applied:false,"
+              "snapshot:'b'.repeat(64)});calls.always();"
+              "check(!voiceApplyNeedsReview&&!button.disabled&&"
+              "voiceSnapshot.val()==='b'.repeat(64),"
+              "'confirmed draft failed to advance snapshot');\n"
+        )
+        save_run = subprocess.run(
+            ["node", "-"], input=save_script, text=True,
+            capture_output=True, check=False,
+        )
+        check(save_run.returncode == 0,
+              "Voice Save Draft response regression: " + save_run.stderr)
         # Exercise the actual two-witness GUI gate and asynchronous settled
         # health join instead of only looking for marker strings. This must
         # not hit a browser, OPNsense or external service.
@@ -393,6 +459,7 @@ def main() -> None:
           "Voice UI must expose the real inactive-draft save action")
     check("public function saveDraftAction()" in status_php and
           "serializeToConfig(false, true)" in status_php and
+          "'requires_review' => true, 'validations'" in status_php and
           "VoiceSettingsSnapshot::digest($model->getNodes())" in status_php,
           "Voice draft must persist using the native model and fresh snapshot")
     check("Save inactive draft requires all Voice services OFF; use Apply to change active profiles" in status_php and
