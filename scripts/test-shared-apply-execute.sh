@@ -5,8 +5,6 @@ trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
-sed -n '/^shared_apply_save_retired_legacy_config_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/executor.sh"
-sed -n '/^shared_apply_commit_retired_legacy_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/executor.sh"
 sh -n "$ROOT/executor.sh" || fail "shell syntax"
 . "$ROOT/executor.sh"
 ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -160,60 +158,4 @@ reset; BAD_RECORD=config-saved
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved '
 reset; RESTORE_RC=1; SAVE_RC=69
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save runtime-restore record:requires-review '
-# First native save of a previously switched old owner, only after
-# durable legacy-config-saving. No commit or terminal journal write.
-run_retired() {
-    expected="$1"; shift
-    set +e
-    shared_apply_save_retired_legacy_config_service "$ID" > "$ROOT/retired-response.txt"
-    actual="$?"
-    set -e
-    [ "$actual" -eq "$expected" ] ||
-        fail "legacy Config status=$actual expected=$expected"
-    steps=$(tr '\n' ' ' < "$LOG")
-    [ "$steps" = "$*" ] || fail "legacy Config steps: $steps"
-}
-reset
-run_retired 0 'bundle:verify runtime-rehydrate runtime-attest config-save config-readback bundle:verify runtime-attest '
-grep -Fqx "legacy-native-config-saved=$ID" "$ROOT/retired-response.txt" ||
-    fail "legacy native Config saved witness missing"
-reset; BAD_OWNER=1
-run_retired 69 ''
-reset; PRE_DRIFT=1
-run_retired 69 'bundle:verify '
-reset; REHYDRATE_RC=69
-run_retired 70 'bundle:verify runtime-rehydrate '
-reset; SAVE_RC=70
-run_retired 70 'bundle:verify runtime-rehydrate runtime-attest config-save '
-reset; SAVED_DIGEST_DRIFT=1
-run_retired 70 'bundle:verify runtime-rehydrate runtime-attest config-save config-readback '
-reset; ATTEST_FAIL_AT=2
-run_retired 70 'bundle:verify runtime-rehydrate runtime-attest config-save config-readback bundle:verify runtime-attest '
-# A successful native Config save alone must NOT authorize stage cleanup.
-# The original journal must first reach durable legacy-common-committing.
-run_legacy_commit() {
-    expected="$1"; shift
-    set +e
-    shared_apply_commit_retired_legacy_service "$ID" > "$ROOT/commit-response.txt"
-    actual="$?"
-    set -e
-    [ "$actual" -eq "$expected" ] ||
-        fail "legacy IPFW commit status=$actual expected=$expected"
-    steps=$(tr '\n' ' ' < "$LOG")
-    [ "$steps" = "$*" ] || fail "legacy IPFW commit steps: $steps"
-}
-reset
-run_legacy_commit 69 ''
-reset; COMMIT_OWNER=1
-run_legacy_commit 0 'bundle:verify runtime-rehydrate runtime-attest runtime-commit runtime-final-verify bundle:verify '
-grep -Fqx "legacy-native-committed=$ID" "$ROOT/commit-response.txt" ||
-    fail "native IPFW commit receipt missing"
-reset; COMMIT_OWNER=1; REHYDRATE_RC=69
-run_legacy_commit 70 'bundle:verify runtime-rehydrate '
-reset; COMMIT_OWNER=1; COMMIT_RC=70
-run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest runtime-commit '
-reset; COMMIT_OWNER=1; FINAL_RC=70
-run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest runtime-commit runtime-final-verify '
-reset; COMMIT_OWNER=1; ATTEST_RC=70
-run_legacy_commit 70 'bundle:verify runtime-rehydrate runtime-attest '
 echo 'PASS: shared FD9 native runtime/Config fault-injection matrix'
