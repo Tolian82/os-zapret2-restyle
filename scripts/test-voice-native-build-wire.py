@@ -72,19 +72,23 @@ class ActualRuntimeWire(unittest.TestCase):
         source = shell[shell.index("orchestrator_build_release()"):
                        shell.index("orchestrator_cleanup_runtime()")]
         self.assertIn('if [ "${_orchestrator_build_variant}" != "ordinary" ]; then', source)
-        stage = source[source.index("# Ordinary legacy runtime uses"):
+        stage = source[source.index("# Ordinary and detached builds use"):
                        source.index("_orchestrator_build_extra_input=")]
         self.assertIn("orchestrator_stage_native_voice", stage)
         self.assertIn('"${_orchestrator_build_user_traffic}"', stage)
         self.assertIn('"${_orchestrator_build_managed_source}"', stage)
         self.assertIn('if [ "${_orchestrator_build_variant}" = "native-detached" ]; then', source)
-        self.assertIn("telegram_voice_build_effective_traffic", source)
+        # Ordinary Strategies stay untouched by all retired Phase-B helpers.
+        self.assertIn('cp "${_orchestrator_build_user_traffic}" "${_orchestrator_build_traffic}"', stage)
+        self.assertNotIn("telegram_voice_build_effective_traffic", source)
+        self.assertNotIn("TELEGRAM_VOICE_MARKER_FILE", source)
+        self.assertNotIn("firewall_telegram_voice", source)
         guard = shell[shell.index("orchestrator_voice_build_preflight()"):
                       shell.index("orchestrator_build_release()")]
         self.assertIn("config_voice_staged_only_guard", guard)
         self.assertLess(source.index("orchestrator_voice_build_preflight"),
-                        source.index("telegram_voice_build_effective_traffic"))
-        self.assertLess(source.index("telegram_voice_build_effective_traffic"),
+                        source.index('cp "${_orchestrator_build_user_traffic}"'))
+        self.assertLess(source.index('cp "${_orchestrator_build_user_traffic}"'),
                         source.index("orchestrator_stage_native_voice"))
 
 
