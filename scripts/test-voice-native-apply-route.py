@@ -39,18 +39,18 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse((SCRIPTS / name).exists())
 
-    def test_retired_forward_runtime_writer_has_no_production_api(self):
-        reader = (BACKEND / "voice_native_forward_runtime.py").read_text()
-        self.assertIn("def _read_redo(", reader)
-        for writer in ("def install_forward_runtime(", "def _arm(",
-                       "def _copy_candidate("):
-            with self.subTest(writer=writer):
-                self.assertNotIn(writer, reader)
-        rollback = (BACKEND / "voice_cutover_file_rollback.py").read_text()
-        self.assertIn(
-            "from voice_native_forward_runtime import _read_redo as read_forward_redo",
-            rollback,
-        )
+    def test_retired_private_cutover_executors_are_absent(self):
+        for path in BACKEND.glob("voice_cutover_*.py"):
+            self.fail("old cutover executor still shipped: " + path.name)
+        for module in (
+            "voice_ipfw_runtime.py",
+            "voice_native_recovery_quiescence.py",
+            "voice_native_five_resource_recovery.py",
+            "voice_native_boot_recovery_review.py",
+            "voice_firewall_ledger.py",
+        ):
+            with self.subTest(module=module):
+                self.assertFalse((BACKEND / module).exists())
 
     def test_retired_telegram_poc_recovery_not_shipped(self):
         for path in BACKEND.glob('voice_native_legacy_*.py'):
@@ -88,8 +88,7 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
         self.assertNotIn("start-candidate-supervisor", actuator)
         self.assertNotIn("start-candidate-engine", actuator)
         self.assertIn("    stop-candidate-engine)", actuator)
-        # Existing rollback and shared lifecycle still need the fixed
-        # old-process stop/restart shell functions.
+        # Shared lifecycle shell helpers remain until their current callers are audited.
         self.assertIn("    stop)", actuator)
         self.assertIn("    start)", actuator)
         self.assertIn("supervisor_start", actuator)

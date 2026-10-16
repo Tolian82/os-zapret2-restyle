@@ -265,11 +265,11 @@ strategy_lab_internal_dispatch()
             strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
-            preflight_voice_cutover_journals || return 69
+            preflight_shared_apply_journal || return 69
             stop_service
             ;;
         strategy-lab-start)
-            preflight_voice_cutover_journals || return 69
+            preflight_shared_apply_journal || return 69
             start_service
             ;;
         *)
@@ -320,109 +320,7 @@ strategy_lab_report_lock_failure()
     fi
 }
 
-# Native FreeBSD Voice IPFW owner is a production executable, not an
-# independent daemon. The dispatcher invokes it ONLY beneath FD9 lockf.
-# No GUI action is allowed to use this partial cutover path.
-native_voice_ipfw_dispatch()
-{
-    _native_voice_ipfw_action="$1"
-    _native_voice_ipfw_python="/usr/local/bin/python3.13"
-    _native_voice_ipfw_script="${BACKEND_DIR}/voice_ipfw_runtime.py"
-
-    [ -x "${_native_voice_ipfw_python}" ] &&
-    [ -r "${_native_voice_ipfw_script}" ] || {
-        echo "ERROR: native Voice IPFW runtime is not installed" >&2
-        return 1
-    }
-    "${_native_voice_ipfw_python}" "${_native_voice_ipfw_script}" \
-        "${_native_voice_ipfw_action}"
-}
-
-# Create a real, fsync'd previous Config/runtime checkpoint BEFORE any
-# native Voice transaction takes ownership of IPFW. This action is private
-# to the service lifecycle FD9, never available through Voice GUI Apply.
-native_voice_checkpoint_service()
-{
-    orchestrator_runtime_is_complete \
-        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
-        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}" || {
-            echo "ERROR: cannot checkpoint an incomplete previous Zapret runtime" >&2
-            return 1
-        }
-
-    _native_voice_checkpoint_python="/usr/local/bin/python3.13"
-    _native_voice_checkpoint_script="${BACKEND_DIR}/voice_cutover_checkpoint.py"
-    [ -x "${_native_voice_checkpoint_python}" ] &&
-    [ -r "${_native_voice_checkpoint_script}" ] || {
-        echo "ERROR: native Voice checkpoint command is not installed" >&2
-        return 1
-    }
-    "${_native_voice_checkpoint_python}" "${_native_voice_checkpoint_script}" prepare
-}
-
-# Prepare exact sealed previous Config/runtime bytes for a verified Voice
-# rollback. Does NOT install them, restart dvtws2 or mutate firewall.
-# The Python entrypoint requires an already-MUTATING whole journal and
-# validates the original IPFW ownership under the existing lockf FD9.
-native_voice_restore_stage_service()
-{
-    _native_voice_restore_python="/usr/local/bin/python3.13"
-    _native_voice_restore_script="${BACKEND_DIR}/voice_cutover_restore_prepare.py"
-    [ -x "${_native_voice_restore_python}" ] &&
-    [ -r "${_native_voice_restore_script}" ] || {
-        echo "ERROR: native Voice restore preparation is not installed" >&2
-        return 1
-    }
-    "${_native_voice_restore_python}" "${_native_voice_restore_script}" prepare
-}
-
-# Read-only native evidence for a future complete Voice rollback. It is
-# accessible only under the existing lockf FD9; unlike file restore it never
-# stops processes, alters IPFW or writes the Config/runtime tree.
-native_voice_quiescence_service()
-{
-    _native_voice_check_python="/usr/local/bin/python3.13"
-    _native_voice_check_script="${BACKEND_DIR}/voice_native_recovery_quiescence.py"
-    [ -x "${_native_voice_check_python}" ] &&
-    [ -r "${_native_voice_check_script}" ] || {
-        echo "ERROR: native Voice recovery inspector is not installed" >&2
-        return 1
-    }
-    "${_native_voice_check_python}" "${_native_voice_check_script}" inspect
-}
-
-
-# Manual-only emergency restoration of a MUTATING schema-4 Voice cutover.
-# The existing lockf FD9 remains owned throughout IPFW, real Config/runtime
-# writes and one-engine/supervisor stop/restart. Never GUI/configd or boot.
-native_voice_five_restore_service()
-{
-    _native_voice_five_python="/usr/local/bin/python3.13"
-    _native_voice_five_script="${BACKEND_DIR}/voice_native_five_resource_recovery.py"
-    [ -x "${_native_voice_five_python}" ] &&
-    [ -r "${_native_voice_five_script}" ] || {
-        echo "ERROR: native Voice five-resource recovery is not installed" >&2
-        return 1
-    }
-    "${_native_voice_five_python}" "${_native_voice_five_script}" rollback
-}
-
-# Native read-only cold-boot/crash recovery triage.
-# Called through the existing FD9 lifecycle lock. This does NOT resume a
-# stopped process, restore IPFW or close the whole Voice journal.
-native_voice_boot_review_service()
-{
-    _native_voice_boot_python="/usr/local/bin/python3.13"
-    _native_voice_boot_script="${BACKEND_DIR}/voice_native_boot_recovery_review.py"
-    [ -x "${_native_voice_boot_python}" ] &&
-    [ -r "${_native_voice_boot_script}" ] || {
-        echo "ERROR: native Voice boot review is not installed" >&2
-        return 1
-    }
-    "${_native_voice_boot_python}" "${_native_voice_boot_script}" inspect
-}
-
-# Owner-only, READ-ONLY physical appliance baseline BEFORE any Voice journal.
+# Read-only saved Voice model / compiled candidate under common FD9 and Config.
 # This observes the already-running ordinary service; does not generate
 # Config, touch IPFW, stop/start a process, or authorize Voice ON.
 native_voice_lifecycle_inspect_service()
@@ -474,18 +372,6 @@ native_voice_preview_draft_service()
     "${_voice_python}" "${_voice_route}" preview-draft "${_voice_mask}" "${_voice_sha}"
 }
 
-native_voice_live_preflight_service()
-{
-    _native_voice_live_python="/usr/local/bin/python3.13"
-    _native_voice_live_script="${BACKEND_DIR}/voice_native_live_preflight.py"
-    [ -x "${_native_voice_live_python}" ] &&
-    [ -r "${_native_voice_live_script}" ] || {
-        echo "ERROR: native Voice live preflight is not installed" >&2
-        return 1
-    }
-    "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
-}
-
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -520,7 +406,7 @@ shared_apply_recover_saved_service()
     case "$_shared_saved_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     case "$_shared_saved_page" in voice|strategies) ;; *) return 69 ;; esac
     # Guard accepts only this exact phase and only original root FD9.
-    preflight_voice_cutover_journals common-recover-saved || return 69
+    preflight_shared_apply_journal common-recover-saved || return 69
     shared_apply_bundle_service verify "$_shared_saved_id" || return 69
     _shared_saved_config=$(shared_apply_native_config saved "$_shared_saved_id" "$_shared_saved_page") || return 69
     _shared_saved_mode=$(printf "%s\n" "$_shared_saved_config" |
@@ -593,7 +479,7 @@ shared_apply_recover_activating_pristine_service()
     case "$_shared_pristine_page" in voice|strategies) ;; *) return 69 ;; esac
     case "$_shared_pristine_old_page" in voice|strategies) ;; *) return 69 ;; esac
     [ "$_shared_pristine_id" != "$_shared_pristine_old" ] || return 69
-    preflight_voice_cutover_journals common-recover-activating || return 69
+    preflight_shared_apply_journal common-recover-activating || return 69
     shared_apply_bundle_service verify "$_shared_pristine_id" || return 69
     shared_apply_bundle_service verify "$_shared_pristine_old" || return 69
     _shared_pristine_config=$(shared_apply_native_config saved         "$_shared_pristine_old" "$_shared_pristine_old_page") || return 69
@@ -670,7 +556,7 @@ shared_apply_recover_activated_cold_service()
     case "$_shared_cold_page" in voice|strategies) ;; *) return 69 ;; esac
     case "$_shared_cold_old_page" in voice|strategies) ;; *) return 69 ;; esac
     [ "$_shared_cold_id" != "$_shared_cold_old" ] || return 69
-    preflight_voice_cutover_journals "common-recover-$_shared_cold_phase" || return 69
+    preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
     shared_apply_bundle_service verify "$_shared_cold_id" || return 69
     shared_apply_bundle_service verify "$_shared_cold_old" || return 69
     _shared_cold_saved=$(shared_apply_native_config saved \
@@ -779,7 +665,7 @@ shared_apply_recover_activating_parked_service()
     [ "$_parked_id" != "$_parked_old" ] || return 69
     case "$_parked_page" in voice|strategies) ;; *) return 69 ;; esac
     case "$_parked_old_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_voice_cutover_journals common-recover-activating || return 69
+    preflight_shared_apply_journal common-recover-activating || return 69
     shared_apply_bundle_service verify "$_parked_id" || return 69
     shared_apply_bundle_service verify "$_parked_old" || return 69
     _parked_config=$(shared_apply_native_config saved "$_parked_old" "$_parked_old_page") || return 69
@@ -882,7 +768,7 @@ shared_apply_stop_service()
     case "$_shared_stop_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_stop_id}" -eq 32 ] || return 69
     case "$_shared_stop_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
     shared_apply_bundle_service verify "$_shared_stop_id" || return 69
     _shared_stop_saved=$(shared_apply_native_config saved \
@@ -973,7 +859,7 @@ shared_apply_boot_service()
     case "$_shared_boot_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_boot_id}" -eq 32 ] || return 69
     case "$_shared_boot_page" in voice|strategies) ;; *) return 69 ;; esac
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     shared_apply_bundle_service verify "$_shared_boot_id" || return 69
     _shared_boot_saved=$(shared_apply_native_config saved "$_shared_boot_id" "$_shared_boot_page") || return 69
     _shared_boot_mode=$(printf "%s\n" "$_shared_boot_saved" |
@@ -1047,7 +933,7 @@ shared_apply_execute_service()
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
     _shared_apply_id="$1"
     _shared_apply_page="$2"
@@ -1204,7 +1090,7 @@ shared_apply_run_service()
     _shared_run_page="$1"
     _shared_run_encoded="$2"
     [ -n "$_shared_run_encoded" ] || return 64
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
     _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
     case "$_shared_run_receipt" in prepared-id=*) ;; *) return 69 ;; esac
@@ -1224,7 +1110,7 @@ shared_apply_build_service()
         ""|*[!A-Za-z0-9_-]*) return 64 ;;
     esac
     [ "${#1}" -le 65536 ] || return 64
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     [ -x /usr/local/bin/php ] || return 69
     _shared_stage_result=$(/usr/local/bin/php \
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
@@ -1250,7 +1136,7 @@ shared_apply_prepare_service()
         *[!a-f0-9]*|"") return 64 ;;
     esac
     [ "${#1}" -eq 32 ] || return 64
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     [ -x /usr/local/bin/python3.13 ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
@@ -1345,7 +1231,7 @@ telegram_voice_compat_apply_service()
 {
     [ "$#" -eq 1 ] || return 64
     case "$1" in enable|disable) ;; *) return 64 ;; esac
-    preflight_voice_cutover_journals common-apply || return 69
+    preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
     # Always forget the previous shell invocation's shared owner first.
     _compat_owner=
@@ -1530,24 +1416,6 @@ service_dispatch()
             shift
             shared_apply_record_service "$@"
             ;;
-        native-voice-checkpoint)
-            native_voice_checkpoint_service
-            ;;
-        native-voice-restore-stage)
-            native_voice_restore_stage_service
-            ;;
-        native-voice-recovery-quiescence)
-            native_voice_quiescence_service
-            ;;
-        native-voice-rollback-five)
-            native_voice_five_restore_service
-            ;;
-        native-voice-boot-review)
-            native_voice_boot_review_service
-            ;;
-        native-voice-live-preflight)
-            native_voice_live_preflight_service
-            ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
             ;;
@@ -1556,18 +1424,6 @@ service_dispatch()
             ;;
         native-voice-preview-draft)
             native_voice_preview_draft_service "${2:-}" "${3:-}"
-            ;;
-        native-voice-ipfw-seed)
-            native_voice_ipfw_dispatch seed
-            ;;
-        native-voice-ipfw-activate)
-            native_voice_ipfw_dispatch activate
-            ;;
-        native-voice-ipfw-commit)
-            native_voice_ipfw_dispatch commit
-            ;;
-        native-voice-ipfw-rollback)
-            native_voice_ipfw_dispatch rollback
             ;;
         runtime-failure)
             orchestrator_runtime_failure \
@@ -1595,7 +1451,7 @@ service_dispatch()
 # Before mutation the existing FD9 owner checks the ONE shared Apply journal.
 # Historical Telegram PoC journals/markers are never consulted for runtime
 # authority. Common recovery exceptions remain scoped to their exact phase.
-preflight_voice_cutover_journals()
+preflight_shared_apply_journal()
 {
     _shared_gate_script="${BACKEND_DIR}/shared_apply_operation.py"
     _shared_gate_python=/usr/local/bin/python3.13
@@ -1708,7 +1564,7 @@ service_with_lifecycle_lock()
                         *) return 69 ;;
                     esac
                 fi
-                preflight_voice_cutover_journals || return 69
+                preflight_shared_apply_journal || return 69
                 ;;
             stop|restart)
                 # A committed common owner has the same native stop/restart
@@ -1728,7 +1584,7 @@ service_with_lifecycle_lock()
                         *) return 69 ;;
                     esac
                 fi
-                preflight_voice_cutover_journals || return 69
+                preflight_shared_apply_journal || return 69
                 ;;
             runtime-failure)
                 # Common committed runtime must NOT execute the old blind
@@ -1746,14 +1602,14 @@ service_with_lifecycle_lock()
                         *) return 69 ;;
                     esac
                 fi
-                preflight_voice_cutover_journals || return 69
+                preflight_shared_apply_journal || return 69
                 ;;
             telegram-voice-enable|telegram-voice-disable)
                 # Compatibility names are common native Apply, not old PoC.
-                preflight_voice_cutover_journals common-apply || return 69
+                preflight_shared_apply_journal common-apply || return 69
                 ;;
-            native-voice-checkpoint|strategy-lab|strategy-lab-circular|strategy-lab-recover)
-                preflight_voice_cutover_journals || return 69
+            strategy-lab|strategy-lab-circular|strategy-lab-recover)
+                preflight_shared_apply_journal || return 69
                 ;;
         esac
         service_dispatch "$@"
@@ -1785,7 +1641,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

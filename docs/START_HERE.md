@@ -2,11 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_176`. `VERSION=0.5.2`; `PLUGIN_REVISION=176`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_177`. `VERSION=0.5.2`; `PLUGIN_REVISION=177`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
-`_173` HEAD `b096b5a`, [CI #38900822687](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38900822687): Voice, Project и FreeBSD 15 package — **PASS**; testing delivery contract — **PASS**. Это не live STUN/MEDIA/CALL.
+`_176` HEAD `2f66022`, [CI #38904110487](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38904110487): **Voice/Project/FreeBSD 15 PASS**; package delivery contract — PASS. Это не подтверждение MEDIA/CALL на OPNsense.
 
 ## Окончательное решение владельца — 16.10.2026
 
@@ -24,8 +24,10 @@
 
 **`_176`:** read-only GUI Voice draft preview больше не зависит от старого `voice_ipfw_runtime` и private quiescence. Разбор сохранённых профилей перенесён на общий Config/flock verifier; отдельный неиспользуемый publisher XML `prepare_saved_draft_candidate` удалён. Оставлены проверки маски, hash, точности XML и отсутствия записей. Далее — полное удаление `voice_cutover_*` и зависимого private graph. Нужен exact-HEAD CI.
 
+**`_177`:** целиком удалён старый Telegram cutover/previous-five/private IPFW граф: 95 исходников и тестов (~0,93 МБ), включая все `voice_cutover_*` и неиспользуемые связанные executors/CI. Из `zapret_service.sh` убраны старые ручные команды checkpoint/restore/five-resource/old IPFW; входы пяти Voice GUI-профилей и общего Apply сохранены. FreeBSD package guard теперь запрещает возврат старого графа. Квалификация exact HEAD `_177` требуется. Далее завершить зачистку остаточных комментариев/CLI оболочек и подтвердить функциональный сценарий по ТЗ.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_176` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_177` не опубликована.
