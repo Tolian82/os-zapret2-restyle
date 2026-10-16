@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Common Apply durable phases and existing lifecycle guard, without kernel changes."""
 import sys
+import json
 from contextlib import ExitStack
 import subprocess
 from unittest.mock import patch
@@ -21,6 +22,29 @@ def detail(ident="1"*32):
 class TestJournal(unittest.TestCase):
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
+
+    def test_retired_telegram_predecessor_api_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            j=SharedApplyOperation(Path(tmp)/"shared-apply")
+            for phase in ("legacy-quiescing", "legacy-marker-retired",
+                          "legacy-common-committing", "legacy-rollback-marker"):
+                with self.assertRaises(SharedOperationError):
+                    j.advance(phase, detail())
+            self.assertFalse(hasattr(j, "prepare_legacy_predecessor"))
+            self.assertFalse(hasattr(j, "begin_legacy_quiesce"))
+            self.assertFalse(j.root.exists())
+            cli=BACKEND/"shared_apply_operation.py"
+            result=subprocess.run([sys.executable,str(cli),"arm-legacy",
+                                   "1"*32,"a"*64,"b"*64,"-"],
+                                  capture_output=True,text=True,check=False)
+            self.assertEqual(64,result.returncode)
+            j.advance("prepared",detail())
+            target=j.root/"operation.json"
+            record=json.loads(target.read_text())
+            record["legacy_predecessor"]="c"*64
+            target.write_text(json.dumps(record))
+            with self.assertRaisesRegex(SharedOperationError,"invalid common Apply record"):
+                j.read()
 
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:

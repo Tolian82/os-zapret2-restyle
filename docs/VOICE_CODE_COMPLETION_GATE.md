@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_172`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_173`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,7 +16,7 @@
 
 ## Открытые границы перед testing package
 
-1. **CI/FreeBSD:** `_167` HEAD `eb2518e` прошёл [CI #38840666241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38840666241) и FreeBSD testing contract. `_168` прошла [CI #38866582677](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38866582677); `_169` выявила два несоответствия проверки ([CI #38872692193](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872692193)), исправленные в `_170`. `_170` [CI #38872971857](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872971857) выявила устаревшее требование boot test к PoC marker/table; `_171` исправляет его; Voice CI PASS, но Project CI FAIL из-за трёх битых исторических ссылок. В `_172` ссылки исправлены и продакшен preflight перенесён на shared-only native-gate; `_172` требует полной квалификации.
+1. **CI/FreeBSD:** `_167` HEAD `eb2518e` прошёл [CI #38840666241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38840666241) и FreeBSD testing contract. `_168` прошла [CI #38866582677](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38866582677); `_169` выявила два несоответствия проверки ([CI #38872692193](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872692193)), исправленные в `_170`. `_170` [CI #38872971857](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872971857) выявила устаревшее требование boot test к PoC marker/table; `_171` исправляет его; Voice CI PASS, но Project CI FAIL из-за трёх битых исторических ссылок. В `_172` ссылки исправлены и продакшен preflight перенесён на shared-only native-gate; `_172` CI обнаружила старую тестовую фикстуру. `_173` удаляет эти тестовые зависимости и отменённые `legacy-*` journal API; нужна новая полная квалификация.
 2. **Этап 6 — новое решение владельца 16.10.2026:** не сохранять ни один старый Telegram PoC restore/migration protocol, пять доменов WAL/receipt, ручной откат или тесты такого отката. `_168` удаляет большой private legacy stack, связанные интерфейсы и GUI панель; `_169` удаляет Phase-B prepend и отдельный marker/IPFW; далее удалить `voice_cutover_*` и dependent readers/guards. Приёмка — один работающий backend и отсутствие заброшенных входов, а не корректное возвращение в старое состояние.
 3. **Миграция:** миграция работающего Phase-B и old marker больше не входит в ТЗ разработки: чистый native Voice + Strategies Config/Apply baseline. Обновить guards, не тратить время на backwards compatibility.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.

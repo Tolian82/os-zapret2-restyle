@@ -12,7 +12,6 @@ directories for fault tests; never pass an arbitrary root via production CLI.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -31,15 +30,6 @@ PAGES = frozenset(("strategies", "voice"))
 PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "committed", "restored", "restore-failed", "requires-review",
-    "legacy-quiescing", "legacy-processes-stopped",
-    "legacy-ipfw-retiring", "legacy-ipfw-retired",
-    "legacy-marker-retiring", "legacy-marker-retired",
-    "legacy-common-activating", "legacy-common-activated",
-    "legacy-config-saving", "legacy-config-saved",
-    "legacy-common-committing",
-    "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
-    "legacy-rollback-marker", "legacy-rollback-marker-restored",
-    "legacy-rollback-processes", "legacy-rollback-processes-restored",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -54,23 +44,6 @@ NEXT = {
     "restored": frozenset(),
     "restore-failed": frozenset(),
     "requires-review": frozenset(),
-    "legacy-quiescing": frozenset(("legacy-processes-stopped",)),
-    "legacy-processes-stopped": frozenset(("legacy-ipfw-retiring",)),
-    "legacy-ipfw-retiring": frozenset(("legacy-ipfw-retired",)),
-    "legacy-ipfw-retired": frozenset(("legacy-marker-retiring",)),
-    "legacy-marker-retiring": frozenset(("legacy-marker-retired",)),
-    "legacy-marker-retired": frozenset(("legacy-rollback-ipfw", "legacy-common-activating")),
-    "legacy-common-activating": frozenset(("legacy-common-activated",)),
-    "legacy-common-activated": frozenset(("legacy-config-saving",)),
-    "legacy-config-saving": frozenset(("legacy-config-saved",)),
-    "legacy-config-saved": frozenset(("legacy-common-committing",)),
-    "legacy-common-committing": frozenset(),
-    "legacy-rollback-ipfw": frozenset(("legacy-rollback-ipfw-restored",)),
-    "legacy-rollback-ipfw-restored": frozenset(("legacy-rollback-marker",)),
-    "legacy-rollback-marker": frozenset(("legacy-rollback-marker-restored",)),
-    "legacy-rollback-marker-restored": frozenset(("legacy-rollback-processes",)),
-    "legacy-rollback-processes": frozenset(("legacy-rollback-processes-restored",)),
-    "legacy-rollback-processes-restored": frozenset(("restored",)),
 }
 
 
@@ -125,25 +98,10 @@ def _validate_record(record: object) -> dict:
     if not isinstance(record, dict) or set(record) not in (
         {"schema", "phase", "detail"},
         {"schema", "phase", "detail", "previous"},
-        {"schema", "phase", "detail", "legacy_predecessor"},
     ) or type(record["schema"]) is not int or record["schema"] != SCHEMA \
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
-    if "legacy_predecessor" in record:
-        if record["phase"] not in ("prepared", "legacy-quiescing", "legacy-processes-stopped",
-                                   "legacy-ipfw-retiring", "legacy-ipfw-retired",
-                                   "legacy-marker-retiring", "legacy-marker-retired",
-                                   "legacy-common-activating", "legacy-common-activated",
-                                   "legacy-config-saving", "legacy-config-saved",
-                                   "legacy-common-committing",
-                                   "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
-                                   "legacy-rollback-marker", "legacy-rollback-marker-restored",
-                                   "legacy-rollback-processes",
-                                   "legacy-rollback-processes-restored") or record["detail"]["page"] != "voice" or \
-           not isinstance(record["legacy_predecessor"], str) or \
-           not DIGEST.fullmatch(record["legacy_predecessor"]):
-            raise SharedOperationError("invalid armed legacy predecessor proof")
     if "previous" in record:
         _validate_detail(record["previous"])
         if record["previous"]["id"] == record["detail"]["id"]:
@@ -196,19 +154,12 @@ class SharedApplyOperation:
         except (ValueError, TypeError, UnicodeError) as error:
             raise SharedOperationError("corrupt common Apply record") from error
 
-    def advance(
-        self, phase: str, detail: dict, *, legacy_predecessor: str | None = None
-    ) -> dict:
+    def advance(self, phase: str, detail: dict) -> dict:
         if phase not in PHASES:
             raise SharedOperationError("unrecognized common Apply phase")
         _validate_detail(detail)
         before = self.read()
         if phase == "prepared":
-            if legacy_predecessor is not None and (
-                detail["page"] != "voice" or not DIGEST.fullmatch(legacy_predecessor)
-                or before is not None
-            ):
-                raise SharedOperationError("legacy predecessor requires new Voice owner and proof")
             if before is not None and before["phase"] not in TERMINAL:
                 raise SharedOperationError("unfinished common Apply operation")
             if before is not None and before["detail"]["id"] == detail["id"]:
@@ -217,14 +168,6 @@ class SharedApplyOperation:
             if previous is not None and previous["id"] == detail["id"]:
                 raise SharedOperationError("reused common Apply predecessor ID")
         else:
-            if legacy_predecessor is not None:
-                raise SharedOperationError("cannot inject predecessor after preparation")
-            if before is not None and "legacy_predecessor" in before:
-                # A running legacy owner cannot be stopped by the ordinary
-                # shared Apply path, generic record CLI, or boot recovery.
-                # A future separately attested ONE-coordinator actuator
-                # must explicitly perform this transition.
-                raise SharedOperationError("armed legacy predecessor requires reviewed executor")
             if before is None or before["detail"] != detail:
                 raise SharedOperationError("common Apply transaction identity changed")
             if phase not in NEXT[before["phase"]]:
@@ -233,12 +176,10 @@ class SharedApplyOperation:
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
             record["previous"] = previous
-        if legacy_predecessor is not None:
-            record["legacy_predecessor"] = legacy_predecessor
         return self._persist_record(record)
 
     def _persist_record(self, record: dict) -> dict:
-        """One fsynced atomic journal writer for ordinary and reviewed cancel."""
+        """One fsynced atomic journal writer for shared Apply."""
         _validate_record(record)
         detail = record["detail"]
         raw = (json.dumps(record, sort_keys=True, separators=(",", ":"),
@@ -273,314 +214,6 @@ class SharedApplyOperation:
             os.close(dirfd)
         return record
 
-    def prepare_legacy_predecessor(self, detail: dict, attest) -> dict:
-        """Durably arm STOP intent only after a complete sealed old snapshot.
-
-        This does not stop any old processes or modify kernel/Config/marker.
-        It only binds one immutable previous-state digest into the EXISTING
-        common journal; generic activating and boot close remain forbidden.
-        """
-        _validate_detail(detail)
-        if detail["page"] != "voice" or self.read() is not None:
-            raise SharedOperationError("legacy STOP intent requires fresh Voice owner")
-        if not callable(attest):
-            raise SharedOperationError("legacy predecessor attestation required")
-        digest = attest()
-        if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
-            raise SharedOperationError("invalid sealed legacy predecessor fingerprint")
-        if self.read() is not None:
-            raise SharedOperationError("shared owner appeared while arming legacy")
-        return self.advance("prepared", detail, legacy_predecessor=digest)
-
-    def begin_legacy_quiesce(self, identity: str, attest) -> dict:
-        """Durable, explicit boundary before any old process/IPFW mutation.
-
-        The new journal entry remains nonterminal across power cuts. The
-        caller holds original root FD9 and Config flock and independently
-        confirms full old live ownership before publishing this intent.
-        Generic Apply, boot and other owners must never cross this phase.
-        """
-        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or not callable(attest):
-            raise SharedOperationError("invalid legacy quiescence request")
-        before = self.read()
-        if before is None or before["phase"] != "prepared" or (
-            before["detail"]["id"] != identity or
-            "legacy_predecessor" not in before or "previous" in before
-        ):
-            raise SharedOperationError("no armed legacy predecessor to quiesce")
-        witness = attest()
-        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
-            raise SharedOperationError("legacy quiescence live fingerprint mismatch")
-        if self.read() != before:
-            raise SharedOperationError("legacy quiescence journal changed during witness")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": "legacy-quiescing",
-            "detail": before["detail"],
-            "legacy_predecessor": before["legacy_predecessor"],
-        })
-
-    def mark_legacy_processes_stopped(self, identity: str, attest_stopped) -> dict:
-        """Record verified old three-role absence in the SAME shared journal.
-
-        The original FD9+Config holder must have already fsynced
-        legacy-quiescing before calling the fixed old-engine actuator.
-        The callback independently checks complete process absence, the
-        still-unchanged old Config/runtime/marker and old IPFW witness.
-        Crashes or partial stops leave legacy-quiescing, never normal boot.
-        """
-        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
-            not callable(attest_stopped)
-        ):
-            raise SharedOperationError("invalid legacy stop completion request")
-        before = self.read()
-        if before is None or before["phase"] != "legacy-quiescing" or (
-            before["detail"]["id"] != identity or
-            "legacy_predecessor" not in before or "previous" in before
-        ):
-            raise SharedOperationError("old engine stop requires durable quiescing intent")
-        witness = attest_stopped()
-        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
-            raise SharedOperationError("old process/IPFW stop evidence differs from predecessor")
-        if self.read() != before:
-            raise SharedOperationError("old stop journal raced during attestation")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": "legacy-processes-stopped",
-            "detail": before["detail"],
-            "legacy_predecessor": before["legacy_predecessor"],
-        })
-
-    def _transition_legacy_boundary(self, identity: str, before_phase: str,
-                                after_phase: str, attest) -> dict:
-        """Same-journal WAL for old resources, no second owner or on-boot replay."""
-        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
-            not callable(attest)
-        ):
-            raise SharedOperationError("invalid legacy IPFW transition")
-        before = self.read()
-        if before is None or before["phase"] != before_phase or (
-            before["detail"]["id"] != identity or
-            "legacy_predecessor" not in before or "previous" in before
-        ):
-            raise SharedOperationError("legacy IPFW predecessor phase is not owned")
-        witness = attest()
-        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
-            raise SharedOperationError("legacy IPFW witness differs from sealed predecessor")
-        if self.read() != before:
-            raise SharedOperationError("legacy IPFW journal changed during attestation")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": after_phase,
-            "detail": before["detail"],
-            "legacy_predecessor": before["legacy_predecessor"],
-        })
-
-    def begin_legacy_ipfw_retire(self, identity: str, attest) -> dict:
-        """Durably record impending old-rule/table removal BEFORE kernel writes."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-processes-stopped", "legacy-ipfw-retiring", attest
-        )
-
-    def finish_legacy_ipfw_retire(self, identity: str, attest) -> dict:
-        """Only exact empty old+native rule/table census closes retirement."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-ipfw-retiring", "legacy-ipfw-retired", attest
-        )
-
-    def begin_legacy_marker_retire(self, identity: str, attest) -> dict:
-        """Fsync old-marker removal intent while previous Config/runtime stay live."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-ipfw-retired", "legacy-marker-retiring", attest
-        )
-
-    def finish_legacy_marker_retire(self, identity: str, attest) -> dict:
-        """Only verified marker absence (old IPFW absent) may finish."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-marker-retiring", "legacy-marker-retired", attest
-        )
-
-    def begin_legacy_common_activation(self, identity: str, attest) -> dict:
-        """Durable original-FD9 intent BEFORE ordinary one-engine Apply acts.
-
-        Only a privately verified, wholly retired old PoC is eligible.
-        Never use advance() or boot recovery to cross this boundary.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-marker-retired", "legacy-common-activating", attest
-        )
-
-    def finish_legacy_common_activation(self, identity: str, attest) -> dict:
-        """Record independently verified new engine/IPFW, NOT Config commit.
-
-        This retains the old predecessor until the forward Config/save and
-        rollback contracts are connected. Interrupted activation stays
-        permanently pending for review; the actuator must never run twice.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-common-activating", "legacy-common-activated", attest
-        )
-
-
-    def begin_legacy_config_save(self, identity: str, attest) -> dict:
-        """Fsync native Config write intent BEFORE any possible Config::save.
-
-        The original FD9 owner proves unchanged OLD Config, sealed original
-        backup, live common engine, and staged native IPFW. Interrupted
-        persistence is nonterminal, never optimistic old-owner restore.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-common-activated", "legacy-config-saving", attest
-        )
-
-    def finish_legacy_config_save(self, identity: str, attest) -> dict:
-        """Acknowledge only exact NEW Config read back by the native worker.
-
-        Attest must verify the new OPNsense model, live common runtime/IPFW
-        and preserved original backup. This is NOT native IPFW COMMIT.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-config-saving", "legacy-config-saved", attest
-        )
-
-    def begin_legacy_common_commit(self, identity: str, attest) -> dict:
-        """Persist the irreversible native IPFW cleanup intent BEFORE mutation.
-
-        The witness still proves staged IPFW, new persisted native Config,
-        live common engine and intact old rollback backup under FD9 and the
-        CURRENT Config flock. Interrupted cleanup is nonterminal.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-config-saved", "legacy-common-committing", attest
-        )
-
-    def finish_legacy_common_commit(self, identity: str, attest) -> dict:
-        """Publish normal committed owner only after POST-cleanup attestation.
-
-        Unlike ordinary advance(), this strictly private final transition
-        removes the predecessor field ONLY from the journal. It never erases
-        physical original-owner backup or native runtime evidence.
-        """
-        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
-            not callable(attest)
-        ):
-            raise SharedOperationError("invalid legacy common commit completion")
-        before = self.read()
-        if before is None or before["phase"] != "legacy-common-committing" or (
-            before["detail"]["id"] != identity or
-            before["detail"]["page"] != "voice" or
-            "legacy_predecessor" not in before or "previous" in before
-        ):
-            raise SharedOperationError("legacy common commit is not pending")
-        witness = attest()
-        if not isinstance(witness, str) or witness != before["legacy_predecessor"]:
-            raise SharedOperationError("native common post-commit witness differs")
-        if self.read() != before:
-            raise SharedOperationError("legacy common journal changed before commit")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": "committed", "detail": before["detail"],
-        })
-
-    def begin_pristine_common_activation_rollback(self, identity: str, attest) -> dict:
-        """One-way rollback after a completely untouched interrupted start.
-
-        Never return to legacy-marker-retired: that would allow a second
-        common engine activation after an unknown power-cut boundary.
-        """
-        return self._transition_legacy_boundary(
-            identity, "legacy-common-activating", "legacy-rollback-ipfw", attest
-        )
-
-    def begin_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
-        """Durable same-owner reverse intent BEFORE restoring any old IPFW."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-marker-retired", "legacy-rollback-ipfw", attest
-        )
-
-    def finish_legacy_ipfw_rollback(self, identity: str, attest) -> dict:
-        """Exact full previous rule/table witness, old engine/marker still off."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored", attest
-        )
-
-    def begin_legacy_marker_rollback(self, identity: str, attest) -> dict:
-        """Record marker recreation intent before creating its staging inode."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-rollback-ipfw-restored", "legacy-rollback-marker", attest
-        )
-
-    def finish_legacy_marker_rollback(self, identity: str, attest) -> dict:
-        """Record same-inode staging/target proof, then remove staged link."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-rollback-marker", "legacy-rollback-marker-restored", attest
-        )
-
-    def begin_legacy_process_restart(self, identity: str, attest) -> dict:
-        """Fsync one-shot old engine restart intent before invoking fixed actuator."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-rollback-marker-restored",
-            "legacy-rollback-processes", attest
-        )
-
-    def finish_legacy_process_restart(self, identity: str, attest) -> dict:
-        """Require independent, stable all-three-role evidence before journal closure."""
-        return self._transition_legacy_boundary(
-            identity, "legacy-rollback-processes",
-            "legacy-rollback-processes-restored", attest
-        )
-
-    def complete_legacy_full_restore(self, identity: str, attest) -> dict:
-        """Close the original five-domain rollback without adopting Voice.
-
-        PRIVATE: the borrowed FD9/Config-flock caller must reattest the saved
-        Config/runtime, original IPFW and marker, three live process identities,
-        their FreeBSD kernel argv and UID/GID/image policy. This method never
-        starts processes, edits IPFW or grants a native Voice owner.
-        """
-        if not isinstance(identity, str) or not OP_ID.fullmatch(identity) or (
-            not callable(attest)
-        ):
-            raise SharedOperationError("untrusted whole legacy restoration")
-        before = self.read()
-        if before is None or before["phase"] != "legacy-rollback-processes-restored" or (
-            before["detail"]["id"] != identity
-            or "legacy_predecessor" not in before or "previous" in before
-        ):
-            raise SharedOperationError("all old recovery domains must be restored first")
-        result = attest()
-        if not isinstance(result, str) or result != before["legacy_predecessor"]:
-            raise SharedOperationError("whole old owner attestation mismatches predecessor")
-        if self.read() != before:
-            raise SharedOperationError("whole old owner journal raced during attestation")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": "restored", "detail": before["detail"],
-        })
-
-    def cancel_pristine_legacy(self, identity: str, attest) -> dict:
-        """Operator-only cancellation: prove the OLD live owner never changed.
-
-        Cannot be used for a stopped or partially migrated PoC. The caller
-        under original root FD9 + Config inode flock must attest sealed old
-        snapshot, exact live Config/runtime/marker/process epochs and IPFW.
-        This is NOT generic record 'restored', and never runs at boot.
-        """
-        if not OP_ID.fullmatch(identity) or not callable(attest):
-            raise SharedOperationError("untrusted legacy cancel request")
-        before = self.read()
-        if before is None or before["phase"] not in ("prepared", "legacy-quiescing") or (
-            before["detail"]["id"] != identity or
-            "legacy_predecessor" not in before or
-            "previous" in before
-        ):
-            raise SharedOperationError("only armed unchanged legacy can cancel")
-        witness = attest()
-        if not isinstance(witness, str) or (
-            witness != before["legacy_predecessor"]
-        ):
-            raise SharedOperationError("old live predecessor differs from sealed intent")
-        if self.read() != before:
-            raise SharedOperationError("legacy cancel journal changed during attestation")
-        return self._persist_record({
-            "schema": SCHEMA, "phase": "restored", "detail": before["detail"],
-        })
-
     def recover_prepared(self, identity: str, attest) -> dict:
         """Only PREPARED can be closed without touching runtime/Config/IPFW.
 
@@ -590,11 +223,7 @@ class SharedApplyOperation:
         """
         record = self.read()
         if record is None or record["phase"] != "prepared" or \
-           record["detail"]["id"] != identity or \
-           "legacy_predecessor" in record:
-            # This candidate never used the ordinary prepared lifecycle.
-            # Legacy is still a distinct LIVE owner; do not auto-dismiss
-            # its bound previous snapshot on boot.
+           record["detail"]["id"] != identity:
             raise SharedOperationError("prepared-only recovery refused")
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("shared candidate attestation refused")
@@ -712,41 +341,7 @@ def native_lifecycle_gate(action: str | None = None, *,
             "phase": phase, "safe_to_mutate": False}
 
 
-def fingerprint_legacy_predecessor(work: Path, *, owner: int = 0) -> str:
-    """Read-only digest of sealed common bundle AND exact old five-domain plan.
-
-    No second journal, arbitrary filesystem root from CLI or inferred owner.
-    """
-    from shared_apply_seal import verify_seal
-    from voice_cutover_backup import _private_dir
-    from voice_native_legacy_previous_seal import (
-        NAME, inspect_legacy_previous,
-    )
-    from voice_native_legacy_restore_plan import (
-        PLAN_NAME, inspect_legacy_restore_plan,
-    )
-    if not OP_ID.fullmatch(work.name):
-        raise SharedOperationError("invalid legacy predecessor operation ID")
-    seal = verify_seal(work, owner=owner)
-    root = work / "legacy-backup"
-    _private_dir(root)
-    if set(os.listdir(root)) != {NAME, PLAN_NAME}:
-        raise SharedOperationError("untrusted old predecessor backup entries")
-    previous = inspect_legacy_previous(root)
-    plan = inspect_legacy_restore_plan(root)
-    if plan["previous_five"] != previous["previous_five"]:
-        raise SharedOperationError("legacy restore plan and prior owner differ")
-    proof = {"candidate_seal": seal, "previous": previous, "plan": plan}
-    return hashlib.sha256(json.dumps(
-        proof, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    ).encode("ascii")).hexdigest()
-
-
 def main(argv: list[str]) -> int:
-    legacy_arm = len(argv) == 6 and argv[1] == "arm-legacy" and bool(
-        OP_ID.fullmatch(argv[2]) and DIGEST.fullmatch(argv[3])
-        and DIGEST.fullmatch(argv[4])
-    )
     inspection = len(argv) == 2 and argv[1] == "inspect"
     native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
         len(argv) == 2 or argv[2] in (
@@ -763,7 +358,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or recording or recovery or finish or pristine or cold_restore or legacy_arm or native_gate_request):
+    if not (inspection or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -776,19 +371,6 @@ def main(argv: list[str]) -> int:
             if not state["safe_to_mutate"]:
                 raise SharedOperationError("native common lifecycle gate blocked: " +
                                            state["reason"])
-        elif legacy_arm:
-            from shared_apply_seal import WORK
-            fields = [] if argv[5] == "-" else argv[5].split(",")
-            detail = {
-                "id": argv[2], "page": "voice", "base": argv[3],
-                "candidate": argv[4], "changed_fields": fields,
-            }
-            result = SharedApplyOperation(owner=0).prepare_legacy_predecessor(
-                detail, lambda: fingerprint_legacy_predecessor(WORK / argv[2])
-            )
-            print("legacy-armed-id=" + result["detail"]["id"])
-            print("legacy-armed-predecessor=" + result["legacy_predecessor"])
-            print("legacy-handoff-authorized=0")
         elif inspection:
             record = SharedApplyOperation(owner=0).read()
             if record is None:
@@ -804,19 +386,9 @@ def main(argv: list[str]) -> int:
                     # Returning 'restored' here would send the ordinary
                     # service to LEGACY boot over the preceding common owner.
                     print("committed " + prior["id"] + " " + prior["page"])
-            elif record["phase"] in ("prepared", "config-saved", "legacy-config-saving", "legacy-config-saved", "legacy-quiescing", "legacy-processes-stopped",
-                                       "legacy-ipfw-retiring", "legacy-ipfw-retired",
-                                       "legacy-marker-retiring", "legacy-marker-retired",
-                                       "legacy-common-committing",
-                                       "legacy-rollback-ipfw", "legacy-rollback-ipfw-restored",
-                                       "legacy-rollback-marker", "legacy-rollback-marker-restored",
-                                       "legacy-rollback-processes",
-                                       "legacy-rollback-processes-restored"):
+            elif record["phase"] in ("prepared", "config-saved"):
                 detail = record["detail"]
-                prefix = "legacy-prepared" if (
-                    "legacy_predecessor" in record and record["phase"] == "prepared"
-                ) else record["phase"]
-                print(prefix + " " + detail["id"] + " " + detail["page"])
+                print(record["phase"] + " " + detail["id"] + " " + detail["page"])
             elif record["phase"] in ("activating", "activated") and "previous" in record:
                 detail, previous = record["detail"], record["previous"]
                 print(record["phase"] + " " + detail["id"] + " " + detail["page"] +

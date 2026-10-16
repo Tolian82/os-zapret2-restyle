@@ -112,7 +112,7 @@ mkdir -p "${SERVICE_BACKEND}"
 cp "${SERVICE_SOURCE}" "${SERVICE_ROOT}/zapret_service.sh"
 chmod 0700 "${SERVICE_ROOT}/zapret_service.sh"
 SERVICE_SOURCE="${SERVICE_ROOT}/zapret_service.sh"
-for module in common config parser registry storage targets telegram_voice target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor apply_runtime
+for module in common config parser registry storage targets target_mode profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic stage launcher supervisor apply_runtime
 do
     : > "${SERVICE_BACKEND}/${module}.sh"
 done
@@ -120,7 +120,7 @@ done
 # read-only journal probe here; its real Python implementation, permissions,
 # corruption and restart behavior are covered by the dedicated Voice tests.
 # A pending journal must still prevent inherited-owner Strategy Lab stop.
-cat > "${SERVICE_BACKEND}/voice_cutover_guard.py" <<'MOCK'
+cat > "${SERVICE_BACKEND}/shared_apply_operation.py" <<'MOCK'
 import os
 raise SystemExit(69 if os.environ.get("MOCK_VOICE_INTENT_PENDING") == "1" else 0)
 MOCK

@@ -231,8 +231,6 @@ jobs:
         run: python3.13 scripts/test-voice-cutover-full-recovery.py
       - name: Voice read-only cross-journal recovery preflight
         run: python3.13 scripts/test-voice-cutover-recovery-preflight.py
-      - name: Voice native boot and shared lockf cutover guard
-        run: python3.13 scripts/test-voice-cutover-boot-guard.py
       - name: Voice private flock/FreeBSD lockf FD9 interoperability
         run: python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
       - name: Native Voice saved Config and journal lifecycle router (read-only)
@@ -692,7 +690,6 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-full-observer.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-full-recovery.py
             /usr/local/bin/python3.13 scripts/test-voice-cutover-recovery-preflight.py
-            /usr/local/bin/python3.13 scripts/test-voice-cutover-boot-guard.py
             /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-lock-interop.py
             /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-router.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
