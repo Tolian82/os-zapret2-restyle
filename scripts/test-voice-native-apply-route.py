@@ -30,6 +30,7 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             "voice_native_forward_ipfw.py",
             "voice_native_forward_supervisor.py",
             "voice_native_candidate_engine_start.py",
+            "voice_native_forward_stop.py",
         )
         for name in retired:
             with self.subTest(name=name):

@@ -2,9 +2,9 @@
 """Source-only schema-4 journal fixture for historical forward/rollback tests.
 
 The retired native five-resource PREPARED executor is not a product entrypoint.
-Downstream tests for stop, IPFW and Config still need a genuine,
-durable PREPARED record. Build it with the existing VoiceCutoverJournal API
-rather than importing a second obsolete production coordinator.
+Retained shared IPFW PRECOMMIT tests need a durable schema-4 PREPARED
+journal. Build it with the existing VoiceCutoverJournal API rather than
+importing a second obsolete production coordinator.
 """
 from __future__ import annotations
 
