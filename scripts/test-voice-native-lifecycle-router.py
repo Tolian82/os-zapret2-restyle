@@ -229,8 +229,8 @@ class LifecycleRouterTests(unittest.TestCase):
         self.assertIn("zapret_service.sh native-voice-candidate-preflight", action)
         self.assertIn("native_voice_candidate_preflight_service()", shell)
         self.assertIn("native-voice-candidate-preflight)", shell)
-        self.assertIn("native_voice_legacy_poc_preflight_service()", shell)
-        self.assertIn("legacy-poc-preflight", shell)
+        self.assertNotIn("native_voice_legacy_poc_preflight_service()", shell)
+        self.assertNotIn("legacy-poc-preflight", shell)
         self.assertIn("telegram_voice_compat_apply_service()", shell)
         self.assertIn(
             "telegram-voice-enable)\n            telegram_voice_compat_apply_service enable",
