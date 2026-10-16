@@ -1,14 +1,14 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_192`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_193`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-`_190` HEAD `0fe4f11` [CI #38946969246](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38946969246) PASS Voice/Project/FreeBSD. `_191` выровняла общий Apply двух страниц, но [CI #38951927926](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38951927926) обнаружила неполную тестовую модель Strategies (отсутствуют обязательные hostlist leaves). `_192` исправляет фикстуру и добавляет Node.js тест синтаксиса JS страницы «Стратегии»; точная CI требуется. Далее полный релиз, затем owner-live.
+`_192` HEAD `339dbb0` [CI #38952414188](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38952414188) Voice/Project PASS; отдельный [delivery contract #38952413992](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38952413992) с FreeBSD 15 PASS. `_193` исправляет текущую/стабильную идентификацию в README и документирует пять Voice-профилей, общий Apply и границы непроверенного STUN/MEDIA/CALL как обязательный release-preparation gate; её exact-HEAD CI требуется. Затем полный релиз и лишь после него owner-live.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=192` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_192.pkg` — **не опубликован**.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=193` — пакет только в feature branch.
+- package candidate: `os-zapret2-restyle-0.5.2_193.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 

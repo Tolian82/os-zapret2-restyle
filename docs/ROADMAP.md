@@ -12,7 +12,7 @@
 | 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
 | 6. Удаление дублирования | Завершено в коде и проверено CI/FreeBSD: удалён private PoC recovery/rollback/IPFW/process graph и его entrypoints; единый shared Apply сохранён |
-| 7. Приёмка | Кодовые проверки Voice/Project/FreeBSD 15 подтверждены на `_186`; `_187` устраняет конкурентные Config-записи в GUI и требует собственной квалификации. После закрытия точечных ошибок — полноценный релиз, а только после него owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL |
+| 7. Завершение и приёмка | Пять сервисов, общий Apply, native lifecycle и GUI status реализованы в коде. Проверка текущего HEAD и обязательный README/release gate предшествуют полноценному Web/pkg релизу; owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL выполняется **после** него. |
 
 **Остаточный рубеж:** квалифицировать текущий точный HEAD, завершить только воспроизводимые ошибки GUI/Apply, затем оценить кодовую готовность ТЗ к полноценному релизу перед будущей owner-live приёмкой. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 

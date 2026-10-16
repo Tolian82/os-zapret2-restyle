@@ -5,13 +5,13 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
-| **Current development candidate** | `v0.5.0_1` |
+| **Current development candidate (not released)** | `v0.5.2_193` · [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. It keeps the normal OPNsense workflow while adding safe lifecycle management, editable Zapret2 traffic strategies, managed target lists, upstream runtime installation/update controls, and a built-in **Strategy Lab** for finding working DPI-bypass profiles.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **unreleased v0.5.2 candidate** additionally introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
@@ -65,6 +65,21 @@ Profiles are separated with the normal Zapret2 boundary:
 
 The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
 
+## Voice Transmission — v0.5.2 release candidate
+
+The upcoming **Services → Zapret2 → Voice Transmission / Передача голоса** page is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
+
+- Each service has an enable checkbox, editable multiline native `dvtws2` STUN/UDP parameters, and one named destination IPv4 IPSET. Its text and addresses remain saved when disabled.
+- Telegram shares the existing `hostlist.telegramips` dataset with Traffic Strategy; the other named IPSETs are also available to ordinary strategies.
+- **Validate** checks a detached configuration without installing it. **Save inactive draft** persists an all-OFF configuration without activating it. **Apply** validates, saves and activates ON/OFF profiles through the *same* Config/FD9/runtime/IPFW transaction as Traffic Strategy.
+- Enabled Voice profiles precede ordinary strategies in one `dvtws2` runtime. UDP capture is limited to selected destination IPSETs, ports and compatible WAN settings; `--filter-udp=*` does not create an unrestricted all-destination firewall rule.
+- The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
+- When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
+
+**Current verification boundary:** source/CI and FreeBSD package validation only. After the full `v0.5.2` release, the owner will test GUI/CONFIG/BOOT, outbound UDP/STUN, media transport and real calls independently. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
+
+For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
+
 ## Zapret2 Service manager
 
 The GUI contains **Zapret2 Service / Служба Zapret2** for managing the upstream bol-van/zapret2 runtime independently from the OPNsense plugin package. It can:
@@ -98,8 +113,9 @@ The repository is transported over HTTPS and uses the project-approved unsigned 
 2. Open **Zapret2 Service / Служба Zapret2** and install/select an upstream bol-van/zapret2 release.
 3. Configure your managed targets and **Traffic Strategy**.
 4. Apply the settings.
-5. Open **Services → Zapret2 → Laboratory** when you need to find a working bypass strategy for a blocked target.
-6. Review a stable Laboratory result and add the required profile to the Traffic Strategy currently in use.
+5. In **v0.5.2 and later**, optionally open **Services → Zapret2 → Voice Transmission** to configure destination-restricted STUN/UDP services; all profiles are OFF until explicitly enabled and applied.
+6. Open **Services → Zapret2 → Laboratory** when you need to find a working bypass strategy for a blocked target.
+7. Review a stable Laboratory result and add the required profile to the Traffic Strategy currently in use.
 
 The plugin package and the upstream bol-van/zapret2 runtime intentionally have separate lifecycles.
 
@@ -161,7 +177,9 @@ Configuration activation follows a transactional path:
 3. validate the candidate configuration;
 4. switch runtime state;
 5. verify firewall/process health;
-6. keep or restore the previous working state if activation fails.
+6. confirm the committed Config/runtime/firewall state; restore the prior state on a safely reversible failure, or **require inspection** when a native save/activation outcome is uncertain.
+
+A failed or timed-out Apply does not automatically prove the original configuration is still active. The native worker and GUI distinguish pre-write rejection from states requiring explicit review.
 
 Lifecycle operations are serialized. The plugin owns its PID/state files, supervisor state and temporary firewall rules so stale callbacks cannot tear down a replacement runtime.
 
@@ -216,7 +234,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Current development stage: **v0.5.2** — shared Strategies/Voice backend, unreleased. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
+Current development stage: **v0.5.2_193** — shared Strategies/Voice backend, unreleased; **v0.5.0** remains the full stable release. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
 
 Useful entry points:
 
