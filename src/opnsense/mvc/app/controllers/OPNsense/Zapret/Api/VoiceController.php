@@ -222,6 +222,9 @@ class VoiceController extends ApiControllerBase
         // ApiControllerBase protects privileged configuration writes. This
         // check MUST precede any model mutation or Config persistence.
         $this->throwReadOnly();
+        // From serialization onward even InvalidArgumentException is an
+        // uncertain write, not a safe pre-write form validation failure.
+        $draftWriteStarted = false;
         $config = Config::getInstance();
         $config->lock();
         try {
@@ -264,6 +267,9 @@ class VoiceController extends ApiControllerBase
                 }
                 // The same native OPNsense model persistence path as
                 // SettingsController, without a second Voice state store.
+                // Keep this marker through Config::save and the post-save
+                // digest; either may throw after a durable write.
+                $draftWriteStarted = true;
                 if (!$model->serializeToConfig(false, true)) {
                     throw new \RuntimeException('Unable to serialize Voice draft');
                 }
@@ -276,6 +282,13 @@ class VoiceController extends ApiControllerBase
                 'snapshot' => VoiceSettingsSnapshot::digest($model->getNodes()),
             ];
         } catch (\InvalidArgumentException $error) {
+            if ($draftWriteStarted) {
+                // The exception class does not prove a pre-write rejection:
+                // Config::save or the post-save digest may already have run.
+                return ['result' => 'failed', 'requires_review' => true, 'validations' => [
+                    'zapret.voice.waninterface' => 'Voice draft could not be saved'
+                ]];
+            }
             return ['result' => 'failed', 'validations' => [
                 'zapret.voice.waninterface' => $error->getMessage()
             ]];

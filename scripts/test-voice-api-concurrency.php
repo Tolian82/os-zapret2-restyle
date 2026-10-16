@@ -17,12 +17,20 @@ namespace OPNsense\Core {
         public static $instance;
         public int $locks = 0;
         public int $saves = 0;
+        public bool $throwInvalidAfterSave = false;
         public static function getInstance() {
             return self::$instance ?? (self::$instance = new self());
         }
         public function lock(): void { $this->locks++; }
         public function unlock(): void { $this->locks--; }
-        public function save($audit = []): void { $this->saves++; }
+        public function save($audit = []): void {
+            // Model and save counter already reflect a durable write before
+            // an error whose PHP class looks like form validation.
+            $this->saves++;
+            if ($this->throwInvalidAfterSave) {
+                throw new \InvalidArgumentException('simulated post-save exception');
+            }
+        }
         // Production OPNsense Config::__toString() returns its independent
         // full XML serialization; this stub must expose that same read-only
         // API without simulating any persistence.
@@ -302,6 +310,8 @@ namespace {
     $api->request = new FakeRequest('POST', $candidate);
     $staleSave = $api->saveDraftAction();
     equal('failed', $staleSave['result'], 'old browser snapshot must reject second write');
+    equal(false, $staleSave['requires_review'] ?? false,
+        'pre-write stale-form rejection must remain editable');
     equal(1, Config::getInstance()->saves, 'stale browser cannot overwrite Config');
     $candidate['sync']['snapshot'] = $newLoad['snapshot'];
     $api->request = new FakeRequest('POST', $candidate);
@@ -473,6 +483,34 @@ namespace {
           'offline draft IPSET was not persisted');
     equal([], Backend::$calls, 'offline SaveDraft must never invoke runtime/configd');
     equal(0, Config::getInstance()->locks, 'offline draft must release Config lock');
+
+    // A native Config write may complete and THEN report an InvalidArgumentException.
+    // Never classify it as a harmless pre-write validation failure: the GUI
+    // must refuse blind retry even when the exception type is "validation".
+    $uncertain = $offlineForm;
+    $uncertain['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
+    $uncertain['voice']['custom']['args'] = 'new uncertain saved custom draft';
+    $api->request = new FakeRequest('POST', $uncertain);
+    $beforeUncertainSaves = Config::getInstance()->saves;
+    Config::getInstance()->throwInvalidAfterSave = true;
+    try {
+        $afterWriteFault = $api->saveDraftAction();
+    } finally {
+        Config::getInstance()->throwInvalidAfterSave = false;
+    }
+    equal('failed', $afterWriteFault['result'],
+        'post-save InvalidArgumentException must not claim a confirmed save');
+    equal(true, $afterWriteFault['requires_review'] ?? false,
+        'post-save InvalidArgumentException must require manual review');
+    equal('Voice draft could not be saved',
+        $afterWriteFault['validations']['zapret.voice.waninterface'] ?? null,
+        'post-save failure must not leak an apparently editable validation error');
+    equal($beforeUncertainSaves + 1, Config::getInstance()->saves,
+        'test must reach native Config save before throwing');
+    equal('new uncertain saved custom draft', Zapret::$nodes['voice']['custom']['args'],
+        'test must prove Config was changed despite failed API response');
+    equal(0, Config::getInstance()->locks,
+        'post-save error must release native Config lock');
 
     echo "PASS: shared native FD9 Voice ON/OFF Apply, envelope, Config lock and Strategy Lab guards\n";
 }

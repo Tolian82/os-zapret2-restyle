@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_188`. `VERSION=0.5.2`; `PLUGIN_REVISION=188`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_189`. `VERSION=0.5.2`; `PLUGIN_REVISION=189`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
@@ -42,10 +42,10 @@
 
 **`_185`:** `_184` [CI #38932040367](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932040367): Voice PASS, Project FAIL на старой PHP concurrency фикстуре, ожидавшей `ready` без общего владельца; FreeBSD не запускалась. Обновлён единственный старый тест: `ready` без аттестованного `native-common` теперь обязан вернуть `interrupted/common-profile-unverified`, `can_activate=false`, никаких профилей. Проверка реального подтверждённого native-common owner остаётся в `test-voice-inspect-config-runtime.php`. Рабочий PHP код `_184` не менялся. Exact-HEAD `_185` CI обязательна; затем закрытие программной приёмки и одна testing-поставка.
 
-**`_188`:** После single-flight исправления выявлена неопределённость Save Draft при браузерном timeout/ошибке или сбое после Config::save: GUI ошибочно утверждал, что черновик не сохранён, и разрешал немедленный повтор. Теперь неизвестный исход блокирует обе Config-кнопки до повторной загрузки и явно показывается в RU/EN; PHP сообщает `requires_review` на исключении в пути сохранения. Подтверждённая валидационная ошибка остаётся редактируемой. Проверка исполняет реальный JS обработчик на пяти исходах. **Далее:** exact-HEAD Voice/Project/FreeBSD CI `_188`, затем итоговая оценка кодовой готовности и одна testing-поставка, без промежуточного релиза.
+**`_189`:** Уточнена реальная граница неизвестного результата Save Draft: после начала `serializeToConfig()` даже `InvalidArgumentException` может исходить из `Config::save()` или вычисления post-save digest. Теперь такой ответ содержит `requires_review=true`, а до записи прежние ошибки валидации остаются редактируемыми. PHP-регрессия имитирует исключение после записи и проверяет изменившийся Config, запрет слепого повтора и освобождение блокировки. **Далее:** exact-HEAD Voice/Project/FreeBSD CI `_189`, затем итоговый аудит фактических незакрытых требований для одной testing-поставки.
 
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_188` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_189` не опубликована.
