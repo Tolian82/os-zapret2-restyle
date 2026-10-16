@@ -167,11 +167,26 @@ namespace {
             'untrusted profile capture metadata reached GUI');
     }
 
-    $legacy = $native;
-    $legacy['source'] = 'old-ledger';
-    $legacyView = $inspect($legacy);
-    verify(!isset($legacyView['profiles']),
-        'legacy or unowned status must not authorize five-service readiness');
+    // A caller must never receive even a bare "ready"/"stopped" when the
+    // common owner is absent or forged. UI already rejects missing profiles,
+    // but the read-only API needs the same fail-closed semantic.
+    foreach (['ready', 'stopped'] as $untrustedState) {
+        foreach (['old-ledger', null] as $untrustedSource) {
+            $untrusted = $untrustedState === 'ready' ? $native : $stopped;
+            if ($untrustedSource === null) {
+                unset($untrusted['source']);
+            } else {
+                $untrusted['source'] = $untrustedSource;
+            }
+            $view = $inspect($untrusted);
+            verify($view['state'] === 'interrupted' &&
+                $view['condition'] === 'common-profile-unverified' &&
+                $view['can_activate'] === false &&
+                !isset($view['profiles']),
+                'foreign/missing common owner must not report native ' .
+                $untrustedState . ' status');
+        }
+    }
 
     $pending = ['state'=>'interrupted', 'can_activate'=>false,
                 'condition'=>'shared-apply-activating'];

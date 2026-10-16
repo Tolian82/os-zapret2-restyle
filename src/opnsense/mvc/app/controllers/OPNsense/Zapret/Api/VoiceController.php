@@ -411,6 +411,15 @@ class VoiceController extends ApiControllerBase
             'rule_count' => (int)($payload['rule_count'] ?? 0),
             'table_count' => (int)($payload['table_count'] ?? 0),
         ];
+        // Ready/stopped is only a verified status when the shared owner
+        // really is native-common. Do not return an unqualified "ready"
+        // (even without profiles) to other API callers when a foreign
+        // inspector or incomplete report claims a successful runtime.
+        if (in_array($payload['state'], ['ready', 'stopped'], true) &&
+            ($payload['source'] ?? null) !== 'native-common') {
+            return ['state' => 'interrupted', 'can_activate' => false,
+                    'condition' => 'common-profile-unverified'];
+        }
         // Only a committed native-common owner may associate five runtime
         // profiles with saved Voice checkboxes. The read-only inspector
         // witnessed exact release bytes, processes and kernel IPFW; confirm
