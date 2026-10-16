@@ -31,6 +31,10 @@ storage_catalog_build()
         printf 'hostlist.user\tmanaged\thostlist-user.txt\n'
         printf 'hostlist.auto\truntime\tipset/zapret-hosts-auto.txt\n'
         printf 'ipset.telegram\tmanaged\tipset-telegram.txt\n'
+        printf 'ipset.discord\tmanaged\tipset-discord.txt\n'
+        printf 'ipset.x\tmanaged\tipset-x.txt\n'
+        printf 'ipset.sip\tmanaged\tipset-sip.txt\n'
+        printf 'ipset.custom\tmanaged\tipset-custom.txt\n'
     } > "${storage_tmp}" || {
         rm -f "${storage_tmp}"
         common_error "could not create storage catalog '${storage_output}'"

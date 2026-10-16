@@ -80,6 +80,7 @@ rm -rf "${REPO_ROOT}/work"
 mkdir -p "${STAGE}/usr/local"
 
 cp -R src/opnsense "${STAGE}/usr/local/opnsense"
+
 if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi

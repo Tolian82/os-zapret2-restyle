@@ -40,6 +40,61 @@
                 <Required>N</Required>
             </extraargs>
         </strategy>
+        <voice>
+            <!-- Empty Voice WAN inherits General WAN until a separate WAN is chosen.
+                 This independent interface is not applied until profile isolation is qualified. -->
+            <waninterface type="InterfaceField">
+                <Required>N</Required>
+                <AllowDynamic>Y</AllowDynamic>
+                <AddParentDevices>Y</AddParentDevices>
+            </waninterface>
+            <telegram>
+                <enabled type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <args type="TextField">
+                    <Required>N</Required>
+                    <Default>--filter-udp=*&#10;--filter-l7=stun&#10;--payload=stun&#10;--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2</Default>
+                </args>
+            </telegram>
+            <discord>
+                <enabled type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <args type="TextField">
+                    <Required>N</Required>
+                </args>
+            </discord>
+            <x>
+                <enabled type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <args type="TextField">
+                    <Required>N</Required>
+                </args>
+            </x>
+            <sip>
+                <enabled type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <args type="TextField">
+                    <Required>N</Required>
+                </args>
+            </sip>
+            <custom>
+                <enabled type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <args type="TextField">
+                    <Required>N</Required>
+                </args>
+            </custom>
+        </voice>
         <strategylab>
             <enablequic type="BooleanField">
                 <Default>0</Default>
@@ -70,6 +125,26 @@
                 <Mask>/^[0-9\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter one IPv4 address or CIDR network per line.</ValidationMessage>
             </telegramips>
+            <discordips type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9\.\/\n\r\s]*$/</Mask>
+                <ValidationMessage>Please enter one IPv4 address or CIDR network per line.</ValidationMessage>
+            </discordips>
+            <xips type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9\.\/\n\r\s]*$/</Mask>
+                <ValidationMessage>Please enter one IPv4 address or CIDR network per line.</ValidationMessage>
+            </xips>
+            <sipips type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9\.\/\n\r\s]*$/</Mask>
+                <ValidationMessage>Please enter one IPv4 address or CIDR network per line.</ValidationMessage>
+            </sipips>
+            <customips type="TextField">
+                <Required>N</Required>
+                <Mask>/^[0-9\.\/\n\r\s]*$/</Mask>
+                <ValidationMessage>Please enter one IPv4 address or CIDR network per line.</ValidationMessage>
+            </customips>
             <userdomains type="TextField">
                 <Required>N</Required>
                 <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>

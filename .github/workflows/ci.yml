@@ -86,6 +86,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Check handoff identity on documentation changes
+        run: python3.13 scripts/test-current-handoff-identity.py
+
       - name: Validate documentation-governance scripts
         run: |
           sh -n scripts/test-release-trigger.sh
@@ -100,6 +103,101 @@ jobs:
 
       - name: Test repository documentation integrity
         run: sh scripts/test-repository-hygiene.sh
+
+  voice-contract:
+    name: Validate Voice candidates
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate Voice shell and Python syntax
+        run: |
+          sh -n scripts/test-voice-shared-ipsets.sh
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py
+          python3.13 -m py_compile scripts/test-voice-profile-compiler.py
+      - name: Voice shared IPv4 targets
+        run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Validate dvtws2 process census before shared Apply
+        run: sh scripts/test-voice-common-engine-census.sh
+      - name: Shared runtime activation and rollback
+        run: sh scripts/test-voice-common-apply-runtime.sh
+      - name: Voice fail-closed compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+      - name: Voice destination-scoped IPFW capture planning
+        run: python3.13 scripts/test-voice-capture-plan.py
+      - name: Persisted Voice model to candidate and capture plan
+        run: python3.13 scripts/test-voice-model-export.py
+      - name: Voice inactive staging with managed IPSET and resolved WAN
+        run: python3.13 scripts/test-voice-release-stage.py
+      - name: Real orchestrator native Voice candidate build
+        run: python3.13 scripts/test-voice-native-build-wire.py
+      - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
+        run: python3.13 scripts/test-voice-generator-interop.py
+      - name: Native Voice saved Config and journal lifecycle router (read-only)
+        run: python3.13 scripts/test-voice-native-lifecycle-router.py
+      - name: Native Voice operator-only PREPARED Apply routing
+        run: python3.13 scripts/test-voice-native-apply-route.py
+      - name: Native Voice saved XML and rendered OPNsense template generation parity
+        run: python3.13 scripts/test-voice-native-saved-pair-guard.py
+      - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
+        run: python3.13 scripts/test-voice-native-saved-draft-candidate.py
+      - name: Native Voice saved GUI read-only FD9 preflight contract
+        run: python3.13 scripts/test-voice-native-draft-preview-route.py
+      - name: Voice non-destructive atomic runtime rollback preflight
+        run: sh scripts/test-voice-atomic-rollback-preflight.sh
+      - name: Voice IPSET integration with shared production Targets normalizer
+        run: python3.13 scripts/test-voice-targets-integration.py
+      - name: Voice and ordinary single-engine traffic merging
+        run: python3.13 scripts/test-voice-traffic-merge.py
+      - name: Shared Voice and Strategies full runtime candidate
+        run: python3.13 scripts/test-voice-common-runtime.py
+      - name: Voice owned IPFW transaction and rollback simulation
+        run: python3.13 scripts/test-voice-firewall-transaction.py
+      - name: FreeBSD IPFW adapter exact argv and parsing contract
+        run: python3.13 scripts/test-voice-ipfw-adapter.py
+      - name: Voice native saved-ON staging guard
+        run: sh scripts/test-voice-staged-runtime-guard.sh
+      - name: Voice read-only live IPFW ownership inspector
+        run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice saved Config and five-profile GUI status API
+        run: php scripts/test-voice-inspect-config-runtime.php
+      - name: Voice one-engine five-profile runtime attestation
+        run: python3.13 scripts/test-voice-common-engine-status.py
+      - name: Interrupted native Config-saved cold recovery and refusal matrix
+        run: sh scripts/test-shared-apply-saved-recovery.sh
+      - name: Interrupted ACTIVATED staged IPFW rollback through common backend
+        run: sh scripts/test-shared-apply-activated-staged.sh
+      - name: Original FD9 shared native stop and restart contract
+        run: sh scripts/test-shared-apply-stop.sh
+      - name: "Common committed native reboot: Config/runtime/IPFW startup"
+        run: sh scripts/test-shared-apply-boot.sh
+      - name: Shared runtime candidate bundle content seal and crash refusal
+        run: python3.13 scripts/test-shared-apply-seal.py
+      - name: Single native Voice and Strategies Apply through existing configd action
+        run: sh scripts/test-shared-apply-run.sh
+      - name: Validate GitHub workflow step name quoting
+        run: |
+          python3.13 - <<'PY'
+          from pathlib import Path
+          import re
+          for flow in Path('.github/workflows').glob('*.yml'):
+              for number, line in enumerate(flow.read_text().splitlines(), 1):
+                  if re.match(r'^\s*- name: [^"\x27].*:\s', line):
+                      raise SystemExit(f'{flow}:{number}: quote name with colon')
+          PY
+      - name: Shared FD9 native Config/runtime transaction fault matrix
+        run: sh scripts/test-shared-apply-execute.sh
+      - name: Native detached OPNsense templates for full shared candidate
+        run: python3.13 scripts/test-shared-apply-render.py
+      - name: Shared FD9 Apply operation record and lifecycle guard
+        run: python3.13 scripts/test-shared-apply-operation.py
+      - name: Voice GUI model and localization contract
+        run: python3.13 scripts/test-voice-gui-contract.py
 
   validate:
     name: Validate Project
@@ -118,7 +216,12 @@ jobs:
           python-version: "3.13"
 
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils php-cli
+
+      - name: Regression test prospective revision-governance gate
+        run: bash scripts/test-pr-revision-policy.sh
+      - name: Check primary revision metadata before costly test matrix
+        run: python3.13 scripts/test-current-handoff-identity.py
 
       - name: Validate project identity and version
         shell: bash
@@ -140,22 +243,62 @@ jobs:
           echo "Internal service: zapret"
           echo "Version: ${VERSION_VALUE}"
 
+      - name: Verify native PHP uses original held FD9
+        run: sh scripts/test-shared-apply-lock.sh
+
       - name: Validate XML files
         run: find src -type f -name "*.xml" -exec xmllint --noout {} \;
 
       - name: Lint PHP files
+        shell: bash
         run: |
-          docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c '
-            set -e
-            find src -type f -name "*.php" -exec php -l {} \;
-            find src -type f -name "*.inc" -exec php -l {} \;
-          '
+          set -euo pipefail
+          # One identical lint/API suite regardless of runtime source.
+          # Runner PHP avoids anonymous Docker Hub rate-limit outages;
+          # the pinned PHP 8.2 image remains a fallback if not installed.
+          php_checks=$(cat <<'PHP_CHECKS'
+          set -e
+          find src -type f -name "*.php" -exec php -l {} \;
+          find src -type f -name "*.inc" -exec php -l {} \;
+          php scripts/test-strategy-voice-settings-scope.php
+          php scripts/test-voice-settings-payload.php
+          php scripts/test-voice-candidate-validator.php
+          php scripts/test-voice-api-concurrency.php
+          php scripts/test-voice-config-flock-release.php
+          php scripts/test-voice-apply-candidate.php
+          php scripts/test-voice-native-config-commit.php
+          php scripts/test-shared-apply-request.php
+          php scripts/test-shared-apply-envelope.php
+          php scripts/test-shared-apply-config.php
+          php scripts/test-voice-candidate-xml.php
+          php scripts/test-voice-draft-selection.php
+          PHP_CHECKS
+          )
+          if command -v php >/dev/null 2>&1 &&
+             php -r 'exit(PHP_VERSION_ID >= 80200 && PHP_VERSION_ID < 90000 ? 0 : 1);'; then
+            php --version | head -n 1
+            sh -c "${php_checks}"
+          else
+            echo "Compatible host PHP not available; using php:8.2-cli container"
+            docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c "${php_checks}"
+          fi
+
+      - name: Verify Voice GUI and backend parser parity
+        run: python3.13 scripts/test-voice-validator-parity.py
 
       - name: Validate shell scripts
         run: |
           find src -type f -name "*.sh" -exec sh -n {} \;
           find pkg -type f -exec sh -n {} \;
-          find scripts -type f -name "*.sh" -exec sh -n {} \;
+          # Project helpers explicitly using bash must be parsed with bash,
+          # not silently reported as POSIX sh syntax errors by find -exec.
+          find scripts -type f -name "*.sh" -print |
+            while IFS= read -r script; do
+              case "$(head -n 1 "$script")" in
+                '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
+                *) sh -n "$script" ;;
+              esac
+            done
           sh -n src/etc/rc.syshook.d/start/20-zapret
           sh -n src/etc/rc.syshook.d/stop/20-zapret
           sh -n tools/telegram-voice-lab/run-a1-opnsense.sh
@@ -204,8 +347,11 @@ jobs:
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
 
-      - name: Test Telegram Voice Phase B scoped STUN PoC
-        run: sh scripts/test-telegram-voice-phase-b.sh
+      - name: Test shared Voice IPSET registration and normalization
+        run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Test fail-closed Voice profile compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
 
       - name: Test Strategy Lab corrective matrix
         run: sh scripts/test-strategy-lab-corrective-matrix.sh
@@ -224,6 +370,9 @@ jobs:
 
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
+
+      - name: Test native Voice Transmission form contract
+        run: python3.13 scripts/test-voice-gui-contract.py
 
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
@@ -267,7 +416,6 @@ jobs:
             src/etc/rc.syshook.d/stop/20-zapret \
             src/etc/inc/plugins.inc.d/zapret.inc \
             src/opnsense/service/conf/actions.d/actions_zapret.conf \
-            src/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh \
             src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py \
             src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py \
             src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py \
@@ -299,7 +447,6 @@ jobs:
             scripts/test-strategy-lab-python-search-extended.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-package-lifecycle-restart.sh \
-            scripts/test-telegram-voice-phase-b.sh \
             scripts/test-setup-release-selection.sh \
             scripts/test-gui-runtime-management.sh \
             scripts/test-release-trigger.sh \
@@ -326,7 +473,6 @@ jobs:
             scripts/test-strategy-lab-python-adaptive-planner.sh \
             scripts/test-release-trigger.sh \
             scripts/test-package-lifecycle-restart.sh \
-            scripts/test-telegram-voice-phase-b.sh \
             scripts/test-diagnostics-guidance-localization.sh \
             scripts/test-freebsd15-package-ci.sh \
             scripts/test-github-branch-hygiene.sh \
@@ -398,7 +544,14 @@ jobs:
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-graph.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
-            sh scripts/test-telegram-voice-phase-b.sh
+            /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
+            /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
+            /usr/local/bin/python3.13 scripts/test-voice-common-runtime.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
+            /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-router.py
+            sh scripts/test-voice-atomic-rollback-preflight.sh
+            /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
             sh scripts/build-pkg.sh
 
       - name: Inspect built FreeBSD 15 package
@@ -411,6 +564,14 @@ jobs:
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw|forward_supervisor|candidate_engine_start|forward_stop)[.]py$' "${contents}"; then
+            echo "ERROR: retired private Voice backend leaked into installable FreeBSD package" >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
+            echo "ERROR: retired operator Voice workers leaked into FreeBSD package" >&2
+            exit 1
+          fi
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/compat.py' "${contents}"
@@ -429,7 +590,31 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${contents}"
-          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"
+          if grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"; then
+            echo "ERROR: retired Telegram Phase-B PoC shipped in package" >&2
+            exit 1
+          fi
+          # The old cutover-only process actuator has no shared Apply caller.
+          if grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_lifecycle.sh' "${contents}"; then
+            echo "ERROR: retired private Voice process actuator shipped in package" >&2
+            exit 1
+          fi
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
+          # Retired Telegram PoC executors, cutover journals and private
+          # five-resource backup paths must never return to the FreeBSD package.
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/(voice_cutover_|voice_ipfw_runtime[.]py$|voice_native_(boot_recovery_review|five_resource_recovery|recovery_quiescence|forward_runtime|process_actions|process_probe|kernel_argv|live_preflight|file_observer|full_observer)[.]py$)' "${contents}"; then
+            echo "ERROR: retired Telegram PoC private backend leaked into FreeBSD package" >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/(voice_native_legacy_[A-Za-z_]+|voice_migration_plan)[.]py$' "${contents}"; then
+            echo "ERROR: retired Telegram PoC migration/rollback leaked into FreeBSD package" >&2
+            exit 1
+          fi
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py' "${contents}"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
           head -80 "${manifest}"

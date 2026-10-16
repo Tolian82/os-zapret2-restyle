@@ -55,7 +55,7 @@ GH-012. **Do not mix unrelated opportunistic cleanup into a task branch.** Prese
 
 GH-013. **A Ready PR is the default for complete intended work.** Use Draft only for intentionally incomplete work that must be published before it is merge-ready.
 
-GH-014. **Branch, PR, commit, and squash identity follows the exact current candidate prefix.** Unless a specific mechanism requires otherwise, subjects use `v<VERSION>_<PLUGIN_REVISION>:` under `DEV-027`–`DEV-028`, including docs/governance changes that intentionally do not bump metadata.
+GH-014. **The PR/squash title uses the latest candidate; each branch commit uses its own immutable package candidate.** Resolve current `VERSION`/`PLUGIN_REVISION` for the PR, each commit's own contemporaneous files for its subject, and the final merged commit for squash. The forward-only revision guard requires a one-step `_N` increment on each packaged-source commit after its migration marker; docs/governance/CI-only commits retain their identity (DEV-027–DEV-033). Earlier Git history is never rewritten merely to rename a revision.
 
 GH-015. **A docs/governance/CI-only delivery may advance `main` without changing package metadata.** Apply `DEV-033`; its title prefix still names the current package candidate so chronology stays anchored.
 
@@ -175,7 +175,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-005` | `DEV-027`–`DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
 | `GH-011` | `DEV-017` |
-| `GH-014` | `DEV-027`, `DEV-028` |
+| `GH-014` | `DEV-027`–`DEV-033` |
 | `GH-015` | `DEV-033` |
 | `GH-017` | `DEV-012` |
 | `GH-019` | `DEV-013` |

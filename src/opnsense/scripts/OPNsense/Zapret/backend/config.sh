@@ -10,6 +10,34 @@ config_load()
     . "${_config_path}"
 }
 
+# An ordinary Strategies-only start cannot apply saved native Voice profiles
+# without a committed common runtime owner. The shared Apply and normal
+# native boot path handle the five saved Voice profiles.
+# This guard prevents a fresh ordinary start from ignoring enabled Voice
+# when no common owner is installed.
+config_voice_staged_only_guard()
+{
+    for _config_voice_requested in \
+        "${VOICE_TELEGRAM_REQUESTED:-0}" \
+        "${VOICE_DISCORD_REQUESTED:-0}" \
+        "${VOICE_X_REQUESTED:-0}" \
+        "${VOICE_SIP_REQUESTED:-0}" \
+        "${VOICE_CUSTOM_REQUESTED:-0}"; do
+        case "${_config_voice_requested}" in
+            0) ;;
+            1)
+                common_error "Persisted Voice ON requires a verified shared runtime owner; ordinary Strategies-only boot refused"
+                return 1
+                ;;
+            *)
+                common_error "Invalid persisted Voice enablement value; refusing ordinary runtime activation"
+                return 1
+                ;;
+        esac
+    done
+    return 0
+}
+
 config_resolve_interface()
 {
     _config_iface="$1"

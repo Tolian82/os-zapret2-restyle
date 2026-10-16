@@ -66,6 +66,114 @@ orchestrator_fail_from_log()
         "${_orchestrator_fail_log_message}"
 }
 
+# Build the real native Voice + ordinary dvtws2 candidate as an artifact
+# of the normal Zapret release. Only the existing orchestrator owns this path.
+# The candidate is deliberately NOT selected as active traffic.conf while the
+# Voice capture belongs exclusively to the shared Apply lifecycle.
+orchestrator_stage_native_voice()
+{
+    _orchestrator_voice_xml="$1"
+    _orchestrator_voice_managed="$2"
+    _orchestrator_voice_active="$3"
+    _orchestrator_voice_logical_wan="$4"
+    _orchestrator_voice_rule_base="$5"
+    _orchestrator_voice_rule_max="$6"
+    _orchestrator_voice_divert="$7"
+    _orchestrator_voice_user_traffic="$8"
+    _orchestrator_voice_output="$9"
+    _orchestrator_voice_layout="${10:-private}"
+
+    _orchestrator_voice_python="/usr/local/bin/python3.13"
+    if [ ! -x "${_orchestrator_voice_python}" ]; then
+        # Native FreeBSD installations must use the pinned package Python.
+        # Repository CI may run from an uninstalled source tree.
+        case "${BACKEND_DIR:-}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                common_error "native Voice compiler requires /usr/local/bin/python3.13"
+                return 1
+                ;;
+            *)
+                _orchestrator_voice_python=$(command -v python3.13) || {
+                    common_error "Python 3.13 is required to compile native Voice"
+                    return 1
+                }
+                ;;
+        esac
+    fi
+
+    [ -r "${BACKEND_DIR}/voice_release_stage.py" ] || {
+        common_error "native Voice release compiler is not installed"
+        return 1
+    }
+    _orchestrator_voice_resolved=$(config_resolve_interface "${_orchestrator_voice_logical_wan}") ||
+        return 1
+
+    case "${_orchestrator_voice_layout}" in
+        private) set -- ;;
+        common) set -- --common-runtime "${_orchestrator_voice_logical_wan}" ;;
+        *) common_error "unknown Voice candidate layout"; return 1 ;;
+    esac
+    "${_orchestrator_voice_python}" "${BACKEND_DIR}/voice_release_stage.py" "$@" \
+        "${_orchestrator_voice_xml}" \
+        "${_orchestrator_voice_managed}" \
+        "${_orchestrator_voice_active}" \
+        "${_orchestrator_voice_resolved}" \
+        "${_orchestrator_voice_rule_base}" \
+        "${_orchestrator_voice_rule_max}" \
+        "${_orchestrator_voice_divert}" \
+        "${_orchestrator_voice_user_traffic}" \
+        "${_orchestrator_voice_output}"
+}
+
+# The detached native-Voice build is an inert producer-only operation.
+# Ordinary start/reconfigure retain the hard Voice-ON refusal. A future
+# original-FD9 owner must supply a distinct, already saved candidate XML;
+# this function never activates its output or adopts IPFW/process ownership.
+orchestrator_voice_build_preflight()
+{
+    _orchestrator_voice_build_mode="$1"
+    _orchestrator_voice_build_xml="$2"
+    _orchestrator_voice_build_out="$3"
+    _orchestrator_voice_build_active="$4"
+    case "${_orchestrator_voice_build_mode}" in
+        ordinary)
+            [ "${_orchestrator_voice_build_xml}" = "/conf/config.xml" ] || {
+                common_error "ordinary build cannot replace the active Voice XML"
+                return 1
+            }
+            config_voice_staged_only_guard
+            ;;
+        native-detached|shared-candidate)
+            case "${_orchestrator_voice_build_xml}" in
+                /*) ;;
+                *) common_error "detached Voice XML must use an absolute path"; return 1 ;;
+            esac
+            case "${_orchestrator_voice_build_out}" in
+                /*) ;;
+                *) common_error "detached Voice release must use an absolute path"; return 1 ;;
+            esac
+            [ "${_orchestrator_voice_build_xml}" != "/conf/config.xml" ] &&
+            [ -f "${_orchestrator_voice_build_xml}" ] &&
+            [ ! -L "${_orchestrator_voice_build_xml}" ] &&
+            [ -n "${_orchestrator_voice_build_active}" ] &&
+            [ "${_orchestrator_voice_build_out}" != "${_orchestrator_voice_build_active}" ] || {
+                common_error "detached Voice candidate must not reuse active inputs"
+                return 1
+            }
+            case "${_orchestrator_voice_build_out}" in
+                "${_orchestrator_voice_build_active}"/*)
+                    common_error "detached Voice candidate cannot be inside active runtime"
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            common_error "unknown Voice build mode"
+            return 1
+            ;;
+    esac
+}
+
 orchestrator_build_release()
 {
     _orchestrator_build_config="$1"
@@ -74,6 +182,8 @@ orchestrator_build_release()
     _orchestrator_build_workspace="$4"
     _orchestrator_build_release="$5"
     _orchestrator_build_stage_file="$6"
+    _orchestrator_build_variant="${7:-ordinary}"
+    _orchestrator_build_voice_xml="${8:-/conf/config.xml}"
     _orchestrator_build_total=8
     _orchestrator_build_error="${_orchestrator_build_workspace}/stage-error.log"
 
@@ -90,12 +200,24 @@ orchestrator_build_release()
         return 1
     }
 
-    [ "${ZAPRET_ENABLED}" = "1" ] || {
+    [ "${ZAPRET_ENABLED}" = "1" ] || [ "${_orchestrator_build_variant}" = "shared-candidate" ] || {
         orchestrator_fail_stage \
             "${_orchestrator_build_stage_file}" 1 \
             "${_orchestrator_build_total}" config \
             "service is disabled"
         return 2
+    }
+    # Only a separate, unpublished native candidate may contain Voice ON.
+    # The six-argument legacy callers still take the ordinary fail-closed
+    # route before touching their running service or firewall.
+    orchestrator_voice_build_preflight \
+        "${_orchestrator_build_variant}" "${_orchestrator_build_voice_xml}" \
+        "${_orchestrator_build_release}" "${_orchestrator_build_active_dir}" || {
+        orchestrator_fail_stage \
+            "${_orchestrator_build_stage_file}" 1 \
+            "${_orchestrator_build_total}" config \
+            "native Voice ON requires the completed transactional runtime"
+        return 1
     }
     [ -n "${TRAFFIC_ARGS}" ] || {
         common_error "Traffic Strategy is empty"
@@ -198,6 +320,7 @@ orchestrator_build_release()
         "${YOUTUBE_DOMAINS}" \
         "${TELEGRAM_IPS}" \
         "${USER_DOMAINS}" \
+        "${DISCORD_IPS:-}" "${X_IPS:-}" "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 3 \
@@ -259,9 +382,8 @@ orchestrator_build_release()
         blobs running "resolving blob declarations" || return 1
     _orchestrator_build_blob_args="${_orchestrator_build_workspace}/blob-args.conf"
     _orchestrator_build_loaded_blobs="${_orchestrator_build_workspace}/loaded-blobs.txt"
-    _orchestrator_build_user_traffic="${_orchestrator_build_release}/${TELEGRAM_VOICE_USER_TRAFFIC_FILE_NAME}"
+    _orchestrator_build_user_traffic="${_orchestrator_build_release}/traffic-user.conf"
     _orchestrator_build_traffic="${_orchestrator_build_release}/traffic.conf"
-    _orchestrator_build_voice_state="${_orchestrator_build_release}/${TELEGRAM_VOICE_STATE_FILE_NAME}"
     : > "${_orchestrator_build_error}"
     blobs_resolve_file \
         "${_orchestrator_build_targets}" \
@@ -277,22 +399,42 @@ orchestrator_build_release()
                 "blob declaration resolution failed"
             return 1
         }
-    : > "${_orchestrator_build_error}"
-    telegram_voice_build_effective_traffic \
-        "${TELEGRAM_VOICE_MARKER_FILE}" \
-        "${_orchestrator_build_managed_source}/ipset-telegram.txt" \
-        "${_orchestrator_build_managed_reference}/ipset-telegram.txt" \
-        "${_orchestrator_build_user_traffic}" \
-        "${_orchestrator_build_traffic}" \
-        "${_orchestrator_build_voice_state}" \
-        2>"${_orchestrator_build_error}" || {
-            orchestrator_fail_from_log \
-                "${_orchestrator_build_stage_file}" 4 \
-                "${_orchestrator_build_total}" blobs \
-                "${_orchestrator_build_error}" \
-                "Telegram Voice profile generation failed"
-            return 1
-        }
+    # Ordinary and detached builds use only resolved Strategies traffic.
+    # The shared candidate generates the merged Voice+Strategies traffic itself.
+    if [ "${_orchestrator_build_variant}" != "shared-candidate" ]; then
+        cp "${_orchestrator_build_user_traffic}" "${_orchestrator_build_traffic}" || return 1
+    fi
+    if [ "${_orchestrator_build_variant}" != "ordinary" ]; then
+        # Detached build stages an inert private Voice candidate; shared
+        # builds compile one merged runtime managed by the common Apply.
+        # Building alone never acquires runtime or IPFW ownership.
+        _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
+        if [ "${_orchestrator_build_variant}" = "shared-candidate" ]; then
+            _orchestrator_build_voice_native="${_orchestrator_build_release}"
+            _orchestrator_build_voice_layout=common
+        else
+            _orchestrator_build_voice_layout=private
+        fi
+        : > "${_orchestrator_build_error}"
+        orchestrator_stage_native_voice \
+            "${_orchestrator_build_voice_xml}" \
+            "${_orchestrator_build_managed_source}" \
+            "${_orchestrator_build_active_dir}" \
+            "${WAN_IF}" \
+            "${RULE_BASE:-19000}" \
+            "${RULE_MAX:-19010}" \
+            "${DIVERT_PORT}" \
+            "${_orchestrator_build_user_traffic}" \
+            "${_orchestrator_build_voice_native}" "${_orchestrator_build_voice_layout}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 4 \
+                    "${_orchestrator_build_total}" blobs \
+                    "${_orchestrator_build_error}" \
+                    "native Voice candidate compilation failed"
+                return 1
+            }
+    fi
     _orchestrator_build_extra_input="${_orchestrator_build_workspace}/extra.input.conf"
     _orchestrator_build_extra="${_orchestrator_build_release}/extra.conf"
     common_write_text_file \
@@ -362,6 +504,51 @@ orchestrator_build_release()
                 "argument generation failed"
             return 1
         }
+    # Only explicit native-detached evidence needs a private argv/IPFW
+    # handoff; shared-candidate uses its one ordinary release generator.
+    if [ "${_orchestrator_build_variant}" = "native-detached" ]; then
+        _orchestrator_build_native_args="${_orchestrator_build_voice_native}/dvtws.args"
+        : > "${_orchestrator_build_error}"
+        generator_build_args_mapped \
+            "${_orchestrator_build_native_args}" \
+            "${DIVERT_PORT}" \
+            "${_orchestrator_build_voice_native}/traffic.conf" \
+            "${_orchestrator_build_extra}" \
+            "${_orchestrator_build_blob_args}" \
+            "${_orchestrator_build_exclude_source}" \
+            "${_orchestrator_build_exclude_reference}" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
+            "${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 6 \
+                    "${_orchestrator_build_total}" generator \
+                    "${_orchestrator_build_error}" \
+                    "native Voice engine argument generation failed"
+                return 1
+            }
+        # Bind the generated one-engine argv to destination-scoped IPFW rules.
+        # This writes ONLY release-local private manifest/proof files. IPFW,
+        # current dvtws2 and ordinary Strategies remain unchanged.
+        : > "${_orchestrator_build_error}"
+        "${_orchestrator_voice_python}" \
+            "${BACKEND_DIR}/voice_handoff_preflight.py" \
+            "${_orchestrator_build_voice_native}" \
+            "${_orchestrator_build_native_args}" \
+            "${_orchestrator_build_user_traffic}" \
+            "${_orchestrator_build_tcp}" \
+            "${_orchestrator_build_udp}" \
+            "${_orchestrator_build_voice_xml}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 6 \
+                    "${_orchestrator_build_total}" generator \
+                    "${_orchestrator_build_error}" \
+                    "native Voice engine/IPFW handoff compilation failed"
+                return 1
+            }
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 6 "${_orchestrator_build_total}" \
         generator ok "arguments generated" || return 1
@@ -386,6 +573,23 @@ orchestrator_build_release()
                 "staged release validation failed"
             return 1
         }
+    # Offline candidate production is also useful before engine installation.
+    # Apply/start must require the installed engine separately; when present,
+    # its native parser checks the exact combined candidate before activation.
+    _orchestrator_build_engine="${_orchestrator_build_zapret_dir}/binaries/my/dvtws2"
+    if [ "${_orchestrator_build_variant}" = "shared-candidate" ] &&
+       [ -x "${_orchestrator_build_engine}" ]; then
+        validator_validate_engine_mapped \
+            "${_orchestrator_build_engine}" "${_orchestrator_build_args}" \
+            "${_orchestrator_build_active_dir}" "${_orchestrator_build_release}" \
+            "${_orchestrator_voice_python}" 2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 7 \
+                    "${_orchestrator_build_total}" validator \
+                    "${_orchestrator_build_error}" "installed engine rejected candidate"
+                return 1
+            }
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 7 "${_orchestrator_build_total}" \
         validator ok "staged release validated" || return 1
@@ -408,7 +612,6 @@ orchestrator_cleanup_runtime()
     firewall_remove_rules \
         "${_orchestrator_cleanup_rule_base}" \
         "${_orchestrator_cleanup_rule_max}"
-    firewall_remove_telegram_voice_tables
     launcher_stop "${_orchestrator_cleanup_child}" 5
 }
 
@@ -424,10 +627,7 @@ orchestrator_runtime_is_complete()
     supervisor_is_running "${_orchestrator_complete_monitor}" &&
     firewall_rules_present \
         "${_orchestrator_complete_rule_base}" \
-        "${_orchestrator_complete_rule_max}" &&
-    firewall_telegram_voice_runtime_complete \
-        "${_orchestrator_complete_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
-        "${_orchestrator_complete_rule_base}"
+        "${_orchestrator_complete_rule_max}"
 }
 
 orchestrator_native_start()
@@ -449,6 +649,22 @@ orchestrator_native_start()
     _orchestrator_start_log="$5"
     _orchestrator_start_supervisor_log="$6"
     _orchestrator_start_total=13
+
+    # Saved Voice ON requires the existing shared runtime owner.
+    # Check BEFORE runtime_is_complete returns success and, crucially,
+    # BEFORE cleanup_runtime stops any currently working process/rules.
+    # Reconfigure already builds before stopping; start used to clean first.
+    if [ -r "${_orchestrator_start_config}" ]; then
+        config_load "${_orchestrator_start_config}" || return 1
+        # Global OFF must still be permitted to stop Zapret; a native Voice
+        # ON preference is not an independent request to start the daemon.
+        if [ "${ZAPRET_ENABLED:-0}" = 1 ]; then
+            config_voice_staged_only_guard || {
+                common_error "native Voice preflight refused; current runtime left untouched"
+                return 1
+            }
+        fi
+    fi
 
     if orchestrator_runtime_is_complete \
         "${_orchestrator_start_child_pid}" \
@@ -583,9 +799,7 @@ orchestrator_native_start()
         "${_orchestrator_start_wan}" \
         "${DIVERT_PORT}" \
         "${_orchestrator_start_rule_base}" \
-        "${_orchestrator_start_rule_max}" \
-        "${_orchestrator_start_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
-        "${_orchestrator_start_active_dir}/managed/ipset-telegram.txt"; then
+        "${_orchestrator_start_rule_max}"; then
         orchestrator_cleanup_runtime \
             "${_orchestrator_start_child_pid}" \
             "${_orchestrator_start_supervisor_daemon}" \
@@ -672,9 +886,6 @@ orchestrator_restore_previous_runtime()
         "${_orchestrator_restore_backup}" || return 1
 
     if [ "${_orchestrator_restore_old_complete}" = "1" ]; then
-        firewall_restore_telegram_voice_table \
-            "${_orchestrator_restore_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
-            "${_orchestrator_restore_active_dir}/managed/ipset-telegram.txt" || return 1
         launcher_start_once \
             "${_orchestrator_restore_dvtws_bin}" \
             "${_orchestrator_restore_active_dir}/dvtws.args" \
@@ -696,7 +907,6 @@ orchestrator_restore_previous_runtime()
         firewall_remove_rules \
             "${_orchestrator_restore_rule_base}" \
             "${_orchestrator_restore_rule_max}"
-        firewall_remove_telegram_voice_tables
     fi
 }
 
@@ -915,9 +1125,7 @@ orchestrator_native_reconfigure()
         "${_orchestrator_reconfigure_wan}" \
         "${DIVERT_PORT}" \
         "${_orchestrator_reconfigure_rule_base}" \
-        "${_orchestrator_reconfigure_rule_max}" \
-        "${_orchestrator_reconfigure_active_dir}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
-        "${_orchestrator_reconfigure_active_dir}/managed/ipset-telegram.txt"; then
+        "${_orchestrator_reconfigure_rule_max}"; then
         orchestrator_reconfigure_failure \
             "${_orchestrator_reconfigure_stage_file}" 11 \
             "${_orchestrator_reconfigure_total}" firewall \
@@ -1013,7 +1221,6 @@ orchestrator_native_stop()
     firewall_remove_rules \
         "${_orchestrator_stop_rule_base}" \
         "${_orchestrator_stop_rule_max}"
-    firewall_remove_telegram_voice_tables
 
     orchestrator_stage "${_orchestrator_stop_stage}" 3 3 launcher running \
         "stopping dvtws2" || return 1
@@ -1068,7 +1275,6 @@ orchestrator_runtime_failure()
     firewall_remove_rules \
         "${_orchestrator_failure_rule_base}" \
         "${_orchestrator_failure_rule_max}"
-    firewall_remove_telegram_voice_tables
     launcher_stop "${_orchestrator_failure_child}" 1
     rm -f \
         "${_orchestrator_failure_supervisor_daemon}" \

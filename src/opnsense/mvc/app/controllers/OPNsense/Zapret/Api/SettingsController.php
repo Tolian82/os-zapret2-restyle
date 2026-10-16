@@ -12,6 +12,9 @@ use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
 
+require_once __DIR__ . '/SettingsApply.php';
+require_once __DIR__ . '/SharedApplyEnvelope.php';
+
 class SettingsController extends ApiMutableModelControllerBase
 {
     protected static $internalModelName = 'zapret';
@@ -209,108 +212,128 @@ class SettingsController extends ApiMutableModelControllerBase
         return $fallback;
     }
 
+    /**
+     * The same one-FD9 Apply as Voice, retaining the established Strategies
+     * normalization and response contract. No GUI-side Config::save precedes
+     * runtime activation; the root Config worker revalidates the full model.
+     */
     public function applyAction()
     {
         if (!$this->request->isPost()) {
             return ['result' => 'failed'];
         }
-
+        $this->throwReadOnly();
         $this->assertLifecycleAvailable();
-
-        $config = Config::getInstance();
-        $config->lock();
-        $model = $this->getModel();
-        $oldNodes = $model->getNodes();
         $post = $this->request->getPost(static::$internalModelName);
-        $model->setNodes($post);
-
-        $result = $this->validate(null, null, true);
-        if (!empty($result['result'])) {
-            $config->unlock();
-            return $result;
+        if (!is_array($post) || !isset($post['sync']) ||
+            !is_array($post['sync']) ||
+            array_keys($post['sync']) !== ['telegramips_baseline']
+        ) {
+            return ['result' => 'failed',
+                'message' => gettext('Missing or invalid Strategies baseline; reload this page')];
         }
-
+        $sync = $post['sync'];
+        unset($post['sync']);
         $summary = [];
+        // From original-FD9 dispatch onward, an exception is not proof of
+        // a pre-write rejection, regardless of its PHP class. This is the
+        // same commit-result contract as VoiceController::applyAction.
+        $nativeApplyDispatched = false;
         try {
-            foreach (self::TARGET_FIELDS as $field => $label) {
-                $raw = (string)$model->hostlist->{$field};
-                if ($field === 'telegramips') {
-                    [$value, $changed, $duplicates] = $this->normalizeIpList($raw, $label);
-                } else {
-                    [$value, $changed, $duplicates] = $this->normalizeDomainList($raw, $label);
-                }
-                $model->hostlist->{$field} = $value;
-                if ($changed > 0 || $duplicates > 0) {
-                    $summary[] = sprintf(
-                        '%s: normalized %d, removed duplicates %d',
-                        $label,
-                        $changed,
-                        $duplicates
-                    );
-                }
-            }
-        } catch (\InvalidArgumentException $exception) {
-            $config->unlock();
-            foreach (self::TARGET_FIELDS as $field => $label) {
-                if (strpos($exception->getMessage(), $label . ',') === 0) {
-                    return $this->validationFailure($field, $exception->getMessage());
-                }
-            }
-            throw $exception;
-        }
-
-        $result = $this->validate(null, null, true);
-        if (!empty($result['result'])) {
-            $config->unlock();
-            return $result;
-        }
-
-        try {
-            $this->assertLifecycleAvailable();
-        } catch (UserException $exception) {
-            $model->setNodes($oldNodes);
-            $config->unlock();
-            throw $exception;
-        }
-
-        $this->setSaveAuditMessage(gettext('Applied Zapret settings'));
-        $this->save(false, true);
-        $config->unlock();
-
-        $backend = new Backend();
-        $reconfigureResponse = trim((string)$backend->configdRun('zapret reconfigure', false, 180));
-
-        if ($reconfigureResponse !== 'OK') {
+            $config = Config::getInstance();
             $config->lock();
-            $model->setNodes($oldNodes);
-            $this->setSaveAuditMessage(gettext('Restored previous Zapret settings after failed apply'));
-            $this->save(false, true);
-            $config->unlock();
-
-            $rollbackTemplateResponse = trim(
-                (string)$backend->configdRun('template reload OPNsense/Zapret')
-            );
-            $message = $this->backendFailureMessage(
-                gettext('The new configuration could not be applied. Previous settings and runtime were restored.')
-            );
-            if ($rollbackTemplateResponse !== 'OK') {
-                $message .= ' ' . gettext(
-                    'The previous settings were saved, but their generated configuration could not be restored. Do not restart Zapret before correcting the template error.'
+            try {
+                $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                $plan = SettingsApply::prepareStrategies(
+                    $current, $post, $sync['telegramips_baseline']
                 );
+                // Normalize exactly the same editable target lists as the
+                // previous Strategies Apply, but only in a detached payload.
+                foreach (self::TARGET_FIELDS as $field => $label) {
+                    $raw = (string)($plan['candidate']['hostlist'][$field] ?? '');
+                    if ($field === 'telegramips') {
+                        [$value, $changed, $duplicates] = $this->normalizeIpList($raw, $label);
+                    } else {
+                        [$value, $changed, $duplicates] = $this->normalizeDomainList($raw, $label);
+                    }
+                    if ($changed > 0 || $duplicates > 0) {
+                        $summary[] = sprintf(
+                            '%s: normalized %d, removed duplicates %d',
+                            $label, $changed, $duplicates
+                        );
+                    }
+                    if ($raw !== $value) {
+                        if (!isset($post['hostlist'])) {
+                            $post['hostlist'] = [];
+                        }
+                        $post['hostlist'][$field] = $value;
+                    }
+                }
+                $plan = SettingsApply::prepareStrategies(
+                    $current, $post, $sync['telegramips_baseline']
+                );
+                // Validate against a detached model, never serialize it to
+                // the live OPNsense Config before the privileged transaction.
+                $model = new \OPNsense\Zapret\Zapret();
+                $model->setNodes($plan['candidate']);
+                $errors = $model->performValidation(false);
+                if (count($errors) > 0) {
+                    $validations = [];
+                    foreach ($errors as $error) {
+                        $validations['zapret.' . $error->getField()] = $error->getMessage();
+                    }
+                    return ['result' => 'failed', 'validations' => $validations];
+                }
+                SettingsApply::renderCandidateXml(
+                    (string)$config, $current, $plan, 'strategies'
+                );
+                $encoded = SharedApplyEnvelope::encode('strategies', $post, $sync);
+            } finally {
+                $config->unlock();
             }
-
-            throw new UserException(
-                $message,
-                gettext('Zapret configuration error')
-            );
+            // No Config lock while configd owns original FD9.
+            $this->assertLifecycleAvailable();
+            $backend = new Backend();
+            $nativeApplyDispatched = true;
+            $response = trim((string)$backend->configdpRun(
+                'zapret shared_apply', ['strategies', $encoded], false, 600
+            ));
+            if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $response)) {
+                return [
+                    'result' => 'failed', 'applied' => false,
+                    'requires_review' => true,
+                    'message' => gettext(
+                        'Native Apply did not confirm Config and runtime commit; inspect recovery status'
+                    ),
+                ];
+            }
+            return [
+                'result' => 'saved',
+                'status' => 'ok',
+                'normalized' => !empty($summary),
+                'normalization' => $summary,
+                static::$internalModelName => $plan['candidate'],
+            ];
+        } catch (\InvalidArgumentException $error) {
+            if ($nativeApplyDispatched) {
+                return [
+                    'result' => 'failed', 'applied' => false,
+                    'requires_review' => true,
+                    'message' => gettext(
+                        'Native Strategies Apply result is uncertain; inspect runtime before retrying'
+                    ),
+                ];
+            }
+            return ['result' => 'failed', 'message' => $error->getMessage()];
+        } catch (\Throwable $error) {
+            return [
+                'result' => 'failed', 'applied' => false,
+                'requires_review' => true,
+                'message' => gettext(
+                    'Native Strategies Apply failed or was interrupted; inspect runtime before retrying'
+                ),
+            ];
         }
-
-        return [
-            'result' => 'saved',
-            'status' => 'ok',
-            'normalized' => !empty($summary),
-            'normalization' => $summary,
-            static::$internalModelName => $model->getNodes(),
-        ];
     }
+
 }

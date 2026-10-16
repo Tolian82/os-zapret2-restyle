@@ -2,7 +2,12 @@
 
 # Public API:
 #
-#   atomic_install_tree SOURCE_DIR DEST_DIR BACKUP_ROOT
+#   atomic_install_tree SOURCE_DIR DEST_DIR BACKUP_ROOT [OPERATION_ID]
+#
+# OPERATION_ID is an optional sealed shared-Apply identifier (32 lowercase
+# hexadecimal chars). It makes the crash window's stage, parked previous and
+# backup names deterministic from the already durable common operation.
+# Legacy/normal boot calls use the historical PID/timestamp layout.
 #
 # Installs an already validated directory tree as one unit.
 #
@@ -161,6 +166,15 @@ atomic_remove_tree()
 
 atomic_install_tree()
 {
+    [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
+    _atomic_install_token=
+    if [ "$#" -eq 4 ]; then
+        _atomic_install_token="$4"
+        case "$_atomic_install_token" in
+            ""|*[!a-f0-9]*) return 64 ;;
+        esac
+        [ "${#_atomic_install_token}" -eq 32 ] || return 64
+    fi
     _atomic_install_source="$1"
     _atomic_install_destination="$2"
     _atomic_install_backup_root="$3"
@@ -180,15 +194,40 @@ atomic_install_tree()
     _atomic_install_parent=$(dirname "${_atomic_install_destination}")
     _atomic_install_name=$(basename "${_atomic_install_destination}")
     _atomic_install_stamp=$(date +%Y%m%d-%H%M%S)
-    _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.$$"
-    _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.$$"
+    if [ -n "$_atomic_install_token" ]; then
+        _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.${_atomic_install_token}"
+        _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.${_atomic_install_token}"
+        _atomic_install_backup_name="${_atomic_install_name}-${_atomic_install_token}"
+    else
+        _atomic_install_stage="${_atomic_install_parent}/.${_atomic_install_name}.stage.$$"
+        _atomic_install_old="${_atomic_install_parent}/.${_atomic_install_name}.old.$$"
+        _atomic_install_backup_name="${_atomic_install_name}-${_atomic_install_stamp}-$$"
+    fi
     _atomic_install_backup=""
 
     mkdir -p "${_atomic_install_parent}" "${_atomic_install_backup_root}" ||
         return 1
 
-    atomic_remove_tree "${_atomic_install_stage}" || return 1
-    atomic_remove_tree "${_atomic_install_old}" || return 1
+    # A prior interrupted install, or a reused PID, may leave the only
+    # known-good release here. Never remove unknown crash evidence.
+    for _atomic_install_reserved in "${_atomic_install_stage}" "${_atomic_install_old}"; do
+        if [ -e "${_atomic_install_reserved}" ] ||
+           [ -L "${_atomic_install_reserved}" ]; then
+            common_error "atomic install: existing stage/park path requires review"
+            return 1
+        fi
+    done
+    # mv into a pre-existing directory would nest the active release and
+    # silently lose backup ownership. Refuse name collisions before copy.
+    if [ -e "${_atomic_install_destination}" ] ||
+       [ -L "${_atomic_install_destination}" ]; then
+        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_backup_name}"
+        if [ -e "${_atomic_install_backup}" ] ||
+           [ -L "${_atomic_install_backup}" ]; then
+            common_error "atomic install: existing backup path requires review"
+            return 1
+        fi
+    fi
 
     atomic_copy_tree \
         "${_atomic_install_source}" \
@@ -207,8 +246,7 @@ atomic_install_tree()
 
     if [ -e "${_atomic_install_destination}" ] ||
        [ -L "${_atomic_install_destination}" ]; then
-        _atomic_install_backup="${_atomic_install_backup_root}/${_atomic_install_name}-${_atomic_install_stamp}-$$"
-
+        # Destination is moved only to the preflighted absent backup name.
         mv \
             "${_atomic_install_destination}" \
             "${_atomic_install_old}" || {
@@ -260,19 +298,62 @@ atomic_restore_tree()
     atomic_validate_path \
         "${_atomic_restore_destination}" "destination directory" || return 1
 
-    if [ -e "${_atomic_restore_destination}" ] ||
-       [ -L "${_atomic_restore_destination}" ]; then
-        atomic_remove_tree "${_atomic_restore_destination}" || return 1
+    # Validate the previous tree BEFORE touching the currently active tree.
+    # A missing, unsafe or symlinked backup must never make rollback destroy
+    # the only remaining dvtws2 candidate. This is especially important for
+    # interrupted full-system Voice/Strategies handoffs.
+    if [ -n "${_atomic_restore_backup}" ]; then
+        atomic_validate_path \
+            "${_atomic_restore_backup}" "rollback backup" || return 1
+        if [ -L "${_atomic_restore_backup}" ] ||
+           [ ! -d "${_atomic_restore_backup}" ]; then
+            common_error "atomic rollback backup is missing or unsafe: ${_atomic_restore_backup}"
+            return 1
+        fi
     fi
 
+    # When a previous release is available, park the current candidate
+    # rather than deleting it. If the second move fails after a successful
+    # first move, we can put the candidate back. Refuse a pre-existing park
+    # path instead of erasing unknown data from an interrupted recovery.
     if [ -n "${_atomic_restore_backup}" ]; then
-        [ -d "${_atomic_restore_backup}" ] || {
-            common_error "atomic rollback backup does not exist: ${_atomic_restore_backup}"
+        _atomic_restore_park="${_atomic_restore_destination}.rollback-old.$$"
+        if [ -e "${_atomic_restore_park}" ] ||
+           [ -L "${_atomic_restore_park}" ]; then
+            common_error "unexpected parked atomic rollback tree; manual review required"
             return 1
-        }
-        mv "${_atomic_restore_backup}" "${_atomic_restore_destination}" || {
-            common_error "cannot restore atomic rollback backup"
+        fi
+        _atomic_restore_parked=0
+        if [ -e "${_atomic_restore_destination}" ] ||
+           [ -L "${_atomic_restore_destination}" ]; then
+            mv "${_atomic_restore_destination}" "${_atomic_restore_park}" || {
+                common_error "cannot park current runtime before rollback"
+                return 1
+            }
+            _atomic_restore_parked=1
+        fi
+        if ! mv "${_atomic_restore_backup}" "${_atomic_restore_destination}"; then
+            if [ "${_atomic_restore_parked}" = 1 ]; then
+                mv "${_atomic_restore_park}" "${_atomic_restore_destination}" || {
+                    common_error "rollback failed and candidate restore also failed; parked tree preserved"
+                    return 1
+                }
+            fi
+            common_error "cannot restore atomic rollback backup; candidate retained"
             return 1
-        }
+        fi
+        if [ "${_atomic_restore_parked}" = 1 ]; then
+            atomic_remove_tree "${_atomic_restore_park}" || {
+                common_error "rollback restored but parked candidate cleanup failed"
+                return 1
+            }
+        fi
+    else
+        # No previous release existed (initial start). Preserve the
+        # established semantics: remove only the failed first candidate.
+        if [ -e "${_atomic_restore_destination}" ] ||
+           [ -L "${_atomic_restore_destination}" ]; then
+            atomic_remove_tree "${_atomic_restore_destination}" || return 1
+        fi
     fi
 }

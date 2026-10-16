@@ -82,8 +82,18 @@ fi
 grep -Fq 'configd transport failed' "${TEST_ROOT}/process-error.log" ||
     fail "configctl process error was not reported"
 
-grep -Fq "if (\$reconfigureResponse !== 'OK')" "${SETTINGS_CONTROLLER}" ||
-    fail "Settings Apply does not require exact configd OK"
+# Strategies Apply now runs the entire native candidate/Config/runtime/IPFW
+# transaction under one original FD9. A final applied-id is the only success
+# receipt; the previous save-then-reconfigure OK predicate is obsolete.
+grep -Fq "'zapret shared_apply'" "${SETTINGS_CONTROLLER}" ||
+    fail "Strategies Apply not connected to native configd action"
+grep -Fq 'SharedApplyEnvelope::encode(' "${SETTINGS_CONTROLLER}" ||
+    fail "Strategies Apply has no scoped native snapshot"
+grep -Fq 'applied-id=' "${SETTINGS_CONTROLLER}" ||
+    fail "Strategies Apply accepts success without committed operation receipt"
+if grep -Fq "'zapret reconfigure'" "${SETTINGS_CONTROLLER}"; then
+    fail "Strategies still uses unsafe save-then-reconfigure Apply"
+fi
 grep -Fq "if (\$response !== 'OK')" "${SERVICE_CONTROLLER}" ||
     fail "service reconfigure API does not require exact configd OK"
 

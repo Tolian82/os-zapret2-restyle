@@ -149,11 +149,11 @@ DEV-046. **A development-rule change is not complete until its references are re
 | `DEV-017` | `GH-011` |
 | `DEV-027` | `GH-005`, `GH-014` |
 | `DEV-028` | `GH-005`, `GH-014` |
-| `DEV-029` | `DOC-026`, `GH-005` |
-| `DEV-030` | `DOC-026`, `GH-005` |
-| `DEV-031` | `DOC-026`, `GH-005` |
-| `DEV-032` | `GH-005` |
-| `DEV-033` | `GH-005`, `GH-015` |
+| `DEV-029` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-030` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-031` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-032` | `GH-005`, `GH-014` |
+| `DEV-033` | `GH-005`, `GH-014`, `GH-015` |
 | `DEV-034` | `GH-005`, `GH-048` |
 | `DEV-035` | `GH-005`, `GH-048` |
 | `DEV-036` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |

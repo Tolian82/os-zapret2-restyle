@@ -43,7 +43,7 @@ Observed IPFW list:
 19002      0        0 divert 989 udp from any to any 80,443,5222,8888 out not diverted not sockarg xmit vtnet1
 ```
 
-**Crucial observed/implemented distinction:** Current Voice PoC ON is requested by `/var/run/zapret2-telegram-voice-poc.enabled`; on OPNsense reboot the file disappears and Voice ON is not restored by the existing ordinary Zapret boot hook. Source corroboration: [Voice helper](../../../src/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh), [native hook](../../../src/etc/rc.syshook.d/start/20-zapret). The October 1 actual current non-STUN reflector control did **not** establish media despite rule counters.
+**Crucial observed/implemented distinction:** Current Voice PoC ON is requested by `/var/run/zapret2-telegram-voice-poc.enabled`; on OPNsense reboot the file disappears and Voice ON is not restored by the existing ordinary Zapret boot hook. Source corroboration: historical Voice helper `telegram_voice.sh` (removed in `v0.5.2_169`), [native hook](../../../src/etc/rc.syshook.d/start/20-zapret). The October 1 actual current non-STUN reflector control did **not** establish media despite rule counters.
 
 ## Squid effective files, GUI provenance and firewall
 

@@ -6,6 +6,7 @@
 #   targets_normalize_hostlist INPUT_FILE OUTPUT_FILE LABEL
 #   targets_normalize_ipset INPUT_FILE OUTPUT_FILE LABEL
 #   targets_prepare_managed BUILD_ROOT YOUTUBE_TEXT TELEGRAM_TEXT USER_TEXT
+#                           [DISCORD_TEXT X_TEXT SIP_TEXT CUSTOM_TEXT]
 #   targets_index_all WORKDIR PROFILE_COUNT
 #   targets_resolve_profile PROFILE_NO WORKDIR REGISTRY CATALOG MANAGED_ROOT RUNTIME_ROOT
 #   targets_resolve_all WORKDIR PROFILE_COUNT REGISTRY CATALOG MANAGED_ROOT RUNTIME_ROOT OUTPUT
@@ -114,10 +115,27 @@ targets_normalize_ipset()
         return 1
     }
 
-    python_bin=$(command -v python3 2>/dev/null) || {
-        common_error "python3 is required for strict IPv4/CIDR validation"
-        return 1
-    }
+    # Production OPNsense declares python313, which does not guarantee an
+    # unversioned /usr/local/bin/python3 alias. Use the same pinned native
+    # interpreter as the Voice release builder on an installed appliance.
+    python_bin=/usr/local/bin/python3.13
+    if [ ! -x "${python_bin}" ]; then
+        case "${BACKEND_DIR:-}" in
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
+                common_error "pinned Python 3.13 is required for managed IPv4/CIDR targets"
+                return 1
+                ;;
+            *)
+                # Only an uninstalled repository test runner may use its
+                # own Python. Do not silently change appliance semantics.
+                python_bin=$(command -v python3.13 2>/dev/null) ||
+                    python_bin=$(command -v python3 2>/dev/null) || {
+                        common_error "Python 3.13 or test Python is required for IPv4/CIDR targets"
+                        return 1
+                    }
+                ;;
+        esac
+    fi
 
     "${python_bin}" - "${input_file}" "${output_file}.tmp" "${label}" <<'PY'
 import ipaddress
@@ -144,7 +162,12 @@ for line_no, raw in enumerate(source.read_text(encoding="utf-8").splitlines(), 1
         errors.append(f"ERROR: {label}, line {line_no}: invalid IPv4 address or CIDR '{raw}': {exc}")
         continue
 
-    canonical = str(parsed)
+    # Native IPFW represents A.B.C.D and A.B.C.D/32 as the same address.
+    # Deduplicate by effective host key so generated IPSET and Voice
+    # release compiler agree on every edit/reapply.
+    canonical = (str(parsed.network_address)
+                 if isinstance(parsed, ipaddress.IPv4Network) and parsed.prefixlen == 32
+                 else str(parsed))
     if canonical not in seen:
         seen.add(canonical)
         normalized.append(canonical)
@@ -175,6 +198,10 @@ targets_prepare_managed()
     local youtube_text="$2"
     local telegram_text="$3"
     local user_text="$4"
+    local discord_text="${5-}"
+    local x_text="${6-}"
+    local sip_text="${7-}"
+    local custom_text="${8-}"
     local input_root
 
     [ -n "${build_root}" ] || {
@@ -198,6 +225,18 @@ targets_prepare_managed()
         "${input_root}/telegram.txt" "${build_root}/ipset-telegram.txt" "Telegram IPs" || return 1
     targets_normalize_hostlist \
         "${input_root}/user.txt" "${build_root}/hostlist-user.txt" "User Domains" || return 1
+    printf '%s\n' "${discord_text}" > "${input_root}/discord.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/discord.txt" "${build_root}/ipset-discord.txt" "DISCORD IPs" || return 1
+    printf '%s\n' "${x_text}" > "${input_root}/x.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/x.txt" "${build_root}/ipset-x.txt" "X IPs" || return 1
+    printf '%s\n' "${sip_text}" > "${input_root}/sip.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/sip.txt" "${build_root}/ipset-sip.txt" "SIP IPs" || return 1
+    printf '%s\n' "${custom_text}" > "${input_root}/custom.txt" || return 1
+    targets_normalize_ipset \
+        "${input_root}/custom.txt" "${build_root}/ipset-custom.txt" "CUSTOM IPs" || return 1
 
     chmod 0755 "${build_root}" || {
         common_error "could not set managed Target directory permissions"
@@ -207,7 +246,11 @@ targets_prepare_managed()
     chmod 0644 \
         "${build_root}/hostlist-youtube.txt" \
         "${build_root}/ipset-telegram.txt" \
-        "${build_root}/hostlist-user.txt" || {
+        "${build_root}/hostlist-user.txt" \
+        "${build_root}/ipset-discord.txt" \
+        "${build_root}/ipset-x.txt" \
+        "${build_root}/ipset-sip.txt" \
+        "${build_root}/ipset-custom.txt" || {
             common_error "could not set managed Target file permissions"
             return 1
         }

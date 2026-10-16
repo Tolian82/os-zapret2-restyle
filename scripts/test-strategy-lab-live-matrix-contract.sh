@@ -48,7 +48,9 @@ require "${STATE}" "package candidate: \`${candidate_pkg}\`"
 require "${START_HERE}" "Current handoff identity:** \`${candidate_tag}\`"
 require "${START_HERE}" "\`VERSION=${version}\`"
 require "${START_HERE}" "\`PLUGIN_REVISION=${revision}\`"
-require "${ROADMAP}" "\`${candidate_tag}\`"
+# ROADMAP is a milestone plan, not a second moving package-revision identity.
+# Exact _N identity remains checked in START_HERE, PROJECT_STATE and release docs.
+require "${ROADMAP}" "## Текущий приоритет"
 require "${INDEX}" "history/current/${line}.md"
 require "${release_doc}" "# os-zapret2-restyle v${version}"
 require "${release_doc}" "\`${candidate_pkg}\`"

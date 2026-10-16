@@ -44,17 +44,34 @@
             operationFailed: isRussian
                 ? 'Установка Zapret2 завершилась с ошибкой. Подробности: /var/log/zapret2/setup.log'
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
-            setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error'
+            setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error',
+            applyError: isRussian ? 'Ошибка применения настроек' : 'Settings Apply failed',
+            applyReview: isRussian
+                ? 'Результат применения неизвестен. Перезагрузите страницу и проверьте состояние службы и настроек перед повтором.'
+                : 'Apply result is uncertain. Reload the page and inspect the service and settings before retrying.'
         };
         $('a[href="/ui/zapret"]').text(isRussian ? 'Стратегия' : 'Strategy');
+        $('a[href="/ui/zapret/voice"]').text(isRussian ? 'Передача голоса' : 'Voice Transmission');
         $('a[href="/ui/zapret/diagnostics"]').text(isRussian ? 'Лаборатория' : 'Laboratory');
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
         let currentRuntimeInstalled = false;
+        let strategiesApplyPending = false;
+        let strategiesApplyNeedsReview = false;
+
+        // The Telegram IPSET is also editable on Voice Transmission. Include
+        // its original value in the Strategies POST as a concurrency token.
+        // A stale browser tab is rejected before the model or runtime changes.
+        const telegramBaseline = $('<input/>', {
+            type: 'hidden', id: 'zapret.sync.telegramips_baseline'
+        });
+        $('#frm_GeneralSettings').append(telegramBaseline);
 
         function reloadSettings() {
             return mapDataToFormUI(data_get_map).done(function() {
+                const currentField = document.getElementById('zapret.hostlist.telegramips');
+                telegramBaseline.val(currentField ? currentField.value : '');
                 formatTokenizersUI();
                 $('.selectpicker').selectpicker('refresh');
             });
@@ -73,6 +90,7 @@
         }
 
         function setRuntimeBusy(busy) {
+            busy = !!busy || strategiesApplyPending || strategiesApplyNeedsReview;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
             }).length > 0;
@@ -84,6 +102,12 @@
             $('#zapretReleaseApply').prop('disabled', busy || !releaseAvailable);
             $('#zapretReleaseApplyText').text(busy ? runtimeText.applying : runtimeText.apply);
             $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', busy);
+        }
+
+        function reconcileStrategiesApplyControls() {
+            $('#reconfigureAct').prop('disabled',
+                strategiesApplyPending || strategiesApplyNeedsReview);
+            setRuntimeBusy(runtimeWasBusy);
         }
 
         function renderRuntime(data) {
@@ -190,7 +214,8 @@
 
         $('#zapretServiceControl').off('click').on('click', function(event) {
             event.preventDefault();
-            if (currentServiceState !== 'started' && currentServiceState !== 'stopped') {
+            if (strategiesApplyPending || strategiesApplyNeedsReview || runtimeWasBusy ||
+                (currentServiceState !== 'started' && currentServiceState !== 'stopped')) {
                 return;
             }
 
@@ -213,7 +238,8 @@
         $('#zapretReleaseApply').off('click').on('click', function(event) {
             event.preventDefault();
             const version = $('#zapretReleaseSelect').val();
-            if (!version || runtimeWasBusy) {
+            if (!version || runtimeWasBusy ||
+                strategiesApplyPending || strategiesApplyNeedsReview) {
                 return;
             }
 
@@ -238,40 +264,70 @@
         refreshRuntime();
         refreshReleases();
 
+        // One original-FD9 Apply, same result handling as Voice. A network
+        // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
-            const button = $(this);
-            button.prop('disabled', true);
+            if (strategiesApplyPending || strategiesApplyNeedsReview) return;
+            strategiesApplyPending = true;
+            reconcileStrategiesApplyControls();
 
-            saveFormToEndpoint(
-                "/api/zapret/settings/apply",
-                'frm_GeneralSettings',
-                function(data) {
-                    reloadSettings().always(function() {
-                        updateServiceControlUI('zapret');
-                        refreshRuntime();
-                        button.prop('disabled', false);
-                    });
+            function finishApply() {
+                strategiesApplyPending = false;
+                reconcileStrategiesApplyControls();
+                updateServiceControlUI('zapret');
+                refreshRuntime();
+            }
+            function needsReview() {
+                strategiesApplyNeedsReview = true;
+                showRuntimeError(runtimeText.applyError, runtimeText.applyReview);
+            }
 
-                    if (data && data.normalized && Array.isArray(data.normalization)) {
-                        BootstrapDialog.show({
-                            type: BootstrapDialog.TYPE_INFO,
-                            title: '{{ lang._("Settings normalized") }}',
-                            message: $('<div/>').text(data.normalization.join('\n')).css('white-space', 'pre-line'),
-                            buttons: [{
-                                label: '{{ lang._("Close") }}',
-                                action: function(dialog) { dialog.close(); }
-                            }]
-                        });
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/settings/apply',
+                data: getFormData('frm_GeneralSettings'),
+                dataType: 'json',
+                // Native configdpRun may run for 600s. A short default
+                // timeout must not invite another Apply during that worker.
+                timeout: 630000
+            }).done(function(data) {
+                handleFormValidation('frm_GeneralSettings',
+                    (data && data.validations) || {});
+                if (data && data.result === 'saved' && data.status === 'ok') {
+                    reloadSettings().done(function() {
+                        if (data.normalized && Array.isArray(data.normalization)) {
+                            BootstrapDialog.show({
+                                type: BootstrapDialog.TYPE_INFO,
+                                title: '{{ lang._("Settings normalized") }}',
+                                message: $('<div/>').text(data.normalization.join('\n'))
+                                    .css('white-space', 'pre-line'),
+                                buttons: [{
+                                    label: '{{ lang._("Close") }}',
+                                    action: function(dialog) { dialog.close(); }
+                                }]
+                            });
+                        }
+                    }).fail(function() {
+                        // Applied, but our original Telegram baseline could
+                        // not be refreshed. Do not retry from a stale form.
+                        needsReview();
+                    }).always(finishApply);
+                } else {
+                    if (!data || data.result !== 'failed' ||
+                        data.requires_review === true) {
+                        needsReview();
+                    } else if (typeof data.message === 'string' && data.message) {
+                        // Only explicitly rejected, pre-dispatch errors are
+                        // editable without a new Config snapshot.
+                        showRuntimeError(runtimeText.applyError, data.message);
                     }
-                },
-                true,
-                function() {
-                    button.prop('disabled', false);
-                    updateServiceControlUI('zapret');
-                    refreshRuntime();
+                    finishApply();
                 }
-            );
+            }).fail(function() {
+                needsReview();
+                finishApply();
+            });
         });
 
         updateServiceControlUI('zapret');
