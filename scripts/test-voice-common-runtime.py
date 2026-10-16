@@ -81,12 +81,11 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     script = r'''
 set -eu
 BACKEND_DIR="$1"
-for module in common config parser registry storage targets telegram_voice target_mode \
+for module in common config parser registry storage targets target_mode \
     profile_normalizer profile_pipeline exclude blobs ports generator validator stage orchestrator; do
     . "$BACKEND_DIR/$module.sh"
 done
 config_resolve_interface() { [ "$1" = WAN ] || return 1; printf 'vtnet1\n'; }
-TELEGRAM_VOICE_MARKER_FILE="$7"
 orchestrator_build_release "$2" "$3" "$4" "$5" "$6" "$5/stages" shared-candidate "$8"
 '''
     result = subprocess.run(["/bin/sh", "-c", script, "common-runtime-test", str(BACKEND),

@@ -3,7 +3,7 @@
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 BACKEND_DIR="${BACKEND_DIR:-${SCRIPT_DIR}/backend}"
 
-for module in common config parser registry storage targets telegram_voice target_mode \
+for module in common config parser registry storage targets target_mode \
     profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic \
     stage launcher supervisor orchestrator apply_runtime
 do
@@ -120,165 +120,6 @@ reconfigure_service()
         "${DVTWS_LOG}" "${SUPERVISOR_LOG}"
 }
 
-telegram_voice_service_state()
-{
-    orchestrator_native_status \
-        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
-        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}" \
-        >/dev/null 2>&1
-    _telegram_voice_service_status=$?
-
-    case "${_telegram_voice_service_status}" in
-        0) printf '%s\n' running ;;
-        1) printf '%s\n' stopped ;;
-        *) printf '%s\n' incomplete ;;
-    esac
-}
-
-telegram_voice_effective()
-{
-    [ "$(telegram_voice_service_state)" = running ] || return 1
-    telegram_voice_state_is_enabled \
-        "${ACTIVE_DIR}/${TELEGRAM_VOICE_STATE_FILE_NAME}" || return 1
-    firewall_telegram_voice_runtime_complete \
-        "${ACTIVE_DIR}/${TELEGRAM_VOICE_STATE_FILE_NAME}" \
-        "${RULE_BASE}"
-}
-
-telegram_voice_status_service()
-{
-    if telegram_voice_marker_is_enabled "${TELEGRAM_VOICE_MARKER_FILE}"; then
-        _telegram_voice_status_requested=on
-    else
-        _telegram_voice_status_requested=off
-    fi
-    if telegram_voice_state_is_enabled \
-        "${ACTIVE_DIR}/${TELEGRAM_VOICE_STATE_FILE_NAME}"; then
-        _telegram_voice_status_profile=on
-    else
-        _telegram_voice_status_profile=off
-    fi
-    _telegram_voice_status_service=$(telegram_voice_service_state)
-    _telegram_voice_status_entries=$(firewall_telegram_voice_table_count)
-    if firewall_table_exists "${TELEGRAM_VOICE_TABLE}"; then
-        _telegram_voice_status_table_present=yes
-    else
-        _telegram_voice_status_table_present=no
-    fi
-    if firewall_table_exists "${TELEGRAM_VOICE_STAGE_TABLE}"; then
-        _telegram_voice_status_stage_table_present=yes
-    else
-        _telegram_voice_status_stage_table_present=no
-    fi
-    _telegram_voice_status_rule=$(firewall_telegram_voice_rule_number \
-        "${RULE_BASE}") || return 1
-    _telegram_voice_status_packets=unavailable
-    _telegram_voice_status_bytes=unavailable
-    _telegram_voice_status_counters=$(firewall_telegram_voice_rule_counters \
-        "${RULE_BASE}" 2>/dev/null || true)
-    if [ -n "${_telegram_voice_status_counters}" ]; then
-        _telegram_voice_status_packets=$(printf '%s\n' \
-            "${_telegram_voice_status_counters}" | awk '{print $1}')
-        _telegram_voice_status_bytes=$(printf '%s\n' \
-            "${_telegram_voice_status_counters}" | awk '{print $2}')
-    fi
-    if telegram_voice_effective; then
-        _telegram_voice_status_effective=on
-    else
-        _telegram_voice_status_effective=off
-    fi
-
-    printf '%s\n' \
-        "telegram_voice_poc.requested=${_telegram_voice_status_requested}" \
-        "telegram_voice_poc.effective=${_telegram_voice_status_effective}" \
-        "telegram_voice_poc.service=${_telegram_voice_status_service}" \
-        "telegram_voice_poc.active_profile=${_telegram_voice_status_profile}" \
-        'telegram_voice_poc.strategy=stun-zero-fake-repeats-2' \
-        'telegram_voice_poc.scope=telegram-ipv4-all-udp-ports' \
-        "telegram_voice_poc.table=${TELEGRAM_VOICE_TABLE}" \
-        "telegram_voice_poc.table_present=${_telegram_voice_status_table_present}" \
-        "telegram_voice_poc.table_entries=${_telegram_voice_status_entries}" \
-        "telegram_voice_poc.stage_table=${TELEGRAM_VOICE_STAGE_TABLE}" \
-        "telegram_voice_poc.stage_table_present=${_telegram_voice_status_stage_table_present}" \
-        "telegram_voice_poc.rule=${_telegram_voice_status_rule}" \
-        "telegram_voice_poc.rule_packets=${_telegram_voice_status_packets}" \
-        "telegram_voice_poc.rule_bytes=${_telegram_voice_status_bytes}"
-
-    if [ "${_telegram_voice_status_requested}" = on ]; then
-        [ "${_telegram_voice_status_effective}" = on ] &&
-        [ "${_telegram_voice_status_service}" = running ] || return 2
-        return 0
-    fi
-
-    [ "${_telegram_voice_status_effective}" = off ] &&
-    [ "${_telegram_voice_status_service}" != incomplete ] &&
-    [ "${_telegram_voice_status_table_present}" = no ] &&
-    [ "${_telegram_voice_status_stage_table_present}" = no ] &&
-    ! firewall_telegram_voice_rule_present "${RULE_BASE}"
-}
-
-telegram_voice_enable_service()
-{
-    [ "$(telegram_voice_service_state)" = running ] || {
-        echo "ERROR: Telegram Voice PoC requires a complete running zapret service" >&2
-        return 1
-    }
-
-    if telegram_voice_marker_is_enabled "${TELEGRAM_VOICE_MARKER_FILE}" &&
-       telegram_voice_effective; then
-        telegram_voice_status_service
-        return $?
-    fi
-
-    telegram_voice_marker_enable "${TELEGRAM_VOICE_MARKER_FILE}" || {
-        echo "ERROR: cannot enable the Telegram Voice PoC request marker" >&2
-        return 1
-    }
-
-    if reconfigure_service && telegram_voice_effective; then
-        telegram_voice_status_service
-        return $?
-    fi
-
-    telegram_voice_marker_disable "${TELEGRAM_VOICE_MARKER_FILE}" || true
-    echo "ERROR: Telegram Voice PoC activation failed; previous runtime was kept" >&2
-    return 1
-}
-
-telegram_voice_disable_service()
-{
-    _telegram_voice_disable_restore_marker=0
-    if telegram_voice_marker_is_enabled "${TELEGRAM_VOICE_MARKER_FILE}" ||
-       telegram_voice_effective; then
-        _telegram_voice_disable_restore_marker=1
-    else
-        telegram_voice_status_service
-        return $?
-    fi
-
-    telegram_voice_marker_disable "${TELEGRAM_VOICE_MARKER_FILE}" || {
-        echo "ERROR: cannot disable the Telegram Voice PoC request marker" >&2
-        return 1
-    }
-
-    if [ "$(telegram_voice_service_state)" = stopped ]; then
-        firewall_remove_telegram_voice_tables
-        telegram_voice_status_service
-        return $?
-    fi
-
-    if reconfigure_service && ! telegram_voice_effective; then
-        telegram_voice_status_service
-        return $?
-    fi
-
-    if [ "${_telegram_voice_disable_restore_marker}" = 1 ]; then
-        telegram_voice_marker_enable "${TELEGRAM_VOICE_MARKER_FILE}" || true
-    fi
-    echo "ERROR: Telegram Voice PoC rollback failed; request marker was restored" >&2
-    return 1
-}
-
 strategy_lab_job_id_valid()
 {
     printf '%s\n' "$1" | grep -Eq '^job\.[A-Za-z0-9]+$'
@@ -333,17 +174,21 @@ strategy_lab_semantic_firewall_hash()
             grep '^[0-9]' >> "${_strategy_lab_semantic_rules}" || true
         _strategy_lab_semantic_rule=$((_strategy_lab_semantic_rule + 1))
     done
-    if "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" table \
-        "${TELEGRAM_VOICE_TABLE}" info >/dev/null 2>&1; then
-        printf 'table %s\n' "${TELEGRAM_VOICE_TABLE}" \
-            >> "${_strategy_lab_semantic_rules}"
-        "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" table \
-            "${TELEGRAM_VOICE_TABLE}" list 2>/dev/null |
-            LC_ALL=C sort >> "${_strategy_lab_semantic_rules}" || {
-                rm -f "${_strategy_lab_semantic_rules}"
-                return 1
-            }
-    fi
+    # Cover all five destination-scoped Voice tables, not only old Telegram.
+    for _strategy_lab_voice_name in telegram discord x sip custom; do
+        _strategy_lab_voice_table="zapret2_voice_${_strategy_lab_voice_name}"
+        if "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" table \
+            "${_strategy_lab_voice_table}" info >/dev/null 2>&1; then
+            printf 'table %s\n' "${_strategy_lab_voice_table}" \
+                >> "${_strategy_lab_semantic_rules}"
+            "${STRATEGY_LAB_SEMANTIC_IPFW_BIN}" table \
+                "${_strategy_lab_voice_table}" list 2>/dev/null |
+                LC_ALL=C sort >> "${_strategy_lab_semantic_rules}" || {
+                    rm -f "${_strategy_lab_semantic_rules}"
+                    return 1
+                }
+        fi
+    done
     if [ ! -s "${_strategy_lab_semantic_rules}" ]; then
         rm -f "${_strategy_lab_semantic_rules}"
         printf '%s\n' empty
@@ -1502,14 +1347,6 @@ telegram_voice_compat_apply_service()
     case "$1" in enable|disable) ;; *) return 64 ;; esac
     preflight_voice_cutover_journals common-apply || return 69
     shared_apply_require_tools || return 69
-    # Explicit migration is required for a still-armed Phase-B predecessor.
-    # No compatibility command may silently delete old marker/IPFW state.
-    if telegram_voice_marker_is_enabled "$TELEGRAM_VOICE_MARKER_FILE" ||
-       firewall_table_exists "$TELEGRAM_VOICE_TABLE" ||
-       firewall_table_exists "$TELEGRAM_VOICE_STAGE_TABLE"; then
-        echo "ERROR: old Telegram PoC needs verified migration before native Apply" >&2
-        return 69
-    fi
     # Always forget the previous shell invocation's shared owner first.
     _compat_owner=
     if shared_apply_has_record_service; then
@@ -1646,8 +1483,8 @@ telegram_voice_compat_status_service()
         echo "telegram_voice_poc.service=incomplete"
         return 2
     fi
-    # Before explicit migration, retain old PoC read-only status.
-    telegram_voice_status_service
+    # Native saved Config and shared Apply are the sole preference sources.
+    telegram_voice_native_status_service
 }
 
 service_dispatch()
