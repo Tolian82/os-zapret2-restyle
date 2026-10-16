@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_178`. `VERSION=0.5.2`; `PLUGIN_REVISION=178`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_179`. `VERSION=0.5.2`; `PLUGIN_REVISION=179`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
@@ -28,8 +28,10 @@
 
 **`_178`:** после большой очистки `_177` [CI #38906538711](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38906538711) обнаружена устаревшая тестовая заглушка `preflight_voice_cutover_journals`, тогда как реальный production использует `preflight_shared_apply_journal`. Все соответствующие Common Apply/Stop/Boot/FD9 регрессии переключены на новый contract; журнал проверяется только через `native_lifecycle_gate`, без PoC-модулей. Требуется exact-HEAD CI новой ревизии.
 
+**`_179`:** обновлены три дополнительные фикстуры, обнаруженные в `_178` [CI #38906963122](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38906963122): `test-shared-apply-saved-recovery.sh`, `test-shared-apply-activated-staged.sh`, `test-shared-apply-render.py` теперь ожидают `preflight_shared_apply_journal`. Runtime и удалённый private PoC не менялись. Требуется полный exact-HEAD CI.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_178` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_179` не опубликована.

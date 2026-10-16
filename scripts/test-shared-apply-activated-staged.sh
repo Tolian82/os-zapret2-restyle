@@ -37,7 +37,7 @@ LOG="$ROOT/events"
 shared_apply_workspace() {
     case "$1" in "$OLD_ID") echo "$ROOT/old" ;; "$NEW_ID") echo "$ROOT/new" ;; *) return 1 ;; esac
 }
-preflight_voice_cutover_journals() { [ "$GUARD_OK" = 1 ]; }
+preflight_shared_apply_journal() { [ "$GUARD_OK" = 1 ]; }
 shared_apply_bundle_service() { [ "$SEAL_OK" = 1 ]; }
 shared_apply_native_config() { [ "$CONFIG_OK" = 1 ] || return 69; echo '{"result":"committed"}'; }
 shared_apply_json_field() { echo committed; }

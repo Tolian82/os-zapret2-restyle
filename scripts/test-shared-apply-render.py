@@ -111,7 +111,7 @@ class RenderTests(unittest.TestCase):
         self.assertIn("shared_apply_prepare_service()",service)
         self.assertIn("shared-apply-prepare)",service)
         body=service.split("shared_apply_prepare_service()\n{",1)[1].split("\n}\n",1)[0]
-        self.assertLess(body.index("preflight_voice_cutover_journals"),
+        self.assertLess(body.index("preflight_shared_apply_journal"),
                         body.index("shared_apply_render.py"))
         self.assertLess(body.index("shared_apply_render.py"),
                         body.index("orchestrator_build_release"))
