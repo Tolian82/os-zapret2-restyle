@@ -39,6 +39,19 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertFalse((SCRIPTS / name).exists())
 
+    def test_retired_forward_runtime_writer_has_no_production_api(self):
+        reader = (BACKEND / "voice_native_forward_runtime.py").read_text()
+        self.assertIn("def _read_redo(", reader)
+        for writer in ("def install_forward_runtime(", "def _arm(",
+                       "def _copy_candidate("):
+            with self.subTest(writer=writer):
+                self.assertNotIn(writer, reader)
+        rollback = (BACKEND / "voice_cutover_file_rollback.py").read_text()
+        self.assertIn(
+            "from voice_native_forward_runtime import _read_redo as read_forward_redo",
+            rollback,
+        )
+
     def test_shared_apply_and_readonly_preview_remain_live_entrypoints(self):
         service = (SCRIPTS / "zapret_service.sh").read_text()
         configd = (

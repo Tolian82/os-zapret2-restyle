@@ -1,196 +1,149 @@
 #!/usr/bin/env python3
-"""Real schema-4 native forward runtime swap, crash safety and old rollback."""
+"""Read-only historical forward-runtime redo evidence and fail-closed handling.
+
+A private runtime installer is no longer part of Voice Apply. The record it
+could have left on a previous appliance must remain readable by verified
+previous-file recovery, without silently recreating a mutation route.
+"""
 from __future__ import annotations
-import fcntl
-import importlib.util
+
+import hashlib
+import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
-from unittest.mock import patch
 
-ROOT=Path(__file__).resolve().parent.parent
-sys.path.insert(0,str(ROOT/"src/opnsense/scripts/OPNsense/Zapret/backend"))
-from voice_native_forward_runtime import (
-    install_forward_runtime,_read_redo,ForwardRuntimeError,MARKER,
-)
-from voice_native_file_observer import observe_live_files
-from voice_cutover_restore_stage import prepare_restore_stage
-from voice_cutover_install_image import prepare_installable_restore
-from voice_cutover_runtime_restore import restore_previous_runtime
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
+
+import voice_native_forward_runtime as redo
+from voice_cutover_file_rollback import read_forward_redo
 
 
-def fixture(name,module):
-    spec=importlib.util.spec_from_file_location(module,ROOT/"scripts"/name)
-    assert spec and spec.loader
-    result=importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(result)
-    return result
-
-
-f=fixture("test-voice-cutover-runtime-bound-intent.py","forward_runtime_fixture")
-
-
-class ForwardRuntimeTests(unittest.TestCase):
+class HistoricalForwardRuntimeRedoTests(unittest.TestCase):
     def setUp(self):
-        self.fx=f.RuntimeBoundCutoverTests()
-        self.fx.setUp()
-        self.addCleanup(self.fx.doCleanups)
-        self.fx.begin()
-        self.fx.whole.mark_mutating()
-        self.record=self.fx.whole.read()
-        self.active=self.fx.root/"runtime"
-        self.config=self.fx.root/"config.xml"
-        self.old=self.fx.prior["runtime"]
-        self.new=self.record["candidate"]["candidate_runtime_sha256"]
-        self.guard_calls=0
-        self.stopped=True
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        self.marker = self.directory / redo.MARKER
+        self.fields = {
+            "schema": 1,
+            "whole_check": "a" * 64,
+            "config_dev": 11,
+            "config_inode": 12,
+            "parent_dev": 21,
+            "parent_inode": 22,
+            "active_name": "runtime-v2",
+            "candidate_sha256": "b" * 64,
+            "previous_sha256": "c" * 64,
+            "ready_name": ".voice-forward-ready-" + "a" * 20,
+            "retained_name": ".voice-forward-previous-" + "a" * 20,
+        }
 
-    def invoke(self, *,lock=True):
-        fd=os.open(self.config,os.O_RDWR)
-        try:
-            if lock:
-                fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            return install_forward_runtime(
-                active_runtime=self.active,
-                staged_config=self.fx.stage_config,
-                candidate_runtime=self.fx.candidate,
-                previous_backup=self.fx.backup,
-                journal=self.fx.whole,
-                config_path=self.config,
-                locked_config_fd=fd,
-                config_owner=(os.geteuid(),os.getegid()),
-                require_lifecycle_owner=self.owner,
-                require_all_processes_stopped=lambda:self.stopped,
-            )
-        finally:
-            os.close(fd)
+    def seal(self, fields=None):
+        fields = dict(self.fields if fields is None else fields)
+        payload = json.dumps(fields, sort_keys=True, separators=(",", ":"),
+                             ensure_ascii=True).encode("ascii")
+        return {**fields, "check": hashlib.sha256(payload).hexdigest()}
 
-    def owner(self):
-        self.guard_calls+=1
+    def write(self, data):
+        self.marker.write_text(json.dumps(
+            data, sort_keys=True, separators=(",", ":"),
+        ) + "\n", encoding="ascii")
+        self.marker.chmod(0o600)
 
-    def paths(self):
-        suffix=self.record["check"][:20]
-        return (self.active.with_name(".voice-forward-ready-"+suffix),
-                self.active.with_name(".voice-forward-previous-"+suffix))
+    def test_exact_historical_schema_accepted_by_live_recovery_reader(self):
+        expected = self.seal()
+        self.write(expected)
+        self.assertEqual(expected, redo._read_redo(self.directory))
+        self.assertIs(read_forward_redo, redo._read_redo)
+        self.assertEqual(expected, read_forward_redo(self.directory))
+        # No filesystem mutation is permitted by a read-only inspector.
+        self.assertEqual(expected, json.loads(self.marker.read_text()))
 
-    def hash(self,path):
-        return observe_live_files(self.fx.stage_config,path)["runtime"]
+    def test_absent_historical_marker_is_not_a_new_install_intent(self):
+        self.assertIsNone(redo._read_redo(self.directory))
+        self.assertFalse(self.marker.exists())
 
-    def verify(self):
-        ready,retired=self.paths()
-        self.assertFalse(ready.exists())
-        self.assertEqual(self.hash(self.active),self.new)
-        self.assertEqual(self.hash(retired),self.old)
-        self.assertEqual(self.fx.whole.read(),self.record)
-        self.assertIsNotNone(_read_redo(self.fx.whole.directory))
-        self.assertGreater(self.guard_calls,3)
+    def test_retired_writer_api_must_not_be_reintroduced(self):
+        for name in ("install_forward_runtime", "_arm", "_copy_candidate",
+                     "_marked"):
+            with self.subTest(name=name):
+                self.assertFalse(hasattr(redo, name))
 
-    def test_native_forward_two_atomic_renames_and_old_tree_retained(self):
-        report=self.invoke()
-        self.assertEqual("native-voice-forward-runtime-installed",report["state"])
-        self.assertIs(report["voice_on"],False)
-        self.assertIs(report["safe_to_start"],False)
-        self.verify()
-        self.assertEqual("native-voice-forward-runtime-installed",self.invoke()["state"])
-        self.verify()
+    def test_checksum_or_saved_field_tampering_is_rejected(self):
+        payload = self.seal()
+        payload["candidate_sha256"] = "d" * 64
+        self.write(payload)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
+        payload = self.seal()
+        payload["check"] = "0" * 64
+        self.write(payload)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
 
-    def test_refuses_without_config_flock_or_quiescence(self):
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke(lock=False)
-        self.stopped=False
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke()
-        self.assertIsNone(_read_redo(self.fx.whole.directory))
-        self.assertEqual(self.hash(self.active),self.old)
+    def test_foreign_name_and_path_escape_rejected_even_if_resealed(self):
+        for key, value in (
+            ("active_name", "../runtime"),
+            ("active_name", "."),
+            ("active_name", ""),
+            ("ready_name", ".voice-forward-ready-" + "f" * 20),
+            ("retained_name", ".voice-forward-previous-" + "f" * 20),
+        ):
+            with self.subTest(key=key, value=value):
+                self.write(self.seal({**self.fields, key: value}))
+                with self.assertRaises(redo.ForwardRuntimeError):
+                    redo._read_redo(self.directory)
 
-    def test_refuses_before_whole_mutating(self):
-        self.fx.whole._transition("mutating","committed")
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke()
-        self.assertIsNone(_read_redo(self.fx.whole.directory))
+    def test_untrusted_schema_types_and_unknown_fields_rejected(self):
+        for payload in (
+            {**self.fields, "schema": True},
+            {**self.fields, "config_inode": -1},
+            {**self.fields, "candidate_sha256": "B" * 64},
+            {**self.fields, "extra": "foreign"},
+            {key: value for key, value in self.fields.items()
+             if key != "whole_check"},
+        ):
+            with self.subTest(payload=payload):
+                self.write(self.seal(payload))
+                with self.assertRaises(redo.ForwardRuntimeError):
+                    redo._read_redo(self.directory)
 
-    def test_wrong_candidate_or_original_runtime_refused_without_rename(self):
-        (self.fx.candidate/"dvtws.args").write_text("--port=981\n")
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke()
-        self.assertIsNone(_read_redo(self.fx.whole.directory))
+    def test_malformed_and_oversized_marker_rejected(self):
+        self.marker.write_text("{", encoding="ascii")
+        self.marker.chmod(0o600)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
+        self.marker.write_bytes(b"x" * (redo.LIMIT + 1))
+        self.marker.chmod(0o600)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
 
-    def test_crash_after_redo_before_first_rename_retries(self):
-        import voice_native_forward_runtime as mod
-        real=mod.os.rename
-        def crash(src,dst):
-            if Path(src)==self.active:
-                raise OSError("power off before first rename")
-            return real(src,dst)
-        with patch.object(mod.os,"rename",side_effect=crash):
-            with self.assertRaises(OSError):
-                self.invoke()
-        self.assertIsNotNone(_read_redo(self.fx.whole.directory))
-        self.assertEqual(self.hash(self.active),self.old)
-        self.invoke()
-        self.verify()
+    def test_group_readable_or_hardlinked_marker_refused(self):
+        self.write(self.seal())
+        self.marker.chmod(0o640)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
+        self.marker.chmod(0o600)
+        sibling = self.directory / "sibling"
+        os.link(self.marker, sibling)
+        with self.assertRaises(redo.ForwardRuntimeError):
+            redo._read_redo(self.directory)
 
-    def test_crash_after_first_rename_before_directory_fsync_retries(self):
-        import voice_native_forward_runtime as mod
-        real=mod.os.rename
-        def crash(src,dst):
-            real(src,dst)
-            if Path(src)==self.active:
-                raise OSError("power off after first rename")
-        with patch.object(mod.os,"rename",side_effect=crash):
-            with self.assertRaises(OSError):
-                self.invoke()
-        self.assertFalse(self.active.exists())
-        self.invoke()
-        self.verify()
-
-    def test_crash_after_second_rename_before_directory_fsync_retries(self):
-        import voice_native_forward_runtime as mod
-        real=mod.os.rename
-        def crash(src,dst):
-            real(src,dst)
-            if Path(src)==self.paths()[0]:
-                raise OSError("power off after second rename")
-        with patch.object(mod.os,"rename",side_effect=crash):
-            with self.assertRaises(OSError):
-                self.invoke()
-        self.assertEqual(self.hash(self.active),self.new)
-        self.invoke()
-        self.verify()
-
-    def test_orphan_ready_pre_marker_denied_not_adopted(self):
-        ready,_=self.paths()
-        ready.mkdir(mode=0o700)
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke()
-        self.assertTrue(ready.exists())
-        self.assertEqual(self.hash(self.active),self.old)
-
-    def test_corrupted_marker_and_unexpected_retired_refused(self):
-        self.invoke()
-        marker=self.fx.whole.directory/MARKER
-        marker.write_text('{"schema":1}')
-        with self.assertRaises((ValueError,RuntimeError,OSError)):
-            self.invoke()
-        self.assertEqual(self.hash(self.active),self.new)
-
-    def test_installed_candidate_is_compatible_with_real_previous_runtime_rollback(self):
-        self.invoke()
-        staged=self.fx.root/"restore-staged"
-        image=self.fx.root/"restore-image"
-        prepare_restore_stage(self.fx.backup,staged,self.fx.prior)
-        prepare_installable_restore(staged,image,self.fx.prior)
-        result=restore_previous_runtime(
-            self.active,image,self.fx.backup,self.fx.whole,
-            require_lifecycle_owner=self.owner,
-            expected_candidate_runtime_sha256=self.new,
-        )
-        self.assertEqual(result,"previous-runtime-restored")
-        self.assertEqual(self.hash(self.active),self.old)
-        self.assertEqual(self.fx.whole.read()["phase"],"mutating")
-        self.assertTrue((self.fx.whole.directory/MARKER).is_file())
+    def test_directory_and_symlink_markers_cannot_be_adopted(self):
+        self.marker.mkdir()
+        with self.assertRaises((OSError, redo.ForwardRuntimeError)):
+            redo._read_redo(self.directory)
+        self.marker.rmdir()
+        target = self.directory / "foreign.json"
+        target.write_text(json.dumps(self.seal()), encoding="ascii")
+        self.marker.symlink_to(target)
+        with self.assertRaises((OSError, redo.ForwardRuntimeError)):
+            redo._read_redo(self.directory)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     unittest.main(verbosity=2)
