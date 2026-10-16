@@ -1,12 +1,14 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_185`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_186`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+
+`_185` [CI #38932524257](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932524257) завершилась успешно на `0e1744e`. `_186` исправляет два действующих JS regex (release list и DOM field ID), требует exact-HEAD CI. Ни релиз, ни owner-live не проводились.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=185` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_185.pkg` — **не опубликован**.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=186` — пакет только в feature branch.
+- package candidate: `os-zapret2-restyle-0.5.2_186.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 

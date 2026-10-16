@@ -399,7 +399,7 @@ $(document).ready(function () {
             !voiceMutationPending && !voiceControlPending && !voiceApplyNeedsReview;
         $('#voiceServiceControl').prop('disabled', runtimeBusy || !controllable);
         var releasesAvailable = $('#voiceReleaseSelect option').filter(function () {
-            return /^v[0-9]+(?:\\.[0-9]+)+$/.test(this.value);
+            return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
         }).length > 0;
         $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled',
             runtimeBusy || voiceMutationPending || voiceControlPending ||
@@ -450,7 +450,7 @@ $(document).ready(function () {
     function showVoiceProfileObservations(reply) {
         ['telegram', 'discord', 'x', 'sip', 'custom'].forEach(function (name) {
             var id = 'zapret.voice.' + name + '.enabled';
-            var input = document.getElementById(id) || document.getElementById(id.replace(/\\./g, '_'));
+            var input = document.getElementById(id) || document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
             var help = $(input).closest('tr').find('.help-block').first();
             if (!help.length) return;

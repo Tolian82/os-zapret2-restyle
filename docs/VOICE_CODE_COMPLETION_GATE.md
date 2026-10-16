@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_185`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_186`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -17,6 +17,7 @@
 ## Открытые границы перед testing package
 
 1. **Квалификация CI/FreeBSD:** `_180` HEAD `a5a1b16` [CI #38907807528](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38907807528) — Voice, Project, FreeBSD 15 **PASS**; testing package contract — PASS. `_181` HEAD `3405301` [CI #38913309729](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38913309729) полностью прошла Voice, Project, FreeBSD 15 и delivery contract. `_182` HEAD `10e9652` [CI #38920675327](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38920675327) прошла Voice, Project, FreeBSD 15 и testing contract. `_183` HEAD `c14a214` [CI #38924849815](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38924849815) Voice/Project/FreeBSD 15 PASS. `_184` исправила API-level ложное `ready/stopped`, Voice CI PASS, Project CI указала на устаревшую PHP concurrency фикстуру. `_185` обновляет её для fail-closed API статуса, требует собственной Voice/Project/FreeBSD 15 exact-HEAD квалификации. Автотесты не доказывают реальный звонок.
+   `_185` HEAD `0e1744e` [CI #38932524257](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932524257) **PASS** Voice, Project, FreeBSD 15. `_186` исправляет release/field DOM JS regex в действующей странице и добавляет поведенческий Node.js regression; требуется её exact-HEAD CI.
 2. **Этап 6 — удаление дублирования:** `_168–_180` убрали PoC marker, legacy migrations, rollback, отдельный IPFW/процессный Python-граф и 95 файлов с тестами; `_181` завершила удаление неиспользуемого частного process shell, подтверждённое CI и проверкой FreeBSD-пакета. Этап 6 закрыт на уровне кода и поставки, не owner-live. Не возвращать восстановление старого Telegram PoC.
 3. **Миграция:** миграция работающего Phase-B и old marker больше не входит в ТЗ разработки: чистый native Voice + Strategies Config/Apply baseline. Обновить guards, не тратить время на backwards compatibility.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.

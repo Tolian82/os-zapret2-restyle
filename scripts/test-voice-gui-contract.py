@@ -197,6 +197,33 @@ def main() -> None:
         )
         check(parsed.returncode == 0,
               "Voice browser JavaScript syntax error: " + parsed.stderr)
+        # Run the exact two regex literals taken from live Volt JavaScript.
+        # A double-escaped dot inside a JS regex rejects v0.5.2 releases and
+        # never finds dotted form IDs when OPNsense renders underscore IDs.
+        release_regex = re.search(
+            r"return (/\^v\[0-9\].*?/)\.test\(this\.value\);",
+            match.group(1),
+        )
+        id_regex = re.search(
+            r"id\.replace\((/.*?/g), '_'\)", match.group(1),
+        )
+        check(release_regex is not None and id_regex is not None,
+              "Voice release or field-ID matching regex is missing")
+        regex_script = (
+            "const releases = " + release_regex.group(1) + ";\n"
+            + "const ids = " + id_regex.group(1) + ";\n"
+            + "if (!releases.test('v0.5.2') || releases.test('v0x5x2')) "
+              "throw Error('valid release missing or invalid release accepted');\n"
+            + "if ('zapret.voice.telegram.enabled'.replace(ids, '_') !== "
+              "'zapret_voice_telegram_enabled') "
+              "throw Error('dotted Voice profile form ID was not resolved');\n"
+        )
+        regex_run = subprocess.run(
+            ["node", "-"], input=regex_script, text=True,
+            capture_output=True, check=False,
+        )
+        check(regex_run.returncode == 0,
+              "Voice release/checkbox regex regression: " + regex_run.stderr)
         # Exercise the actual two-witness GUI gate and asynchronous settled
         # health join instead of only looking for marker strings. This must
         # not hit a browser, OPNsense or external service.

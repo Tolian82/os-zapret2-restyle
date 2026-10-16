@@ -2,11 +2,11 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_185`. `VERSION=0.5.2`; `PLUGIN_REVISION=185`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_186`. `VERSION=0.5.2`; `PLUGIN_REVISION=186`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
-`_183` HEAD `c14a214`, [CI #38924849815](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38924849815): **Voice/Project/FreeBSD 15 PASS**, testing package delivery contract — PASS. Это не подтверждение STUN/MEDIA/CALL на OPNsense.
+`_185` HEAD `0e1744e`, [CI #38932524257](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932524257): **Voice/Project/FreeBSD 15 PASS**, testing delivery contract — PASS. Это не подтверждение STUN/MEDIA/CALL на OPNsense.
 
 ## Окончательное решение владельца — 16.10.2026
 
@@ -42,8 +42,10 @@
 
 **`_185`:** `_184` [CI #38932040367](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932040367): Voice PASS, Project FAIL на старой PHP concurrency фикстуре, ожидавшей `ready` без общего владельца; FreeBSD не запускалась. Обновлён единственный старый тест: `ready` без аттестованного `native-common` теперь обязан вернуть `interrupted/common-profile-unverified`, `can_activate=false`, никаких профилей. Проверка реального подтверждённого native-common owner остаётся в `test-voice-inspect-config-runtime.php`. Рабочий PHP код `_184` не менялся. Exact-HEAD `_185` CI обязательна; затем закрытие программной приёмки и одна testing-поставка.
 
+**`_186`:** найден и исправлен дефект двух браузерных регулярных выражений в рабочей странице Voice: double-escaped `\\.` блокировал распознавание корректных версий релиза `v0.5.2` и мешал найти DOM-идентификаторы профилей при замене точек на подчёркивания. Исправлены только два regex в `voice.volt`; добавлен исполняемый Node.js регрессионный тест, использующий реальные regex из страницы. GUI-компоновка, 5 профилей, общий Apply/engine не менялись. **Далее:** exact-HEAD Voice/Project/FreeBSD CI `_186` и после готовности одна testing-поставка / owner-live.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_185` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_186` не опубликована.
