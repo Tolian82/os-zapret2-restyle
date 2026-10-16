@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_194`** (published full release `v0.5.2`), main source [1896122](https://github.com/Tolian82/os-zapret2-restyle/commit/18961229801011a201bff1dae22db96692074648). Publication verified in [release evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md); owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL pending. [START_HERE](START_HERE.md) owns the next task.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_194`** (published full release `v0.5.2`), main source [1896122](https://github.com/Tolian82/os-zapret2-restyle/commit/18961229801011a201bff1dae22db96692074648). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`. Publication verified in [release evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md); owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL pending. [START_HERE](START_HERE.md) owns the next task.
 
 `_194` candidate [CI #38955078719](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38955078719) Voice/Project/FreeBSD PASS; [post-merge main #38956106794](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956106794), [trigger #38956106955](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956106955), [full release #38956132121](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956132121) all PASS. The initial `_193` release-preparation failure was corrected in forward-only `_194`; no history or tag rewriting.
 
