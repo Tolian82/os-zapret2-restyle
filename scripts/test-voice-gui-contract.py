@@ -109,13 +109,28 @@ def main() -> None:
           "$status['profile_id'] = $id" in status_php and
           "$status['ipset_entries'] = $count" in status_php,
           "Voice GUI must show saved ON/OFF, applied profile, physical WAN, UDP and IPSET")
-    check("voiceIPFWDetail" in view and
-          "prepared-needs-previous-verification" in view and
-          "interrupted-needs-kernel-runtime-review" in view and
-          "committed-needs-cleanup-review" in view and
-          "Незавершённая подготовка" in view and
-          "Interrupted cutover" in view,
-          "Native Voice diagnostic needs bilingual whole-runtime crash guidance")
+    # Match actual phases emitted by the single common Apply journal.
+    native_inspector = (
+        ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py"
+    ).read_text(encoding="utf-8")
+    check('"shared-apply-" + phase' in native_inspector and
+          "voiceIPFWDetail" in view and
+          all(f"'shared-apply-{phase}'" in view for phase in (
+              "prepared", "activating", "activated", "config-saved",
+              "restore-failed", "requires-review"
+          )) and
+          "Общее применение" in view and "Shared Apply" in view and
+          "common-config-mismatch" in view and
+          "common-profile-unverified" in view,
+          "Voice GUI must explain actual shared Apply phases in RU/EN")
+    check(all(term not in view for term in (
+              "prepared-needs-previous-verification",
+              "interrupted-needs-kernel-runtime-review",
+              "committed-needs-cleanup-review",
+              "Interrupted cutover", "old Telegram PoC",
+              "старый Telegram PoC", "cutoverPrepared",
+          )) and "old Telegram PoC" not in info,
+          "Active Voice page must not suggest retired PoC migration")
     for term in ("'Общий движок и правила подтверждены'", "'Shared engine and IPFW verified'",
                  "'Новая Voice-конфигурация не активирована'", "'New Voice configuration not activated'"):
         check(term in view, f"Missing read-only Voice diagnostic localization: {term}")

@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_181`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_182`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,8 +16,8 @@
 
 ## Открытые границы перед testing package
 
-1. **Квалификация CI/FreeBSD:** `_180` HEAD `a5a1b16` [CI #38907807528](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38907807528) — Voice, Project, FreeBSD 15 **PASS**; testing package contract — PASS. `_181` удаляет последний явно приватный shell-исполнитель прежнего PoC и добавляет отрицательную проверку в FreeBSD package; нужна собственная exact-HEAD квалификация. Автотесты не доказывают реальный звонок.
-2. **Этап 6 — удаление дублирования:** `_168–_180` убрали PoC marker, legacy migrations, rollback, отдельный IPFW/процессный Python-граф и 95 файлов с тестами; `_181` завершает удаление ненужного частного процесса shell, после чего этап проверяется по фактическому составу pkg и отсутствию вторых точек запуска. Не возвращать восстановление старого Telegram PoC.
+1. **Квалификация CI/FreeBSD:** `_180` HEAD `a5a1b16` [CI #38907807528](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38907807528) — Voice, Project, FreeBSD 15 **PASS**; testing package contract — PASS. `_181` HEAD `3405301` [CI #38913309729](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38913309729) полностью прошла Voice, Project, FreeBSD 15 и delivery contract. `_182` исправляет диагностику и подсказки действующего GUI; требует отдельного exact-HEAD CI. Автотесты не доказывают реальный звонок.
+2. **Этап 6 — удаление дублирования:** `_168–_180` убрали PoC marker, legacy migrations, rollback, отдельный IPFW/процессный Python-граф и 95 файлов с тестами; `_181` завершила удаление неиспользуемого частного process shell, подтверждённое CI и проверкой FreeBSD-пакета. Этап 6 закрыт на уровне кода и поставки, не owner-live. Не возвращать восстановление старого Telegram PoC.
 3. **Миграция:** миграция работающего Phase-B и old marker больше не входит в ТЗ разработки: чистый native Voice + Strategies Config/Apply baseline. Обновить guards, не тратить время на backwards compatibility.
 4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 

@@ -8,18 +8,22 @@ $(document).ready(function () {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
         general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         infoTitle: 'Как работают голосовые профили',
-        infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Работающий старый Telegram PoC требует отдельной миграции. Non-STUN остаётся в «Стратегиях».',
+        infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
         service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
-        notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом применении или работающем старом Telegram PoC требуется проверка состояния; не запускайте повторное применение вслепую.',
+        notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Общий движок и правила подтверждены', ipfwStopped: 'Общая служба остановлена, IPFW очищен',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
-        cutoverPrepared: 'Незавершённая подготовка — проверьте прежнее состояние',
-        cutoverMutating: 'Прервано переключение — требуется проверка служб и IPFW',
-        cutoverCommitted: 'Переключение зафиксировано — проверьте завершение очистки',
+
+        sharedApplyPrepared: 'Общее применение подготовлено, но не завершено — проверьте состояние службы',
+        sharedApplyActivating: 'Общее применение прервано при переключении runtime/IPFW — нужна проверка',
+        sharedApplyActivated: 'Runtime/IPFW переключены; сохранение Config не подтверждено',
+        sharedApplyConfigSaved: 'Config сохранён; завершение общего применения не подтверждено',
+        sharedApplyRestoreFailed: 'Не удалось восстановить согласованное состояние общей службы — нужна проверка',
+        sharedApplyRequiresReview: 'Общее применение требует проверки Config, службы и IPFW',
         commonConfigMismatch: 'Сохранённый Config не совпадает с активным профилем — требуется проверка',
         commonProfileUnverified: 'Профиль не подтверждён — проверьте Config и runtime',
         savedVoiceOn: 'Сохранено: ВКЛ', savedVoiceOff: 'Сохранено: ВЫКЛ',
@@ -38,18 +42,22 @@ $(document).ready(function () {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
         general: 'General Settings', wan: 'Voice WAN Interface',
         infoTitle: 'About Voice Profiles',
-        infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. An active old Telegram PoC requires a separate migration. Non-STUN remains in Strategies.',
+        infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
         service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
-        notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If Apply was interrupted or the old Telegram PoC is running, inspect the actual state before retrying.',
+        notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Shared engine and IPFW verified', ipfwStopped: 'Shared service stopped; IPFW cleared',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
-        cutoverPrepared: 'Interrupted preparation — verify previous runtime',
-        cutoverMutating: 'Interrupted cutover — inspect services and IPFW',
-        cutoverCommitted: 'Cutover committed — verify cleanup completion',
+
+        sharedApplyPrepared: 'Shared Apply prepared but not completed — inspect service state',
+        sharedApplyActivating: 'Shared Apply interrupted while switching runtime/IPFW — review required',
+        sharedApplyActivated: 'Runtime/IPFW activated; Config save not confirmed',
+        sharedApplyConfigSaved: 'Config saved; shared Apply completion not confirmed',
+        sharedApplyRestoreFailed: 'Shared service restoration failed — inspection required',
+        sharedApplyRequiresReview: 'Shared Apply needs Config, service and IPFW review',
         commonConfigMismatch: 'Saved Config differs from active profile — review required',
         commonProfileUnverified: 'Profile not verified — inspect Config and runtime',
         savedVoiceOn: 'Saved: ON', savedVoiceOff: 'Saved: OFF',
@@ -551,9 +559,13 @@ $(document).ready(function () {
                             state === 'inspection-error' ? text.ipfwUnknown :
                             text.ipfwBlocked;
                 var details = {
-                    'prepared-needs-previous-verification': text.cutoverPrepared,
-                    'interrupted-needs-kernel-runtime-review': text.cutoverMutating,
-                    'committed-needs-cleanup-review': text.cutoverCommitted,
+
+                    'shared-apply-prepared': text.sharedApplyPrepared,
+                    'shared-apply-activating': text.sharedApplyActivating,
+                    'shared-apply-activated': text.sharedApplyActivated,
+                    'shared-apply-config-saved': text.sharedApplyConfigSaved,
+                    'shared-apply-restore-failed': text.sharedApplyRestoreFailed,
+                    'shared-apply-requires-review': text.sharedApplyRequiresReview,
                     'common-config-mismatch': text.commonConfigMismatch,
                     'common-profile-unverified': text.commonProfileUnverified
                 };
@@ -566,7 +578,7 @@ $(document).ready(function () {
                 );
                 showVoiceProfileObservations(unverified ? null : reply);
                 // A ready/stopped code without all five matching attested
-                // profiles (legacy, stale or partial owner) is not actionable.
+                // profiles (stale or partial common owner) is not actionable.
                 voiceInspectionState = ['ready', 'stopped'].includes(state) ? state : null;
                 reconcileVoiceServiceStatus();
                 $('#voiceIPFWState')
