@@ -1,15 +1,15 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_194`** (`main` уже содержит [merged PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328); открывается forward-only correction PR). Семантический релиз `v0.5.2` не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_194`** (published full release `v0.5.2`), main source [1896122](https://github.com/Tolian82/os-zapret2-restyle/commit/18961229801011a201bff1dae22db96692074648). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`. Publication verified in [release evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md); owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL pending. [START_HERE](START_HERE.md) owns the next task.
 
-`_193` [CI #38953354911](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38953354911) Voice/Project/FreeBSD PASS. Initial squash merge `ff32abd` created `main` source at `0.5.2_193`, but [post-merge main integrity](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38954679986) failed on one extra blank line and [release trigger](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38954680028) rejected initial third-component transition not starting at `_1`. No v0.5.2 release was created. `_194` forward-corrects that packaged-source whitespace, increments identity, preserves immutable history, and prepares the normal current-version release; exact-head CI required before merge.
+`_194` candidate [CI #38955078719](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38955078719) Voice/Project/FreeBSD PASS; [post-merge main #38956106794](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956106794), [trigger #38956106955](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956106955), [full release #38956132121](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956132121) all PASS. The initial `_193` release-preparation failure was corrected in forward-only `_194`; no history or tag rewriting.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=194` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_194.pkg` — **не опубликован**.
-- Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=194` — exact published stable package source.
+- package candidate: `os-zapret2-restyle-0.5.2_194.pkg` — **now published full stable package**: [`os-zapret2-restyle-0.5.2_194.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.2/os-zapret2-restyle-0.5.2_194.pkg), release SHA256 and Pages/pkg repository verified by workflow.
+- Former stable `v0.5.0` / `0.5.0_1` and testing `0.5.0_3` are historical.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 
 ## Фактическая реализация Voice

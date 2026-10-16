@@ -4,14 +4,14 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
-| **Current development candidate (not released)** | `v0.5.2_194` · [release correction PR](https://github.com/Tolian82/os-zapret2-restyle/pulls) |
+| **Full Web/pkg release** | [`v0.5.2`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) · `os-zapret2-restyle-0.5.2_194.pkg` |
+| **Current development candidate (not released)** | None; `v0.5.2_194` is the published full release |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 release candidate** additionally introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
@@ -65,7 +65,7 @@ Profiles are separated with the normal Zapret2 boundary:
 
 The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
 
-## Voice Transmission — v0.5.2 release candidate
+## Voice Transmission — v0.5.2
 
 The upcoming **Services → Zapret2 → Voice Transmission / Передача голоса** page is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
 
@@ -76,7 +76,7 @@ The upcoming **Services → Zapret2 → Voice Transmission / Передача г
 - The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
 - When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
 
-**Current verification boundary:** source/CI and FreeBSD package validation only. After the full `v0.5.2` release, the owner will test GUI/CONFIG/BOOT, outbound UDP/STUN, media transport and real calls independently. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
+**Current verification boundary:** the full `v0.5.2` GitHub Release and FreeBSD pkg repository are published. Owner-live GUI/CONFIG/BOOT, UDP/STUN, media and real calls remain **PENDING**, not PASS. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
 
 For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
 
@@ -234,7 +234,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Current development stage: **v0.5.2_194** — shared Strategies/Voice backend, release preparation in progress; **v0.5.0** remains the full stable release. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
+Current published stable release: **v0.5.2 / 0.5.2_194**. [Release publication evidence](docs/verification/evidence/2026-10-16-v0.5.2-release-publication.md). Owner-live Voice tests are pending.
 
 Useful entry points:
 
