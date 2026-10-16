@@ -405,9 +405,9 @@ orchestrator_build_release()
         cp "${_orchestrator_build_user_traffic}" "${_orchestrator_build_traffic}" || return 1
     fi
     if [ "${_orchestrator_build_variant}" != "ordinary" ]; then
-        # The detached shared build feeds the ordinary generator directly.
-        # Legacy callers retain their old layout until common IPFW/Apply replaces
-        # that lifecycle; no build variant itself activates a candidate.
+        # Detached build stages an inert private Voice candidate; shared
+        # builds compile one merged runtime managed by the common Apply.
+        # Building alone never acquires runtime or IPFW ownership.
         _orchestrator_build_voice_native="${_orchestrator_build_release}/voice-native-candidate"
         if [ "${_orchestrator_build_variant}" = "shared-candidate" ]; then
             _orchestrator_build_voice_native="${_orchestrator_build_release}"
