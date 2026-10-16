@@ -15,7 +15,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
 import voice_native_draft_preview_route as route
 import voice_native_saved_draft_candidate as draft
-import voice_native_legacy_poc_guard as legacy
 
 
 def previous_config() -> bytes:
@@ -43,19 +42,6 @@ class VoiceDraftPreviewTests(unittest.TestCase):
         self.config.chmod(0o600)
         self.sha = hashlib.sha256(self.original).hexdigest()
         self.hits = 0
-        poc = tempfile.TemporaryDirectory(prefix="voice-old-poc-")
-        self.addCleanup(poc.cleanup)
-        self.poc_root = Path(poc.name)
-        self.marker = self.poc_root / "old-telegram.enabled"
-        self.runtime = self.poc_root / "runtime"
-        self.runtime.mkdir()
-        self.state = self.runtime / "telegram-voice-poc.state"
-        marker_patch = patch.object(route.native, "LEGACY_MARKER", self.marker)
-        active_patch = patch.object(route.native, "ACTIVE_ROOT", self.runtime)
-        marker_patch.start()
-        active_patch.start()
-        self.addCleanup(marker_patch.stop)
-        self.addCleanup(active_patch.stop)
 
     def test_preview_reuses_exact_saved_draft_parser_without_writes(self):
         with patch.object(route.native, "CONFIG", self.config), \
@@ -79,50 +65,6 @@ class VoiceDraftPreviewTests(unittest.TestCase):
             with self.assertRaises(draft.NativeDraftCandidateError):
                 route.preview("00000", self.sha)
         self.assertEqual(["config.xml"], sorted(p.name for p in self.root.iterdir()))
-        self.assertEqual(self.original, self.config.read_bytes())
-
-    def test_live_legacy_marker_blocks_gui_preview_even_if_empty(self):
-        self.marker.write_bytes(b"")
-        self.state.write_bytes(b"disabled\n")
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock", return_value=None):
-            with self.assertRaisesRegex(legacy.NativePrepareRouteError, "requires reviewed migration"):
-                route.preview("10000", self.sha)
-        self.assertEqual(self.original, self.config.read_bytes())
-        self.assertEqual(["config.xml"], sorted(p.name for p in self.root.iterdir()))
-        self.assertEqual(b"", self.marker.read_bytes())
-
-    def test_live_legacy_runtime_on_blocks_gui_preview_without_marker(self):
-        self.state.write_bytes(b"enabled\n")
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock", return_value=None):
-            with self.assertRaisesRegex(legacy.NativePrepareRouteError, "requires reviewed migration"):
-                route.preview("10000", self.sha)
-        self.assertEqual(self.original, self.config.read_bytes())
-
-    def test_legacy_symlink_unknown_and_unsafe_state_fail_closed(self):
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock", return_value=None):
-            self.state.symlink_to(self.config)
-            with self.assertRaisesRegex(legacy.NativePrepareRouteError, "untrusted"):
-                route.preview("10000", self.sha)
-            self.state.unlink()
-            self.state.write_text("unknown\n")
-            with self.assertRaisesRegex(legacy.NativePrepareRouteError, "unknown"):
-                route.preview("10000", self.sha)
-            self.state.unlink()
-            self.marker.symlink_to(self.config)
-            with self.assertRaisesRegex(legacy.NativePrepareRouteError, "untrusted"):
-                route.preview("10000", self.sha)
-        self.assertEqual(self.original, self.config.read_bytes())
-
-    def test_legacy_disabled_state_matches_closed_apply_guard(self):
-        self.state.write_bytes(b"disabled\n")
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock", return_value=None):
-            result = route.preview("10000", self.sha)
-        self.assertEqual("native-voice-saved-draft-preview", result["state"])
-        self.assertFalse(result["safe_to_enable_voice"])
         self.assertEqual(self.original, self.config.read_bytes())
 
     def test_invalid_argv_does_not_access_native_backend(self):

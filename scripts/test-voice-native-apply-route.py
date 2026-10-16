@@ -52,6 +52,16 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             rollback,
         )
 
+    def test_retired_telegram_poc_recovery_not_shipped(self):
+        for path in BACKEND.glob('voice_native_legacy_*.py'):
+            with self.subTest(path=path.name):
+                self.fail('retired Telegram PoC legacy backend must not ship: ' + path.name)
+        self.assertFalse((BACKEND / 'voice_migration_plan.py').exists())
+        actions = (ROOT / 'src/opnsense/service/conf/actions.d/actions_zapret.conf').read_text()
+        self.assertNotIn('[voice_recovery_status]', actions)
+        shell = (SCRIPTS / 'zapret_service.sh').read_text()
+        self.assertNotIn('voice_native_legacy_', shell)
+        self.assertNotIn('shared-apply-legacy-', shell)
     def test_shared_apply_and_readonly_preview_remain_live_entrypoints(self):
         service = (SCRIPTS / "zapret_service.sh").read_text()
         configd = (

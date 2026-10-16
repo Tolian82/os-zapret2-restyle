@@ -87,13 +87,9 @@ def main() -> None:
     check("/api/zapret/voice/inspect" in view and
           "refreshVoiceIPFW" in view and "voiceIPFWState" in view,
           "Voice read-only IPFW diagnostics are missing from GUI")
-    check("voiceRecoveryLabel" in view and "voiceRecoveryState" in view and
-          "/api/zapret/voice/recoveryStatus" in view and
-          "refreshVoiceRecovery" in view and
-          "Восстановление старого Telegram PoC" in view and
-          "Previous Telegram PoC recovery" in view and
-          "recoveryReceipt" in view and "recoveryIncomplete" in view,
-          "Old PoC read-only bilingual GUI status is not present")
+    check("voiceRecoveryLabel" not in view and
+          "/api/zapret/voice/recoveryStatus" not in view,
+          "Retired PoC recovery controls must not reappear in the five-profile GUI")
     status_api = SRC / "controllers/OPNsense/Zapret/Api/VoiceController.php"
     status_php = status_api.read_text(encoding="utf-8")
     check("showVoiceProfileObservations(reply)" in view and
@@ -129,11 +125,9 @@ def main() -> None:
           "public function applyAction()" in status_php,
           "Voice diagnostics and shared native Apply must both be available")
     configd = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text(encoding="utf-8")
-    check("[voice_recovery_status]" in configd and
-          "zapret_service.sh native-voice-legacy-boot-review" in configd and
-          "public function recoveryStatusAction()" in status_php and
-          "'zapret voice_recovery_status'" in status_php,
-          "Recovery status must use the original FD9 read-only configd route")
+    check("[voice_recovery_status]" not in configd and
+          "public function recoveryStatusAction()" not in status_php,
+          "Private old-PoC recovery API must stay retired")
     check("[voice_inspect]" in configd and
           "voice_live_inspect.py; exit 0" in configd,
           "Native Voice inspection must use a fixed read-only configd action")

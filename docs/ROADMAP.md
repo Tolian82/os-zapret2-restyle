@@ -9,12 +9,12 @@
 | 1. Общий Voice + ordinary generator | Реализован в коде и isolated tests |
 | 2. Общий scoped STUN/IPFW | Реализован, включая точную сверку engine/UDP/IPSET/WAN/divert |
 | 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
-| 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. Работающий legacy PoC требует отдельной не принятой live-миграции |
+| 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
-| 6. Удаление дублирования | Убрана инертная ordinary Voice-сборка; публичные Telegram configctl больше не вызывают старый marker/reconfigure. Резервные migration/rollback компоненты сохранены |
+| 6. Удаление дублирования | Убрана инертная ordinary Voice-сборка; публичные Telegram configctl больше не вызывают старый marker/reconfigure. По решению владельца 16.10.2026 удаляются все legacy PoC migration/rollback компоненты |
 | 7. Приёмка | `_145` полный CI + FreeBSD 15 SUCCESS; `_146` проверяется отдельно. Owner-live GUI/STUN/MEDIA/CALL впереди |
 
-**Остаточный рубеж:** подтвердить latest-HEAD CI и реальную FreeBSD 15 сборку, проверить оставшиеся используемые legacy PoC entrypoints и состав пакета, затем одну testing поставку и owner-live приёмку. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
+**Остаточный рубеж:** подтвердить latest-HEAD CI и реальную FreeBSD 15 сборку, удалить старый PoC из продукта, проверить отсутствие его entrypoints и состав пакета, затем одну testing поставку и owner-live приёмку. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 
 ## Основной завершённый путь
 

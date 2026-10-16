@@ -196,26 +196,6 @@ jobs:
         run: python3.13 scripts/test-voice-native-kernel-argv.py
       - name: Live pre-cutover FreeBSD process, argv and scoped IPFW read-only acceptance
         run: python3.13 scripts/test-voice-native-live-preflight.py
-      - name: Durable legacy PoC marker and IPFW witness with native previous Config/runtime
-        run: python3.13 scripts/test-voice-native-legacy-previous-seal.py
-      - name: Sealed legacy PoC reverse plan with old rule/marker drift and crash guards
-        run: python3.13 scripts/test-voice-native-legacy-restore-plan.py
-      - name: Quiescent legacy PoC reverse WAL admission and power-cut refusal
-        run: python3.13 scripts/test-voice-native-legacy-reverse-wal.py
-      - name: Real legacy IPFW per-command durable replay and crash-before-done recovery
-        run: python3.13 scripts/test-voice-native-legacy-ipfw-replay.py
-      - name: Stage previous Telegram PoC Config runtime and marker after completed IPFW replay
-        run: python3.13 scripts/test-voice-native-legacy-files-ready.py
-      - name: Recover original Telegram runtime via original-FD9 double-rename and durable redo
-        run: python3.13 scripts/test-voice-native-legacy-runtime-restore.py
-      - name: Recover prior Telegram Config on original inode with durable same-FD power-cut redo
-        run: python3.13 scripts/test-voice-native-legacy-config-restore.py
-      - name: Recover old Telegram PoC marker with atomic no-replace hardlink and crash replay
-        run: python3.13 scripts/test-voice-native-legacy-marker-restore.py
-      - name: Restart old three-role Telegram engine exactly once with sealed kernel security and argv
-        run: python3.13 scripts/test-voice-native-legacy-process-restart.py
-      - name: Execute original-FD9 five-domain legacy rollback end-to-end with power-cut resume
-        run: python3.13 scripts/test-voice-native-legacy-five-domain-coordinator.py
       - name: Historical Voice forward runtime redo read-only recovery contract
         run: python3.13 scripts/test-voice-native-forward-runtime.py
       - name: Shared IPFW PRECOMMIT/rollback regression with legacy journal fixtures
@@ -287,8 +267,6 @@ jobs:
         run: python3.13 scripts/test-voice-common-engine-status.py
       - name: Read-only FreeBSD Voice trial counter evidence
         run: python3.13 scripts/test-voice-live-trial.py
-      - name: Voice explicit legacy PoC migration safety
-        run: python3.13 scripts/test-voice-migration-plan.py
       - name: Interrupted native Config-saved cold recovery and refusal matrix
         run: sh scripts/test-shared-apply-saved-recovery.sh
       - name: Interrupted ACTIVATED staged IPFW rollback through common backend
@@ -679,7 +657,6 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
             /usr/local/bin/python3.13 scripts/test-voice-live-trial.py
-            /usr/local/bin/python3.13 scripts/test-voice-migration-plan.py
             /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
             /usr/local/bin/python3.13 scripts/test-voice-common-runtime.py
             /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
@@ -770,7 +747,10 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
-          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_migration_plan.py' "${contents}"
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/(voice_native_legacy_[A-Za-z_]+|voice_migration_plan)[.]py$' "${contents}"; then
+            echo "ERROR: retired Telegram PoC migration/rollback leaked into FreeBSD package" >&2
+            exit 1
+          fi
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_ledger.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_activation.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"

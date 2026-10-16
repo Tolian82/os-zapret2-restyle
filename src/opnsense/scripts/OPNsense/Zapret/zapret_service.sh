@@ -577,76 +577,6 @@ native_voice_boot_review_service()
     "${_native_voice_boot_python}" "${_native_voice_boot_script}" inspect
 }
 
-# Operator-only read-only old PoC rollback *disk* boot review under the same FD9.
-# Pending Voice journals remain blocked for every lifecycle mutation.
-native_voice_legacy_boot_review_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_boot_review.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
-        echo "ERROR: old Voice rollback boot inspector unavailable" >&2
-        return 69
-    }
-    "${_voice_python}" "${_voice_script}" inspect
-}
-
-# Manual-only live IPFW/three-role evidence after a sealed old rollback.
-# Deliberately no boot hook, configd, Apply, or process startup.
-native_voice_legacy_boot_live_review_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_boot_review.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || return 69
-    "${_voice_python}" "${_voice_script}" inspect-live
-}
-
-# Operator-only previous Telegram PoC Config/runtime/marker/IPFW evidence,
-# plus an immutable reverse plan; old processes and kernel remain untouched.
-native_voice_legacy_capture_plan_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_predecessor_route.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || return 69
-    "${_voice_python}" "${_voice_script}" capture-plan
-}
-
-# Manual old-PoC STOP intent only. No process/marker/IPFW mutation;
-# original FD9 comes from this service and Config flock from Python route.
-native_voice_legacy_arm_stop_intent_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_quiescence_intent.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || return 69
-    "${_voice_python}" "${_voice_script}" arm-stop-intent
-}
-
-# Operator-only sealed reverse WAL of an ALREADY stopped old Telegram PoC.
-# Records exact no-process/no-old-IPFW/marker-OFF state without actuating them.
-native_voice_legacy_seal_clean_wal_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_clean_wal_route.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
-        echo "ERROR: legacy Voice clean-WAL inspector not installed" >&2
-        return 69
-    }
-    "${_voice_python}" "${_voice_script}" seal-clean-wal
-}
-
-# Explicit root-only OPERATOR recovery of a fully sealed old Telegram PoC.
-# This invokes REAL old IPFW/file/marker/process rollback under the same FD9.
-# NOT registered with configd, GUI, boot, normal start or runtime-failure.
-native_voice_legacy_rollback_five_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_rollback_route.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
-        echo "ERROR: native Voice old rollback executor unavailable" >&2
-        return 69
-    }
-    "${_voice_python}" "${_voice_script}" rollback
-}
-
 # Owner-only, READ-ONLY physical appliance baseline BEFORE any Voice journal.
 # This observes the already-running ordinary service; does not generate
 # Config, touch IPFW, stop/start a process, or authorize Voice ON.
@@ -662,21 +592,6 @@ native_voice_lifecycle_inspect_service()
         return 69
     }
     "${_native_voice_router_python}" "${_native_voice_router_script}" inspect
-}
-
-# Compatibility guard: before either old PoC mutation, refuse coexistence
-# with saved native Voice ON or any pending native cutover, under EXISTING FD9.
-# This does not migrate or clean up legacy PoC state; status remains readable.
-native_voice_legacy_poc_preflight_service()
-{
-    _native_voice_router_python="/usr/local/bin/python3.13"
-    _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
-    [ -x "${_native_voice_router_python}" ] &&
-    [ -r "${_native_voice_router_script}" ] || {
-        echo "ERROR: native Voice compatibility guard is unavailable" >&2
-        return 69
-    }
-    "${_native_voice_router_python}" "${_native_voice_router_script}" legacy-poc-preflight
 }
 
 # Read-only saved-model -> native compiler bridge, under the same FD9.
@@ -714,17 +629,6 @@ native_voice_preview_draft_service()
     "${_voice_python}" "${_voice_route}" preview-draft "${_voice_mask}" "${_voice_sha}"
 }
 
-native_voice_legacy_live_preflight_service()
-{
-    _voice_python="/usr/local/bin/python3.13"
-    _voice_script="${BACKEND_DIR}/voice_native_legacy_live_preflight.py"
-    [ -x "${_voice_python}" ] && [ -r "${_voice_script}" ] || {
-        echo "ERROR: legacy Voice read-only preflight is not installed" >&2
-        return 69
-    }
-    "${_voice_python}" "${_voice_script}" inspect
-}
-
 native_voice_live_preflight_service()
 {
     _native_voice_live_python="/usr/local/bin/python3.13"
@@ -735,335 +639,6 @@ native_voice_live_preflight_service()
         return 1
     }
     "${_native_voice_live_python}" "${_native_voice_live_script}" inspect
-}
-
-# One read-only FD9 owner audit, not a legacy-to-native cutover executor.
-shared_apply_legacy_audit_service()
-{
-    [ "$#" -eq 0 ] || return 64
-    if shared_apply_has_record_service; then
-        # A common pending/committed owner cannot be imported as legacy.
-        shared_apply_inspect_service >/dev/null || return 69
-        return 69
-    fi
-    preflight_voice_cutover_journals || return 69
-    apply_runtime_observe_live_legacy || return 69
-    # Reuse the existing strict FreeBSD legacy PoC inspector. It already
-    # holds the original Config inode flock under inherited FD9 and checks:
-    # actual three-process kernel argv/image, old marker, pinned managed
-    # IPv4 IPSET, and exact old rule/table contents TWICE. No new watcher,
-    # journal, raw IPFW parser, or mutation entrypoint is introduced.
-    [ -x /usr/local/bin/python3.13 ] &&
-    [ -r "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" ] || return 69
-    _legacy_exact_report=$(/usr/local/bin/python3.13 \
-        "${BACKEND_DIR}/voice_native_legacy_live_preflight.py" inspect) || return 69
-    [ "${#_legacy_exact_report}" -le 1024 ] || return 69
-    printf '%s\n' "$_legacy_exact_report" |
-        grep -Fqx 'legacy-voice-preflight=legacy-poc-full-live-baseline-observed-not-owned' || return 69
-    printf '%s\n' "$_legacy_exact_report" |
-        grep -Fqx 'legacy-voice-ownership=not-adopted' || return 69
-    printf '%s\n' "$_legacy_exact_report" |
-        grep -Fqx 'voice-on=blocked' || return 69
-    # The second independent runtime/process observation brackets the exact
-    # kernel witness, so a stopped/replaced engine is not reported as live.
-    apply_runtime_observe_live_legacy || return 69
-    printf '%s\n' "$_legacy_exact_report" \
-        'legacy-live-observed=1' \
-        'legacy-exact-ipfw-argv-observed=1' \
-        'legacy-handoff-authorized=0'
-}
-
-# Operator-only candidate-bound check for a RUNNING legacy Telegram PoC.
-# A seal and fresh native Config preflight must describe ONE proposed Voice ON.
-# The strict old kernel/argv witness is reused; no Config, journal, engine,
-# kernel or active release is changed. This does NOT authorize migration.
-shared_apply_legacy_candidate_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_qual_id="$1"
-    case "$_legacy_qual_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_qual_id}" -eq 32 ] || return 64
-    preflight_voice_cutover_journals || return 69
-    shared_apply_require_tools || return 69
-    _legacy_qual_root=$(shared_apply_workspace "$_legacy_qual_id") || return 69
-    [ -d "$_legacy_qual_root/release" ] &&
-    [ ! -L "$_legacy_qual_root/release" ] || return 69
-    shared_apply_bundle_service verify "$_legacy_qual_id" || return 69
-    _legacy_qual_preview=$(shared_apply_native_config preflight \
-        "$_legacy_qual_id" voice) || return 69
-    _legacy_qual_mode=$(printf "%s\n" "$_legacy_qual_preview" |
-        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
-    [ "$_legacy_qual_mode" = 1 ] || return 69
-    _legacy_qual_base=$(printf "%s\n" "$_legacy_qual_preview" |
-        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
-    _legacy_qual_target=$(printf "%s\n" "$_legacy_qual_preview" |
-        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
-    validator_validate_runtime_modes "$_legacy_qual_root/release" || return 69
-    [ -x "$DVTWS_BIN" ] || return 69
-    validator_validate_engine_mapped "$DVTWS_BIN" \
-        "$_legacy_qual_root/release/dvtws.args" "$ACTIVE_DIR" \
-        "$_legacy_qual_root/release" "${PYTHON_BIN:-/usr/local/bin/python3.13}" || return 69
-    _legacy_qual_report=$(shared_apply_legacy_audit_service) || return 69
-    printf "%s\n" "$_legacy_qual_report" |
-        grep -Fqx 'legacy-handoff-authorized=0' || return 69
-    printf "%s\n" "$_legacy_qual_report" |
-        grep -Fqx 'legacy-exact-ipfw-argv-observed=1' || return 69
-    _legacy_qual_ipfw=$(printf "%s\n" "$_legacy_qual_report" |
-        sed -n 's/^legacy-voice-ipfw-sha256=//p') || return 69
-    _legacy_qual_ipset=$(printf "%s\n" "$_legacy_qual_report" |
-        sed -n 's/^legacy-voice-managed-sha256=//p') || return 69
-    for _legacy_qual_digest in "$_legacy_qual_ipfw" "$_legacy_qual_ipset"; do
-        case "$_legacy_qual_digest" in ""|*[!a-f0-9]*) return 69 ;; esac
-        [ "${#_legacy_qual_digest}" -eq 64 ] || return 69
-    done
-    # Nothing is adopted. Revalidate immutable bundle and unchanged native
-    # Config before returning the identity-bound informational receipt.
-    shared_apply_bundle_service verify "$_legacy_qual_id" || return 69
-    _legacy_qual_check=$(shared_apply_native_config preflight \
-        "$_legacy_qual_id" voice) || return 69
-    [ "$_legacy_qual_check" = "$_legacy_qual_preview" ] || return 69
-    printf "legacy-qualified-candidate=%s\n" "$_legacy_qual_id"
-    printf "legacy-current-ipfw-sha256=%s\n" "$_legacy_qual_ipfw"
-    printf "legacy-current-managed-sha256=%s\n" "$_legacy_qual_ipset"
-    printf "candidate-config-base=%s\n" "$_legacy_qual_base"
-    printf "candidate-config-target=%s\n" "$_legacy_qual_target"
-    printf '%s\n' 'legacy-handoff-authorized=0'
-}
-
-# Operator-only immutable previous-five backup into the existing sealed
-# shared-work candidate. The old Telegram PoC stays RUNNING: no stop, IPFW,
-# marker or native Config save here. Reuses the historical full five-domain
-# capture + reverse plan, but NOT its independent actuator or journal.
-shared_apply_legacy_capture_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_capture_id="$1"
-    case "$_legacy_capture_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_capture_id}" -eq 32 ] || return 64
-    _legacy_capture_before=$(shared_apply_legacy_candidate_service "$_legacy_capture_id") || return 69
-    [ -x /usr/local/bin/python3.13 ] &&
-    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69
-    _legacy_capture_result=$(/usr/local/bin/python3.13 \
-        "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \
-        capture-common "$_legacy_capture_id") || return 70
-    printf '%s\n' "$_legacy_capture_result" |
-        grep -Fqx "legacy-voice-bound-candidate=$_legacy_capture_id" || return 70
-    printf '%s\n' "$_legacy_capture_result" |
-        grep -Fqx 'legacy-voice-predecessor=legacy-poc-previous-and-reverse-plan-sealed-quiescence-pending' || return 70
-    printf '%s\n' "$_legacy_capture_result" |
-        grep -Fqx 'native-voice-public-apply=disabled' || return 70
-    # The old owner must still be live and exact after copying its five
-    # domains. Any race retains the newly captured backup for review.
-    _legacy_capture_after=$(shared_apply_legacy_candidate_service "$_legacy_capture_id") || return 70
-    [ "$_legacy_capture_before" = "$_legacy_capture_after" ] || return 70
-    printf '%s\n' "legacy-backup-candidate=$_legacy_capture_id" \
-        'legacy-backup-sealed=1' 'legacy-handoff-authorized=0'
-}
-
-# Operator-only arm for the ONE shared durable Apply.  An exact old
-# previous-five snapshot/plan must exist inside this sealed Voice candidate.
-# This records only a prepared legacy predecessor digest; generic activating
-# and reboot auto-close remain forbidden until one reversible executor exists.
-shared_apply_legacy_arm_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_arm_id="$1"
-    case "$_legacy_arm_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_arm_id}" -eq 32 ] || return 64
-    _legacy_arm_before=$(shared_apply_legacy_candidate_service "$_legacy_arm_id") || return 69
-    _legacy_arm_root=$(shared_apply_workspace "$_legacy_arm_id") || return 69
-    [ -d "$_legacy_arm_root/legacy-backup" ] &&
-    [ ! -L "$_legacy_arm_root/legacy-backup" ] || return 69
-    shared_apply_require_tools || return 69
-    _legacy_arm_preview=$(shared_apply_native_config preflight "$_legacy_arm_id" voice) || return 69
-    _legacy_arm_on=$(printf '%s\n' "$_legacy_arm_preview" |
-        shared_apply_json_field '.enabled | select(.=="1")') || return 69
-    _legacy_arm_base=$(printf '%s\n' "$_legacy_arm_preview" |
-        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
-    _legacy_arm_candidate=$(printf '%s\n' "$_legacy_arm_preview" |
-        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
-    _legacy_arm_fields=$(printf '%s\n' "$_legacy_arm_preview" |
-        shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
-    shared_apply_bundle_service verify "$_legacy_arm_id" || return 69
-    _legacy_arm_after=$(shared_apply_legacy_candidate_service "$_legacy_arm_id") || return 69
-    [ "$_legacy_arm_before" = "$_legacy_arm_after" ] || return 69
-    [ -x /usr/local/bin/python3.13 ] &&
-    [ -r "${BACKEND_DIR}/shared_apply_operation.py" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
-        arm-legacy "$_legacy_arm_id" "$_legacy_arm_base" \
-        "$_legacy_arm_candidate" "$_legacy_arm_fields"
-}
-
-# Explicit operator-only close of an UNCHANGED old PoC STOP-intent.
-# Reuses the existing complete five-domain snapshot, strict FreeBSD live
-# witness and ONE shared journal writer. Never runs in automatic boot.
-shared_apply_legacy_cancel_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_cancel_id="$1"
-    case "$_legacy_cancel_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_cancel_id}" -eq 32 ] || return 64
-    [ -x /usr/local/bin/python3.13 ] &&
-    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \
-        cancel-common "$_legacy_cancel_id"
-}
-
-# Explicit operator-only first boundary BEFORE any actual legacy process stop.
-# Same root FD9/Config flock, previous snapshot and exact FreeBSD live witness.
-shared_apply_legacy_begin_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_begin_id="$1"
-    case "$_legacy_begin_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_begin_id}" -eq 32 ] || return 64
-    [ -x /usr/local/bin/python3.13 ] &&
-    [ -r "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" \
-        begin-common "$_legacy_begin_id"
-}
-
-# PRIVATE first native Config write for a previously attested legacy→common
-# switch. The Python FD9 coordinator must have ALREADY fsynced the single
-# legacy-config-saving journal intent and RELEASED its OLD pinned Config flock:
-# this worker uses OPNsense Config::lock/save/unlock itself. Never expose this
-# through configd, GUI or ordinary lifecycle. A nonzero after save may mean
-# persisted Config; preserve the original journal and all IPFW rollback.
-# Private original-FD9 native IPFW commit after persisted legacy Config.
-# This is the SAME common actuator and kernel table cleanup, NOT a Voice
-# second owner. The Python parent MUST hold the NEW Config inode flock and
-# has already fsynced legacy-common-committing, proving native saved Config.
-# Any uncertain/partial kernel cleanup leaves that journal pending.
-shared_apply_commit_retired_legacy_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_commit_id="$1"
-    case "$_legacy_commit_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_commit_id}" -eq 32 ] || return 64
-    _legacy_commit_owner=$(shared_apply_inspect_service) || return 69
-    [ "$_legacy_commit_owner" = "legacy-common-committing $_legacy_commit_id voice" ] ||
-        return 69
-    shared_apply_require_tools || return 69
-    shared_apply_bundle_service verify "$_legacy_commit_id" || return 69
-    _legacy_commit_root=$(shared_apply_workspace "$_legacy_commit_id") || return 69
-    apply_runtime_rehydrate_retired_legacy \
-        "$_legacy_commit_root/release" "$_legacy_commit_id" || return 70
-    apply_runtime_attest_activated || return 70
-    # Native commit deletes ONLY exact verified obsolete/stage IPFW tables.
-    # No old-runtime backup or sealed previous Config is deleted here.
-    apply_runtime_commit || return 70
-    apply_runtime_verify_retired_legacy_committed \
-        "$_legacy_commit_root/release" "$_legacy_commit_id" || return 70
-    shared_apply_bundle_service verify "$_legacy_commit_id" || return 70
-    printf "legacy-native-committed=%s\n" "$_legacy_commit_id"
-}
-
-# Read-only common cold proof for an EXACT pending native COMMIT.
-# Native saved Config is checked before and after the physical kernel audit.
-shared_apply_verify_retired_legacy_cold_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _cold_id="$1"
-    case "$_cold_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_cold_id}" -eq 32 ] || return 64
-    _cold_owner=$(shared_apply_inspect_service) || return 69
-    [ "$_cold_owner" = "legacy-common-committing $_cold_id voice" ] || return 69
-    shared_apply_require_tools || return 69
-    shared_apply_bundle_service verify "$_cold_id" || return 69
-    _cold_config=$(shared_apply_native_config saved "$_cold_id" voice) || return 69
-    _cold_saved=$(printf '%s\n' "$_cold_config" |
-        shared_apply_json_field '.result | select(.=="committed")') || return 69
-    _cold_enabled=$(printf '%s\n' "$_cold_config" |
-        shared_apply_json_field '.enabled | select(.=="1")') || return 69
-    [ "$_cold_saved" = committed ] && [ "$_cold_enabled" = 1 ] || return 69
-    _cold_work=$(shared_apply_workspace "$_cold_id") || return 69
-    apply_runtime_verify_retired_legacy_cold "$_cold_work/release" "$_cold_id" || return 70
-    [ "$(shared_apply_native_config saved "$_cold_id" voice)" = "$_cold_config" ] || return 70
-    shared_apply_bundle_service verify "$_cold_id" || return 70
-    printf 'legacy-native-cold-ready=%s\n' "$_cold_id"
-}
-
-# Explicit operator-only completion of partial post-COMMIT IPFW stage.
-# Reuses the existing common cleanup, not a fresh native IPFW COMMIT or
-# alternative firewall writer. Saved native Config and owner must remain
-# exact throughout original inherited FD9 and CURRENT Config flock.
-shared_apply_resume_retired_legacy_cleanup_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _partial_id="$1"
-    case "$_partial_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_partial_id}" -eq 32 ] || return 64
-    _partial_owner=$(shared_apply_inspect_service) || return 69
-    [ "$_partial_owner" = "legacy-common-committing $_partial_id voice" ] || return 69
-    shared_apply_require_tools || return 69
-    shared_apply_bundle_service verify "$_partial_id" || return 69
-    _partial_config=$(shared_apply_native_config saved "$_partial_id" voice) || return 69
-    _partial_ok=$(printf '%s\n' "$_partial_config" |
-        shared_apply_json_field '.result | select(.=="committed")') || return 69
-    _partial_enabled=$(printf '%s\n' "$_partial_config" |
-        shared_apply_json_field '.enabled | select(.=="1")') || return 69
-    [ "$_partial_ok" = committed ] && [ "$_partial_enabled" = 1 ] || return 69
-    _partial_work=$(shared_apply_workspace "$_partial_id") || return 69
-    apply_runtime_resume_retired_legacy_cleanup "$_partial_work/release" "$_partial_id" || return 70
-    [ "$(shared_apply_native_config saved "$_partial_id" voice)" = "$_partial_config" ] || return 70
-    shared_apply_bundle_service verify "$_partial_id" || return 70
-    apply_runtime_verify_retired_legacy_committed "$_partial_work/release" "$_partial_id" || return 70
-    printf 'legacy-native-cleanup-resumed=%s\n' "$_partial_id"
-}
-
-shared_apply_save_retired_legacy_config_service()
-{
-    [ "$#" -eq 1 ] || return 64
-    _legacy_save_id="$1"
-    case "$_legacy_save_id" in ""|*[!a-f0-9]*) return 64 ;; esac
-    [ "${#_legacy_save_id}" -eq 32 ] || return 64
-    _legacy_save_owner=$(shared_apply_inspect_service) || return 69
-    [ "$_legacy_save_owner" = "legacy-config-saving $_legacy_save_id voice" ] ||
-        return 69
-    shared_apply_require_tools || return 69
-    shared_apply_bundle_service verify "$_legacy_save_id" || return 69
-    _legacy_save_root=$(shared_apply_workspace "$_legacy_save_id") || return 69
-    _legacy_save_pre=$(shared_apply_native_config preflight \
-        "$_legacy_save_id" voice) || return 69
-    _legacy_save_target=$(printf "%s\n" "$_legacy_save_pre" | \
-        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') ||
-        return 69
-    _legacy_save_mode=$(printf "%s\n" "$_legacy_save_pre" | \
-        shared_apply_json_field '.enabled | select(.=="1")') || return 69
-    _legacy_save_expected=$(printf "%s\n" "$_legacy_save_pre" | \
-        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') ||
-        return 69
-    [ "$_legacy_save_mode" = 1 ] &&
-    [ "$_legacy_save_expected" = "$_legacy_save_target" ] || return 69
-    apply_runtime_rehydrate_retired_legacy \
-        "$_legacy_save_root/release" "$_legacy_save_id" || return 70
-    apply_runtime_attest_activated || return 70
-    # Once the native Config writer is entered, ANY error is an ambiguous
-    # persistence outcome for this already-switched live predecessor.
-    # The PHP worker emits its OWN JSON receipt. Its pre-save stdout must
-    # not be confused with our uniquely named post-save verification token.
-    shared_apply_native_config save "$_legacy_save_id" voice >/dev/null || return 70
-    _legacy_save_actual=$(shared_apply_native_config saved \
-        "$_legacy_save_id" voice) || return 70
-    if ! {
-        _legacy_save_result=$(printf "%s\n" "$_legacy_save_actual" | \
-            shared_apply_json_field '.result | select(.=="committed")') &&
-        _legacy_save_digest=$(printf "%s\n" "$_legacy_save_actual" | \
-            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') &&
-        _legacy_save_enabled=$(printf "%s\n" "$_legacy_save_actual" | \
-            shared_apply_json_field '.enabled | select(.=="1")') &&
-        [ "$_legacy_save_result" = committed ] &&
-        [ "$_legacy_save_digest" = "$_legacy_save_target" ] &&
-        [ "$_legacy_save_enabled" = 1 ] &&
-        shared_apply_bundle_service verify "$_legacy_save_id" &&
-        apply_runtime_attest_activated
-    }; then
-        return 70
-    fi
-    # This reports native SAVED witness only. The journal is STILL in the
-    # saving phase until a SEPARATE pinned new-owner witness completes it.
-    # IPFW stages remain intact; NO native COMMIT runs here.
-    printf "legacy-native-config-saved=%s\n" "$_legacy_save_id"
 }
 
 # One actual runtime/Config Apply owner: the existing service process holds
@@ -2105,45 +1680,6 @@ service_dispatch()
         shared-apply-run)
             shared_apply_run_service "${2:-}" "${3:-}"
             ;;
-        shared-apply-legacy-audit)
-            [ "$#" -eq 1 ] || return 64
-            shared_apply_legacy_audit_service
-            ;;
-        shared-apply-legacy-qualify)
-            [ "$#" -eq 2 ] || return 64
-            shared_apply_legacy_candidate_service "$2"
-            ;;
-        shared-apply-legacy-capture)
-            [ "$#" -eq 2 ] || return 64
-            shared_apply_legacy_capture_service "$2"
-            ;;
-        shared-apply-legacy-arm)
-            [ "$#" -eq 2 ] || return 64
-            shared_apply_legacy_arm_service "$2"
-            ;;
-        shared-apply-legacy-cancel)
-            [ "$#" -eq 2 ] || return 64
-            shared_apply_legacy_cancel_service "$2"
-            ;;
-        shared-apply-legacy-begin)
-            [ "$#" -eq 2 ] || return 64
-            shared_apply_legacy_begin_service "$2"
-            ;;
-        shared-apply-legacy-reconcile)
-            [ "$#" -eq 2 ] || return 64
-            [ -x /usr/local/bin/python3.13 ] || return 69
-            /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" reconcile-common "$2"
-            ;;
-        shared-apply-legacy-cold)
-            [ "$#" -eq 2 ] || return 64
-            [ -x /usr/local/bin/python3.13 ] || return 69
-            /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" reconcile-cold-common "$2"
-            ;;
-        shared-apply-legacy-resume)
-            [ "$#" -eq 2 ] || return 64
-            [ -x /usr/local/bin/python3.13 ] || return 69
-            /usr/local/bin/python3.13 "${BACKEND_DIR}/voice_native_legacy_predecessor_route.py" resume-common "$2"
-            ;;
         shared-apply-execute)
             shared_apply_execute_service "${2:-}" "${3:-}"
             ;;
@@ -2174,27 +1710,6 @@ service_dispatch()
             ;;
         native-voice-live-preflight)
             native_voice_live_preflight_service
-            ;;
-        native-voice-legacy-boot-review)
-            native_voice_legacy_boot_review_service
-            ;;
-        native-voice-legacy-boot-live-review)
-            native_voice_legacy_boot_live_review_service
-            ;;
-        native-voice-legacy-capture-plan)
-            native_voice_legacy_capture_plan_service
-            ;;
-        native-voice-legacy-arm-stop-intent)
-            native_voice_legacy_arm_stop_intent_service
-            ;;
-        native-voice-legacy-seal-clean-wal)
-            native_voice_legacy_seal_clean_wal_service
-            ;;
-        native-voice-legacy-rollback-five)
-            native_voice_legacy_rollback_five_service
-            ;;
-        native-voice-legacy-live-preflight)
-            native_voice_legacy_live_preflight_service
             ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
@@ -2309,30 +1824,6 @@ service_with_lifecycle_lock()
                             shared_apply_boot_service "$_shared_owner"
                             return $?
                             ;;
-                        legacy-common-committing\ *)
-                            # Reboot can leave a SAVED native Config and an
-                            # already fsynced irreversible IPFW COMMIT intent.
-                            # Only normal START may attempt the existing
-                            # fail-closed, read-only cold physical witness.
-                            # Do not enable it on reconfigure or restart.
-                            [ "${1:-}" = start ] || return 69
-                            _shared_legacy_cold_id=$(printf '%s\n' "$_shared_owner" |
-                                cut -d ' ' -f 2) || return 69
-                            case "$_shared_legacy_cold_id" in
-                                ""|*[!a-f0-9]*) return 69 ;;
-                            esac
-                            [ "${#_shared_legacy_cold_id}" -eq 32 ] || return 69
-                            [ "$_shared_owner" = "legacy-common-committing $_shared_legacy_cold_id voice" ] || return 69
-                            # Existing FD9/Config owner and private common
-                            # route: NEVER replay IPFW COMMIT/Config save.
-                            service_dispatch shared-apply-legacy-cold "$_shared_legacy_cold_id" || return 69
-                            # A subprocess receipt alone is not enough:
-                            # reread the SAME durable journal before boot.
-                            _shared_owner=$(shared_apply_inspect_service) || return 69
-                            [ "$_shared_owner" = "committed $_shared_legacy_cold_id voice" ] || return 69
-                            shared_apply_boot_service "$_shared_owner"
-                            return $?
-                            ;;
                         config-saved\ *)
                             # Cold recovery proves Config was persisted and
                             # the kernel contains NO active Zapret2 owner.
@@ -2444,14 +1935,6 @@ service_with_lifecycle_lock()
     ) 9>"${LIFECYCLE_LOCK_FILE}"
 }
 
-# Source the existing service functions in the private original-FD9
-# descendant of voice_native_legacy_predecessor_route. The parent continues
-# holding its pinned Config flock. Not an executable configd/GUI route.
-if [ "${ZAPRET_NATIVE_PRIVATE_IMPORT:-}" = "retired-legacy-forward" ]; then
-    case "$0" in */zapret_service.sh|zapret_service.sh) exit 69 ;; esac
-    return 0
-fi
-
 case "${1:-}" in
     status)
         service_dispatch "$@"
@@ -2477,7 +1960,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-legacy-live-preflight|native-voice-legacy-boot-review|native-voice-legacy-boot-live-review|native-voice-legacy-capture-plan|native-voice-legacy-arm-stop-intent|native-voice-legacy-seal-clean-wal|native-voice-legacy-rollback-five|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-legacy-audit|shared-apply-legacy-qualify|shared-apply-legacy-capture|shared-apply-legacy-arm|shared-apply-legacy-cancel|shared-apply-legacy-begin|shared-apply-legacy-reconcile|shared-apply-legacy-cold|shared-apply-legacy-resume)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-checkpoint|native-voice-restore-stage|native-voice-recovery-quiescence|native-voice-rollback-five|native-voice-boot-review|native-voice-live-preflight|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|native-voice-ipfw-seed|native-voice-ipfw-activate|native-voice-ipfw-commit|native-voice-ipfw-rollback|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

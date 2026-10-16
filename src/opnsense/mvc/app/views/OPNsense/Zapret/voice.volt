@@ -10,16 +10,10 @@ $(document).ready(function () {
         infoTitle: 'Как работают голосовые профили',
         infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Работающий старый Telegram PoC требует отдельной миграции. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние службы и восстановление перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом применении или работающем старом Telegram PoC требуется проверка состояния; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
-        recoveryTitle: 'Восстановление старого Telegram PoC',
-        recoveryAbsent: 'Журнал старого PoC отсутствует — восстановление не подтверждено',
-        recoveryOther: 'Обнаружен другой журнал Voice — проверьте его отдельно',
-        recoveryIncomplete: 'Незавершённое восстановление — нужна ручная проверка',
-        recoveryReceipt: 'Диск проверен — после загрузки проверьте IPFW и процессы',
-        recoveryUnknown: 'Статус восстановления недоступен — применение заблокировано',
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Общий движок и правила подтверждены', ipfwStopped: 'Общая служба остановлена, IPFW очищен',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
@@ -46,16 +40,10 @@ $(document).ready(function () {
         infoTitle: 'About Voice Profiles',
         infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. An active old Telegram PoC requires a separate migration. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect service and recovery status before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If Apply was interrupted or the old Telegram PoC is running, inspect the actual state before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
-        recoveryTitle: 'Previous Telegram PoC recovery',
-        recoveryAbsent: 'No old PoC journal — recovery not established',
-        recoveryOther: 'Another Voice journal exists — review it separately',
-        recoveryIncomplete: 'Incomplete recovery — manual review required',
-        recoveryReceipt: 'Disk proof verified — verify IPFW and processes after boot',
-        recoveryUnknown: 'Recovery status unavailable — activation blocked',
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Shared engine and IPFW verified', ipfwStopped: 'Shared service stopped; IPFW cleared',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
@@ -209,7 +197,6 @@ $(document).ready(function () {
     $('a[href="/ui/zapret/diagnostics"]').text(text.navLab);
     $('#voiceServiceTitle').text(text.service);
     $('#voiceStatusLabel').text(text.status + ':');
-    $('#voiceRecoveryLabel').text(text.recoveryTitle + ':');
     // This value comes from the same locked config.xml snapshot as the form
     // itself. Keep Validate disabled until that paired read succeeds.
     var voiceSnapshot = $('<input/>', {
@@ -598,34 +585,6 @@ $(document).ready(function () {
                 $('#voiceIPFWDetail').text('');
             });
     }
-    function refreshVoiceRecovery() {
-        return $.ajax({
-            type: 'POST', url: '/api/zapret/voice/recoveryStatus',
-            dataType: 'json', timeout: 40000
-        }).done(function (reply) {
-            var state = reply && reply.state;
-            var safe = reply && reply.safe_to_mutate === false &&
-                reply.safe_to_start === false &&
-                reply.public_voice_apply === false &&
-                reply.boot_recovery_validated === false;
-            var labels = {
-                'no-legacy-five-domain-journal-observed': text.recoveryAbsent,
-                'not-a-legacy-five-domain-journal': text.recoveryOther,
-                'legacy-five-domain-incomplete-manual-review': text.recoveryIncomplete,
-                'legacy-whole-disk-valid-live-boot-recheck-required': text.recoveryReceipt
-            };
-            var known = safe && Object.prototype.hasOwnProperty.call(labels, state);
-            $('#voiceRecoveryState')
-                .removeClass('label-success label-default label-danger')
-                .addClass(known && state === 'no-legacy-five-domain-journal-observed'
-                    ? 'label-default' : 'label-danger')
-                .text(known ? labels[state] : text.recoveryUnknown);
-        }).fail(function () {
-            $('#voiceRecoveryState')
-                .removeClass('label-success label-default')
-                .addClass('label-danger').text(text.recoveryUnknown);
-        });
-    }
     function refreshReleases() {
         var select = $('#voiceReleaseSelect');
         select.prop('disabled',true).empty().append($('<option/>').val('').text(text.loading));
@@ -701,7 +660,6 @@ $(document).ready(function () {
     $('#voiceReleaseApply').text(text.apply);
     refreshRuntime();
     refreshVoiceIPFW();
-    refreshVoiceRecovery();
     refreshReleases();
     updateServiceControlUI('zapret');
 });
@@ -754,10 +712,7 @@ $(document).ready(function () {
                 <span id="voiceIPFWState" class="label label-default">—</span>
                 <span id="voiceIPFWDetail" aria-live="polite"></span>
             </td></tr>
-            <tr><td colspan="3">
-                <b id="voiceRecoveryLabel">Previous Telegram PoC recovery:</b>
-                <span id="voiceRecoveryState" class="label label-danger" aria-live="polite">—</span>
-            </td></tr></tbody>
+</tbody>
         </table>
     </div></div>
 <section class="grid-bottom-reserve __mt">

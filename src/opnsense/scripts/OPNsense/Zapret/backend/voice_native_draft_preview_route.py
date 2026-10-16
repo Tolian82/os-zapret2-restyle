@@ -13,7 +13,6 @@ import sys
 
 from voice_native_recovery_quiescence import _locked_config
 from voice_native_saved_draft_candidate import preview_saved_draft_candidate
-from voice_native_legacy_poc_guard import _require_no_legacy_poc
 import voice_ipfw_runtime as native
 
 
@@ -25,10 +24,6 @@ def preview(mask: str, original_config_sha: str) -> dict:
         owner = (os.geteuid(), os.getegid())
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
-        # The native Apply refuses an active legacy Telegram PoC marker or
-        # runtime flag. Preview must refuse the SAME conflict, before its
-        # "previewed" UI result; never imply the candidate is executable.
-        _require_no_legacy_poc()
         result = preview_saved_draft_candidate(
             config_path=native.CONFIG, mask=mask,
             expected_sha=original_config_sha,
@@ -37,7 +32,6 @@ def preview(mask: str, original_config_sha: str) -> dict:
         )
         native.require_native_lock()
         _locked_config(native.CONFIG, fd, owner)
-        _require_no_legacy_poc()
         if result.get("state") != "native-voice-saved-draft-preview" or (
             result.get("safe_to_enable_voice") is not False
             or result.get("public_voice_apply") is not False
