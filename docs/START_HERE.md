@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff:** published full release `v0.5.2`, package `os-zapret2-restyle-0.5.2_194.pkg`. `VERSION=0.5.2`, `PLUGIN_REVISION=194`. Exact immutable release-preparation main merge [1896122](https://github.com/Tolian82/os-zapret2-restyle/commit/18961229801011a201bff1dae22db96692074648) from PR #329 after implementation PR #328.
+**Current handoff identity:** `v0.5.2_194`. Published full release `v0.5.2`, package `os-zapret2-restyle-0.5.2_194.pkg`. `VERSION=0.5.2`, `PLUGIN_REVISION=194`. Exact immutable release-preparation main merge [1896122](https://github.com/Tolian82/os-zapret2-restyle/commit/18961229801011a201bff1dae22db96692074648) from PR #329 after implementation PR #328.
 
 ## Последняя подтверждённая квалификация
 
