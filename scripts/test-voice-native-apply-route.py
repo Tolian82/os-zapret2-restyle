@@ -62,6 +62,7 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
         shell = (SCRIPTS / 'zapret_service.sh').read_text()
         self.assertNotIn('voice_native_legacy_', shell)
         self.assertNotIn('shared-apply-legacy-', shell)
+
     def test_shared_apply_and_readonly_preview_remain_live_entrypoints(self):
         service = (SCRIPTS / "zapret_service.sh").read_text()
         configd = (
@@ -84,14 +85,13 @@ class RetiredVoiceEntrypointsTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertNotIn(command, service)
                 self.assertNotIn(command, configd)
-        actuator = (BACKEND / "voice_native_process_lifecycle.sh").read_text()
-        self.assertNotIn("start-candidate-supervisor", actuator)
-        self.assertNotIn("start-candidate-engine", actuator)
-        self.assertIn("    stop-candidate-engine)", actuator)
-        # Shared lifecycle shell helpers remain until their current callers are audited.
-        self.assertIn("    stop)", actuator)
-        self.assertIn("    start)", actuator)
-        self.assertIn("supervisor_start", actuator)
+        # The previous Python cutover coordinator is gone: do not leave its
+        # standalone process actuator packaged or callable under inherited FD9.
+        self.assertFalse((BACKEND / "voice_native_process_lifecycle.sh").exists())
+        self.assertIn("shared_apply_stop_service", service)
+        self.assertIn("shared_apply_boot_service", service)
+        self.assertIn("shared_apply_execute_service", service)
+        self.assertIn("start|stop|restart|reconfigure", service)
         pkg = (ROOT / "scripts/build-pkg.sh").read_text()
         self.assertNotIn('PREPARE_ROUTE=', pkg)
         self.assertNotIn('APPLY_ROUTE=', pkg)

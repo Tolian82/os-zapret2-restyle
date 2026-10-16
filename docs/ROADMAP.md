@@ -11,10 +11,10 @@
 | 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
 | 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
-| 6. Удаление дублирования | Убрана инертная ordinary Voice-сборка; публичные Telegram configctl больше не вызывают старый marker/reconfigure. По решению владельца 16.10.2026 удаляются все legacy PoC migration/rollback компоненты |
-| 7. Приёмка | `_145` полный CI + FreeBSD 15 SUCCESS; `_146` проверяется отдельно. Owner-live GUI/STUN/MEDIA/CALL впереди |
+| 6. Удаление дублирования | Основной PoC rollback/migration/private IPFW-граф удалён в `_168–_180` и прошёл Voice/Project/FreeBSD 15 CI. `_181` удаляет остаточный частный shell-исполнитель и квалифицирует отсутствие в пакете |
+| 7. Приёмка | `_180` Voice/Project/FreeBSD 15 PASS; `_181` требует новой квалификации. Одна testing-поставка только после закрытия программных требований; owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL ещё не проведена |
 
-**Остаточный рубеж:** подтвердить latest-HEAD CI и реальную FreeBSD 15 сборку, удалить старый PoC из продукта, проверить отсутствие его entrypoints и состав пакета, затем одну testing поставку и owner-live приёмку. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
+**Остаточный рубеж:** квалифицировать `_181` на точном HEAD, проверить пакет и отсутствие последнего старого process entrypoint, затем оценить готовность неизменного ТЗ к одной testing-поставке и owner-live приёмке. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
 
 ## Основной завершённый путь
 

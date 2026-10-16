@@ -594,6 +594,11 @@ jobs:
             echo "ERROR: retired Telegram Phase-B PoC shipped in package" >&2
             exit 1
           fi
+          # The old cutover-only process actuator has no shared Apply caller.
+          if grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_lifecycle.sh' "${contents}"; then
+            echo "ERROR: retired private Voice process actuator shipped in package" >&2
+            exit 1
+          fi
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
           # Retired Telegram PoC executors, cutover journals and private
