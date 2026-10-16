@@ -77,6 +77,7 @@ grep -Fq 'telegram_voice_native_status_service()' "$SOURCE" ||
     fail "Telegram status still reports only hardcoded PoC profile"
 grep -Fq 'shared_apply_request.php" telegram-saved' "$SOURCE" ||
     fail "Telegram status uses old marker as saved preference"
-grep -Fq 'telegram-voice-status|native-voice-checkpoint' "$SOURCE" ||
+# Public Telegram status is in the same original FD9 dispatch as lifecycle.
+grep -Fq 'reconfigure|telegram-voice-status|native-voice-lifecycle-inspect' "$SOURCE" ||
     fail "compatibility status must own original FD9"
 echo 'PASS: original-FD9 one-request shared Voice/Strategies transaction and configd action'

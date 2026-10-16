@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_179`. `VERSION=0.5.2`; `PLUGIN_REVISION=179`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_180`. `VERSION=0.5.2`; `PLUGIN_REVISION=180`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
@@ -30,8 +30,10 @@
 
 **`_179`:** обновлены три дополнительные фикстуры, обнаруженные в `_178` [CI #38906963122](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38906963122): `test-shared-apply-saved-recovery.sh`, `test-shared-apply-activated-staged.sh`, `test-shared-apply-render.py` теперь ожидают `preflight_shared_apply_journal`. Runtime и удалённый private PoC не менялись. Требуется полный exact-HEAD CI.
 
+**`_180`:** обновлён последний obsolete assertion в `test-shared-apply-run.sh`: проверяется текущая FD9-диспетчеризация `telegram-voice-status` без удалённой `native-voice-checkpoint`. В `_179` [CI #38907372710](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38907372710) Voice дошёл до общего Apply, тест остановился только на старой строке dispatch. Нужна новая квалификация `_180`; релиз и owner-live не выполнялись.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_179` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_180` не опубликована.
