@@ -44,8 +44,8 @@ class VoiceDraftPreviewTests(unittest.TestCase):
         self.hits = 0
 
     def test_preview_reuses_exact_saved_draft_parser_without_writes(self):
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock",
+        with patch.object(route, "CONFIG", self.config), \
+             patch.object(route, "require_lifecycle_lock",
                           side_effect=lambda: setattr(self, "hits", self.hits + 1)):
             result = route.preview("10001", self.sha)
         self.assertEqual("native-voice-saved-draft-preview", result["state"])
@@ -58,8 +58,8 @@ class VoiceDraftPreviewTests(unittest.TestCase):
         self.assertGreaterEqual(self.hits, 3)
 
     def test_fail_closed_for_stale_input_without_publishing(self):
-        with patch.object(route.native, "CONFIG", self.config), \
-             patch.object(route.native, "require_native_lock", return_value=None):
+        with patch.object(route, "CONFIG", self.config), \
+             patch.object(route, "require_lifecycle_lock", return_value=None):
             with self.assertRaises(draft.NativeDraftCandidateError):
                 route.preview("10000", "0" * 64)
             with self.assertRaises(draft.NativeDraftCandidateError):

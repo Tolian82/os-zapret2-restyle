@@ -15,14 +15,11 @@ import os
 from pathlib import Path
 import re
 import stat
-import tempfile
 from xml.dom import minidom
 
-from voice_cutover_backup import _private_dir, _sync_dir
-from voice_native_recovery_quiescence import _locked_config
+from voice_native_lifecycle_router import _locked_config
 
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
-PREFIX = ".voice-draft-input-"
 MAX_CONFIG = 4 * 1048576
 
 
@@ -139,60 +136,3 @@ def preview_saved_draft_candidate(
     }
 
 
-def prepare_saved_draft_candidate(
-    *, config_path, destination, mask, expected_sha, config_fd,
-    config_owner, require_lifecycle_owner,
-) -> dict:
-    """Atomic root-private XML publication; never touches existing live Config."""
-    config_path, destination = Path(config_path), Path(destination)
-    if not destination.is_absolute() or destination.name != "voice-build-input" or (
-        config_path == destination
-    ):
-        raise NativeDraftCandidateError("foreign native Voice destination")
-    candidate_xml = render_saved_draft_candidate(
-        config_path=config_path, mask=mask, expected_sha=expected_sha,
-        config_fd=config_fd, config_owner=config_owner,
-        require_lifecycle_owner=require_lifecycle_owner,
-    )
-
-    parent = destination.parent
-    _private_dir(parent)
-    if os.path.lexists(destination) or any(
-        name.startswith(PREFIX) for name in os.listdir(parent)
-    ):
-        raise NativeDraftCandidateError("existing Voice candidate or interrupted private stage")
-    temp = Path(tempfile.mkdtemp(prefix=PREFIX, dir=parent))
-    os.chmod(temp, 0o700)
-    _sync_dir(parent)
-    try:
-        outfile = temp / "config.xml"
-        fd = os.open(outfile, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                     getattr(os, "O_NOFOLLOW", 0), 0o600)
-        try:
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(candidate_xml)
-                stream.flush()
-                os.fsync(stream.fileno())
-        except BaseException:
-            # with fdopen owns fd even when the write fails
-            raise
-        _sync_dir(temp)
-        require_lifecycle_owner()
-        _locked_config(config_path, config_fd, config_owner)
-        if hashlib.sha256(os.pread(config_fd, MAX_CONFIG + 1, 0)).hexdigest() != expected_sha:
-            raise NativeDraftCandidateError("current Config changed during private stage")
-        if os.path.lexists(destination):
-            raise NativeDraftCandidateError("foreign Voice build input appeared")
-        os.rename(temp, destination)
-        _sync_dir(parent)
-        return {
-            "state": "native-voice-private-saved-draft-xml",
-            "saved_xml_sha256": hashlib.sha256(candidate_xml).hexdigest(),
-            "previous_config_sha256": expected_sha,
-            "safe_to_enable_voice": False,
-            "public_voice_apply": False,
-        }
-    except BaseException:
-        # Retain private partial files for review, not a silent reuse.
-        _sync_dir(parent)
-        raise

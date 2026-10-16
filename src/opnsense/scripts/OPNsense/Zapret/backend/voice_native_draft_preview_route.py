@@ -1,37 +1,40 @@
 #!/usr/bin/env python3
 """Read-only native GUI Voice selection preflight under the original FD9.
 
-The one-lock, one-source parser is shared with the later private publisher.
+The one-lock, one-source parser produces a read-only preview of saved choices.
 No writable stage, native PREPARED, ledger, IPFW or Config mutation exists here.
 """
 from __future__ import annotations
 
 import fcntl
+from pathlib import Path
 import json
 import os
 import sys
 
-from voice_native_recovery_quiescence import _locked_config
+from voice_native_lifecycle_router import _locked_config
 from voice_native_saved_draft_candidate import preview_saved_draft_candidate
-import voice_ipfw_runtime as native
+from voice_ipfw_adapter import require_lifecycle_lock
+
+CONFIG = Path("/conf/config.xml")
 
 
 def preview(mask: str, original_config_sha: str) -> dict:
-    native.require_native_lock()
-    fd = os.open(native.CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+    require_lifecycle_lock()
+    fd = os.open(CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         owner = (os.geteuid(), os.getegid())
-        native.require_native_lock()
-        _locked_config(native.CONFIG, fd, owner)
+        require_lifecycle_lock()
+        _locked_config(CONFIG, fd, owner)
         result = preview_saved_draft_candidate(
-            config_path=native.CONFIG, mask=mask,
+            config_path=CONFIG, mask=mask,
             expected_sha=original_config_sha,
             config_fd=fd, config_owner=owner,
-            require_lifecycle_owner=native.require_native_lock,
+            require_lifecycle_owner=require_lifecycle_lock,
         )
-        native.require_native_lock()
-        _locked_config(native.CONFIG, fd, owner)
+        require_lifecycle_lock()
+        _locked_config(CONFIG, fd, owner)
         if result.get("state") != "native-voice-saved-draft-preview" or (
             result.get("safe_to_enable_voice") is not False
             or result.get("public_voice_apply") is not False

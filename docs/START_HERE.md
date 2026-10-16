@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_175`. `VERSION=0.5.2`; `PLUGIN_REVISION=175`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_176`. `VERSION=0.5.2`; `PLUGIN_REVISION=176`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
@@ -22,8 +22,10 @@
 
 **`_175`:** `voice_native_lifecycle_router.py` переведён с PoC cutover/backup/old-IPFW импортов на `shared_apply_operation.native_lifecycle_gate` и прямую read-only проверку Config inode/flock. Удалён CLI `legacy-poc-preflight`. Результаты saved ON/OFF теперь говорят об общем Apply, а не о «неподключённом» native. Обновлён regression saved/config-flock/candidate/shared pending. После CI `_175` — удаление неиспользуемого `voice_cutover_*` private graph.
 
+**`_176`:** read-only GUI Voice draft preview больше не зависит от старого `voice_ipfw_runtime` и private quiescence. Разбор сохранённых профилей перенесён на общий Config/flock verifier; отдельный неиспользуемый publisher XML `prepare_saved_draft_candidate` удалён. Оставлены проверки маски, hash, точности XML и отсутствия записей. Далее — полное удаление `voice_cutover_*` и зависимого private graph. Нужен exact-HEAD CI.
+
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_175` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_176` не опубликована.
