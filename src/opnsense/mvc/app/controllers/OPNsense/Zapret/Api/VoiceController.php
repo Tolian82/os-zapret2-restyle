@@ -328,6 +328,10 @@ class VoiceController extends ApiControllerBase
             return $failed('Missing Voice form');
         }
         $this->throwReadOnly();
+        // After dispatch to the privileged worker, even an exception that
+        // looks like invalid user input cannot prove that Config/runtime/IPFW
+        // were untouched. Pre-dispatch validation keeps its normal errors.
+        $nativeApplyDispatched = false;
         try {
             $backend = new Backend();
             $guard = json_decode(trim((string)$backend->configdRun('zapret strategy_lab_guard')), true);
@@ -357,6 +361,7 @@ class VoiceController extends ApiControllerBase
             } finally {
                 $config->unlock();
             }
+            $nativeApplyDispatched = true;
             $output = trim((string)$backend->configdpRun(
                 'zapret shared_apply', ['voice', $encoded], false, 600
             ));
@@ -374,6 +379,12 @@ class VoiceController extends ApiControllerBase
                 'snapshot' => VoiceSettingsSnapshot::digest($plan['candidate']),
             ];
         } catch (\InvalidArgumentException $error) {
+            if ($nativeApplyDispatched) {
+                return $failed(
+                    'Native Voice Apply result is uncertain; inspect the shared service state before retrying',
+                    true
+                );
+            }
             return $failed($error->getMessage());
         } catch (\Throwable $error) {
             return $failed(

@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Решение владельца 15.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем одна testing-поставка и живые испытания. База разработки `v0.5.2_189`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Актуальное решение владельца 16.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем **полноценный релиз**, и только после него живые испытания. База разработки `v0.5.2_190`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -14,14 +14,13 @@
 
 Повторная разработка этих функций запрещена без воспроизводимого нового дефекта. Автоматическая проверка не доказывает STUN/MEDIA/CALL.
 
-## Открытые границы перед testing package
+## Открытые границы перед полноценным релизом
 
-1. **Квалификация CI/FreeBSD:** `_180` HEAD `a5a1b16` [CI #38907807528](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38907807528) — Voice, Project, FreeBSD 15 **PASS**; testing package contract — PASS. `_181` HEAD `3405301` [CI #38913309729](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38913309729) полностью прошла Voice, Project, FreeBSD 15 и delivery contract. `_182` HEAD `10e9652` [CI #38920675327](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38920675327) прошла Voice, Project, FreeBSD 15 и testing contract. `_183` HEAD `c14a214` [CI #38924849815](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38924849815) Voice/Project/FreeBSD 15 PASS. `_184` исправила API-level ложное `ready/stopped`, Voice CI PASS, Project CI указала на устаревшую PHP concurrency фикстуру. `_185` обновляет её для fail-closed API статуса, требует собственной Voice/Project/FreeBSD 15 exact-HEAD квалификации. Автотесты не доказывают реальный звонок.
-   `_185` HEAD `0e1744e` [CI #38932524257](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38932524257) **PASS** Voice, Project, FreeBSD 15. `_186` HEAD `054bd07` [CI #38938460953](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38938460953) Voice/Project/FreeBSD 15 PASS и [testing contract](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38938460954) PASS. `_187` HEAD `ce3030f` [CI #38941362799](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38941362799) Voice/Project/FreeBSD 15 PASS и [testing contract](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38941362780) PASS. `_188` отмечает неопределённый результат Save Draft, включая ошибки браузера/Config. `_189` закрывает дополнительный post-serialization путь `InvalidArgumentException`: после возможной записи это требует review, а pre-write validation остаётся обычной ошибкой. Добавлена PHP-регрессия с реально изменившимися полями модели и исключением после Save; exact-HEAD CI требуется.
+1. **Exact-HEAD CI/FreeBSD:** `_189` HEAD `d1052c6` [CI #38943651499](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38943651499) — **Voice/Project/FreeBSD 15 PASS**, [testing delivery contract](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38943651602) — PASS. `_190` закрывает post-dispatch `InvalidArgumentException` в общем Apply и добавляет PHP-регрессию. Её собственная exact-HEAD квалификация требуется до выпуска. CI не доказывает MEDIA/CALL.
 2. **Этап 6 — удаление дублирования:** `_168–_180` убрали PoC marker, legacy migrations, rollback, отдельный IPFW/процессный Python-граф и 95 файлов с тестами; `_181` завершила удаление неиспользуемого частного process shell, подтверждённое CI и проверкой FreeBSD-пакета. Этап 6 закрыт на уровне кода и поставки, не owner-live. Не возвращать восстановление старого Telegram PoC.
 3. **Миграция:** миграция работающего Phase-B и old marker больше не входит в ТЗ разработки: чистый native Voice + Strategies Config/Apply baseline. Обновить guards, не тратить время на backwards compatibility.
-4. **Owner-live:** после завершения кода/сборки проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
+4. **Owner-live после релиза:** после публикации полноценного установочного релиза проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
 
-После кодовой готовности — одна GitHub testing-поставка, затем owner-live. Не делать stable или merge преждевременно. Для каждого пункта различать **source implemented**, **CI/package verified** и **owner-live confirmed**.
+После кодовой готовности — один полноценный релиз с проверкой README/пакетного репозитория по GH-039–GH-052, затем owner-live. Не выпускать незавершённый или известный критически неисправный пакет; промежуточных live-тестов до релиза нет. Для каждого пункта различать **source implemented**, **CI/package verified** и **owner-live confirmed**.
 
 Точное действие — [START_HERE](START_HERE.md); факты — [PROJECT_STATE](PROJECT_STATE.md); хронология — [ledger](history/current/v0.5.x.md).

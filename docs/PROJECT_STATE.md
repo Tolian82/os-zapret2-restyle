@@ -1,14 +1,14 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_189`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.2_190`** (feature branch, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328)). Не выпускался и не установлен на OPNsense. Точный следующий шаг и последний CI — [START_HERE](START_HERE.md). Хронология — [working ledger](history/current/v0.5.x.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-`_187` [CI #38941362799](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38941362799) Voice/Project/FreeBSD PASS. `_188` обновляет Save Draft на неопределённые ошибки. `_189` также правильно маркирует `InvalidArgumentException` после начала записи как `requires_review`, сохраняя pre-write валидацию; нужна собственная exact-HEAD CI. Релиз и owner-live не выполнялись.
+`_189` HEAD `d1052c6` [CI #38943651499](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38943651499) Voice/Project/FreeBSD PASS и [delivery contract #38943651602](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38943651602) PASS. `_190` корректирует classification неизвестного результата общего Voice Apply при post-dispatch `InvalidArgumentException`, добавляет PHP-regression и требует exact-HEAD CI. Владелец уточнил порядок: код → полноценный релиз → owner-live; ни релиз, ни live ещё не выполнены.
 
 ## Версия и поставка
 
 - Repository `Tolian82/os-zapret2-restyle`, `main`; service key `zapret`.
-- `VERSION=0.5.2`, `PLUGIN_REVISION=189` — пакет только в feature branch.
-- package candidate: `os-zapret2-restyle-0.5.2_189.pkg` — **не опубликован**.
+- `VERSION=0.5.2`, `PLUGIN_REVISION=190` — пакет только в feature branch.
+- package candidate: `os-zapret2-restyle-0.5.2_190.pkg` — **не опубликован**.
 - Stable `v0.5.0` / `os-zapret2-restyle-0.5.0_1.pkg`; опубликованный testing `v0.5.0_3`.
 - Target platform FreeBSD 15 amd64 / Python 3.13. Последние CI/FreeBSD результаты по точному HEAD находятся в [START_HERE](START_HERE.md), не копируются сюда. `SKIPPED`, offline-only и owner-live непроверенные результаты не считаются PASS.
 

@@ -43,6 +43,8 @@ namespace OPNsense\Core {
     class Backend {
         public static bool $busy = false;
         public static bool $reconfigureOK = true;
+        public static bool $postNativeCommitInvalid = false;
+        public static int $nativeCommits = 0;
         public static string $inspectResponse = '';
         public static bool $inspectThrows = false;
         public static array $calls = [];
@@ -65,9 +67,16 @@ namespace OPNsense\Core {
                     !is_array($request['sync'] ?? null)) {
                     throw new \RuntimeException('Invalid native Apply envelope');
                 }
-                return self::$reconfigureOK
-                    ? 'applied-id=' . str_repeat('d',32)
-                    : 'ERROR: interrupted native Apply';
+                if (self::$reconfigureOK) {
+                    self::$nativeCommits++;
+                    // Native work has already produced its receipt. The
+                    // transport/PHP boundary may still throw InvalidArgument.
+                    if (self::$postNativeCommitInvalid) {
+                        throw new \InvalidArgumentException('synthetic invalid after native Apply');
+                    }
+                    return 'applied-id=' . str_repeat('d',32);
+                }
+                return 'ERROR: interrupted native Apply';
             }
             if ($action !== 'zapret voice_preview_draft') {
                 throw new \RuntimeException('unexpected parameterized configd action');
@@ -393,6 +402,44 @@ namespace {
     equal(true, $retried['applied'], 'native confirmed receipt reports Applied');
     equal(1, Config::getInstance()->saves,
         'GUI does not re-persist native Config');
+
+    // A pre-dispatch InvalidArgumentException (stale snapshot) is still an
+    // editable form error and MUST NOT invoke the privileged worker.
+    $candidate['sync']['snapshot'] = str_repeat('0', 64);
+    $api->request = new FakeRequest('POST', $candidate);
+    Backend::$calls = [];
+    $staleApply = $api->applyAction();
+    equal('failed', $staleApply['result'], 'stale native Apply baseline must fail');
+    equal(false, $staleApply['requires_review'],
+        'pre-dispatch validation must not incorrectly demand post-Apply review');
+    equal(['zapret strategy_lab_guard'], Backend::$calls,
+        'stale native Apply cannot reach privileged mutation');
+    $candidate['sync']['snapshot'] = VoiceSettingsSnapshot::digest(Zapret::$nodes);
+
+    // Native Apply may fully finish but PHP/transport still raises the
+    // InvalidArgumentException class, despite a committed Config/runtime.
+    // The response MUST require inspection instead of inviting a blind retry.
+    $api->request = new FakeRequest('POST', $candidate);
+    Backend::$calls = [];
+    $beforeNativeCommit = Backend::$nativeCommits;
+    Backend::$postNativeCommitInvalid = true;
+    try {
+        $postApplyFault = $api->applyAction();
+    } finally {
+        Backend::$postNativeCommitInvalid = false;
+    }
+    equal('failed', $postApplyFault['result'],
+        'exception after native Apply must never report success');
+    equal(false, $postApplyFault['applied'],
+        'post-commit exception must not assert Applied without a PHP receipt');
+    equal(true, $postApplyFault['requires_review'],
+        'post-commit InvalidArgumentException requires explicit runtime review');
+    equal($beforeNativeCommit + 1, Backend::$nativeCommits,
+        'regression must simulate completion before InvalidArgumentException');
+    equal(['zapret strategy_lab_guard', 'zapret shared_apply'], Backend::$calls,
+        'regression must exercise real common FD9 Apply entrypoint');
+    equal(0, Config::getInstance()->locks,
+        'post-commit error cannot leave GUI Config lock held');
 
     // The Voice status widget is read-only and must always fail closed.
     // An unowned bare "ready" (without an attested native-common source)
