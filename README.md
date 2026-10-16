@@ -5,13 +5,13 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | `v0.5.0` · `os-zapret2-restyle-0.5.0_1.pkg` |
-| **Current development candidate (not released)** | `v0.5.2_193` · [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328) |
+| **Current development candidate (not released)** | `v0.5.2_194` · [release correction PR](https://github.com/Tolian82/os-zapret2-restyle/pulls) |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **unreleased v0.5.2 candidate** additionally introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 release candidate** additionally introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
@@ -234,7 +234,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Current development stage: **v0.5.2_193** — shared Strategies/Voice backend, unreleased; **v0.5.0** remains the full stable release. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
+Current development stage: **v0.5.2_194** — shared Strategies/Voice backend, release preparation in progress; **v0.5.0** remains the full stable release. See the [implementation plan and controls](docs/architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md); historical v0.5.1 reports are available through the [stage archive](docs/history/stages/v0.5.1/README.md).
 
 Useful entry points:
 

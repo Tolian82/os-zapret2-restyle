@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — v0.5.2: завершение Voice
 
-Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и внешний вид пяти Voice-сервисов не меняются. [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328); никакого релиза до кодовой готовности.
+Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и внешний вид пяти Voice-сервисов не меняются. [merged PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328); в `main` внесён код пяти сервисов, но стабильный релиз `v0.5.2` заблокирован post-merge CI и триггером. Следующий этап — исправление по фактическим логам и нормальная публикация без переписывания истории.
 
 | Этап из [плана](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) | Фактический статус |
 |---|---|
