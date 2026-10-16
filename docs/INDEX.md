@@ -22,7 +22,7 @@
 - [Подробный план v0.5.2](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — критерии семи этапов; общий generator/IPFW/Apply/lifecycle и GUI status реализованы; следующий рубеж — проверка пакета/legacy deprecation, CI/FreeBSD.
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — неизменные frontend/функции пяти сервисов и утверждённый общий backend.
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [Zapret2 Service](architecture/ZAPRET2_SERVICE.md) — действующие общие контракты.
-- [Запись этапа v0.5.2](releases/v0.5.2.md) — development only, без релиза.
+- [Полный релиз v0.5.2](releases/v0.5.2.md) и [доказательства публикации](verification/evidence/2026-10-16-v0.5.2-release-publication.md).
 - [Working ledger v0.5.x](history/current/v0.5.x.md) — текущая хронология; состояние принадлежит PROJECT_STATE.
 
 ## Specialist routes по задаче

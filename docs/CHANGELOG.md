@@ -6,6 +6,16 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [v0.5.2] - 2026-10-16
+
+Full stable OPNsense Web/pkg release: `os-zapret2-restyle-0.5.2_194.pkg`, FreeBSD 15 amd64, [GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) and GitHub Pages pkg repository.
+
+- Added a shared native Voice Transmission page for Telegram, Discord, X, SIP and Custom STUN/UDP profiles with RU/EN help and IPv4 IPSET.
+- Reused ordinary Strategies Config/FD9 Apply, one dvtws2 and shared IPFW/boot lifecycle. Removed obsolete private Telegram PoC/recovery.
+- Corrected both GUI clients to require review after unknown native Apply outcomes.
+- CI/FreeBSD package and release publication PASS; real OPNsense GUI/BOOT/STUN/MEDIA/CALL PENDING. [Evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md).
+
+
 ## [Unreleased]
 
 ### Added

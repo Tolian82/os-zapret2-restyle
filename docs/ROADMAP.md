@@ -1,8 +1,8 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.2: завершение Voice
+## Текущий приоритет — v0.5.2: owner-live после полного релиза
 
-Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и внешний вид пяти Voice-сервисов не меняются. [merged PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328); в `main` внесён код пяти сервисов, но стабильный релиз `v0.5.2` заблокирован post-merge CI и триггером. Следующий этап — исправление по фактическим логам и нормальная публикация без переписывания истории.
+Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и пять Voice-сервисов сохранены. PR #328 и PR #329 merged; [полный v0.5.2 Web/pkg release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) опубликован. Следующий этап — owner-live, не повторный релиз и не возврат к старому PoC.
 
 | Этап из [плана](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) | Фактический статус |
 |---|---|
@@ -12,9 +12,9 @@
 | 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
 | 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
 | 6. Удаление дублирования | Завершено в коде и проверено CI/FreeBSD: удалён private PoC recovery/rollback/IPFW/process graph и его entrypoints; единый shared Apply сохранён |
-| 7. Завершение и приёмка | Пять сервисов, общий Apply, native lifecycle и GUI status реализованы в коде. Проверка текущего HEAD и обязательный README/release gate предшествуют полноценному Web/pkg релизу; owner-live GUI/CONFIG/BOOT/STUN/MEDIA/CALL выполняется **после** него. |
+| 7. Завершение и приёмка | Код, Voice/Project/FreeBSD CI и полный release `v0.5.2_194` опубликованы. GUI/CONFIG/BOOT/STUN/MEDIA/CALL на OPNsense — **PENDING**, следующий этап. |
 
-**Остаточный рубеж:** квалифицировать текущий точный HEAD, завершить только воспроизводимые ошибки GUI/Apply, затем оценить кодовую готовность ТЗ к полноценному релизу перед будущей owner-live приёмкой. Уже реализованную STUN→common dvtws2→IPFW→Apply цепочку не строить повторно. **Точное следующее действие принадлежит [START_HERE](START_HERE.md)**, подтверждённые факты — [PROJECT_STATE](PROJECT_STATE.md), критерии — [контролю](VOICE_CODE_COMPLETION_GATE.md). ROADMAP не хранит `_N` и последние логи CI.
+**Остаточный рубеж:** owner-live приёмка опубликованного `v0.5.2_194`: сначала GUI/CONFIG/BOOT, затем WAN/UDP/STUN и отдельно MEDIA/CALL. Без повторного создания старой архитектуры; [точный handoff](START_HERE.md).
 
 ## Основной завершённый путь
 
