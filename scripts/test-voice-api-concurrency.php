@@ -563,6 +563,12 @@ namespace {
     equal(0, Config::getInstance()->locks,
         'post-save error must release native Config lock');
 
+    // A Strategies XML candidate validates ALL ordinary model leaves.
+    // The earlier Voice-only stub intentionally omitted these four fields.
+    Zapret::$nodes['hostlist'] += [
+        'mode' => 'auto', 'youtubedomains' => '',
+        'userdomains' => '', 'excludedomains' => '',
+    ];
     // Strategies shares the SAME FD9 worker. Post-dispatch exceptions must
     // never masquerade as safe field errors on that second GUI.
     $strategy = new SettingsController();

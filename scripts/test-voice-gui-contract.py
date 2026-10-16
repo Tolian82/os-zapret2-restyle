@@ -13,6 +13,7 @@ FORM = SRC / "controllers/OPNsense/Zapret/forms/voice.xml"
 MENU = SRC / "models/OPNsense/Zapret/Menu/Menu.xml"
 CONTROLLER = SRC / "controllers/OPNsense/Zapret/IndexController.php"
 VIEW = SRC / "views/OPNsense/Zapret/voice.volt"
+STRATEGIES_VIEW = SRC / "views/OPNsense/Zapret/general.volt"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 BAD_FIELDS = ("laninterface", "incominginterface", "processlocaludp", "restoreonboot")
 
@@ -26,6 +27,7 @@ def main() -> None:
     menu = ET.parse(MENU).getroot()
     controller = CONTROLLER.read_text(encoding="utf-8")
     view = VIEW.read_text(encoding="utf-8")
+    strategies_view = STRATEGIES_VIEW.read_text(encoding="utf-8")
     fields = [f.findtext("id") for f in form.findall("./field") if f.findtext("id")]
     required = ["zapret.voice.waninterface"]
     for name in SERVICES:
@@ -191,6 +193,23 @@ def main() -> None:
     match = re.search(r"<script>(.*?)</script>", view, re.DOTALL)
     check(match is not None, "Voice view is missing inline JavaScript")
     if shutil.which("node"):
+        # Parse the second real browser client of the same FD9 Apply.
+        strategies_script = re.search(r"<script>(.*?)</script>",
+                                      strategies_view, re.DOTALL)
+        check(strategies_script is not None,
+              "Strategies GUI missing browser JavaScript")
+        syntax = subprocess.run(
+            ["node", "--check", "-"], input=strategies_script.group(1),
+            text=True, capture_output=True, check=False,
+        )
+        check(syntax.returncode == 0,
+              "Strategies GUI JS syntax: " + syntax.stderr)
+        check("strategiesApplyPending" in strategies_script.group(1) and
+              "strategiesApplyNeedsReview" in strategies_script.group(1) and
+              "data.requires_review === true" in strategies_script.group(1) and
+              "timeout: 630000" in strategies_script.group(1) and
+              "reloadSettings().done" in strategies_script.group(1),
+              "Strategies browser shared Apply review gate missing")
         parsed = subprocess.run(
             ["node", "--check", "-"], input=match.group(1),
             text=True, capture_output=True, check=False,

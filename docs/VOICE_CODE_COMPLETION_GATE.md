@@ -1,6 +1,6 @@
 # «Передача голоса» — контроль завершения без преждевременного релиза
 
-Актуальное решение владельца 16.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем **полноценный релиз**, и только после него живые испытания. База разработки `v0.5.2_191`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
+Актуальное решение владельца 16.10.2026: закончить полный код пяти сервисов по [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), затем **полноценный релиз**, и только после него живые испытания. База разработки `v0.5.2_192`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328), без релиза.
 
 ## Реализовано в коде (не равно live PASS)
 
@@ -16,7 +16,7 @@
 
 ## Открытые границы перед полноценным релизом
 
-1. **Exact-HEAD CI/FreeBSD:** `_190` HEAD `0fe4f11` [CI #38946969246](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38946969246) **Voice/Project/FreeBSD 15 PASS**, [delivery contract](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38946969196) PASS. `_191` устраняет ложный retry на второй странице общего Apply при post-dispatch exception/AJAX timeout, повторяет имеющиеся PHP safety checks для Strategies; собственная exact-HEAD квалификация требуется до релиза.
+1. **Exact-HEAD CI/FreeBSD:** `_190` [CI #38946969246](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38946969246) Voice/Project/FreeBSD PASS. `_191` [CI #38951927926](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38951927926) нашла неполную PHP-фикстуру Strategies; `_192` восстанавливает обязательные hostlist leaves и добавляет Node.js syntax check для `general.volt`. Exact-HEAD CI `_192` нужна до релиза.
 2. **Этап 6 — удаление дублирования:** `_168–_180` убрали PoC marker, legacy migrations, rollback, отдельный IPFW/процессный Python-граф и 95 файлов с тестами; `_181` завершила удаление неиспользуемого частного process shell, подтверждённое CI и проверкой FreeBSD-пакета. Этап 6 закрыт на уровне кода и поставки, не owner-live. Не возвращать восстановление старого Telegram PoC.
 3. **Миграция:** миграция работающего Phase-B и old marker больше не входит в ТЗ разработки: чистый native Voice + Strategies Config/Apply baseline. Обновить guards, не тратить время на backwards compatibility.
 4. **Owner-live после релиза:** после публикации полноценного установочного релиза проверить GUI/CONFIG/BOOT и WAN UDP/STUN; MEDIA/CALL остаются самостоятельными испытаниями. TCP parent/TNAS/Docker не входят в plugin.
