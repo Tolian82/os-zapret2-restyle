@@ -15,8 +15,6 @@ import stat
 import subprocess
 import sys
 
-from voice_firewall_ledger import LedgerError, VoiceOwnershipStore
-from voice_cutover_journal import CutoverJournalError, VoiceCutoverJournal
 from voice_ipfw_adapter import (FreeBSDIPFWAdapter, IPFWAdapterError,
                                 shared_release_manifest)
 from voice_firewall_transaction import verify_prior_state
@@ -24,76 +22,12 @@ from shared_apply_operation import (SharedApplyOperation, SharedOperationError,
                                     committed_owner)
 from shared_apply_seal import WORK, SharedBundleError, verify_seal
 from voice_firewall_transaction import (
-    SERVICES, TABLE_PREFIX, VoiceFirewallError, table_contents_equal,
+    SERVICES, TABLE_PREFIX, VoiceFirewallError,
 )
 
 
 class VoiceInspectError(RuntimeError):
     pass
-
-
-def examine(store, adapter, cutover=None) -> dict:
-    """Inspect without side effects; 'ready' requires exact owned kernel state.
-
-    An incomplete whole-runtime Config/engine/IPFW transition takes priority
-    even if this moment's individual IPFW rules happen to appear correct.
-    """
-    if cutover is not None:
-        phase = cutover.inspect()
-        if phase != "no-intent":
-            return {
-                "state": "interrupted",
-                "condition": phase,
-                "can_activate": False,
-                "remedy": "whole-runtime-manual-review",
-            }
-    if store.pending() is not None:
-        condition = store.inspect(adapter)
-        return {
-            "state": "interrupted",
-            "condition": condition,
-            "can_activate": False,
-            "remedy": "manual-inspection" if condition == "manual-review"
-                      else "verified-recovery-required",
-        }
-
-    expected = store.owned()
-    if expected is None:
-        return {
-            "state": "uninitialized",
-            "can_activate": False,
-            "remedy": "explicit-ownership-adoption-required",
-        }
-    if adapter.rule_base != expected["rule_base"] or \
-       adapter.rule_max != expected["rule_max"]:
-        return {"state": "mismatched-range", "can_activate": False,
-                "remedy": "manual-inspection"}
-
-    # Inspect *all* service tables (even if OFF) to catch foreign/stale
-    # tables before enabling a service for the first time.
-    observed = adapter.list_rules(expected["rule_base"], expected["rule_max"])
-    if observed != expected["rules"]:
-        return {"state": "foreign-or-modified-rules", "can_activate": False,
-                "remedy": "manual-inspection"}
-    for name in SERVICES:
-        table = TABLE_PREFIX + name
-        if not table_contents_equal(adapter.get_table(table), expected["tables"].get(table)):
-            return {
-                "state": "foreign-or-modified-table",
-                "service": name,
-                "can_activate": False,
-                "remedy": "manual-inspection",
-            }
-        if adapter.get_table(table + "_stage") is not None:
-            return {
-                "state": "orphan-stage-table",
-                "service": name,
-                "can_activate": False,
-                "remedy": "manual-inspection",
-            }
-    return {"state": "ready", "can_activate": True,
-            "rule_count": len(observed), "table_count": len(expected["tables"])}
-
 
 
 # Reuse the single dvtws2/monitor process owner, not five invented daemons.
@@ -413,41 +347,21 @@ def main(args: list[str]) -> int:
         print("usage: voice_live_inspect.py", file=sys.stderr)
         return 64
     try:
-        # A whole-runtime cutover intent is stronger than a momentary IPFW
-        # observation: deny readiness even when the per-IPFW ledger is absent.
-        cutover_dir = Path("/var/db/zapret2/voice-cutover")
-        cutover = None
-        if cutover_dir.exists() or cutover_dir.is_symlink():
-            cutover = VoiceCutoverJournal(cutover_dir)
-            status = cutover.inspect()
-            if status != "no-intent":
-                print(json.dumps({
-                    "state": "interrupted", "condition": status,
-                    "can_activate": False, "remedy": "whole-runtime-manual-review",
-                }, sort_keys=True))
-                return 2
-        # Native common ownership supersedes the historic Voice-IPFW ledger.
-        # The shared journal itself is root-owned and fails closed on corruption.
+        # Only the shared journal can identify the native owner. Invalid or
+        # incomplete records fail closed before runtime/IPFW observation.
         shared = SharedApplyOperation().read()
         common = examine_shared(shared)
         if common is not None:
             print(json.dumps(common, sort_keys=True))
             return 0 if common["state"] == "ready" else 2
-        # Fixed private path. The production code must explicitly prepare
-        # the directory under the existing lifecycle lock after migration.
-        directory = Path("/var/db/zapret2/voice-ipfw")
-        if not directory.exists() and not directory.is_symlink():
-            print(json.dumps({"state": "uninitialized", "can_activate": False,
-                              "remedy": "explicit-ownership-adoption-required"},
-                             sort_keys=True))
-            return 2
-        store = VoiceOwnershipStore(directory)
-        adapter = FreeBSDIPFWAdapter(19000, 19010)
-        report = examine(store, adapter, cutover)
-        print(json.dumps(report, sort_keys=True))
-        return 0 if report["state"] == "ready" else 2
-    except (OSError, ValueError, VoiceFirewallError, LedgerError,
-            IPFWAdapterError, CutoverJournalError, SharedOperationError,
+        # No common owner: a retired Telegram PoC ledger is NEVER authority.
+        print(json.dumps({
+            "state": "uninitialized", "source": "native-common",
+            "can_activate": False, "remedy": "common-apply-required",
+        }, sort_keys=True))
+        return 2
+    except (OSError, ValueError, VoiceFirewallError,
+            IPFWAdapterError, SharedOperationError,
             SharedBundleError, VoiceInspectError) as error:
         # Never dump kernel rule text, sensitive config or tables to stdout.
         print(json.dumps({
