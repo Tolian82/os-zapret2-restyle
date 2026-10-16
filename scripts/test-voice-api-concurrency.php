@@ -385,20 +385,26 @@ namespace {
         'GUI does not re-persist native Config');
 
     // The Voice status widget is read-only and must always fail closed.
-    // A configd exception is not a valid readiness signal or a GUI 500.
+    // An unowned bare "ready" (without an attested native-common source)
+    // cannot become readiness merely because configd returned HTTP success.
+    // The valid five-service native-common case is covered by
+    // test-voice-inspect-config-runtime.php, not this concurrency fixture.
     Backend::$inspectResponse = json_encode([
         'state' => 'ready', 'can_activate' => true,
         'condition' => 'verified', 'service' => 'telegram',
         'rule_count' => 3, 'table_count' => 1,
-        'previous_five' => ['private' => 'not exposed'],
     ]);
     $api->request = new FakeRequest('POST', []);
     Backend::$calls = [];
     $inspection = $api->inspectAction();
-    equal('ready', $inspection['state'], 'Voice status lost verified state');
-    equal(true, $inspection['can_activate'], 'read-only Voice status lost readiness');
-    equal(false, isset($inspection['previous_five']),
-          'read-only Voice status leaked unrelated internal evidence');
+    equal('interrupted', $inspection['state'],
+          'unowned Voice status must not report ready');
+    equal('common-profile-unverified', $inspection['condition'],
+          'unowned Voice status did not explain the missing native owner');
+    equal(false, $inspection['can_activate'],
+          'unowned Voice status authorized activation');
+    equal(false, isset($inspection['profiles']),
+          'unowned Voice status fabricated service profiles');
     equal(['zapret voice_inspect'], Backend::$calls,
           'Voice status did not use the existing common backend');
     Backend::$inspectResponse = '{malformed';
