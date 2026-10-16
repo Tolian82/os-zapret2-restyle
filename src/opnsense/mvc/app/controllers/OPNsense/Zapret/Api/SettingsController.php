@@ -235,6 +235,10 @@ class SettingsController extends ApiMutableModelControllerBase
         $sync = $post['sync'];
         unset($post['sync']);
         $summary = [];
+        // From original-FD9 dispatch onward, an exception is not proof of
+        // a pre-write rejection, regardless of its PHP class. This is the
+        // same commit-result contract as VoiceController::applyAction.
+        $nativeApplyDispatched = false;
         try {
             $config = Config::getInstance();
             $config->lock();
@@ -290,6 +294,7 @@ class SettingsController extends ApiMutableModelControllerBase
             // No Config lock while configd owns original FD9.
             $this->assertLifecycleAvailable();
             $backend = new Backend();
+            $nativeApplyDispatched = true;
             $response = trim((string)$backend->configdpRun(
                 'zapret shared_apply', ['strategies', $encoded], false, 600
             ));
@@ -310,6 +315,15 @@ class SettingsController extends ApiMutableModelControllerBase
                 static::$internalModelName => $plan['candidate'],
             ];
         } catch (\InvalidArgumentException $error) {
+            if ($nativeApplyDispatched) {
+                return [
+                    'result' => 'failed', 'applied' => false,
+                    'requires_review' => true,
+                    'message' => gettext(
+                        'Native Strategies Apply result is uncertain; inspect runtime before retrying'
+                    ),
+                ];
+            }
             return ['result' => 'failed', 'message' => $error->getMessage()];
         } catch (\Throwable $error) {
             return [

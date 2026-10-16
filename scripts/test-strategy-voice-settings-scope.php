@@ -102,7 +102,11 @@ if (strpos($controller, 'SettingsApply::prepareStrategies(') === false ||
     strpos($controller, "configdpRun(") === false ||
     strpos($sharedApply, "StrategySettingsPayload::requireFreshTelegram(\$previous, \$telegramBaseline)") === false ||
     strpos($view, 'zapret.sync.telegramips_baseline') === false ||
-    strpos($view, 'telegramBaseline.val(currentField ? currentField.value') === false
+    strpos($view, 'telegramBaseline.val(currentField ? currentField.value') === false ||
+    strpos($view, 'strategiesApplyNeedsReview') === false ||
+    strpos($view, "timeout: 630000") === false ||
+    strpos($view, 'data.requires_review === true') === false ||
+    strpos($controller, '$nativeApplyDispatched = true;') === false
 ) {
     fwrite(STDERR, "FAIL: Strategies Apply optimistic lock not wired through GUI+API\n");
     exit(1);

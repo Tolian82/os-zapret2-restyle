@@ -11,6 +11,8 @@ namespace OPNsense\Base {
             if (self::$denyWrites) { throw new \RuntimeException('read-only user'); }
         }
     }
+    class ApiMutableModelControllerBase extends ApiControllerBase {}
+    class UserException extends \RuntimeException {}
 }
 namespace OPNsense\Core {
     class Config {
@@ -57,12 +59,12 @@ namespace OPNsense\Core {
                     throw new \RuntimeException('GUI Config lock held during native FD9 Apply');
                 }
                 if (!is_array($params) || count($params) !== 2 ||
-                    $params[0] !== 'voice') {
+                    !in_array($params[0], ['voice', 'strategies'], true)) {
                     throw new \RuntimeException('Unexpected native Apply page/parameters');
                 }
                 $raw = base64_decode(strtr($params[1], '-_', '+/'), true);
                 $request = is_string($raw) ? json_decode($raw, true) : null;
-                if (!is_array($request) || ($request['page'] ?? null) !== 'voice' ||
+                if (!is_array($request) || ($request['page'] ?? null) !== $params[0] ||
                     !is_array($request['fields'] ?? null) ||
                     !is_array($request['sync'] ?? null)) {
                     throw new \RuntimeException('Invalid native Apply envelope');
@@ -131,11 +133,13 @@ namespace OPNsense\Zapret {
 }
 namespace {
     require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/VoiceController.php';
+    require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php';
 
     use OPNsense\Core\Config;
     use OPNsense\Core\Backend;
     use OPNsense\Zapret\Zapret;
     use OPNsense\Zapret\Api\VoiceController;
+    use OPNsense\Zapret\Api\SettingsController;
     use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
     class FakeRequest {
@@ -559,5 +563,55 @@ namespace {
     equal(0, Config::getInstance()->locks,
         'post-save error must release native Config lock');
 
-    echo "PASS: shared native FD9 Voice ON/OFF Apply, envelope, Config lock and Strategy Lab guards\n";
+    // Strategies shares the SAME FD9 worker. Post-dispatch exceptions must
+    // never masquerade as safe field errors on that second GUI.
+    $strategy = new SettingsController();
+    $strategyFields = [
+        'sync' => ['telegramips_baseline' => Zapret::$nodes['hostlist']['telegramips']],
+        // Ordinary settings are unchanged; exercise the actual endpoint
+        // without introducing unrelated Strategy Lab/model fixtures.
+        'strategy' => ['trafficargs' => Zapret::$nodes['strategy']['trafficargs']],
+    ];
+    $strategy->request = new FakeRequest('POST', $strategyFields);
+    Backend::$calls = [];
+    $safeStrategy = $strategy->applyAction();
+    equal('saved', $safeStrategy['result'],
+        'baseline native Strategies shared Apply must succeed');
+
+    $strategyFields['sync']['telegramips_baseline'] = '203.0.113.0/24';
+    $strategy->request = new FakeRequest('POST', $strategyFields);
+    Backend::$calls = [];
+    $staleStrategy = $strategy->applyAction();
+    equal('failed', $staleStrategy['result'],
+        'stale Strategies Telegram baseline must be rejected');
+    equal(false, $staleStrategy['requires_review'] ?? false,
+        'pre-dispatch Strategies rejection remains editable');
+    equal(false, in_array('zapret shared_apply', Backend::$calls, true),
+        'stale Strategies form must not dispatch native work');
+
+    $strategyFields['sync']['telegramips_baseline'] =
+        Zapret::$nodes['hostlist']['telegramips'];
+    $strategy->request = new FakeRequest('POST', $strategyFields);
+    Backend::$postNativeCommitInvalid = true;
+    Backend::$calls = [];
+    $commitsBefore = Backend::$nativeCommits;
+    try {
+        $uncertainStrategy = $strategy->applyAction();
+    } finally {
+        Backend::$postNativeCommitInvalid = false;
+    }
+    equal('failed', $uncertainStrategy['result'],
+        'post-commit exception must never confirm Strategies Apply');
+    equal(true, $uncertainStrategy['requires_review'] ?? false,
+        'post-commit Strategies InvalidArgumentException demands review');
+    equal(false, $uncertainStrategy['applied'] ?? null,
+        'post-commit Strategies must not claim Applied');
+    equal($commitsBefore + 1, Backend::$nativeCommits,
+        'Strategies regression must simulate a completed native commit');
+    equal(true, in_array('zapret shared_apply', Backend::$calls, true),
+        'Strategies regression must use shared native FD9 worker');
+    equal(0, Config::getInstance()->locks,
+        'Strategies Apply must release the GUI Config lock');
+
+    echo "PASS: shared native FD9 Voice/Strategies Apply, envelope, Config lock and review guards\n";
 }
