@@ -224,6 +224,41 @@ def main() -> None:
         )
         check(regex_run.returncode == 0,
               "Voice release/checkbox regex regression: " + regex_run.stderr)
+        # Execute the real GUI Config mutation gate: both writers must be
+        # single-flight; an uncertain Apply cannot be followed by draft save.
+        mutation_gate = re.search(
+            r"    function reconcileVoiceMutationControls\(\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(mutation_gate is not None, "Voice Config mutation gate missing")
+        gate_script = (
+            "let voiceMutationPending=false,voiceControlPending=false,"
+            "voiceApplyNeedsReview=false,token='a'.repeat(64),disabled=true;\n"
+            + "const voiceSnapshot={val:()=>token};\n"
+            + "function $(selector) {if(selector!=='#voiceSaveDraft,#voiceApply')"
+              "throw Error('wrong controls');return {prop:(name,value)=>"
+              "{if(name!=='disabled')throw Error('wrong prop');disabled=value;}};}\n"
+            + mutation_gate.group(0) + "\n"
+            + "function check(ok,label){if(!ok)throw Error(label);}\n"
+            + "reconcileVoiceMutationControls();check(!disabled,'clean form blocked');\n"
+            + "voiceMutationPending=true;reconcileVoiceMutationControls();"
+              "check(disabled,'parallel Apply/Save Draft permitted');\n"
+            + "voiceMutationPending=false;voiceControlPending=true;"
+              "reconcileVoiceMutationControls();"
+              "check(disabled,'service action permitted Config write');\n"
+            + "voiceControlPending=false;voiceApplyNeedsReview=true;"
+              "reconcileVoiceMutationControls();"
+              "check(disabled,'unknown Apply permitted draft overwrite');\n"
+            + "voiceApplyNeedsReview=false;token='';"
+              "reconcileVoiceMutationControls();"
+              "check(disabled,'missing baseline permitted write');\n"
+        )
+        gate_run = subprocess.run(
+            ["node", "-"], input=gate_script, text=True,
+            capture_output=True, check=False,
+        )
+        check(gate_run.returncode == 0,
+              "Voice GUI Config mutation regression: " + gate_run.stderr)
         # Exercise the actual two-witness GUI gate and asynchronous settled
         # health join instead of only looking for marker strings. This must
         # not hit a browser, OPNsense or external service.
@@ -317,6 +352,11 @@ def main() -> None:
               "Voice async health reconciliation failed: " + executed.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
+    check("if (button.prop('disabled') || voiceMutationPending ||" in view and
+          view.count("voiceControlPending || voiceApplyNeedsReview) return;") == 2 and
+          "voiceMutationPending = false;\n            reconcileVoiceServiceStatus();" in view and
+          "reconcileVoiceMutationControls();" in view,
+          "Both Voice Config writers must share pending/review exclusion")
     check("voiceRuntimeAligned()" in view and
           "!voiceProfilesVerified(reply)" in view and
           "unverified ? 'unverified-profiles' : reportedState" in view and

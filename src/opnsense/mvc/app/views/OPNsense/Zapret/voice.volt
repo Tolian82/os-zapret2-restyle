@@ -275,8 +275,11 @@ $(document).ready(function () {
     });
     $('#voiceSaveDraft').on('click', function () {
         var button = $(this);
-        if (button.prop('disabled')) return;
-        button.prop('disabled', true);
+        if (button.prop('disabled') || voiceMutationPending ||
+            voiceControlPending || voiceApplyNeedsReview) return;
+        // Both Config writers must be exclusive, even after uncertain Apply.
+        voiceMutationPending = true;
+        reconcileVoiceServiceStatus();
         $('#voiceValidationStatus').text(text.loading);
         $.ajax({
             type: 'POST',
@@ -298,7 +301,8 @@ $(document).ready(function () {
         }).fail(function () {
             $('#voiceValidationStatus').text(text.draftFailed);
         }).always(function () {
-            button.prop('disabled', !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
+            voiceMutationPending = false;
+            reconcileVoiceServiceStatus();
         });
     });
     // A timeout or an explicit requires_review can mean the root worker is
@@ -307,8 +311,8 @@ $(document).ready(function () {
     var voiceMutationPending = false;
     $('#voiceApply').on('click', function () {
         var button = $(this);
-        if (button.prop('disabled')) return;
-        button.prop('disabled', true);
+        if (button.prop('disabled') || voiceMutationPending ||
+            voiceControlPending || voiceApplyNeedsReview) return;
         voiceMutationPending = true;
         voiceInspectionState = null;
         reconcileVoiceServiceStatus();
@@ -357,8 +361,6 @@ $(document).ready(function () {
                     $('#voiceValidationStatus').text(text.applyReview);
                 }
                 reconcileVoiceServiceStatus();
-                button.prop('disabled', voiceApplyNeedsReview ||
-                    !/^[a-f0-9]{64}$/.test(voiceSnapshot.val() || ''));
             });
         });
     });
@@ -372,8 +374,7 @@ $(document).ready(function () {
             voiceSnapshot.val(record.snapshot);
             $('#voiceValidate').prop('disabled', false);
             $('#voicePreviewDraft').prop('disabled', false);
-            $('#voiceSaveDraft').prop('disabled', false);
-            $('#voiceApply').prop('disabled', false);
+            reconcileVoiceMutationControls();
         } else {
             $('#voiceValidationStatus').text(text.checkError);
         }
@@ -392,6 +393,14 @@ $(document).ready(function () {
             (runtimeState === 'started' && voiceInspectionState === 'ready') ||
             (runtimeState === 'stopped' && voiceInspectionState === 'stopped')
         );
+    }
+    function reconcileVoiceMutationControls() {
+        // No Config write while another write/service operation is pending,
+        // or when shared Apply has returned an indeterminate result.
+        var fresh = /^[a-f0-9]{64}$/.test(voiceSnapshot.val() || '');
+        $('#voiceSaveDraft,#voiceApply').prop('disabled',
+            !fresh || voiceMutationPending || voiceControlPending ||
+            voiceApplyNeedsReview);
     }
     function setServiceControlsBusy(busy) {
         runtimeBusy = !!busy;
@@ -421,6 +430,7 @@ $(document).ready(function () {
             .toggle(runtimeInstalled && ['started', 'stopped'].includes(runtimeState))
             .text(runtimeState === 'started' ? text.stop : text.start);
         setServiceControlsBusy(runtimeBusy);
+        reconcileVoiceMutationControls();
     }
     function refreshRuntime() {
         var epoch = ++voiceRuntimeEpoch;
