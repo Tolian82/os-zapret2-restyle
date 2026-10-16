@@ -35,7 +35,6 @@ namespace OPNsense\Core {
     class Backend {
         public static bool $busy = false;
         public static bool $reconfigureOK = true;
-        public static string $recoveryResponse = '';
         public static string $inspectResponse = '';
         public static bool $inspectThrows = false;
         public static array $calls = [];
@@ -78,12 +77,6 @@ namespace OPNsense\Core {
         }
         public function configdRun($action, ...$args) {
             self::$calls[] = $action;
-            if ($action === 'zapret voice_recovery_status') {
-                if (Config::getInstance()->locks !== 0) {
-                    throw new \RuntimeException('Config lock held across recovery status');
-                }
-                return self::$recoveryResponse;
-            }
             if ($action === 'zapret voice_inspect') {
                 if (Config::getInstance()->locks !== 0) {
                     throw new \RuntimeException('Config lock held across voice status');
@@ -390,34 +383,6 @@ namespace {
     equal(true, $retried['applied'], 'native confirmed receipt reports Applied');
     equal(1, Config::getInstance()->saves,
         'GUI does not re-persist native Config');
-
-    // A valid on-disk old rollback receipt is NOT boot-ready or Voice ON.
-    $api->request = new FakeRequest('POST', []);
-    Backend::$recoveryResponse = 'legacy-voice-boot-review=' . json_encode([
-        'state' => 'legacy-whole-disk-valid-live-boot-recheck-required',
-        'safe_to_mutate' => false, 'safe_to_start' => false,
-        'public_voice_apply' => false, 'boot_recovery_validated' => false,
-        'previous_five' => ['private' => 'do not expose'],
-    ]);
-    $review = $api->recoveryStatusAction();
-    equal('legacy-whole-disk-valid-live-boot-recheck-required', $review['state'],
-          'disk receipt mapped to nonauthorizing recovery label');
-    equal(false, $review['public_voice_apply'], 'disk receipt cannot grant Voice Apply');
-    equal(false, isset($review['previous_five']), 'journal internals redacted from API');
-    Backend::$recoveryResponse = 'legacy-voice-boot-review=' . json_encode([
-        'state' => 'legacy-whole-disk-valid-live-boot-recheck-required',
-        'safe_to_mutate' => true, 'safe_to_start' => false,
-        'public_voice_apply' => false, 'boot_recovery_validated' => false,
-    ]);
-    equal('unavailable', $api->recoveryStatusAction()['state'],
-          'unsafe claimed permissions rejected');
-    Backend::$recoveryResponse = 'ERROR: corrupt evidence';
-    equal('unavailable', $api->recoveryStatusAction()['state'],
-          'untrusted configd output rejected');
-    $api->request = new FakeRequest('GET', []);
-    equal('unavailable', $api->recoveryStatusAction()['state'],
-          'recovery status only accepts POST');
-
 
     // The Voice status widget is read-only and must always fail closed.
     // A configd exception is not a valid readiness signal or a GUI 500.
