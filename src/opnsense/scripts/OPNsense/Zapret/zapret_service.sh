@@ -428,7 +428,7 @@ native_voice_boot_review_service()
 native_voice_lifecycle_inspect_service()
 {
     # One read-only lifecycle classifier shares the existing FD9 route.
-    # It NEVER bypasses the legacy cutover guard or activates Voice ON.
+    # It never mutates the common owner or activates Voice ON.
     _native_voice_router_python="/usr/local/bin/python3.13"
     _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
     [ -x "${_native_voice_router_python}" ] &&
@@ -1592,38 +1592,26 @@ service_dispatch()
     esac
 }
 
-# A pending full Voice cutover or per-IPFW journal is stronger than the
-# legacy service's ordinary start/stop/reconfigure semantics. In particular,
-# boot must NOT clean old resources before an interrupted transaction has
-# been reviewed. This check is read-only and MUST run *under* the same lockf
-# handle held by all existing Zapret2 lifecycle operations.
+# Before mutation the existing FD9 owner checks the ONE shared Apply journal.
+# Historical Telegram PoC journals/markers are never consulted for runtime
+# authority. Common recovery exceptions remain scoped to their exact phase.
 preflight_voice_cutover_journals()
 {
-    _voice_cutover_guard_script="${BACKEND_DIR}/voice_cutover_guard.py"
-    _voice_cutover_guard_python=/usr/local/bin/python3.13
-
-    # FreeBSD production uses only the trusted, absolute pkg interpreter.
-    # The repository's Linux integration tests run from a non-installed
-    # BACKEND_DIR; there alone resolve the versioned CI interpreter on PATH.
-    # Never permit an environment-supplied interpreter or bypass in a live
-    # OPNsense installation.
-    if [ ! -x "${_voice_cutover_guard_python}" ]; then
+    _shared_gate_script="${BACKEND_DIR}/shared_apply_operation.py"
+    _shared_gate_python=/usr/local/bin/python3.13
+    if [ ! -x "${_shared_gate_python}" ]; then
         case "${BACKEND_DIR}" in
-            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
-                ;;
-            *)
-                _voice_cutover_guard_python=$(command -v python3.13 2>/dev/null || true)
-                ;;
+            /usr/local/opnsense/scripts/OPNsense/Zapret/backend) ;;
+            *) _shared_gate_python=$(command -v python3.13 2>/dev/null || true) ;;
         esac
     fi
-
-    if [ ! -r "${_voice_cutover_guard_script}" ] ||
-       [ -z "${_voice_cutover_guard_python}" ] ||
-       [ ! -x "${_voice_cutover_guard_python}" ]; then
-        echo "ERROR: native Voice journal inspection is unavailable; refusing lifecycle mutation" >&2
+    if [ ! -r "${_shared_gate_script}" ] ||
+       [ -z "${_shared_gate_python}" ] ||
+       [ ! -x "${_shared_gate_python}" ]; then
+        echo "ERROR: shared Apply journal gate is unavailable" >&2
         return 69
     fi
-    "${_voice_cutover_guard_python}" "${_voice_cutover_guard_script}" "$@"
+    "${_shared_gate_python}" "${_shared_gate_script}" native-gate "$@"
 }
 
 # Fixed native journal locator (mockable only by isolated shell extraction).

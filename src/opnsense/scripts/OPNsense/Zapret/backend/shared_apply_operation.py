@@ -681,6 +681,37 @@ class SharedApplyOperation:
         }
 
 
+def native_lifecycle_gate(action: str | None = None, *,
+                          root: Path = DEFAULT_ROOT) -> dict:
+    """Read-only FD9 policy from the ONE current shared Apply journal.
+
+    Old Telegram cutover roots are not a runtime ownership authority. Only
+    a trusted common record may block/authorize this gate. Caller still
+    verifies Config, processes, release seal and native IPFW independently.
+    """
+    exceptions = {
+        "common-apply": None,
+        "common-recover-saved": "config-saved",
+        "common-recover-activating": "activating",
+        "common-recover-activated": "activated",
+    }
+    if action is not None and action not in exceptions:
+        raise SharedOperationError("invalid native lifecycle gate action")
+    record = SharedApplyOperation(root).read()
+    if record is None:
+        return {"state": "clear", "safe_to_mutate": True}
+    phase = record["phase"]
+    if action is None and committed_owner(record) is not None:
+        return {"state": "blocked", "reason": "shared-runtime-owned",
+                "phase": phase, "safe_to_mutate": False}
+    if phase in TERMINAL or (
+        action is not None and exceptions[action] == phase
+    ):
+        return {"state": "clear", "safe_to_mutate": True}
+    return {"state": "blocked", "reason": "shared-apply-pending",
+            "phase": phase, "safe_to_mutate": False}
+
+
 def fingerprint_legacy_predecessor(work: Path, *, owner: int = 0) -> str:
     """Read-only digest of sealed common bundle AND exact old five-domain plan.
 
@@ -717,6 +748,12 @@ def main(argv: list[str]) -> int:
         and DIGEST.fullmatch(argv[4])
     )
     inspection = len(argv) == 2 and argv[1] == "inspect"
+    native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
+        len(argv) == 2 or argv[2] in (
+            "common-apply", "common-recover-saved",
+            "common-recover-activating", "common-recover-activated",
+        )
+    )
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
     finish = len(argv) == 3 and argv[1] == "finish-saved" and bool(OP_ID.fullmatch(argv[2]))
@@ -726,14 +763,20 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or recording or recovery or finish or pristine or cold_restore or legacy_arm):
+    if not (inspection or recording or recovery or finish or pristine or cold_restore or legacy_arm or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
-        if legacy_arm:
+        if native_gate_request:
+            action = argv[2] if len(argv) == 3 else None
+            state = native_lifecycle_gate(action)
+            if not state["safe_to_mutate"]:
+                raise SharedOperationError("native common lifecycle gate blocked: " +
+                                           state["reason"])
+        elif legacy_arm:
             from shared_apply_seal import WORK
             fields = [] if argv[5] == "-" else argv[5].split(",")
             detail = {

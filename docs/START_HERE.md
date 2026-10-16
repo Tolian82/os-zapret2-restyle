@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.2_171`. `VERSION=0.5.2`; `PLUGIN_REVISION=171`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
+**Current handoff identity:** `v0.5.2_172`. `VERSION=0.5.2`; `PLUGIN_REVISION=172`. Branch `feature/v0.5.1_1-voice-transmission`, [Draft PR #328](https://github.com/Tolian82/os-zapret2-restyle/pull/328). Решение владельца: завершить программный код пяти Voice-сервисов по неизменному ТЗ, затем одна testing-поставка и owner-live испытания. Без релиза и установки на OPNsense.
 
 ## Последняя подтверждённая квалификация
 
@@ -16,10 +16,10 @@
 
 **`_168`:** выводятся manual legacy PoC routes, previous-five/reverse-plan/WAL/receipt/restore executors, старые `shared-apply-legacy-*` команды и GUI-панель восстановления старого Telegram PoC. Удаляются историческая migration assessment и связанные тесты. Пять профилей, единый Voice+Strategies dvtws2/Config/FD9 Apply, нормальные Start/Stop и IPFW не меняются. CI и FreeBSD package guards теперь запрещают возвращение удалённых модулей.
 
-**`_169`:** удалены Phase-B prepend/marker/Telegram-only IPFW table/rule. Voice использует только общий Apply, обычные Strategies — портовые правила. **`_170`:** исправлен устаревший тест сборщика и синхронизирована release identity после выявленных ошибок `_169` ([CI #38872692193](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872692193)). **`_171`:** обновлён boot regression: исторические PoC marker/table больше не блокируют native Telegram Apply/status. `_170` CI прошла генератор/общий Apply, выявила устаревшее требование boot test ([CI #38872971857](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872971857)). **Следующее действие:** проверить `_171` exact-HEAD CI, затем удалить `voice_cutover_*` и зависимые readers/guards. Не выпускать testing package до source-code gate; owner-live после одной поставки.
+**`_169`:** удалены Phase-B prepend/marker/Telegram-only IPFW table/rule. Voice использует только общий Apply, обычные Strategies — портовые правила. **`_170`:** исправлен устаревший тест сборщика и синхронизирована release identity после выявленных ошибок `_169` ([CI #38872692193](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38872692193)). **`_172`:** штатный FD9-предконтроль переведён со старого `voice_cutover_guard.py` на `shared_apply_operation.py native-gate`, сохранив фазовые ограничения общей транзакции. Устранены три мёртвые Markdown-ссылки, из-за которых Project CI у `_171` завершилась FAIL ([CI #38873301576](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38873301576): Voice PASS, Project FAIL, FreeBSD skipped). **Далее:** проверить `_172` CI, удалить оставшийся устаревший `voice_cutover_*` private graph и зависимости inspector/router. Не выпускать testing package до source-code gate; owner-live после одной поставки.
 
 ## Минимальное чтение
 
 [Completion gate](VOICE_CODE_COMPLETION_GATE.md) · [План завершения](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [Неизменное ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [Current ledger](history/current/v0.5.x.md).
 
-Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_171` не опубликована.
+Stable `v0.5.0`, опубликованный testing `v0.5.0_3`; `v0.5.2_172` не опубликована.

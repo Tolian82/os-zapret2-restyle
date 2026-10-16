@@ -10,7 +10,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate
 from voice_cutover_guard import check_pending
 
 def detail(ident="1"*32):
@@ -21,6 +21,53 @@ def detail(ident="1"*32):
 class TestJournal(unittest.TestCase):
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
+
+    def test_native_gate_uses_only_trusted_shared_apply_owner(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            shared=root/"shared-apply"
+            j=SharedApplyOperation(shared)
+            for abandoned in ("voice-cutover", "voice-ipfw",
+                              "voice-cutover-legacy-whole-receipt"):
+                (root/abandoned).write_text("retired-old-evidence")
+            self.assertTrue(native_lifecycle_gate(root=shared)["safe_to_mutate"])
+            self.assertFalse(shared.exists())
+            d1=detail()
+            j.advance("prepared",d1)
+            self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
+            j.advance("activating",d1)
+            self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("common-recover-activating",root=shared)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate("common-recover-saved",root=shared)["safe_to_mutate"])
+            j.advance("activated",d1)
+            self.assertTrue(native_lifecycle_gate("common-recover-activated",root=shared)["safe_to_mutate"])
+            j.advance("config-saved",d1)
+            self.assertTrue(native_lifecycle_gate("common-recover-saved",root=shared)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate("common-apply",root=shared)["safe_to_mutate"])
+            j.advance("committed",d1)
+            self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("common-apply",root=shared)["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                native_lifecycle_gate("legacy-skip",root=shared)
+            (shared/"operation.json").write_text("untrusted")
+            with self.assertRaises(SharedOperationError):
+                native_lifecycle_gate("common-apply",root=shared)
+
+    def test_production_service_uses_shared_gate_without_old_cutover(self):
+        service=(BACKEND.parent/"zapret_service.sh").read_text()
+        gate=service.split("preflight_voice_cutover_journals()\n{",1)[1].split("\n}\n",1)[0]
+        self.assertIn("shared_apply_operation.py",gate)
+        self.assertIn('native-gate "$@"',gate)
+        self.assertNotIn("voice_cutover_guard.py",gate)
+        self.assertNotIn("voice-cutover",gate)
+        cli=BACKEND/"shared_apply_operation.py"
+        for arguments,expected in ((["native-gate"],69),
+                                   (["native-gate","common-apply"],69),
+                                   (["native-gate","bogus"],64)):
+            result=subprocess.run([sys.executable,str(cli),*arguments],
+                                  capture_output=True,text=True,check=False)
+            self.assertEqual(expected,result.returncode, result.stderr)
+            self.assertNotIn("Traceback",result.stderr)
 
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
