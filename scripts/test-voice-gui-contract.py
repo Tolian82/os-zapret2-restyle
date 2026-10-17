@@ -56,7 +56,7 @@ def main() -> None:
               f"{service}: checkbox help contradicts the shared Apply")
     check("Включённый STUN-профиль применяется" in view and
           "Enabled STUN profiles use the shared Apply button" in view and
-          "help.text(text.enableHelp)" in view and
+          "localizedHelp = text.enableHelp" in view and
           "info.text(text.infoText)" in view,
           "RU/EN dynamic help differs from actual shared Apply")
     for name in SERVICES:
