@@ -5,8 +5,7 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (not released)** | `v0.5.3_5` — correcting false pre-dispatch Apply uncertainty; full CI/package/owner-live pending |
-| **Latest testing prerelease (not stable)** | [`v0.5.3_4`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_4) — installed; common-service status and lifecycle inspector confirmed by owner |
+| **Current development candidate (testing prerelease, not stable)** | [`v0.5.3_5`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_5/os-zapret2-restyle-0.5.3_5.pkg) — pre-dispatch Apply classification and read-only validation-stage diagnostics; CI/package confirmed, owner-live pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -254,4 +253,4 @@ This independent project builds on open-source work by **bol-van** and **Umur Go
 
 MIT. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
-Current Voice live acceptance: owner installed `_4`; read-only lifecycle inspector works and confirms saved Voice profiles OFF, while GUI reports a WAN validation error and uncertain Apply result. `_5` corrects a proven pre-dispatch error classification defect but does not claim that Voice Apply or real calls work. No blind re-Apply is advised.
+Current Voice live acceptance: owner installed `_4`; read-only lifecycle inspector works and confirms saved Voice profiles OFF, while GUI reports a WAN validation error and uncertain Apply result. `_5` is now a separately published testing prerelease correcting a proven pre-dispatch error classification defect and providing read-only validation-stage diagnostics. It is not installed or accepted on the owner's OPNsense; successful Voice Apply or real calls are still unproven. No blind re-Apply is advised.
