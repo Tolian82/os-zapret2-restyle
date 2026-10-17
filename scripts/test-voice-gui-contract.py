@@ -11,7 +11,7 @@ SRC = ROOT / "src/opnsense/mvc/app"
 MODEL = SRC / "models/OPNsense/Zapret/Zapret.xml"
 FORM = SRC / "controllers/OPNsense/Zapret/forms/voice.xml"
 MENU = SRC / "models/OPNsense/Zapret/Menu/Menu.xml"
-CONTROLLER = SRC / "controllers/OPNsense/Zapret/IndexController.php"
+CONTROLLER = SRC / "controllers/OPNsense/Zapret/VoiceController.php"
 VIEW = SRC / "views/OPNsense/Zapret/voice.volt"
 STRATEGIES_VIEW = SRC / "views/OPNsense/Zapret/general.volt"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
@@ -76,7 +76,8 @@ def main() -> None:
     check(menu.find("./Services/Zapret/General").get("order") == "0", "Strategies menu order changed")
     check(menu.find("./Services/Zapret/Voice").get("order") == "1", "Voice menu order missing")
     check(menu.find("./Services/Zapret/Diagnostics").get("order") == "2", "Laboratory menu order changed")
-    check("function voiceAction()" in controller and "getForm('voice')" in controller, "Voice route missing")
+    check("function indexAction()" in controller and "getForm('voice')" in controller and
+          "OPNsense/Zapret/voice" in controller, "Voice UI controller/form entry missing")
     for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
                    "voiceServiceState", "voiceReleaseSelect", "voiceServiceControl",
                    "voiceRepositoryReleasesLabel", "voiceImplementationNotice"):

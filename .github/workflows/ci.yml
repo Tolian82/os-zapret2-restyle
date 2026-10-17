@@ -198,6 +198,8 @@ jobs:
         run: python3.13 scripts/test-shared-apply-operation.py
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
+      - name: OPNsense 26.7 real Voice UI Router and missing-handler regression
+        run: php scripts/test-voice-ui-route.php src/opnsense
 
   validate:
     name: Validate Project
@@ -615,6 +617,15 @@ jobs:
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py' "${contents}"
+          # Validate the installed paths, not only the git/source tree.
+          if ! command -v php >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y php-cli
+          fi
+          extracted=$(mktemp -d)
+          trap 'rm -f "${contents}" "${manifest}"; rm -rf "${extracted}"' EXIT
+          tar -xf dist/*.pkg -C "${extracted}"
+          php scripts/test-voice-ui-route.php "${extracted}/usr/local/opnsense"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313"' "${manifest}" >/dev/null
           head -80 "${manifest}"
