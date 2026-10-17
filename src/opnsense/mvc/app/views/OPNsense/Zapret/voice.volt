@@ -134,6 +134,7 @@ $(document).ready(function () {
             'Voice validation preflight rejected (candidate-xml)': 'Не удалось построить предварительную конфигурацию XML. Действия не выполнялись'
         };
         var dynamic = [
+            [/^Native Voice preflight rejected before runtime \((root-gate|bootstrap|model|decode|candidate|workspace|render|runtime-build|seal)\)$/, 'Подготовка Voice остановлена до переключения службы (стадия: $1). Настройки не применены'],
             [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],
             [/^CIDR contains host bits at line ([0-9]+)$/, 'В CIDR заданы биты хоста в строке $1'],
             [/^Duplicate fake option: ([A-Za-z0-9_]+)$/, 'Повторяется параметр fake: $1'],

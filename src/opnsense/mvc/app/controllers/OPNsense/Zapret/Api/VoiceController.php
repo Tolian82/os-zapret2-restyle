@@ -389,6 +389,12 @@ class VoiceController extends ApiControllerBase
             $output = trim((string)$backend->configdpRun(
                 'zapret shared_apply', ['voice', $encoded], false, 600
             ));
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|workspace|render|runtime-build|seal)$/D', $output, $match)) {
+                // The one FD9 worker explicitly attests failure before the
+                // shared transaction. Do not classify this as an unknown
+                // post-activation result or freeze editable Voice settings.
+                return $failed('Native Voice preflight rejected before runtime (' . $match[1] . ')');
+            }
             if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $output)) {
                 return $failed(
                     'Native Voice Apply was not confirmed; inspect Zapret runtime and recovery status',
