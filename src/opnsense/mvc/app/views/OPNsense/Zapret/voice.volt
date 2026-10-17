@@ -10,7 +10,7 @@ $(document).ready(function () {
         infoTitle: 'Как работают голосовые профили',
         infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
-        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить', repositoryReleases: 'Релизы репозитория',
+        service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
         loading: 'Загрузка…', incomplete: 'Неизвестно',
@@ -44,7 +44,7 @@ $(document).ready(function () {
         infoTitle: 'About Voice Profiles',
         infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
-        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop', repositoryReleases: 'Repository Releases',
+        service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
         loading: 'Loading…', incomplete: 'Unknown',
@@ -120,7 +120,10 @@ $(document).ready(function () {
             'Select at least one Voice service to preview': 'Выберите хотя бы один голосовой профиль для проверки',
             'Save inactive Voice parameters and IPSET changes before native preview': 'Сначала сохраните параметры голоса и IPSET с выключенными профилями',
             'Saved native Voice preview unavailable': 'Предпросмотр сохранённых голосовых профилей недоступен',
-            'Saved Voice drafts or Config generation changed; reload and retry': 'Черновики или конфигурация изменились; обновите страницу и повторите проверку'
+            'Saved Voice drafts or Config generation changed; reload and retry': 'Черновики или конфигурация изменились; обновите страницу и повторите проверку',
+            'Shared model candidate is not normalized': 'Не удалось обработать сохранённые настройки. Обновите страницу.',
+            'Ambiguous shared model option': 'Неоднозначный выбор в сохранённых настройках',
+            'Invalid shared model option': 'Некорректное значение сохранённых настроек'
         };
         var dynamic = [
             [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],
@@ -139,7 +142,8 @@ $(document).ready(function () {
                 result[key] = fixed[message];
                 return;
             }
-            result[key] = message;
+            // Unknown internal errors are not safe Russian user-facing help.
+            result[key] = 'Ошибка проверки настроек. Обновите страницу или проверьте журнал Zapret2.';
             for (var i = 0; i < dynamic.length; i++) {
                 if (dynamic[i][0].test(message)) {
                     result[key] = message.replace(dynamic[i][0], dynamic[i][1]);
@@ -192,12 +196,21 @@ $(document).ready(function () {
             }
             var field = row.find('input,textarea,select').first();
             var id = (field.attr('id') || '').replace(/_/g, '.');
-            var help = row.find('.help-block').first();
-            if (!help.length) return;
-            if (id === 'zapret.voice.waninterface') help.text(text.wanHelp);
-            else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) help.text(text.enableHelp);
-            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) help.html(text.argsHelp);
-            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) help.html(text.ipHelp);
+            var localizedHelp = null;
+            if (id === 'zapret.voice.waninterface') localizedHelp = text.wanHelp;
+            else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) localizedHelp = text.enableHelp;
+            else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) localizedHelp = text.argsHelp;
+            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) localizedHelp = text.ipHelp;
+            if (localizedHelp === null) return;
+            // OPNsense form_input_tr (26.7) reads help from its native hidden
+            // div[data-for="help_for_<field>"] small, NOT .help-block.
+            // Update the actual source used by icons and the full-help switch.
+            row.find('div[data-for^="help_for_"] small').html(localizedHelp);
+            var visible = row.find('.help-block').first();
+            if (visible.length && visible.text().trim() &&
+                /Select the outgoing WAN|Apply validates|One native dvtws2|Shared IPv4 or CIDR targets/.test(visible.text())) {
+                visible.html(localizedHelp);
+            }
         });
     }
     $('a[href="/ui/zapret"]').text(text.navStrategy);
@@ -418,12 +431,6 @@ $(document).ready(function () {
         var controllable = voiceRuntimeAligned() &&
             !voiceMutationPending && !voiceControlPending && !voiceApplyNeedsReview;
         $('#voiceServiceControl').prop('disabled', runtimeBusy || !controllable);
-        var releasesAvailable = $('#voiceReleaseSelect option').filter(function () {
-            return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
-        }).length > 0;
-        $('#voiceReleaseSelect,#voiceReleaseApply').prop('disabled',
-            runtimeBusy || voiceMutationPending || voiceControlPending ||
-            voiceApplyNeedsReview || !releasesAvailable);
     }
     function reconcileVoiceServiceStatus() {
         var aligned = voiceRuntimeAligned() && !voiceMutationPending &&
@@ -618,28 +625,6 @@ $(document).ready(function () {
                 $('#voiceIPFWDetail').text('');
             });
     }
-    function refreshReleases() {
-        var select = $('#voiceReleaseSelect');
-        select.prop('disabled',true).empty().append($('<option/>').val('').text(text.loading));
-        return $.ajax({type:'POST',url:'/api/zapret/service/releases',dataType:'json',timeout:60000})
-            .done(function (reply) {
-                select.empty();
-                if (reply && reply.status === 'ok' && Array.isArray(reply.releases)) {
-                    reply.releases.forEach(function (release) {
-                        select.append($('<option/>').val(release).text(release));
-                    });
-                }
-                if (!select.children().length) {
-                    select.append($('<option/>').val('').text(text.incomplete));
-                }
-                setServiceControlsBusy(runtimeBusy);
-            }).fail(function () {
-                select.empty().append($('<option/>').val('').text(text.incomplete));
-                // A release-list outage must not fabricate service busy or
-                // override independently attested Voice Start/Stop status.
-                setServiceControlsBusy(runtimeBusy);
-            });
-    }
     function refreshVoiceHealthSettled() {
         // jQuery.when rejects early if one query fails. Normalize failure
         // into a completed observation so neither mutation control unlocks
@@ -668,32 +653,12 @@ $(document).ready(function () {
                 });
             });
     });
-    $('#voiceReleaseApply').on('click', function () {
-        var version = $('#voiceReleaseSelect').val();
-        if (runtimeBusy || voiceControlPending || voiceMutationPending ||
-            voiceApplyNeedsReview || !/^v[0-9]+(?:\.[0-9]+)+$/.test(version || '')) return;
-        voiceControlPending = true;
-        voiceInspectionState = null;
-        reconcileVoiceServiceStatus();
-        $.ajax({type:'POST',url:'/api/zapret/service/install',data:{version:version},dataType:'json',timeout:30000})
-            .always(function () {
-                refreshReleases();
-                refreshVoiceHealthSettled().always(function () {
-                    voiceControlPending = false;
-                    updateServiceControlUI('zapret');
-                    reconcileVoiceServiceStatus();
-                });
-            });
-    });
     $('#voiceServiceHeader').on('click', function () {
         $('#voiceServiceBody').toggle();
         $('#voiceServiceCollapseIcon').toggleClass('fa-angle-down fa-angle-right');
     });
-    $('#voiceRepositoryReleasesLabel').text(text.repositoryReleases);
-    $('#voiceReleaseApply').text(text.apply);
     refreshRuntime();
     refreshVoiceIPFW();
-    refreshReleases();
     updateServiceControlUI('zapret');
 });
 </script>
@@ -701,7 +666,7 @@ $(document).ready(function () {
 <style>
     #voiceServiceLine {
         display: grid;
-        grid-template-columns: max-content max-content 14ch 12ch 4ch max-content minmax(130px,150px) max-content;
+        grid-template-columns: max-content max-content 14ch 12ch;
         column-gap: 8px;
         align-items: center;
         min-width: max-content;
@@ -710,8 +675,6 @@ $(document).ready(function () {
     }
     #voiceRuntimeVersion { display: inline-block; width: 14ch; }
     #voiceServiceControlSlot, #voiceServiceControl { min-width: 12ch; }
-    .voice-service-spacer { display: inline-block; width: 4ch; }
-    #voiceReleaseSelect { width:150px; min-width:130px; }
     #frm_VoiceSettings textarea {max-width:100%; box-sizing:border-box;}
     @media (max-width: 767px) {
         #frm_VoiceSettings input, #frm_VoiceSettings select {max-width:100%;}
@@ -734,10 +697,6 @@ $(document).ready(function () {
                     <span id="voiceServiceState" class="label label-danger">—</span>
                     <strong id="voiceRuntimeVersion">—</strong>
                     <span id="voiceServiceControlSlot"><button type="button" class="btn btn-default" id="voiceServiceControl" disabled style="display:none">Start</button></span>
-                    <span class="voice-service-spacer" aria-hidden="true"></span>
-                    <label for="voiceReleaseSelect" id="voiceRepositoryReleasesLabel" style="margin-bottom:0;">Repository Releases</label>
-                    <select class="form-control" id="voiceReleaseSelect" disabled><option value="">Loading…</option></select>
-                    <button type="button" class="btn btn-primary" id="voiceReleaseApply" disabled>Apply</button>
                 </div>
             </td></tr>
             <tr><td colspan="3">

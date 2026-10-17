@@ -214,4 +214,51 @@ refuses(fn() => SettingsApply::renderCandidateXml(
     $doctype, $previous, $strategy, 'strategies'
 ), 'DOCTYPE injected into Strategies candidate');
 
+
+/*
+ * Use the real BaseListField::getNodeData() shape: option objects are
+ * shown to the form, but the detached Config writer needs selected keys.
+ */
+$options = records();
+$optionRows = [
+    '' => ['value' => 'None', 'selected' => 0],
+    'WAN' => ['value' => 'WAN', 'selected' => 1],
+    'WAN2' => ['value' => 'WAN2', 'selected' => 0],
+];
+$options['general']['waninterface'] = $optionRows;
+$options['voice']['waninterface'] = $optionRows;
+$options['hostlist']['mode'] = [
+    'all' => ['value' => 'All', 'selected' => 0],
+    'list' => ['value' => 'Listed', 'selected' => 1],
+];
+$dropdownForm = $form;
+$dropdownForm['voice']['telegram']['enabled'] = '0';
+$dropdownForm['voice']['waninterface'] = 'WAN';
+$dropdown = VoiceApplyCandidate::prepare(
+    $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
+);
+must(($dropdown['result'] ?? '') === 'prepared', 'real InterfaceField options rejected');
+must(!in_array('voice.waninterface', $dropdown['changed_fields'], true),
+     'same WAN choice falsely differs from saved value');
+must(VoiceCandidateXml::render(
+    $liveXml, $options, $dropdown['candidate'], $dropdown['changed_fields']
+) === $liveXml, 'unchanged native dropdown rewrote Config');
+$dropdownForm['voice']['waninterface'] = 'WAN2';
+$changedDropdown = VoiceApplyCandidate::prepare(
+    $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
+);
+must(($changedDropdown['result'] ?? '') === 'prepared' &&
+     in_array('voice.waninterface', $changedDropdown['changed_fields'], true),
+     'new WAN not recognized as selected raw value');
+$dropdownXml = VoiceCandidateXml::render(
+    $liveXml, $options, $changedDropdown['candidate'], $changedDropdown['changed_fields']
+);
+must(str_contains($dropdownXml, '<waninterface>WAN2</waninterface>'),
+     'WAN selection did not become correct XML leaf');
+$invalidOptions = $options;
+$invalidOptions['voice']['waninterface']['WAN2']['selected'] = 1;
+refuses(fn() => VoiceCandidateXml::render(
+    $liveXml, $invalidOptions, $invalidOptions, []
+), 'ambiguous native InterfaceField selection accepted');
+
 echo "PASS: shared detached native XML for Strategies/Voice, ownership, no-op and foreign-node preservation\n";

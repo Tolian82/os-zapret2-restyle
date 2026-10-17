@@ -13,6 +13,7 @@ namespace OPNsense\Zapret\Api;
 require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/VoiceModelValues.php';
 require_once __DIR__ . '/StrategySettingsPayload.php';
 
 final class VoiceApplyCandidate
@@ -58,8 +59,8 @@ final class VoiceApplyCandidate
         // Until per-profile incoming-WAN isolation is proven, the kernel
         // capture interface must be identical for Strategies and Voice.
         // This matches the authoritative Python compiler preflight.
-        $strategyWan = (string)($previous['general']['waninterface'] ?? '');
-        $selectedWan = (string)($next['voice']['waninterface'] ?? '');
+        $strategyWan = VoiceModelValues::text($previous['general']['waninterface'] ?? '');
+        $selectedWan = VoiceModelValues::text($next['voice']['waninterface'] ?? '');
         // All-OFF settings are inert drafts: allow them to be saved and
         // syntax-checked before Strategies WAN is configured. A selected
         // override is enforced as soon as any Voice service becomes ON.
@@ -121,11 +122,11 @@ final class VoiceApplyCandidate
             foreach ($fieldNames as $field) {
                 if (str_contains($field, '.')) {
                     [$name, $member] = explode('.', $field, 2);
-                    $prior = (string)($previous['voice'][$name][$member] ?? '');
-                    $final = (string)$next['voice'][$name][$member];
+                    $prior = VoiceModelValues::text($previous['voice'][$name][$member] ?? '');
+                    $final = VoiceModelValues::text($next['voice'][$name][$member]);
                 } else {
-                    $prior = (string)($previous[$group][$field] ?? '');
-                    $final = (string)$next[$group][$field];
+                    $prior = VoiceModelValues::text($previous[$group][$field] ?? '');
+                    $final = VoiceModelValues::text($next[$group][$field]);
                 }
                 if (str_replace(["\r\n", "\r"], "\n", $prior) !==
                     str_replace(["\r\n", "\r"], "\n", $final)) {
