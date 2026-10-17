@@ -244,6 +244,23 @@ must(!in_array('voice.waninterface', $dropdown['changed_fields'], true),
 must(VoiceCandidateXml::render(
     $liveXml, $options, $dropdown['candidate'], $dropdown['changed_fields']
 ) === $liveXml, 'unchanged native dropdown rewrote Config');
+// Real dropdown + an ON checkbox: the combination exercised on the
+// installed owner's Voice form must prepare a detached XML without a
+// false foreign-field or unchanged-field exception.
+$dropdownForm['voice']['telegram']['enabled'] = '1';
+$dropdownForm['voice']['telegram']['args'] =
+    "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
+$onDropdown = VoiceApplyCandidate::prepare(
+    $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
+);
+must(($onDropdown['result'] ?? null) === 'prepared', 'ON and native WAN options rejected');
+$onDropdownXml = VoiceCandidateXml::render(
+    $liveXml, $options, $onDropdown['candidate'], $onDropdown['changed_fields']
+);
+must(str_contains($onDropdownXml, '<enabled>1</enabled>'),
+     'ON profile disappeared from native option-selected candidate');
+$dropdownForm['voice']['telegram']['enabled'] = '0';
+$dropdownForm['voice']['telegram']['args'] = '';
 $dropdownForm['voice']['waninterface'] = 'WAN2';
 $changedDropdown = VoiceApplyCandidate::prepare(
     $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)

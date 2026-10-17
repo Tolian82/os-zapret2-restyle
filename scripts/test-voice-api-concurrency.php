@@ -20,6 +20,7 @@ namespace OPNsense\Core {
         public int $locks = 0;
         public int $saves = 0;
         public bool $throwInvalidAfterSave = false;
+        public static bool $malformedXml = false;
         public static function getInstance() {
             return self::$instance ?? (self::$instance = new self());
         }
@@ -37,6 +38,7 @@ namespace OPNsense\Core {
         // full XML serialization; this stub must expose that same read-only
         // API without simulating any persistence.
         public function __toString(): string {
+            if (self::$malformedXml) return '<opnsense broken XML';
             return '<?xml version="1.0" encoding="utf-8"?>' .
                 '<opnsense><system><hostname>old</hostname></system>' .
                 '<OPNsense><Zapret><voice/></Zapret></OPNsense></opnsense>';
@@ -49,6 +51,7 @@ namespace OPNsense\Core {
         public static int $nativeCommits = 0;
         public static string $inspectResponse = '';
         public static bool $inspectThrows = false;
+        public static bool $guardThrows = false;
         public static array $calls = [];
         public static array $params = [];
         public function configdpRun($action, $params, ...$args) {
@@ -106,6 +109,9 @@ namespace OPNsense\Core {
                 return self::$inspectResponse;
             }
             if ($action === 'zapret strategy_lab_guard') {
+                if (self::$guardThrows) {
+                    throw new \RuntimeException('synthetic read-only guard failure');
+                }
                 return json_encode(['busy' => self::$busy]);
             }
             if ($action === 'zapret reconfigure') {
@@ -240,6 +246,23 @@ namespace {
     equal(false, $check['applied'], 'validated XML candidate cannot report Apply');
     equal(0, Config::getInstance()->saves, 'validation cannot persist native Voice');
     equal(0, Config::getInstance()->locks, 'successful validate must unlock config');
+
+    // A read-only malformed source Config can reject candidate XML before
+    // any shared Apply. Surface the phase, not an internal PHP exception.
+    Config::$malformedXml = true;
+    Backend::$calls = [];
+    try {
+        $badCandidate = $api->validateAction();
+    } finally {
+        Config::$malformedXml = false;
+    }
+    equal('failed', $badCandidate['result'], 'malformed candidate XML cannot validate');
+    equal('Voice validation preflight rejected (candidate-xml)',
+        $badCandidate['validations']['zapret.voice.waninterface'],
+        'read-only candidate error must retain a safe, visible phase');
+    equal([], Backend::$calls, 'read-only Validate must not invoke configd');
+    equal(0, Config::getInstance()->locks, 'failed Validate leaked Config lock');
+    equal(0, Config::getInstance()->saves, 'failed Validate persisted Config');
 
     // Same saved model, different PHP array field ordering: stable digest.
     $reordered = array_reverse(Zapret::$nodes, true);
@@ -386,6 +409,29 @@ namespace {
     equal('failed', $busy['result'], 'Strategy Lab must block Voice native Apply');
     equal(1, Config::getInstance()->saves, 'busy runtime must not write GUI Config');
     Backend::$busy = false;
+
+    // A Throwable raised while checking the read-only guard occurs BEFORE
+    // dispatch. There is no Config write or shared FD9 Apply to review.
+    // Previously this falsely marked the outcome "unknown" in the GUI.
+    Backend::$guardThrows = true;
+    Backend::$calls = [];
+    $api->request = new FakeRequest('POST', $candidate);
+    try {
+        $guardFault = $api->applyAction();
+    } finally {
+        Backend::$guardThrows = false;
+    }
+    equal('failed', $guardFault['result'], 'pre-FD9 Throwable must be explicit failed');
+    equal(false, $guardFault['applied'], 'pre-FD9 Throwable must not claim Apply');
+    equal(false, $guardFault['requires_review'] ?? false,
+        'read-only guard failure must not masquerade as uncertain Apply');
+    equal('Voice preflight rejected before native Apply (guard)',
+        $guardFault['validations']['zapret.voice.waninterface'],
+        'safe diagnostic stage must be available without leaking raw errors');
+    equal(['zapret strategy_lab_guard'], Backend::$calls,
+        'guard failure must never dispatch shared_apply');
+    equal(1, Config::getInstance()->saves,
+        'guard failure cannot save Config');
 
     // The privileged worker may fail after it has touched Config/kernel.
     // Browser MUST NOT claim saved, applied, or rollback merely from HTTP.

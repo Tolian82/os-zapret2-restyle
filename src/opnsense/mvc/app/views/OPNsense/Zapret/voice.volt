@@ -123,7 +123,15 @@ $(document).ready(function () {
             'Saved Voice drafts or Config generation changed; reload and retry': 'Черновики или конфигурация изменились; обновите страницу и повторите проверку',
             'Shared model candidate is not normalized': 'Не удалось обработать сохранённые настройки. Обновите страницу.',
             'Ambiguous shared model option': 'Неоднозначный выбор в сохранённых настройках',
-            'Invalid shared model option': 'Некорректное значение сохранённых настроек'
+            'Invalid shared model option': 'Некорректное значение сохранённых настроек',
+            'Voice validation failed': 'Не удалось проверить настройки голоса до применения',
+            'Voice configuration baseline is missing; reload this page': 'Нет исходной версии настроек. Обновите страницу',
+            'Voice preflight rejected before native Apply (guard)': 'Проверка готовности службы недоступна. Применение не запускалось',
+            'Voice preflight rejected before native Apply (model)': 'Не удалось подготовить сохранённые настройки. Применение не запускалось',
+            'Voice preflight rejected before native Apply (candidate-xml)': 'Не удалось построить предварительную конфигурацию. Применение не запускалось',
+            'Voice preflight rejected before native Apply (envelope)': 'Не удалось подготовить безопасный запрос. Применение не запускалось',
+            'Voice validation preflight rejected (model)': 'Не удалось проверить структуру настроек без применения. Действия не выполнялись',
+            'Voice validation preflight rejected (candidate-xml)': 'Не удалось построить предварительную конфигурацию XML. Действия не выполнялись'
         };
         var dynamic = [
             [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],

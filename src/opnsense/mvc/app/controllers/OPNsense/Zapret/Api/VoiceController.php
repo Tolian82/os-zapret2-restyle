@@ -59,6 +59,7 @@ class VoiceController extends ApiControllerBase
         }
         $config = Config::getInstance();
         $config->lock();
+        $validationStage = 'model';
         try {
             $model = new \OPNsense\Zapret\Zapret();
             $current = $model->getNodes();
@@ -70,6 +71,7 @@ class VoiceController extends ApiControllerBase
             // Build a normalized *in-memory* preview under the same Config
             // lock. The actual Save/Apply transaction must re-run this
             // entire preparation and the Python release compiler.
+            $validationStage = 'model';
             $plan = SettingsApply::prepareVoice($current, $fields, $sync['snapshot']);
             if ($plan['result'] !== 'prepared') {
                 return $plan;
@@ -78,6 +80,7 @@ class VoiceController extends ApiControllerBase
             // Config::lock() protects the source generation. Never call
             // setNodes(), serializeToConfig() or Config::save() here: Voice
             // ON must not enter the live XML ahead of original FD9 cutover.
+            $validationStage = 'candidate-xml';
             $candidateXml = VoiceCandidateXml::render(
                 (string)$config, $current, $plan['candidate'], $plan['changed_fields']
             );
@@ -90,13 +93,28 @@ class VoiceController extends ApiControllerBase
                 'applied' => false,
             ];
         } catch (\InvalidArgumentException $error) {
+            $safe = [
+                'Voice configuration baseline is missing. Reload the Voice page.',
+                'Voice or shared Strategies settings changed in another tab. Reload the Voice page.',
+            ];
+            if (in_array($error->getMessage(), $safe, true)) {
+                return ['result' => 'failed', 'validations' => [
+                    'zapret.voice.waninterface' => $error->getMessage()
+                ]];
+            }
+            error_log(sprintf('Zapret Voice validation rejection stage=%s type=%s',
+                $validationStage, get_class($error)));
             return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => $error->getMessage()
+                'zapret.voice.waninterface' =>
+                    'Voice validation preflight rejected (' . $validationStage . ')'
             ]];
         } catch (\Throwable $error) {
-            // Never reveal PHP stack, unrelated configuration or raw input.
+            // No raw PHP exception/Config/user fields in the public API.
+            error_log(sprintf('Zapret Voice validation error stage=%s type=%s',
+                $validationStage, get_class($error)));
             return ['result' => 'failed', 'validations' => [
-                'zapret.voice.waninterface' => 'Voice validation failed'
+                'zapret.voice.waninterface' =>
+                    'Voice validation preflight rejected (' . $validationStage . ')'
             ]];
         } finally {
             $config->unlock();
@@ -332,6 +350,9 @@ class VoiceController extends ApiControllerBase
         // looks like invalid user input cannot prove that Config/runtime/IPFW
         // were untouched. Pre-dispatch validation keeps its normal errors.
         $nativeApplyDispatched = false;
+        // Stable, non-sensitive stage labels for errors BEFORE FD9. Do not
+        // print Config, submitted arguments or PHP exception text to the GUI.
+        $preflightStage = 'guard';
         try {
             $backend = new Backend();
             $guard = json_decode(trim((string)$backend->configdRun('zapret strategy_lab_guard')), true);
@@ -344,6 +365,7 @@ class VoiceController extends ApiControllerBase
             }
             $fields = $post;
             unset($fields['sync']);
+            $preflightStage = 'model';
             $config = Config::getInstance();
             $config->lock();
             try {
@@ -354,9 +376,11 @@ class VoiceController extends ApiControllerBase
                 }
                 // Keep the original native model XML validation before FD9.
                 // Root repeats it from a freshly loaded Config snapshot.
+                $preflightStage = 'candidate-xml';
                 SettingsApply::renderCandidateXml(
                     (string)$config, $current, $plan, 'voice'
                 );
+                $preflightStage = 'envelope';
                 $encoded = SharedApplyEnvelope::encode('voice', $fields, $sync);
             } finally {
                 $config->unlock();
@@ -385,8 +409,29 @@ class VoiceController extends ApiControllerBase
                     true
                 );
             }
-            return $failed($error->getMessage());
+            // Known user form errors remain specific. Candidate XML
+            // boundary errors are internal, not an instruction to re-Apply.
+            $safeMessages = [
+                'Voice configuration baseline is missing; reload this page',
+                'Voice or shared Strategies settings changed in another tab. Reload the Voice page.',
+                'Strategies WAN must be configured before Voice',
+                'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN',
+            ];
+            if (in_array($error->getMessage(), $safeMessages, true)) {
+                return $failed($error->getMessage());
+            }
+            error_log(sprintf('Zapret Voice pre-Apply rejection stage=%s type=%s',
+                $preflightStage, get_class($error)));
+            return $failed('Voice preflight rejected before native Apply (' . $preflightStage . ')');
         } catch (\Throwable $error) {
+            if (!$nativeApplyDispatched) {
+                // A PHP/Config/model failure before configdpRun cannot have
+                // executed the shared native transaction. Never mislabel it
+                // "result unknown" or freeze editable form state.
+                error_log(sprintf('Zapret Voice pre-Apply error stage=%s type=%s',
+                    $preflightStage, get_class($error)));
+                return $failed('Voice preflight rejected before native Apply (' . $preflightStage . ')');
+            }
             return $failed(
                 'Native Voice Apply failed or was interrupted; inspect the shared service state before retrying',
                 true
