@@ -53,6 +53,11 @@ A1/A2 дали проверенный WAN fake output без ответа/мед
 
 Squid/sing-box/PF/TCP, маршруты, TNAS и Docker не входят в продуктовую переделку. Ручные TNAS host routes и запуск Docker сохраняются; route Cron/autostart не добавляется. При работе с appliance читать [операционный runbook](architecture/TELEGRAM_LAB_OPERATIONS.md), а не переносить его команды в plugin по умолчанию.
 
+
+## Проверенный блокер подготовки `_8`, коррекция `_9`
+
+Owner-live `_8`: `EUID=0`, FD9 PHP PASS, native-gate и PHP model PASS; GUI `shared-apply-run voice` дважды rc69 при отсутствии `shared-apply` record и `/var/db/zapret2`, Zapret2 продолжает работать. CLI `telegram-envelope enable` использовал сохранённую OFF-конфигурацию, поэтому не диагностирует несохранённый GUI-кандидат. Доказан дефект наблюдаемости границы: pre-runtime отказ ошибочно выглядит как post-runtime неопределённость. `_9` возвращает ограниченный `preflight-rejected=<stage>` из native worker и классифицирует его как безопасный отказ до runtime с переводом на RU. Прочие результаты остаются неопределёнными. **Точный отказ стадий `_8` и успешный Apply/CALL ещё не подтверждены.**
+
 ## Completed version-line archives
 
 - [v0.1.x archive](history/archive/v0.1.x.md)
@@ -67,7 +72,3 @@ Squid/sing-box/PF/TCP, маршруты, TNAS и Docker не входят в п�
 ## Исправление OPNsense-зависимости v0.5.3_8
 
 Владелец подтвердил штатным pkg, что php85-posix в доступных OPNsense репозиториях отсутствует. Кандидат _7 ошибочно требовал порт FreeBSD; _8 полностью удаляет зависимость и проверяет root эффективный UID через штатный /usr/bin/id -u (PHP proc_open с argv без shell). Сохраняются FD9/inode/flock; php -n тест гарантирует работу без расширения POSIX, FreeBSD package metadata не должно требовать php85-posix. Native Apply и Telegram CALL ещё не приняты.
-
-## Проверенный блокер подготовки `_8`, коррекция `_9`
-
-Owner-live `_8`: `EUID=0`, FD9 PHP PASS, native-gate и PHP model PASS; GUI `shared-apply-run voice` дважды rc69 при отсутствии `shared-apply` record и `/var/db/zapret2`, Zapret2 продолжает работать. CLI `telegram-envelope enable` использовал сохранённую OFF-конфигурацию, поэтому не диагностирует несохранённый GUI-кандидат. Доказан дефект наблюдаемости границы: pre-runtime отказ ошибочно выглядит как post-runtime неопределённость. `_9` возвращает ограниченный `preflight-rejected=<stage>` из native worker и классифицирует его как безопасный отказ до runtime с переводом на RU. Прочие результаты остаются неопределёнными. **Точный отказ стадий `_8` и успешный Apply/CALL ещё не подтверждены.**
