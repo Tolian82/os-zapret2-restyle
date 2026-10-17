@@ -18,6 +18,10 @@ preflight_shared_apply_journal() {
 shared_apply_build_service() {
     echo "build:$1" >> "$LOG"
     [ "$BUILD_OK" = 1 ] || return 69
+    if [ "${BUILD_REFUSED:-0}" = 1 ]; then
+        echo 'preflight-rejected=candidate'
+        return 0
+    fi
     echo 'native template and runtime generated'
     echo "prepared-id=$ID"
 }
@@ -46,7 +50,13 @@ check 0 strategies c2FmZQ
 GUARD_OK=0
 check 69 voice c2FmZQ
 [ "$(cat "$LOG")" = "guard:common-apply" ] || fail "busy lock mutated"
-GUARD_OK=1; BUILD_OK=0
+GUARD_OK=1; BUILD_OK=1; BUILD_REFUSED=1
+check 0 voice c2FmZQ
+[ "$(cat "$TMP/response")" = 'preflight-rejected=candidate' ] ||
+    fail "a native rejected candidate was incorrectly reported as an unknown Apply"
+[ "$(tr '\n' ' ' < "$LOG")" = 'guard:common-apply build:c2FmZQ ' ] ||
+    fail "preflight rejection started runtime mutation"
+BUILD_REFUSED=0; BUILD_OK=0
 check 69 voice c2FmZQ
 [ "$(tr '\n' ' ' < "$LOG")" = 'guard:common-apply build:c2FmZQ ' ] ||
     fail "failed build entered native Config save"

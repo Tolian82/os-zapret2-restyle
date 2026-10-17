@@ -220,15 +220,18 @@ final class SharedApplyRequest
             fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST | telegram-envelope enable|disable | telegram-saved\n");
             return 64;
         }
+        $phase = 'root-gate';
         try {
             if (PHP_OS_FAMILY !== 'BSD' || SharedApplyLifecycleLock::effectiveUid() !== 0) {
                 throw new \RuntimeException('Native root staging required');
             }
             SharedApplyLifecycleLock::assertHeld();
+            $phase = 'bootstrap';
             // Same installed OPNsense bootstrapping as built-in PHP scripts.
             require_once('script/load_phalcon.php');
             $config = \OPNsense\Core\Config::getInstance();
             $config->lock();
+            $phase = 'model';
             try {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
                 if ($argv[1] === 'telegram-envelope') {
@@ -236,12 +239,15 @@ final class SharedApplyRequest
                 } elseif ($argv[1] === 'telegram-saved') {
                     $response = json_encode(self::telegramSaved($current), JSON_THROW_ON_ERROR);
                 } else {
+                    $phase = 'decode';
                     $request = self::decode($argv[2]);
                     $activeXml = file_get_contents('/conf/config.xml');
                     if (!is_string($activeXml)) {
                         throw new \RuntimeException('Could not read locked native Config');
                     }
+                    $phase = 'candidate';
                     $prepared = self::prepare($request, $current, $activeXml);
+                    $phase = 'workspace';
                     $id = self::materialize($prepared);
                     $response = "prepared-id=$id";
                 }
@@ -251,6 +257,16 @@ final class SharedApplyRequest
             echo $response . "\n";
             return 0;
         } catch (\Throwable $error) {
+            if ($argv[1] === 'stage') {
+                // Stage prepares only an inert detached candidate. No Config save,
+                // IPFW or process switch is possible here. Return a bounded
+                // negative receipt rather than an indistinguishable configd 69.
+                // Never echo the submitted envelope or exception text.
+                error_log(sprintf('Zapret shared Apply stage refused phase=%s type=%s',
+                    $phase, get_class($error)));
+                echo 'preflight-rejected=' . $phase . "\n";
+                return 0;
+            }
             fwrite(STDERR, "ERROR: shared native request preparation refused: " .
                 $error->getMessage() . "\n");
             return 69;

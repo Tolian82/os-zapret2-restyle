@@ -1093,7 +1093,16 @@ shared_apply_run_service()
     preflight_shared_apply_journal common-apply || return 69
     _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
     _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
-    case "$_shared_run_receipt" in prepared-id=*) ;; *) return 69 ;; esac
+    case "$_shared_run_receipt" in
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
+            # Nothing reached shared_apply_execute_service: no Config save,
+            # runtime handoff, IPFW mutation or durable operation was started.
+            printf '%s\n' "$_shared_run_receipt"
+            return 0
+            ;;
+        prepared-id=*) ;;
+        *) return 69 ;;
+    esac
     _shared_run_id="${_shared_run_receipt#prepared-id=}"
     case "$_shared_run_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_shared_run_id}" -eq 32 ] || return 69
@@ -1116,13 +1125,24 @@ shared_apply_build_service()
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=workspace)
+            printf '%s\n' "$_shared_stage_result"
+            return 0
+            ;;
         *) return 69 ;;
     esac
     case "$_shared_stage_id" in
         *[!a-f0-9]*|"") return 69 ;;
     esac
     [ "${#_shared_stage_id}" -eq 32 ] || return 69
-    shared_apply_prepare_service "$_shared_stage_id" || return $?
+    _shared_build_result=$(shared_apply_prepare_service "$_shared_stage_id") || return $?
+    _shared_build_last=$(printf '%s\n' "$_shared_build_result" | tail -n 1)
+    case "$_shared_build_last" in
+        preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
+            printf '%s\n' "$_shared_build_last"
+            return 0
+            ;;
+    esac
     printf "prepared-id=%s\n" "$_shared_stage_id"
 }
 # Prepare one complete Voice+Strategies release from the detached OPNsense
@@ -1140,14 +1160,23 @@ shared_apply_prepare_service()
     [ -x /usr/local/bin/python3.13 ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_render.py" render "$1" || return 69
+    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_render.py" render "$1" || {
+        printf '%s\n' preflight-rejected=render
+        return 0
+    }
     _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
     [ -f "$_shared_template" ] && [ ! -L "$_shared_template" ] || return 69
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
-        shared-candidate "$_shared_work/candidate.xml" || return $?
-    shared_apply_bundle_service seal "$1"
+        shared-candidate "$_shared_work/candidate.xml" || {
+        printf '%s\n' preflight-rejected=runtime-build
+        return 0
+    }
+    shared_apply_bundle_service seal "$1" || {
+        printf '%s\n' preflight-rejected=seal
+        return 0
+    }
 }
 # Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
 shared_apply_record_service()

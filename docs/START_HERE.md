@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_8`. `VERSION=0.5.3`, `PLUGIN_REVISION=8`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_9`. `VERSION=0.5.3`, `PLUGIN_REVISION=9`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -40,9 +40,15 @@
 
 _8 исправляет именно зависимость: больше не требует php85-posix и использует базовый /usr/bin/id -u через PHP proc_open(argv) без shell, EUID проверяется строго и fail-closed; исходный FD9/inode/flock остаётся. FreeBSD pkg CI запрещает наличие php85-posix в манифесте; тест php -n проверяет отсутствие POSIX.
 
+## Новый live-блокер и конкретное исправление `_9`
+
+На установленной `_8` PHP FD9 (`EUID=0`, `PHP_FD9_OK`), native gate (`GATE_RC=0`) и PHP saved-model (`PHP_MODEL_RC=0`) успешно проверены. Два GUI Apply вошли в `configd shared-apply-run voice`, но завершились кодом 69; под FD9 `shared_apply_operation.py inspect` вернул `none`, `/var/db/zapret2` отсутствует, общий движок продолжает работать. `telegram-envelope enable` отказал для *сохранённой OFF-конфигурации* и не является причиной отказа несохранённой GUI-формы.
+
+В `_9` исправлена доказанная потеря результата подготовительной стадии: вместо безусловной неопределённости для всех nonzero `configd`, root-worker сообщает только доверенную `preflight-rejected=<stage>` до runtime/Config/IPFW. Контроллер отвечает `applied=false`, `requires_review=false`, переводит стадию в RU; post-dispatch ошибки без такого подтверждения остаются неопределёнными. Ни WAN, ни runtime, ни STUN семантика не меняются. **Причина исходного отказа `_8` ещё не доказана**.
+
 ## Точное следующее действие
 
-Пройти exact-head Voice/Project/FreeBSD15 pkg CI, опубликовать GitHub testing _8. После установки сначала только read-only PHP FD9 attestor; затем отдельный контролируемый Apply и независимые Config/runtime/IPFW проверки. Не менять стабильный pkg-репозиторий, не подключать FreeBSD ports.
+Пройти exact-head Voice/Project/FreeBSD15 pkg CI для `_9`, опубликовать GitHub testing pkg без изменения стабильного репозитория. На установленной `_9` один контролируемый GUI Apply Telegram ON: получить `preflight-rejected` со стадией либо подтверждённый `applied-id`; отдельно проверить Config/runtime/IPFW. При отказе исправить именно показанную стадию, не расширяя архитектуру.
 
 
 ## Минимальное чтение
