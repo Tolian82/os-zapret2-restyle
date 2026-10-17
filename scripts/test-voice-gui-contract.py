@@ -56,7 +56,7 @@ def main() -> None:
               f"{service}: checkbox help contradicts the shared Apply")
     check("Включённый STUN-профиль применяется" in view and
           "Enabled STUN profiles use the shared Apply button" in view and
-          "help.text(text.enableHelp)" in view and
+          "localizedHelp = text.enableHelp" in view and
           "info.text(text.infoText)" in view,
           "RU/EN dynamic help differs from actual shared Apply")
     for name in SERVICES:
@@ -79,8 +79,7 @@ def main() -> None:
     check("function indexAction()" in controller and "getForm('voice')" in controller and
           "OPNsense/Zapret/voice" in controller, "Voice UI controller/form entry missing")
     for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
-                   "voiceServiceState", "voiceReleaseSelect", "voiceServiceControl",
-                   "voiceRepositoryReleasesLabel", "voiceImplementationNotice"):
+                   "voiceServiceState", "voiceServiceControl", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
     for marker in ("'Передача голоса'", "'Voice Transmission'", "'Основные настройки'",
                    "'General Settings'", "'Параметры передачи голоса'",
@@ -217,33 +216,17 @@ def main() -> None:
         )
         check(parsed.returncode == 0,
               "Voice browser JavaScript syntax error: " + parsed.stderr)
-        # Run the exact two regex literals taken from live Volt JavaScript.
-        # A double-escaped dot inside a JS regex rejects v0.5.2 releases and
-        # never finds dotted form IDs when OPNsense renders underscore IDs.
-        release_regex = re.search(
-            r"return (/\^v\[0-9\].*?/)\.test\(this\.value\);",
-            match.group(1),
-        )
-        id_regex = re.search(
-            r"id\.replace\((/.*?/g), '_'\)", match.group(1),
-        )
-        check(release_regex is not None and id_regex is not None,
-              "Voice release or field-ID matching regex is missing")
-        regex_script = (
-            "const releases = " + release_regex.group(1) + ";\n"
-            + "const ids = " + id_regex.group(1) + ";\n"
-            + "if (!releases.test('v0.5.2') || releases.test('v0x5x2')) "
-              "throw Error('valid release missing or invalid release accepted');\n"
-            + "if ('zapret.voice.telegram.enabled'.replace(ids, '_') !== "
-              "'zapret_voice_telegram_enabled') "
-              "throw Error('dotted Voice profile form ID was not resolved');\n"
-        )
-        regex_run = subprocess.run(
-            ["node", "-"], input=regex_script, text=True,
-            capture_output=True, check=False,
-        )
-        check(regex_run.returncode == 0,
-              "Voice release/checkbox regex regression: " + regex_run.stderr)
+        check("voiceReleaseSelect" not in view and
+              "voiceReleaseApply" not in view and
+              "/api/zapret/service/releases" not in view and
+              "/api/zapret/service/install" not in view,
+              "Voice page contains unrequested upstream release manager")
+        check('div[data-for^="help_for_"] small' in view and
+              "row.find('.help-block').first()" in view and
+              "localizedHelp" in view and
+              "Shared model candidate is not normalized" in view and
+              "result[key] = 'Ошибка проверки настроек." in view,
+              "Native help source and validation messages are not localized")
         # Execute the real GUI Config mutation gate: both writers must be
         # single-flight; an uncertain Apply cannot be followed by draft save.
         mutation_gate = re.search(
@@ -451,9 +434,8 @@ def main() -> None:
           "voiceInspectionState = null" in view and
           "voiceMutationPending = true" in view and
           "refreshVoiceHealthSettled().always(function ()" in view and
-          "voiceApplyNeedsReview || !releasesAvailable" in view and
           "reconcileVoiceServiceStatus()" in view,
-          "Voice Start/Stop, Apply and installer must share the two-witness gate")
+          "Voice Start/Stop and Apply must share the two-witness gate")
     # Both read-only inspector and GUI must expose the same verified,
     # per-profile IPFW rule identity. Counters may be unavailable on FreeBSD
     # but must never be fabricated or rounded in browser JavaScript.
@@ -491,7 +473,7 @@ def main() -> None:
           "Voice draft cannot claim activation or bypass write privileges")
     # The approved Voice GUI stays unchanged. Its existing Apply action
     # now calls the ONE native Strategies/Voice transaction under original
-    # FD9, including ON. The separately owned release installer is untouched.
+    # FD9, including ON. The release installer stays on Strategies.
     check("ipfwStopped:" in view and
           "state === 'stopped' ? text.ipfwStopped" in view and
           "'ready', 'stopped', 'uninitialized'" in status_php,
@@ -517,17 +499,13 @@ def main() -> None:
           "throwReadOnly()" in status_php and
           "configdRun('zapret reconfigure'" not in status_php,
           "Voice ON/OFF Apply must call one native FD9 Config/runtime transaction")
-    check('id="voiceReleaseApply"' in view and
-          "$('#voiceReleaseApply').on('click'" in view and
-          "'/api/zapret/service/install'" in view,
-          "Removing settings Apply must not delete the repository installer")
     check('id="voiceValidate"' in view and
           "'/api/zapret/voice/validate'" in view,
           "Voice validation control must remain usable")
     check('"/api/zapret/settings/apply"' not in view and
-          'id="voiceReleaseApply"' in view,
+          "'/api/zapret/service/install'" not in view,
           "Voice must not accidentally reuse Strategies Apply or the installer")
-    print("PASS: Voice GUI unchanged; existing Voice ON/OFF Apply uses common original FD9 native transaction")
+    print("PASS: native Voice localization and shared Apply without release installer")
 
 if __name__ == "__main__":
     main()

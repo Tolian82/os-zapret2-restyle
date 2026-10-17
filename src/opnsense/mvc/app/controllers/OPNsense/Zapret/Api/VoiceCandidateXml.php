@@ -11,6 +11,8 @@
  */
 namespace OPNsense\Zapret\Api;
 
+require_once __DIR__ . '/VoiceModelValues.php';
+
 final class VoiceCandidateXml
 {
     private const SERVICES = ['telegram', 'discord', 'x', 'sip', 'custom'];
@@ -80,10 +82,9 @@ final class VoiceCandidateXml
             }
             $source = $source[$key];
         }
-        if (!is_string($source)) {
-            throw new \InvalidArgumentException('Shared model candidate is not normalized');
-        }
-        return $source;
+        // Native getNodes() emits a selected-option dictionary for dropdowns.
+        // Resolve it without changing the original, full OPNsense model.
+        return VoiceModelValues::text($source);
     }
 
     /**

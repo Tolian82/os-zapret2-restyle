@@ -17,6 +17,7 @@ require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/VoiceApplyCandidate.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
+require_once __DIR__ . '/VoiceModelValues.php';
 
 final class SettingsApply
 {
@@ -38,8 +39,8 @@ final class SettingsApply
         $changed = [];
         foreach ($submitted as $group => $fields) {
             foreach ($fields as $name => $_) {
-                $before = (string)($previous[$group][$name] ?? '');
-                $after = (string)$candidate[$group][$name];
+                $before = VoiceModelValues::text($previous[$group][$name] ?? '');
+                $after = VoiceModelValues::text($candidate[$group][$name]);
                 if (!self::sameText($before, $after)) {
                     $changed[] = $group . '.' . $name;
                 }
