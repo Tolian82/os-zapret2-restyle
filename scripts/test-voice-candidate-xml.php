@@ -233,6 +233,7 @@ $options['hostlist']['mode'] = [
 ];
 $dropdownForm = $form;
 $dropdownForm['voice']['telegram']['enabled'] = '0';
+$dropdownForm['voice']['telegram']['args'] = '';
 $dropdownForm['voice']['waninterface'] = 'WAN';
 $dropdown = VoiceApplyCandidate::prepare(
     $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
