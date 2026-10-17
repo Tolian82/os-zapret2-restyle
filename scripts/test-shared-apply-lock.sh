@@ -10,6 +10,8 @@ touch "$LOCK" "$FOREIGN"
 chmod 600 "$LOCK" "$FOREIGN"
 command -v flock >/dev/null || exit 1
 sh -c 'exec 9>"$1"; flock -x 9; php "$2" held "$1"' sh "$LOCK" "$TEST"
+php -n "$ROOT/scripts/test-shared-apply-uid.php" "$(/usr/bin/id -u)"
+sh -c 'exec 9>"$1"; flock -x 9; php -n "$2" held "$1"' sh "$LOCK" "$TEST"
 sh -c 'exec 9>"$1"; php "$2" refuse "$1"' sh "$LOCK" "$TEST"
 sh -c 'exec 9>"$1"; flock -x 9; php "$2" refuse "$3"' sh "$FOREIGN" "$TEST" "$LOCK"
 ln -s "$LOCK" "$TMP/link"
