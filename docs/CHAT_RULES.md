@@ -1,7 +1,7 @@
 # Owner / assistant chat rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-15
+**Updated:** 2026-10-17
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.
 
@@ -17,7 +17,7 @@ CHAT-001. **Owner-facing project communication is normal, understandable Russian
 
 CHAT-002. **Use literal technical names only when useful.** File names, commands, code identifiers, GitHub check names, package names, and protocol terms may remain literal; unexplained mixed-language abstractions should be translated or immediately explained.
 
-CHAT-003. **Status reports are outcome-oriented.** State what was found, what changed, what passed or failed, whether the change is already in `main`, and the practical next step. Internal tool choreography is secondary.
+CHAT-003. **Status reports are outcome-oriented and expose the evidence boundary.** Every increment/completion report states what changed, what was actually verified, and what remains unconfirmed. Name the relevant candidate and observed user scenario, cite the applicable evidence, state whether the change is in `main` and whether its package is published, then give the practical next step. Keep source implementation, CI/package results and installed OPNsense acceptance distinct. A blocker is reported as open until its replacement check succeeds; counts of commits/tests are not a readiness claim. Internal tool choreography is secondary.
 
 CHAT-004. **Prefer action over narration.** When the owner has already given a clear executable instruction, perform the routine work instead of repeatedly describing what could be done or requesting confirmation already implied by that instruction.
 
