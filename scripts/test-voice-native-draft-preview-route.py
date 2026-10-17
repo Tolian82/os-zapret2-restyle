@@ -42,6 +42,11 @@ class VoiceDraftPreviewTests(unittest.TestCase):
         self.config.chmod(0o600)
         self.sha = hashlib.sha256(self.original).hexdigest()
         self.hits = 0
+        # Linux CI has no wwwonly account; simulate native owner separately.
+        patch_owner = patch.object(route, "native_config_owner",
+                                   return_value=(os.geteuid(), os.getegid()))
+        patch_owner.start()
+        self.addCleanup(patch_owner.stop)
 
     def test_preview_reuses_exact_saved_draft_parser_without_writes(self):
         with patch.object(route, "CONFIG", self.config), \
@@ -56,6 +61,7 @@ class VoiceDraftPreviewTests(unittest.TestCase):
         self.assertEqual(self.original, self.config.read_bytes())
         self.assertEqual(["config.xml"], sorted(p.name for p in self.root.iterdir()))
         self.assertGreaterEqual(self.hits, 3)
+        route.native_config_owner.assert_called_once_with()
 
     def test_fail_closed_for_stale_input_without_publishing(self):
         with patch.object(route, "CONFIG", self.config), \

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import errno
 import fcntl
+import grp
 import hashlib
 import json
 import os
 from pathlib import Path
+import pwd
 import stat
 import sys
 import xml.etree.ElementTree as ET
@@ -30,6 +32,16 @@ class VoiceLifecycleRouteError(RuntimeError):
 
 
 CONFIG = Path("/conf/config.xml")
+
+
+def native_config_owner() -> tuple[int, int]:
+    """Resolve the OPNsense 26.7 Config owner, not the caller's root UID.
+
+    The upstream config.php declares wwwonly:wheel, and rc.subr.d/php
+    chowns /conf/config.xml accordingly. Keep strict, named ownership
+    while verifying the exact opened/path inode and exclusive Config flock.
+    """
+    return pwd.getpwnam("wwwonly").pw_uid, grp.getgrnam("wheel").gr_gid
 
 
 def _pinned_regular(path: Path, fd: int, *, owner: tuple[int, int]) -> os.stat_result:
@@ -257,10 +269,11 @@ def main(argv: list[str]) -> int:
     try:
         require_lifecycle_lock()
         fd = os.open(CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
-        _pinned_regular(CONFIG, fd, owner=(0, 0))
+        config_owner = native_config_owner()
+        _pinned_regular(CONFIG, fd, owner=config_owner)
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         arguments = dict(
-            config_fd=fd, config_owner=(0, 0),
+            config_fd=fd, config_owner=config_owner,
             require_lifecycle_owner=require_lifecycle_lock,
         )
         route = inspect_lifecycle if argv == ["inspect"] else inspect_candidate
@@ -273,7 +286,13 @@ def main(argv: list[str]) -> int:
         ))
         return 0
     except (OSError, ValueError, RuntimeError) as exc:
-        print("ERROR: native Voice candidate/lifecycle preflight refused", file=sys.stderr)
+        # configctl reports only "Execute error" for failed script_output.
+        # Retain fail-closed exit 69, but let root see the bounded diagnosis
+        # when invoking the read-only script directly. Never print Config XML.
+        detail = " ".join(str(exc).split())[:180]
+        print("ERROR: native Voice candidate/lifecycle preflight refused"
+              " (%s: %s)" % (type(exc).__name__, detail),
+              file=sys.stderr)
         return 69
     finally:
         if fd is not None:

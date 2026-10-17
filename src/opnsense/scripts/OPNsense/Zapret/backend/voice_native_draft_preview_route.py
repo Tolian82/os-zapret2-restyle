@@ -12,7 +12,7 @@ import json
 import os
 import sys
 
-from voice_native_lifecycle_router import _locked_config
+from voice_native_lifecycle_router import _locked_config, native_config_owner
 from voice_native_saved_draft_candidate import preview_saved_draft_candidate
 from voice_ipfw_adapter import require_lifecycle_lock
 
@@ -24,7 +24,7 @@ def preview(mask: str, original_config_sha: str) -> dict:
     fd = os.open(CONFIG, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        owner = (os.geteuid(), os.getegid())
+        owner = native_config_owner()
         require_lifecycle_lock()
         _locked_config(CONFIG, fd, owner)
         result = preview_saved_draft_candidate(
