@@ -8,10 +8,19 @@ final class SharedApplyLifecycleLock
 {
     private const LOCK = '/var/run/zapret2-lifecycle.lock';
 
+    /** Fail closed when the optional FreeBSD PHP POSIX extension is absent. */
+    public static function effectiveUid(): int
+    {
+        if (!\function_exists('posix_geteuid')) {
+            throw new \RuntimeException('Native Apply requires php85-posix');
+        }
+        return \posix_geteuid();
+    }
+
     /** Non-native path/platform override may be used ONLY by isolated CI. */
     public static function assertHeld(bool $nativeOnly = true, ?string $path = null): void
     {
-        if ($nativeOnly && (PHP_OS_FAMILY !== 'BSD' || posix_geteuid() !== 0 ||
+        if ($nativeOnly && (PHP_OS_FAMILY !== 'BSD' || self::effectiveUid() !== 0 ||
             ($path !== null && $path !== self::LOCK))) {
             throw new \RuntimeException('Shared Apply requires native FreeBSD root FD9');
         }
@@ -27,7 +36,7 @@ final class SharedApplyLifecycleLock
                 ($held['mode'] & 0170000) !== 0100000 ||
                 ($named['mode'] & 0170000) !== 0100000 ||
                 $held['dev'] !== $named['dev'] || $held['ino'] !== $named['ino'] ||
-                $named['uid'] !== ($nativeOnly ? 0 : posix_geteuid()) ||
+                $named['uid'] !== ($nativeOnly ? 0 : self::effectiveUid()) ||
                 ($named['mode'] & 0022) !== 0 || is_link($path)) {
                 throw new \RuntimeException('Foreign native lifecycle descriptor');
             }

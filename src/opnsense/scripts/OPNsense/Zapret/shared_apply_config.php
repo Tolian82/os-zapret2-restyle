@@ -42,7 +42,7 @@ final class SharedApplyConfigWorker
         if (!preg_match('/^[a-f0-9]{32}$/D', $id)) {
             throw new \InvalidArgumentException('Invalid common Apply ID');
         }
-        $owner = $owner ?? posix_geteuid();
+        $owner = $owner ?? SharedApplyLifecycleLock::effectiveUid();
         self::secureFile($root, true, $owner);
         $dir = rtrim($root, '/') . '/' . $id;
         self::secureFile($dir, true, $owner);
@@ -144,7 +144,7 @@ final class SharedApplyConfigWorker
             return 64;
         }
         try {
-            if (PHP_OS_FAMILY !== 'BSD' || posix_geteuid() !== 0) {
+            if (PHP_OS_FAMILY !== 'BSD' || SharedApplyLifecycleLock::effectiveUid() !== 0) {
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
             SharedApplyLifecycleLock::assertHeld();
