@@ -23,7 +23,7 @@ expect = {
         f"{q}PLUGIN_REVISION={revision}{q}",
         f"package candidate: {q}{package}{q}",
     ],
-    "docs/releases/v0.5.2.md": [
+    f"docs/releases/v{version}.md": [
         f"{q}PLUGIN_REVISION={revision}{q}, candidate {q}{candidate}{q}",
         f"{q}{package}{q}",
     ],

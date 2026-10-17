@@ -1,7 +1,7 @@
 # Project development rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-08-15
+**Updated:** 2026-10-17
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
 
@@ -29,7 +29,7 @@ DEV-006. **A project decision must have an evidentiary or owner-authority basis.
 
 ## Engineering quality and change discipline
 
-DEV-007. **Correctness and sufficiency outrank speed.** Prefer the smallest change that fully solves the confirmed problem and preserves required behavior over speculative breadth.
+DEV-007. **Correctness and an observable result define each logical increment.** Before implementation, name the user scenario, bounded change and evidence required to accept it. Prefer the smallest change that fully solves the confirmed problem and preserves required behavior. A discovered blocking defect remains the current task until corrected and checked; do not advance to an unrelated increment or declare the blocked scenario complete. If the required environment is unavailable, record the concrete boundary and leave acceptance open. Commit count, test count and internal component completion are not substitutes for the user-visible result.
 
 DEV-008. **Preserve working behavior before optimizing it.** Optimization is justified only when the relevant cost or defect is measured or otherwise demonstrated and required semantics are preserved.
 
@@ -37,7 +37,7 @@ DEV-009. **Do not hide behavior behind silent magic.** Important defaults, fallb
 
 DEV-010. **Failure classes must remain truthful.** Infrastructure, internal, restoration, or validation failures must not be reported as normal network candidate failure, completion, or success merely to simplify control flow.
 
-DEV-011. **Never claim an unexecuted verification as PASS.** A test, live row, package build, restoration check, benchmark, or release gate is PASS only when corresponding evidence exists.
+DEV-011. **Never claim an unexecuted verification as PASS.** A test, live row, package build, restoration check, benchmark, or release gate is PASS only when corresponding evidence exists. Distinguish implementation in source, executed CI/package verification, and observed operation on installed OPNsense. State the exact scenario, candidate and evidence for a readiness claim; successful packaging or static GUI assertions do not prove that a menu opens a rendered page, that settings persist, or that voice traffic works.
 
 DEV-012. **Diagnose from exact evidence before changing code.** Read the concrete failure, log, source, and state first; do not patch a plausible cause and retrofit the explanation.
 
@@ -51,7 +51,7 @@ DEV-016. **Audits and refactors are scope/risk based.** Inspect enough surroundi
 
 DEV-017. **One logical engineering scope remains one logical change.** Same-root-cause repairs, tests, and documentation belong together; unrelated improvements wait for their own scope. GitHub same-scope handling is enforced by `GH-011`.
 
-DEV-018. **Do not change approved architecture merely to make an old test or old implementation path convenient.** First determine whether the contract or implementation is stale.
+DEV-018. **Do not change approved architecture merely to make an old test or old implementation path convenient.** First determine whether the contract or implementation is stale. A delivery defect is repaired in the existing architecture unless reproducible evidence establishes that architecture as the blocker and the owner approves a changed direction. Repeated internal checks alone do not justify another architecture rewrite.
 
 DEV-019. **Requirements or architecture changes require explicit rationale.** A change to approved user-visible behavior, safety semantics, ownership, or public contract is not smuggled in as an implementation cleanup.
 

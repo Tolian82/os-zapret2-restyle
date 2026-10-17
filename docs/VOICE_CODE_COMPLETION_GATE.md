@@ -1,16 +1,18 @@
-# «Передача голоса» — послерелизная функциональная приёмка
+# «Передача голоса» — фактическая приёмка v0.5.3
 
-Опубликован [полный релиз v0.5.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2), FreeBSD 15 amd64 package `0.5.2_194`; [publication evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md). Решение владельца 16.10.2026: код → полный релиз → реальные тесты. Первые два этапа завершены.
+17.10.2026 владелец установил опубликованный `0.5.2_194` через GUI и получил «Страница не найдена» на `/ui/zapret/voice`. **GUI-приёмка не пройдена.** Прежняя формулировка «код завершён» не означает соответствия установленной страницы ТЗ и снята.
 
-## Подтверждено кодом и CI
+[План v0.5.3](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) утверждён полностью. Текущая ревизия и следующий шаг — [START_HERE](START_HERE.md). [Публикация v0.5.2](verification/evidence/2026-10-16-v0.5.2-release-publication.md) и её успешные CI сохраняют силу только для проверенных ими уровней.
 
-Все пять Voice-сервисов Telegram/Discord/X/SIP/Custom, RU/EN/help, shared IPSET/Config, FD9 Apply, один dvtws2, scoped UDP/IPFW/WAN, обычный Start/Stop/boot и GUI status реализованы. [CI #38955078719](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38955078719) Voice/Project/FreeBSD PASS; [release #38956132121](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/38956132121) validates and publishes exact package/assets/Pages. CI не доказывает STUN/MEDIA/CALL.
+| Рубеж | Фактическое состояние | Что закроет |
+|---|---|---|
+| Маршрут меню | В `_194` отсутствует нужный UI-контроллер; исправление ожидается | Настоящий Router находит controller/action/form/view |
+| Регрессия и пакет | Новая проверка ещё не выполнена | `_194` отвергнут по конкретному дефекту; исправленный source и распакованный `.pkg` проходят |
+| Публикация v0.5.3 | Не выполнена | Подтверждены точный tag, пакет, checksum и GUI/pkg-репозиторий |
+| Открытие установленной страницы | **Отказ на `_194`; исправленный пакет не проверен** | Переход из меню и напрямую показывает форму/данные; три страницы и RU/EN проверены |
+| GUI/CONFIG пяти профилей | Не подтверждено на OPNsense | Полные пользовательские сценарии сохранения/валидации/Apply и отсутствие lost update |
+| Runtime/BOOT | Не подтверждено на OPNsense | Один dvtws2, scoped IPFW, Start/Stop, сохранение после reboot |
+| UDP/STUN | Не подтверждено | Наблюдение пакетного результата и scope |
+| MEDIA/CALL | Не подтверждено | Реальное двустороннее медиа и звонки по каждому квалифицируемому сервису |
 
-## Следующий этап: owner-live PENDING
-
-1. GUI/CONFIG: установить опубликованный пакет; проверить RU/EN, пять сервисов, обе страницы, ON/OFF, shared IPSET и stale-form guards.
-2. Runtime/BOOT: один dvtws2, точные IPFW rules/tables/WAN/ports, Start/Stop и сохранённые профили после reboot без ручного enable.
-3. UDP/STUN: отдельные подтверждения local/forwarded capture, IPSET/WAN scope и реального STUN.
-4. MEDIA/CALL: повторяемое двустороннее медиа и настоящий звонок, без ложного PASS от одних счётчиков.
-
-Реальные испытания **не проводились**. Старый Telegram PoC/marker/private recovery не возвращать. TCP/proxy/TNAS/Docker вне нового плагинного lifecycle. [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) · [START_HERE](START_HERE.md).
+Успешный нижний уровень не закрывает верхний: найденный в исходниках handler не равен отрисованной странице; отрисованная форма не равна успешному Apply; counters не равны звонку. Отчёт содержит «изменено / фактически проверено / остаётся неподтверждённым». Следующий участок не обходит обнаруженный блокер. Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md), пять сервисов и общий backend сохраняются.

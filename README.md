@@ -5,13 +5,13 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.2`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) · `os-zapret2-restyle-0.5.2_194.pkg` |
-| **Current development candidate (not released)** | None; `v0.5.2_194` is the published full release |
+| **Current development candidate (not released)** | `v0.5.3_1` — corrective development stage |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. This feature has passed isolated tests but not yet been verified on an owner OPNsense installation.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. The owner installed `0.5.2_194` and reported that its Voice menu opens “Page not found”. This is a confirmed release defect. The approved v0.5.3 corrective plan keeps the full feature scope; installed-page and voice-call acceptance remain open.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 

@@ -16,10 +16,11 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — этап v0.5.2 и текущая линия
+## Level 2 — этап v0.5.3 и текущая линия
 
-- [Контроль готовности к испытаниям v0.5.2](VOICE_CODE_COMPLETION_GATE.md) — кодовые факты, CI/FreeBSD и отдельная live-приёмка.
-- [Подробный план v0.5.2](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — критерии семи этапов; общий generator/IPFW/Apply/lifecycle и GUI status реализованы; следующий рубеж — проверка пакета/legacy deprecation, CI/FreeBSD.
+- [Фактическая приёмка v0.5.3](VOICE_CODE_COMPLETION_GATE.md) — подтверждённый отказ `_194`, исправление/пакет и отдельные живые сценарии.
+- [Утверждённый план v0.5.3](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) — маршрут, целевая регрессия, GUI/pkg-поставка, полная приёмка.
+- [Исправляющая поставка v0.5.3](releases/v0.5.3.md) — текущая граница подготовки и публикации.
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — неизменные frontend/функции пяти сервисов и утверждённый общий backend.
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [Zapret2 Service](architecture/ZAPRET2_SERVICE.md) — действующие общие контракты.
 - [Полный релиз v0.5.2](releases/v0.5.2.md) и [доказательства публикации](verification/evidence/2026-10-16-v0.5.2-release-publication.md).

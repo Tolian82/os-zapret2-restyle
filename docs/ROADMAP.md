@@ -1,20 +1,15 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.2: owner-live после полного релиза
+## Текущий приоритет — v0.5.3: исправление поставки Voice
 
-Полное [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md) и пять Voice-сервисов сохранены. PR #328 и PR #329 merged; [полный v0.5.2 Web/pkg release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) опубликован. Следующий этап — owner-live, не повторный релиз и не возврат к старому PoC.
+Установленный `v0.5.2_194` не открывает `/ui/zapret/voice`; это текущий блокер, а не завершённая GUI-приёмка. Владелец утвердил [четыре шага](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) 17.10.2026:
 
-| Этап из [плана](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) | Фактический статус |
-|---|---|
-| 1. Общий Voice + ordinary generator | Реализован в коде и isolated tests |
-| 2. Общий scoped STUN/IPFW | Реализован, включая точную сверку engine/UDP/IPSET/WAN/divert |
-| 3. Единый Apply обеих страниц | Реализован: FD9, Config save, rollback, commit |
-| 4. Lifecycle и legacy миграция | Normal Stop/Start/boot реализованы; имена Telegram enable/disable/status уже идут через native Config/Apply/inspect. По новому решению владельца legacy миграция отменена, native clean baseline |
-| 5. Фактические статусы | Реализованы и уточнены в `_138–_140` |
-| 6. Удаление дублирования | Завершено в коде и проверено CI/FreeBSD: удалён private PoC recovery/rollback/IPFW/process graph и его entrypoints; единый shared Apply сохранён |
-| 7. Завершение и приёмка | Код, Voice/Project/FreeBSD CI и полный release `v0.5.2_194` опубликованы. GUI/CONFIG/BOOT/STUN/MEDIA/CALL на OPNsense — **PENDING**, следующий этап. |
+1. Исправить штатный UI route, проверить меню/права/form/view и RU/EN.
+2. Проверить адреса через настоящий Router OPNsense на исходниках и собранном пакете; воспроизвести отказ `_194`.
+3. Выпустить исправляющее GUI/pkg-обновление и подтвердить открытие установленной страницы.
+4. Пройти всё [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md): пять сервисов, сохранение/Apply, общая служба/IPFW/boot, отдельно UDP/STUN/MEDIA/CALL.
 
-**Остаточный рубеж:** owner-live приёмка опубликованного `v0.5.2_194`: сначала GUI/CONFIG/BOOT, затем WAN/UDP/STUN и отдельно MEDIA/CALL. Без повторного создания старой архитектуры; [точный handoff](START_HERE.md).
+Каждый шаг завершается наблюдаемым результатом; найденный блокер исправляется до следующего участка. Общая архитектура уже реализована в исходниках и сохраняется; её наличие не доказывает готовность установленного продукта. Точные статусы — [приёмка](VOICE_CODE_COMPLETION_GATE.md), следующее действие — [START_HERE](START_HERE.md).
 
 ## Основной завершённый путь
 

@@ -53,6 +53,8 @@ This is an execution reminder for **existing** canonical rules, not another rule
 
 Before announcing or starting implementation, compare the claimed missing behavior with its real production entrypoint/call path, current tests and applicable CI. Record the proof level separately: **implemented in source**, **verified in CI/package**, or **confirmed owner-live**. An already implemented feature may be reopened only for a demonstrated defect, changed requirement or new evidence (`DEV-004`–`DEV-005`, `DEV-011`–`DEV-013`).
 
+For each increment, apply `DEV-007`: name the observable user scenario and acceptance evidence before code, and resolve a blocking defect before moving to another increment. Report changed / actually verified / still unconfirmed under `CHAT-003`; do not convert CI counts into installed-page acceptance. Architecture changes still require the evidence and authority in `DEV-018`–`DEV-019`.
+
 After every logical change, reconcile affected facts under `DOC-036`–`DOC-037` and `DOC-047`: replace superseded assertions in `PROJECT_STATE.md`, preserve exactly one next action in `START_HERE.md`, update `ROADMAP.md` only when milestone priorities change, and put per-revision chronology only in the current-line ledger. Do not update documents that have no changed facts, and never append revision diaries to handoff, state, roadmap or TЗ. For every newly completed milestone cite the real entrypoint and verification evidence; a failed/skipped CI job, mock and live experiment have distinct proof status.
 
 Validate `VERSION`/`PLUGIN_REVISION` against handoff/state/release metadata, not ROADMAP formatting or a moving `_N` suffix in its heading.
