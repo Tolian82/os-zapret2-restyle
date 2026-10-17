@@ -5,7 +5,7 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (not released)** | `v0.5.3_3` — Voice RU help / WAN candidate, pending CI and owner-live verification |
+| **Current development candidate (not released)** | `v0.5.3_3` — Voice RU help / WAN fix merged to `main`, CI qualified; not published or owner-live accepted |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
