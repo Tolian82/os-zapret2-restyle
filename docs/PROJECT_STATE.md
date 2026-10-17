@@ -4,8 +4,8 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.3_2`**: ис
 
 ## Версия и поставка
 
-- `VERSION=0.5.3`, `PLUGIN_REVISION=2`; package candidate: `os-zapret2-restyle-0.5.3_2.pkg`. Этап открыт прямым решением владельца 17.10.2026. Полный релиз v0.5.3 ещё не опубликован; исправление `_2` находится в `main` [`92a96ae`](https://github.com/Tolian82/os-zapret2-restyle/commit/92a96ae26235d5c3bad8492a00b2b60563722779). [CI #39023792241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39023792241) подтвердил Voice, общий проект, FreeBSD 15 сборку и проверку реального OPNsense Router на извлечённом пакете. Установленная страница пока не проверена.
-- Последняя опубликованная версия — `v0.5.2`, пакет `0.5.2_194`, source `18961229801011a201bff1dae22db96692074648`. [Публикация и её CI](verification/evidence/2026-10-16-v0.5.2-release-publication.md) подтверждены; владелец подтвердил установку через GUI.
+- `VERSION=0.5.3`, `PLUGIN_REVISION=2`; package candidate: `os-zapret2-restyle-0.5.3_2.pkg`. Этап открыт прямым решением владельца 17.10.2026. Полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) опубликован 17.10.2026, exact source/tag `376616af9e13963a27710bb3784b376855bb908d`; package `os-zapret2-restyle-0.5.3_2.pkg`, SHA256 `4ee03d677af571f3f23954a68fb086edfd0d8984f779efd7e9762091c640fc49`. [CI #39023792241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39023792241) проверил Voice/Project/FreeBSD/.pkg Router; [release workflow #39024503035](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39024503035) выполнил GitHub Release и GitHub Pages FreeBSD repo. [Публикационные доказательства](verification/evidence/2026-10-17-v0.5.3-release-publication.md). Установленная страница пока не проверена.
+- Предыдущая версия `v0.5.2_194` опубликована и установлена владельцем; её [публикация](verification/evidence/2026-10-16-v0.5.2-release-publication.md) подтверждена, но `/ui/zapret/voice` на ней не открывается. Текущий `v0.5.3_2` опубликован, но его установку владелец пока не подтвердил.
 - Целевая платформа — OPNsense 26.7 / FreeBSD 15 amd64 / Python 3.13. Наблюдённая система владельца — OPNsense 26.7.3_8.
 
 ## Подтверждённый отказ и граница доказательств
@@ -15,7 +15,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.3_2`**: ис
 | Открытие `/ui/zapret/voice` из меню в `_194` | Отказ: «Страница не найдена», сообщение и снимок владельца от 17.10.2026 |
 | Причина в исходниках | В UI namespace отсутствует `VoiceController.php`; `voiceAction` находится в `IndexController`. API VoiceController не обслуживает `/ui/` |
 | CI предыдущего пакета | Проверки исходников, симуляции и FreeBSD-сборка выполнены; не подтверждают открытие страницы |
-| Новая поставка | `_2` в `main`; CI Voice/Project/FreeBSD15/pkg Router успешно. Полная публикация и работа установленной страницы пока не подтверждены |
+| Новая поставка | `v0.5.3_2` опубликован: tag/source/package/checksum и GitHub Pages репозиторий подтверждены. Работа установленной страницы на OPNsense пока не проверена |
 | Полное GUI/CONFIG/BOOT/STUN/MEDIA/CALL | Не принято; открытие GUI имеет подтверждённый отказ, остальные живые сценарии не подтверждены |
 
 ## Сохраняемая реализация и ограничения
