@@ -8,7 +8,7 @@
 |---|---|---|
 | Маршрут меню | `_194` не содержит UI-контроллер. `_2`: штатный `VoiceController::indexAction` и успешная проверка настоящим Router OPNsense 26.7 по Menu.xml | Маршрут в исходниках проверен; после GUI-установки подтвердить отображение страницы |
 | Регрессия и пакет | [CI #39023792241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39023792241): Voice/Project/FreeBSD/package успешно, исходный и извлечённый `.pkg` проверены настоящим Router; негативный `_194` воспроизведён | Проверка маршрута в поставке закрыта, GUI браузер на устройстве — отдельный рубеж |
-| Публикация v0.5.3 | Не выполнена | Подтверждены точный tag, пакет, checksum и GUI/pkg-репозиторий |
+| Публикация v0.5.3 | **Подтверждена:** [GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3), [workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39024503035), [evidence](verification/evidence/2026-10-17-v0.5.3-release-publication.md): tag/package/SHA256/Pages | Опубликованная поставка закрыта; установленный браузер — отдельная проверка |
 | Открытие установленной страницы | **Отказ на `_194`; исправленный пакет не проверен** | Переход из меню и напрямую показывает форму/данные; три страницы и RU/EN проверены |
 | GUI/CONFIG пяти профилей | Не подтверждено на OPNsense | Полные пользовательские сценарии сохранения/валидации/Apply и отсутствие lost update |
 | Runtime/BOOT | Не подтверждено на OPNsense | Один dvtws2, scoped IPFW, Start/Stop, сохранение после reboot |
