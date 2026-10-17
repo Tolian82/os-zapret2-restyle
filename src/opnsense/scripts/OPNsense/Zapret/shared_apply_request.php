@@ -221,7 +221,7 @@ final class SharedApplyRequest
             return 64;
         }
         try {
-            if (PHP_OS_FAMILY !== 'BSD' || posix_geteuid() !== 0) {
+            if (PHP_OS_FAMILY !== 'BSD' || SharedApplyLifecycleLock::effectiveUid() !== 0) {
                 throw new \RuntimeException('Native root staging required');
             }
             SharedApplyLifecycleLock::assertHeld();

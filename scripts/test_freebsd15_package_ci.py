@@ -29,14 +29,20 @@ revision = int(match.group(1))
 candidate = f"os-zapret2-restyle-{version}_{revision}.pkg"
 if not re.search(r"^PLUGIN_NAME=\s*zapret2-restyle\s*$", makefile, re.MULTILINE):
     fail("plugin name mismatch")
-if not re.search(r"^PLUGIN_DEPENDS=\s*python313(?:\s|$)", makefile, re.MULTILINE):
+if not re.search(r"^PLUGIN_DEPENDS=\s*python313\s+php85-posix\s*$", makefile, re.MULTILINE):
     fail("python313 dependency is missing")
 
 require("scripts/build-pkg.sh", 'python313)  echo "lang/python313"')
+require("scripts/build-pkg.sh", 'php85-posix) echo "sysutils/php85-posix"')
 require("scripts/build-pkg.sh", 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"')
 require(".github/workflows/ci.yml", 'release: "15.0"')
 require(".github/workflows/release.yml", "release: '15.0'")
-require(".github/workflows/ci.yml", 'pkg install -y jq python313')
+require(".github/workflows/ci.yml", 'pkg install -y jq python313 php85-posix')
+require(".github/workflows/ci.yml", '.deps."php85-posix".origin == "sysutils/php85-posix"')
+require(".github/workflows/release.yml", 'prepare: pkg install -y jq php85-posix')
+require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_lock.php", 'function_exists(\'posix_geteuid\')')
+require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php", 'SharedApplyLifecycleLock::effectiveUid()')
+require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php", 'SharedApplyLifecycleLock::effectiveUid()')
 require(".github/workflows/ci.yml", 'tar -tf dist/*.pkg > "${contents}"')
 require(".github/workflows/ci.yml", 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"')
 require(".github/workflows/ci.yml", '.abi == "FreeBSD:15:amd64"')

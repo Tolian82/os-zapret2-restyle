@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_6`. `VERSION=0.5.3`, `PLUGIN_REVISION=6`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_7`. `VERSION=0.5.3`, `PLUGIN_REVISION=7`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -30,11 +30,13 @@
 
 17.10.2026 владелец прислал `pkg info -x os-zapret2-restyle` → `os-zapret2-restyle-0.5.3_6` и снимок GUI после нажатия «Проверить». Видно **«Синтаксис проверен (без применения)»** на отдельной строке и выбранный WAN без ошибки. Это принимает read-only GUI Validate/его отображение на установленной версии. Это не подтверждение записи Config, перехода Voice/IPFW к ON или работы звонков. Последний независимый lifecycle-осмотр ранее показал все сохранённые профили OFF; более поздних фактов сохранения ещё нет.
 
+## Блокер после первого live Apply на установленной _6
+
+17.10.2026 владелец показал неуспешный `shared-apply-run voice` (exit 69) на OPNsense 26.7.7, saved Voice всё OFF, runtime Voice uninitialized; `/var/db/zapret2` отсутствует. Отдельные пробы: `CLI_MODEL_OK`, Python native-gate `NATIVE_GATE_RC=0`, но настоящий PHP FD9 check вызывает **Fatal Error: undefined `posix_geteuid()`** в `shared_apply_lock.php:14`, rc 255. Это доказанный blocker до PHP-attestation, но не доказательство успешности более поздних фаз Apply. OPNsense 26.7 использует PHP 8.5 и не включает расширение POSIX в обязательный список. `v0.5.3_7` добавляет в пакет `php85-posix` (`sysutils/php85-posix`), единый fail-closed euid helper и FreeBSD pkg regression; только этот дефект, без изменений сервиса/IPFW/GUI.
+
 ## Точное следующее действие
 
-Следующий сценарий по утверждённому ТЗ — **один контролируемый Telegram ON Apply** через общий штатный механизм «Стратегий», без нового пакета или переделки архитектуры. Перед тестом проверить на форме, что Telegram ON, остальные четыре OFF, WAN совпадает со «Стратегиями»; исходный профиль и IPSET не менять. Убедиться в рабочем доступе к OPNsense и подходящем окне тестирования: Apply меняет общие Config, `dvtws2` и IPFW, возможен кратковременный сетевой перерыв. Если форма менялась после Validate, повторить read-only «Проверить». Нажать «Применить» **один раз**, дождаться итогового сообщения (до 600 секунд), при таймауте или неопределённости НЕ повторять. После завершения получить только read-only `configctl zapret setup_status`, `configctl zapret voice_inspect`, `configctl zapret voice_lifecycle_inspect` и скриншот результата. Успех требует подтверждения сохранённого Telegram ON, общего runtime и Voice/IPFW; только затем STUN-трафик и тест звонка. [Приёмка](VOICE_CODE_COMPLETION_GATE.md).
-
-Статус **OPEN**, пока Apply не проверен на OPNsense. `VERSION=0.5.3`, `PLUGIN_REVISION=6` не изменять без подтверждённого дефекта.
+Проверить exact-head CI Voice/Project/FreeBSD package, опубликовать тестовый `v0.5.3_7`. На установленном пакете сначала проверить `function_exists('posix_geteuid')` и повторить **только read-only PHP FD9 attestor** до `PHP_FD9_OK`. Лишь после этого отдельно согласовать однократный Apply в тестовом окне. Пока живое включение Telegram, IPFW и звонок **OPEN**. Stable релиз и Pages/pkg не менять.
 
 ## Минимальное чтение
 

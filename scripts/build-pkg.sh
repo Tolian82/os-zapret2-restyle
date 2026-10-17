@@ -113,6 +113,7 @@ dep_origin()
         jq)         echo "textproc/jq" ;;
         git)        echo "devel/git" ;;
         python313)  echo "lang/python313" ;;
+        php85-posix) echo "sysutils/php85-posix" ;;
         *)          echo "$1" ;;
     esac
 }
