@@ -5,13 +5,13 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (not released)** | None — latest full release is `v0.5.3_2`; installed OPNsense GUI acceptance pending |
+| **Current development candidate (not released)** | `v0.5.3_3` — Voice RU help / WAN candidate, pending CI and owner-live verification |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. The owner installed `0.5.2_194` and reported that its Voice menu opens “Page not found”. This is a confirmed release defect. The approved v0.5.3 corrective plan keeps the full feature scope. The published `0.5.3_2` corrects the missing Voice UI controller and passed regression tests against the actual OPNsense 26.7 Router, including the extracted FreeBSD package. **The replacement package has not yet been installed and verified on OPNsense**; installed-page and voice-call acceptance remain open.
+`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. The owner installed `0.5.2_194` and reported that its Voice menu opens “Page not found”. This is a confirmed release defect. The approved v0.5.3 corrective plan keeps the full feature scope. The published `0.5.3_2` corrects the missing Voice UI controller and passed regression tests against the actual OPNsense 26.7 Router, including the extracted FreeBSD package. The owner installed `0.5.3_2` and the Voice page now opens, but native Russian help, the WAN dropdown preview and error localization failed in live use. An unreleased `0.5.3_3` source candidate addresses those issues; Apply, runtime and voice-call acceptance remain open.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
@@ -76,7 +76,7 @@ The **Services → Zapret2 → Voice Transmission / Передача голос�
 - The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
 - When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
 
-**Current verification boundary:** `v0.5.3` is a published full GitHub Release and FreeBSD 15 package repository update correcting the `0.5.2_194` Voice route defect. Its source and extracted `.pkg` passed the real OPNsense Router regression, but this does not yet prove the installed page opens or loads settings. Owner-live GUI/CONFIG/BOOT, UDP/STUN, media and real calls remain **PENDING**, not PASS. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
+**Current verification boundary:** `v0.5.3` is a published full GitHub Release and FreeBSD 15 package repository update correcting the `0.5.2_194` Voice route defect. Its source and extracted `.pkg` passed the real OPNsense Router regression, and the owner confirmed that the installed `0.5.3_2` page opens with five profile fields. However, Russian field help and the WAN candidate failed in live testing; their `_3` correction is not yet accepted. GUI/CONFIG/BOOT, UDP/STUN, media and real calls remain **PENDING**, not PASS. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
 
 For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
 
@@ -234,7 +234,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Current published full release: **v0.5.3 / 0.5.3_2** (Voice UI route correction). [Release publication evidence](docs/verification/evidence/2026-10-17-v0.5.3-release-publication.md). Installed OPNsense page opening and Voice GUI/CONFIG/BOOT/STUN/MEDIA/CALL testing are pending.
+Current published full release: **v0.5.3 / 0.5.3_2** (Voice UI route correction). [Release publication evidence](docs/verification/evidence/2026-10-17-v0.5.3-release-publication.md). Installed page opening was observed by the owner on `_2`; RU help/WAN and full Voice GUI/CONFIG/BOOT/STUN/MEDIA/CALL acceptance remain pending.
 
 Useful entry points:
 
