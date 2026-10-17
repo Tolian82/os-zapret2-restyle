@@ -6,6 +6,8 @@ import fcntl
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -14,6 +16,7 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 from voice_native_lifecycle_router import (
     inspect_lifecycle, inspect_candidate, VoiceLifecycleRouteError,
+    native_config_owner, _pinned_regular,
 )
 from shared_apply_operation import SharedApplyOperation
 
@@ -38,6 +41,62 @@ def config_xml(*, profiles=None, global_enabled="1", voice_wan="",
 
 
 class LifecycleRouterTests(unittest.TestCase):
+    def test_failed_inspector_emits_bounded_reason_without_success(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        from voice_native_lifecycle_router import main as cli_main
+        stderr = io.StringIO()
+        with patch("voice_native_lifecycle_router.require_lifecycle_lock",
+                   side_effect=VoiceLifecycleRouteError("existing lifecycle FD9 is required")):
+            with contextlib.redirect_stderr(stderr):
+                code = cli_main(["inspect"])
+        self.assertEqual(code, 69)
+        self.assertIn("existing lifecycle FD9 is required", stderr.getvalue())
+        self.assertNotIn("<opnsense>", stderr.getvalue())
+
+
+    def test_production_owner_is_opnsense_wwwonly_wheel_not_root(self):
+        # Actual OPNsense 26.7: Mk/version.mk CORE_USER=wwwonly UID=789,
+        # config.php owner=wwwonly:wheel; rc.subr.d/php chowns config.xml.
+        with patch("voice_native_lifecycle_router.pwd.getpwnam",
+                   return_value=SimpleNamespace(pw_uid=789)) as user, \
+             patch("voice_native_lifecycle_router.grp.getgrnam",
+                   return_value=SimpleNamespace(gr_gid=0)) as group:
+            self.assertEqual(native_config_owner(), (789, 0))
+            user.assert_called_once_with("wwwonly")
+            group.assert_called_once_with("wheel")
+
+    def test_real_style_wwwonly_inode_is_accepted_without_loosening_checks(self):
+        # No ownership mutation in CI: simulate the production inode
+        # while preserving the real opened file dev/ino/mode/link structure.
+        fd = os.open(self.config, os.O_RDONLY)
+        try:
+            current = os.fstat(fd)
+            fake = SimpleNamespace(
+                st_mode=current.st_mode, st_nlink=current.st_nlink,
+                st_dev=current.st_dev, st_ino=current.st_ino,
+                st_uid=789, st_gid=0,
+            )
+            with patch("voice_native_lifecycle_router.os.lstat", return_value=fake), \
+                 patch("voice_native_lifecycle_router.os.fstat", return_value=fake):
+                self.assertIs(_pinned_regular(self.config, fd, owner=(789, 0)), fake)
+                with self.assertRaisesRegex(
+                    VoiceLifecycleRouteError, "unsafe or replaced native Config inode"
+                ):
+                    _pinned_regular(self.config, fd, owner=(0, 0))
+            foreign = SimpleNamespace(
+                st_mode=current.st_mode, st_nlink=current.st_nlink,
+                st_dev=current.st_dev, st_ino=current.st_ino + 1,
+                st_uid=789, st_gid=0,
+            )
+            with patch("voice_native_lifecycle_router.os.lstat", return_value=foreign), \
+                 patch("voice_native_lifecycle_router.os.fstat", return_value=fake):
+                with self.assertRaises(VoiceLifecycleRouteError):
+                    _pinned_regular(self.config, fd, owner=(789, 0))
+        finally:
+            os.close(fd)
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

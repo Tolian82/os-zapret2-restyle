@@ -419,6 +419,59 @@ def main() -> None:
         )
         check(executed.returncode == 0,
               "Voice async health reconciliation failed: " + executed.stderr)
+        # Execute the actual state presentation with conflicting read-only
+        # witnesses (owner-live: setup_status=started, voice_inspect=uninitialized).
+        # This must present the common service truth without green Voice/Start.
+        presenter = re.search(
+            r"    function reconcileVoiceServiceStatus\(\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(presenter is not None, "Voice service status presenter missing")
+        badge_script = (
+            "let runtimeInstalled=true,runtimeState='started',"
+            "runtimeBusy=false,voiceInspectionState=null,"
+            "voiceMutationPending=false,voiceControlPending=false,"
+            "voiceApplyNeedsReview=false;\n"
+            "const text={running:'Запущена',stopped:'Остановлена',error:'Ошибка',"
+            "incomplete:'Неизвестно',runningUnverified:'Запущена · Voice не подтверждён',"
+            "stoppedUnverified:'Остановлена · Voice не подтверждён',"
+            "start:'Запустить',stop:'Остановить'};\n"
+            "const badge={classes:'',value:'',removeClass(){this.classes='';return this;},"
+            "addClass(value){this.classes=value;return this;},"
+            "text(value){this.value=value;return this;}};\n"
+            "const control={value:'',shown:false,toggle(value){this.shown=value;return this;},"
+            "text(value){this.value=value;return this;}};\n"
+            "function $(key){return key==='#voiceServiceState'?badge:"
+            "key==='#voiceServiceControl'?control: (()=>{throw Error(key)})();}\n"
+            "function voiceRuntimeAligned(){return runtimeInstalled && ("
+            "(runtimeState==='started' && voiceInspectionState==='ready') ||"
+            "(runtimeState==='stopped' && voiceInspectionState==='stopped'));}\n"
+            "function setServiceControlsBusy(){control.disabled=!voiceRuntimeAligned();}\n"
+            "function reconcileVoiceMutationControls(){}\n"
+            + presenter.group(0) + "\n"
+            "function assert(ok,msg){if(!ok)throw Error(msg)};\n"
+            "reconcileVoiceServiceStatus();"
+            "assert(badge.value===text.runningUnverified &&"
+            "badge.classes==='label-warning','uninitialized Voice hid started Zapret2');"
+            "assert(control.disabled,'unverified Voice unlocked Start/Stop');\n"
+            "voiceInspectionState='ready';reconcileVoiceServiceStatus();"
+            "assert(badge.value===text.running&&badge.classes==='label-success',"
+            "'verified owner not shown green');\n"
+            "runtimeState='stopped';voiceInspectionState=null;"
+            "reconcileVoiceServiceStatus();"
+            "assert(badge.value===text.stoppedUnverified &&"
+            "badge.classes==='label-default','stopped service misreported');\n"
+            "runtimeInstalled=false;runtimeState='error';"
+            "reconcileVoiceServiceStatus();"
+            "assert(badge.value===text.error && badge.classes==='label-danger',"
+            "'runtime error falsely healthy');\n"
+        )
+        badge_run = subprocess.run(
+            ["node", "-"], input=badge_script, text=True,
+            capture_output=True, check=False,
+        )
+        check(badge_run.returncode == 0,
+              "Voice live service-status display regression: " + badge_run.stderr)
     else:
         print("SKIP: Node.js is unavailable; browser JavaScript syntax was not checked")
     check("if (button.prop('disabled') || voiceMutationPending ||" in view and

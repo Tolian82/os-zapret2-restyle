@@ -13,7 +13,7 @@ $(document).ready(function () {
         service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
         status: 'Статус', running: 'Запущена', stopped: 'Остановлена', error: 'Ошибка',
-        loading: 'Загрузка…', incomplete: 'Неизвестно',
+        loading: 'Загрузка…', incomplete: 'Неизвестно', runningUnverified: 'Запущена · Voice не подтверждён', stoppedUnverified: 'Остановлена · Voice не подтверждён',
         ipfwStatus: 'IPFW — передача голоса', ipfwReady: 'Общий движок и правила подтверждены', ipfwStopped: 'Общая служба остановлена, IPFW очищен',
         ipfwEmpty: 'Новая Voice-конфигурация не активирована', ipfwInterrupted: 'Незавершённое применение',
         ipfwBlocked: 'Требуется проверка правил', ipfwUnknown: 'Статус недоступен',
@@ -47,7 +47,7 @@ $(document).ready(function () {
         service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
         status: 'Status', running: 'Started', stopped: 'Stopped', error: 'Error',
-        loading: 'Loading…', incomplete: 'Unknown',
+        loading: 'Loading…', incomplete: 'Unknown', runningUnverified: 'Started · Voice not verified', stoppedUnverified: 'Stopped · Voice not verified',
         ipfwStatus: 'Voice IPFW', ipfwReady: 'Shared engine and IPFW verified', ipfwStopped: 'Shared service stopped; IPFW cleared',
         ipfwEmpty: 'New Voice configuration not activated', ipfwInterrupted: 'Interrupted apply',
         ipfwBlocked: 'Firewall review required', ipfwUnknown: 'Status unavailable',
@@ -435,14 +435,21 @@ $(document).ready(function () {
     function reconcileVoiceServiceStatus() {
         var aligned = voiceRuntimeAligned() && !voiceMutationPending &&
             !voiceControlPending && !voiceApplyNeedsReview;
-        var started = aligned && runtimeState === 'started';
-        var stopped = aligned && runtimeState === 'stopped';
-        // A generic started flag MUST NOT look green if the committed
-        // Voice owner is interrupted, its Config differs, or IPFW is unknown.
+        var serviceRunning = runtimeInstalled && runtimeState === 'started';
+        var serviceStopped = runtimeInstalled && runtimeState === 'stopped';
+        var started = aligned && serviceRunning;
+        var stopped = aligned && serviceStopped;
+        // Keep separate facts separate: setup_status is the GENERAL Zapret2
+        // service; voice_inspect attests the optional native Voice/IPFW owner.
+        // An uninitialized Voice owner MUST NOT overwrite a known 'started'
+        // general service with 'Unknown', or make it appear Voice is active.
         $('#voiceServiceState')
-            .removeClass('label-success label-default label-danger')
-            .addClass(started ? 'label-success' : stopped ? 'label-default' : 'label-danger')
+            .removeClass('label-success label-warning label-default label-danger')
+            .addClass(started ? 'label-success' : serviceRunning ? 'label-warning' :
+                      serviceStopped ? 'label-default' : 'label-danger')
             .text(started ? text.running : stopped ? text.stopped :
+                  serviceRunning ? text.runningUnverified :
+                  serviceStopped ? text.stoppedUnverified :
                   runtimeState === 'error' ? text.error : text.incomplete);
         $('#voiceServiceControl')
             .toggle(runtimeInstalled && ['started', 'stopped'].includes(runtimeState))
