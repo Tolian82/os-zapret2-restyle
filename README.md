@@ -5,7 +5,7 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (testing prerelease, not stable)** | `v0.5.3_7` — add PHP 8.5 POSIX dependency for native FD9 Apply; source CI and installed recheck pending |
+| **Current development candidate (testing prerelease, not stable)** | [v0.5.3_7](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_7/os-zapret2-restyle-0.5.3_7.pkg) — requires php85-posix for native FD9 Apply; Voice/Project/FreeBSD pkg passed and testing asset published, installed recheck pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
