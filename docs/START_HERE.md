@@ -46,9 +46,11 @@ _8 исправляет именно зависимость: больше не �
 
 В `_9` исправлена доказанная потеря результата подготовительной стадии: вместо безусловной неопределённости для всех nonzero `configd`, root-worker сообщает только доверенную `preflight-rejected=<stage>` до runtime/Config/IPFW. Контроллер отвечает `applied=false`, `requires_review=false`, переводит стадию в RU; post-dispatch ошибки без такого подтверждения остаются неопределёнными. Ни WAN, ни runtime, ни STUN семантика не меняются. **Причина исходного отказа `_8` ещё не доказана**.
 
-## Точное следующее действие
+## Публикация и точное следующее действие
 
-Пройти exact-head Voice/Project/FreeBSD15 pkg CI для `_9`, опубликовать GitHub testing pkg без изменения стабильного репозитория. На установленной `_9` один контролируемый GUI Apply Telegram ON: получить `preflight-rejected` со стадией либо подтверждённый `applied-id`; отдельно проверить Config/runtime/IPFW. При отказе исправить именно показанную стадию, не расширяя архитектуру.
+`_9` объединена в `main` из PR #348 (commit `e979517`) после успешных Voice/Project/FreeBSD15 CI [#39068637403](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39068637403). Проверочный [FreeBSD 15 amd64 pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_9/os-zapret2-restyle-0.5.3_9.pkg) опубликован от того же источника workflow [#39069224353](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39069224353); SHA-256 `cd6c57f24668587109ac133605f2699d43869aef1b1bdb7f4babbb65cf9b2045`. Сам пакет/tag/asset проверены; workflow завершился с ошибкой только на автоматическом создании docs PR (Actions запрещён createPR), запись подготовлена через GitHub connector. Stable Pages/pkg repository не менялся.
+
+**Единственное следующее действие:** на установленной `_9` один контролируемый GUI Apply Telegram ON с уже заполненными STUN-параметрами и IPSET, затем независимый осмотр `voice_lifecycle_inspect`, `voice_inspect`, `setup_status` и журнала. При показанной ранней стадии `preflight-rejected` исправить именно её. При `applied-id` подтвердить saved Config/runtime/IPFW, а затем отдельно MEDIA/CALL. Не повторять Apply при неопределённом результате, не создавать новую архитектуру.
 
 
 ## Минимальное чтение
