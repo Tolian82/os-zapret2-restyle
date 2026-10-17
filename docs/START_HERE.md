@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_7`. `VERSION=0.5.3`, `PLUGIN_REVISION=7`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_8`. `VERSION=0.5.3`, `PLUGIN_REVISION=8`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -34,9 +34,16 @@
 
 17.10.2026 владелец показал неуспешный `shared-apply-run voice` (exit 69) на OPNsense 26.7.7, saved Voice всё OFF, runtime Voice uninitialized; `/var/db/zapret2` отсутствует. Отдельные пробы: `CLI_MODEL_OK`, Python native-gate `NATIVE_GATE_RC=0`, но настоящий PHP FD9 check вызывает **Fatal Error: undefined `posix_geteuid()`** в `shared_apply_lock.php:14`, rc 255. Это доказанный blocker до PHP-attestation, но не доказательство успешности более поздних фаз Apply. OPNsense 26.7 использует PHP 8.5 и не включает расширение POSIX в обязательный список. `v0.5.3_7` добавляет в пакет `php85-posix` (`sysutils/php85-posix`), единый fail-closed euid helper и FreeBSD pkg regression; только этот дефект, без изменений сервиса/IPFW/GUI. Пакет [опубликован](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_7/os-zapret2-restyle-0.5.3_7.pkg) из `e402d89`, SHA-256 `38f656a4e295f7451b1dd192737dba41d8e2f4405929fa81aa3b324a49158913`, [Voice/Project/FreeBSD15 CI #39053386699](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39053386699) PASS. Установка и повторный root PHP FD9 test ещё не проверены.
 
+## Дополненное доказательство (17.10.2026)
+
+Установленная _6: PHP posix_geteuid() отсутствует, FD9 PHP проверка завершается Fatal Error (rc255), конфигурация Voice не сохранена и configd Apply rc69. _7 ошибочно добавлял php85-posix (из FreeBSD ports). Владелец подтвердил, что пакет не найден в штатных репозиториях OPNsense. _7 как исправление использовать нельзя.
+
+_8 исправляет именно зависимость: больше не требует php85-posix и использует базовый /usr/bin/id -u через PHP proc_open(argv) без shell, EUID проверяется строго и fail-closed; исходный FD9/inode/flock остаётся. FreeBSD pkg CI запрещает наличие php85-posix в манифесте; тест php -n проверяет отсутствие POSIX.
+
 ## Точное следующее действие
 
-Установить [проверочный pkg v0.5.3_7](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_7/os-zapret2-restyle-0.5.3_7.pkg) после сверки SHA-256 `38f656a4e295f7451b1dd192737dba41d8e2f4405929fa81aa3b324a49158913` и `pkg info -d os-zapret2-restyle`; проверить `function_exists('posix_geteuid')` в PHP CLI и повторить **только безопасный PHP FD9 attestor** до `PHP_FD9_OK`. Лишь после этого отдельно согласовать однократный Apply в тестовом окне. Пока живое включение Telegram, IPFW и звонок **OPEN**. Stable релиз и Pages/pkg не менять.
+Пройти exact-head Voice/Project/FreeBSD15 pkg CI, опубликовать GitHub testing _8. После установки сначала только read-only PHP FD9 attestor; затем отдельный контролируемый Apply и независимые Config/runtime/IPFW проверки. Не менять стабильный pkg-репозиторий, не подключать FreeBSD ports.
+
 
 ## Минимальное чтение
 

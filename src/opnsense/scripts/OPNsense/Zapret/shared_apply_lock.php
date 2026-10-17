@@ -8,13 +8,37 @@ final class SharedApplyLifecycleLock
 {
     private const LOCK = '/var/run/zapret2-lifecycle.lock';
 
-    /** Fail closed when the optional FreeBSD PHP POSIX extension is absent. */
+    /**
+     * OPNsense core PHP does not include the optional POSIX extension.
+     * Use base /usr/bin/id without shell expansion; fail closed on malformed
+     * output, non-zero status, missing PHP process support or missing binary.
+     */
     public static function effectiveUid(): int
     {
-        if (!\function_exists('posix_geteuid')) {
-            throw new \RuntimeException('Native Apply requires php85-posix');
+        if (!\function_exists('proc_open') || !\is_executable('/usr/bin/id')) {
+            throw new \RuntimeException('Native effective UID verification unavailable');
         }
-        return \posix_geteuid();
+        $pipes = [];
+        $process = @\proc_open(
+            ['/usr/bin/id', '-u'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            null,
+            ['PATH' => '/usr/bin:/bin']
+        );
+        if (!\is_resource($process)) {
+            throw new \RuntimeException('Native effective UID verification failed');
+        }
+        \fclose($pipes[0]);
+        $output = \stream_get_contents($pipes[1], 32);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        $status = \proc_close($process);
+        if ($status !== 0 || !\is_string($output) ||
+            !\preg_match('/^(0|[1-9][0-9]{0,9})\n$/D', $output)) {
+            throw new \RuntimeException('Native effective UID verification refused');
+        }
+        return (int)\trim($output);
     }
 
     /** Non-native path/platform override may be used ONLY by isolated CI. */

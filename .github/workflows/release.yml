@@ -83,7 +83,7 @@ jobs:
         with:
           release: '15.0'
           usesh: true
-          prepare: pkg install -y jq php85-posix
+          prepare: pkg install -y jq
           run: |
             sh scripts/build-pkg.sh
             sh scripts/verify-release-package.sh
