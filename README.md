@@ -5,7 +5,8 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (testing prerelease, not stable)** | [`v0.5.3_5`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_5/os-zapret2-restyle-0.5.3_5.pkg) — pre-dispatch Apply classification and read-only validation-stage diagnostics; CI/package confirmed, owner-live pending |
+| **Current development candidate (unreleased)** | `v0.5.3_6` — make Voice Validate feedback visible on its own line; CI/package/installed acceptance pending |
+| **Latest testing prerelease (not stable)** | [`v0.5.3_5`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_5) — pre-dispatch Apply classification and validation-stage diagnostics; installed package identity not established from screenshots |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

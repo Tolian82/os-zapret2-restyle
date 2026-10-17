@@ -158,6 +158,23 @@ def main() -> None:
           'id="voiceValidate"' in view and
           'id="voiceValidationStatus"' in view,
           "Voice GUI missing syntax-only Validate control")
+    # The owner's screenshots show all four controls occupying the full
+    # horizontal row; a following inline validation span can be pushed off
+    # screen together with help text. Preserve action IDs and dedicate a
+    # visible, wrapping block to the actual AJAX result and a second to help.
+    check(re.search(
+          r'<div\s+id="voiceValidationStatus"[^>]*role="status"[^>]*></div>',
+          view) is not None and
+          '<div id="voiceImplementationNotice"></div>' in view and
+          '#voiceValidationStatus, #voiceImplementationNotice {' in view and
+          'display: block;' in view.split(
+              '#voiceValidationStatus, #voiceImplementationNotice {', 1
+          )[1].split('}', 1)[0] and
+          'overflow-wrap: break-word;' in view.split(
+              '#voiceValidationStatus, #voiceImplementationNotice {', 1
+          )[1].split('}', 1)[0],
+          "Voice Validate feedback and implementation notice must be "
+          "separate wrapping visible blocks, never trailing inline spans")
     for term in ("'Проверить'", "'Validate'", "'Синтаксис проверен (без применения)'",
                  "'Syntax checked (not applied)'"):
         check(term in view, f"Voice validation UI missing localization {term}")

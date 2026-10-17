@@ -691,6 +691,17 @@ $(document).ready(function () {
     #voiceRuntimeVersion { display: inline-block; width: 14ch; }
     #voiceServiceControlSlot, #voiceServiceControl { min-width: 12ch; }
     #frm_VoiceSettings textarea {max-width:100%; box-sizing:border-box;}
+    /* A row of four actions can fill the viewport at desktop zoom.
+       Keep the actual validation result visible on its own wrapping line
+       rather than flowing it off-screen after buttons and long help text. */
+    #voiceValidationStatus, #voiceImplementationNotice {
+        display: block;
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: break-word;
+        margin-top: 8px;
+    }
+    #voiceValidationStatus:empty { display: none; }
     @media (max-width: 767px) {
         #frm_VoiceSettings input, #frm_VoiceSettings select {max-width:100%;}
     }
@@ -728,7 +739,7 @@ $(document).ready(function () {
         <button class="btn btn-default __mr" id="voicePreviewDraft" type="button" disabled>Preview saved Voice drafts</button>
         <button class="btn btn-default __mr" id="voiceSaveDraft" type="button" disabled>Save inactive draft</button>
         <button class="btn btn-primary __mr" id="voiceApply" type="button" disabled>Apply</button>
-        <span id="voiceValidationStatus" aria-live="polite"></span>
-        <span id="voiceImplementationNotice" aria-live="polite"></span>
+        <div id="voiceValidationStatus" role="status" aria-live="polite" aria-atomic="true"></div>
+        <div id="voiceImplementationNotice"></div>
     </div>
 </section>
