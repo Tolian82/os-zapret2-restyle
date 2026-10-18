@@ -58,7 +58,6 @@ try {
 
 $post = [
     'voice' => [
-        'waninterface' => 'WAN',
         'telegram' => ['enabled' => '1', 'args' => '--filter-udp=*'],
         'discord' => ['enabled' => '0', 'args' => 'not-yet-approved'],
     ],
@@ -68,7 +67,6 @@ $post = [
     ],
 ];
 $expected = $current;
-$expected['voice']['waninterface'] = 'WAN';
 $expected['voice']['telegram'] = ['enabled' => '1', 'args' => '--filter-udp=*'];
 $expected['voice']['discord']['args'] = 'not-yet-approved';
 $expected['hostlist']['telegramips'] = '91.108.13.10';
@@ -85,7 +83,8 @@ failPayload($current, ['hostlist' => ['userdomains' => 'evil']], 'unrelated doma
 failPayload($current, ['voice' => ['custom' => ['secret' => 'evil']]], 'new service field');
 failPayload($current, ['voice' => ['discord' => ['enabled' => 'yes']]], 'invalid switch');
 failPayload($current, ['voice' => ['telegram' => ['args' => ['--new']]]], 'non-scalar args');
-failPayload($current, ['voice' => ['waninterface' => []]], 'non-scalar WAN');
+failPayload($current, ['voice' => ['waninterface' => 'WAN2']], 'retired independent WAN');
+failPayload($current, ['voice' => ['waninterface' => []]], 'retired WAN array');
 failPayload($current, ['voice' => ['foo' => ['enabled' => '1']]], 'unknown service');
 failPayload($current, ['hostlist' => ['xips' => ['8.8.8.8']]], 'non-scalar IPSET');
 
