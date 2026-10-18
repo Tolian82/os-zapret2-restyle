@@ -91,3 +91,7 @@ Only attested original old Strategies state can authorize reattaching missing su
 ## Published `_22`, owner-live gate OPEN
 
 Source CI #39148988899 PASS, FreeBSD15 testing pkg SHA-256 `0d2dca31eed8f12dafc616bdbeb4699599c0a9a498ff41ae3ca5355ecc719c78` published from `22fbbed3`. No owner-live recovery yet: persistent `requires-review` `_19`, old IPFW, no supervisor. Operator uses explicit FD9 `shared_recover_reviewed_legacy`, and separately tests Telegram ON and STUN/MEDIA/CALL. Never report saved Voice ON or working calls from static CI.
+
+## v0.5.3_23 status FD9 gate
+
+The owner confirmed full prior Strategies state after reviewed recovery on `_22`: journal=restored, engine/supervisor/IPFW production checks all OK. Existing common journal read under `status` lacked FD9, causing false incomplete. `_23` reuses the lifecycle lock before read-only status journal inspection, and tests actual entrypoint. No live Telegram Voice ON, STUN/media/call claim.
