@@ -63,3 +63,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## Опубликованная `_16`: проверено в CI, не принято на OPNsense
 
 Из исходного PR #366 `8c50c401` тесты Voice/Project/FreeBSD15 #39132346651 успешны. GitHub testing package опубликован #39132944747, SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`. После install требуется один Telegram ON Apply с явным подтверждением Config ON и общего runtime/IPFW. STUN/MEDIA/CALL принимаются отдельно. Публикация сама по себе не закрывает реальный дефект на устройстве.
+
+## v0.5.3_17 — FreeBSD process census false duplicate; live gate OPEN
+
+`_16` owner-live: successful candidate prep but refused at `runtime-preflight`; stderr `unexpected or untracked dvtws2 process`. Owner supplied actual PID-file 2848, genuine dvtws2 PID 2848, shell PID 9195 with dvtws2 pathname only in its argv field 7. Scanner previously matched *any* argument, hence counted an unrelated shell. `_17` matches the executable position only, with regression against shell mentions and two real engines. Until fresh installed Apply, `saved_voice_on=false`, shared Voice/IPFW uninitialized; STUN/MEDIA/CALL still OPEN.

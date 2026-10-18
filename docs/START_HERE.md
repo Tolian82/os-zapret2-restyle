@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_16`. `VERSION=0.5.3`, `PLUGIN_REVISION=16`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_17`. `VERSION=0.5.3`, `PLUGIN_REVISION=17`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** установить опубликованный testing [пакет `_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_16/os-zapret2-restyle-0.5.3_16.pkg) (SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`) и выполнить **один** Telegram ON Apply при работающих «Стратегиях». После Apply независимо проверить saved Telegram ON, shared runtime/IPFW и лишь потом STUN/MEDIA/CALL. При отказе собрать точную стадию/ошибку из configd без повторного Apply; не возвращаться к старым WAN/FD9/8 из 8 тестам.
+**Единственное следующее действие:** проверить исходник `_17` в Voice/Project/FreeBSD15 CI, затем опубликовать тестовый пакет из точного source merge и провести один Telegram ON Apply на OPNsense. Исправляется строго наблюдённый ложный census дубль: PID 2848 — dvtws2, PID 9195 — `/bin/sh` с текстовым упоминанием движка в argv; никаких попыток отключить защиту от настоящих дубликатов, перезапустить рабочие «Стратегии» или заявить saved ON заранее.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -101,6 +101,12 @@ _8 исправляет именно зависимость: больше не �
 ## Опубликованная testing `_16` — live Apply ожидается
 
 Исходный [PR #366](https://github.com/Tolian82/os-zapret2-restyle/pull/366) объединён в `8c50c401f4494d76a674cfa80d1b7150193eeb61` после успешных Voice/Project/FreeBSD 15 CI [#39132346651](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132346651). [Проверочный пакет `_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_16/os-zapret2-restyle-0.5.3_16.pkg) опубликован из этого точного коммита в [publisher #39132944747](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132944747), SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`. Workflow собрал и проверил tag/asset, но не смог создать docs PR из-за разрешений GitHub Actions; публикационная запись проводится через connector PR #367. Stable Pages/pkg repo без изменений. **Installed Apply, Config ON/IPFW/STUN/CALL остаются неподтверждёнными.**
+
+## Owner-live `_16` — ошибка census, исправление `_17`
+
+Установленная `0.5.3_16` показала `preflight-rejected=runtime-preflight`; Config Telegram остаётся OFF, Voice `uninitialized`. stderr configd: `ERROR: shared Apply: unexpected or untracked dvtws2 process`. Опрос тем же `process_query.sh` показал PID-файл `2848`, настоящий `dvtws2` PID 2848 и отдельную оболочку `/bin/sh` PID 9195, PPID 8993 с текстовым токеном пути к движку в поле 7. Текущий `apply_runtime_attest_engine_inventory` искал путь в **любом** токене командной строки и ошибочно засчитывал оболочку как второй `dvtws2`.
+
+`_17` проверяет только поле исполняемой программы `$2` в `ps -o pid= -o command=`, с числовым PID. Все реальные дополнительные экземпляры, потерянный PID-файл и посторонние процессы в IPFW по-прежнему блокируют Apply. Регрессия выполняет оригинальную production-функцию с сочетанием `engine + shell mention`, только `shell mention` и `two real engines + shell mention`. Это **не** доказательство успешного реального переключения. После публикации проверить GUI Apply и saved/runtime/IPFW/STUN/CALL по отдельности.
 
 ## Минимальное чтение
 

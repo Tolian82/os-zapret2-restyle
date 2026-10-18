@@ -41,6 +41,26 @@ check 69
 printf "%s\n" 542 > "$CHILD_PIDFILE"
 _apply_engine=1
 check 0
+# Owner observed: real PID 2848 and a /bin/sh command that mentioned
+# the full engine path at token 7. The shell is NOT a second dvtws2.
+{
+    printf "%s\n" " 542 $DVTWS_BIN --filter-udp=443"
+    printf "%s\n" " 9195 /bin/sh -c /usr/local/bin/awk -v expected $DVTWS_BIN"
+} > "$FIXTURE"
+check 0
+# Even when no engine is expected, only non-executable mentions are not
+# evidence of an orphan dvtws2.
+printf "%s\n" " 9195 /bin/sh -c /usr/local/bin/awk -v expected $DVTWS_BIN" > "$FIXTURE"
+_apply_engine=0
+check 0
+# A true second executable must still fail even with a wrapper present.
+_apply_engine=1
+{
+    printf "%s\n" " 542 $DVTWS_BIN --filter-udp=443"
+    printf "%s\n" " 9195 /bin/sh -c /usr/local/bin/awk -v expected $DVTWS_BIN"
+    printf "%s\n" " 999 $DVTWS_BIN --filter-udp=555"
+} > "$FIXTURE"
+check 69
 printf "%s\n" " 999 $DVTWS_BIN --filter-udp=443" > "$FIXTURE"
 check 69
 {
