@@ -32,7 +32,7 @@ shared_apply_require_tools() { return 0; }
 shared_apply_bundle_service() { printf "bundle:%s\n" "$1" >> "$LOG"; [ "$1" != verify ] || [ "$BAD_BUNDLE" = 0 ]; }
 shared_apply_native_config() {
     case "$1" in
-        preflight) echo '{"snapshot":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","enabled":"1","base":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","candidate":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","fields":["voice.telegram.enabled"]}' ;;
+        preflight) [ "$CONFIG_PREFLIGHT_RC" = 0 ] || return "$CONFIG_PREFLIGHT_RC"; echo '{"snapshot":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","enabled":"1","base":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","candidate":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","fields":["voice.telegram.enabled"]}' ;;
         save) echo config-save >> "$LOG"; return "$SAVE_RC" ;;
         saved)
             echo config-readback >> "$LOG"
@@ -102,7 +102,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; }
+reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -129,7 +129,13 @@ expect_status 70 'bundle:verify runtime-probe record:prepared record:activating 
 reset; FINAL_MONITOR=0
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:requires-review '
 reset; BAD_BUNDLE=1
-expect_status 69 'bundle:verify '
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=bundle-verify' "$ROOT/response.txt" ||
+    fail "bundle refused before journal but GUI receipt was uncertain"
+reset; CONFIG_PREFLIGHT_RC=69
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=config-preflight' "$ROOT/response.txt" ||
+    fail "Config refused before journal but GUI receipt was uncertain"
 reset; SAVE_RC=69
 expect_status 69 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save runtime-restore record:restored '
 reset; SAVE_RC=70
@@ -139,7 +145,9 @@ expect_status 69 'bundle:verify runtime-probe record:prepared record:activating 
 reset; ATTEST_RC=1
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest record:requires-review '
 reset; PROBE_RC=1
-expect_status 69 'bundle:verify runtime-probe '
+expect_status 0 'bundle:verify runtime-probe '
+grep -Fqx 'preflight-rejected=runtime-preflight' "$ROOT/response.txt" ||
+    fail "legacy runtime preflight failure did not reach GUI"
 reset; ACTIVATE_RC=1
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:requires-review '
 reset; COMMIT_RC=1

@@ -389,7 +389,7 @@ class VoiceController extends ApiControllerBase
             $output = trim((string)$backend->configdpRun(
                 'zapret shared_apply', ['voice', $encoded], false, 600
             ));
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal)$/D', $output, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight)$/D', $output, $match)) {
                 // The one FD9 worker explicitly attests failure before the
                 // shared transaction. Do not classify this as an unknown
                 // post-activation result or freeze editable Voice settings.

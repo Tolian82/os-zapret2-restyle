@@ -941,9 +941,18 @@ shared_apply_execute_service()
     [ -d "$_shared_apply_root/release" ] &&
     [ -f "$_shared_apply_root/candidate.xml" ] &&
     [ -f "$_shared_apply_root/plan.json" ] || return 69
-    shared_apply_bundle_service verify "$_shared_apply_id" || return 69
+    # These gates run before the first durable Apply record and mutate
+    # neither Config nor runtime/IPFW. Report their exact bounded stage
+    # instead of mislabelling them as uncertain post-activation results.
+    if ! shared_apply_bundle_service verify "$_shared_apply_id"; then
+        printf '%s\n' preflight-rejected=bundle-verify
+        return 0
+    fi
     _shared_apply_preview=$(shared_apply_native_config preflight \
-        "$_shared_apply_id" "$_shared_apply_page") || return 69
+        "$_shared_apply_id" "$_shared_apply_page") || {
+        printf '%s\n' preflight-rejected=config-preflight
+        return 0
+    }
     _shared_apply_mode=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
     _shared_apply_base=$(printf "%s\n" "$_shared_apply_preview" |
@@ -957,7 +966,10 @@ shared_apply_execute_service()
     # purely read-only. The mutating activation repeats the exact probe.
     # A failed transition must not permanently poison the common journal
     # when no kernel or Config change has even been attempted.
-    apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode" || return 69
+    if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
+        printf '%s\n' preflight-rejected=runtime-preflight
+        return 0
+    fi
     # The journal records only a fixed operation identity and owned-fields
     # proof. It never contains private Config XML or untrusted shell strings.
     shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
