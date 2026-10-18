@@ -27,3 +27,7 @@
 ## Обнаруженный недостаток snapshot в `_10`, кандидат `_11`
 
 Текущая Voice-страница без отдельного WAN всё ещё возвращает `preflight-rejected=candidate` при Telegram ON. Подтверждение установленного `_10` по `pkg info` для этой попытки отсутствует. Источник OPNsense `BaseListField::getNodeData()` допускает отличающиеся локализованные `value` и наборы невключённых опций между web и CLI; SHA256 не должен включать эти UI-атрибуты. `_11` нормализует выбранные ключи и добавляет регрессию RU/EN с негативными проверками реальной смены WAN и mode. В случае сохранённого отказа пользователь увидит подстадию `candidate-plan/validation/xml/size`; successful Config/runtime/IPFW/CALL ещё не подтверждены.
+
+## `_11` runtime-build failure / `_12` repair
+
+Owner-live `_11`: native Apply остановился до IPFW/Config на `runtime-build`. Фактическая ошибка: `telegram.args: required --filter-udp is missing`, стадия 4/8 blobs. Доказан дефект подготовки: MVC default Telegram args не попадал в физический detached XML, когда менялся только enabled. В `_12` полный args/IPSET каждого включённого профиля материализуется независимо от MVC changed map (сохраняя его проверку для авторизации). CI и проверка на сервере ещё ожидаются; **реальный Telegram Call не принят**.
