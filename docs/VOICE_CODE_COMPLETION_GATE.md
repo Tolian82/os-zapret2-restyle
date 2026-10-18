@@ -103,3 +103,7 @@ Exact source PR #375, CI #39152790833 PASS, pkg SHA-256 `04196633b5fbc40e21eaaef
 ## v0.5.3_27 — OPNsense scalar native leaf validation before cutover
 
 Owner `_26` read-only reproduction: whole `getNodes` to `setNodes()` failed on untouched `general.waninterface` selected options dictionary. `_27` uses scalar changed-fields leaf setter and identical native validation before runtime; only actual Telegram ON/IPFW and STUN/CALL close this gate.
+
+## v0.5.3_28 published, real Voice acceptance pending
+
+Full CI #39165184611 PASS, FreeBSD testing pkg digest `4b0f2ac937ad7f219740f7b383ac2599d5847e9d7fa34c9c181020543ed6c12d`, source `93c8510`. Owner must install and prove native Config Telegram ON, common runtime/IPFW and bidirectional STUN/MEDIA/CALL. Static CI does not close issue #360.
