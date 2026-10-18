@@ -67,3 +67,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## v0.5.3_17 — FreeBSD process census false duplicate; live gate OPEN
 
 `_16` owner-live: successful candidate prep but refused at `runtime-preflight`; stderr `unexpected or untracked dvtws2 process`. Owner supplied actual PID-file 2848, genuine dvtws2 PID 2848, shell PID 9195 with dvtws2 pathname only in its argv field 7. Scanner previously matched *any* argument, hence counted an unrelated shell. `_17` matches the executable position only, with regression against shell mentions and two real engines. Until fresh installed Apply, `saved_voice_on=false`, shared Voice/IPFW uninitialized; STUN/MEDIA/CALL still OPEN.
+
+## Testing `_17` подтверждена пакетом — owner-live проверка впереди
+
+Source PR #368 merged `6501b0f`, source Voice/Project/FreeBSD15 CI #39134787692 PASS, testing release [v0.5.3_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_17) SHA-256 `e306babb6d4515c3fac70653a3ba9ecdccf2eb9a7a7b95e53e359c0b7725d4aa`. Воспроизведённая ошибка `_16`: census учитывал PID 9195 shell как dvtws2 при настоящем PID 2848. `_17` исправляет фильтр executable token; настоящий второй процесс всё ещё должен отказываться. На установленной `_17` Config/runtime/IPFW/STUN/MEDIA/CALL пока не проверены.
