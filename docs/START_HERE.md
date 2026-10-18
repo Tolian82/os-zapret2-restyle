@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_26`. `VERSION=0.5.3`, `PLUGIN_REVISION=26`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_27`. `VERSION=0.5.3`, `PLUGIN_REVISION=27`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** на OPNsense установить точный [testing pkg `_26`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_26/os-zapret2-restyle-0.5.3_26.pkg) SHA-256 `04196633b5fbc40e21eaaef1ea7542b9017e04e1ea8518589fcbb7f49098149f`. Установленная `_22` имеет подтверждённый journal `restored`, ENGINE/SUPERVISOR/IPFW OK, но false incomplete из-за пропуска FD9 при read-only status. `_26` исправляет status и входящий preinstall со старой `_22`. После установки подтвердить `configctl zapret status`=running и terminal `restored`, тогда **один** Telegram ON Apply и проверка Config/runtime/IPFW/STUN/call. Не повторять recovery; если установка или статус неуспешны, сначала собрать точную ошибку.
+**Единственное следующее действие:** завершить `_27` CI Voice/Project/FreeBSD15 и опубликовать точный testing pkg, затем владельцу установить пакет и выполнить один Telegram ON Apply. Доказанный blocker установленной `_26`: native Config preflight проходил, но SharedConfigCommit::persist делал `model->setNodes($target)` на полном `getNodes()` с InterfaceField option dictionary (`general.waninterface`), вызывая `Invalid input type for waninterface: expected a single value` ПЕРЕД Config::save и подтверждённый rollback `restored`/69. `_27` проверяет и применяет только изменённые form-owned scalar leaf через BaseModel::setNodeByReference, один и тот же метод на preflight и save, не касаясь WAN или чужих групп. Контроль успеха — saved_voice_on=true, runtime/IPFW Voice, затем STUN и звонок.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -153,6 +153,14 @@ Installed appliance is still `_19` with voice `requires-review`, supervisor abse
 Source PR #375 merged `53485762181de25e1da823019e979c9af591b06a`, exact-head [CI #39152790833](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39152790833) PASS Voice/Project/FreeBSD15. [Release v0.5.3_26](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_26) includes FreeBSD:15:amd64 pkg SHA-256 `04196633b5fbc40e21eaaef1ea7542b9017e04e1ea8518589fcbb7f49098149f`, source/tag exact. [Publisher #39153448678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39153448678) completed publish and verification, failed only creating docs PR due Actions permissions; connector PR #376 reconciles docs, stable Pages/pkg unchanged.
 
 Owner `_22`: successful guarded legacy recovery returned journal `restored` and live ENGINE=OK/SUPERVISOR=OK/IPFW=OK (dvtws2 14397, monitor 44795, old IPFW 19000/19001); common `status` falsely incomplete due missing FD9. `_26` is tested to close status-route and package bridge. No `_26` installed success or Voice ON yet.
+
+## Owner-live `_26`: OPNsense InterfaceField write contract; `_27`
+
+18.10 владелец запустил два Telegram ON Apply на `_26`: обе операции вернули 69 и восстановили прежний runtime, Config Telegram OFF. Последняя операция `9455192c1aeefb7ee40743d2861a789e`, `changed_fields=['voice.telegram.enabled']`, seal RC0, нативный PHP preflight RC0, свежий Config snapshot. Отдельный read-only тест в OPNsense под FD9 с вызовом настоящего `Zapret::setNodes($target)` выбросил `Invalid input type for waninterface: expected a single value` ещё до validate/save. Source `SharedConfigCommit::persist` использовал именно `setNodes($target)` всего `getNodes` (в том числе неизменённого Strategies WAN). OPNsense BaseModel::getNodes выдаёт для InterfaceField/OptionField выбор в виде option map, но setNodes требует scalar leaf.
+
+`_27`: `SettingsApply::mergeForCommit()` по-прежнему проверяет полный candidate, dependency и whitelist, однако инертный OPNsense model изменяется через `BaseModel::setNodeByReference()` **только** для доказанных `changed_fields`; `performValidation(false)` тот же. Shared Config preflight теперь проверяет точный этот setter+валидацию под Config lock без `serializeToConfig`/`Config::save` и до runtime/IPFW. Существующая Config::save и rollback границы не изменены. Регрессия воспроизводит selected-option карты `general.waninterface`, legacy `voice.waninterface`, `hostlist.mode` и единственное изменение Telegram enabled; не допускает full-model setNodes.
+
+CI/pkg/owner-live Telegram ON, IPFW, STUN и звонок остаются открытыми.
 
 ## Минимальное чтение
 

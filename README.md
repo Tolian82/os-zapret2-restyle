@@ -254,3 +254,5 @@ This independent project builds on open-source work by **bol-van** and **Umur Go
 MIT. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
 
 Current Voice live acceptance: owner installed `_4`; read-only lifecycle inspector works and confirms saved Voice profiles OFF, while GUI reports a WAN validation error and uncertain Apply result. `_5` is now a separately published testing prerelease correcting a proven pre-dispatch error classification defect and providing read-only validation-stage diagnostics. It is not installed or accepted on the owner's OPNsense; successful Voice Apply or real calls are still unproven. No blind re-Apply is advised.
+
+Testing candidate `v0.5.3_27` fixes native Model InterfaceField getNodes/setNodes mismatch by updating only the approved changed fields. Owner-live acceptance is still required.

@@ -5,7 +5,7 @@
  */
 namespace {
     require_once __DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
-    require_once __DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/apply_settings.php';
+    require_once __DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php';
 
     use OPNsense\Zapret\Api\SettingsApply;
     use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
@@ -92,6 +92,60 @@ namespace {
         $config->disk['voice']===$prior['voice'] &&
         $config->disk['strategy']['trafficargs']==='--filter-tcp=80',
         'native save lost unrelated or Voice data');
+
+    // Real OPNsense getNodes() represents InterfaceField and OptionField as
+    // option maps; passing that complete tree back through setNodes() raises
+    // "Invalid input type for waninterface: expected a single value".
+    // The owner observed this on the installed 0.5.3_26 Telegram ON.
+    $optionWan = [
+        'wan' => ['value' => 'WAN', 'selected' => 1],
+        'lan' => ['value' => 'LAN', 'selected' => 0],
+    ];
+    $options = state();
+    $options['general']['waninterface'] = $optionWan;
+    $options['voice']['waninterface'] = $optionWan;
+    $options['hostlist']['mode'] = [
+        'all' => ['value' => 'All', 'selected' => 0],
+        'list' => ['value' => 'List', 'selected' => 1],
+    ];
+    $voiceCandidate = $options;
+    $voiceCandidate['voice']['telegram']['enabled'] = '1';
+    $voicePlan = [
+        'result' => 'prepared',
+        'candidate' => $voiceCandidate,
+        'changed_fields' => ['voice.telegram.enabled'],
+        'dependencies' => VoiceSettingsSnapshot::digest($options),
+    ];
+    FakeModel::$state = $options;
+    $previewModel = new FakeModel();
+    $preview = \OPNsense\Zapret\Native\SharedApplyConfigWorker::preflight(
+        $voicePlan, $options, 'voice', $previewModel
+    );
+    verify($preview['result'] === 'prepared' && $preview['enabled'] === '1',
+        'production native preflight failed owned Voice leaf');
+    verify($previewModel->getNodes()['general']['waninterface'] === $optionWan &&
+        $previewModel->getNodes()['hostlist']['mode'] === $options['hostlist']['mode'] &&
+        $previewModel->getNodes()['voice']['telegram']['enabled'] === '1',
+        'native preflight touched unrelated option-map fields');
+    FakeModel::$reject = true;
+    try {
+        \OPNsense\Zapret\Native\SharedApplyConfigWorker::preflight(
+            $voicePlan, $options, 'voice', new FakeModel()
+        );
+        verify(false, 'model validation error survived preflight');
+    } catch (\InvalidArgumentException $expected) {}
+    FakeModel::$reject = false;
+    $voiceConfig = new FakeConfig($options);
+    $voiceSaved = SharedConfigCommit::persist(
+        $voicePlan, 'voice', $voiceConfig, static fn()=>new FakeModel()
+    );
+    verify($voiceSaved['result'] === 'saved' && $voiceConfig->saves === 1 &&
+        $voiceConfig->disk['voice']['telegram']['enabled'] === '1' &&
+        $voiceConfig->disk['general']['waninterface'] === $optionWan &&
+        $voiceConfig->disk['voice']['waninterface'] === $optionWan &&
+        $voiceConfig->disk['hostlist']['mode'] === $options['hostlist']['mode'],
+        'Voice ON changed foreign InterfaceField/OptionField or did not persist');
+
     $noChange=SettingsApply::prepareStrategies(
         $config->disk, [], $config->disk['hostlist']['telegramips']
     );

@@ -84,9 +84,17 @@ final class SharedApplyConfigWorker
     }
 
     public static function preflight(
-        array $plan, array $current, string $page
+        array $plan, array $current, string $page, ?object $model = null
     ): array {
         $target = SettingsApply::mergeForCommit($current, $plan, $page);
+        if ($model !== null && count($plan['changed_fields']) > 0) {
+            // Full getNodes() contains selection-option arrays not suitable
+            // for native setNodes(). Validate only form-owned scalar leaves,
+            // using exactly the same write method as Config persist.
+            SharedConfigCommit::validateOwnedModelFields(
+                $model, $target, $plan['changed_fields']
+            );
+        }
         $mode = (string)($target['general']['enabled'] ?? '0');
         if (!in_array($mode, ['0', '1'], true)) {
             throw new \InvalidArgumentException('Invalid shared candidate runtime mode');
@@ -158,9 +166,10 @@ final class SharedApplyConfigWorker
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
                 $config->lock();
                 try {
-                    $fresh = $factory()->getNodes();
+                    $model = $factory();
+                    $fresh = $model->getNodes();
                     $result = $argv[1] === 'preflight'
-                        ? self::preflight($plan, $fresh, $argv[3])
+                        ? self::preflight($plan, $fresh, $argv[3], $model)
                         : self::saved($plan, $fresh);
                 } finally {
                     $config->unlock();
