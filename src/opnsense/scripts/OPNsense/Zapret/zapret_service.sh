@@ -24,6 +24,11 @@ CHILD_PIDFILE="/var/run/dvtws2.pid"
 SUPERVISOR_DAEMON_PIDFILE="/var/run/zapret2-supervisor-daemon.pid"
 SUPERVISOR_MONITOR_PIDFILE="/var/run/zapret2-supervisor-monitor.pid"
 SUPERVISOR_LOOP="${SCRIPT_DIR}/supervisor_loop.sh"
+# Shared native Apply and recovery call supervisor_start() from apply_runtime.sh
+# and require the absolute executable service callback. Ordinary Strategies
+# passed "$0" via orchestrator, but the common path otherwise inherited an
+# unset SERVICE_SCRIPT and could not start or restore the supervisor.
+SERVICE_SCRIPT="${SCRIPT_DIR}/zapret_service.sh"
 STAGE_FILE="/var/run/zapret2-execution.status"
 DVTWS_LOG="/var/log/zapret2/dvtws2.log"
 SUPERVISOR_LOG="/var/log/zapret2/supervisor.log"

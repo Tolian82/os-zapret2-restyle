@@ -20,7 +20,11 @@ launcher_start_once() {
     if [ "$FAIL_LAUNCH" = 1 ]; then FAIL_LAUNCH=0; return 1; fi
     PROCESS=1
 }
-supervisor_start() { MONITOR=1; }
+supervisor_start() {
+    [ -n "${5:-}" ] && [ "$5" = "$SERVICE_SCRIPT" ] && [ -x "$5" ] ||
+        fail "runtime activation/recovery handed supervisor a missing callback"
+    MONITOR=1
+}
 firewall_shared_runtime() {
     case "$1" in
         verify-cleanup)
@@ -71,6 +75,21 @@ atomic_verify_tree() {
 }
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret/backend" && pwd)
 . "$BASE/apply_runtime.sh"
+# Exercise the real service entrypoint header: mocks must never silently
+# supply SERVICE_SCRIPT when production leaves it unset (the owner-live _19
+# failure). Do not source the full CLI dispatcher or touch any real runtime.
+SERVICE_SOURCE="$BASE/../zapret_service.sh"
+awk '/^ensure_runtime_components\(\)$/ { exit } { print }' "$SERVICE_SOURCE" > "$ROOT/service-header.sh"
+[ -s "$ROOT/service-header.sh" ] || fail "native service entrypoint header unavailable"
+(
+    unset SERVICE_SCRIPT
+    SCRIPT_DIR="$BASE/.."
+    BACKEND_DIR="$BASE"
+    . "$ROOT/service-header.sh"
+    [ "$SERVICE_SCRIPT" = "$SCRIPT_DIR/zapret_service.sh" ] &&
+    [ -x "$SERVICE_SCRIPT" ] ||
+        fail "shared Apply has no executable supervisor callback in real service"
+) || fail "production shared Apply service callback initialization"
 # Separate census regression exercises the REAL production function.
 # This process-less activation harness injects only its process witness.
 apply_runtime_attest_engine_inventory() {
@@ -82,7 +101,7 @@ DVTWS_BIN="$ROOT/engine"; : > "$DVTWS_BIN"; chmod +x "$DVTWS_BIN"
 ACTIVE_DIR="$ROOT/active"; BACKUP_ROOT="$ROOT/backup"
 CHILD_PIDFILE="$ROOT/child"; SUPERVISOR_DAEMON_PIDFILE="$ROOT/sd"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/sm"; SUPERVISOR_LOOP="$ROOT/loop"
-SERVICE_SCRIPT="$ROOT/service"; DVTWS_LOG="$ROOT/dvtws.log"
+SERVICE_SCRIPT="$BASE/../zapret_service.sh"; DVTWS_LOG="$ROOT/dvtws.log"
 SUPERVISOR_LOG="$ROOT/supervisor.log"
 for name in one two off; do
     mkdir -p "$ROOT/$name"
