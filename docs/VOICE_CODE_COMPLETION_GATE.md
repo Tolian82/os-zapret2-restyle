@@ -87,3 +87,7 @@ Live `_19` requires-review: new dvtws2 launched 19:15:11 without supervisor, leg
 ## v0.5.3_22 — operator-reviewed legacy handoff recovery is NOT end-to-end Voice success
 
 Only attested original old Strategies state can authorize reattaching missing supervisor and committing restored journal under original FD9. User must confirm one successful common Telegram ON Apply after recovery. STUN/MEDIA/CALL remain OPEN until appliance results.
+
+## Published `_22`, owner-live gate OPEN
+
+Source CI #39148988899 PASS, FreeBSD15 testing pkg SHA-256 `0d2dca31eed8f12dafc616bdbeb4699599c0a9a498ff41ae3ca5355ecc719c78` published from `22fbbed3`. No owner-live recovery yet: persistent `requires-review` `_19`, old IPFW, no supervisor. Operator uses explicit FD9 `shared_recover_reviewed_legacy`, and separately tests Telegram ON and STUN/MEDIA/CALL. Never report saved Voice ON or working calls from static CI.

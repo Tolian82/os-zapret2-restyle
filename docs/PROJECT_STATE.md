@@ -151,3 +151,7 @@ CI correction in `_21`: initial unshipped `_20` runtime regression assumed the G
 ## v0.5.3_22 — checked requires-review old-Strategies ownership
 
 Operator-only FD9 command shared_recover_reviewed_legacy proves the precise initial Voice requires-review operation with no native predecessor; checks sealed candidate, fresh Config preflight, exact old root-owned Strategies IPFW including absent Voice/stage tables, no atomic stage/backup, exact single dvtws2 and supervisor census. Starts only missing monitor without changing engine/IPFW/Config, reattests, marks restored journal only after proof. No automatically clearing pending phases. Voice/Project/FreeBSD15 CI, testing package, owner-live unblock and Telegram call remain open.
+
+## Published testing v0.5.3_22 — live recovery and voice remain OPEN
+
+PR #373 merged source `22fbbed3fa8e5bb223ba1e4b87577b7aeb6fa87a`, exact CI #39148988899 Voice/Project/FreeBSD15 PASS; [testing package](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_22) SHA256 `0d2dca31eed8f12dafc616bdbeb4699599c0a9a498ff41ae3ca5355ecc719c78`, publishing #39149653258 source/tag/digest verified. Actions publication-record PR permission failure reconciled by connector PR #374. Stable repo untouched. Installed owner `_19` requires-review + unsupervised old engine; first controlled recovery, then owner Telegram Apply/STUN/CALL still pending.
