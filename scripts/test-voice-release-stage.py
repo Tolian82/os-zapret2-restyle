@@ -118,14 +118,21 @@ class VoiceReleaseStageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 0)
 
-    def test_different_voice_wan_does_not_get_accepted_due_to_physical_resolution(self):
+    def test_legacy_voice_wan_never_overrides_strategies_wan(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             root = fixture()
             root.find("./OPNsense/Zapret/voice/waninterface").text = "WAN2"
             source, managed = write_fixture(tmp, root)
-            with self.assertRaisesRegex(ValueError, "independent WAN"):
-                stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989)
+            candidate = stage.compile_bundle(
+                source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989
+            )
+            import json
+            metadata = json.loads(candidate["metadata.json"])
+            self.assertEqual("WAN", metadata["logical_wan"])
+            self.assertEqual("vtnet1", metadata["resolved_wan"])
+            plan = json.loads(candidate["profile-plan.json"])
+            self.assertEqual("WAN", plan["wan"])
 
     def test_staging_directory_is_private_atomic_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as d:
