@@ -31,3 +31,7 @@
 ## `_11` runtime-build failure / `_12` repair
 
 Owner-live `_11`: native Apply остановился до IPFW/Config на `runtime-build`. Фактическая ошибка: `telegram.args: required --filter-udp is missing`, стадия 4/8 blobs. Доказан дефект подготовки: MVC default Telegram args не попадал в физический detached XML, когда менялся только enabled. В `_12` полный args/IPSET каждого включённого профиля материализуется независимо от MVC changed map (сохраняя его проверку для авторизации). CI и проверка на сервере ещё ожидаются; **реальный Telegram Call не принят**.
+
+## Testing v0.5.3_12 — код проверен, устройство ожидается
+
+После исправления XML-мостика Voice/Project/FreeBSD15 CI #39117198942 прошёл; [testing pkg `_12`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_12/os-zapret2-restyle-0.5.3_12.pkg) опубликован (SHA-256 `ed28d1c071fb2dee1e2ee891634762a367fa675a48c561e2db2ce13731e6effe`). Результат установки, Telegram ON Apply, сохранённый Config, IPFW/STUN и реальный CALL ещё не подтверждены владельцем.
