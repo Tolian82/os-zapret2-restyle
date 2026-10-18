@@ -33,4 +33,4 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 ## Архивы завершённых линий
 
-- [v0.1.x](history/archive/v0.1.x.md) · [v0.2.x](history/archive/v0.2.x.md) · [v0.3.x](history/archive/v0.3.x.md) · [v0.4.x](history/archive/v0.4.x.md).
+- [v0.1.x archive](history/archive/v0.1.x.md) · [v0.2.x archive](history/archive/v0.2.x.md) · [v0.3.x archive](history/archive/v0.3.x.md) · [v0.4.x archive](history/archive/v0.4.x.md).
