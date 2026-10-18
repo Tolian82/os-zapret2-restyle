@@ -47,7 +47,26 @@ namespace {
         private ?array $pending = null;
         public static bool $reject = false;
         public function getNodes(): array { return $this->pending ?? self::$state; }
-        public function setNodes(array $new): void { $this->pending = $new; }
+        public function setNodes(array $new): void {
+            throw new \LogicException('Whole-model setNodes is invalid for OPNsense option dictionaries');
+        }
+        public function setNodeByReference(string $reference, string $value): bool {
+            $next = $this->pending ?? self::$state;
+            $node = &$next;
+            foreach (explode('.', $reference) as $part) {
+                if (!is_array($node) || !array_key_exists($part, $node)) {
+                    return false;
+                }
+                $node = &$node[$part];
+            }
+            if (!is_string($node)) {
+                return false;
+            }
+            $node = $value;
+            unset($node);
+            $this->pending = $next;
+            return true;
+        }
         public function performValidation(bool $full = false): array {
             return self::$reject ? ['rejected'] : [];
         }
