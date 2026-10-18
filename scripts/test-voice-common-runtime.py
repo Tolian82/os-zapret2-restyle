@@ -322,8 +322,18 @@ class CommonRuntimeTests(unittest.TestCase):
                 self.assertEqual(engine == "accept", result.returncode == 0, result.stderr)
                 argv = (tmp / "engine-argv").read_text().splitlines()
                 self.assertEqual("--dry-run", argv[-1])
-                self.assertIn("--ipset=" + str(release / "managed/ipset-telegram.txt"), argv)
+                engine_ipsets = [arg.removeprefix("--ipset=") for arg in argv
+                                 if arg.startswith("--ipset=")]
+                self.assertTrue(engine_ipsets, "engine did not receive an IPSET")
+                self.assertTrue(all("/tmp/zapret-dvtws-validate-" in path
+                                    and path.endswith("/managed/ipset-telegram.txt")
+                                    for path in engine_ipsets if path.endswith("ipset-telegram.txt")))
+                self.assertNotIn("--ipset=" + str(release / "managed/ipset-telegram.txt"), argv)
                 self.assertNotIn("--ipset=" + ACTIVE + "/managed/ipset-telegram.txt", argv)
+                self.assertTrue(all(not Path(path).exists() for path in engine_ipsets),
+                                "engine validation mirror was not removed")
+                self.assertTrue((release / "managed/ipset-telegram.txt").is_file(),
+                                "private candidate runtime was modified by validation")
 
 
 if __name__ == "__main__":
