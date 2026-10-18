@@ -202,6 +202,8 @@ jobs:
         run: python3.13 scripts/test-shared-apply-render.py
       - name: Shared FD9 Apply operation record and lifecycle guard
         run: python3.13 scripts/test-shared-apply-operation.py
+      - name: Reviewed first Voice handoff attestation refuses unsafe old ownership
+        run: sh scripts/test-shared-apply-reviewed-legacy.sh
       - name: Voice GUI model and localization contract
         run: python3.13 scripts/test-voice-gui-contract.py
       - name: OPNsense 26.7 real Voice UI Router and missing-handler regression

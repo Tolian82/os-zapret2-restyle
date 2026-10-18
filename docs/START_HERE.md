@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_21`. `VERSION=0.5.3`, `PLUGIN_REVISION=21`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_22`. `VERSION=0.5.3`, `PLUGIN_REVISION=22`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** доказать работоспособность production-связки `SERVICE_SCRIPT → supervisor_start` и сценариев запуска/отката в source CI `_20`, затем отдельно спроектировать безопасную проверяемую разблокировку уже установленного `_19` `requires-review` на OPNsense. НЕ запускать Apply, Restart, Stop, Reconfigure или ручное редактирование журнала на устройстве до подтверждения целостности runtime/IPFW/процессов. Публикация пакета и его установка сами по себе не разблокируют журнал.
+**Единственное следующее действие:** завершить `_22` Voice/Project/FreeBSD15 CI, опубликовать testing pkg из точного source merge, после проверки package delivery на заблокированном OPNsense выполнить операторское `configctl zapret shared_recover_reviewed_legacy` ТОЛЬКО при доказанном unchanged старом Strategies state; подтвердить supervisor, restored journal и нормальный статус; затем один Telegram ON Apply и отдельная приёмка IPFW/STUN/CALL. Никаких ручных изменений журнала/IPFW и слепых перезапусков.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -127,6 +127,14 @@ _8 исправляет именно зависимость: больше не �
 После Apply в 19:15:16+0300 журнал `/var/db/zapret2/shared-apply/operation.json` `requires-review` (ID `1595b71b6f6c268615c17d62a3449175`), `saved_voice_on=false`. В 19:15:11 создан PID-файл и запущен новый `dvtws2` PID 14397 от `daemon` PID 14273; это launcher, а не supervisor. `runtime-v2/voice-plan.json` отсутствует; старые IPFW 19000/19001 и WAN vtnet1 на месте; все Voice-таблицы и временные/backup деревья для ID отсутствуют; **оба supervisor PID-файла отсутствуют, supervisor_loop не обнаружен**, supervisor.log пуст; Configd вернул 70.
 
 Проверка исходников доказала defect: `backend/apply_runtime.sh` на обоих путях `supervisor_start()` передаёт `$SERVICE_SCRIPT`; в `zapret_service.sh` и всех его 21 sourced backend-модулях `SERVICE_SCRIPT` не назначена. `supervisor_start()` отвергает пустой путь через `[ -x "${_supervisor_service_script}" ]`. Обычный Strategies orchestrator использует `$0`, из-за чего ошибка специфична для новой общей архитектуры. Предыдущий mock `scripts/test-voice-common-apply-runtime.sh` искусственно задавал `SERVICE_SCRIPT="$ROOT/service"`, маскируя production-разрыв. `_20` задаёт единственный путь к реальному служебному entrypoint `"${SCRIPT_DIR}/zapret_service.sh"` и проверяет production-header, а также оба вызова supervisor через оригинальный runtime с in-memory/mock адаптерами. Это **объясняет невозможность запуска supervisor**, но ещё не подтверждает, что это единственная причина более раннего cutover/rollback failure. Журнал блокирует новую попытку; запрещено автоматически менять requires-review на terminal. Live repair и Telegram STUN/CALL остаются открытыми.
+
+## v0.5.3_22 — восстановление первой неудачной Voice транзакции
+
+На установленной `_19` journal `requires-review`, ID `1595b71b6f6c268615c17d62a3449175`, saved Telegram OFF, старые IPFW 19000/19001 и runtime без native Voice, новый `dvtws2` поднялся в 19:15:11, supervisor отсутствует. `_21` исправила обязательный `SERVICE_SCRIPT` и прошла CI, но существующий pending journal невозможно сбросить установкой пакета.
+
+В `_22` вводится отдельная ручная операция root FD9 `configctl zapret shared_recover_reviewed_legacy`, применимая ТОЛЬКО для первой Voice `requires-review` без previous native-владельца. Она заново сверяет один оригинальный journal, seal, свежий Config dependency snapshot через native PHP preflight, отсутствие новых/atomic stage/backup каталогов, точные старые правила IPFW по root-owned runtime с отсутствующими десятью Voice-таблицами, ровно один `dvtws2` по PID и отсутствие orphan supervisor. Только после этого поднимает отсутствующий supervisor без рестарта движка, повторяет полные проверки и через single journal CLI фиксирует `restored`. Любое расхождение сохраняет `requires-review`, никакого автоматического recovery при boot.
+
+Следующий реальный тест: пройти это восстановление на OPNsense, затем штатный Voice Apply, подтвердить сохранённое Telegram ON, новый общий IPFW, STUN и двусторонний звонок. Зеленый CI/пакет не равны успешной приёмке.
 
 ## Минимальное чтение
 
