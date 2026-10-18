@@ -602,7 +602,9 @@ def main(argv: list[str]) -> int:
         adapter = FreeBSDIPFWAdapter(reference["rule_base"], reference["rule_max"],
                                      allow_mutations=argv[2] in {"install", "rollback", "commit"})
         if argv[2] == "verify-legacy":
-            if not legacy:
+            # `_14` used undefined `legacy` here, unconditionally failing
+            # the real CLI even though helper-only unit tests passed.
+            if not prior_legacy:
                 raise IPFWAdapterError("legacy preflight cannot adopt a native release")
             shared_firewall_action(adapter, "verify", previous, previous)
         else:
