@@ -258,3 +258,5 @@ Current Voice live acceptance: owner installed `_4`; read-only lifecycle inspect
 Testing candidate `v0.5.3_27` fixes native Model InterfaceField getNodes/setNodes mismatch by updating only the approved changed fields. Owner-live acceptance is still required.
 
 The `_27` native OPNsense scalar-leaf change is advanced as unshipped `_28` after updating the CI model fixture to implement `setNodeByReference`. Live acceptance remains open.
+
+Verified testing package [`v0.5.3_28`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_28) is published; owner installed Telegram ON and call acceptance pending, stable repository unchanged.
