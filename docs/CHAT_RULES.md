@@ -1,7 +1,7 @@
 # Owner / assistant chat rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-10-17
+**Updated:** 2026-10-18
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.
 
@@ -73,7 +73,15 @@ CHAT-025. **When the owner corrects terminology or communication behavior, adopt
 
 CHAT-026. **An unambiguous owner instruction must have an observable consequence.** It ends in execution, persisted canon, or an explicit concrete blocker; it may not be silently omitted, downgraded to a suggestion, or deferred because old documentation, tests, habits, or assistant preferences disagree. This reinforces `DEV-001` and `DEV-003`.
 
-CHAT-027. **Project patches and packages are never delivered through chat/sandbox files.** Do not create or attach `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, or equivalent downloadable transport artifacts in chat as the delivery mechanism for project patches/packages, and never substitute an Actions artifact or local/sandbox file for the required GitHub delivery. Owner-facing completion provides the GitHub PR/repository result for a patch and, when a package candidate is involved, the direct persistent GitHub release-asset URL required by `GH-034`–`GH-038` and `GH-060`–`GH-061`. If GitHub delivery is concretely blocked, report the blocker; do not fall back to a chat-delivered package/archive.
+CHAT-027. **Project patches and packages are never delivered through chat/sandbox files.** Do not create or attach `.pkg`, `.zip`, `.tar.*`, `.patch`, `.diff`, or equivalent downloadable transport artifacts in chat as the delivery mechanism for project patches/packages, and never substitute an Actions artifact or local/sandbox file for the required GitHub delivery. Owner-facing completion provides the GitHub PR/repository result for a patch and, when a package candidate is involved, the direct persistent GitHub release-asset URL required by `GH-034`–`GH-038` and `GH-060`–`GH-061`. **After publishing and verifying an installable OPNsense `.pkg`, the answer MUST immediately include three copy-paste-ready commands for the owner's root OPNsense shell, in this exact order: `fetch -o /root/os-zapret2-restyle-<actual-version>.pkg <direct-asset-URL>`, `pkg add -f /root/os-zapret2-restyle-<actual-version>.pkg`, `pkg info -x os-zapret2-restyle`.** Replace placeholders with the actual published candidate identity and exact GitHub release-asset URL in the user-facing code block; never reuse an older `_N`, require the owner to construct the URL, or present only a link/button. Include the direct asset URL as unformatted shell text inside `fetch`. If GitHub delivery is concretely blocked, report the blocker; do not fall back to a chat-delivered package/archive.
+
+**Example of the required installation block** (illustrative `_10`; every new publication uses its *actual* candidate, not this example):
+
+```sh
+fetch -o /root/os-zapret2-restyle-0.5.3_10.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_10/os-zapret2-restyle-0.5.3_10.pkg
+pkg add -f /root/os-zapret2-restyle-0.5.3_10.pkg
+pkg info -x os-zapret2-restyle
+```
 
 ## Cross-reference registry
 
