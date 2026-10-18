@@ -43,3 +43,7 @@ Owner-live `pkg info -> _12`; stage 7/8 validator и точное `ERROR: instal
 ## v0.5.3_14 — первый переход от обычных Стратегий
 
 Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal none, Telegram saved OFF. Native executor has a pre-journal guard refusing old running runtime without common ownership manifest. `_14` verifies exact previous root-owned Strategies runtime and kernel TCP/UDP divert rules before first common Apply and reuses the same journal/runtime/IPFW/Config transactions. CI and installed Telegram ON, common runtime/IPFW/STUN and actual call remain open.
+
+## Testing v0.5.3_14 — ожидает установленной приёмки
+
+Реализация первого перехода из живых обычных «Стратегий» проверена Voice/Project/FreeBSD15 CI #39123963640. [Тестовый пакет `_14`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_14/os-zapret2-restyle-0.5.3_14.pkg) опубликован из `be66694` (SHA-256 `e790c48f1fe3f8e1a42e9e865bb35f8507520e09c8bc8905feb7647fc238360c`). Успешная установка, native Apply/Config ON, общий IPFW/runtime и Telegram STUN/CALL на приборе ещё не подтверждены.
