@@ -215,18 +215,14 @@ def compile_candidate(data: dict, managed_root: Path) -> tuple[str, dict]:
         has_active = has_active or entry["enabled"]
 
     strategy_wan = data.get("strategy_wan")
-    voice_wan = data.get("voice_wan") or strategy_wan
+    # Ignore historical Voice WAN overrides in older candidate JSON: the
+    # existing dvtws2/IPFW engine must use Strategies WAN exclusively.
+    voice_wan = strategy_wan
     if not isinstance(strategy_wan, str) or not strategy_wan.strip():
         fail("voice.strategy_wan", "Strategies WAN must be set for the common runtime")
     if not isinstance(voice_wan, str) or not voice_wan.strip():
         fail("voice.voice_wan", "Voice WAN must be a valid string")
-    if has_active and voice_wan != strategy_wan:
-        fail("voice.voice_wan", "independent WAN is not yet isolated by the shared divert engine; select the Strategies WAN")
-    # Disabled-only Voice settings must not change the effective common WAN.
-    # The XML preserves the saved Voice override for a future ON edit, but
-    # no native Voice IPFW rule/profile is generated in the all-OFF release.
-    if not has_active:
-        voice_wan = strategy_wan
+    # All-OFF settings create no Voice capture, but share the same WAN.
     if not managed_root.is_absolute():
         fail("voice.managed_root", "managed output root must be absolute")
 

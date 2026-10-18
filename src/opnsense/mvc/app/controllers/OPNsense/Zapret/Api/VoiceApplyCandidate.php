@@ -60,10 +60,8 @@ final class VoiceApplyCandidate
         // capture interface must be identical for Strategies and Voice.
         // This matches the authoritative Python compiler preflight.
         $strategyWan = VoiceModelValues::text($previous['general']['waninterface'] ?? '');
-        $selectedWan = VoiceModelValues::text($next['voice']['waninterface'] ?? '');
-        // All-OFF settings are inert drafts: allow them to be saved and
-        // syntax-checked before Strategies WAN is configured. A selected
-        // override is enforced as soon as any Voice service becomes ON.
+        // WAN is inherited only from Strategies; all-OFF drafts remain
+        // editable even before it is configured.
         $hasActive = false;
         foreach (self::SERVICES as $service) {
             if ($next['voice'][$service]['enabled'] === '1') {
@@ -76,15 +74,6 @@ final class VoiceApplyCandidate
                 'result' => 'failed',
                 'validations' => [
                     'zapret.voice.waninterface' => 'Strategies WAN must be configured before Voice',
-                ],
-            ];
-        }
-        if ($hasActive && $selectedWan !== '' && $selectedWan !== $strategyWan) {
-            return [
-                'result' => 'failed',
-                'validations' => [
-                    'zapret.voice.waninterface' =>
-                        'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN',
                 ],
             ];
         }
@@ -108,7 +97,7 @@ final class VoiceApplyCandidate
         $changed = [];
         foreach (['voice', 'hostlist'] as $group) {
             if ($group === 'voice') {
-                $fieldNames = ['waninterface'];
+                $fieldNames = [];
                 foreach (self::SERVICES as $service) {
                     $fieldNames[] = $service . '.enabled';
                     $fieldNames[] = $service . '.args';

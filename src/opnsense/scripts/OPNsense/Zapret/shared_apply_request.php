@@ -159,10 +159,12 @@ final class SharedApplyRequest
         }
         if (!isset($current['voice'], $current['hostlist']) ||
             !is_array($current['voice']) || !is_array($current['hostlist']) ||
-            !isset($current['voice']['waninterface'])) {
+            !isset($current['general']['waninterface'])) {
             throw new \InvalidArgumentException('Incomplete native Voice model');
         }
-        $voice = ['waninterface' => (string)$current['voice']['waninterface']];
+        // The compatibility action also inherits the Strategies WAN; never
+        // send the saved legacy Voice override as a writable form field.
+        $voice = [];
         $ips = [];
         foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
             $entry = $current['voice'][$service] ?? null;
