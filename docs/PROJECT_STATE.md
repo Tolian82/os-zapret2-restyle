@@ -110,3 +110,7 @@ Source [PR #356](https://github.com/Tolian82/os-zapret2-restyle/pull/356) объ
 ## `_15` — исправление реального CLI verify-legacy
 
 Owner-live `_14`: GUI Apply снова пишет «Результат применения неизвестен», saved Voice ON не подтверждён. В `voice_ipfw_adapter.py` обнаружена неинициализированная переменная `legacy` внутри реального CLI `verify-legacy`; правильная проверка `prior_legacy`. Все предыдущие тесты этого исправления обходили вызов `main()`. `_15` исправляет вызов и проверяет точку входа прямым CLI-тестом, включая отказ при native predecessor. Отказы на безопасных этапах bundle/Config/runtime preflight показываются как preflight-rejected, постжурнальные uncertain состояния не маскируются. CI/pkg/установленный Apply/STUN/CALL ещё ожидаются.
+
+## `_15` — опубликована тестовая версия
+
+[PR #364](https://github.com/Tolian82/os-zapret2-restyle/pull/364) merged в `64ca0e4f46253aa52c78a7311125e985ef9e72df` после успешного Voice/Project/FreeBSD15 CI #39126436549, включая реальный CLI `verify-legacy` и проверку ревизий. [Тестовый пакет `_15`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_15/os-zapret2-restyle-0.5.3_15.pkg) SHA-256 `d1cc2fad37be7473beac86c8aeef42cc500a1d48763ba891e20fbf46b36f488e` создан и подтверждён publisher #39127051722. GitHub Actions не мог создать только документационный PR, запись идёт через connector PR #365. Stable pkg repo unchanged. Установка на OPNsense, успешный Voice Apply, сохранённый Telegram ON/IPFW и звонок **ещё не приняты**.

@@ -51,3 +51,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## `_15` — невозможность первой активации из-за unbound CLI variable
 
 После owner-live `_14` GUI остаётся Voice unconfirmed / Apply unknown. Код `voice_ipfw_adapter.main()` содержал `if not legacy` (переменная не существует) в `verify-legacy` при живом old Strategies. Исправлено на `prior_legacy`. Для исключения ложного зелёного CI добавлен тест самой CLI-ветки, отдельная проверка safe-before-journal отказов в shell executor и сообщения GUI. До owner-live проверки `_15` сохранённый Telegram ON, общий runtime, IPFW, STUN/CALL не приняты.
+
+## Testing package `_15`: проверен код, владелец ещё не подтвердил работу
+
+Реальный код `verify-legacy` после исправления проверен вызовом CLI `main()`, а отказ до durable журнала возвращает ограниченную стадию вместо 'unknown'. Voice/Project/FreeBSD15 CI #39126436549 PASS. [Пакет `_15`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_15/os-zapret2-restyle-0.5.3_15.pkg) опубликован с SHA-256 `d1cc2fad37be7473beac86c8aeef42cc500a1d48763ba891e20fbf46b36f488e`. Успешный installed Apply/Config ON, общий runtime/IPFW/STUN и реальный CALL всё ещё OPEN.
