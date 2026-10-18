@@ -29,7 +29,7 @@ ARGS="--filter-udp=596-599\n--filter-l7=stun\n--payload=stun\n"
 FAKE="--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2"
 
 def form():
-    voice={'waninterface':'WAN'}
+    voice={}
     targets={}
     for name in ('telegram','discord','x','sip','custom'):
         voice[name]={'enabled':'0','args':''}
@@ -44,7 +44,6 @@ def enabled(data,name='telegram',args=ARGS,ips='91.108.0.0/16'):
 def python_accepts(data):
     state={
         'strategy_wan':'WAN',
-        'voice_wan':data['voice'].get('waninterface',''),
         'services':{
             name:{
                 'enabled':data['voice'][name]['enabled']=='1',
