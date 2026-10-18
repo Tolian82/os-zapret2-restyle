@@ -179,7 +179,22 @@ final class VoiceCandidateXml
         if ($zapret === null) {
             throw new \InvalidArgumentException('Missing Zapret model mount');
         }
-        foreach ($expected as $field => $_) {
+        // OPNsense getNodes() returns default TextField values even when
+        // config.xml has no corresponding leaf. A checkbox-only ON change
+        // used to omit default STUN args from detached XML; Python then
+        // rejected the missing --filter-udp before runtime build.
+        // Materialize only enabled services' already-validated Voice fields.
+        // The ownership and changed-field checks above still govern inputs.
+        $materialized = $expected;
+        if ($scope === 'voice') {
+            foreach (self::SERVICES as $service) {
+                if (self::value($candidate, ['voice', $service, 'enabled']) === '1') {
+                    $materialized['voice.' . $service . '.args'] = true;
+                    $materialized['hostlist.' . $service . 'ips'] = true;
+                }
+            }
+        }
+        foreach ($materialized as $field => $_) {
             $path = $allowed[$field];
             $node = $zapret;
             foreach ($path as $part) {

@@ -111,6 +111,54 @@ foreach (['/opnsense/system','/opnsense/openvpn','/opnsense/OPNsense/Unboundplus
 must($xpath->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/userdomains)') ===
      'untouched.example', 'shared non-Voice hostlist field altered');
 
+// Reproduce owner-live: MVC exposes a Telegram default, but saved XML
+// has an absent or empty <args> leaf. Checkbox-only ON must hydrate it
+// in the actual detached XML consumed by the Python runtime builder.
+$defaultArgs = "--filter-udp=*\n--filter-l7=stun\n--payload=stun\n" .
+    "--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
+$defaultPrevious = records();
+$defaultPrevious['voice']['telegram']['args'] = $defaultArgs;
+$defaultSubmitted = [
+    'voice' => array_diff_key($defaultPrevious['voice'], ['waninterface' => true]),
+    'hostlist' => [
+        'telegramips' => '91.108.0.0/16',
+        'discordips' => '', 'xips' => '', 'sipips' => '', 'customips' => '',
+    ],
+];
+$defaultSubmitted['voice']['telegram']['enabled'] = '1';
+$defaultPlan = VoiceApplyCandidate::prepare(
+    $defaultPrevious, $defaultSubmitted,
+    VoiceSettingsSnapshot::digest($defaultPrevious)
+);
+must($defaultPlan['result'] === 'prepared' &&
+    $defaultPlan['changed_fields'] === ['voice.telegram.enabled'],
+    'checkbox-only ON should not falsely mark default args as changed');
+foreach ([
+    str_replace('<args/>', '', $liveXml),
+    $liveXml,
+    str_replace('<telegramips>91.108.0.0/16</telegramips>', '', $liveXml),
+] as $xmlWithMissingDefaults) {
+    $hydratedXml = VoiceCandidateXml::render(
+        $xmlWithMissingDefaults, $defaultPrevious,
+        $defaultPlan['candidate'], $defaultPlan['changed_fields']
+    );
+    $hydratedDoc = new \DOMDocument();
+    must($hydratedDoc->loadXML($hydratedXml),
+        'default hydration must leave detached XML well formed');
+    $hydratedXPath = new \DOMXPath($hydratedDoc);
+    must($hydratedXPath->evaluate('string(/opnsense/OPNsense/Zapret/voice/telegram/args)') ===
+        $defaultArgs, 'Telegram default arguments lost before runtime build');
+    must($hydratedXPath->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/telegramips)') ===
+        '91.108.0.0/16', 'Telegram enabled IPSET omitted in detached XML');
+    must($hydratedXPath->evaluate('string(/opnsense/OPNsense/Zapret/voice/telegram/enabled)') ===
+        '1', 'Telegram active flag omitted in detached XML');
+}
+// An unchanged Voice candidate must keep original active XML bytes intact.
+$rawWithoutArgs = str_replace('<args/>', '', $liveXml);
+must(VoiceCandidateXml::render(
+    $rawWithoutArgs, $defaultPrevious, $defaultPrevious, []
+) === $rawWithoutArgs, 'no-change draft unexpectedly hydrated active XML');
+
 // OFF / no-change path preserves exact source bytes.
 must(VoiceCandidateXml::render($liveXml, $previous, $previous, []) === $liveXml,
      'no-change path rewrote Config');
