@@ -39,3 +39,7 @@ Owner-live `_11`: native Apply остановился до IPFW/Config на `run
 ## Установленная `_12`: validator 7/8, этап `_13`
 
 Owner-live `pkg info -> _12`; stage 7/8 validator и точное `ERROR: installed engine rejected candidate: file_open_test: Permission denied` для `.../shared-work/<id>/release/managed/hostlist-exclude.txt`. Причина — native `dvtws2 --dry-run` с drop privileges не может пройти каталог приватной FD9-транзакции `0700`. `_13` сохраняет staging root-only и валидирует только публичные runtime-списки через временную копию, которую удаляет до Config/IPFW. Voice/Project/FreeBSD15 CI #39119480095 успешно; [testing pkg `_13`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_13/os-zapret2-restyle-0.5.3_13.pkg) опубликован (SHA-256 `7e090d0ff7a6f8db7c1d4e5290eb388313aed297fbdf5c6936d10fd345bba171`). Требуются установленная `_13`, подтверждение ON/runtime/IPFW/STUN и реального звонка.
+
+## v0.5.3_14 — первый переход от обычных Стратегий
+
+Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal none, Telegram saved OFF. Native executor has a pre-journal guard refusing old running runtime without common ownership manifest. `_14` verifies exact previous root-owned Strategies runtime and kernel TCP/UDP divert rules before first common Apply and reuses the same journal/runtime/IPFW/Config transactions. CI and installed Telegram ON, common runtime/IPFW/STUN and actual call remain open.

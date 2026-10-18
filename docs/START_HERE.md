@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_13`. `VERSION=0.5.3`, `PLUGIN_REVISION=13`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_14`. `VERSION=0.5.3`, `PLUGIN_REVISION=14`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** установить [testing pkg `_13`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_13/os-zapret2-restyle-0.5.3_13.pkg) (SHA-256 `7e090d0ff7a6f8db7c1d4e5290eb388313aed297fbdf5c6936d10fd345bba171`) и выполнить **один** Telegram ON Apply с исходным STUN/IPSET-профилем. Успешны Voice/Project/FreeBSD15 pkg CI [#39119480095](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39119480095), PR #358 merged source `b8c5c35`. Публикация [#39120145999](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39120145999) подтвердила тестовый пакет и тег, но GitHub Actions не смог открыть docs PR; запись выполнена connector PR #359. Стабильный pkg-репозиторий не менялся. После Apply — saved Config, общий runtime/IPFW, STUN/MEDIA/CALL; при отказе только точный журнал stage-error, не повторять проверки FD9/WAN/PID.
+**Единственное следующее действие:** завершить точные Voice/Project/FreeBSD15 CI `_14`, объединить PR #361 и опубликовать testing pkg с командами `fetch`, `pkg add -f`, `pkg info -x`. На OPNsense проверить **один** первый Telegram ON Apply из работающих «Стратегий»; далее отдельно saved Config, общий runtime/IPFW и реальный Telegram STUN/CALL. Не возвращаться к проверкам WAN, FD9 и runtime-build. Если прежний IPFW принадлежит не плагину, отказать до транзакции, не трогая ядро.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -76,6 +76,14 @@ _8 исправляет именно зависимость: больше не �
 `_13` сохраняет закрытый FD9 workspace и создаёт лишь на время `--dry-run` отдельное дерево в `/tmp` с `0755` и строго разрешёнными списками `managed/(hostlist|ipset)-*.txt` с `0644`. Никакие `candidate.xml`, `plan.json`, внутренние файлы транзакции или пользовательские секреты туда не копируются. Движок получает аргументы, переписанные только на эту временную копию; после проверки она удаляется в успехе, ошибке и исключении. Регрессия моделирует `nobody` на закрытом staging, отказывает в symlink/escape, проверяет очистку.
 
 **Следующий контроль** — точные исходники, CI, затем installed Telegram Apply и STUN/CALL; никакого заявления об успешном звонке до независимых наблюдений.
+
+## Подтверждённый owner-live переход: обычные «Стратегии» → общий Voice (`_14`)
+
+Установленная `_13`: build `8|8|ready|ok|2026-10-18T13:53:58+0300`, общий журнал `phase=none`, сохранённый Telegram OFF и Voice uninitialized. Read-only проверка владельца: `LEGACY_NO_VOICE_PLAN` и `SEALED`. Код `apply_runtime_probe` до durable `prepared` явно запрещал работающий Strategies runtime без `voice-plan.json`, хотя новый кандидат полностью подготовлен. Остальные предтранзакционные проверки (seal и native Config) сохраняются.
+
+В `_14` общий IPFW адаптер получает строго проверенный manifest предыдущих обычных «Стратегий» из root-owned `runtime-v2/dvtws.args`, `tcp-ports.txt`, `udp-ports.txt` и физического WAN текущего native кандидата. Отдельная read-only проверка сравнивает действительные старые правила и отсутствие чужих таблиц; любое несовпадение отвергается **до** записи журнала. После успешной проверки используется прежний FD9, одна durable транзакция, существующие atomic runtime/Config/IPFW этапы и rollback штатного адаптера. Старый Telegram PoC не используется и второй движок не запускается.
+
+Код проверяется в PR #361. Тесты охватывают первую передачу владения, rollback до Config и отказы для чужих правил/подменённого runtime. До установки `_14` успех сохранения Telegram, IPFW/STUN и звонка **не подтверждён**.
 
 ## Минимальное чтение
 
