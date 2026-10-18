@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_17`. `VERSION=0.5.3`, `PLUGIN_REVISION=17`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_18`. `VERSION=0.5.3`, `PLUGIN_REVISION=18`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** установить тестовый пакет [`v0.5.3_17`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_17/os-zapret2-restyle-0.5.3_17.pkg) (SHA-256 `e306babb6d4515c3fac70653a3ba9ecdccf2eb9a7a7b95e53e359c0b7725d4aa`), один раз выполнить Telegram ON Apply при работающих «Стратегиях», затем подтвердить saved Telegram ON, общий runtime/IPFW, отдельно STUN/MEDIA/CALL. При отказе не повторять Apply, а проверить фактический stderr стадии. Причина `_16` была в неправильном подсчёте оболочки `/bin/sh` как второго `dvtws2`; защита от реальных дубликатов сохранена.
+**Единственное следующее действие:** завершить `_18` Voice/Project/FreeBSD15 CI, опубликовать точный testing pkg, затем выполнить один Telegram ON Apply на OPNsense. Подтверждённый blocker `_17`: FreeBSD 15 `ipfw table zapret2_voice_* info` возвращает rc71, `ipfw: failed to request table info: No such process` для десяти отсутствующих таблиц, но native adapter ошибочно объявлял критический отказ. Правка узкая: трактовать строго такой ответ на `table NAME info` как отсутствие таблицы, не разрешая другие ошибки IPFW. Продолжить только после Config ON/common IPFW, STUN/MEDIA/CALL отдельно.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -111,6 +111,12 @@ _8 исправляет именно зависимость: больше не �
 ## Testing `_17` опубликована; ожидание owner-live
 
 Исправление ложного учета shell argv как второго движка в [PR #368](https://github.com/Tolian82/os-zapret2-restyle/pull/368) объединено в источник `6501b0fbc4f3b678b4c9fe4b8a20229e9bdc0184`. На точном коммите [CI #39134787692](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39134787692) прошёл Voice, Project и FreeBSD 15 pkg. [Тестовый пакет `_17`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_17/os-zapret2-restyle-0.5.3_17.pkg) опубликован с SHA-256 `e306babb6d4515c3fac70653a3ba9ecdccf2eb9a7a7b95e53e359c0b7725d4aa`, tag/target/source совпадают, [workflow #39135384986](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39135384986). Автоматическое создание документационного PR отказало по правам GitHub Actions; запись проводится через [PR #369](https://github.com/Tolian82/os-zapret2-restyle/pull/369). Stable Pages/pkg не менялся. **Установленный Telegram ON Apply, Config ON, общий IPFW/STUN/CALL пока не приняты.**
+
+## Owner-live `_17`: FreeBSD 15 missing Voice tables rc71; candidate `_18`
+
+18.10.2026 владелец установил `_17`; Telegram ON Apply остался `runtime-preflight` и `saved_voice_on=false`. `configd` 17:59:35, 17:59:42: `ERROR: IPFW command failed: operation not completed`. Read-only `/sbin/ipfw -q list` rc0, точные рабочие правила `19000 divert 989 tcp ... 80,443 ... xmit vtnet1` и `19001 divert 989 udp ... 596-599 ... xmit vtnet1`; для всех десяти `zapret2_voice_{telegram,discord,x,sip,custom}{,_stage}` команды `ipfw table NAME info` rc71, `ipfw: failed to request table info: No such process`. Таблицы ещё не должны существовать до первого Voice Apply, но `voice_ipfw_adapter.py` не распознавал именно этот FreeBSD-ответ и останавливал без изменения Config/IPFW.
+
+`_18` распознаёт только **точный** текст `ipfw: failed to request table info: No such process` с кодом 71 и только при чтении `table NAME info` с `allow_missing`; существующие безопасные ошибки отсутствия таблиц сохранены. `list` правил и таблиц, права доступа, ошибки иных операций и нештатное сообщение по-прежнему блокируют. Регрессии проверяют десять таблиц, отказ по ложным/mismatched ошибкам, и реальный `shared verify-legacy` CLI с двумя обычными правилами и отсутствующими Voice-таблицами. Тест и пакет ещё не равны успеху установленной Voice-функции.
 
 ## Минимальное чтение
 

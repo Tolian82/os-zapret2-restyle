@@ -5,7 +5,7 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (testing prerelease after publication)** | `v0.5.3_17` — FreeBSD census false-positive fix published as testing pkg; installed Telegram ON Apply pending |
+| **Current development candidate (testing prerelease after publication)** | `v0.5.3_18` — recognize absent Voice tables on FreeBSD 15 (rc71); CI/pkg and installed Apply pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
