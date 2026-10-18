@@ -1,5 +1,8 @@
 # Telegram laboratory: exact live configuration, boot and operator runbook
 
+**19.10.2026 current native-path notice:** это исторический runbook отдельной лаборатории и прежнего `zapret2_tgvoice` helper. Установленная `0.5.3_28` native Voice использует `zapret2_voice_telegram`, `19000` и общий движок. Текущее наблюдение 60/4080 и план A2–A5 принадлежат [TELEGRAM_NATIVE_VOICE_TNAS_LAB.md](TELEGRAM_NATIVE_VOICE_TNAS_LAB.md). Не выполнять старые recovery/helper/IPFW процедуры без новой диагностики; они не являются prerequisite для native-рефлектора.
+
+
 **Status:** October 1 owner-live inventory with **October 7 Voice reboot/recovery update**; separate laboratory, not plugin code. Latest helper state: native ON/table14/rule restored manually; automatic recovery still unimplemented. [Three-phase evidence](../verification/evidence/2026-10-07-telegram-voice-reboot-and-manual-recovery.md).
 **October 2 continuation:** [Matched real Windows/Android call PCAP/counter evidence](../verification/evidence/2026-10-02-real-telegram-windows-android-p2p-disabled-call.md) records both clients P2P-disabled, clean owner-reported audio, Voice rule +99/+6624 and 18 extra WAN zero16 fakes, **but no inbound Telegram UDP and no proven UDP media**. This does not change startup or routing requirements. Owner-live outbound IPv4 PFIL order for that capture was **IPFW→PF**; re-check after later boots.
 
