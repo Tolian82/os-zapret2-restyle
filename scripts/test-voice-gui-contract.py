@@ -291,6 +291,11 @@ def main() -> None:
             match.group(1), re.DOTALL | re.MULTILINE,
         )
         check(save_handler is not None, "Voice Save Draft handler missing")
+        failure_helper = re.search(
+            r"    function formFailure\(reason, errors\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(failure_helper is not None, "Global Voice errors must remain visible")
         save_script = (
             "let click,calls,voiceMutationPending=false,voiceControlPending=false,"
               "voiceApplyNeedsReview=false;\n"
@@ -317,6 +322,7 @@ def main() -> None:
             + "function reconcileVoiceServiceStatus(){"
               "button.disabled=voiceMutationPending||voiceControlPending||"
               "voiceApplyNeedsReview;}\n"
+            + failure_helper.group(0) + "\n"
             + save_handler.group(0) + "\n"
             + "function check(ok,why){if(!ok)throw Error(why);}\n"
             + "function start(){voiceMutationPending=false;"
