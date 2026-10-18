@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_12`. `VERSION=0.5.3`, `PLUGIN_REVISION=12`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_13`. `VERSION=0.5.3`, `PLUGIN_REVISION=13`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,8 +64,18 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** установить проверочный [FreeBSD 15 pkg `_12`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_12/os-zapret2-restyle-0.5.3_12.pkg) SHA-256 `ed28d1c071fb2dee1e2ee891634762a367fa675a48c561e2db2ce13731e6effe` и выполнить **один** Telegram ON Apply в GUI (актуальный STUN профиль/IPSET). PR #356 успешно проверен Voice/Project/FreeBSD15 CI #39117198942, объединён в `main` как `5bfafc0`; публикация [#39117736239](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39117736239) создала и проверила тег/пакет, но автоматический docs PR запрещён GitHub Actions; документация завершена через connector PR #357. Стабильный pkg repo не менялся. При успехе — независимо saved Config, общий runtime, IPFW, реальный STUN/CALL; при отказе — точный `stage-error.log` без повторных проверок PID/FD9/WAN. **Реальный Apply ещё не принят**.
+**Единственное следующее действие:** пройти exact-head Voice/Project/FreeBSD15 CI для `_13`, объединить PR, опубликовать тестовый FreeBSD pkg из merge commit и выдать готовые команды `fetch`, `pkg add -f`, `pkg info -x` по CHAT-027. После установки — один Telegram ON Apply, затем независимая проверка сохранённого ON, общего runtime и IPFW и реального STUN-звонка. Если новая ошибка — читать только точную стадию сборки, без повторной диагностики PID/FD9/WAN.
 
+
+## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
+
+После установки `_12` (подтверждено `pkg info`) и одного Telegram ON Apply предыдущая ошибка `telegram.args: required --filter-udp is missing` **не повторилась**; кандидат прошёл стадии 4/8 blobs и 6/8 generator. Следующий блокер достоверно обнаружен по журналу: `7|8|validator|failed|2026-10-18T13:10:47+0300|cannot access hostlist file '/var/db/zapret2/shared-work/.../release/managed/hostlist-exclude.txt'`; native `dvtws2 --dry-run`: `file_open_test: Permission denied`.
+
+Аудит `validator_validate_engine_mapped()` подтвердил дефект: он переписывает стабильные пути engine на `/var/db/zapret2/shared-work/<id>/release/...`, а каталог самой транзакции root-only `0700`. Установленный `dvtws2` сбрасывает права до `nobody` при чтении hostlist; поэтому даже имеющий `0644` файл недоступен через закрытый родительский каталог. Общий runtime/Config/IPFW ещё **не** переключались.
+
+`_13` сохраняет закрытый FD9 workspace и создаёт лишь на время `--dry-run` отдельное дерево в `/tmp` с `0755` и строго разрешёнными списками `managed/(hostlist|ipset)-*.txt` с `0644`. Никакие `candidate.xml`, `plan.json`, внутренние файлы транзакции или пользовательские секреты туда не копируются. Движок получает аргументы, переписанные только на эту временную копию; после проверки она удаляется в успехе, ошибке и исключении. Регрессия моделирует `nobody` на закрытом staging, отказывает в symlink/escape, проверяет очистку.
+
+**Следующий контроль** — точные исходники, CI, затем installed Telegram Apply и STUN/CALL; никакого заявления об успешном звонке до независимых наблюдений.
 
 ## Минимальное чтение
 
