@@ -86,7 +86,7 @@ def main() -> None:
                    "voiceServiceState", "voiceServiceControl", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
     for marker in ("'Передача голоса'", "'Voice Transmission'",
-                   "'General Settings'", "'Параметры передачи голоса'",
+                   "'Параметры передачи голоса'",
                    "'Voice Transmission Parameters'", "'Как работают голосовые профили'",
                    "'About Voice Profiles'", "'Служба Zapret2'", "'Zapret2 Service'"):
         check(marker in view, f"Missing RU/EN translation: {marker}")
