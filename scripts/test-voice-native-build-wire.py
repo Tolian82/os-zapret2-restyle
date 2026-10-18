@@ -141,13 +141,18 @@ class ActualRuntimeWire(unittest.TestCase):
             self.assertEqual("WAN", capture["logical_wan"])
             self.assertEqual("vtnet1", capture["wan"])
             self.assertEqual([], capture["voice"])
-            # Reusing the exact same candidate with Voice ON must fail.
+            # Enabling Voice must still use the Strategies WAN regardless of
+            # a legacy persisted Voice override.
             tree.getroot().find("./OPNsense/Zapret/voice/telegram/enabled").text = "1"
             tree.write(xml, encoding="utf-8")
-            rejected = tmp / "refused-on-with-mismatched-wan"
-            failed = build(xml, managed, ordinary, rejected)
-            self.assertNotEqual(0, failed.returncode)
-            self.assertFalse(rejected.exists())
+            inherited = tmp / "active-on-strategies-wan"
+            result = build(xml, managed, ordinary, inherited)
+            self.assertEqual(0, result.returncode, result.stderr)
+            plan = json.loads((inherited / "profile-plan.json").read_text())
+            capture = json.loads((inherited / "capture-plan.json").read_text())
+            self.assertEqual("WAN", plan["wan"])
+            self.assertEqual("WAN", capture["logical_wan"])
+            self.assertEqual("vtnet1", capture["wan"])
 
     def test_invalid_wan_or_managed_targets_cannot_publish(self):
         with tempfile.TemporaryDirectory() as d:
