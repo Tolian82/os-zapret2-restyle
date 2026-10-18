@@ -94,7 +94,7 @@ class LegacyFirstCommonHandoff(unittest.TestCase):
         # These tests are expected to run in regular CI without root, so
         # require production check to match the controlled fixture uid only.
         # No patch is made to production code.
-        return original(self.release, self.desired)
+        return original(self.release, self.desired, owner=self.old_uid)
 
     def test_live_old_rules_are_attested_then_transferred_atomically(self):
         previous = self.manifest()

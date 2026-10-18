@@ -389,7 +389,7 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
 
 
 
-def legacy_strategies_manifest(release: Path, target: dict) -> dict:
+def legacy_strategies_manifest(release: Path, target: dict, *, owner: int = 0) -> dict:
     """First common Apply: attest old ordinary Strategies IPFW, not an old PoC.
 
     The installed Strategies runtime has no voice-plan.json. Its IPFW owner is
@@ -402,7 +402,7 @@ def legacy_strategies_manifest(release: Path, target: dict) -> dict:
     release = Path(release)
     if not release.is_absolute() or release.resolve() != release or not release.is_dir():
         raise IPFWAdapterError("legacy Strategies predecessor requires regular release")
-    if release.stat().st_uid != 0 or release.stat().st_mode & 0o022:
+    if release.stat().st_uid != owner or release.stat().st_mode & 0o022:
         raise IPFWAdapterError("unsafe legacy Strategies predecessor directory")
     if (release / "voice-plan.json").exists() or (release / "voice-plan.json").is_symlink():
         raise IPFWAdapterError("legacy Strategies predecessor must lack native Voice manifest")
@@ -412,7 +412,7 @@ def legacy_strategies_manifest(release: Path, target: dict) -> dict:
     def read(name: str) -> str:
         path = release / name
         info = path.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or \
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or \
                 info.st_mode & 0o022 or info.st_nlink != 1 or \
                 info.st_size > 1_048_576 or path.resolve() != path:
             raise IPFWAdapterError("unsafe legacy Strategies runtime artifact")
@@ -555,24 +555,46 @@ def main(argv: list[str]) -> int:
         for argument in argv[3:]:
             if argument != "-" and Path(argument).stat().st_uid != 0:
                 raise IPFWAdapterError("shared firewall requires root-owned releases")
-        # Prefer the fully sealed native desired manifest. A legacy ordinary
-        # predecessor is accepted only with that complete target, never as a
-        # synthetic empty/foreign IPFW owner. Rollback and commit repeat the
-        # same derivation against the retained old runtime backup.
-        desired = None if argv[4] == "-" else shared_release_manifest(Path(argv[4]))
-        legacy = argv[3] != "-" and not (Path(argv[3]) / "voice-plan.json").is_file()
-        if legacy and (desired is None or argv[2] not in {
+        # An existing ordinary Strategies owner may be a legacy manifest
+        # without voice-plan.json. The OTHER side of the transaction MUST be
+        # a trusted native release (including rollback verification). Never
+        # infer legacy ownership from an empty range or numeric prefix alone.
+        prior_path = None if argv[3] == "-" else Path(argv[3])
+        wanted_path = None if argv[4] == "-" else Path(argv[4])
+        prior_legacy = prior_path is not None and not (
+            prior_path / "voice-plan.json"
+        ).is_file()
+        wanted_legacy = wanted_path is not None and not (
+            wanted_path / "voice-plan.json"
+        ).is_file()
+        if prior_legacy and wanted_legacy:
+            raise IPFWAdapterError("legacy handoff has no native trusted reference")
+        if prior_legacy and (wanted_path is None or argv[2] not in {
             "verify-legacy", "install", "rollback", "commit", "verify-staged",
             "verify-cleanup",
         }):
-            raise IPFWAdapterError("unsupported legacy Strategies handoff")
-        previous = None if argv[3] == "-" else (
-            legacy_strategies_manifest(Path(argv[3]), desired) if legacy
-            else shared_release_manifest(Path(argv[3]))
+            raise IPFWAdapterError("unsupported legacy Strategies predecessor")
+        if wanted_legacy and (prior_path is None or argv[2] != "verify"):
+            raise IPFWAdapterError("unsupported legacy Strategies restore witness")
+        native_wanted = (
+            shared_release_manifest(wanted_path)
+            if wanted_path is not None and not wanted_legacy else None
         )
-        reference = desired if desired is not None else previous
+        native_prior = (
+            shared_release_manifest(prior_path)
+            if prior_path is not None and not prior_legacy else None
+        )
+        previous = (
+            legacy_strategies_manifest(prior_path, native_wanted)
+            if prior_legacy else native_prior
+        )
+        desired = (
+            legacy_strategies_manifest(wanted_path, native_prior)
+            if wanted_legacy else native_wanted
+        )
+        reference = native_wanted if native_wanted is not None else native_prior
         if reference is None:
-            raise IPFWAdapterError("shared firewall requires a trusted release")
+            raise IPFWAdapterError("shared firewall requires a native release")
         empty = {"rule_base": reference["rule_base"], "rule_max": reference["rule_max"],
                  "rules": {}, "tables": {}}
         previous = empty if previous is None else previous
