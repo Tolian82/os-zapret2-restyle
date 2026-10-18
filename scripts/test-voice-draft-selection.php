@@ -50,7 +50,7 @@ $input['voice']['telegram']['enabled'] = '1';
 $token = VoiceSettingsSnapshot::digest($saved);
 $plan = VoiceDraftSelection::plan($saved, $input, $token);
 assertDraft($plan['result'] === 'eligible' && $plan['mask'] === '10000' &&
-    $plan['selected_count'] === 1, 'saved Telegram selection was not selected');
+    $plan['selected_count'] === 1, 'saved Telegram selection was not selected: ' . json_encode($plan));
 assertDraft($saved['voice']['telegram']['enabled'] === '0',
     'pure selection changed saved Voice ON flags');
 $input['voice']['custom']['enabled'] = '1';
