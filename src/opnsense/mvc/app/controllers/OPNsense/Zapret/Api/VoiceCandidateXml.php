@@ -42,7 +42,8 @@ final class VoiceCandidateXml
         if ($scope !== 'voice') {
             throw new \InvalidArgumentException('Unknown shared candidate scope');
         }
-        $allowed = ['voice.waninterface' => ['voice', 'waninterface']];
+        // Saved legacy Voice WAN is read-only and has no Voice write authority.
+        $allowed = [];
         foreach (self::SERVICES as $service) {
             $allowed['voice.' . $service . '.enabled'] = ['voice', $service, 'enabled'];
             $allowed['voice.' . $service . '.args'] = ['voice', $service, 'args'];

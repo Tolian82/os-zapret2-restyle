@@ -59,7 +59,7 @@ must($out['plan']['dependencies']===Snapshot::digest($all),
     'detached candidate generation not pinned to native model');
 must(str_contains($active,'<trafficargs>--filter-tcp=443</trafficargs>'),
     'original native XML was changed');
-$completeVoice = $all['voice'];
+$completeVoice = array_diff_key($all['voice'], ['waninterface' => true]);
 $completeHostlists = [];
 foreach (['telegram','discord','x','sip','custom'] as $svc) {
     $completeHostlists[$svc . 'ips'] = $all['hostlist'][$svc . 'ips'];
@@ -95,6 +95,8 @@ $native['voice']['telegram']['args'] =
     "--filter-udp=3478\n--filter-l7=stun\n--payload=stun";
 $native['hostlist']['telegramips'] = "91.108.13.10";
 $compat = Request::decode(Request::telegramEnvelope($native, 'enable'));
+must(!array_key_exists('waninterface', $compat['fields']['voice']),
+     'compatibility adapter transmitted a retired independent Voice WAN');
 must($compat['page'] === 'voice' && $compat['sync']['snapshot'] === Snapshot::digest($native),
      'Telegram adapter bypassed shared Voice snapshot/whitelist');
 must($compat['fields']['voice']['telegram']['enabled'] === '1' &&

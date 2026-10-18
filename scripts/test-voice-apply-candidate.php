@@ -39,7 +39,7 @@ function records(): array {
 
 function formFrom(array $record): array {
     return [
-        'voice' => $record['voice'],
+        'voice' => array_diff_key($record['voice'], ['waninterface' => true]),
         'hostlist' => [
             'telegramips' => $record['hostlist']['telegramips'],
             'discordips' => $record['hostlist']['discordips'],
@@ -88,7 +88,16 @@ $wanMismatch['voice']['waninterface'] = 'WAN2';
 $wan = VoiceApplyCandidate::prepare($before, $wanMismatch, $token);
 verify($wan['result'] === 'failed' &&
        isset($wan['validations']['zapret.voice.waninterface']),
-       'independent Voice WAN must fail before a candidate is accepted');
+       'retired Voice WAN form submission must be rejected');
+$legacy = $before;
+$legacy['voice']['waninterface'] = 'WAN2';
+$legacyPlan = VoiceApplyCandidate::prepare(
+    $legacy, $form, VoiceSettingsSnapshot::digest($legacy)
+);
+verify($legacyPlan['result'] === 'prepared' &&
+       $legacyPlan['candidate']['voice']['waninterface'] === 'WAN2' &&
+       !in_array('voice.waninterface', $legacyPlan['changed_fields'], true),
+       'saved historical Voice override must not block inherited Strategies WAN');
 $wanMissing = $before;
 $wanMissing['general']['waninterface'] = '';
 $missing = VoiceApplyCandidate::prepare(
@@ -98,8 +107,8 @@ verify($missing['result'] === 'failed' &&
        isset($missing['validations']['zapret.voice.waninterface']),
        'missing Strategies WAN must fail before Apply');
 
-// Inactive-only drafts are editable before the general WAN is selected.
-// The same saved mismatched Voice WAN is still rejected when activated.
+// Inactive-only drafts are editable before the Strategies WAN is selected.
+// Historical saved Voice WAN overrides are inert and retained unchanged.
 $offline = $before;
 $offline['general']['waninterface'] = '';
 $offline['voice']['waninterface'] = 'WAN2';

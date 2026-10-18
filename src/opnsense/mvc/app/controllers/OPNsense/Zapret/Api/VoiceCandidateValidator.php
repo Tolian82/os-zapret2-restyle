@@ -259,12 +259,7 @@ final class VoiceCandidateValidator
         }
         $names = self::SERVICES;
         $enabled = [];
-        $wan = $voice['waninterface'] ?? '';
-        if (!is_string($wan) || strlen($wan) > 64 ||
-            ($wan !== '' && !preg_match('/^[A-Za-z][A-Za-z0-9_.:-]{0,63}$/D', $wan))) {
-            self::error($errors, 'zapret.voice.waninterface', 'Invalid Voice WAN selection');
-        }
-        if (array_diff(array_keys($voice), array_merge(['waninterface'], $names)) ||
+        if (array_diff(array_keys($voice), $names) ||
             array_diff(array_keys($hostlist), array_map(static fn($n) => $n . 'ips', $names))
         ) {
             self::error($errors, 'zapret.voice.waninterface', 'Unexpected Voice form fields');

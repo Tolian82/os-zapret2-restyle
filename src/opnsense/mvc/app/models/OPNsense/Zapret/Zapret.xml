@@ -41,8 +41,9 @@
             </extraargs>
         </strategy>
         <voice>
-            <!-- Empty Voice WAN inherits General WAN until a separate WAN is chosen.
-                 This independent interface is not applied until profile isolation is qualified. -->
+            <!-- Legacy Voice WAN kept only to read existing Config XML.
+                 No GUI or native worker writes or uses this override.
+                 Effective Voice WAN is general.waninterface on Strategies. -->
             <waninterface type="InterfaceField">
                 <Required>N</Required>
                 <AllowDynamic>Y</AllowDynamic>

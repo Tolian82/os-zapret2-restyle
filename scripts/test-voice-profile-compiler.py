@@ -61,9 +61,12 @@ class VoiceCandidateTests(unittest.TestCase):
         self.assertEqual([], plan["profiles"])
         self.assertEqual("wan0", plan["wan"],
                          "common runtime must inherit Strategies WAN with all Voice OFF")
-        # Once enabled, the stored override must be validated, not ignored.
-        with self.assertRaisesRegex(voice.VoiceConfigurationError, "independent WAN"):
-            self.compile(enable(source))
+        # A legacy saved WAN override must not influence an enabled profile.
+        active = enable(payload())
+        active["voice_wan"] = "WAN2"
+        _, active_plan = self.compile(active)
+        self.assertEqual("wan0", active_plan["wan"])
+        self.assertEqual("wan0", active_plan["profiles"][0]["wan"])
 
     def test_host_and_explicit_32_have_one_native_ipfw_key(self):
         source = enable(payload(), ips="91.108.13.10/32\n91.108.13.10\n91.108.0.0/16\n91.108.13.10/32")
@@ -195,11 +198,11 @@ class VoiceCandidateTests(unittest.TestCase):
                 with self.assertRaisesRegex(voice.VoiceConfigurationError, "required"):
                     self.compile(enable(payload(), args=BASE_ARGS.replace(name, "")))
 
-    def test_single_engine_rejects_independent_wan(self):
+    def test_single_engine_ignores_obsolete_wan_key(self):
         source = enable(payload())
         source["voice_wan"] = "wan1"
-        with self.assertRaisesRegex(voice.VoiceConfigurationError, "independent WAN is not yet isolated"):
-            self.compile(source)
+        _, plan = self.compile(source)
+        self.assertEqual("wan0", plan["wan"])
 
     def test_cli_fails_before_changing_outputs(self):
         with tempfile.TemporaryDirectory() as d:

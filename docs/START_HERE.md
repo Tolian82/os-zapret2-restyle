@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_9`. `VERSION=0.5.3`, `PLUGIN_REVISION=9`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_10`. `VERSION=0.5.3`, `PLUGIN_REVISION=10`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -46,11 +46,17 @@ _8 исправляет именно зависимость: больше не �
 
 В `_9` исправлена доказанная потеря результата подготовительной стадии: вместо безусловной неопределённости для всех nonzero `configd`, root-worker сообщает только доверенную `preflight-rejected=<stage>` до runtime/Config/IPFW. Контроллер отвечает `applied=false`, `requires_review=false`, переводит стадию в RU; post-dispatch ошибки без такого подтверждения остаются неопределёнными. Ни WAN, ни runtime, ни STUN семантика не меняются. **Причина исходного отказа `_8` ещё не доказана**.
 
-## Публикация и точное следующее действие
+## Опубликованная `_9` и выявленный `candidate` blocker
+
+Владелец установил `_9` на OPNsense 26.7.7 и нажал Telegram ON Apply: GUI показал **«Подготовка Voice остановлена до переключения службы (стадия: candidate). Настройки не применены»**. Сохранённые профили остаются OFF, Voice `uninitialized`, общий Zapret2 продолжает работать. Это точное свидетельство pre-runtime отказа; гипотеза «WAN не проходит» не подтверждена отдельно.
+
+18.10 владелец одобрил архитектурное упрощение: **удалить Voice WAN selector и брать только WAN со страницы «Стратегии»**. [Issue #350](https://github.com/Tolian82/os-zapret2-restyle/issues/350). `_10` изменяет нативную форму, PHP-кандидат/whitelist, совместимый CLI-путь и Python-компилятор; старое `voice.waninterface` в Config читается инертно и не изменяет Strategies. ТЗ согласовано с решением владельца; пять STUN/IPSET профилей, общий backend и его транзакция сохраняются. Ошибка `candidate` может остаться после этого упрощения, поэтому успех Apply не объявлен.
+
+## Предыдущая публикация и точное следующее действие
 
 `_9` объединена в `main` из PR #348 (commit `e979517`) после успешных Voice/Project/FreeBSD15 CI [#39068637403](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39068637403). Проверочный [FreeBSD 15 amd64 pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_9/os-zapret2-restyle-0.5.3_9.pkg) опубликован от того же источника workflow [#39069224353](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39069224353); SHA-256 `cd6c57f24668587109ac133605f2699d43869aef1b1bdb7f4babbb65cf9b2045`. Сам пакет/tag/asset проверены; workflow завершился с ошибкой только на автоматическом создании docs PR (Actions запрещён createPR), запись подготовлена через GitHub connector. Stable Pages/pkg repository не менялся.
 
-**Единственное следующее действие:** на установленной `_9` один контролируемый GUI Apply Telegram ON с уже заполненными STUN-параметрами и IPSET, затем независимый осмотр `voice_lifecycle_inspect`, `voice_inspect`, `setup_status` и журнала. При показанной ранней стадии `preflight-rejected` исправить именно её. При `applied-id` подтвердить saved Config/runtime/IPFW, а затем отдельно MEDIA/CALL. Не повторять Apply при неопределённом результате, не создавать новую архитектуру.
+**Единственное следующее действие:** пройти CI/FreeBSD15 pkg `_10`, опубликовать тестовый пакет и на устройстве проверить, что отдельного выбора Voice WAN нет; применить Telegram ON один раз. Если `candidate` по-прежнему отказывает, отладить точную причину в in-memory/root XML-кандидате, а не повторять диагностику уже работающей общей службы. Только после успешного Apply проверять saved Config/runtime/IPFW/STUN/CALL.
 
 
 ## Минимальное чтение

@@ -25,13 +25,6 @@ final class VoiceSettingsPayload
                 throw new \InvalidArgumentException('Voice configuration must be an object');
             }
             foreach ($submitted['voice'] as $key => $value) {
-                if ($key === 'waninterface') {
-                    if (!is_scalar($value)) {
-                        throw new \InvalidArgumentException('Voice WAN must be a string');
-                    }
-                    $result['voice']['waninterface'] = (string)$value;
-                    continue;
-                }
                 if (!in_array($key, self::SERVICES, true) || !is_array($value)) {
                     throw new \InvalidArgumentException('Unexpected Voice service');
                 }

@@ -16,7 +16,7 @@ function check(bool $condition, string $reason): void
 
 function data(): array
 {
-    $voice = ['waninterface' => 'WAN'];
+    $voice = [];
     $ips = [];
     foreach (['telegram','discord','x','sip','custom'] as $name) {
         $voice[$name] = ['enabled' => '0', 'args' => ''];

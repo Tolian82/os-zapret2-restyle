@@ -40,7 +40,6 @@ def read_voice_model(xml_source: Path) -> dict:
         return default if value is None or value.text is None else value.text
 
     wan = scalar("./general/waninterface").strip()
-    voice_wan = scalar("./voice/waninterface").strip()
     fields: dict[str, dict] = {}
     for name in SERVICES:
         enabled = scalar(f"./voice/{name}/enabled", "0").strip()
@@ -55,7 +54,6 @@ def read_voice_model(xml_source: Path) -> dict:
         }
     return {
         "strategy_wan": wan,
-        "voice_wan": voice_wan,
         "services": fields,
     }
 

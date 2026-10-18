@@ -34,7 +34,7 @@ def fixture(enable_telegram=True):
     general = ET.SubElement(settings, "general")
     ET.SubElement(general, "waninterface").text = "WAN"
     voice = ET.SubElement(settings, "voice")
-    ET.SubElement(voice, "waninterface").text = ""
+    ET.SubElement(voice, "waninterface").text = "WAN2"
     telegram = ET.SubElement(voice, "telegram")
     ET.SubElement(telegram, "enabled").text = "1" if enable_telegram else "0"
     ET.SubElement(telegram, "args").text = STUN
@@ -53,6 +53,7 @@ class NativeModelBridgeTests(unittest.TestCase):
             ET.ElementTree(fixture()).write(source, encoding="utf-8")
             state = exporter.read_voice_model(source)
             self.assertEqual("WAN", state["strategy_wan"])
+            self.assertNotIn("voice_wan", state)
             self.assertEqual("91.108.0.0/16\n91.108.13.10",
                              state["services"]["telegram"]["ips"])
             self.assertFalse(state["services"]["discord"]["enabled"])
@@ -76,6 +77,7 @@ class NativeModelBridgeTests(unittest.TestCase):
             ET.ElementTree(root).write(source, encoding="utf-8")
             state = exporter.read_voice_model(source)
             self.assertEqual("WAN", state["strategy_wan"])
+            self.assertNotIn("voice_wan", state)
             self.assertTrue(all(not item["enabled"] for item in state["services"].values()))
             strategy, plan = compiler.compile_candidate(state, MANAGED)
             self.assertEqual("", strategy)

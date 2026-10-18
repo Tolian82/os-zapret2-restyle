@@ -42,7 +42,7 @@ function form(array $saved): array
     foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $name) {
         $ips[$name.'ips'] = $saved['hostlist'][$name.'ips'];
     }
-    return ['voice' => $saved['voice'], 'hostlist' => $ips];
+    return ['voice' => array_diff_key($saved['voice'], ['waninterface' => true]), 'hostlist' => $ips];
 }
 $saved = model();
 $input = form($saved);
@@ -50,7 +50,7 @@ $input['voice']['telegram']['enabled'] = '1';
 $token = VoiceSettingsSnapshot::digest($saved);
 $plan = VoiceDraftSelection::plan($saved, $input, $token);
 assertDraft($plan['result'] === 'eligible' && $plan['mask'] === '10000' &&
-    $plan['selected_count'] === 1, 'saved Telegram selection was not selected');
+    $plan['selected_count'] === 1, 'saved Telegram selection was not selected: ' . json_encode($plan));
 assertDraft($saved['voice']['telegram']['enabled'] === '0',
     'pure selection changed saved Voice ON flags');
 $input['voice']['custom']['enabled'] = '1';
@@ -69,8 +69,10 @@ rejectDraft(fn() => VoiceDraftSelection::plan($saved, $changedIps, $token),
     'unsaved shared IPSET change accepted');
 $changedWan = $input;
 $changedWan['voice']['waninterface'] = '';
-rejectDraft(fn() => VoiceDraftSelection::plan($saved, $changedWan, $token),
-    'unsaved Voice WAN change accepted');
+$invalidWan = VoiceDraftSelection::plan($saved, $changedWan, $token);
+assertDraft(($invalidWan['result'] ?? null) === 'failed' &&
+    isset($invalidWan['validations']['zapret.voice.waninterface']),
+    'retired Voice WAN submission was not rejected');
 $noSelect=form($saved);
 rejectDraft(fn() => VoiceDraftSelection::plan($saved, $noSelect, $token),
     'empty active selection accepted');

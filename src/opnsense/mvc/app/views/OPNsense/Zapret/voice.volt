@@ -6,9 +6,8 @@ $(document).ready(function () {
     var ru = isRussian;
     var text = ru ? {
         navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
-        general: 'Основные настройки', wan: 'Интерфейс WAN для голоса',
         infoTitle: 'Как работают голосовые профили',
-        infoText: 'UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
+        infoText: 'WAN для голоса автоматически берётся со страницы «Стратегии» и здесь не настраивается. UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
         service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить',
         notice: 'Кнопка «Применить» использует единый native Apply для включённых и выключенных профилей, с проверкой Config, runtime и IPFW. «Сохранить черновик» сохраняет только выключенные профили без переключения службы. При незавершённом общем применении проверьте состояние Zapret2, Config и IPFW; не запускайте повторное применение вслепую.',
@@ -34,15 +33,13 @@ $(document).ready(function () {
         voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET записей',
         voiceProfileId: 'Применённый профиль', voiceRule: 'Правило IPFW',
         voicePackets: 'Пакеты', voiceBytes: 'Байты',
-        wanHelp: 'Исходящий WAN для перехвата голосового UDP. Пустое значение наследует WAN страницы «Стратегии». Выбор WAN не меняет маршруты.',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
         ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
         navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
-        general: 'General Settings', wan: 'Voice WAN Interface',
         infoTitle: 'About Voice Profiles',
-        infoText: 'Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
+        infoText: 'Voice always inherits the WAN selected on the Strategies page; change it there. Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
         service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop',
         notice: 'Apply uses the single native transaction for enabled and disabled Voice profiles, checking Config, runtime and IPFW. Save inactive draft only persists disabled profiles without restarting the service. If shared Apply was interrupted, inspect Zapret2, Config and IPFW before retrying.',
@@ -68,7 +65,6 @@ $(document).ready(function () {
         voiceEffectiveWan: 'WAN', voiceUdpPorts: 'UDP', voiceIpsetCount: 'IPSET entries',
         voiceProfileId: 'Applied profile', voiceRule: 'IPFW rule',
         voicePackets: 'Packets', voiceBytes: 'Bytes',
-        wanHelp: 'Outgoing WAN used for voice UDP interception. Empty selection inherits Strategies WAN. WAN selection does not change routing.',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
@@ -163,12 +159,17 @@ $(document).ready(function () {
         return result;
     }
 
+    // Global errors must stay visible without a WAN form control.
+    function formFailure(reason, errors) {
+        var translated = localizeVoiceErrors(errors || {});
+        var first = Object.keys(translated).map(function (key) { return translated[key]; })
+            .filter(function (value) { return typeof value === 'string' && value.length > 0; })[0];
+        return first ? reason + ': ' + first : reason;
+    }
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
     function localizeForm() {
         var form = $('#frm_VoiceSettings');
         var titles = {
-            'General Settings': text.general,
-            'Voice WAN Interface': text.wan,
             'Voice Transmission Parameters': text.parameters,
             'About Voice Profiles': text.infoTitle,
             'Destination IP Addresses': text.destinations
@@ -206,8 +207,7 @@ $(document).ready(function () {
             var field = row.find('input,textarea,select').first();
             var id = (field.attr('id') || '').replace(/_/g, '.');
             var localizedHelp = null;
-            if (id === 'zapret.voice.waninterface') localizedHelp = text.wanHelp;
-            else if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) localizedHelp = text.enableHelp;
+            if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) localizedHelp = text.enableHelp;
             else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) localizedHelp = text.argsHelp;
             else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) localizedHelp = text.ipHelp;
             if (localizedHelp === null) return;
@@ -253,7 +253,7 @@ $(document).ready(function () {
             if (reply && reply.result === 'validated') {
                 $('#voiceValidationStatus').text(text.checkOk);
             } else {
-                $('#voiceValidationStatus').text(text.checkFailed);
+                $('#voiceValidationStatus').text(formFailure(text.checkFailed, reply && reply.validations));
             }
         }).fail(function () {
             $('#voiceValidationStatus').text(text.checkError);
@@ -287,7 +287,7 @@ $(document).ready(function () {
                 /^[a-f0-9]{64}$/.test(reply.candidate_xml_sha256)) {
                 $('#voiceValidationStatus').text(text.previewOk);
             } else {
-                $('#voiceValidationStatus').text(text.previewFailed);
+                $('#voiceValidationStatus').text(formFailure(text.previewFailed, reply && reply.validations));
             }
         }).fail(function () {
             $('#voiceValidationStatus').text(text.previewFailed);
@@ -323,7 +323,7 @@ $(document).ready(function () {
                 !Array.isArray(reply.validations) &&
                 Object.keys(reply.validations).length > 0) {
                 // Explicit pre-write validation rejection is safe to edit.
-                $('#voiceValidationStatus').text(text.draftFailed);
+                $('#voiceValidationStatus').text(formFailure(text.draftFailed, reply && reply.validations));
             } else {
                 // A malformed/ambiguous response may follow a Config write.
                 voiceApplyNeedsReview = true;
@@ -374,7 +374,7 @@ $(document).ready(function () {
                 voiceApplyNeedsReview = true;
                 $('#voiceValidationStatus').text(text.applyReview);
             } else {
-                $('#voiceValidationStatus').text(text.applyFailed);
+                $('#voiceValidationStatus').text(formFailure(text.applyFailed, reply && reply.validations));
             }
         }).fail(function () {
             voiceApplyNeedsReview = true;

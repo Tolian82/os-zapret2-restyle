@@ -29,14 +29,14 @@ def main() -> None:
     view = VIEW.read_text(encoding="utf-8")
     strategies_view = STRATEGIES_VIEW.read_text(encoding="utf-8")
     fields = [f.findtext("id") for f in form.findall("./field") if f.findtext("id")]
-    required = ["zapret.voice.waninterface"]
+    required = []
     for name in SERVICES:
         required.extend((f"zapret.voice.{name}.enabled", f"zapret.voice.{name}.args"))
     for name in SERVICES:
         required.append(f"zapret.hostlist.{name}ips")
     check(fields == required, f"Voice form field order/identities changed: {fields!r}")
     check([f.findtext("label") for f in form.findall("./field") if f.findtext("type") == "header"] ==
-          ["General Settings", "Voice Transmission Parameters", "Destination IP Addresses"],
+          ["Voice Transmission Parameters", "Destination IP Addresses"],
           "Voice form is missing the native section headers")
     check(any(f.findtext("type") == "info" for f in form.findall("./field")),
           "Voice inline help/info is missing")
@@ -72,7 +72,11 @@ def main() -> None:
         check(f"<IPSET:{name}>" in ET.tostring(form, encoding="unicode") or
               f"&lt;IPSET:{name}&gt;" in FORM.read_text(encoding="utf-8"),
               f"{name}: field must document the exact shared placeholder")
-    check(model.find("./items/voice/waninterface") is not None, "Voice WAN must be modeled")
+    check(model.find("./items/voice/waninterface") is not None,
+          "Legacy Voice WAN must remain readable but not editable")
+    check("zapret.voice.waninterface" not in fields and
+          "Voice always uses the WAN selected on the Strategies page" in info,
+          "Voice must inherit Strategies WAN without a selector")
     check(menu.find("./Services/Zapret/General").get("order") == "0", "Strategies menu order changed")
     check(menu.find("./Services/Zapret/Voice").get("order") == "1", "Voice menu order missing")
     check(menu.find("./Services/Zapret/Diagnostics").get("order") == "2", "Laboratory menu order changed")
@@ -81,8 +85,8 @@ def main() -> None:
     for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
                    "voiceServiceState", "voiceServiceControl", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
-    for marker in ("'Передача голоса'", "'Voice Transmission'", "'Основные настройки'",
-                   "'General Settings'", "'Параметры передачи голоса'",
+    for marker in ("'Передача голоса'", "'Voice Transmission'",
+                   "'Параметры передачи голоса'",
                    "'Voice Transmission Parameters'", "'Как работают голосовые профили'",
                    "'About Voice Profiles'", "'Служба Zapret2'", "'Zapret2 Service'"):
         check(marker in view, f"Missing RU/EN translation: {marker}")
@@ -287,6 +291,11 @@ def main() -> None:
             match.group(1), re.DOTALL | re.MULTILINE,
         )
         check(save_handler is not None, "Voice Save Draft handler missing")
+        failure_helper = re.search(
+            r"    function formFailure\(reason, errors\) \{.*?^    \}",
+            match.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(failure_helper is not None, "Global Voice errors must remain visible")
         save_script = (
             "let click,calls,voiceMutationPending=false,voiceControlPending=false,"
               "voiceApplyNeedsReview=false;\n"
@@ -313,6 +322,7 @@ def main() -> None:
             + "function reconcileVoiceServiceStatus(){"
               "button.disabled=voiceMutationPending||voiceControlPending||"
               "voiceApplyNeedsReview;}\n"
+            + failure_helper.group(0) + "\n"
             + save_handler.group(0) + "\n"
             + "function check(ok,why){if(!ok)throw Error(why);}\n"
             + "function start(){voiceMutationPending=false;"

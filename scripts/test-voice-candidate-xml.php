@@ -69,7 +69,7 @@ XML;
 
 $previous = records();
 $form = [
-    'voice' => $previous['voice'],
+    'voice' => array_diff_key($previous['voice'], ['waninterface' => true]),
     'hostlist' => [
         'telegramips' => '91.108.0.0/16',
         'discordips' => '',
@@ -234,7 +234,6 @@ $options['hostlist']['mode'] = [
 $dropdownForm = $form;
 $dropdownForm['voice']['telegram']['enabled'] = '0';
 $dropdownForm['voice']['telegram']['args'] = '';
-$dropdownForm['voice']['waninterface'] = 'WAN';
 $dropdown = VoiceApplyCandidate::prepare(
     $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
 );
@@ -261,22 +260,18 @@ must(str_contains($onDropdownXml, '<enabled>1</enabled>'),
      'ON profile disappeared from native option-selected candidate');
 $dropdownForm['voice']['telegram']['enabled'] = '0';
 $dropdownForm['voice']['telegram']['args'] = '';
-$dropdownForm['voice']['waninterface'] = 'WAN2';
-$changedDropdown = VoiceApplyCandidate::prepare(
-    $options, $dropdownForm, VoiceSettingsSnapshot::digest($options)
+// Even malformed historic Voice InterfaceField options are inert.
+$legacyOptions = $options;
+$legacyOptions['voice']['waninterface']['WAN2']['selected'] = 1;
+$legacyForm = $dropdownForm;
+$legacy = VoiceApplyCandidate::prepare(
+    $legacyOptions, $legacyForm, VoiceSettingsSnapshot::digest($legacyOptions)
 );
-must(($changedDropdown['result'] ?? '') === 'prepared' &&
-     in_array('voice.waninterface', $changedDropdown['changed_fields'], true),
-     'new WAN not recognized as selected raw value');
-$dropdownXml = VoiceCandidateXml::render(
-    $liveXml, $options, $changedDropdown['candidate'], $changedDropdown['changed_fields']
-);
-must(str_contains($dropdownXml, '<waninterface>WAN2</waninterface>'),
-     'WAN selection did not become correct XML leaf');
-$invalidOptions = $options;
-$invalidOptions['voice']['waninterface']['WAN2']['selected'] = 1;
-refuses(fn() => VoiceCandidateXml::render(
-    $liveXml, $invalidOptions, $invalidOptions, []
-), 'ambiguous native InterfaceField selection accepted');
+must($legacy['result'] === 'prepared' &&
+     !in_array('voice.waninterface', $legacy['changed_fields'], true),
+     'legacy WAN should not become a new Voice change');
+must(VoiceCandidateXml::render(
+    $liveXml, $legacyOptions, $legacy['candidate'], $legacy['changed_fields']
+) === $liveXml, 'legacy dropdown should not rewrite Config');
 
 echo "PASS: shared detached native XML for Strategies/Voice, ownership, no-op and foreign-node preservation\n";

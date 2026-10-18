@@ -1,26 +1,13 @@
 <form>
     <field>
         <type>header</type>
-        <label>General Settings</label>
-    </field>
-    <field>
-        <id>zapret.voice.waninterface</id>
-        <label>Voice WAN Interface</label>
-        <type>dropdown</type>
-        <help><![CDATA[
-            Select the outgoing WAN for voice interception. An empty selection inherits the Strategies WAN.
-            The interface selects interception, not routing; incompatible independent-WAN capture is rejected before activation.
-        ]]></help>
-    </field>
-    <field>
-        <type>header</type>
         <label>Voice Transmission Parameters</label>
     </field>
     <field>
         <type>info</type>
         <label>About Voice Profiles</label>
         <text><![CDATA[
-            This page configures outgoing STUN / UDP interception through the existing Zapret2 engine.
+            This page configures outgoing STUN / UDP interception through the existing Zapret2 engine. Voice always uses the WAN selected on the Strategies page; change it there.
             Use Apply to validate, save and activate enabled or disabled Voice profiles with the shared runtime/IPFW transaction. Save inactive draft only stores all-OFF Voice settings without a service restart; Validate checks syntax without saving. All enabled Voice profiles use shared Apply; there is no separate Voice service or migration action.
             Each enabled profile requires a nonempty IPv4/CIDR destination IPSET and native dvtws2 parameters.
             Non-STUN strategies remain on the Strategy page. A profile being enabled does not prove a working voice call.
