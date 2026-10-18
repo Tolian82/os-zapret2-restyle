@@ -769,6 +769,12 @@ sh -n "$ROOT/status-entry.sh" || fail "entrypoint syntax"
     printf '%s\n' restored
   }
   orchestrator_native_status() { echo "zapret is running"; }
+  # The original shared boot mock replaced service_dispatch with a logging
+  # stub. Exercise the real body of status, not that earlier fake dispatcher.
+  service_dispatch() {
+    [ "$1" = status ] || return 64
+    shared_apply_status_service
+  }
   . "$ROOT/status-entry.sh"
 ) > "$ROOT/status-entry-output" || fail "restored owner status not routed via FD9"
 grep -Fqx 'zapret is running' "$ROOT/status-entry-output" ||
