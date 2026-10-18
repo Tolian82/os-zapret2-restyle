@@ -75,11 +75,18 @@ apply_runtime_probe()
     }
     apply_runtime_attest_engine_inventory || return 69
     if [ "$_apply_engine" = 1 ]; then
-        [ -f "$ACTIVE_DIR/voice-plan.json" ] || {
-            common_error "running legacy release requires explicit migration"
-            return 69
-        }
-        firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+        if [ -f "$ACTIVE_DIR/voice-plan.json" ]; then
+            firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+        else
+            # First common Strategies/Voice Apply from a live ordinary
+            # Strategies runtime. Require BOTH exact process/supervisor
+            # identity and the old-owned TCP/UDP divert rules. The adapter
+            # reconstructs that bounded old manifest from installed files
+            # and rejects foreign rules/tables before the durable journal.
+            # The same FD9 owns the later atomic handoff and IPFW rollback.
+            apply_runtime_observe_live_legacy || return 69
+            firewall_shared_runtime verify-legacy "$ACTIVE_DIR" "$1" || return 69
+        fi
     else
         firewall_shared_runtime verify "$1" - || return 69
     fi

@@ -388,6 +388,68 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
         raise IPFWAdapterError("unowned or duplicated Voice profile in common engine argv")
 
 
+
+def legacy_strategies_manifest(release: Path, target: dict) -> dict:
+    """First common Apply: attest old ordinary Strategies IPFW, not an old PoC.
+
+    The installed Strategies runtime has no voice-plan.json. Its IPFW owner is
+    represented by the *old* divert port, TCP/UDP ports artifacts, and the
+    existing physical WAN already bound to the new native capture. The exact
+    kernel state is checked against this manifest before a rule is touched.
+    This does not grant arbitrary numeric-range ownership or accept foreign
+    Voice tables.
+    """
+    release = Path(release)
+    if not release.is_absolute() or release.resolve() != release or not release.is_dir():
+        raise IPFWAdapterError("legacy Strategies predecessor requires regular release")
+    if release.stat().st_uid != 0 or release.stat().st_mode & 0o022:
+        raise IPFWAdapterError("unsafe legacy Strategies predecessor directory")
+    if (release / "voice-plan.json").exists() or (release / "voice-plan.json").is_symlink():
+        raise IPFWAdapterError("legacy Strategies predecessor must lack native Voice manifest")
+    if not isinstance(target, dict):
+        raise IPFWAdapterError("native target is required for legacy handoff")
+
+    def read(name: str) -> str:
+        path = release / name
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or \
+                info.st_mode & 0o022 or info.st_nlink != 1 or \
+                info.st_size > 1_048_576 or path.resolve() != path:
+            raise IPFWAdapterError("unsafe legacy Strategies runtime artifact")
+        return path.read_text(encoding="utf-8")
+
+    tokens = read("dvtws.args").split()
+    ports = [value[7:] for value in tokens if value.startswith("--port=")]
+    if not tokens or not tokens[0].startswith("--port=") or len(ports) != 1 or \
+            not ports[0].isdecimal() or any(
+                token.startswith("--name=voice-") for token in tokens
+            ):
+        raise IPFWAdapterError("legacy predecessor cannot be a Voice or unknown engine")
+    divert = int(ports[0])
+    wan_names = {
+        argv[-1] for argv in target.get("rules", {}).values()
+        if isinstance(argv, list) and argv
+    }
+    if len(wan_names) != 1:
+        raise IPFWAdapterError("cannot attest the common WAN for legacy predecessor")
+    capture = {
+        "schema": 1,
+        "rule_base": target["rule_base"],
+        "rule_max": target["rule_max"],
+        "ordinary_rule_base": target["rule_base"],
+        "divert_port": divert,
+        "wan": next(iter(wan_names)),
+        "voice": [],
+    }
+    # The existing Strategies firewall installer uses exactly these two
+    # standard divert rules. No Voice table is owned by this predecessor.
+    return prepare_desired(
+        capture,
+        read("tcp-ports.txt").strip(),
+        read("udp-ports.txt").strip(),
+    )
+
+
 def shared_release_manifest(release: Path) -> dict:
     """Derive ownership from one trusted common release, without a second ledger.
 
@@ -482,7 +544,8 @@ def shared_firewall_action(adapter, action: str, previous: dict, desired: dict) 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 5 or argv[1] != "shared" or argv[2] not in {
-        "install", "rollback", "commit", "verify", "verify-staged", "verify-cleanup"
+        "install", "rollback", "commit", "verify", "verify-staged", "verify-cleanup",
+        "verify-legacy",
     }:
         print("usage: voice_ipfw_adapter.py shared ACTION PREVIOUS_RELEASE DESIRED_RELEASE",
               file=sys.stderr)
@@ -492,8 +555,21 @@ def main(argv: list[str]) -> int:
         for argument in argv[3:]:
             if argument != "-" and Path(argument).stat().st_uid != 0:
                 raise IPFWAdapterError("shared firewall requires root-owned releases")
-        previous = None if argv[3] == "-" else shared_release_manifest(Path(argv[3]))
+        # Prefer the fully sealed native desired manifest. A legacy ordinary
+        # predecessor is accepted only with that complete target, never as a
+        # synthetic empty/foreign IPFW owner. Rollback and commit repeat the
+        # same derivation against the retained old runtime backup.
         desired = None if argv[4] == "-" else shared_release_manifest(Path(argv[4]))
+        legacy = argv[3] != "-" and not (Path(argv[3]) / "voice-plan.json").is_file()
+        if legacy and (desired is None or argv[2] not in {
+            "verify-legacy", "install", "rollback", "commit", "verify-staged",
+            "verify-cleanup",
+        }):
+            raise IPFWAdapterError("unsupported legacy Strategies handoff")
+        previous = None if argv[3] == "-" else (
+            legacy_strategies_manifest(Path(argv[3]), desired) if legacy
+            else shared_release_manifest(Path(argv[3]))
+        )
         reference = desired if desired is not None else previous
         if reference is None:
             raise IPFWAdapterError("shared firewall requires a trusted release")
@@ -503,7 +579,12 @@ def main(argv: list[str]) -> int:
         desired = empty if desired is None else desired
         adapter = FreeBSDIPFWAdapter(reference["rule_base"], reference["rule_max"],
                                      allow_mutations=argv[2] in {"install", "rollback", "commit"})
-        shared_firewall_action(adapter, argv[2], previous, desired)
+        if argv[2] == "verify-legacy":
+            if not legacy:
+                raise IPFWAdapterError("legacy preflight cannot adopt a native release")
+            shared_firewall_action(adapter, "verify", previous, previous)
+        else:
+            shared_firewall_action(adapter, argv[2], previous, desired)
     except Exception as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1

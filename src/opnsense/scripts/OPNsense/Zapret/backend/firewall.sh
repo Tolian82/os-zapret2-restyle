@@ -12,7 +12,7 @@ firewall_shared_runtime()
     # These exact actions must match voice_ipfw_adapter.py. The added
     # verify-cleanup is read-only: it only classifies a partially completed
     # post-COMMIT stage before the EXISTING commit cleanup is permitted.
-    case "$1" in install|rollback|commit|verify|verify-staged|verify-cleanup) ;; *) return 64 ;; esac
+    case "$1" in install|rollback|commit|verify|verify-staged|verify-cleanup|verify-legacy) ;; *) return 64 ;; esac
     "${PYTHON_BIN:-/usr/local/bin/python3.13}" \
         "${BACKEND_DIR}/voice_ipfw_adapter.py" shared "$1" "$2" "$3"
 }
