@@ -90,4 +90,38 @@ grep -Fq 'shared_apply_request.php" telegram-saved' "$SOURCE" ||
 # Public Telegram status is in the same original FD9 dispatch as lifecycle.
 grep -Fq 'reconfigure|telegram-voice-status|native-voice-lifecycle-inspect' "$SOURCE" ||
     fail "compatibility status must own original FD9"
+# Verify the actual release finalizer, not a mock of its implementation.
+sed -n '/^shared_apply_finalize_release_modes()$/,/^}$/p' "$SOURCE" > "$TMP/release-modes.sh"
+[ -s "$TMP/release-modes.sh" ] || fail "common runtime mode finalizer missing"
+sh -n "$TMP/release-modes.sh" || fail "common runtime mode finalizer syntax"
+. "$TMP/release-modes.sh"
+common_set_directory_mode() { [ -d "$1" ] && chmod "$2" "$1"; }
+validator_validate_runtime_modes() {
+    [ "$(find "$1" -prune -perm 755 -print)" = "$1" ] &&
+    [ -d "$1/managed" ] &&
+    [ "$(find "$1/managed" -prune -perm 755 -print)" = "$1/managed" ]
+}
+mkdir -p "$TMP/private/release/managed"
+chmod 0700 "$TMP/private" "$TMP/private/release"
+chmod 0755 "$TMP/private/release/managed"
+shared_apply_finalize_release_modes "$TMP/private/release" ||
+    fail "native candidate runtime still has private 0700 mode"
+[ "$(find "$TMP/private" -prune -perm 700 -print)" = "$TMP/private" ] ||
+    fail "candidate workspace must remain private 0700"
+[ "$(find "$TMP/private/release" -prune -perm 755 -print)" = "$TMP/private/release" ] ||
+    fail "release mode must be 0755"
+ln -s release "$TMP/private/symlink"
+if shared_apply_finalize_release_modes "$TMP/private/symlink"; then
+    fail "symlink candidate was accepted"
+fi
+chmod 0700 "$TMP/private/release/managed"
+if shared_apply_finalize_release_modes "$TMP/private/release"; then
+    fail "managed directory validator was bypassed"
+fi
+sed -n '/^shared_apply_prepare_service()$/,/^}$/p' "$SOURCE" > "$TMP/prepare.sh"
+awk '/orchestrator_build_release / { build=NR }
+     /shared_apply_finalize_release_modes "\$_shared_work\/release"/ { modes=NR }
+     /shared_apply_bundle_service seal / { seal=NR }
+     END { exit !(build > 0 && modes > build && seal > modes) }' "$TMP/prepare.sh" ||
+    fail "release mode finalizer must run after build and before bundle seal"
 echo 'PASS: original-FD9 one-request shared Voice/Strategies transaction and configd action'

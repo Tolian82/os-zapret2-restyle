@@ -152,6 +152,10 @@ def main() -> None:
     check("[voice_inspect]" in configd and
           "voice_live_inspect.py; exit 0" in configd,
           "Native Voice inspection must use a fixed read-only configd action")
+    dynamic_errors = view.split("var dynamic = [", 1)[1].split("];", 1)[0]
+    check(all(stage in dynamic_errors for stage in (
+              "bundle-verify", "config-preflight", "runtime-preflight"
+          )), "RU Voice GUI masks native pre-journal refusal stages")
     check("function localizeVoiceErrors(errors)" in view and
           "handleFormValidation('frm_VoiceSettings', localizeVoiceErrors(" in view and
           "Некорректный IPv4/CIDR" in view and

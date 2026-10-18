@@ -1157,6 +1157,15 @@ shared_apply_build_service()
     esac
     printf "prepared-id=%s\n" "$_shared_stage_id"
 }
+# Finalize only the public runtime root before sealing this private FD9 bundle.
+# The parent shared-work directory, candidate.xml and plan remain root-only.
+shared_apply_finalize_release_modes()
+{
+    [ "$#" -eq 1 ] || return 64
+    [ -d "$1" ] && [ ! -L "$1" ] || return 69
+    common_set_directory_mode "$1" 0755 || return 69
+    validator_validate_runtime_modes "$1" || return 69
+}
 # Prepare one complete Voice+Strategies release from the detached OPNsense
 # candidate. This is an INTERNAL FD9 operation, not a Config/runtime Apply.
 # Caller must have placed its root-owned candidate.xml in the fixed private
@@ -1182,6 +1191,12 @@ shared_apply_prepare_service()
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
         shared-candidate "$_shared_work/candidate.xml" || {
+        printf '%s\n' preflight-rejected=runtime-build
+        return 0
+    }
+    # Normal Start/Reconfigure make their release 0755 before activation.
+    # The native shared candidate needs the same normalization BEFORE SEAL.
+    shared_apply_finalize_release_modes "$_shared_work/release" || {
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
