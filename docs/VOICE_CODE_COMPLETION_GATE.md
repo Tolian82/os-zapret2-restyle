@@ -71,3 +71,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## Testing `_17` подтверждена пакетом — owner-live проверка впереди
 
 Source PR #368 merged `6501b0f`, source Voice/Project/FreeBSD15 CI #39134787692 PASS, testing release [v0.5.3_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_17) SHA-256 `e306babb6d4515c3fac70653a3ba9ecdccf2eb9a7a7b95e53e359c0b7725d4aa`. Воспроизведённая ошибка `_16`: census учитывал PID 9195 shell как dvtws2 при настоящем PID 2848. `_17` исправляет фильтр executable token; настоящий второй процесс всё ещё должен отказываться. На установленной `_17` Config/runtime/IPFW/STUN/MEDIA/CALL пока не проверены.
+
+## v0.5.3_19 — FreeBSD missing native Voice tables; installed result OPEN
+
+On installed `_17`, `runtime-preflight` fails because FreeBSD 15 says `ipfw: failed to request table info: No such process` (rc71) for ten Voice tables that are normally absent until initial shared Apply. Existing Strategy divert 19000 TCP/19001 UDP (989, vtnet1) remain intact. `_18` contains narrow table-info rc71/diagnostic recognition and native CLI regression; real Telegram saved ON, new IPFW, STUN and bidirectional CALL not yet accepted.

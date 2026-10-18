@@ -213,6 +213,88 @@ class IPFWAdapterTests(unittest.TestCase):
             action.assert_not_called()
             legacy.assert_not_called()
 
+
+    def test_actual_freebsd15_missing_table_info_is_not_an_ipfw_failure(self):
+        """Owner evidence: all ten unopened Voice tables return code 71."""
+        from voice_firewall_transaction import SERVICES, TABLE_PREFIX
+        calls = []
+        missing = "ipfw: failed to request table info: No such process\n"
+
+        def runner(argv, **kwargs):
+            calls.append(tuple(argv))
+            return subprocess.CompletedProcess(argv, 71, stdout="", stderr=missing)
+
+        adapter = FreeBSDIPFWAdapter(19000, 19010, runner=runner)
+        for service in SERVICES:
+            for suffix in ("", "_stage"):
+                table = TABLE_PREFIX + service + suffix
+                self.assertIsNone(adapter.get_table(table))
+        self.assertEqual(
+            {("/sbin/ipfw", "table", TABLE_PREFIX + name + suffix, "info")
+             for name in SERVICES for suffix in ("", "_stage")},
+            set(calls),
+        )
+        self.assertEqual(10, len(calls))
+        # Error 71 is never a general waiver for commands other than
+        # the read-only, explicitly allowlisted table-info probe.
+        for args in (("-q", "list"), ("table", "zapret2_voice_telegram", "list")):
+            with self.subTest(args=args):
+                with self.assertRaisesRegex(IPFWAdapterError, "command failed"):
+                    adapter._run(*args, allow_missing=True)
+        for code, stderr in (
+            (1, missing),
+            (71, "Permission denied"),
+            (71, "ipfw: failed to request table info: No such process\nunsafe extra"),
+            (71, "ipfw: failed to request table info: Operation not permitted"),
+            (71, ""),
+        ):
+            def unsafe_runner(argv, **kwargs):
+                return subprocess.CompletedProcess(argv, code, stdout="", stderr=stderr)
+            unsafe = FreeBSDIPFWAdapter(19000, 19010, runner=unsafe_runner)
+            with self.subTest(code=code, stderr=stderr):
+                with self.assertRaisesRegex(IPFWAdapterError, "command failed"):
+                    unsafe.get_table("zapret2_voice_telegram")
+
+    def test_real_verify_legacy_cli_accepts_only_absent_freebsd15_voice_tables(self):
+        """Run actual shared verify-legacy CLI and native adapters, not a stub."""
+        import voice_ipfw_adapter as module
+        active = {"rule_base": 19000, "rule_max": 19010,
+                  "rules": {19000: TCP, 19001: UDP}, "tables": {}}
+        candidate = {"rule_base": 19000, "rule_max": 19010,
+                     "rules": {19000: VOICE, 19001: TCP, 19002: UDP},
+                     "tables": {}}
+        ipfw_calls = []
+        missing = "ipfw: failed to request table info: No such process\n"
+
+        def native_runner(argv, **kwargs):
+            ipfw_calls.append(tuple(argv))
+            if argv[1:] == ["-q", "list"]:
+                return subprocess.CompletedProcess(argv, 0,
+                    stdout="19000 " + " ".join(TCP) + "\n" +
+                           "19001 " + " ".join(UDP) + "\n", stderr="")
+            if len(argv) == 4 and argv[1] == "table" and argv[3] == "info":
+                return subprocess.CompletedProcess(argv, 71, stdout="", stderr=missing)
+            raise AssertionError("unplanned IPFW command: " + repr(argv))
+
+        def native_adapter(first, last, *, allow_mutations):
+            self.assertFalse(allow_mutations)
+            return FreeBSDIPFWAdapter(first, last, runner=native_runner)
+
+        argv = ["voice_ipfw_adapter.py", "shared", "verify-legacy",
+                "/test/ordinary-strategies", "/test/native-candidate"]
+        with patch.object(module, "require_lifecycle_lock"), \
+             patch.object(Path, "stat", return_value=SimpleNamespace(st_uid=0)), \
+             patch.object(Path, "is_file", autospec=True,
+                          side_effect=lambda p: str(p) == "/test/native-candidate/voice-plan.json"), \
+             patch.object(module, "shared_release_manifest", return_value=candidate), \
+             patch.object(module, "legacy_strategies_manifest", return_value=active), \
+             patch.object(module, "FreeBSDIPFWAdapter", side_effect=native_adapter):
+            self.assertEqual(0, module.main(argv))
+        self.assertEqual(11, len(ipfw_calls))
+        self.assertEqual(("/sbin/ipfw", "-q", "list"), ipfw_calls[0])
+        self.assertTrue(all(op[1] == "table" and op[-1] == "info"
+                            for op in ipfw_calls[1:]))
+
     def test_missing_table_only_on_specific_diagnostic_and_fail_closed(self):
         fake=SimulateFreeBSD()
         adapter=FreeBSDIPFWAdapter(19000,19010,runner=fake)

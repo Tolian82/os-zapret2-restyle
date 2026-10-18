@@ -173,8 +173,17 @@ class FreeBSDIPFWAdapter:
         if len(result.stdout) + len(result.stderr) > MAX_IPFW_OUTPUT:
             raise IPFWAdapterError("IPFW command output exceeds bound")
         if result.returncode != 0:
-            if allow_missing and MISSING_TABLE.search(result.stderr):
-                return None
+            # FreeBSD 15 table-info lookup of an absent Voice table returns
+            # sysexits 71 with "failed to request table info: No such process".
+            # Accept it ONLY for this read-only lookup, never for unrelated
+            # read commands, IPFW mutation, permissions or unexpected output.
+            if allow_missing and len(args) == 3 and args[0] == "table" and args[2] == "info":
+                if MISSING_TABLE.search(result.stderr) or (
+                    result.returncode == 71 and
+                    result.stderr.strip() ==
+                    "ipfw: failed to request table info: No such process"
+                ):
+                    return None
             raise IPFWAdapterError("IPFW command failed: operation not completed")
         return result.stdout
 
