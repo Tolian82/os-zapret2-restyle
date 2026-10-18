@@ -5,7 +5,7 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (testing prerelease after publication)** | `v0.5.3_8` — remove unavailable php85-posix dependency, use base OPNsense UID check; CI/pkg and installed Apply pending |
+| **Current development candidate (testing prerelease after publication)** | `v0.5.3_16` — fix shared Apply release mode before sealing; CI/pkg and installed Apply pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

@@ -55,3 +55,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## Testing package `_15`: проверен код, владелец ещё не подтвердил работу
 
 Реальный код `verify-legacy` после исправления проверен вызовом CLI `main()`, а отказ до durable журнала возвращает ограниченную стадию вместо 'unknown'. Voice/Project/FreeBSD15 CI #39126436549 PASS. [Пакет `_15`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_15/os-zapret2-restyle-0.5.3_15.pkg) опубликован с SHA-256 `d1cc2fad37be7473beac86c8aeef42cc500a1d48763ba891e20fbf46b36f488e`. Успешный installed Apply/Config ON, общий runtime/IPFW/STUN и реальный CALL всё ещё OPEN.
+
+## v0.5.3_16 — подтверждённая ошибка staged release на установленной `_15`
+
+18.10.2026: owner-live `_15` Telegram ON Apply завершился rc69 до сохранения Config. В `configd` точный stderr: `runtime root must have mode 0755: .../shared-work/<id>/release`. `_16` финализирует именно release до bundle seal и проверяет режимы через штатный валидатор, сохраняя workspace 0700. Русский GUI перестаёт маскировать `bundle-verify/config-preflight/runtime-preflight`. CI/пакет и installed Telegram ON, IPFW, STUN/MEDIA/CALL ещё не приняты.

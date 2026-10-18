@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_15`. `VERSION=0.5.3`, `PLUGIN_REVISION=15`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_16`. `VERSION=0.5.3`, `PLUGIN_REVISION=15`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** установить [testing pkg `_15`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_15/os-zapret2-restyle-0.5.3_15.pkg) с SHA-256 `d1cc2fad37be7473beac86c8aeef42cc500a1d48763ba891e20fbf46b36f488e`, после чего выполнить ОДИН Telegram ON Apply с действующими «Стратегиями»; затем подтвердить saved Config ON, общий runtime/IPFW, STUN/MEDIA/CALL. Исходник PR #364 объединён как `64ca0e4`, проверены Voice/Project/FreeBSD15 CI #39126436549 и строгие правила версий; тестовый тег/пакет в workflow #39127051722 подтверждены, Actions не смог создать лишь docs PR, что завершает connector PR #365. Stable package repository не менялся. При новой ошибке до транзакции GUI возвращает безопасный этап preflight, не повторять WAN/FD9/runtime-build.
+**Единственное следующее действие:** проверить `_16` в CI/FreeBSD15, опубликовать testing pkg из точного исходного коммита, затем установить на OPNsense и выполнить один Telegram ON Apply. Только после подтверждения сохранённого Telegram ON и общего runtime/IPFW переходить к STUN/MEDIA/CALL. Owner-live `_15` отказал с `runtime root must have mode 0755` (подробнее ниже).
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -90,6 +90,12 @@ _8 исправляет именно зависимость: больше не �
 После публикации `_14` владелец снова получил в GUI «Результат применения неизвестен» и статус «Voice не подтверждён». Ревизия кода установила конкретный блокирующий дефект: `backend/voice_ipfw_adapter.py::main()` проверяет `if not legacy` в ветке `verify-legacy`, но переменная `legacy` **не объявлена**; выше вычисляется `prior_legacy`. Таким образом первая попытка передачи владения от обычных «Стратегий» падает с `NameError` ещё до durable `prepared`. Ранее unit-тесты использовали только вспомогательный алгоритм и не вызывали настоящий CLI — CI не обнаружил ошибку. Причина подтверждена анализом кода, но точный live журнал `_14` владелец не предоставлял.
 
 `_15` исправляет имя переменной и добавляет тест, выполняющий настоящую CLI-ветку `main()` с контролируемыми FD9/root/IPFW двойниками. Дополнительно префлайт до durable журнала возвращает строго ограниченный этап отказа в GUI (`bundle-verify`/`config-preflight`/`runtime-preflight`), чтобы новые причины не маскировались сообщением о неизвестном результате. После начала транзакции неопределённые ошибки продолжают требовать проверки состояния. **Нет подтверждения установленного `_15`, saved Telegram ON, IPFW или работающего звонка.**
+
+## Owner-live _15: runtime release 0700 and _16 correction
+
+18.10.2026 установленная `_15`: GUI Telegram ON Apply rc69, saved Telegram OFF, Voice uninitialized. В configd stderr в 16:15:15 +0300: `runtime root must have mode 0755: /var/db/zapret2/shared-work/.../release`. Это отказ до Config/IPFW.
+
+В normal Start/Reconfigure собранная release переводится в 0755 перед проверкой, в native `shared_apply_prepare_service` _15 такого шага не было. _16 устанавливает 0755 только на `shared-work/<id>/release`, вызывает `validator_validate_runtime_modes` перед bundle seal; приватный workspace/candidate.xml/plan остаётся 0700, временное managed зеркало сохраняется. Добавлены shell/GUI регрессии и перевод `bundle-verify/config-preflight/runtime-preflight`. Реальный Apply, STUN/MEDIA/CALL ещё не приняты.
 
 ## Минимальное чтение
 
