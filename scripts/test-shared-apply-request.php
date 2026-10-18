@@ -73,6 +73,35 @@ $voiceInput=['page'=>'voice',
     'fields'=>['voice'=>$completeVoice, 'hostlist'=>$completeHostlists],
     'sync'=>['snapshot'=>Snapshot::digest($all)]];
 $voice= Request::prepare($voiceInput,$all,$active);
+// Native root stage receives MVC defaults while original XML may lack
+// the physical Telegram args/hostlist nodes. This must work if only the
+// Telegram enabled checkbox differs from the saved model.
+$savedDefault = $all;
+$savedDefault['voice']['telegram']['args'] = $completeVoice['telegram']['args'];
+$defaultsForm = $completeVoice;
+$defaultsForm['telegram']['enabled'] = '1';
+$defaultsForm['telegram']['args'] = $savedDefault['voice']['telegram']['args'];
+$defaultsHostlist = $completeHostlists;
+$defaultsHostlist['telegramips'] = $savedDefault['hostlist']['telegramips'];
+$defaultRequest = [
+    'page' => 'voice',
+    'fields' => ['voice' => $defaultsForm, 'hostlist' => $defaultsHostlist],
+    'sync' => ['snapshot' => Snapshot::digest($savedDefault)],
+];
+$oldXml = str_replace('<args>--filter-udp=*</args>', '', $active);
+$oldXml = str_replace('<telegramips>91.108.0.0/16</telegramips>', '', $oldXml);
+$withDefaults = Request::prepare($defaultRequest, $savedDefault, $oldXml);
+$xmlDoc = new \DOMDocument();
+must($xmlDoc->loadXML($withDefaults['xml']),
+    'native root default hydration produced invalid XML');
+$xmlQuery = new \DOMXPath($xmlDoc);
+must($xmlQuery->evaluate('string(/opnsense/OPNsense/Zapret/voice/telegram/args)') ===
+    $savedDefault['voice']['telegram']['args'],
+    'root detached candidate lost unchanged Telegram TextField default');
+must($xmlQuery->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/telegramips)') ===
+    $savedDefault['hostlist']['telegramips'],
+    'root detached candidate lost unchanged Telegram targets');
+
 must($voice['plan']['page']==='voice', 'saved plan lost Voice page ownership');
 must(str_contains($voice['xml'],'<telegram><enabled>1</enabled>') &&
     str_contains($voice['xml'],'<telegramips>91.108.13.10</telegramips>'),
