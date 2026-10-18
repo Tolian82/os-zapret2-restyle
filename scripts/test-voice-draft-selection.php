@@ -69,8 +69,10 @@ rejectDraft(fn() => VoiceDraftSelection::plan($saved, $changedIps, $token),
     'unsaved shared IPSET change accepted');
 $changedWan = $input;
 $changedWan['voice']['waninterface'] = '';
-rejectDraft(fn() => VoiceDraftSelection::plan($saved, $changedWan, $token),
-    'unsaved Voice WAN change accepted');
+$invalidWan = VoiceDraftSelection::plan($saved, $changedWan, $token);
+assertDraft(($invalidWan['result'] ?? null) === 'failed' &&
+    isset($invalidWan['validations']['zapret.voice.waninterface']),
+    'retired Voice WAN submission was not rejected');
 $noSelect=form($saved);
 rejectDraft(fn() => VoiceDraftSelection::plan($saved, $noSelect, $token),
     'empty active selection accepted');
