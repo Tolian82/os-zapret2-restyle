@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** проверить `_16` в CI/FreeBSD15, опубликовать testing pkg из точного исходного коммита, затем установить на OPNsense и выполнить один Telegram ON Apply. Только после подтверждения сохранённого Telegram ON и общего runtime/IPFW переходить к STUN/MEDIA/CALL. Owner-live `_15` отказал с `runtime root must have mode 0755` (подробнее ниже).
+**Единственное следующее действие:** установить опубликованный testing [пакет `_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_16/os-zapret2-restyle-0.5.3_16.pkg) (SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`) и выполнить **один** Telegram ON Apply при работающих «Стратегиях». После Apply независимо проверить saved Telegram ON, shared runtime/IPFW и лишь потом STUN/MEDIA/CALL. При отказе собрать точную стадию/ошибку из configd без повторного Apply; не возвращаться к старым WAN/FD9/8 из 8 тестам.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
@@ -96,6 +96,11 @@ _8 исправляет именно зависимость: больше не �
 18.10.2026 установленная `_15`: GUI Telegram ON Apply rc69, saved Telegram OFF, Voice uninitialized. В configd stderr в 16:15:15 +0300: `runtime root must have mode 0755: /var/db/zapret2/shared-work/.../release`. Это отказ до Config/IPFW.
 
 В normal Start/Reconfigure собранная release переводится в 0755 перед проверкой, в native `shared_apply_prepare_service` _15 такого шага не было. _16 устанавливает 0755 только на `shared-work/<id>/release`, вызывает `validator_validate_runtime_modes` перед bundle seal; приватный workspace/candidate.xml/plan остаётся 0700, временное managed зеркало сохраняется. Добавлены shell/GUI регрессии и перевод `bundle-verify/config-preflight/runtime-preflight`. Реальный Apply, STUN/MEDIA/CALL ещё не приняты.
+
+
+## Опубликованная testing `_16` — live Apply ожидается
+
+Исходный [PR #366](https://github.com/Tolian82/os-zapret2-restyle/pull/366) объединён в `8c50c401f4494d76a674cfa80d1b7150193eeb61` после успешных Voice/Project/FreeBSD 15 CI [#39132346651](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132346651). [Проверочный пакет `_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_16/os-zapret2-restyle-0.5.3_16.pkg) опубликован из этого точного коммита в [publisher #39132944747](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132944747), SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`. Workflow собрал и проверил tag/asset, но не смог создать docs PR из-за разрешений GitHub Actions; публикационная запись проводится через connector PR #367. Stable Pages/pkg repo без изменений. **Installed Apply, Config ON/IPFW/STUN/CALL остаются неподтверждёнными.**
 
 ## Минимальное чтение
 
