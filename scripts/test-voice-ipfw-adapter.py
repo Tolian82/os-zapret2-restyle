@@ -208,7 +208,7 @@ class IPFWAdapterTests(unittest.TestCase):
             # adopting it as the legacy Strategies owner.
             action.reset_mock()
             legacy.reset_mock()
-            with patch.object(Path, "is_file", autospec=True, return_value=True):
+            with patch.object(Path, "is_file", return_value=True):
                 self.assertEqual(1, main(argv))
             action.assert_not_called()
             legacy.assert_not_called()
