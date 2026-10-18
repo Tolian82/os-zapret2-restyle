@@ -18,6 +18,32 @@ final class VoiceSettingsSnapshot
     private static function canonicalize($value)
     {
         if (is_array($value)) {
+            // OPNsense BaseListField options include localized display labels
+            // and unselected entries that can differ between web and root
+            // configd PHP. Hash only the selected keys (stored semantics).
+            if ($value !== []) {
+                $optionList = true;
+                foreach ($value as $option) {
+                    if (!is_array($option) || !array_key_exists('selected', $option) ||
+                        !array_key_exists('value', $option)) {
+                        $optionList = false;
+                        break;
+                    }
+                }
+                if ($optionList) {
+                    $selected = [];
+                    foreach ($value as $key => $option) {
+                        if (!in_array($option['selected'], [0, 1, false, true, '0', '1'], true)) {
+                            throw new \InvalidArgumentException('Invalid shared model selection');
+                        }
+                        if ($option['selected'] == 1) {
+                            $selected[] = (string)$key;
+                        }
+                    }
+                    sort($selected, SORT_STRING);
+                    return implode(',', $selected);
+                }
+            }
             ksort($value, SORT_STRING);
             $result = [];
             foreach ($value as $key => $member) {

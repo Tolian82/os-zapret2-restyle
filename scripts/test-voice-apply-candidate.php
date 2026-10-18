@@ -51,6 +51,52 @@ function formFrom(array $record): array {
 }
 
 $before = records();
+// Reproduce one saved Config represented differently by OPNsense web and
+// root: translated labels and unselected interface choices must not make
+// Voice ON fail the original FD9 snapshot check.
+$guiModel = $before;
+$rootModel = $before;
+$guiModel['general']['waninterface'] = [
+    '' => ['value' => 'Нет', 'selected' => 0],
+    'WAN' => ['value' => 'Интернет', 'selected' => 1],
+    'WAN2' => ['value' => 'Резервный', 'selected' => 0],
+];
+$rootModel['general']['waninterface'] = [
+    'WAN' => ['value' => 'Internet', 'selected' => 1],
+    '' => ['value' => 'None', 'selected' => 0],
+    'OTHER' => ['value' => 'Other', 'selected' => 0],
+];
+$guiModel['voice']['waninterface'] = ['WAN' => ['value' => 'Интернет', 'selected' => 1]];
+$rootModel['voice']['waninterface'] = ['WAN' => ['value' => 'Internet', 'selected' => 1]];
+$guiModel['hostlist']['mode'] = [
+    'all' => ['value' => 'Все', 'selected' => 0],
+    'list' => ['value' => 'Список', 'selected' => 1],
+];
+$rootModel['hostlist']['mode'] = [
+    'list' => ['value' => 'List', 'selected' => 1],
+    'all' => ['value' => 'All', 'selected' => 0],
+];
+$shared = VoiceSettingsSnapshot::digest($guiModel);
+verify($shared === VoiceSettingsSnapshot::digest($rootModel) &&
+       $shared === VoiceSettingsSnapshot::digest($before),
+       'web/root dynamic option labels changed the saved snapshot');
+$rootForm = formFrom($rootModel);
+$rootForm['voice']['telegram']['enabled'] = '1';
+$rootForm['voice']['telegram']['args'] = "--filter-udp=*\n--filter-l7=stun\n--payload=stun";
+$rootPlan = VoiceApplyCandidate::prepare($rootModel, $rootForm, $shared);
+verify(($rootPlan['result'] ?? null) === 'prepared' &&
+       $rootPlan['enabled_services'] === ['telegram'],
+       'root PHP rejected a valid GUI snapshot because of option presentation');
+$changedWan = $rootModel;
+$changedWan['general']['waninterface']['WAN']['selected'] = 0;
+$changedWan['general']['waninterface']['OTHER']['selected'] = 1;
+verify(VoiceSettingsSnapshot::digest($changedWan) !== $shared,
+       'changing the selected WAN must invalidate the snapshot');
+$changedMode = $rootModel;
+$changedMode['hostlist']['mode']['list']['selected'] = 0;
+$changedMode['hostlist']['mode']['all']['selected'] = 1;
+verify(VoiceSettingsSnapshot::digest($changedMode) !== $shared,
+       'changing the selected target mode must invalidate the snapshot');
 $token = VoiceSettingsSnapshot::digest($before);
 $form = formFrom($before);
 $telegram = "--filter-udp=596-599\n--filter-l7=stun\n--payload=stun\n";
