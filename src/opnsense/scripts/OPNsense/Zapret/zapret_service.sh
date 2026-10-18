@@ -1222,6 +1222,94 @@ shared_apply_record_service()
 
 # Native committed owners need the existing read-only full-runtime/IPFW
 # witness, never legacy PID-plus-any-divert status.
+
+# Explicit operator-only closure of the FIRST failed Voice handoff.
+# No Config, IPFW or engine restart; only the missing monitor is reattached
+# and only after all old ownership has been attested under original root FD9.
+shared_apply_reviewed_legacy_attest_service()
+{
+    [ "$#" -eq 4 ] || return 64
+    _review_id="$1"
+    _review_base="$2"
+    _review_candidate="$3"
+    _review_monitor="$4"
+    case "$_review_monitor" in 0|1) ;; *) return 64 ;; esac
+
+    shared_apply_bundle_service verify "$_review_id" || return 69
+    # Native mergeForCommit revalidates the LIVE Config dependency snapshot.
+    _review_config=$(shared_apply_native_config preflight "$_review_id" voice) || return 69
+    _review_config_base=$(printf '%s\n' "$_review_config" |
+        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+    _review_config_candidate=$(printf '%s\n' "$_review_config" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_review_config_base" = "$_review_base" ] &&
+    [ "$_review_config_candidate" = "$_review_candidate" ] || return 69
+
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] &&
+    [ ! -e "$ACTIVE_DIR/voice-plan.json" ] &&
+    [ ! -L "$ACTIVE_DIR/voice-plan.json" ] || return 69
+    _review_stage="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").stage.$_review_id"
+    _review_park="$(dirname "$ACTIVE_DIR")/.$(basename "$ACTIVE_DIR").old.$_review_id"
+    _review_backup="$BACKUP_ROOT/$(basename "$ACTIVE_DIR")-$_review_id"
+    for _review_artifact in "$_review_stage" "$_review_park" "$_review_backup"; do
+        [ ! -e "$_review_artifact" ] && [ ! -L "$_review_artifact" ] || return 69
+    done
+    # Verify the exact old-owned Strategies rules from the root-owned old
+    # runtime artifacts, WAN of sealed candidate, and all ten absent tables.
+    _review_work=$(shared_apply_workspace "$_review_id") || return 69
+    firewall_shared_runtime verify-legacy "$ACTIVE_DIR" "$_review_work/release" || return 69
+    launcher_is_running "$CHILD_PIDFILE" || return 69
+    _apply_engine=1
+    apply_runtime_attest_engine_inventory || return 69
+
+    _review_processes=$("$COMMON_PS_BIN" ax -o pid= -o command=) || return 69
+    _review_loop_pids=$(printf '%s\n' "$_review_processes" | awk -v target="$SUPERVISOR_LOOP" '
+        $1 ~ /^[0-9]+$/ &&
+        ($2 == target || (($2 == "/bin/sh" || $2 == "sh") && $3 == target)) {
+            print $1
+        }') || return 69
+    if [ "$_review_monitor" = 1 ]; then
+        supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 69
+        _review_supervisor_pid=$(supervisor_pidfile_read "$SUPERVISOR_MONITOR_PIDFILE") || return 69
+        [ "$_review_loop_pids" = "$_review_supervisor_pid" ] || return 69
+    else
+        supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && return 69
+        [ -z "$_review_loop_pids" ] &&
+        [ ! -e "$SUPERVISOR_MONITOR_PIDFILE" ] &&
+        [ ! -L "$SUPERVISOR_MONITOR_PIDFILE" ] &&
+        [ ! -e "$SUPERVISOR_DAEMON_PIDFILE" ] &&
+        [ ! -L "$SUPERVISOR_DAEMON_PIDFILE" ] || return 69
+    fi
+}
+
+shared_apply_recover_reviewed_legacy_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    preflight_shared_apply_journal common-recover-reviewed-legacy || return 69
+    _review_identity=$(/usr/local/bin/python3.13 \
+        "$BACKEND_DIR/shared_apply_operation.py" review-legacy) || return 69
+    set -- $_review_identity
+    [ "$#" -eq 4 ] && [ "$1" = review-legacy ] || return 69
+    _review_id="$2"
+    _review_base="$3"
+    _review_candidate="$4"
+    _review_has_monitor=0
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _review_has_monitor=1
+    shared_apply_reviewed_legacy_attest_service "$_review_id" \
+        "$_review_base" "$_review_candidate" "$_review_has_monitor" || return 70
+    if [ "$_review_has_monitor" = 0 ]; then
+        supervisor_start "$SUPERVISOR_LOOP" "$SUPERVISOR_DAEMON_PIDFILE" \
+            "$SUPERVISOR_MONITOR_PIDFILE" "$CHILD_PIDFILE" \
+            "$SERVICE_SCRIPT" "$DVTWS_BIN" "$SUPERVISOR_LOG" || return 70
+    fi
+    shared_apply_reviewed_legacy_attest_service "$_review_id" \
+        "$_review_base" "$_review_candidate" 1 || return 70
+    # Root FD9 CLI rechecks sealed bundle, operation ID and phase.
+    /usr/local/bin/python3.13 "$BACKEND_DIR/shared_apply_operation.py" \
+        finish-reviewed-legacy "$_review_id" || return 70
+    printf 'reviewed-legacy-restored=%s\n' "$_review_id"
+}
+
 shared_apply_status_observe_service()
 {
     _status_python=/usr/local/bin/python3.13
@@ -1460,6 +1548,9 @@ service_dispatch()
             ;;
         reconfigure)
             reconfigure_service
+            ;;
+        shared-apply-recover-reviewed-legacy)
+            shared_apply_recover_reviewed_legacy_service
             ;;
         shared-apply-run)
             shared_apply_run_service "${2:-}" "${3:-}"
@@ -1702,7 +1793,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

@@ -83,3 +83,7 @@ Source/FreeBSD15 CI #39142330715 PASS, source merge `ff43ed56`, [testing `_19`](
 ## v0.5.3_21 — native supervisor callback and blocked live recovery gate
 
 Live `_19` requires-review: new dvtws2 launched 19:15:11 without supervisor, legacy runtime/IPFW remain, Config Telegram OFF. Exact code defect: absent service-level `SERVICE_SCRIPT` despite two uses inside `apply_runtime.sh` and executable check in `supervisor_start`. Tests previously mocked this variable and missed the failure. `_20` explicitly pins the native callback and regression-checks real service header plus full activation/restore forwarding. The already blocked `requires-review` journal is NOT auto-recovered; appliance safety and actual Telegram ON/IPFW/STUN/CALL still OPEN.
+
+## v0.5.3_22 — operator-reviewed legacy handoff recovery is NOT end-to-end Voice success
+
+Only attested original old Strategies state can authorize reattaching missing supervisor and committing restored journal under original FD9. User must confirm one successful common Telegram ON Apply after recovery. STUN/MEDIA/CALL remain OPEN until appliance results.

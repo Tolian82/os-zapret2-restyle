@@ -92,6 +92,40 @@ class TestJournal(unittest.TestCase):
             self.assertEqual(expected,result.returncode, result.stderr)
             self.assertNotIn("Traceback",result.stderr)
 
+    def test_reviewed_legacy_only_exact_first_voice_with_witness(self):
+        with tempfile.TemporaryDirectory() as d:
+            j=SharedApplyOperation(Path(d)/"shared-apply")
+            item=detail()
+            with self.assertRaises(SharedOperationError):
+                j.reviewed_legacy_detail()
+            for phase in ("prepared","activating","requires-review"):
+                j.advance(phase,item)
+            self.assertEqual(item,j.reviewed_legacy_detail())
+            self.assertTrue(native_lifecycle_gate(
+                "common-recover-reviewed-legacy",root=j.root)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate("common-apply",root=j.root)["safe_to_mutate"])
+            evidence=(j.root/"operation.json").read_bytes()
+            for ident,proof in (("2"*32,lambda:True),(item["id"],lambda:False)):
+                with self.assertRaises(SharedOperationError):
+                    j.finish_reviewed_legacy(ident,proof)
+                self.assertEqual(evidence,(j.root/"operation.json").read_bytes())
+            self.assertEqual("restored",
+                             j.finish_reviewed_legacy(item["id"],lambda:True)["phase"])
+            self.assertTrue(native_lifecycle_gate("common-apply",root=j.root)["safe_to_mutate"])
+            with self.assertRaises(SharedOperationError):
+                j.finish_reviewed_legacy(item["id"],lambda:True)
+        with tempfile.TemporaryDirectory() as d:
+            j=SharedApplyOperation(Path(d)/"shared-apply")
+            original=detail("a"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                j.advance(phase,original)
+            second=detail("b"*32)
+            for phase in ("prepared","activating","requires-review"):
+                j.advance(phase,second)
+            with self.assertRaises(SharedOperationError):
+                j.reviewed_legacy_detail()
+            self.assertEqual("requires-review",j.read()["phase"])
+
     def test_missing_state_stays_readonly(self):
         with tempfile.TemporaryDirectory() as d:
             j=SharedApplyOperation(Path(d)/"shared-apply")
