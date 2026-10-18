@@ -1094,7 +1094,7 @@ shared_apply_run_service()
     _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
     _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
     case "$_shared_run_receipt" in
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
             # Nothing reached shared_apply_execute_service: no Config save,
             # runtime handoff, IPFW mutation or durable operation was started.
             printf '%s\n' "$_shared_run_receipt"
@@ -1125,7 +1125,7 @@ shared_apply_build_service()
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=workspace)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace)
             printf '%s\n' "$_shared_stage_result"
             return 0
             ;;

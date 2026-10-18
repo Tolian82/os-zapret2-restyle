@@ -53,8 +53,9 @@ final class SharedApplyRequest
     }
 
     public static function prepare(
-        array $request, array $current, string $activeXml
+        array $request, array $current, string $activeXml, ?string &$phase = null
     ): array {
+        $phase = 'candidate-plan';
         $plan = $request['page'] === 'voice'
             ? SettingsApply::prepareVoice(
                 $current, $request['fields'], $request['sync']['snapshot']
@@ -63,12 +64,15 @@ final class SharedApplyRequest
                 $current, $request['fields'], $request['sync']['telegramips_baseline']
             );
         if (($plan['result'] ?? null) !== 'prepared') {
+            $phase = 'candidate-validation';
             throw new \InvalidArgumentException('Shared native Apply candidate rejected');
         }
+        $phase = 'candidate-xml';
         $xml = SettingsApply::renderCandidateXml(
             $activeXml, $current, $plan, $request['page']
         );
         if (strlen($xml) > self::MAX_XML) {
+            $phase = 'candidate-size';
             throw new \InvalidArgumentException('Detached Config exceeds native limit');
         }
         // Bind the form's page to the native plan itself. A configd caller
@@ -247,8 +251,7 @@ final class SharedApplyRequest
                     if (!is_string($activeXml)) {
                         throw new \RuntimeException('Could not read locked native Config');
                     }
-                    $phase = 'candidate';
-                    $prepared = self::prepare($request, $current, $activeXml);
+                    $prepared = self::prepare($request, $current, $activeXml, $phase);
                     $phase = 'workspace';
                     $id = self::materialize($prepared);
                     $response = "prepared-id=$id";
