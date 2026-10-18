@@ -1770,7 +1770,11 @@ service_with_lifecycle_lock()
 
 case "${1:-}" in
     status)
-        service_dispatch "$@"
+        # Status may inspect the persisted shared-Apply journal, whose
+        # read-only Python owner validates the ORIGINAL held FD9. Previous
+        # direct dispatch omitted it, falsely classifying restored/common
+        # owners as "incomplete" even when engine, supervisor and IPFW pass.
+        service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
     strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start)
         strategy_lab_internal_dispatch "$@"

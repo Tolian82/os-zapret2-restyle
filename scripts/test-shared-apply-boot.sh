@@ -743,6 +743,53 @@ ln -s "$ROOT/absent" "$ACTIVE_DIR/voice-plan.json"
 status_case 2
 [ ! -s "$STATUS_LOG" ] || fail "orphan native symlink delegated to legacy"
 rm -f "$ACTIVE_DIR/voice-plan.json"
+
+# The old generic status test called shared_apply_status_service directly,
+# bypassing the actual top-level shell dispatcher. Extract and execute the
+# exact final entrypoint with the original service_with_lifecycle_lock so the
+# recovered legacy journal can only be read with the inherited FD9.
+awk '
+  /^case "\$\{1:-\}" in$/ { begin = NR }
+  { data[NR] = $0 }
+  END {
+    if (begin == 0) exit 1
+    for (i = begin; i <= NR; i++) print data[i]
+  }
+' "$SOURCE" > "$ROOT/status-entry.sh" || fail "entrypoint extraction"
+sh -n "$ROOT/status-entry.sh" || fail "entrypoint syntax"
+(
+  set -- status
+  LIFECYCLE_LOCK_TIMEOUT=30
+  STATUS_RECORD=1 STATUS_VALID=1 STATUS_OWNER=restored STATUS_LEGACY_RC=0
+  shared_apply_inspect_service() {
+    # In real production this read-only CLI rejects a missing root FD9.
+    # The test only verifies routing and availability of fd9, not privileged
+    # FreeBSD lock ownership.
+    : >&9 || return 69
+    printf '%s\n' restored
+  }
+  orchestrator_native_status() { echo "zapret is running"; }
+  # The original shared boot mock replaced service_dispatch with a logging
+  # stub. Exercise the real body of status, not that earlier fake dispatcher.
+  service_dispatch() {
+    [ "$1" = status ] || return 64
+    shared_apply_status_service
+  }
+  . "$ROOT/status-entry.sh"
+) > "$ROOT/status-entry-output" || fail "restored owner status not routed via FD9"
+grep -Fqx 'zapret is running' "$ROOT/status-entry-output" ||
+    fail "real status entrypoint classified complete restored legacy as incomplete"
+(
+  set -- status
+  LIFECYCLE_LOCK_TIMEOUT=30
+  LOCKF_BIN="$ROOT/reject-lockf"
+  printf '#!/bin/sh\nexit 1\n' > "$LOCKF_BIN"
+  chmod 700 "$LOCKF_BIN"
+  orchestrator_native_status() { fail "status bypassed refused lifecycle lock"; }
+  . "$ROOT/status-entry.sh"
+) > "$ROOT/status-entry-rejected" 2>&1 &&
+    fail "status ignored unavailable lifecycle lock"
+
 echo 'PASS: generic status separates verified native and genuine legacy'
 
 echo 'PASS: committed native common owner routes boot through sealed release and fresh saved Config'
