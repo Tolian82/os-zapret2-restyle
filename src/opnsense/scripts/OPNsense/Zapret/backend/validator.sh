@@ -553,21 +553,76 @@ validator_validate_engine_mapped()
         "${_validator_engine_args}" "${_validator_engine_reference}" \
         "${_validator_engine_source}" <<'PY'
 from pathlib import Path
+import os
+import re
+import stat
 import subprocess
 import sys
+import tempfile
 
 binary, args_file, reference, source = sys.argv[1:]
 tokens = Path(args_file).read_text(encoding="utf-8").split()
 prefix = reference.rstrip("/") + "/"
-mapped = []
-for token in tokens:
-    option, sep, value = token.partition("=")
-    if sep and option in ("--ipset", "--hostlist", "--hostlist-exclude") and value.startswith(prefix):
-        token = option + "=" + source.rstrip("/") + "/" + value[len(prefix):]
-    mapped.append(token)
+source_root = Path(source)
+
+# Native staging and candidate.xml/plan.json remain private under FD9.
+# dvtws2 drops privileges before reading hostlists in --dry-run and cannot
+# traverse shared-work (0700). Copy ONLY allowed public runtime lists into a
+# short-lived, nobody-readable temp mirror. Never chmod the private work.
+def validate_source(relative):
+    parts = Path(relative).parts
+    if len(parts) != 2 or parts[0] != "managed" or not re.fullmatch(
+        r"(?:hostlist|ipset)-[a-z0-9-]+\.txt", parts[1]
+    ):
+        raise ValueError("unexpected staged engine reference")
+    parent = source_root / "managed"
+    if parent.is_symlink() or not parent.is_dir():
+        raise ValueError("unsafe managed directory in native candidate")
+    path = parent / parts[1]
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise ValueError("unsafe staged hostlist or IPSET")
+    return path
+
 try:
-    result = subprocess.run([binary, *mapped, "--dry-run"], capture_output=True, timeout=15)
-except (OSError, subprocess.TimeoutExpired) as exc:
+    with tempfile.TemporaryDirectory(prefix="zapret-dvtws-validate-", dir="/tmp") as directory:
+        public_root = Path(directory)
+        os.chmod(public_root, 0o755)
+        public_managed = public_root / "managed"
+        public_managed.mkdir(mode=0o755)
+        os.chmod(public_managed, 0o755)
+        copied = set()
+
+        def remap(value):
+            if not value.startswith(prefix):
+                return value
+            relative = value[len(prefix):]
+            source_file = validate_source(relative)
+            destination = public_root / relative
+            if relative not in copied:
+                with source_file.open("rb") as old, destination.open("xb") as new:
+                    while True:
+                        chunk = old.read(65536)
+                        if not chunk:
+                            break
+                        new.write(chunk)
+                os.chmod(destination, 0o644)
+                copied.add(relative)
+            return str(destination)
+
+        mapped = []
+        for token in tokens:
+            option, sep, value = token.partition("=")
+            if sep and option in ("--ipset", "--hostlist", "--hostlist-exclude"):
+                token = option + "=" + remap(value)
+            elif sep and option == "--lua-init" and value.startswith("@"):
+                token = option + "=@" + remap(value[1:])
+            elif sep and option == "--blob" and ":@" in value:
+                kind, path = value.split(":@", 1)
+                token = option + "=" + kind + ":@" + remap(path)
+            mapped.append(token)
+        result = subprocess.run([binary, *mapped, "--dry-run"], capture_output=True, timeout=15)
+except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
     print("ERROR: installed engine validation failed: " + str(exc), file=sys.stderr)
     raise SystemExit(1)
 if result.returncode:
