@@ -42,7 +42,7 @@ function form(array $saved): array
     foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $name) {
         $ips[$name.'ips'] = $saved['hostlist'][$name.'ips'];
     }
-    return ['voice' => $saved['voice'], 'hostlist' => $ips];
+    return ['voice' => array_diff_key($saved['voice'], ['waninterface' => true]), 'hostlist' => $ips];
 }
 $saved = model();
 $input = form($saved);
