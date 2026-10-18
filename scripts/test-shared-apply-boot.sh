@@ -759,6 +759,7 @@ awk '
 sh -n "$ROOT/status-entry.sh" || fail "entrypoint syntax"
 (
   set -- status
+  LIFECYCLE_LOCK_TIMEOUT=30
   STATUS_RECORD=1 STATUS_VALID=1 STATUS_OWNER=restored STATUS_LEGACY_RC=0
   shared_apply_inspect_service() {
     # In real production this read-only CLI rejects a missing root FD9.
@@ -774,6 +775,7 @@ grep -Fqx 'zapret is running' "$ROOT/status-entry-output" ||
     fail "real status entrypoint classified complete restored legacy as incomplete"
 (
   set -- status
+  LIFECYCLE_LOCK_TIMEOUT=30
   LOCKF_BIN="$ROOT/reject-lockf"
   printf '#!/bin/sh\nexit 1\n' > "$LOCKF_BIN"
   chmod 700 "$LOCKF_BIN"

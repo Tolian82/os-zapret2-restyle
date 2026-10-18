@@ -10,6 +10,30 @@ SERVICE_SCRIPT="${SERVICE_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/za
 UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
+SHARED_APPLY_JOURNAL="${SHARED_APPLY_JOURNAL:-/var/db/zapret2/shared-apply/operation.json}"
+LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK_FILE:-/var/run/zapret2-lifecycle.lock}"
+LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
+
+# Installed _22's direct status lacked FD9 when any journal existed.
+# Incoming pre-install runs against the OLD installed service: retry
+# status with its original FD9 only when normal inspection reports 2.
+# A genuinely incomplete owner remains blocked without invoking stop.
+read_service_status()
+{
+    "${SERVICE_SCRIPT}" status >/dev/null 2>&1
+    _pkg_status=$?
+    if [ "${_pkg_status}" -eq 2 ] &&
+       [ -r "${SHARED_APPLY_JOURNAL}" ] &&
+       [ -x "${LOCKF_BIN}" ]; then
+        (
+            "${LOCKF_BIN}" -s -t 5 9 || exit 75
+            "${SERVICE_SCRIPT}" status >/dev/null 2>&1
+        ) 9>"${LIFECYCLE_LOCK_FILE}"
+        _pkg_status=$?
+    fi
+    return "${_pkg_status}"
+}
+
 
 # No installed service script means a fresh installation or a repair of an
 # already incomplete package. Neither case may inherit stale restart intent.
@@ -18,7 +42,7 @@ if [ ! -x "${SERVICE_SCRIPT}" ]; then
     exit 0
 fi
 
-"${SERVICE_SCRIPT}" status >/dev/null 2>&1
+read_service_status
 service_status=$?
 
 case "${service_status}" in
@@ -31,8 +55,10 @@ case "${service_status}" in
         # package transaction whose earlier pre-install already stopped service.
         ;;
     2)
-        # Incomplete state must be cleaned but never promoted to running.
+        # Never stop unverified runtime via legacy lifecycle.
         rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+        echo "ERROR: incomplete zapret lifecycle; review before package replacement" >&2
+        exit 1
         ;;
     *)
         rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
@@ -48,7 +74,7 @@ if [ "${service_status}" -ne 1 ]; then
         exit 1
     fi
 
-    "${SERVICE_SCRIPT}" status >/dev/null 2>&1
+    read_service_status
     stopped_status=$?
     if [ "${stopped_status}" -ne 1 ]; then
         rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"

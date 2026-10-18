@@ -69,6 +69,8 @@ PID_FILE="${TMP_ROOT}/configd.pid"
 STATE_DIR="${TMP_ROOT}/state"
 SERVICE_STATE="${TMP_ROOT}/service.state"
 STOP_FAIL="${TMP_ROOT}/stop.fail"
+SHARED_JOURNAL="${TMP_ROOT}/operation.json"
+LIFECYCLE_LOCK="${TMP_ROOT}/lifecycle.lock"
 LEGACY_MARKER="${STATE_DIR}/pkg-upgrade.restart"
 REPLACEMENT_MARKER="${STATE_DIR}/pkg-replacement.restart"
 printf '%s\n' 4242 > "${PID_FILE}"
@@ -78,6 +80,9 @@ write_mock "${TMP_ROOT}/service" \
     'printf "%s\n" "service:$*" >> "${TRACE}"' \
     'case "${1:-}" in' \
     '  status)' \
+    '    if [ "${LEGACY_FD9_REQUIRED:-0}" = 1 ] && [ -r "${SHARED_APPLY_JOURNAL}" ]; then' \
+    '      if ! (: >&9) 2>/dev/null; then exit 2; fi' \
+    '    fi' \
     '    case "$(cat "${SERVICE_STATE}")" in' \
     '      running) exit 0 ;;' \
     '      stopped) exit 1 ;;' \
@@ -92,6 +97,8 @@ write_mock "${TMP_ROOT}/service" \
     '    ;;' \
     '  *) exit 64 ;;' \
     'esac'
+write_mock "${TMP_ROOT}/lockf" \
+    '[ "$1" = -s ] && [ "$2" = -t ] && [ "$4" = 9 ]'
 write_mock "${TMP_ROOT}/pgrep" \
     'printf "%s\n" "pgrep:$*" >> "${TRACE}"' \
     'if [ -e "${RELOADED}" ]; then printf "%s\n" 4444; else printf "%s\n" 4343; fi'
@@ -124,6 +131,8 @@ run_pre_install()
 {
     TRACE="${TRACE}" SERVICE_STATE="${SERVICE_STATE}" STOP_FAIL="${STOP_FAIL}" \
     SERVICE_SCRIPT="${TMP_ROOT}/service" UPGRADE_STATE_DIR="${STATE_DIR}" \
+    SHARED_APPLY_JOURNAL="${SHARED_JOURNAL}" LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK}" \
+    LOCKF_BIN="${TMP_ROOT}/lockf" LEGACY_FD9_REQUIRED="${LEGACY_FD9_REQUIRED:-0}" \
     UPGRADE_RESTART_MARKER="${LEGACY_MARKER}" \
     REPLACEMENT_RESTART_MARKER="${REPLACEMENT_MARKER}" \
     "${PRE_INSTALL}"
@@ -155,7 +164,7 @@ run_post_install()
 reset_case()
 {
     : > "${TRACE}"
-    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}"
+    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}" "${SHARED_JOURNAL}"
 }
 
 # Forced pkg add -f replacement: PKG_UPGRADE is absent. The incoming pre-install
@@ -199,17 +208,36 @@ run_post_install
 assert_absent "${REPLACEMENT_MARKER}"
 grep -Fxq running "${SERVICE_STATE}" || fail "interrupted replacement retry did not restore service"
 
-# Incomplete state is cleaned but never promoted.
+# Incomplete owner must remain untouched and never cause legacy stop.
 reset_case
 printf '%s\n' incomplete > "${SERVICE_STATE}"
 : > "${REPLACEMENT_MARKER}"
-run_pre_install
-assert_absent "${REPLACEMENT_MARKER}"
-grep -Fxq stopped "${SERVICE_STATE}" || fail "incomplete state was not cleaned"
-run_post_install
-if grep -Fq 'configctl:zapret start' "${TRACE}"; then
-    fail "incomplete state was promoted to running"
+if run_pre_install > "${TMP_ROOT}/incomplete-error" 2>&1; then
+    fail "genuinely incomplete owner accepted for package replacement"
 fi
+assert_absent "${REPLACEMENT_MARKER}"
+grep -Fxq incomplete "${SERVICE_STATE}" || fail "incomplete owner was changed"
+if grep -Fq 'service:stop' "${TRACE}"; then fail "incomplete owner was stopped"; fi
+
+# Installed _22 falsely says incomplete until the caller holds FD9. The
+# incoming package's hook reads old status under FD9, stops the known-good
+# running engine and preserves restart intent.
+reset_case
+printf '%s\n' running > "${SERVICE_STATE}"
+: > "${SHARED_JOURNAL}"
+LEGACY_FD9_REQUIRED=1 run_pre_install ||
+    fail "restored old owner was rejected despite valid FD9"
+assert_present "${REPLACEMENT_MARKER}"
+grep -Fxq stopped "${SERVICE_STATE}" || fail "recovered engine was not stopped"
+run_post_install
+grep -Fxq running "${SERVICE_STATE}" || fail "recovered engine was not restarted"
+reset_case
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+: > "${SHARED_JOURNAL}"
+if LEGACY_FD9_REQUIRED=1 run_pre_install > "${TMP_ROOT}/still-incomplete" 2>&1; then
+    fail "real requires-review owner bypassed FD9 guard"
+fi
+grep -Fxq incomplete "${SERVICE_STATE}" || fail "real incomplete owner was stopped"
 
 # Stop failure aborts replacement and clears restart intent.
 reset_case

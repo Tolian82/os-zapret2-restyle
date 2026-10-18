@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.3_23`. `VERSION=0.5.3`, `PLUGIN_REVISION=23`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
+**Current handoff identity:** `v0.5.3_24`. `VERSION=0.5.3`, `PLUGIN_REVISION=24`. Владелец 17.10.2026 открыл исправляющий этап и поручил сначала записать подход/план, затем выполнить его. Переход `_1`, исправление `_2` и точная подготовка релиза интегрированы в `main`; полный [релиз `v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) и FreeBSD pkg-репозиторий опубликованы. Приёмка установленной страницы и голосового канала отдельно открыта.
 
 ## Наблюдение установленного 0.5.3_2
 
@@ -64,7 +64,7 @@ _8 исправляет именно зависимость: больше не �
 
 Причина обнаружена в преобразовании модели OPNsense в detached XML: `Zapret.xml` задаёт Telegram STUN `args` по умолчанию (`--filter-udp=*`...), поэтому GUI показывает и валидирует профиль, но старый `config.xml` может не содержать физического `<args>`. При включении только флага `enabled` прежний `VoiceCandidateXml` записывал только changed fields, оставляя default `args` за пределами XML; Python-компилятор читает этот XML и ожидаемо отказывает. В `_12` при Voice Apply для **каждого включённого** профиля явно материализуются его уже проверенные `args` и IPSET в detached XML даже без пользовательского изменения этих полей. Запись вне Voice whitelist и изменение активного Config на подготовке запрещены, режим all-OFF/no-change остаётся прежним. PHP-регрессии покрывают отсутствующий и пустой `<args>`, отсутствующий IPSET и root worker request.
 
-**Единственное следующее действие:** проверить source CI v0.5.3_23, опубликовать testing pkg с исправленным FD9 status, установить на OPNsense, затем сначала проверить `configctl zapret status`: recovered legacy engine/supervisor/IPFW должны распознаваться как RUNNING, только после этого один Telegram ON Apply и отдельная проверка saved Config/IPFW/STUN/CALL. Установленный `_22` journal уже `restored` и supervisor PID подтверждён, три реальных статуса Engine/Supervisor/IPFW = OK; Telegram пока OFF. Не повторять recovery.
+**Единственное следующее действие:** проверить CI `_24` (вход status под FD9, совместимость incoming preinstall со старой `_22` и реальные package lifecycle mocks), опубликовать testing pkg по SHA и source HEAD; владелец затем устанавливает `_24`, подтверждает `configctl zapret status` = RUNNING и сохранённый `restored` journal. Только затем один Telegram ON Apply и отдельная приёмка saved Config/IPFW/STUN/CALL. На `_22` ENGINE, SUPERVISOR, IPFW уже доказанно OK, а incomplete вызван отсутствием FD9 у status. Не повторять `shared_recover_reviewed_legacy`.
 
 
 ## Owner-live `_12`: доказанный отказ на validator 7/8, исправление `_13`
