@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 import unittest
 import subprocess
+from types import SimpleNamespace
+from unittest.mock import patch
 
 BACKEND = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
@@ -173,6 +175,43 @@ class IPFWAdapterTests(unittest.TestCase):
             with self.assertRaises(IPFWAdapterError):
                 invoke()
         self.assertEqual(operations,len(fake.operations))
+
+    def test_actual_cli_verify_legacy_branch_is_read_only(self):
+        """Regression: _14 helper-only tests missed undefined legacy in main."""
+        import voice_ipfw_adapter as module
+        from voice_ipfw_adapter import main
+        prev = {"rule_base": 19000, "rule_max": 19010,
+                "rules": {19000: TCP}, "tables": {}}
+        desired = {"rule_base": 19000, "rule_max": 19010,
+                   "rules": {19000: VOICE, 19001: TCP}, "tables": {}}
+        argv = ["voice_ipfw_adapter.py", "shared", "verify-legacy",
+                "/test/ordinary-strategies", "/test/native-candidate"]
+
+        def is_file(path):
+            return str(path) == "/test/native-candidate/voice-plan.json"
+
+        with patch.object(module, "require_lifecycle_lock"), \
+             patch.object(Path, "stat", return_value=SimpleNamespace(st_uid=0)), \
+             patch.object(Path, "is_file", autospec=True, side_effect=is_file), \
+             patch.object(module, "shared_release_manifest", return_value=desired) as native, \
+             patch.object(module, "legacy_strategies_manifest", return_value=prev) as legacy, \
+             patch.object(module, "FreeBSDIPFWAdapter") as backend, \
+             patch.object(module, "shared_firewall_action") as action:
+            self.assertEqual(0, main(argv))
+            native.assert_called_once_with(Path(argv[4]))
+            legacy.assert_called_once_with(Path(argv[3]), desired)
+            backend.assert_called_once_with(19000, 19010, allow_mutations=False)
+            action.assert_called_once_with(backend.return_value, "verify", prev, prev)
+            self.assertEqual([], backend.return_value.method_calls)
+
+            # The same real CLI must reject a native predecessor without
+            # adopting it as the legacy Strategies owner.
+            action.reset_mock()
+            legacy.reset_mock()
+            with patch.object(Path, "is_file", return_value=True):
+                self.assertEqual(1, main(argv))
+            action.assert_not_called()
+            legacy.assert_not_called()
 
     def test_missing_table_only_on_specific_diagnostic_and_fail_closed(self):
         fake=SimulateFreeBSD()
