@@ -24,16 +24,14 @@ apply_runtime_attest_engine_inventory()
     _apply_census_bin="${COMMON_PS_BIN:-/bin/ps}"
     [ -x "$_apply_census_bin" ] || return 69
     _apply_census_processes=$("$_apply_census_bin" ax -o pid= -o command=) || return 69
+    # ps lists the executable as the first command token (column 2).
+    # Never scan later argv: a shell/diagnostic command mentioning the
+    # dvtws2 path is NOT another running engine. Keep strict PID equality
+    # so genuine duplicate or orphan engine processes still fail closed.
     _apply_census_pids=$(printf '%s\n' "$_apply_census_processes" |
         awk -v expected="$DVTWS_BIN" '
-            {
-                for (i = 2; i <= NF; i++) {
-                    if ($i == expected) {
-                        print $1
-                        break
-                    }
-                }
-            }') || return 69
+            $1 ~ /^[0-9]+$/ && $2 == expected { print $1 }
+        ') || return 69
     if [ "$_apply_engine" = 1 ]; then
         _apply_census_pid=$(common_pidfile_read "$CHILD_PIDFILE") || return 69
         [ -n "$_apply_census_pids" ] &&
