@@ -165,3 +165,7 @@ Unpublished `_23` CI failed the new root-dispatch *test* because its isolated sh
 Internal `_24` CI rejected the actual-entrypoint regression because the pre-existing shared boot test suite had replaced `service_dispatch` with a trace-only stub, so the new entrypoint returned no status text. `_25` narrows the new test's subshell dispatch to invoke actual `shared_apply_status_service`; production status-under-FD9 and package preinstall bridge are unchanged. No `_23`/`_24` testing pkg was published.
 
 Unpublished `_25` exact-head Voice CI passed but Project hygiene rejected `scripts/test-package-lifecycle-restart.sh` mode 0644: tree construction had unintentionally dropped the original executable 0755 bit (also corrected on `scripts/test-shared-apply-boot.sh`). `_26` restores exact script modes; no production code change. Full CI required again before publication.
+
+## Testing `_26` published, installed Voice still pending
+
+PR #375 merged source `53485762181de25e1da823019e979c9af591b06a`, exact CI #39152790833 PASS Voice/Project/FreeBSD15; [release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_26) SHA256 `04196633b5fbc40e21eaaef1ea7542b9017e04e1ea8518589fcbb7f49098149f` verified same tag target. Publication #39153448678 docs-PR permission failure completed by connector #376. Stable repo unchanged. `_22` engine/supervisor/IPFW good and journal restored; owner `_26` install and status/Telegram ON/STUN/CALL all pending.
