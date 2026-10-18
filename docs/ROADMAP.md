@@ -1,15 +1,15 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.3: исправление поставки Voice
+## Текущий приоритет — v0.5.4: измеримый native Voice media path через TNAS
 
-Дефект маршрута `_194` устранён опубликованным и установленным `v0.5.3_2`: владелец подтвердил открытие страницы Voice. Следующий наблюдаемый блокер — английская нативная справка и ошибка преобразования выбранного WAN в Config-кандидате, а также лишний селектор релизов. Владелец утвердил [четыре шага](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) 17.10.2026:
+На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
-1. Исправить штатный UI route, проверить меню/права/form/view и RU/EN.
-2. Проверить адреса через настоящий Router OPNsense на исходниках и собранном пакете; воспроизвести отказ `_194`.
-3. GUI открыт на OPNsense, исправлены RU/native help, WAN и статус; на установленной `_6` подтверждено «Синтаксис проверен (без применения)». Read-only Validate принят.
-4. Следующий рубеж — первый контролируемый Telegram ON Apply с отдельным подтверждением Config, общей службы и Voice/IPFW; после него пройти всё [ТЗ](architecture/VOICE_TRANSMISSION_GUI.md): пять сервисов, сохранение/boot, отдельно UDP/STUN/MEDIA/CALL.
+1. По явному решению владельца зафиксировать [актуальный runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) и [живое evidence](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md), выпустить полный Web/pkg `v0.5.4_1` с честной границей медиа-проверки.
+2. Следующий сетевой тест **A2**: синхронный LAN/WAN PCAP, точная атрибуция оригинальных UDP, extra fake и входящих ответов без изменения production IPFW/PFIL/маршрута.
+3. Затем A3 STUN-aware test с валидным STUN packet/known responder; старый reflector Hello не удовлетворяет текущему `--filter-l7=stun` профилю.
+4. Только по доказанным packet traces — ограниченные сравнения стратегий/TTL/checksum; полный A5 Telegram caller/callee + двусторонний звук обязателен для `CALL_PASS`.
 
-Каждый шаг завершается наблюдаемым результатом; найденный блокер исправляется до следующего участка. Общая архитектура уже реализована в исходниках и сохраняется; её наличие не доказывает готовность установленного продукта. Точные статусы — [приёмка](VOICE_CODE_COMPLETION_GATE.md), следующее действие — [START_HERE](START_HERE.md).
+Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), одно следующее действие — [START_HERE](START_HERE.md), исторический v0.5.3 UI/root-FD9 completion plan — [здесь](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Не делать новую архитектурную переделку или запускать старый PoC runner ради «зелёного» счётчика.
 
 ## Основной завершённый путь
 

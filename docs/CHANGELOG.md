@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [v0.5.4] — full release preparation, 2026-10-19
+
+- Advanced project stage to `0.5.4_1` at the owner's explicit request, preserving the production shared Voice/Strategies backend from installed `0.5.3_28`.
+- Documented the current TNAS/Docker native Voice lab, fixed reflector route via OPNsense, exact test binary checksum and safe A0–A5 progression.
+- Owner-live Telegram native Config/Apply/IPFW capture confirmed: 15s reflector produces 60 packets/4080 bytes on IPFW 19000. **Call did not establish** (Caller/Callee Reconnecting; exit 1); WAN RX/STUN/media/call are still open.
+- Full Web/pkg release publication must independently verify the exact GitHub tag, package/SHA256 and FreeBSD15 Pages repository.
+
 ## [v0.5.2] - 2026-10-16
 
 Full stable OPNsense Web/pkg release: `os-zapret2-restyle-0.5.2_194.pkg`, FreeBSD 15 amd64, [GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.2) and GitHub Pages pkg repository.

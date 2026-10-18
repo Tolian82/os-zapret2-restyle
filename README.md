@@ -4,14 +4,16 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [`v0.5.3`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) · `os-zapret2-restyle-0.5.3_2.pkg` |
-| **Current development candidate (testing prerelease after publication)** | `v0.5.3_26` testing pkg published — fix shared journal read-only status under FD9; owner-live Telegram Apply pending |
+| **Full Web/pkg release (release preparation)** | `v0.5.4` / `os-zapret2-restyle-0.5.4_1.pkg` — publication in progress; [last confirmed stable v0.5.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) |
+| **Current development candidate** | `v0.5.4_1` — native Voice and TNAS lab qualification stage; media/call pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around the upstream [bol-van/zapret2](https://github.com/bol-van/zapret2) runtime. The published stable release includes the native service manager, editable Traffic Strategy, managed targets and **Strategy Lab**. The **v0.5.2 full release** introduces **Voice Transmission**, a five-service STUN/UDP configuration page using the same normal Zapret2 engine and Apply lifecycle. The owner installed `0.5.2_194` and reported that its Voice menu opens “Page not found”. This is a confirmed release defect. The approved v0.5.3 corrective plan keeps the full feature scope. The published `0.5.3_2` corrects the missing Voice UI controller and passed regression tests against the actual OPNsense 26.7 Router, including the extracted FreeBSD package. The owner installed `0.5.3_2` and the Voice page now opens, but native Russian help, the WAN dropdown preview and error localization failed in live use. The owner installed the `0.5.3_3` testing prerelease and confirmed RU help, WAN selection, and syntax check; the GUI wrongly labeled an independently started service as Unknown, and the read-only lifecycle inspector refused OPNsense's native `wwwonly:wheel` Config inode because it expected root ownership. Testing prerelease `_4` now packages both fixes with Voice/Project/FreeBSD CI and a verified SHA-256, while preserving Config/FD9 safety checks; installation and actual lifecycle result on OPNsense 26.7.7 are still pending. Save/Apply, runtime, Voice IPFW, media and real calls remain unaccepted.
+`os-zapret2-restyle` is an independent OPNsense integration around [bol-van/zapret2](https://github.com/bol-van/zapret2). It provides the managed engine, normal Traffic Strategies, Strategy Lab, and a five-service native Voice Transmission editor. The owner installed testing `0.5.3_28` on FreeBSD 15 OPNsense and **successfully saved Telegram ON through the shared Config/FD9/runtime/IPFW Apply**. The service and supervisor were running, the transaction journal was `committed`, and the Voice inspector reported `ready`. This confirms configuration and kernel interception, **not a working media call**.
+
+The 15-second TNAS Docker `tgcalls_cli` reflector experiment on 19 October 2026 routed traffic via OPNsense and increased the native Voice IPFW rule by **60 UDP packets / 4080 bytes**, but Caller/Callee remained `Reconnecting`, and no call was established. The v0.5.4 stage makes the TNAS lab and incremental media-path verification explicit; see the [current operator runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) and [first-run evidence](docs/verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Release packaging does not imply STUN or a completed call.
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
@@ -65,9 +67,9 @@ Profiles are separated with the normal Zapret2 boundary:
 
 The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
 
-## Voice Transmission — v0.5.2
+## Voice Transmission — native common engine (v0.5.4)
 
-The **Services → Zapret2 → Voice Transmission / Передача голоса** page (broken in released `0.5.2_194`, route corrected in released `0.5.3_2`) is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
+The **Services → Zapret2 → Voice Transmission / Передача голоса** page is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
 
 - Each service has an enable checkbox, editable multiline native `dvtws2` STUN/UDP parameters, and one named destination IPv4 IPSET. Its text and addresses remain saved when disabled.
 - Telegram shares the existing `hostlist.telegramips` dataset with Traffic Strategy; the other named IPSETs are also available to ordinary strategies.
@@ -76,7 +78,7 @@ The **Services → Zapret2 → Voice Transmission / Передача голос�
 - The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
 - When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
 
-**Current verification boundary:** `v0.5.3` is a published full GitHub Release and FreeBSD 15 package repository update correcting the `0.5.2_194` Voice route defect. Its source and extracted `.pkg` passed the real OPNsense Router regression, and the owner confirmed that the installed `0.5.3_2` page opens with five profile fields. However, Russian field help and the WAN candidate failed in live testing; their `_3` correction is not yet accepted. GUI/CONFIG/BOOT, UDP/STUN, media and real calls remain **PENDING**, not PASS. SIP signaling/RTP, Discord discovery and Telegram non-STUN traffic remain ordinary-strategy concerns, not automatically handled by the STUN label. The existing TCP/proxy/routing configuration is outside this feature.
+**Current verification boundary:** owner-live `0.5.3_28` confirms Telegram ON, committed native Apply, one running `dvtws2`, healthy supervisor, 14 destination CIDRs and outbound UDP interception through IPFW rule 19000. The 15s TNAS reflector generated 60/4080 intercepted packets but returned `Call established: no`; `media_verified=false` and `call_verified=false` remain correct. Validated STUN payload/response and two-way audio are separate acceptance gates. The independent Squid/sing-box/SSH/routing lab is **not** automatically managed by the plugin. Current lab/test matrix: [native TNAS runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
 
 For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
 
@@ -234,7 +236,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Current published full release: **v0.5.3 / 0.5.3_2** (Voice UI route correction). [Release publication evidence](docs/verification/evidence/2026-10-17-v0.5.3-release-publication.md). Installed page opening was observed by the owner on `_2`; RU help/WAN and full Voice GUI/CONFIG/BOOT/STUN/MEDIA/CALL acceptance remain pending.
+Full release candidate: **v0.5.4 / 0.5.4_1** (publication verification pending at release-preparation time). [Latest confirmed prior stable release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3). Native Telegram ON, Config, engine/supervisor and IPFW capture passed on owner-installed `_28`; **STUN/remote UDP/media/call remain unverified**. See [lab](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
 
 Useful entry points:
 
@@ -242,6 +244,7 @@ Useful entry points:
 - [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/INDEX.md`](docs/INDEX.md)
+- [`Native Voice TNAS lab`](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md)
 - [`docs/architecture/`](docs/architecture/)
 - [`docs/verification/`](docs/verification/)
 
@@ -252,11 +255,3 @@ This independent project builds on open-source work by **bol-van** and **Umur Go
 ## License
 
 MIT. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
-
-Current Voice live acceptance: owner installed `_4`; read-only lifecycle inspector works and confirms saved Voice profiles OFF, while GUI reports a WAN validation error and uncertain Apply result. `_5` is now a separately published testing prerelease correcting a proven pre-dispatch error classification defect and providing read-only validation-stage diagnostics. It is not installed or accepted on the owner's OPNsense; successful Voice Apply or real calls are still unproven. No blind re-Apply is advised.
-
-Testing candidate `v0.5.3_27` fixes native Model InterfaceField getNodes/setNodes mismatch by updating only the approved changed fields. Owner-live acceptance is still required.
-
-The `_27` native OPNsense scalar-leaf change is advanced as unshipped `_28` after updating the CI model fixture to implement `setNodeByReference`. Live acceptance remains open.
-
-Verified testing package [`v0.5.3_28`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_28) is published; owner installed Telegram ON and call acceptance pending, stable repository unchanged.
