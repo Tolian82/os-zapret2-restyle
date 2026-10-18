@@ -270,8 +270,8 @@ class IPFWAdapterTests(unittest.TestCase):
             ipfw_calls.append(tuple(argv))
             if argv[1:] == ["-q", "list"]:
                 return subprocess.CompletedProcess(argv, 0,
-                    stdout="19000 " + " ".join(TCP) + "\\n" +
-                           "19001 " + " ".join(UDP) + "\\n", stderr="")
+                    stdout="19000 " + " ".join(TCP) + "\n" +
+                           "19001 " + " ".join(UDP) + "\n", stderr="")
             if len(argv) == 4 and argv[1] == "table" and argv[3] == "info":
                 return subprocess.CompletedProcess(argv, 71, stdout="", stderr=missing)
             raise AssertionError("unplanned IPFW command: " + repr(argv))
@@ -285,7 +285,7 @@ class IPFWAdapterTests(unittest.TestCase):
         with patch.object(module, "require_lifecycle_lock"), \
              patch.object(Path, "stat", return_value=SimpleNamespace(st_uid=0)), \
              patch.object(Path, "is_file", autospec=True,
-                          side_effect=lambda p: str(p).endswith("/voice-plan.json")), \
+                          side_effect=lambda p: str(p) == "/test/native-candidate/voice-plan.json"), \
              patch.object(module, "shared_release_manifest", return_value=candidate), \
              patch.object(module, "legacy_strategies_manifest", return_value=active), \
              patch.object(module, "FreeBSDIPFWAdapter", side_effect=native_adapter):
