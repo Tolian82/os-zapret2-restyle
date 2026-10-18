@@ -95,3 +95,7 @@ Source CI #39148988899 PASS, FreeBSD15 testing pkg SHA-256 `0d2dca31eed8f12dafc6
 ## v0.5.3_26 status FD9 gate
 
 The owner confirmed full prior Strategies state after reviewed recovery on `_22`: journal=restored, engine/supervisor/IPFW production checks all OK. Existing common journal read under `status` lacked FD9, causing false incomplete. `_23` reuses the lifecycle lock before read-only status journal inspection, and tests actual entrypoint. No live Telegram Voice ON, STUN/media/call claim.
+
+## Published testing `_26`, live Telegram Voice still OPEN
+
+Exact source PR #375, CI #39152790833 PASS, pkg SHA-256 `04196633b5fbc40e21eaaef1ea7542b9017e04e1ea8518589fcbb7f49098149f`, tag/source verified. Owner currently confirmed `_22` full old Strategies engine/supervisor/IPFW plus restored journal; `status` old FD9 defect fixed in `_26`. Need live status proof then single Telegram ON Apply and STUN/MEDIA/CALL.
