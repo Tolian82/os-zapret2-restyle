@@ -179,7 +179,7 @@ namespace {
         ],
     ];
     $candidate = [
-        'voice' => ['waninterface' => 'WAN'],
+        'voice' => [],
         'hostlist' => [],
     ];
     foreach (['telegram','discord','x','sip','custom'] as $service) {
