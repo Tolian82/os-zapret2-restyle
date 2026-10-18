@@ -75,3 +75,7 @@ Source PR #368 merged `6501b0f`, source Voice/Project/FreeBSD15 CI #39134787692 
 ## v0.5.3_19 — FreeBSD missing native Voice tables; installed result OPEN
 
 On installed `_17`, `runtime-preflight` fails because FreeBSD 15 says `ipfw: failed to request table info: No such process` (rc71) for ten Voice tables that are normally absent until initial shared Apply. Existing Strategy divert 19000 TCP/19001 UDP (989, vtnet1) remain intact. `_18` contains narrow table-info rc71/diagnostic recognition and native CLI regression; real Telegram saved ON, new IPFW, STUN and bidirectional CALL not yet accepted.
+
+## v0.5.3_19 packaged — live gate still pending
+
+Source/FreeBSD15 CI #39142330715 PASS, source merge `ff43ed56`, [testing `_19`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_19) SHA-256 `57ac0eb1b9ce873aa5821bf2c633d72af2bcd3d5ecf879f63de4fac854bd541f` published and verified. Owner confirmed on `_17` that FreeBSD15 uninitialized Voice table info uses rc71 and `No such process`; code now handles that narrow absence. Installed `_19` saved Voice ON, IPFW and bidirectional STUN/MEDIA/CALL not yet evidenced.
