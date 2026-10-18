@@ -118,3 +118,8 @@ Owner-live `_14`: GUI Apply снова пишет «Результат прим�
 ## v0.5.3_16 — подготовленный общий runtime с корректными правами
 
 Owner-live `_15`: Telegram Apply rc69, Config OFF, Voice uninitialized; `configd` 16:15:15 +0300: `runtime root must have mode 0755: .../shared-work/<id>/release`. Normal Start/Reconfigure выставляют 0755, а shared-Apply _15 пропускал шаг до seal. `_16` исправляет только release и валидирует его до seal, оставляет private shared-work 0700, переводит новые безопасные preflight-этапы в GUI. CI, package, live Config/runtime/IPFW/STUN/MEDIA/CALL требуют отдельного подтверждения.
+
+
+## Testing `_16` — публикация подтверждена, установленная работа ещё нет
+
+Source [PR #366](https://github.com/Tolian82/os-zapret2-restyle/pull/366) merged `8c50c401f4494d76a674cfa80d1b7150193eeb61`; точный Voice/Project/FreeBSD 15 CI [#39132346651](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132346651) успешен. Пакет [v0.5.3_16](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.3_16/os-zapret2-restyle-0.5.3_16.pkg) SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f` опубликован из того же source; [workflow #39132944747](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39132944747) подтвердил tag/asset/ABI, но шаг createPR отказал по правам Actions и оформлен connector PR #367. Stable repo не менялся. Saved Telegram ON, общий runtime/IPFW/STUN/MEDIA/CALL на установленной `_16` ещё OPEN.

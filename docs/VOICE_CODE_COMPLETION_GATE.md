@@ -59,3 +59,7 @@ Owner-live `_13` confirmed READY 8/8, `LEGACY_NO_VOICE_PLAN`, `SEALED`, journal 
 ## v0.5.3_16 — подтверждённая ошибка staged release на установленной `_15`
 
 18.10.2026: owner-live `_15` Telegram ON Apply завершился rc69 до сохранения Config. В `configd` точный stderr: `runtime root must have mode 0755: .../shared-work/<id>/release`. `_16` финализирует именно release до bundle seal и проверяет режимы через штатный валидатор, сохраняя workspace 0700. Русский GUI перестаёт маскировать `bundle-verify/config-preflight/runtime-preflight`. CI/пакет и installed Telegram ON, IPFW, STUN/MEDIA/CALL ещё не приняты.
+
+## Опубликованная `_16`: проверено в CI, не принято на OPNsense
+
+Из исходного PR #366 `8c50c401` тесты Voice/Project/FreeBSD15 #39132346651 успешны. GitHub testing package опубликован #39132944747, SHA-256 `b55e5a2ed8d018918f4b0bd4a8bebd3703a2dbdffea3ff4ba0d9bf2b27ef246f`. После install требуется один Telegram ON Apply с явным подтверждением Config ON и общего runtime/IPFW. STUN/MEDIA/CALL принимаются отдельно. Публикация сама по себе не закрывает реальный дефект на устройстве.
