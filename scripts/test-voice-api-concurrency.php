@@ -558,7 +558,7 @@ namespace {
     foreach (['telegram','discord','x','sip','custom'] as $service) {
         Zapret::$nodes['voice'][$service]['enabled'] = '0';
     }
-    $offlineForm = ['voice' => Zapret::$nodes['voice'], 'hostlist' => []];
+    $offlineForm = ['voice' => array_diff_key(Zapret::$nodes['voice'], ['waninterface' => true]), 'hostlist' => []];
     foreach (['telegram','discord','x','sip','custom'] as $service) {
         $offlineForm['hostlist'][$service . 'ips'] = Zapret::$nodes['hostlist'][$service . 'ips'];
     }
