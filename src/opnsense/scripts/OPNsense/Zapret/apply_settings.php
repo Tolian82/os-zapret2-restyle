@@ -35,6 +35,46 @@ final class SharedConfigCommit
      * Injected dependencies keep the OPNsense lock/save contract testable
      * without a live router or independent persistence implementation.
      */
+    /**
+     * Native MVC getNodes() returns option dictionaries for InterfaceField
+     * and OptionField. The inverse setNodes() REJECTS such dictionaries:
+     * leaf updates require one scalar. Never feed a full read-only snapshot
+     * back to OPNsense (particularly the unchanged Strategies WAN).
+     *
+     * mergeForCommit() has already verified the exact changed-field whitelist
+     * and complete candidate. Mutate ONLY those approved leaf nodes on the
+     * fresh in-memory model, for both preflight and real Config save.
+     */
+    public static function validateOwnedModelFields(
+        object $model,
+        array $target,
+        array $changedFields
+    ): void {
+        foreach ($changedFields as $reference) {
+            if (!is_string($reference) ||
+                !preg_match('/^[a-z]+(?:\.[a-z]+){1,2}$/D', $reference)) {
+                throw new \InvalidArgumentException('Invalid native changed-field reference');
+            }
+            $value = $target;
+            foreach (explode('.', $reference) as $part) {
+                if (!is_array($value) || !array_key_exists($part, $value)) {
+                    throw new \InvalidArgumentException('Missing native changed-field leaf');
+                }
+                $value = $value[$part];
+            }
+            if (!is_string($value) ||
+                $model->setNodeByReference($reference, $value) !== true) {
+                throw new \InvalidArgumentException('Native changed-field leaf refused');
+            }
+        }
+        $errors = $model->performValidation(false);
+        if (count($errors) > 0) {
+            throw new \InvalidArgumentException(
+                'Native OPNsense model rejected the shared Apply candidate'
+            );
+        }
+    }
+
     public static function persist(
         array $plan,
         string $page,
@@ -60,13 +100,7 @@ final class SharedConfigCommit
                     'change_count' => 0,
                 ];
             }
-            $model->setNodes($target);
-            $errors = $model->performValidation(false);
-            if (count($errors) > 0) {
-                throw new \InvalidArgumentException(
-                    'Native OPNsense model rejected the shared Apply candidate'
-                );
-            }
+            self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
             if (!$model->serializeToConfig(false, true)) {
                 throw new \RuntimeException(
                     'Native OPNsense model serialization failed'

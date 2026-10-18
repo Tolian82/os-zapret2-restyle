@@ -99,3 +99,7 @@ The owner confirmed full prior Strategies state after reviewed recovery on `_22`
 ## Published testing `_26`, live Telegram Voice still OPEN
 
 Exact source PR #375, CI #39152790833 PASS, pkg SHA-256 `04196633b5fbc40e21eaaef1ea7542b9017e04e1ea8518589fcbb7f49098149f`, tag/source verified. Owner currently confirmed `_22` full old Strategies engine/supervisor/IPFW plus restored journal; `status` old FD9 defect fixed in `_26`. Need live status proof then single Telegram ON Apply and STUN/MEDIA/CALL.
+
+## v0.5.3_27 — OPNsense scalar native leaf validation before cutover
+
+Owner `_26` read-only reproduction: whole `getNodes` to `setNodes()` failed on untouched `general.waninterface` selected options dictionary. `_27` uses scalar changed-fields leaf setter and identical native validation before runtime; only actual Telegram ON/IPFW and STUN/CALL close this gate.
