@@ -80,6 +80,6 @@ On installed `_17`, `runtime-preflight` fails because FreeBSD 15 says `ipfw: fai
 
 Source/FreeBSD15 CI #39142330715 PASS, source merge `ff43ed56`, [testing `_19`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_19) SHA-256 `57ac0eb1b9ce873aa5821bf2c633d72af2bcd3d5ecf879f63de4fac854bd541f` published and verified. Owner confirmed on `_17` that FreeBSD15 uninitialized Voice table info uses rc71 and `No such process`; code now handles that narrow absence. Installed `_19` saved Voice ON, IPFW and bidirectional STUN/MEDIA/CALL not yet evidenced.
 
-## v0.5.3_20 — native supervisor callback and blocked live recovery gate
+## v0.5.3_21 — native supervisor callback and blocked live recovery gate
 
 Live `_19` requires-review: new dvtws2 launched 19:15:11 without supervisor, legacy runtime/IPFW remain, Config Telegram OFF. Exact code defect: absent service-level `SERVICE_SCRIPT` despite two uses inside `apply_runtime.sh` and executable check in `supervisor_start`. Tests previously mocked this variable and missed the failure. `_20` explicitly pins the native callback and regression-checks real service header plus full activation/restore forwarding. The already blocked `requires-review` journal is NOT auto-recovered; appliance safety and actual Telegram ON/IPFW/STUN/CALL still OPEN.

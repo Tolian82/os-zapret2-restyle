@@ -79,11 +79,18 @@ BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret
 # supply SERVICE_SCRIPT when production leaves it unset (the owner-live _19
 # failure). Do not source the full CLI dispatcher or touch any real runtime.
 SERVICE_SOURCE="$BASE/../zapret_service.sh"
+# Git stores the root service script as a source file (0644); its installed
+# OPNsense package path is executable. Mirror ONLY that packaging mode in a
+# disposable test tree, rather than asserting the Git checkout is executable.
+NATIVE_INSTALL="$ROOT/installed"
+mkdir -p "$NATIVE_INSTALL"
+cp "$SERVICE_SOURCE" "$NATIVE_INSTALL/zapret_service.sh"
+chmod 0755 "$NATIVE_INSTALL/zapret_service.sh"
 awk '/^ensure_runtime_components\(\)$/ { exit } { print }' "$SERVICE_SOURCE" > "$ROOT/service-header.sh"
 [ -s "$ROOT/service-header.sh" ] || fail "native service entrypoint header unavailable"
 (
     unset SERVICE_SCRIPT
-    SCRIPT_DIR="$BASE/.."
+    SCRIPT_DIR="$NATIVE_INSTALL"
     BACKEND_DIR="$BASE"
     . "$ROOT/service-header.sh"
     [ "$SERVICE_SCRIPT" = "$SCRIPT_DIR/zapret_service.sh" ] &&
@@ -101,7 +108,7 @@ DVTWS_BIN="$ROOT/engine"; : > "$DVTWS_BIN"; chmod +x "$DVTWS_BIN"
 ACTIVE_DIR="$ROOT/active"; BACKUP_ROOT="$ROOT/backup"
 CHILD_PIDFILE="$ROOT/child"; SUPERVISOR_DAEMON_PIDFILE="$ROOT/sd"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/sm"; SUPERVISOR_LOOP="$ROOT/loop"
-SERVICE_SCRIPT="$BASE/../zapret_service.sh"; DVTWS_LOG="$ROOT/dvtws.log"
+SERVICE_SCRIPT="$NATIVE_INSTALL/zapret_service.sh"; DVTWS_LOG="$ROOT/dvtws.log"
 SUPERVISOR_LOG="$ROOT/supervisor.log"
 for name in one two off; do
     mkdir -p "$ROOT/$name"
