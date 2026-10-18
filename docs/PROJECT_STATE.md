@@ -4,9 +4,9 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 ## Версия, пакет и граница доставки
 
-- `VERSION=0.5.4`, `PLUGIN_REVISION=1`; package candidate: `os-zapret2-restyle-0.5.4_1.pkg`. Это явно порученный новый третий-компонентный этап и полный release preparation, а не незапрошенная перестройка backend. До выполнения CI/Release workflow **не** утверждать, что tag/pkg или Pages уже опубликованы.
+- `VERSION=0.5.4`, `PLUGIN_REVISION=1`; package candidate: `os-zapret2-restyle-0.5.4_1.pkg`. Это явно порученный новый этап, **полный Web/pkg v0.5.4 опубликован** из `b3c57106`: [релиз](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4), [workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035) SUCCESS Validate/Build/Publish Release/Deploy Pages; sha256 пакета `3cf80db941a701024c15936371ee2d30fb7ef12c0b5209608ff633ba2f9d6bb9`. Владелец установку `_1` через GUI ещё не подтвердил.
 - Последний проверенный пользователем пакет: `os-zapret2-restyle-0.5.3_28`, source [PR #377](https://github.com/Tolian82/os-zapret2-restyle/pull/377), [CI #39165184611](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39165184611), прежний [testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_28). Он успешно применил native Telegram ON с `committed` и `ready` на реальной OPNsense, без rollback/errors.
-- Предыдущая полная Web/pkg поставка: [v0.5.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) (`0.5.3_2`), [исторические доказательства](verification/evidence/2026-10-17-v0.5.3-release-publication.md). При появлении нового `v0.5.4` статус публикации обновляется только по подтверждённым тегу, pkg, SHA и Pages, не по плану.
+- Предыдущая полная Web/pkg поставка: [v0.5.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) (`0.5.3_2`), [исторические доказательства](verification/evidence/2026-10-17-v0.5.3-release-publication.md). Новый [v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) имеет подтверждённые tag, pkg, SHA256 и Pages через GitHub Actions, отдельная [запись публикации](verification/evidence/2026-10-19-v0.5.4-full-release-publication.md).
 - Платформа OPNsense 26.7 / FreeBSD 15 amd64, native Python 3.13. Единая служба `zapret`, один `dvtws2` и один supervisor; нативная общая транзакция Config/FD9/runtime/IPFW. Новые отдельные Voice daemon/PoC и старый `192.168.1.140` маршрут не являются текущей архитектурой.
 
 ## Приёмка на устройстве — подтверждено
@@ -23,7 +23,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 ## Следующий технический рубеж
 
-1. Завершить полный релиз `v0.5.4_1`: exact CI, FreeBSD/pkg checksum, immutable semantic tag `v0.5.4`, GitHub release, Pages/pkg-repository и README gate. Исполнимость media **не** выдавать за успешную.
+1. **Выполнено:** полный релиз v0.5.4_1, PR #379, CI, tag, GitHub pkg+SHA256 и Pages/pkg-repository. GUI обновление владельцем не проверено, MEDIA/CALL остаются открыты.
 2. После релиза A2: синхронно захватить LAN и WAN `host 91.108.13.10 and udp port 596`, сравнить направления и размеры/контрольные суммы/TTL, ответы и счётчик IPFW; без изменения маршрута/IPFW/PFIL.
 3. Затем A3: отдельный валидный STUN-aware тест с подтверждённым STUN responder; текущая reflector Hello-проба не соответствует фильтру STUN профиля. A4 изолированные сравнения/изменения **только** после точного сетевого доказательства. A5 реальный двусторонний звонок — окончательная отдельная приёмка.
 

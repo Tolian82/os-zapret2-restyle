@@ -4,7 +4,7 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release (release preparation)** | `v0.5.4` / `os-zapret2-restyle-0.5.4_1.pkg` — publication in progress; [last confirmed stable v0.5.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) |
+| **Full Web/pkg release** | [v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) · `os-zapret2-restyle-0.5.4_1.pkg` · FreeBSD 15 pkg repository deployed |
 | **Current development candidate** | `v0.5.4_1` — native Voice and TNAS lab qualification stage; media/call pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
@@ -236,7 +236,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Full release candidate: **v0.5.4 / 0.5.4_1** (publication verification pending at release-preparation time). [Latest confirmed prior stable release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3). Native Telegram ON, Config, engine/supervisor and IPFW capture passed on owner-installed `_28`; **STUN/remote UDP/media/call remain unverified**. See [lab](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
+Full Web/pkg release: **[v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) / 0.5.4_1**, verified by [release workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035). Native Telegram ON, Config, engine/supervisor and IPFW capture passed on owner-installed `_28`; **STUN/remote UDP/media/call remain unverified**. See [lab](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
 
 Useful entry points:
 
