@@ -74,6 +74,27 @@
             });
         }
 
+        // Keep known pre-dispatch errors localized like the rest of the UI.
+        // Other PHP exception strings are not suitable as UI translations.
+        function localizeStrategiesApplyError(message) {
+            if (!isRussian) return message;
+            const translations = {
+                'Candidate changes fields outside the owning form':
+                    'Кандидат изменяет поля, не принадлежащие форме «Стратегии».',
+                'Candidate changes a foreign field':
+                    'Кандидат изменяет постороннее поле конфигурации.',
+                'Shared change map omits candidate field':
+                    'В списке изменений отсутствует поле кандидата.',
+                'Shared change map includes unchanged field':
+                    'В списке изменений указано неизменённое поле.',
+                'Strategies candidate field validation refused':
+                    'Проверка изменённого поля стратегии не пройдена.',
+                'Missing or invalid Strategies baseline; reload this page':
+                    'Исходное состояние стратегии не подтверждено. Обновите страницу.'
+            };
+            return translations[message] ||
+                'Предварительная проверка настроек не пройдена. Изменения не применены.';
+        }
         function showRuntimeError(title, message) {
             BootstrapDialog.show({
                 type: BootstrapDialog.TYPE_DANGER,
@@ -317,7 +338,8 @@
                     } else if (typeof data.message === 'string' && data.message) {
                         // Only explicitly rejected, pre-dispatch errors are
                         // editable without a new Config snapshot.
-                        showRuntimeError(runtimeText.applyError, data.message);
+                        showRuntimeError(runtimeText.applyError,
+                            localizeStrategiesApplyError(data.message));
                     }
                     finishApply();
                 }

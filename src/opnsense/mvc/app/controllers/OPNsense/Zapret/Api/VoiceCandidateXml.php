@@ -140,12 +140,17 @@ final class VoiceCandidateXml
             } elseif (isset($expected[$field])) {
                 throw new \InvalidArgumentException('Shared change map includes unchanged field');
             }
-            $pointer = &$rebuilt;
-            foreach ($parts as $part) {
-                $pointer = &$pointer[$part];
+            // A displayed dropdown scalar does not replace its native
+            // selected-option dictionary when the value is unchanged.
+            // Only explicitly changed form-owned fields may be overlaid.
+            if (isset($expected[$field])) {
+                $pointer = &$rebuilt;
+                foreach ($parts as $part) {
+                    $pointer = &$pointer[$part];
+                }
+                $pointer = $after;
+                unset($pointer);
             }
-            $pointer = $after;
-            unset($pointer);
         }
         if ($rebuilt !== $candidate) {
             throw new \InvalidArgumentException('Candidate changes fields outside the owning form');

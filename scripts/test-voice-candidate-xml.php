@@ -205,6 +205,69 @@ $created = VoiceCandidateXml::render(
 );
 must(str_contains($created, '<telegram>'), 'missing Voice section not created');
 
+// Real OPNsense getNodes() uses selected-option dictionaries for dropdowns.
+// A no-op form must retain their structure through BOTH native validations.
+$nativePrevious = records();
+$nativePrevious['general']['waninterface'] = [
+    'WAN' => ['value' => 'WAN', 'selected' => 1],
+    'LAN' => ['value' => 'LAN', 'selected' => 0],
+];
+$nativePrevious['hostlist']['mode'] = [
+    'list' => ['value' => 'list', 'selected' => 1],
+    'auto' => ['value' => 'auto', 'selected' => 0],
+];
+$nativeForm = [
+    'general' => ['waninterface' => 'WAN'],
+    'hostlist' => ['mode' => 'list', 'telegramips' => '91.108.0.0/16'],
+    'strategy' => ['trafficargs' => $nativePrevious['strategy']['trafficargs']],
+];
+$nativeNoOp = SettingsApply::prepareStrategies(
+    $nativePrevious, $nativeForm, '91.108.0.0/16'
+);
+must($nativeNoOp['changed_fields'] === [] &&
+    $nativeNoOp['candidate'] === $nativePrevious,
+    'native dropdown no-op incorrectly changed fields');
+must(SettingsApply::mergeForCommit($nativePrevious, $nativeNoOp, 'strategies')
+    === $nativePrevious, 'native no-op merge refused option dictionaries');
+must(VoiceCandidateXml::renderStrategies(
+    $liveXml, $nativePrevious, $nativeNoOp['candidate'], []
+) === $liveXml, 'native dropdown no-op XML renderer refused');
+
+$nativeChangedForm = $nativeForm;
+$nativeChangedForm['strategy']['trafficargs'] = '--filter-tcp=80';
+$nativeChanged = SettingsApply::prepareStrategies(
+    $nativePrevious, $nativeChangedForm, '91.108.0.0/16'
+);
+must($nativeChanged['changed_fields'] === ['strategy.trafficargs'],
+    'one changed Strategy marked additional dropdown fields');
+must(SettingsApply::mergeForCommit($nativePrevious, $nativeChanged, 'strategies')
+    === $nativeChanged['candidate'],
+    'native changed Strategy merge refused dropdown dictionaries');
+$nativeXml = VoiceCandidateXml::renderStrategies(
+    $liveXml, $nativePrevious, $nativeChanged['candidate'],
+    $nativeChanged['changed_fields']
+);
+$nativeDom = new \DOMDocument();
+must($nativeDom->loadXML($nativeXml), 'native edited XML malformed');
+$nativeXpath = new \DOMXPath($nativeDom);
+must($nativeXpath->evaluate('string(/opnsense/OPNsense/Zapret/strategy/trafficargs)')
+    === '--filter-tcp=80', 'native Strategy edit missing in XML');
+must($nativeXpath->evaluate('string(/opnsense/OPNsense/Zapret/general/waninterface)')
+    === 'WAN', 'native WAN dropdown unexpectedly changed');
+must($nativeXpath->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/mode)')
+    === 'list', 'native hostlist dropdown unexpectedly changed');
+must($nativeXpath->evaluate('string(/opnsense/OPNsense/Zapret/voice/telegram/enabled)')
+    === '0', 'native Strategies edit modified Voice');
+$foreign = $nativeChanged['candidate'];
+$foreign['voice']['telegram']['enabled'] = '1';
+refuses(fn() => VoiceCandidateXml::renderStrategies(
+    $liveXml, $nativePrevious, $foreign, $nativeChanged['changed_fields']
+), 'native Strategy scope accepted foreign Voice mutation');
+$unclaimedShape = $nativeNoOp['candidate'];
+$unclaimedShape['general']['waninterface'] = 'WAN';
+refuses(fn() => VoiceCandidateXml::renderStrategies(
+    $liveXml, $nativePrevious, $unclaimedShape, []
+), 'native candidate accepted unclaimed dropdown shape mutation');
 // Both public forms must produce one full detached candidate without
 // introducing a second Config writer or silently replacing the Voice subtree.
 $strategyForm = [
