@@ -85,7 +85,11 @@ def main() -> None:
     for marker in ("base_form", "frm_VoiceSettings", "/api/zapret/voice/load",
                    "voiceServiceState", "voiceServiceControl", "voiceImplementationNotice"):
         check(marker in view, f"Voice view missing {marker}")
-    for marker in ("'Передача голоса'", "'Voice Transmission'",
+    menu_runtime = (MENU.parent / "Menu.php").read_text(encoding="utf-8")
+    check("'Voice' => 'Передача голоса'" in menu_runtime and
+          menu.find("./Services/Zapret/Voice").get("VisibleName") == "Voice Transmission",
+          "Voice navigation translation must be owned by the native menu builder")
+    for marker in (
                    "'Параметры передачи голоса'",
                    "'Voice Transmission Parameters'", "'Как работают голосовые профили'",
                    "'About Voice Profiles'", "'Служба Zapret2'", "'Zapret2 Service'"):

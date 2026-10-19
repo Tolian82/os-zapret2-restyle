@@ -50,9 +50,6 @@
                 ? 'Результат применения неизвестен. Перезагрузите страницу и проверьте состояние службы и настроек перед повтором.'
                 : 'Apply result is uncertain. Reload the page and inspect the service and settings before retrying.'
         };
-        $('a[href="/ui/zapret"]').text(isRussian ? 'Стратегия' : 'Strategy');
-        $('a[href="/ui/zapret/voice"]').text(isRussian ? 'Передача голоса' : 'Voice Transmission');
-        $('a[href="/ui/zapret/diagnostics"]').text(isRussian ? 'Лаборатория' : 'Laboratory');
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
