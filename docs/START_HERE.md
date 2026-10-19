@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.5_4`. `VERSION=0.5.5`, `PLUGIN_REVISION=4`. Это **опубликованный testing prerelease** исправления Strategies Apply (не стабильный Pages/pkg upgrade); владелец пока использует `0.5.5_1`. [Тестовый пакет](releases/v0.5.5.md) · [протокол](verification/evidence/testing-publications/v0.5.5_3.md). Владелец 19.10.2026 подтвердил на OPNsense исправленную компоновку наблюдений Voice и корректную RU-локализацию трёх пунктов меню, закрыл обе UI-задачи и прямо поручил полный Web/pkg релиз `v0.5.5_1` (`DEV-034`, `DEV-039`, `CHAT-017`). Успешный GUI не означает подтверждённый Telegram-звонок.
+**Current handoff identity:** `v0.5.5_4`. `VERSION=0.5.5`, `PLUGIN_REVISION=4`. Это текущий исходный кандидат исправления Strategies Apply (CI ещё не завершена, пакет `_4` пока не опубликован); владелец использует `0.5.5_1`. Ранее опубликованный testing `_3` исправлял только диагностику отказов. [Тестовый пакет](releases/v0.5.5.md) · [протокол](verification/evidence/testing-publications/v0.5.5_3.md). Владелец 19.10.2026 подтвердил на OPNsense исправленную компоновку наблюдений Voice и корректную RU-локализацию трёх пунктов меню, закрыл обе UI-задачи и прямо поручил полный Web/pkg релиз `v0.5.5_1` (`DEV-034`, `DEV-039`, `CHAT-017`). Успешный GUI не означает подтверждённый Telegram-звонок.
 
 ## Подтверждено на установленной `0.5.3_28`
 
