@@ -30,3 +30,15 @@ The 40-byte UDP payload belongs to the historical *Reflector Hello* test, **not*
 A2 establishes WAN-side egress and a repeated shorter-packet pattern. No further package, SSH, route, container, service or IPFW readiness repetitions are justified absent a change. The initial offline packet accounting and hex analysis are complete (LAN six source tuples ×30; WAN 60 original +120 zero16; 0 replies). The immediate next action is **read-only examination of the effective merged `/usr/local/etc/zapret2/runtime-v2/traffic.conf` selectors** to attribute Hello handling to native `voice-telegram` or a separate ordinary profile; if necessary, use saved PCAP for NAT-flow-to-LAN-candidate correlation. No new media experiment is required for this. Cross-check only the effective live process arguments when necessary to attribute the observed manipulation. Do **not** perform another live reflector run merely to reproduce the same 60/4080 result.
 
 After the offline A2 attribution, A3 is a separate validated STUN packet/responder trial. Any controlled strategy change requires its own explicit, evidence-based hypothesis and measurement. A5 actual bidirectional audio call remains open.
+
+## Active merged profile attribution (owner-live inspection, same installed `0.5.5_1`)
+
+The owner read the selectors in `/usr/local/etc/zapret2/runtime-v2/traffic.conf`, without Apply or restarting the service:
+
+- **Profile 1:** `--name=voice-telegram`, `--filter-l3=ipv4`, managed Telegram IPSET, `--filter-udp=*`, `--filter-l7=stun`, `--payload=stun`, `--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2`.
+- **Profile 4:** ordinary Strategy, `--filter-l3=ipv4`, `--filter-udp=596-599`, identical managed Telegram IPSET, `--payload=unknown`, `--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:repeats=2`.
+- Other active profiles (2, 3, 5) cover HTTP/TLS and are not candidates for this UDP/596 experiment.
+
+The captured 40-byte Reflector Hello has no standard STUN magic cookie. Its `unknown` type, destination port 596, two matching zero16 fakes and correct target IP identify **ordinary Profile 4 as the packet-processing candidate**. This is stronger than the earlier payload-only inference, although there is no per-packet engine log attributing profile IDs. Native Voice **Profile 1 was not exercised as STUN** by the A2 reflector run. No changes to effective profiles were performed.
+
+**Next single bounded trial:** A3a sends one RFC 8489 valid 20-byte STUN Binding Request from Docker host-mode TNAS bound to `192.168.1.100`, to `91.108.13.10:3478` while passively capturing OPNsense WAN UDP/3478. Port 3478 lies outside Profile 4's `596-599`; it is inside native Voice Profile 1's `--filter-udp=*` and same Telegram IPSET. Expected local wire indication of native STUN processing: one original STUN payload 20 plus two 16-byte zero fakes; no response is promised from this **unverified** port/server. This is an outbound-path profile isolation test only, **not A3 STUN_RX qualification**, which separately requires a known STUN responder. Do not run another reflector A1/A2 or edit routing, IPFW, PFIL, Proxy or Config for A3a.
