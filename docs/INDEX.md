@@ -16,12 +16,14 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — текущая линия v0.5.x, этап v0.5.4
+## Level 2 — текущая линия v0.5.x, этап v0.5.5
 
 - [Native Voice TNAS lab — текущий runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) — доступ, маршрут, безопасные тесты A0–A5 и приёмка.
 - [Первый native reflector опыт](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md) — факт 60/4080 и незавершённый звонок.
 - [Публикация v0.5.4](verification/evidence/2026-10-19-v0.5.4-full-release-publication.md) — immutable tag/CI/pkg/Pages evidence.
-- [Полный релиз v0.5.4](releases/v0.5.4.md) — точная идентичность и граница поставки.
+- [Подготовка релиза v0.5.5](releases/v0.5.5.md) — точная новая идентичность, GUI-приёмка и граница поставки.
+- [Принятая Voice GUI/меню локализация](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md) — owner-live закрытие UI дефектов.
+- [Полный релиз v0.5.4](releases/v0.5.4.md) — история предыдущей стабильной поставки.
 - [Приёмка Voice](VOICE_CODE_COMPLETION_GATE.md) — текущая независимая цепочка GUI/Config/IPFW/STUN/media/call.
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — пять сервисов, GUI и общий backend.
 - [Исторический план v0.5.3](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) и [история v0.5.3](releases/v0.5.3.md).
