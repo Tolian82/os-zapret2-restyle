@@ -313,7 +313,23 @@ class SettingsController extends ApiMutableModelControllerBase
                     (string)$config, $current, $plan, 'strategies'
                 );
                 $preflightStage = 'envelope';
-                $encoded = SharedApplyEnvelope::encode('strategies', $post, $sync);
+                // Original POST may include megabytes of unchanged domains.
+                // Native configd argv is intentionally limited to 65536 bytes.
+                // Root FD9 rereads the current Config and overlays only edits.
+                $transport = [];
+                foreach ($plan['changed_fields'] as $reference) {
+                    if (!preg_match('/^(general|strategy|hostlist)\.[a-z]+$/D', $reference)) {
+                        throw new \InvalidArgumentException('Invalid Strategies changed field');
+                    }
+                    [$group, $field] = explode('.', $reference, 2);
+                    $value = $plan['candidate'][$group][$field] ?? null;
+                    if (!is_string($value)) {
+                        throw new \InvalidArgumentException('Invalid Strategies changed value');
+                    }
+                    $transport[$group][$field] = $value;
+                }
+                // Do not relax envelope size checks for actually edited lists.
+                $encoded = SharedApplyEnvelope::encode('strategies', $transport, $sync);
             } finally {
                 $config->unlock();
             }
