@@ -484,10 +484,10 @@ $(document).ready(function () {
                 reconcileVoiceServiceStatus();
             });
     }
-    // Keep attested runtime information in the checkbox's INPUT cell rather
-    // than OPNsense's third-column help-block. The native help stays under
-    // the input and controls whether the observation wraps below the checkbox.
-    // All five form inputs, native help toggles and their IDs remain untouched.
+    // Keep attested runtime information always below the checkbox in its
+    // INPUT cell (never in OPNsense's third-column help-block). Toggling
+    // native help must not move this read-only observation. All five form
+    // inputs, help toggles and original IDs remain untouched.
     function showVoiceProfileObservations(reply) {
         ['telegram', 'discord', 'x', 'sip', 'custom'].forEach(function (name) {
             var id = 'zapret.voice.' + name + '.enabled';
@@ -678,25 +678,17 @@ $(document).ready(function () {
 </script>
 
 <style>
-    /* Native OPNsense form_input_tr places the checkbox in column two and
-       its help in a div[data-for] below it. Do not put the read-only runtime
-       observation in column three (.help-block), which is far off to the
-       right on desktop. With help hidden, place it next to the checkbox. */
+    /* Native form_input_tr puts the checkbox and its optional help in
+       column two. Always place the read-only observation BELOW the checkbox
+       in that same cell, whether help is hidden or shown. OPNsense's native
+       showhelp/full-help handlers only toggle the following help div;
+       switching help must never move the observation. */
     #frm_VoiceSettings tr.voice-profile-checkbox-row > td:nth-child(2) > .voice-profile-observation {
-        display: inline-block;
-        vertical-align: top;
-        max-width: calc(100% - 55px);
-        margin-left: 28px;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-    /* OPNsense 26.7 toggles .show on the NATIVE help div both for the
-       individual help icon and for the page's full-help toggle. When open,
-       place the observation below the checkbox and above the native help. */
-    #frm_VoiceSettings tr.voice-profile-checkbox-row > td:nth-child(2):has(> div[data-for^="help_for_"].show) > .voice-profile-observation {
         display: block;
         margin: 10px 0 8px;
         max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     #voiceServiceLine {
         display: grid;
