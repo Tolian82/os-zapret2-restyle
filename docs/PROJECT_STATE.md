@@ -4,8 +4,8 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 ## Версия, пакет и граница доставки
 
-- `VERSION=0.5.4`, `PLUGIN_REVISION=1`; package candidate: `os-zapret2-restyle-0.5.4_1.pkg`. Это явно порученный новый этап, **полный Web/pkg v0.5.4 опубликован** из `b3c57106`: [релиз](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4), [workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035) SUCCESS Validate/Build/Publish Release/Deploy Pages; sha256 пакета `3cf80db941a701024c15936371ee2d30fb7ef12c0b5209608ff633ba2f9d6bb9`. Владелец установку `_1` через GUI ещё не подтвердил.
-- Последний проверенный пользователем пакет: `os-zapret2-restyle-0.5.3_28`, source [PR #377](https://github.com/Tolian82/os-zapret2-restyle/pull/377), [CI #39165184611](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39165184611), прежний [testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_28). Он успешно применил native Telegram ON с `committed` и `ready` на реальной OPNsense, без rollback/errors.
+- `VERSION=0.5.4`, `PLUGIN_REVISION=1`; package candidate: `os-zapret2-restyle-0.5.4_1.pkg`. Это явно порученный новый этап, **полный Web/pkg v0.5.4 опубликован** из `b3c57106`: [релиз](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4), [workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035) SUCCESS Validate/Build/Publish Release/Deploy Pages; sha256 пакета `3cf80db941a701024c15936371ee2d30fb7ef12c0b5209608ff633ba2f9d6bb9`. Владелец подтвердил установку/обновление до `_1` и сохранение всех настроек Voice Transmission после обновления пакета без изменения значений (19.10.2026). Это подтверждает сохранность Config, но не runtime/IPFW после самостоятельной перезагрузки или работоспособность звонка. [Owner-live evidence](verification/evidence/2026-10-19-v0.5.4_1-voice-upgrade-config-persistence.md).
+- Последний пакет с **подтверждённым полноценным Voice Apply на устройстве**: `os-zapret2-restyle-0.5.3_28`, source [PR #377](https://github.com/Tolian82/os-zapret2-restyle/pull/377), [CI #39165184611](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39165184611), прежний [testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3_28). Он успешно применил native Telegram ON с `committed` и `ready` на реальной OPNsense, без rollback/errors.
 - Предыдущая полная Web/pkg поставка: [v0.5.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.3) (`0.5.3_2`), [исторические доказательства](verification/evidence/2026-10-17-v0.5.3-release-publication.md). Новый [v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) имеет подтверждённые tag, pkg, SHA256 и Pages через GitHub Actions, отдельная [запись публикации](verification/evidence/2026-10-19-v0.5.4-full-release-publication.md).
 - Платформа OPNsense 26.7 / FreeBSD 15 amd64, native Python 3.13. Единая служба `zapret`, один `dvtws2` и один supervisor; нативная общая транзакция Config/FD9/runtime/IPFW. Новые отдельные Voice daemon/PoC и старый `192.168.1.140` маршрут не являются текущей архитектурой.
 
@@ -13,7 +13,8 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 | Уровень | Факт | Граница |
 |---|---|---|
-| Настройки и Apply | Telegram `saved_voice_on=true`, остальные Voice профили OFF; journal `committed`, Config digest соответствует Voice runtime | Включение профиля подтверждено на установленной `_28` |
+| Обновление GUI-пакета | После обновления до `0.5.4_1` **все настройки Voice Transmission остались точно такими же, как до обновления** | OWNER-LIVE: подтверждение владельца 19.10.2026; проверка значений конфигурации, не runtime/успешного звонка |
+| Настройки и Apply | Telegram `saved_voice_on=true`, остальные Voice профили OFF; journal `committed`, Config digest соответствует Voice runtime | Включение профиля подтверждено на установленной `_28`; повторный Apply на `_1` не проверялся |
 | Runtime | `configctl zapret status` running; `voice_inspect.state=ready`, `engine_verified=true`, `supervisor_verified=true` | Конфигурация и процесс подтверждены, но звонок не проверен |
 | IPFW | native `19000 divert 989 udp ... table(zapret2_voice_telegram) ... xmit vtnet1`, 14 CIDR, `udp_ports=1-65535` | Подготовлен захват для совпадающих UDP destination |
 | TNAS | `192.168.1.100`, `ovs_eth1`, SSH TCP/9222, Docker `tgvoice-lab` host mode; reflector route через OPNsense `192.168.1.2` | Только проверенный фиксированный адрес `91.108.13.10`; reboot/вся Telegram сеть не проверены |
@@ -23,7 +24,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_1`**: оф
 
 ## Следующий технический рубеж
 
-1. **Выполнено:** полный релиз v0.5.4_1, PR #379, CI, tag, GitHub pkg+SHA256 и Pages/pkg-repository. GUI обновление владельцем не проверено, MEDIA/CALL остаются открыты.
+1. **Выполнено:** полный релиз v0.5.4_1, PR #379, CI, tag, GitHub pkg+SHA256 и Pages/pkg-repository. GUI обновление до `_1` и неизменность настроек Voice Transmission подтверждены владельцем; post-upgrade runtime/IPFW и MEDIA/CALL остаются открыты.
 2. После релиза A2: синхронно захватить LAN и WAN `host 91.108.13.10 and udp port 596`, сравнить направления и размеры/контрольные суммы/TTL, ответы и счётчик IPFW; без изменения маршрута/IPFW/PFIL.
 3. Затем A3: отдельный валидный STUN-aware тест с подтверждённым STUN responder; текущая reflector Hello-проба не соответствует фильтру STUN профиля. A4 изолированные сравнения/изменения **только** после точного сетевого доказательства. A5 реальный двусторонний звонок — окончательная отдельная приёмка.
 
