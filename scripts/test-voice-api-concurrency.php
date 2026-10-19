@@ -48,6 +48,7 @@ namespace OPNsense\Core {
         public static bool $busy = false;
         public static bool $reconfigureOK = true;
         public static bool $postNativeCommitInvalid = false;
+        public static ?string $preflightReceipt = null;
         public static int $nativeCommits = 0;
         public static string $inspectResponse = '';
         public static bool $inspectThrows = false;
@@ -71,6 +72,10 @@ namespace OPNsense\Core {
                     !is_array($request['fields'] ?? null) ||
                     !is_array($request['sync'] ?? null)) {
                     throw new \RuntimeException('Invalid native Apply envelope');
+                }
+                if (self::$preflightReceipt !== null) {
+                    // Root-stage negative receipt: no Config/runtime mutation.
+                    return self::$preflightReceipt;
                 }
                 if (self::$reconfigureOK) {
                     self::$nativeCommits++;
@@ -125,10 +130,16 @@ namespace OPNsense\Zapret {
     class Zapret {
         public static $nodes = [];
         public static int $serializations = 0;
+        public static bool $validationThrows = false;
         private ?array $pending = null;
         public function getNodes(): array { return $this->pending ?? self::$nodes; }
         public function setNodes(array $nodes): void { $this->pending = $nodes; }
-        public function performValidation($full = false): array { return []; }
+        public function performValidation($full = false): array {
+            if (self::$validationThrows) {
+                throw new \RuntimeException('synthetic detached candidate validation failure');
+            }
+            return [];
+        }
         public function serializeToConfig($full = false, $disable = false): bool {
             if ($this->pending === null) return false;
             self::$nodes = $this->pending;
@@ -644,6 +655,61 @@ namespace {
     $strategyFields['sync']['telegramips_baseline'] =
         Zapret::$nodes['hostlist']['telegramips'];
     $strategy->request = new FakeRequest('POST', $strategyFields);
+
+    // A safe root preflight rejection never reaches durable transaction
+    // phases and MUST NOT be misreported as an uncertain commit.
+    foreach (['candidate-validation', 'runtime-build', 'seal'] as $phase) {
+        Backend::$preflightReceipt = 'preflight-rejected=' . $phase;
+        Backend::$calls = [];
+        $commitsBefore = Backend::$nativeCommits;
+        $rejected = $strategy->applyAction();
+        equal('failed', $rejected['result'], 'safe preflight receipt must fail');
+        equal(false, $rejected['requires_review'] ?? null,
+            'preflight receipt is safe and must not freeze Strategies');
+        equal(false, $rejected['applied'] ?? null,
+            'preflight receipt cannot claim Apply');
+        equal(true, strpos($rejected['message'] ?? '', $phase) !== false,
+            'failed native stage must be visible in the GUI response');
+        equal($commitsBefore, Backend::$nativeCommits,
+            'preflight receipt must not simulate a native commit');
+    }
+    Backend::$preflightReceipt = null;
+
+    // A guard exception BEFORE native dispatch may not be an unknown result.
+    Backend::$guardThrows = true;
+    Backend::$calls = [];
+    try {
+        $guardRejected = $strategy->applyAction();
+    } finally {
+        Backend::$guardThrows = false;
+    }
+    equal('failed', $guardRejected['result'],
+        'pre-dispatch guard failure should have an API response');
+    equal(false, $guardRejected['requires_review'] ?? null,
+        'pre-dispatch guard failure cannot require runtime reconciliation');
+    equal(true, strpos($guardRejected['message'] ?? '', 'lifecycle-guard') !== false,
+        'guard failure must report the safe rejected stage');
+    equal(false, in_array('zapret shared_apply', Backend::$calls, true),
+        'guard failure must not dispatch native work');
+
+    // Force an actual Throwable inside detached candidate validation,
+    // before Config persistence and before root FD9 dispatch.
+    Zapret::$validationThrows = true;
+    Backend::$calls = [];
+    try {
+        $validationRejected = $strategy->applyAction();
+    } finally {
+        Zapret::$validationThrows = false;
+    }
+    equal('failed', $validationRejected['result'],
+        'detached candidate validation exception must reject Strategies Apply');
+    equal(false, $validationRejected['requires_review'] ?? null,
+        'pre-dispatch candidate validation error cannot require recovery');
+    equal(true, strpos($validationRejected['message'] ?? '', 'candidate-validation') !== false,
+        'candidate validator exception must reveal safe failure stage');
+    equal(false, in_array('zapret shared_apply', Backend::$calls, true),
+        'detached candidate validation fault must not dispatch');
+
     Backend::$postNativeCommitInvalid = true;
     Backend::$calls = [];
     $commitsBefore = Backend::$nativeCommits;
