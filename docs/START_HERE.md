@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.4_4`. `VERSION=0.5.4`, `PLUGIN_REVISION=4`. Владелец 19.10.2026 прямо поручил зафиксировать TNAS/OPNsense laboratory, маршруты и план дальнейших автоматизированных тестов, затем выпустить **полный** релиз `v0.5.4_1`. Это отдельный новый этап разработки (`DEV-034`, `CHAT-017`), не объявление успешного Telegram-звонка.
+**Current handoff identity:** `v0.5.4_5`. `VERSION=0.5.4`, `PLUGIN_REVISION=5`. Владелец 19.10.2026 прямо поручил зафиксировать TNAS/OPNsense laboratory, маршруты и план дальнейших автоматизированных тестов, затем выпустить **полный** релиз `v0.5.4_1`. Это отдельный новый этап разработки (`DEV-034`, `CHAT-017`), не объявление успешного Telegram-звонка.
 
 ## Подтверждено на установленной `0.5.3_28`
 
@@ -13,11 +13,11 @@
 
 **Источник технических деталей и актуальные команды:** [native TNAS runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md); [неизменяемая запись первого live опыта](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Подробная история `v0.5.3_1..28` — [old stage release record](releases/v0.5.3.md) и [current-line ledger](history/current/v0.5.x.md). Полный [v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) опубликован из source `b3c57106`, pkg SHA256 `3cf80db941a701024c15936371ee2d30fb7ef12c0b5209608ff633ba2f9d6bb9`; [workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035) подтвердил GitHub Release и Pages/pkg. Предыдущий v0.5.3 остаётся историческим релизом.
 
-## Нынешняя граница `v0.5.4_4`
+## Нынешняя граница `v0.5.4_5`
 
 **Код runtime/IPFW/Voice Apply не меняется.** Изменяются VERSION/PLUGIN_REVISION, текущая документация лаборатории, release notes и README. В полном релизе явно указать: подтверждены Config/общий Apply/IPFW interception на устройстве, но не получены рефлекторный ответ, двусторонняя media или CALL_PASS. Данные сайта/пакета, CI и Live — три разных уровня доказательства.
 
-**Единственное следующее действие:** после установки кандидата `v0.5.4_4` проверить расположение статусов всех пяти Voice-профилей при выключенной и включённой «справке» и ранее исправленное RU/EN меню Zapret сразу после F5 и при переходах между страницами OPNsense; это до owner-live подтверждения остаётся непроверенным. После GUI-подтверждения продолжить A2 из [native TNAS runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md): синхронно снять read-only LAN/WAN PCAP UDP `91.108.13.10:596`, отличить LAN ingress, WAN TX/RX, fake и наличие ответов; не изменять IPFW/PFIL/Config. Затем A3 валидный STUN packet/responder и A5 реальный двусторонний звонок. Обновление пакета до v0.5.4_1 и сохранность всех настроек Voice Transmission подтверждены владельцем 19.10.2026 ([evidence](verification/evidence/2026-10-19-v0.5.4_1-voice-upgrade-config-persistence.md)); проверка runtime/IPFW после обновления и CALL_PASS остаются открыты.
+**Единственное следующее действие:** после установки кандидата `v0.5.4_5` проверить неизменное расположение диагностического текста под чекбоксами всех пяти Voice-профилей при выключенной и включённой «справке» и ранее исправленное RU/EN меню Zapret сразу после F5 и при переходах между страницами OPNsense; это до owner-live подтверждения остаётся непроверенным. После GUI-подтверждения продолжить A2 из [native TNAS runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md): синхронно снять read-only LAN/WAN PCAP UDP `91.108.13.10:596`, отличить LAN ingress, WAN TX/RX, fake и наличие ответов; не изменять IPFW/PFIL/Config. Затем A3 валидный STUN packet/responder и A5 реальный двусторонний звонок. Обновление пакета до v0.5.4_1 и сохранность всех настроек Voice Transmission подтверждены владельцем 19.10.2026 ([evidence](verification/evidence/2026-10-19-v0.5.4_1-voice-upgrade-config-persistence.md)); проверка runtime/IPFW после обновления и CALL_PASS остаются открыты.
 
 ## Минимальное чтение
 

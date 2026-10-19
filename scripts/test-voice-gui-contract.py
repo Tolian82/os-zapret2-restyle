@@ -541,18 +541,22 @@ def main() -> None:
           "reply.state === 'stopped'" in view and
           "Number.isInteger(profile.rule)" in view,
           "Voice GUI must display only verified native IPFW rules and safe counters")
-    # Read-only runtime observations belong to the same native form cell
-    # as the checkbox, immediately before OPNsense's original help div.
-    # The existing field IDs, form serializer and help toggle stay intact.
+    # Read-only runtime observations always occupy the same block beneath
+    # each checkbox, regardless of native OPNsense full-help or per-field
+    # help visibility. The original help div and field IDs remain intact.
+    observation_css = view.split(
+        "#frm_VoiceSettings tr.voice-profile-checkbox-row > td:nth-child(2) > .voice-profile-observation {", 1
+    )[-1].split("}", 1)[0]
     check("cell.closest('tr').addClass('voice-profile-checkbox-row')" in view and
           "cell.children('.voice-profile-observation')" in view and
           ".insertAfter(input)" in view and
           "var help = $(input).closest('tr').find('.help-block')" not in view and
-          'div[data-for^="help_for_"].show' in view and
-          ":has(> div[data-for" in view and
-          "display: inline-block;" in view and "display: block;" in view,
-          "Voice observations must sit beside the checkbox with help OFF "
-          "and above native per-field help when help is ON")
+          "display: block;" in observation_css and
+          "margin: 10px 0 8px;" in observation_css and
+          "max-width: 100%;" in observation_css and
+          "display: inline-block;" not in observation_css and
+          ":has(> div[data-for" not in view,
+          "Voice observation must remain below the checkbox with help ON or OFF")
     # The optional OFF-only draft save remains separate from the real
     # ON/OFF native Apply; no form identity or Apply behavior changes.
     check('id="voiceSaveDraft"' in view and

@@ -76,7 +76,7 @@ generated template and runtime are restored to the prior valid state.
 
 ## Voice form observation layout
 
-The five Voice service checkboxes are rendered by OPNsense 26.7 native `base_form`/`form_input_tr` in the second table column. The UI-only `voice-profile-observation` is inserted immediately after each checkbox into the same cell, not into the third-column native `.help-block`. It stays inline while help is hidden; the native per-field help `div[data-for="help_for_…"]` gains class `show` when individual or full help opens, moving the observation above the original help text via local CSS. This is read-only presentation; native input IDs, help behavior, validation, Apply and persistence are unchanged.
+The five Voice service checkboxes are rendered by OPNsense 26.7 native `base_form`/`form_input_tr` in the second table column. The UI-only `voice-profile-observation` is inserted immediately after each checkbox into the same cell, not into the third-column native `.help-block`. The observation always uses the same block position immediately below the checkbox, regardless of help state. OPNsense's native per-field help `div[data-for="help_for_…"]` gains `show` when individual or full help opens, but only the help is toggled: it follows the stationary observation; no `:has(.show)` layout selector or custom event handler is needed. This is read-only presentation; native input IDs, help behavior, validation, Apply and persistence are unchanged.
 
 ## Diagnostics interfaces
 
