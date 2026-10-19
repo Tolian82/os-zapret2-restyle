@@ -24,6 +24,9 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.4_5`**: оф
 
 ## Стабильное расположение наблюдений Voice в текущем кандидате
 
+- `v0.5.4_5` опубликован в [GitHub testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4_5) как [`os-zapret2-restyle-0.5.4_5.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.4_5/os-zapret2-restyle-0.5.4_5.pkg), source/tag `0a4f0d89771d1845e297aa3beec94f1df7235e6b`, SHA-256 `6413b902f2e9a21c0633a55966b36ba3d97561bd082474edfa1939f2939a12e6`, FreeBSD 15 amd64. Стабильная публикация OPNsense GUI/pkg остаётся `v0.5.4_1`; пользовательская проверка расположения под флажком при обоих состояниях справки ещё не выполнена. [Publication record](verification/evidence/testing-publications/v0.5.4_5.md).
+
+
 - Пакет `v0.5.4_4` опубликован как [testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4_4) для ручной установки, источник `ff5c4bf1e73fee6d25e99ec7e6c06e18f121556f`, SHA-256 `1eae13071c9a2fce5157771e5b5a6ca2cd6e13b68934c1a4df4ee52249415759`. GUI/pkg-репозиторий остаётся на `v0.5.4_1`. Автоматическая проверка CI успешна, соответствие образцам 02.jpg / 03.jpg на OPNsense пока не подтверждено владельцем. [Протокол публикации](verification/evidence/testing-publications/v0.5.4_4.md).
 - Кандидат `v0.5.4_5` исправляет подтверждённый владельцем недостаток компоновки `_4`: диагностические подписи Telegram, Discord, X, SIP и Custom **всегда** располагаются под чекбоксом в том же втором столбце, независимо от состояния индивидуальной и общей справки. Штатный текст справки появляется после подписи, не сдвигая её. Изменён только CSS и документация/контракт GUI; form XML, Config, runtime, IPFW и Apply не меняются. Owner-live проверка `_5` ожидается отдельно.
 
