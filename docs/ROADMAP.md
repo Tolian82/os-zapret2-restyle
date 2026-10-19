@@ -1,10 +1,10 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.4: измеримый native Voice media path через TNAS
+## Текущий приоритет — v0.5.5: выпуск принятого Voice GUI и следующий native media path A2
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
-1. **Выполнено:** по явному решению владельца зафиксировать [актуальный runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) и [живое evidence](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md), выпустить полный Web/pkg `v0.5.4_1` с честной границей медиа-проверки.
+1. **Выполнено:** full Web/pkg `v0.5.4_1`; позднее владелец принял [Voice UI / RU меню](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md). Следующая явно разрешённая поставка — full Web/pkg `v0.5.5_1` с этими исправлениями, без заявления CALL_PASS.
 2. Следующий сетевой тест **A2**: синхронный LAN/WAN PCAP, точная атрибуция оригинальных UDP, extra fake и входящих ответов без изменения production IPFW/PFIL/маршрута.
 3. Затем A3 STUN-aware test с валидным STUN packet/known responder; старый reflector Hello не удовлетворяет текущему `--filter-l7=stun` профилю.
 4. Только по доказанным packet traces — ограниченные сравнения стратегий/TTL/checksum; полный A5 Telegram caller/callee + двусторонний звук обязателен для `CALL_PASS`.

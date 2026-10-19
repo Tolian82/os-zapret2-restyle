@@ -4,8 +4,8 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) · `os-zapret2-restyle-0.5.4_1.pkg` · FreeBSD 15 pkg repository deployed |
-| **Current development candidate** | `v0.5.4_1` — native Voice and TNAS lab qualification stage; media/call pending |
+| **Full Web/pkg release** | [v0.5.5](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.5) · `os-zapret2-restyle-0.5.5_1.pkg` · FreeBSD 15 stable pkg repository |
+| **Current development candidate** | `v0.5.5_1` — Voice UI and Russian menu accepted; media/call pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -13,7 +13,7 @@
 
 `os-zapret2-restyle` is an independent OPNsense integration around [bol-van/zapret2](https://github.com/bol-van/zapret2). It provides the managed engine, normal Traffic Strategies, Strategy Lab, and a five-service native Voice Transmission editor. The owner installed testing `0.5.3_28` on FreeBSD 15 OPNsense and **successfully saved Telegram ON through the shared Config/FD9/runtime/IPFW Apply**. The service and supervisor were running, the transaction journal was `committed`, and the Voice inspector reported `ready`. This confirms configuration and kernel interception, **not a working media call**.
 
-The 15-second TNAS Docker `tgcalls_cli` reflector experiment on 19 October 2026 routed traffic via OPNsense and increased the native Voice IPFW rule by **60 UDP packets / 4080 bytes**, but Caller/Callee remained `Reconnecting`, and no call was established. The v0.5.4 stage makes the TNAS lab and incremental media-path verification explicit; see the [current operator runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) and [first-run evidence](docs/verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Release packaging does not imply STUN or a completed call.
+The 15-second TNAS Docker `tgcalls_cli` reflector experiment on 19 October 2026 routed traffic via OPNsense and increased the native Voice IPFW rule by **60 UDP packets / 4080 bytes**, but Caller/Callee remained `Reconnecting`, and no call was established. The current release keeps the TNAS lab and incremental media-path verification explicit; see the [current operator runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) and [first-run evidence](docs/verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Release packaging does not imply STUN or a completed call.
 
 ## Architecture overview
 
@@ -84,7 +84,7 @@ What it does:
 - accepts a blocked **domain or IPv4 address**;
 - supports optional **Host / SNI** for fixed-IP HTTPS/TLS/QUIC testing;
 - measures a clean baseline before trying bypass candidates;
-- runs deterministic native Zapret2 candidate families under the production **Model C** execution architecture;
+- runs deterministic native Zapret2 strategy candidates with temporary runtime and firewall rules;
 - attributes candidate traffic to exact controlled source ports and temporary firewall rules;
 - checks stability and replays finalists before recommending them;
 - keeps HTTP application errors such as `4xx`/`5xx` separate from DPI-path reachability, so a reachable server is not falsely discarded just because the application returned an error;
@@ -123,7 +123,7 @@ Profiles are separated with the normal Zapret2 boundary:
 
 The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
 
-## Voice Transmission — native common engine (v0.5.4)
+## Voice Transmission — native common engine (v0.5.5)
 
 The **Services → Zapret2 → Voice Transmission / Передача голоса** page is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
 
@@ -131,7 +131,7 @@ The **Services → Zapret2 → Voice Transmission / Передача голос�
 - Telegram shares the existing `hostlist.telegramips` dataset with Traffic Strategy; the other named IPSETs are also available to ordinary strategies.
 - **Validate** checks a detached configuration without installing it. **Save inactive draft** persists an all-OFF configuration without activating it. **Apply** validates, saves and activates ON/OFF profiles through the *same* Config/FD9/runtime/IPFW transaction as Traffic Strategy.
 - Enabled Voice profiles precede ordinary strategies in one `dvtws2` runtime. UDP capture is limited to selected destination IPSETs, ports and compatible WAN settings; `--filter-udp=*` does not create an unrestricted all-destination firewall rule.
-- The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
+- The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. Per-profile status remains beneath its checkbox with help on or off; the three navigation labels localize correctly in Russian on regular page loads. Both GUI corrections were confirmed on the installed test package. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
 - When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
 
 **Current verification boundary:** owner-live `0.5.3_28` confirms Telegram ON, committed native Apply, one running `dvtws2`, healthy supervisor, 14 destination CIDRs and outbound UDP interception through IPFW rule 19000. The 15s TNAS reflector generated 60/4080 intercepted packets but returned `Call established: no`; `media_verified=false` and `call_verified=false` remain correct. Validated STUN payload/response and two-way audio are separate acceptance gates. The independent Squid/sing-box/SSH/routing lab is **not** automatically managed by the plugin. Current lab/test matrix: [native TNAS runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
@@ -292,7 +292,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Full Web/pkg release: **[v0.5.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.4) / 0.5.4_1**, verified by [release workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39172936035). Native Telegram ON, Config, engine/supervisor and IPFW capture passed on owner-installed `_28`; **STUN/remote UDP/media/call remain unverified**. See [lab](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
+Full Web/pkg release: **[v0.5.5](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.5) / 0.5.5_1**. The user accepted corrected Voice checkbox status placement and the Russian sidebar menu in the prior installed testing package. Config, engine/supervisor and IPFW interception were verified earlier; **STUN/remote UDP/media/call remain unverified**. See [release notes](docs/releases/v0.5.5.md) and [lab](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
 
 Useful entry points:
 
