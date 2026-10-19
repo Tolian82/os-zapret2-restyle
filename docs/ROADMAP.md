@@ -1,13 +1,13 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.5: A2 wire proof получен; офлайн атрибуция, затем A3 STUN
+## Текущий приоритет — v0.5.5: STUN outbound A3a PASS; Telegram non-STUN media / bounded fake TTL
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
 1. **Выполнено:** full Web/pkg `v0.5.5_1` установлен владельцем; приняты [Voice UI / RU меню](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md), без заявления CALL_PASS.
-2. **A2 выполнен:** синхронный LAN/WAN PCAP подтвердил WAN egress и последовательность коротких/обычных UDP payload при неуспешном звонке; [owner-live A2](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md). **Далее:** офлайн полная атрибуция сохранённых PCAP, без нового прогона, затем A3.
-3. Затем A3 STUN-aware test с валидным STUN packet/known responder; старый reflector Hello не удовлетворяет текущему `--filter-l7=stun` профилю.
-4. Только по доказанным packet traces — ограниченные сравнения стратегий/TTL/checksum; полный A5 Telegram caller/callee + двусторонний звук обязателен для `CALL_PASS`.
+2. **A2 выполнен:** [LAN/WAN packet evidence](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md) установило WAN egress 60 non-STUN Reflector Hello +120 zero16, 0 ответов; merged профили показали, что работает ordinary Strategy №4 `unknown` UDP/596–599, **не** Voice STUN №1.
+3. **A3a STUN outbound PASS:** на установленной `_1` профиль №1 отдельно обработал валидный STUN20 на UDP/3478 и выпустил 2 zero16 fake. [Evidence](verification/evidence/2026-10-19-native-voice-a3a-stun-outbound.md). STUN_RX с заведомым responder открыт, но случайный Telegram IP:3478 не квалифицирован как responder.
+4. **Далее к Media:** один read-only hop trace к рефлектору и ограниченный fake-TTL кандидат **только** ordinary №4, с явным возвратом и PCAP; перебор уже испытанных UDP/fragment A1/A2 не повторять. Полный A5 Telegram caller/callee + звук обязателен для `CALL_PASS`.
 
 Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), одно следующее действие — [START_HERE](START_HERE.md), исторический v0.5.3 UI/root-FD9 completion plan — [здесь](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Не делать новую архитектурную переделку или запускать старый PoC runner ради «зелёного» счётчика.
 

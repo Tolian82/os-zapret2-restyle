@@ -10,8 +10,8 @@
 | Engine/supervisor/IPFW | **ПРОЙДЕНО на _28:** native common engine, Telegram table 14 CIDR, WAN vtnet1, UDP rule 19000 | Применённое правило и живые процессы подтверждены |
 | Лаборатория TNAS | **ДОСТУПНА:** SSH, Docker host, sha256 binary, маршрут через OPNsense; A1 15 сек | Лаборатория работает для фиксированного endpoint |
 | IPFW traffic capture | **ПРОЙДЕНО:** rule 19000 вырос 0/0 → 60/4080 | Только попадание UDP в IPFW |
-| WAN egress / UDP inbound | **НЕ ПОДТВЕРЖДЕНО:** нет синхронного LAN/WAN PCAP | A2: захваты TX/RX |
-| STUN desync | **НЕ ПОДТВЕРЖДЕНО:** reflector Hello не обязательно STUN | A3: protocol-valid STUN и ответ |
+| WAN egress / UDP inbound | **A2 TX ПРОЙДЕНО** на `_1`: 60 оригиналов + 120 zero16 fake на WAN, на LAN 6 source tuples, ответов 0 | Точный packet egress доказан; ответ Telegram и MEDIA ещё нет |
+| STUN desync | **A3a STUN_MATCH/FAKE_TX/ORIGINAL_TX ПРОЙДЕНО** на `_1`: 2 zero16 + 1 RFC8489 STUN20 на WAN UDP/3478 вне ordinary profile №4 | STUN_RX только с заведомо валидным responder, Media/CALL отдельно; [A3a](verification/evidence/2026-10-19-native-voice-a3a-stun-outbound.md) |
 | Telegram media и звонок | **НЕ ПРОЙДЕНО:** Caller/Callee Reconnecting, call=no, exit=1 | A5: стабильный двусторонний звук |
 
 Полный Web/pkg release `v0.5.4_1` относится к доставке конфигурационно работающего native плагина и текущей лабораторной документации. Сам по себе он не превращает Media/Call строки в PASS. Следующий обязательный технический опыт — A2, а не повторение Apply или изменение IPFW.
