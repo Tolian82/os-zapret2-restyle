@@ -541,8 +541,20 @@ def main() -> None:
           "reply.state === 'stopped'" in view and
           "Number.isInteger(profile.rule)" in view,
           "Voice GUI must display only verified native IPFW rules and safe counters")
+    # Read-only runtime observations belong to the same native form cell
+    # as the checkbox, immediately before OPNsense's original help div.
+    # The existing field IDs, form serializer and help toggle stay intact.
+    check("cell.closest('tr').addClass('voice-profile-checkbox-row')" in view and
+          "cell.children('.voice-profile-observation')" in view and
+          ".insertAfter(input)" in view and
+          "var help = $(input).closest('tr').find('.help-block')" not in view and
+          'div[data-for^="help_for_"].show' in view and
+          ":has(> div[data-for" in view and
+          "display: inline-block;" in view and "display: block;" in view,
+          "Voice observations must sit beside the checkbox with help OFF "
+          "and above native per-field help when help is ON")
     # The optional OFF-only draft save remains separate from the real
-    # ON/OFF native Apply, with the existing GUI layout unchanged.
+    # ON/OFF native Apply; no form identity or Apply behavior changes.
     check('id="voiceSaveDraft"' in view and
           "$('#voiceSaveDraft').on('click'" in view and
           "'/api/zapret/voice/saveDraft'" in view,

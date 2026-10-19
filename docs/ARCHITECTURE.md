@@ -74,6 +74,10 @@ generated template and runtime are restored to the prior valid state.
 
 `src/opnsense/mvc/app/models/OPNsense/Zapret/Menu/Menu.xml` declares the static English URLs and labels. `Menu/Menu.php` implements the supported OPNsense `MenuContainer::collect()` hook; for an active `ru_RU` system/user locale it sets `FixedName` on the three existing nodes (`General`, `Voice`, `Diagnostics`) when OPNsense builds the menu on any page. Per-user language overrides the system language, as in OPNsense's `ControllerRoot::setLang()`. Other locales continue to use the native gettext-translated Menu.xml labels. Individual Zapret Volt views must not rewrite the global menu DOM after page load.
 
+## Voice form observation layout
+
+The five Voice service checkboxes are rendered by OPNsense 26.7 native `base_form`/`form_input_tr` in the second table column. The UI-only `voice-profile-observation` is inserted immediately after each checkbox into the same cell, not into the third-column native `.help-block`. It stays inline while help is hidden; the native per-field help `div[data-for="help_for_…"]` gains class `show` when individual or full help opens, moving the observation above the original help text via local CSS. This is read-only presentation; native input IDs, help behavior, validation, Apply and persistence are unchanged.
+
 ## Diagnostics interfaces
 
 Short connectivity probe:
