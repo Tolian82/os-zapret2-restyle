@@ -130,10 +130,16 @@ namespace OPNsense\Zapret {
     class Zapret {
         public static $nodes = [];
         public static int $serializations = 0;
+        public static bool $validationThrows = false;
         private ?array $pending = null;
         public function getNodes(): array { return $this->pending ?? self::$nodes; }
         public function setNodes(array $nodes): void { $this->pending = $nodes; }
-        public function performValidation($full = false): array { return []; }
+        public function performValidation($full = false): array {
+            if (self::$validationThrows) {
+                throw new \RuntimeException('synthetic detached candidate validation failure');
+            }
+            return [];
+        }
         public function serializeToConfig($full = false, $disable = false): bool {
             if ($this->pending === null) return false;
             self::$nodes = $this->pending;
@@ -686,20 +692,23 @@ namespace {
     equal(false, in_array('zapret shared_apply', Backend::$calls, true),
         'guard failure must not dispatch native work');
 
-    // Malformed detached Config XML fails BEFORE FD9, also not uncertain.
-    Config::$malformedXml = true;
+    // Force an actual Throwable inside detached candidate validation,
+    // before Config persistence and before root FD9 dispatch.
+    Zapret::$validationThrows = true;
     Backend::$calls = [];
     try {
-        $badXmlStrategy = $strategy->applyAction();
+        $validationRejected = $strategy->applyAction();
     } finally {
-        Config::$malformedXml = false;
+        Zapret::$validationThrows = false;
     }
-    equal('failed', $badXmlStrategy['result'],
-        'detached malformed XML must reject Strategies Apply');
-    equal(false, $badXmlStrategy['requires_review'] ?? null,
-        'pre-dispatch detached XML errors cannot require recovery');
+    equal('failed', $validationRejected['result'],
+        'detached candidate validation exception must reject Strategies Apply');
+    equal(false, $validationRejected['requires_review'] ?? null,
+        'pre-dispatch candidate validation error cannot require recovery');
+    equal(true, strpos($validationRejected['message'] ?? '', 'candidate-validation') !== false,
+        'candidate validator exception must reveal safe failure stage');
     equal(false, in_array('zapret shared_apply', Backend::$calls, true),
-        'malformed detached XML must not dispatch');
+        'detached candidate validation fault must not dispatch');
 
     Backend::$postNativeCommitInvalid = true;
     Backend::$calls = [];
