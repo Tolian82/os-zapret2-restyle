@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.5_2: безопасный отказ Strategies Apply, затем Telegram non-STUN TTL7
+## Текущий приоритет — v0.5.5: безопасный отказ Strategies Apply, затем Telegram non-STUN TTL7
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
