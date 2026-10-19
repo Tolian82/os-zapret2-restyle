@@ -21,7 +21,8 @@
 - [Native Voice TNAS lab — текущий runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) — доступ, маршрут, безопасные тесты A0–A5 и приёмка.
 - [Первый native reflector опыт](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md) — факт 60/4080 и незавершённый звонок.
 - [Публикация v0.5.4](verification/evidence/2026-10-19-v0.5.4-full-release-publication.md) — immutable tag/CI/pkg/Pages evidence.
-- [Подготовка релиза v0.5.5](releases/v0.5.5.md) — точная новая идентичность, GUI-приёмка и граница поставки.
+- [Полный релиз v0.5.5](releases/v0.5.5.md) — текущая стабильная идентичность, UI-приёмка и граница поставки.
+- [Публикация v0.5.5](verification/evidence/2026-10-19-v0.5.5-full-release-publication.md) — exact tag/PR/CI/pkg SHA-256/Pages evidence.
 - [Принятая Voice GUI/меню локализация](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md) — owner-live закрытие UI дефектов.
 - [Полный релиз v0.5.4](releases/v0.5.4.md) — история предыдущей стабильной поставки.
 - [Приёмка Voice](VOICE_CODE_COMPLETION_GATE.md) — текущая независимая цепочка GUI/Config/IPFW/STUN/media/call.
