@@ -70,7 +70,7 @@ $(document).ready(function () {
         testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', serviceHostLabel:'Host / SNI (опционально)',
         serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.',
         genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
-        modeLabel:'Режим', 
+        modeLabel:'Режим',
         family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
         completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние'
     } : {
@@ -89,7 +89,7 @@ $(document).ready(function () {
         testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', serviceHostLabel:'Host / SNI (optional)',
         serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.',
         genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
-        modeLabel:'Mode', 
+        modeLabel:'Mode',
         family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
         completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State'
     };
