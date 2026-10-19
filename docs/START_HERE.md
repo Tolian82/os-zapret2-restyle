@@ -19,7 +19,9 @@
 
 **После установки `v0.5.5_1` A2 выполнен на устройстве:** два одновременных PCAP (`vtnet0`/`vtnet1`) фиксируют по 180 пакетных строк, 60/4080 IPFW, повторяющийся WAN-рисунок `16,16,40` UDP payload при TTL 63, `udp sum ok` и `Call established=no`; отдельные входящие ответы в представленных фрагментах не видны. В LAN встречаются три source IP TNAS/его сред. [Новая запись A2](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md); исходные PCAP остаются только на OPNsense. Это WAN-egress evidence, **не STUN или MEDIA/CALL_PASS**.
 
-**Единственное следующее действие:** офлайн разобрать **уже сохранённые** `/tmp/tgvoice-a2.589zgP/lan.pcap` и `wan.pcap`: полные counts направления/размера/source, точные байты двух коротких пакетов и соответствие runtime profile, без нового reflector прогона или изменений Config/IPFW/PFIL/маршрутов. Затем независимый A3 валидный STUN request/response, A5 — звонок. Полная публикация: [evidence](verification/evidence/2026-10-19-v0.5.5-full-release-publication.md).
+**Дополнительное owner-live подтверждение A2:** LAN 6 потоков (3 source IP × 2 порта), по 30 оригинальных пакетов; WAN 60 исходных UDP payload 40 и 120 нулевых payload 16, все контрольные суммы в выведенной части корректны, TTL 63, **0 ответов на обоих интерфейсах**. Начало оригинала `00 8c 47 3a a0 93 d8 e2` не содержит обязательный стандартный STUN Magic Cookie; текущий вызов испытывает Reflector Hello, а не валидный STUN. Фейки нельзя автоматически приписывать Voice, пока не проверен effective merged profile.
+
+**Единственное следующее действие:** read-only проверить **уже активный** `/usr/local/etc/zapret2/runtime-v2/traffic.conf` по именам профилей/UDP/L7/payload/fake, чтобы атрибутировать 40-byte Hello и zero16 fake. Не повторять A0/A1/A2, не изменять Config/IPFW/PFIL/маршруты. После атрибуции — отдельно A3 STUN request/response, затем A5 звонок. Полная публикация: [evidence](verification/evidence/2026-10-19-v0.5.5-full-release-publication.md).
 
 ## Минимальное чтение
 
