@@ -279,7 +279,27 @@ class SettingsController extends ApiMutableModelControllerBase
                 // Validate against a detached model, never serialize it to
                 // the live OPNsense Config before the privileged transaction.
                 $model = new \OPNsense\Zapret\Zapret();
-                $model->setNodes($plan['candidate']);
+                // Native getNodes() includes non-scalar selected-option
+                // dictionaries. OPNsense setNodes() cannot accept them.
+                // Match SharedConfigCommit: validate only the explicitly
+                // changed scalar leaves on a fresh detached model.
+                foreach ($plan['changed_fields'] as $reference) {
+                    $value = $plan['candidate'];
+                    foreach (explode('.', $reference) as $part) {
+                        if (!is_array($value) || !array_key_exists($part, $value)) {
+                            throw new \InvalidArgumentException(
+                                'Incomplete Strategies candidate field'
+                            );
+                        }
+                        $value = $value[$part];
+                    }
+                    if (!is_string($value) ||
+                        $model->setNodeByReference($reference, $value) !== true) {
+                        throw new \InvalidArgumentException(
+                            'Strategies candidate field validation refused'
+                        );
+                    }
+                }
                 $errors = $model->performValidation(false);
                 if (count($errors) > 0) {
                     $validations = [];
