@@ -1,6 +1,6 @@
 # Native Voice — лаборатория TNAS / OPNsense
 
-**Актуальный стенд:** подтверждён владельцем 19.10.2026 на установленной `os-zapret2-restyle-0.5.3_28`. **Следующий этап:** `v0.5.4_1`, автоматизированные наблюдаемые проверки без использования старого PoC. Достоверный результат первого native прогона и его ограничения: [evidence](../verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md).
+**Актуальный стенд:** подтверждён владельцем 19.10.2026 на установленной `os-zapret2-restyle-0.5.5_1`. **A2 LAN/WAN PCAP выполнен; следующий шаг — офлайн-анализ сохранённых PCAP, затем STUN-aware A3.** Первые данные: [A1](../verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md), [A2](../verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md).
 
 Этот документ — **актуальная точка входа для тестов Telegram Voice**. Старые [A1/A2 runner](../../tools/telegram-voice-lab/run-a1-opnsense.sh), [PoC/runbook](TELEGRAM_LAB_OPERATIONS.md), [campaign](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md) и архивы фиксируют прежний эксперимент, но не являются командами запуска нового общего backend: их ожидания `zapret2_tgvoice`, отдельного helper и старого UDP 596–599 устарели. **Не запускать старый runner на работающем native Voice** без перепроверки его preflight и побочных эффектов; не создавать второй divert listener или второй `dvtws2`.
 
@@ -94,4 +94,6 @@ configctl zapret voice_inspect
 
 ## Текущая точка возобновления
 
-На `v0.5.3_28` read-only состояние `ready`, Telegram ON, `committed`, rule `19000`, `ipset_entries=14`. Первый A1: `before 0/0`, `after 60 packets / 4080 bytes`; `Caller=Callee=Reconnecting`, `Call established=no`, `BWE non-zero=no`, `Errors=none`, `TGCALLS_EXIT=1`. Следующее действие **A2: синхронный LAN/WAN PCAP и подсчёт входящих UDP ответов**, не изменение стратегии наугад. Для `v0.5.4_1` текущий этап разработки — доказательство медиапути, а не повторная реализация GUI или common Apply.
+A0/A1 завершены ранее; после обновления до `0.5.5_1` владелец повторно подтвердил здоровый native runtime без конфигурационных изменений. **A2 на `0.5.5_1` выполнен:** LAN `vtnet0` и WAN `vtnet1` PCAP по `91.108.13.10:596` содержат по 180 строк; правило 19000 выросло на 60 packets / 4080 bytes. В выведенной части WAN виден `16,16,40` byte UDP payload pattern, TTL 63, `udp sum ok`, внешних ответов в выведенных фрагментах нет, клиент `Reconnecting`. [Источник с границами вывода](../verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md).
+
+**Один следующий шаг, без нового генератора:** посмотреть существующие `/tmp/tgvoice-a2.589zgP/lan.pcap` и `wan.pcap` офлайн; проверить полные counts направлений, source IP и размера, короткий payload и реальную цепочку применённого native профиля. Только после этого переходить к A3 с протокольно верным STUN/responder. Не повторять готовность контейнера/SSH/IPFW без признаков drift.
