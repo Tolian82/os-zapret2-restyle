@@ -59,3 +59,14 @@ Upstream bol-van/zapret2 does document `ip_ttl=N` as an argument to `fake` (see 
 - Owner supplied local SHA256 prefixes: `dvtws2` `310e931cf0741ffd`, `zapret-antidpi.lua` `31c9dd75b0bd55e9`, `zapret-lib.lua` `b67a470f23b00a8d` (record only prefixes; not asserted equivalent to GitHub blob SHA or upstream release digest).
 - Installed Lua structural checks ALL YES: `FAKE_FUNCTION`, `DESYNC_OPTIONS`, `SEGMENT_FOOLING`, `TTL_IMPLEMENTATION`. Exact upstream 1.0.5.2 has the same supported `fake`/`ip_ttl` composition and repeats option, so the explanation that fake TTL requires a *different* Lua function is not supported for this version.
 - GUI refusal cause **still unknown**: user saw generic status; archived Config/runtime show original profile only; no TTL7 run. `--dry-run` validates engine CLI/parameters but does not execute Lua. Next uniquely informative, isolated read-only-in-effect test is one in-memory candidate argv substitution against installed binary with `--dry-run`, **not** an Apply or network experiment.
+
+## 2026-10-19 — owner-live in-memory installed dvtws2 TTL7 dry-run: PASS
+
+Executed on the installed OPNsense host with `/usr/local/bin/python3.13` (no config/runtime/file writes): read active `/usr/local/etc/zapret2/runtime-v2/dvtws.args`, confirm **exactly one** match of `--lua-desync=fake:payload=unknown:blob=0x00000000000000000000000000000000:repeats=2`, create a Python in-memory argv copy with only that token appended `:ip_ttl=7`, invoke `/usr/local/etc/zapret2/binaries/my/dvtws2` with `--dry-run`. Owner supplied:
+
+- `EXACT_PROFILE_MATCHES: 1`, `CHANGED_ARGUMENTS: 1 (in memory only)`.
+- `DRY_RUN_EXIT: 0`, `STDERR: (empty)`, `command line parameters verified`.
+- Engine reported `self-built version Oct 2 2026 17:42:03 lua_compat_ver 6`, **5** user-defined desync profiles; Telegram IPSET **14** entries; other hostlists loaded.
+- No on-disk Config, GUI or active runtime alteration, no IPFW or network side effect, no Telegram reflector traffic.
+
+**Narrow verdict:** engine command-line validation accepts combined `fake:...:repeats=2:ip_ttl=7` with the other active arguments. The installed Lua sources also support the path. This does **not** demonstrate runtime Lua execution; `--dry-run` explicitly does not. **Original GUI fault attribution remains unresolved**: the UI has an AJAX `.fail()` branch that presents generic uncertain error on HTTP/network exceptions, and an API `requires_review` branch that presents the same generic warning. Without the captured HTTP response/stage receipt from the original failed Apply, neither one can be inferred. Do not repeat prior A0-A3a or perform an unobserved retry; the next diagnostic should focus on the GUI-to-API response boundary using available existing logs or an explicitly agreed single instrumented attempt later.
