@@ -17,7 +17,7 @@
 
 **Код runtime/IPFW/Voice Apply не меняется.** Изменяются VERSION/PLUGIN_REVISION, текущая документация лаборатории, release notes и README. В полном релизе явно указать: подтверждены Config/общий Apply/IPFW interception на устройстве, но не получены рефлекторный ответ, двусторонняя media или CALL_PASS. Данные сайта/пакета, CI и Live — три разных уровня доказательства.
 
-**Единственное следующее действие:** A2 из [native TNAS runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md): синхронно снять read-only LAN/WAN PCAP UDP `91.108.13.10:596`, отличить LAN ingress, WAN TX/RX, fake и наличие ответов; не изменять IPFW/PFIL/Config. Затем A3 валидный STUN packet/responder и A5 реальный двусторонний звонок. Установка/обновление через GUI до v0.5.4_1 и сохранность всех настроек Voice Transmission подтверждены владельцем 19.10.2026 ([evidence](verification/evidence/2026-10-19-v0.5.4_1-voice-upgrade-config-persistence.md)); проверка runtime/IPFW после обновления и CALL_PASS остаются открыты.
+**Единственное следующее действие:** A2 из [native TNAS runbook](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md): синхронно снять read-only LAN/WAN PCAP UDP `91.108.13.10:596`, отличить LAN ingress, WAN TX/RX, fake и наличие ответов; не изменять IPFW/PFIL/Config. Затем A3 валидный STUN packet/responder и A5 реальный двусторонний звонок. Обновление пакета до v0.5.4_1 и сохранность всех настроек Voice Transmission подтверждены владельцем 19.10.2026 ([evidence](verification/evidence/2026-10-19-v0.5.4_1-voice-upgrade-config-persistence.md)); проверка runtime/IPFW после обновления и CALL_PASS остаются открыты.
 
 ## Минимальное чтение
 
