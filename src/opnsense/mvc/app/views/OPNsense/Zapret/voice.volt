@@ -484,18 +484,21 @@ $(document).ready(function () {
                 reconcileVoiceServiceStatus();
             });
     }
-    // Append read-only observations to existing checkbox help text, without
-    // moving or replacing any of the five approved form fields/help icons.
+    // Keep attested runtime information in the checkbox's INPUT cell rather
+    // than OPNsense's third-column help-block. The native help stays under
+    // the input and controls whether the observation wraps below the checkbox.
+    // All five form inputs, native help toggles and their IDs remain untouched.
     function showVoiceProfileObservations(reply) {
         ['telegram', 'discord', 'x', 'sip', 'custom'].forEach(function (name) {
             var id = 'zapret.voice.' + name + '.enabled';
             var input = document.getElementById(id) || document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
-            var help = $(input).closest('tr').find('.help-block').first();
-            if (!help.length) return;
-            var observed = help.find('.voice-profile-observation');
+            var cell = $(input).closest('td');
+            if (!cell.length) return;
+            cell.closest('tr').addClass('voice-profile-checkbox-row');
+            var observed = cell.children('.voice-profile-observation');
             if (!observed.length) {
-                observed = $('<span class="voice-profile-observation"></span>').appendTo(help);
+                observed = $('<span class="voice-profile-observation"></span>').insertAfter(input);
             }
             var profile = reply && reply.profiles && reply.profiles[name];
             if (!profile || typeof profile.saved_enabled !== 'boolean' ||
@@ -675,6 +678,26 @@ $(document).ready(function () {
 </script>
 
 <style>
+    /* Native OPNsense form_input_tr places the checkbox in column two and
+       its help in a div[data-for] below it. Do not put the read-only runtime
+       observation in column three (.help-block), which is far off to the
+       right on desktop. With help hidden, place it next to the checkbox. */
+    #frm_VoiceSettings tr.voice-profile-checkbox-row > td:nth-child(2) > .voice-profile-observation {
+        display: inline-block;
+        vertical-align: top;
+        max-width: calc(100% - 55px);
+        margin-left: 28px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    /* OPNsense 26.7 toggles .show on the NATIVE help div both for the
+       individual help icon and for the page's full-help toggle. When open,
+       place the observation below the checkbox and above the native help. */
+    #frm_VoiceSettings tr.voice-profile-checkbox-row > td:nth-child(2):has(> div[data-for^="help_for_"].show) > .voice-profile-observation {
+        display: block;
+        margin: 10px 0 8px;
+        max-width: 100%;
+    }
     #voiceServiceLine {
         display: grid;
         grid-template-columns: max-content max-content 14ch 12ch;
