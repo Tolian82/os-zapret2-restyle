@@ -1,13 +1,13 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.5: STUN outbound A3a PASS; Telegram non-STUN media / bounded fake TTL
+## Текущий приоритет — v0.5.5_2: безопасный отказ Strategies Apply, затем Telegram non-STUN TTL7
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
 1. **Выполнено:** full Web/pkg `v0.5.5_1` установлен владельцем; приняты [Voice UI / RU меню](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md), без заявления CALL_PASS.
 2. **A2 выполнен:** [LAN/WAN packet evidence](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md) установило WAN egress 60 non-STUN Reflector Hello +120 zero16, 0 ответов; merged профили показали, что работает ordinary Strategy №4 `unknown` UDP/596–599, **не** Voice STUN №1.
 3. **A3a STUN outbound PASS:** на установленной `_1` профиль №1 отдельно обработал валидный STUN20 на UDP/3478 и выпустил 2 zero16 fake. [Evidence](verification/evidence/2026-10-19-native-voice-a3a-stun-outbound.md). STUN_RX с заведомым responder открыт, но случайный Telegram IP:3478 не квалифицирован как responder.
-4. **Далее к Media:** read-only hop trace выполнен: ICMP target ответил на hop 12. Один ещё не запущенный fake-TTL **7** кандидат только ordinary №4 UDP/596–599, штатный GUI Apply и возврат после WAN/ICMP измерения; [trace и ограниченный план](verification/evidence/2026-10-19-reflector-hop-trace-ttl7-first-candidate.md). Позиция DPI неизвестна; уже испытанный A1/A2/A3a/fragment sweep не повторять. Полный A5 Telegram caller/callee + звук обязателен для `CALL_PASS`.
+4. **Блокер TTL7 Apply выявлен:** GUI `_1` ошибочно считает безмутационные preflight-отказы неопределённым результатом; source candidate `_2` классифицирует стадийные receipt и pre-dispatch exception, оставляя post-dispatch requires-review. Только после CI/выпуска тестового пакета и owner-live проверки — один ещё не запущенный fake-TTL **7** кандидат ordinary №4 UDP/596–599, штатный GUI Apply и возврат после WAN/ICMP измерения; [trace и ограниченный план](verification/evidence/2026-10-19-reflector-hop-trace-ttl7-first-candidate.md). Позиция DPI неизвестна; уже испытанный A1/A2/A3a/fragment sweep не повторять. Полный A5 Telegram caller/callee + звук обязателен для `CALL_PASS`.
 
 Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), одно следующее действие — [START_HERE](START_HERE.md), исторический v0.5.3 UI/root-FD9 completion plan — [здесь](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Не делать новую архитектурную переделку или запускать старый PoC runner ради «зелёного» счётчика.
 

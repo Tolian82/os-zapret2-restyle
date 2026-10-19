@@ -223,7 +223,6 @@ class SettingsController extends ApiMutableModelControllerBase
             return ['result' => 'failed'];
         }
         $this->throwReadOnly();
-        $this->assertLifecycleAvailable();
         $post = $this->request->getPost(static::$internalModelName);
         if (!is_array($post) || !isset($post['sync']) ||
             !is_array($post['sync']) ||
@@ -239,7 +238,10 @@ class SettingsController extends ApiMutableModelControllerBase
         // a pre-write rejection, regardless of its PHP class. This is the
         // same commit-result contract as VoiceController::applyAction.
         $nativeApplyDispatched = false;
+        $preflightStage = 'lifecycle-guard';
         try {
+            $this->assertLifecycleAvailable();
+            $preflightStage = 'model';
             $config = Config::getInstance();
             $config->lock();
             try {
@@ -247,6 +249,7 @@ class SettingsController extends ApiMutableModelControllerBase
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
+                $preflightStage = 'normalization';
                 // Normalize exactly the same editable target lists as the
                 // previous Strategies Apply, but only in a detached payload.
                 foreach (self::TARGET_FIELDS as $field => $label) {
@@ -272,6 +275,7 @@ class SettingsController extends ApiMutableModelControllerBase
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
+                $preflightStage = 'candidate-validation';
                 // Validate against a detached model, never serialize it to
                 // the live OPNsense Config before the privileged transaction.
                 $model = new \OPNsense\Zapret\Zapret();
@@ -284,20 +288,37 @@ class SettingsController extends ApiMutableModelControllerBase
                     }
                     return ['result' => 'failed', 'validations' => $validations];
                 }
+                $preflightStage = 'candidate-xml';
                 SettingsApply::renderCandidateXml(
                     (string)$config, $current, $plan, 'strategies'
                 );
+                $preflightStage = 'envelope';
                 $encoded = SharedApplyEnvelope::encode('strategies', $post, $sync);
             } finally {
                 $config->unlock();
             }
             // No Config lock while configd owns original FD9.
+            $preflightStage = 'dispatch-guard';
             $this->assertLifecycleAvailable();
             $backend = new Backend();
             $nativeApplyDispatched = true;
             $response = trim((string)$backend->configdpRun(
                 'zapret shared_apply', ['strategies', $encoded], false, 600
             ));
+            // Root preflight receipts are definitive: shared_apply_run returns
+            // them only before journal PREPARED / Config / runtime / IPFW changes.
+            // A generic requires_review here would freeze the GUI for a
+            // safely rejected candidate and conceal the actual stage.
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight)$/D', $response, $match)) {
+                return [
+                    'result' => 'failed', 'applied' => false,
+                    'requires_review' => false,
+                    'message' => sprintf(
+                        gettext('Native Strategies preflight rejected before Apply (%s)'),
+                        $match[1]
+                    ),
+                ];
+            }
             if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $response)) {
                 return [
                     'result' => 'failed', 'applied' => false,
@@ -326,6 +347,20 @@ class SettingsController extends ApiMutableModelControllerBase
             }
             return ['result' => 'failed', 'message' => $error->getMessage()];
         } catch (\Throwable $error) {
+            if (!$nativeApplyDispatched) {
+                // All failures before configdpRun are known non-mutating.
+                // Log only bounded labels, never a Config or request envelope.
+                error_log(sprintf('Zapret Strategies pre-Apply refused stage=%s type=%s',
+                    $preflightStage, get_class($error)));
+                return [
+                    'result' => 'failed', 'applied' => false,
+                    'requires_review' => false,
+                    'message' => sprintf(
+                        gettext('Strategies preflight failed before native Apply (%s)'),
+                        $preflightStage
+                    ),
+                ];
+            }
             return [
                 'result' => 'failed', 'applied' => false,
                 'requires_review' => true,
