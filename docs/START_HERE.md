@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.5_7`. `VERSION=0.5.5`, `PLUGIN_REVISION=7`. Source repair candidate (not published): installed testing `_6` failed owner-live Apply because unchanged full JSON 1 900 088 bytes exceeds 65 536-byte native command envelope. `_7` sends changed fields only, retains full-form validation and root FD9 owner.
+**Current handoff identity:** `v0.5.5_7`. `VERSION=0.5.5`, `PLUGIN_REVISION=7`. Published testing prerelease `v0.5.5_7` ([package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.5_7/os-zapret2-restyle-0.5.5_7.pkg), CI PASS, owner not yet installed): installed testing `_6` failed owner-live Apply because unchanged full JSON 1 900 088 bytes exceeds 65 536-byte native command envelope. `_7` sends changed fields only, retains full-form validation and root FD9 owner.
 
 ## Подтверждено на установленной `0.5.3_28`
 
