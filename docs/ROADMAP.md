@@ -1,11 +1,11 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.5: выпуск принятого Voice GUI и следующий native media path A2
+## Текущий приоритет — v0.5.5: A2 wire proof получен; офлайн атрибуция, затем A3 STUN
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
-1. **Выполнено:** full Web/pkg `v0.5.4_1`; позднее владелец принял [Voice UI / RU меню](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md). Следующая явно разрешённая поставка — full Web/pkg `v0.5.5_1` с этими исправлениями, без заявления CALL_PASS.
-2. Следующий сетевой тест **A2**: синхронный LAN/WAN PCAP, точная атрибуция оригинальных UDP, extra fake и входящих ответов без изменения production IPFW/PFIL/маршрута.
+1. **Выполнено:** full Web/pkg `v0.5.5_1` установлен владельцем; приняты [Voice UI / RU меню](verification/evidence/2026-10-19-v0.5.4_5-voice-ui-menu-owner-acceptance.md), без заявления CALL_PASS.
+2. **A2 выполнен:** синхронный LAN/WAN PCAP подтвердил WAN egress и последовательность коротких/обычных UDP payload при неуспешном звонке; [owner-live A2](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md). **Далее:** офлайн полная атрибуция сохранённых PCAP, без нового прогона, затем A3.
 3. Затем A3 STUN-aware test с валидным STUN packet/known responder; старый reflector Hello не удовлетворяет текущему `--filter-l7=stun` профилю.
 4. Только по доказанным packet traces — ограниченные сравнения стратегий/TTL/checksum; полный A5 Telegram caller/callee + двусторонний звук обязателен для `CALL_PASS`.
 
