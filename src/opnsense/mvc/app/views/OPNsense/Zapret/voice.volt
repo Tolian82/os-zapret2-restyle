@@ -5,8 +5,7 @@ $(document).ready(function () {
     var isRussian = ((document.documentElement.lang || '').toLowerCase().indexOf('ru') === 0);
     var ru = isRussian;
     var text = ru ? {
-        navStrategy: 'Стратегии', navVoice: 'Передача голоса', navLab: 'Лаборатория',
-        infoTitle: 'Как работают голосовые профили',
+                infoTitle: 'Как работают голосовые профили',
         infoText: 'WAN для голоса автоматически берётся со страницы «Стратегии» и здесь не настраивается. UDP/STUN-профили пяти сервисов используют общий движок Zapret2 и штатную операцию Apply вместе со «Стратегиями». «Применить» сохраняет настройки и переключает runtime/IPFW с проверяемым возвратом при ошибке. «Сохранить черновик» доступно только для выключенных профилей и не перезапускает службу. Голосовые профили применяются только через общий Apply; отдельной Voice-службы нет. Non-STUN остаётся в «Стратегиях».',
         parameters: 'Параметры передачи голоса', destinations: 'IP-адреса назначения',
         service: 'Служба Zapret2', apply: 'Применить', validate: 'Проверить', saveDraft: 'Сохранить черновик', applied: 'Настройки сохранены и применены к общему движку Zapret2', applyFailed: 'Применение не подтверждено — проверьте ошибки и состояние службы', applyReview: 'Результат применения неизвестен. Проверьте состояние общей службы перед повторной попыткой; обновите страницу.', draftSaved: 'Черновик сохранён, без применения к службе', draftFailed: 'Черновик не сохранён', draftReview: 'Результат сохранения черновика неизвестен. Перезагрузите страницу и проверьте настройки перед повторной попыткой.', checkOk: 'Синтаксис проверен (без применения)', previewDraft: 'Проверить сохранённый черновик', previewOk: 'Черновики проверены под блокировкой службы; изменения не применены', previewFailed: 'Черновики должны быть сначала сохранены выключенными; проверьте настройки', checkFailed: 'Исправьте отмеченные поля', checkError: 'Проверка недоступна', start: 'Запустить', stop: 'Остановить',
@@ -37,8 +36,7 @@ $(document).ready(function () {
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
         ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
-        navStrategy: 'Strategies', navVoice: 'Voice Transmission', navLab: 'Laboratory',
-        infoTitle: 'About Voice Profiles',
+                infoTitle: 'About Voice Profiles',
         infoText: 'Voice always inherits the WAN selected on the Strategies page; change it there. Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
         parameters: 'Voice Transmission Parameters', destinations: 'Destination IP Addresses',
         service: 'Zapret2 Service', apply: 'Apply', validate: 'Validate', saveDraft: 'Save inactive draft', applied: 'Settings saved and applied to the shared Zapret2 engine', applyFailed: 'Apply not confirmed — review validation and current service state', applyReview: 'Apply result is uncertain. Inspect the shared service state before retrying; reload this page.', draftSaved: 'Draft saved to Config; runtime unchanged', draftFailed: 'Draft was not saved', draftReview: 'Draft save result is unknown. Reload the page and inspect saved settings before retrying.', checkOk: 'Syntax checked (not applied)', previewDraft: 'Preview saved Voice drafts', previewOk: 'Saved drafts checked under service lock; no changes applied', previewFailed: 'Save disabled Voice drafts before preview; check the settings', checkFailed: 'Correct highlighted fields', checkError: 'Validation unavailable', start: 'Start', stop: 'Stop',
@@ -222,9 +220,6 @@ $(document).ready(function () {
             }
         });
     }
-    $('a[href="/ui/zapret"]').text(text.navStrategy);
-    $('a[href="/ui/zapret/voice"]').text(text.navVoice);
-    $('a[href="/ui/zapret/diagnostics"]').text(text.navLab);
     $('#voiceServiceTitle').text(text.service);
     $('#voiceStatusLabel').text(text.status + ':');
     // This value comes from the same locked config.xml snapshot as the form

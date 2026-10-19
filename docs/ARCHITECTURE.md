@@ -70,6 +70,10 @@ while preserving non-selector lines, order and user-authored `--new` boundaries.
 Only an exact successful configd response completes Apply. On failure, persistent model,
 generated template and runtime are restored to the prior valid state.
 
+## Menu localization
+
+`src/opnsense/mvc/app/models/OPNsense/Zapret/Menu/Menu.xml` declares the static English URLs and labels. `Menu/Menu.php` implements the supported OPNsense `MenuContainer::collect()` hook; for an active `ru_RU` system/user locale it sets `FixedName` on the three existing nodes (`General`, `Voice`, `Diagnostics`) when OPNsense builds the menu on any page. Per-user language overrides the system language, as in OPNsense's `ControllerRoot::setLang()`. Other locales continue to use the native gettext-translated Menu.xml labels. Individual Zapret Volt views must not rewrite the global menu DOM after page load.
+
 ## Diagnostics interfaces
 
 Short connectivity probe:
