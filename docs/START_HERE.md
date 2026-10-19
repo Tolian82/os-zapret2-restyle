@@ -21,7 +21,9 @@
 
 **Дополнительное owner-live подтверждение A2:** LAN 6 потоков (3 source IP × 2 порта), по 30 оригинальных пакетов; WAN 60 исходных UDP payload 40 и 120 нулевых payload 16, все контрольные суммы в выведенной части корректны, TTL 63, **0 ответов на обоих интерфейсах**. Начало оригинала `00 8c 47 3a a0 93 d8 e2` не содержит обязательный стандартный STUN Magic Cookie; текущий вызов испытывает Reflector Hello, а не валидный STUN. Фейки нельзя автоматически приписывать Voice, пока не проверен effective merged profile.
 
-**Единственное следующее действие:** read-only проверить **уже активный** `/usr/local/etc/zapret2/runtime-v2/traffic.conf` по именам профилей/UDP/L7/payload/fake, чтобы атрибутировать 40-byte Hello и zero16 fake. Не повторять A0/A1/A2, не изменять Config/IPFW/PFIL/маршруты. После атрибуции — отдельно A3 STUN request/response, затем A5 звонок. Полная публикация: [evidence](verification/evidence/2026-10-19-v0.5.5-full-release-publication.md).
+**Атрибуция сделана на установленной `0.5.5_1`:** просмотр effective `runtime-v2/traffic.conf` установил, что native `voice-telegram` — профиль №1 (`--filter-l7=stun`, `--payload=stun`, UDP `*`), а обычная Стратегия №4 (`--filter-udp=596-599`, `--payload=unknown`) совпадает с 40-байтовыми non-STUN Hello и observed zero16 ×2. Значит A2 измерял UDP/unknown стратегию №4, не native STUN. [Live evidence](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md).
+
+**Единственное следующее действие A3a:** один стандартный STUN Binding Request (20-byte) из TNAS Docker host с привязкой к `192.168.1.100` на уже разрешённый Telegram endpoint `91.108.13.10`, **UDP/3478** (не входит в диапазон №4), с коротким одновременным пассивным WAN PCAP; проверить одну исходную STUN-дейтаграмму и возможные `zero16 ×2` именно от Voice №1. Адрес/порт **не подтверждены как STUN responder**, отсутствие ответа не означает неисправность Voice. Потом — отдельный responder-valid STUN_RX A3b и CALL A5. A0/A1/A2 не повторять. Полная публикация: [evidence](verification/evidence/2026-10-19-v0.5.5-full-release-publication.md).
 
 ## Минимальное чтение
 
