@@ -15,6 +15,62 @@
 
 The 15-second TNAS Docker `tgcalls_cli` reflector experiment on 19 October 2026 routed traffic via OPNsense and increased the native Voice IPFW rule by **60 UDP packets / 4080 bytes**, but Caller/Callee remained `Reconnecting`, and no call was established. The v0.5.4 stage makes the TNAS lab and incremental media-path verification explicit; see the [current operator runbook](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md) and [first-run evidence](docs/verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Release packaging does not imply STUN or a completed call.
 
+## Architecture overview
+
+```mermaid
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"16px","lineColor":"#8ea5bd","background":"#0d1117"},"flowchart":{"nodeSpacing":16,"rankSpacing":23,"curve":"linear","htmlLabels":true}}}%%
+flowchart LR
+  subgraph CORE[" "]
+    direction TB
+    S["Traffic Strategies"]
+    V["Voice Transmission"]
+    M["Shared Zapret Model"]
+    G["Shared Generator"]
+    P["Regular and STUN Profiles"]
+    F["TCP/UDP + IPSET<br/>IPFW Rules"]
+    A["Shared Apply + Rollback"]
+    R["One Managed dvtws2"]
+    NOTE["Main workflow: Config → Apply → Runtime<br/>Lab temporarily pauses this service"]
+
+    S --> M
+    V --> M
+    M --> G
+    G --> P
+    G --> F
+    P --> A
+    F --> A
+    A --> R
+    R ~~~ NOTE
+  end
+
+  subgraph LAB[" "]
+    direction TB
+    L["Laboratory"]
+    T["Domain / IPv4 · Optional Host/SNI<br/>Standard / Extended Mode"]
+    H["Capture Service State<br/>Stop Main Runtime"]
+    B["Baseline Check<br/>Without Zapret2"]
+    C["Search Candidates<br/>Temporary IPFW + dvtws2"]
+    Q["Verify Stability<br/>TLS / HTTP / QUIC / UDP"]
+    O["Cleanup and Restore<br/>Original Service State"]
+    W["Results → Manual Transfer<br/>to Traffic Strategies"]
+
+    L --> T --> H --> B --> C --> Q --> O --> W
+  end
+
+  CORE ~~~ LAB
+
+  classDef entry fill:#052c4e,stroke:#174b72,color:#a7d8ff,stroke-width:1px,font-size:16px;
+  classDef step fill:#052c4e,stroke:#174b72,color:#a7d8ff,stroke-width:1px,font-size:16px;
+  classDef output fill:#07385b,stroke:#3277a2,color:#c6e8ff,stroke-width:1px,font-size:16px;
+  classDef note fill:transparent,stroke:transparent,color:#8298aa,font-size:16px;
+  class S,V,L entry;
+  class M,G,P,F,A,T,H,B,C,Q,O step;
+  class R,W output;
+  class NOTE note;
+  style CORE fill:transparent,stroke:transparent
+  style LAB fill:transparent,stroke:transparent
+```
+
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
 **Strategy Lab is the flagship feature of the project.** Give it a blocked domain or IPv4 address and it automatically tests real Zapret2 strategy families from the OPNsense firewall, verifies stable winners, and returns complete profiles ready to copy into **Traffic Strategy**.
