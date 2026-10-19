@@ -134,6 +134,17 @@ namespace OPNsense\Zapret {
         private ?array $pending = null;
         public function getNodes(): array { return $this->pending ?? self::$nodes; }
         public function setNodes(array $nodes): void { $this->pending = $nodes; }
+        public function setNodeByReference(string $reference, $value): bool {
+            if ($this->pending === null) $this->pending = self::$nodes;
+            $node = &$this->pending;
+            foreach (explode('.', $reference) as $part) {
+                if (!is_array($node) || !array_key_exists($part, $node)) return false;
+                $node = &$node[$part];
+            }
+            $node = $value;
+            unset($node);
+            return true;
+        }
         public function performValidation($full = false): array {
             if (self::$validationThrows) {
                 throw new \RuntimeException('synthetic detached candidate validation failure');

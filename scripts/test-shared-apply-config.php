@@ -51,6 +51,44 @@ try {
     // After Config::save the caller MUST return 70, not 69.
 }
 
+// Reproduce production OPNsense getNodes(): unchanged InterfaceField and
+// OptionField arrive as selected-option dictionaries, unlike HTML POST.
+$optionModel=$state;
+$optionModel['general']['waninterface']=[
+    'WAN'=>['value'=>'WAN','selected'=>1],
+    'WAN2'=>['value'=>'WAN2','selected'=>0],
+];
+$optionModel['hostlist']['mode']=[
+    'list'=>['value'=>'list','selected'=>1],
+    'auto'=>['value'=>'auto','selected'=>0],
+];
+$unchangedForm=[
+    'general'=>['waninterface'=>'WAN'],
+    'hostlist'=>['mode'=>'list','telegramips'=>'91.108.0.0/16'],
+    'strategy'=>['trafficargs'=>'--filter-tcp=443'],
+];
+$noOpPlan=SettingsApply::prepareStrategies(
+    $optionModel,$unchangedForm,'91.108.0.0/16'
+);
+must($noOpPlan['changed_fields']===[],
+    'unchanged selected-option form fabricated changed fields');
+must($noOpPlan['candidate']===$optionModel,
+    'unchanged selected-option form must preserve native model identity');
+must(SettingsApply::mergeForCommit($optionModel,$noOpPlan,'strategies')===$optionModel,
+    'native no-op Config preflight rejected selected-option input');
+$changedForm=$unchangedForm;
+$changedForm['strategy']['trafficargs']='--filter-tcp=80';
+$changedPlan=SettingsApply::prepareStrategies(
+    $optionModel,$changedForm,'91.108.0.0/16'
+);
+must($changedPlan['changed_fields']===['strategy.trafficargs'],
+    'strategy edit must change only one owned scalar leaf');
+$merged=SettingsApply::mergeForCommit($optionModel,$changedPlan,'strategies');
+must($merged['strategy']['trafficargs']==='--filter-tcp=80' &&
+    $merged['general']['waninterface']===$optionModel['general']['waninterface'] &&
+    $merged['hostlist']['mode']===$optionModel['hostlist']['mode'],
+    'edited Strategy must preserve unchanged selected-option and Voice fields');
+
 $savedCandidate=$plan['candidate'];
 $savedRow=Worker::saved($plan,$savedCandidate);
 must($savedRow['result']==='committed' && $savedRow['enabled']==='1',

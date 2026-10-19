@@ -43,6 +43,15 @@ final class SettingsApply
                 $after = VoiceModelValues::text($candidate[$group][$name]);
                 if (!self::sameText($before, $after)) {
                     $changed[] = $group . '.' . $name;
+                } elseif (isset($previous[$group]) &&
+                    array_key_exists($name, $previous[$group])) {
+                    // getNodes() represents InterfaceField/OptionField as
+                    // selected-option arrays, while HTML forms POST scalars.
+                    // They are the SAME saved value: retain the native
+                    // structure for the untouched leaf. Otherwise a no-op
+                    // Apply appears to modify an unlisted model field during
+                    // the strict native Config preflight.
+                    $candidate[$group][$name] = $previous[$group][$name];
                 }
             }
         }

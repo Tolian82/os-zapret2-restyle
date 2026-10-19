@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.5: установить точную причину отклонения TTL7, сохранить Strategy/Voice
+## Текущий приоритет — v0.5.5_4: исправить обычный Strategies Apply, затем обязательный TTL7
 
 На установленной `0.5.3_28` успешно завершился Telegram ON Apply: Config сохранён, общая транзакция `committed`, engine/supervisor/IPFW `ready`. Владелец подтвердил доступ к TNAS, маршрут `91.108.13.10` через OPNsense и Docker host laboratory. Первый 15-секундный `tgcalls_cli` reflector test дал **60/4080 на IPFW rule 19000**, но `Call established: no`; это не proof of UDP response, STUN processing или media.
 
@@ -8,6 +8,9 @@
 2. **A2 выполнен:** [LAN/WAN packet evidence](verification/evidence/2026-10-19-native-voice-a2-lan-wan-capture.md) установило WAN egress 60 non-STUN Reflector Hello +120 zero16, 0 ответов; merged профили показали, что работает ordinary Strategy №4 `unknown` UDP/596–599, **не** Voice STUN №1.
 3. **A3a STUN outbound PASS:** на установленной `_1` профиль №1 отдельно обработал валидный STUN20 на UDP/3478 и выпустил 2 zero16 fake. [Evidence](verification/evidence/2026-10-19-native-voice-a3a-stun-outbound.md). STUN_RX с заведомым responder открыт, но случайный Telegram IP:3478 не квалифицирован как responder.
 4. **Неуспешная TTL7 попытка не доказала дефект Apply и не была применена:** сохранённый/активный профиль №4 остался исходным. Для upstream Zapret2 параметр `ip_ttl=N` может быть аргументом `fake`; `pktmod:ip_ttl=N` имеет другую семантику. Почему installed `_1` отказал, неизвестно, GUI показал только общий статус; проектный validation/dry-run не гарантирует проверку реального Lua execution. Testing `_3` опубликован как **улучшение диагностики**, не доказанное исправление этого случая. **Новый приоритет:** без повторной попытки Save/Apply получить read-only контракт установленного движка и исходную причину отказа. TTL7 опыт снят с непосредственной очереди; A5 двусторонний звонок по-прежнему открыт.
+
+5. **Блокер приоритет №1:** owner-live no-op Strategies Apply тоже показывает неопределённый результат; lifecycle guard — `busy:false/idle`. В `0.5.5_4` source устранить несогласованность выбранных словарей и HTML-скаляров в candidate, не применять полную модель через `setNodes()`, квалифицировать регрессиями no-op и changed сценарии; CI, затем owner-live Apply. Отдельно подтвердить, что Voice не потерял настройки.
+6. **Обязательный следующий эксперимент:** после восстановления GUI выполнить единственный TTL7 опыт обычного UDP/596 профиля №4, проверить на WAN fake TTL=7 и original TTL=63, наличие ответа Telegram и вернуть прежнюю стратегию. Отмечать как невыполненный до live proof.
 
 Текущие факты — [PROJECT_STATE](PROJECT_STATE.md), одно следующее действие — [START_HERE](START_HERE.md), исторический v0.5.3 UI/root-FD9 completion plan — [здесь](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md). Не делать новую архитектурную переделку или запускать старый PoC runner ради «зелёного» счётчика.
 
