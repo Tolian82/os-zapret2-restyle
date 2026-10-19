@@ -238,7 +238,7 @@ def main() -> None:
           "Предварительная проверка настроек не пройдена" in strategies_script.group(1) and
           "localizeStrategiesApplyError(data.message)" in strategies_script.group(1),
           "Strategies Apply must restore RU locale on safe rejection")
-    check("strategiesApplyPending" in strategies_script.group(1) and
+        check("strategiesApplyPending" in strategies_script.group(1) and
               "strategiesApplyNeedsReview" in strategies_script.group(1) and
               "data.requires_review === true" in strategies_script.group(1) and
               "timeout: 630000" in strategies_script.group(1) and
