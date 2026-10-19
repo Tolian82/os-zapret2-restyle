@@ -31,8 +31,8 @@
         const runtimeText = {
             title: isRussian ? 'Служба Zapret2' : 'Zapret2 Service',
             repositoryReleases: isRussian ? 'Релизы репозитория' : 'Repository Releases',
-            started: '{{ lang._("Started") }}',
-            stopped: '{{ lang._("Stopped") }}',
+            started: isRussian ? 'Запущена' : 'Started',
+            stopped: isRussian ? 'Остановлена' : 'Stopped',
             error: '{{ lang._("Error") }}',
             start: '{{ lang._("Start") }}',
             stop: '{{ lang._("Stop") }}',
@@ -90,7 +90,9 @@
                 'Strategies candidate field validation refused':
                     'Проверка изменённого поля стратегии не пройдена.',
                 'Missing or invalid Strategies baseline; reload this page':
-                    'Исходное состояние стратегии не подтверждено. Обновите страницу.'
+                    'Исходное состояние стратегии не подтверждено. Обновите страницу.',
+                'Shared Apply request is too large; shorten the destination lists':
+                    'Размер изменённых данных превышает допустимый лимит передачи. Настройки не применены.'
             };
             return translations[message] ||
                 'Предварительная проверка настроек не пройдена. Изменения не применены.';

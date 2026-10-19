@@ -646,9 +646,49 @@ namespace {
         // without introducing unrelated Strategy Lab/model fixtures.
         'strategy' => ['trafficargs' => Zapret::$nodes['strategy']['trafficargs']],
     ];
+    // Owner-live reproduction: unchanged domains make the form >1.9 MB.
+    $largeDomains = [];
+    for ($n = 0; $n < 103000; $n++) {
+        $largeDomains[] = 'host' . $n . '.example.com';
+    }
+    $largeDomains = implode("\n", $largeDomains);
+    equal(true, strlen($largeDomains) > 1900000,
+        'large Strategies form regression fixture must exceed 1.9MB');
+    Zapret::$nodes['hostlist']['userdomains'] = $largeDomains;
+    $strategyFields['hostlist'] = [
+        'userdomains' => $largeDomains,
+        'mode' => 'auto',
+        'telegramips' => Zapret::$nodes['hostlist']['telegramips'],
+    ];
     $strategy->request = new FakeRequest('POST', $strategyFields);
     Backend::$calls = [];
     $safeStrategy = $strategy->applyAction();
+    $decodedNoOp = json_decode(
+        base64_decode(strtr(Backend::$params[1], '-_', '+/'), true), true
+    );
+    equal([], $decodedNoOp['fields'],
+        'no-op with giant domain list must send empty native delta');
+    equal(true, strlen(Backend::$params[1]) < 1024,
+        'large unchanged list leaked into bounded configd argument');
+
+    $strategyFields['strategy']['trafficargs'] = '--filter-tcp=80';
+    $strategy->request = new FakeRequest('POST', $strategyFields);
+    Backend::$calls = [];
+    $editedStrategy = $strategy->applyAction();
+    equal('saved', $editedStrategy['result'],
+        'small Strategy edit failed with large unchanged domains');
+    $decodedEdited = json_decode(
+        base64_decode(strtr(Backend::$params[1], '-_', '+/'), true), true
+    );
+    equal(['strategy' => ['trafficargs' => '--filter-tcp=80']],
+        $decodedEdited['fields'],
+        'small Strategy edit must send its sole changed field');
+
+    // Restore the small fixture for unrelated API/lifecycle checks.
+    $strategyFields['strategy']['trafficargs'] =
+        Zapret::$nodes['strategy']['trafficargs'];
+    Zapret::$nodes['hostlist']['userdomains'] = '';
+    unset($strategyFields['hostlist']);
     equal('saved', $safeStrategy['result'],
         'baseline native Strategies shared Apply must succeed');
 
