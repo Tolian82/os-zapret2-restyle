@@ -233,6 +233,11 @@ def main() -> None:
         )
         check(syntax.returncode == 0,
               "Strategies GUI JS syntax: " + syntax.stderr)
+        check("function localizeStrategiesApplyError(message)" in strategies_script.group(1) and
+          "Кандидат изменяет поля, не принадлежащие форме" in strategies_script.group(1) and
+          "Предварительная проверка настроек не пройдена" in strategies_script.group(1) and
+          "localizeStrategiesApplyError(data.message)" in strategies_script.group(1),
+          "Strategies Apply must restore RU locale on safe rejection")
         check("strategiesApplyPending" in strategies_script.group(1) and
               "strategiesApplyNeedsReview" in strategies_script.group(1) and
               "data.requires_review === true" in strategies_script.group(1) and
