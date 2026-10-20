@@ -45,6 +45,17 @@ Important subtlety: upstream `is_stun_message` checks 20-byte minimum, type flag
 
 The available youtubeUnblock Telegram screenshot only proves **saved UI selection**. Until the active OpenWrt process/firewall/netfilter queue and a **single successful actual call** are observed, do not label `fake 6×64` as the reason the real call works and do not blindly port it into native Zapret2 `unknown` Strategy #4.
 
+## Current live OpenWrt snapshot — 20.10.2026
+
+[Owner's read-only live inventory and Podkop GUI diagnostics](../verification/evidence/2026-10-20-openwrt-podkop-running-runtime.md):
+- OpenWrt 25.12.5 kernel 6.12.94, route to `91.108.13.10` via **`192.168.80.1` / `eth2` with local source `192.168.80.236`.
+- **GOST and youtubeUnblock are running**, `sing-box` process is running; GOST TCP listeners `1070/1088/1050` exist; netfilter **queue 537 is registered**.
+- Podkop `/etc/init.d/podkop status` reported `not running` yet **Podkop-owned NFT rules and a functioning sing-box are observable**; owner GUI diagnostics pass DNS, nftables and `main` outbound (409 ms). Do **not** label Podkop routing globally stopped based solely on init script state.
+- Existing Podkop TPROXY UDP rule to `127.0.0.1:1602` and matching mark rule each show cumulative `180 packets / 12240 bytes`; **no correlation to a real call**, no proof of particular UDP destination, and no proof of successful youtubeUnblock fake injection.
+- GUI flags installed Podkop version `0.7.21` as outdated and a sing-box-version-compatibility warning; these observations are not yet a demonstrated UDP failure.
+
+**Next precise read-only step:** inspect actual `youtubeUnblock` NFQUEUE hook rule and Podkop TPROXY socket/routing state. Then only one correlated, limited real Telegram call with explicit SOCKS5 `:1070`, and inspect metadata/counter deltas to determine youtubeUnblock/Podkop involvement.
+
 ## Next one observation gate (owner-approved)
 
 **Read-only OpenWrt inventory** from the **OpenWrt VM's own console** (not OPNsense; its SSH trust to unrelated `192.168.4.1` is unknown). Check:
