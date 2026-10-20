@@ -10,13 +10,15 @@ This reference is the active conceptual architecture. Owner-provided facts and i
 |---|---|---|
 | Real Telegram app | **explicit SOCKS5 `192.168.1.236:1070`** | Whether its live voice UDP uses SOCKS5 UDP ASSOCIATE, goes directly to another destination, or chooses a different transport |
 | OpenWrt VM on TNAS | `192.168.1.236`, separate VM, not Docker | Its route, forwarding, effective nft/netfilter hooks, actual egress interfaces and NAT for the real Telegram stream |
-| GOST `universal_lan` | `mode=auto`, `listen=0.0.0.0:1070`, enabled | The section itself specifies **no upstream**; do not equate it automatically to HTTP parent or prove UDP relay |
-| Podkop MAIN | Proxy, Telegram community selection, `socks5://127.0.0.1:1088`; **UDP-through-TCP off** in GUI | Effective DNS/routing/mark/nft rules and whether real app voice flow matches them |
+| GOST `universal_lan` | `mode=auto`, `listen=0.0.0.0:1070?udp=true`, enabled; SOCKS5 `UDP ASSOCIATE=ACCEPTED` live, ephemeral relay | No upstream declared in section; real Telegram call UDP association still unqualified |
+| Podkop MAIN | Proxy, Telegram community selection, `socks5://127.0.0.1:1088`; **UDP-through-TCP was OFF, owner later toggled ON for one failed direct-CLI retest; current setting unknown** | Effective client-specific UDP route and direct-vs-proxy behavior need independent proof |
 | GOST `main` | `mode=socks5`, `listen=127.0.0.1:1088?dns=0`, upstream `http://185.203.117.88:33128?keepalive=true`, enabled | Exactly which Telegram flows traverse this chain |
 | GOST `socks_wan` | separate authenticated SOCKS5 `:1050`, enabled | Outside the current analysis; no credential published |
 | youtubeUnblock — Telegram section | `udp-mode=fake`, `udp-faking-strategy=none`, `udp-fake-seq-len=6`, `udp-fake-len=64`, STUN filter on, UDP dport empty, QUIC disabled, QUIC drop off; Telegram SNI list | **Whether real UDP packets are enqueued, selected by the Telegram section and cause actual outgoing 6×64 fakes** |
 | pfSense `192.168.1.140` | Squid `telegram_sites ssl::server_name` ACL, `cache_peer_access voiceproxy`, `never_direct`, `ssl_bump splice`, external HTTP parent `185.203.117.88:33128` | Real route/NAT for *direct* UDP, separate from TCP/TLS Squid |
 | OPNsense `192.168.1.2` | Native Zapret2 Voice STUN #1 + ordinary Telegram non-STUN Strategy #4; Squid/sing-box for Telegram TCP/TLS | Real STUN matches/responses, and effect of ordinary unknown fake on direct reflector run |
+
+**Owner-live newer GOST observation (20.10.2026):** SOCKS5 UDP ASSOCIATE changed from `REP=02` with no UDP flag to `REP=00` / relay `192.168.1.236:<ephemeral>` after adding `?udp=true` to `auto :1070`. A 20-byte RFC5389 STUN request sent through actual GOST SOCKS5 (30-byte client envelope) produced **6×UDP64 fake-shaped + 1×original UDP20** on `eth2 Out` toward `74.125.250.129:19302`; no reply in four seconds. This directly qualifies outbound SOCKS-associated UDP and the configured youtubeUnblock-like WAN transformation, but not real Telegram voice, return path or a SOCKS-capable `tgcalls_cli`. OPNsense Squid 6.14 ACL inventory currently includes **563 in both SSL_ports and Safe_ports**; it has not been observed handling a Telegram CONNECT to 563. A new direct non-STUN lab run via each `.1.2` and `.1.236` again **failed with both peers Reconnecting**, with `RESTORE=PASS` for TNAS reflector /32. Earlier `.1.140` positive direct call still requires LAN/WAN capture to identify true egress and upstream response. [Detailed owner-live evidence](../verification/evidence/2026-10-20-gost-udp-associate-socks-stun-and-repeated-tgvoice-direct-routes.md).
 
 ## Distinct packet paths — do not force a false global order
 
@@ -86,7 +88,7 @@ The available youtubeUnblock Telegram screenshot only proves **saved UI selectio
 - active nftables/iptables selection and `youtubeUnblock` queue, or evidence of kernel-module mode;
 - netfilter queue registration in `/proc/net/netfilter/nfnetlink_queue`, if present.
 
-The immediate next action is the **headless STUN probe** above, which requires no real user call. A future genuine Telegram call through SOCKS5 `:1070` may corroborate the actual application UDP transport, but must not be silently presumed from the synthetic STUN or CLI outcomes. Do not collect unrelated traffic or payloads/secrets.
+These historical OpenWrt-origin STUN probes and the newer **GOST SOCKS5-mediated STUN probe** are complete, with outgoing wire proof but no STUN reply. The next diagnostic is one read-only pfSense LAN/WAN forwarding comparison; not another equivalent STUN probe. A future genuine Telegram call through SOCKS5 `:1070` may corroborate the actual application UDP transport, but must not be silently presumed from the synthetic STUN or CLI outcomes. Do not collect unrelated traffic or payloads/secrets.
 
 The separate **same-reflector direct-UDP no-fake** OPNsense comparison remains an optional *next distinct experiment* once the owner-approved OpenWrt observation is complete. If used: temporarily neutralize **only ordinary Strategy #4**, keep native STUN #1 and routing unchanged, verify WAN only original 40-byte UDP payloads, restore full original strategy; never disable all Zapret2 or rewrite IPFW/NAT to simplify the test.
 
