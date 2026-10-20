@@ -54,7 +54,9 @@ The available youtubeUnblock Telegram screenshot only proves **saved UI selectio
 - Existing Podkop TPROXY UDP rule to `127.0.0.1:1602` and matching mark rule each show cumulative `180 packets / 12240 bytes`; **no correlation to a real call**, no proof of particular UDP destination, and no proof of successful youtubeUnblock fake injection.
 - GUI flags installed Podkop version `0.7.21` as outdated and a sing-box-version-compatibility warning; these observations are not yet a demonstrated UDP failure.
 
-**Next precise read-only step:** inspect actual `youtubeUnblock` NFQUEUE hook rule and Podkop TPROXY socket/routing state. Then only one correlated, limited real Telegram call with explicit SOCKS5 `:1070`, and inspect metadata/counter deltas to determine youtubeUnblock/Podkop involvement.
+**After package update, actual UDP hooks were examined read-only.** The installed `youtubeUnblock` chain has `hook postrouting priority mangle - 1`, UDP `ct original packets < 9`, `queue flags bypass to 537` (453 packet counter), TCP/443 queued (807), while Podkop's UDP TPROXY receiver `127.0.0.1:1602` is alive but its matched UDP counters are 0. Podkop now `0.7.24` with sing-box `1.14.3-extended-2.7.3`; successful compatibility and 377ms outbound. The GUI mangle-counter warning corresponds to zero `prerouting mangle` counter lines in upstream `check_nft_rules`. [After-update evidence](../verification/evidence/2026-10-20-openwrt-upgraded-nfqueue-podkop-nft.md).
+
+**Next step:** learn actual Telegram user's LAN source IPv4 and conduct one **privacy-bounded real voice call** with explicit SOCKS5 `:1070`; observe packet metadata and before/after NFQUEUE/TPROXY counts. Avoid broad packet capture and changing the running network services.
 
 ## Next one observation gate (owner-approved)
 
