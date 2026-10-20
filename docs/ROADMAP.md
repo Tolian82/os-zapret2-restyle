@@ -38,6 +38,11 @@ Owner stopped the experiment in this environment after failure of repeated direc
 
 Эти направления не становятся автоматически долгом страницы или уже опубликованного v0.5.0.
 
+## Согласованный предварительный план улучшения Strategy Lab
+
+- [Браузерные HTTPS/HTTP/2 и HTTP/3 проверки через curl-impersonate](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — согласованное направление **будущей** модернизации (20.10.2026), пока **только документация**, без разрешения на код: готовый FreeBSD `latest` клиент в приватном пакете, один Chrome-профиль, Standard TLS 1.3/HTTP/2, Extended HTTP/3 GET, расширенный QUIC-каталог, достоверная атрибуция и owner-live приёмка. Firefox, обычный curl-тест, fallback и новая система поиска исключены.
+- Эта работа не меняет текущую опубликованную `v0.5.6_1` или закрытую Telegram Voice-кампанию; начать реализацию только после отдельного поручения владельца.
+
 ## Отложенные исследования
 
 Candidate parallel width выше трёх, endpoint parallelism, cross-batch keep-warm, BLOB/Lua/discovery optimization и Model-C timeout/deadline audit открываются только при новом конкретном дефекте/потребности, материальном изменении архитектуры либо выборе владельца. Завершённые измерения сохранены в истории.
