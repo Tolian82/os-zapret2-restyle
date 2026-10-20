@@ -1,4 +1,6 @@
-# 2026-10-20 — Planned same-endpoint alternate gateway control (NOT YET RUN)
+# 2026-10-20 — Alternate gateway controls: first PASS, second topology pending
+
+**Owner-live 20 October update:** the first test via `192.168.1.140` has completed successfully with both peers Established, call=yes @1.561s, nonzero BWE, CLI exit0 and `RESTORE=PASS`. See [measured positive evidence](2026-10-20-tgvoice-gateway-140-positive-control.md). The following was the pre-test plan; second gateway `192.168.4.1` is **not yet tested**.
 
 **User-authorized goal:** check both `192.168.1.140` and `192.168.4.1` for current pinned `tgcalls_cli` UDP `91.108.13.10:596` response/media, distinguish direct gateway controls from paths that traverse another gateway.
 
