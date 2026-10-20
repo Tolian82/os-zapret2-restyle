@@ -1,5 +1,8 @@
 # Telegram: OpenWrt reference — GOST, Podkop and youtubeUnblock
 
+**Owner-closed Telegram laboratory (20.10.2026):** GOST SOCKS5 UDP ASSOCIATE and outbound OpenWrt six UDP64 fake + original STUN20 are confirmed, no STUN response/call proven. Direct `tgcalls_cli` fails via OPNsense and OpenWrt; earlier pfSense success is on a **different VPN-routed Telegram subnet via `ovpnc6`/ `10.1.11.1`**, supported by pfSense route/NAT and traceroute, not explained by Squid HTTP parent or TCP563. No further Telegram tests are active; legacy next-test instructions below preserve historical context only. [Final owner evidence](../verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+
+
 **Status 20.10.2026:** confirmed **installed/configured component roles** based on owner-supplied screenshots and GOST UCI; observed **one successful same-binary direct-UDP reflector control** through pfSense `192.168.1.140`, failures via OPNsense `192.168.1.2` and directly via OpenWrt `192.168.1.236`. The **path of real Telegram UDP configured for SOCKS5 is not yet packet-qualified**. **No causal attribution to youtubeUnblock has been established.**
 
 This reference is the active conceptual architecture. Owner-provided facts and individual tests remain preserved in [contemporaneous evidence](../verification/evidence/2026-10-20-openwrt-236-youtubeunblock-topology.md) and [positive pfSense control](../verification/evidence/2026-10-20-tgvoice-gateway-140-positive-control.md). It must not silently override owner correction with the earlier idea that Squid forwards arbitrary Telegram UDP to OpenWrt.

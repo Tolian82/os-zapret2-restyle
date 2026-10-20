@@ -1,6 +1,8 @@
-# «Передача голоса» — независимая приёмка native Voice (v0.5.4)
+# «Передача голоса» — независимая приёмка native Voice (v0.5.6)
 
-## Текущая приёмка на установленной _28 (19.10.2026)
+**Итоговое решение владельца, 20.10.2026:** Telegram Voice media/call испытания через данный плагин **закрыты с неполученным MEDIA_PASS/CALL_PASS** в нынешней сети. Native UI, shared Apply и outbound STUN/fake proved; исходящая UDP обработка есть, входящего ответа/соединения при прямом OPNsense провайдере нет. Успешный direct `tgcalls_cli` pfSense MEDIA_PASS связан с **другим маршрутом**: Telegram subnet via VPN `ovpnc6`/ `10.1.11.1` (не local direct ISP), NAT `10.1.11.2`, traceroute первый hop `10.1.11.1`; exact forwarded flow не captured, root cause blocking не изолирован. Никаких новых Voice Telegram испытаний по умолчанию; релиз `v0.5.6` не заявляет рабочий Telegram-bypass. [Evidence](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md). Дальнейшие строки ниже — исторический протокол критериев, не актуальное поручение тестировать Telegram.
+
+## Историческая приёмка на установленной _28 (19.10.2026)
 
 Нормативный актуальный стенд/план: [native TNAS lab](architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md). [Неизменяемый owner-live результат](verification/evidence/2026-10-19-native-voice-tnas-reflector-first-run.md). Таблица ниже **перекрывает устаревшие ожидания** старого этапа `_4` и не переписывает их историческую проверку.
 
