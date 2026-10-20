@@ -2,8 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Published testing prerelease `v0.5.5_7` ([package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.5_7/os-zapret2-restyle-0.5.5_7.pkg), CI PASS; owner-live no-op и изменённый Strategies Apply на установленном `_7` успешны 20.10.2026): installed testing `_6` failed owner-live Apply because unchanged full JSON 1 900 088 bytes exceeds 65 536-byte native command envelope. `_7` sends changed fields only, retains full-form validation and root FD9 owner.
-
+**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. **Full Web/pkg release v0.5.6 published**: exact source merge `b319aafe748c1363712f5d7d6cbaaf40396bb64c`, annotated tag `v0.5.6` points at that merge, non-prerelease [GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) with pkg/SHA256SUMS, [release workflow #39468105730](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39468105730) four jobs PASS incl. FreeBSD15 Pages/pkg deployment. Owner GUI upgrade to `0.5.6_1` remains unverified. [Publication record](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
 ## Подтверждено на установленной `0.5.3_28`
 
 - На OPNsense `192.168.1.2` настоящий Voice Apply сохранил `Telegram ON`, journal `committed`, `voice_inspect.state=ready`, общий `dvtws2` и supervisor verified; таблица `zapret2_voice_telegram` содержит 14 CIDR, правило `19000` на WAN `vtnet1`.
@@ -21,7 +20,7 @@
 
 **Статус:** исследования Telegram Voice **закрыты отрицательным результатом в данном стенде**; `MEDIA_PASS=false`, `CALL_PASS=false`, окончательная причина отсутствия ответа (DPI/маршрут/NAT/сервер) не доказана. GUI Voice/STUN, Shared Apply и остальные компоненты сохраняются. Не проводить новые Telegram-звонки, capture/STUN, TTL/fake или прокси-маршрутные исследования без нового явного задания владельца. [Заключительное доказательство](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
 
-**Ровно следующая работа:** **полный релиз `v0.5.6_1`** (изменение stage `0.5.5 → 0.5.6`, новая редакция README, package validation, explicit release-preparation squash merge, annotated `v0.5.6` tag, проверенный GitHub Release с FreeBSD15 pkg/SHA256SUMS и публикация Pages/pkg). Не заявлять release/Web delivery PASS до фактической проверки workflow. После релиза исследовательская кампания Telegram не возобновляется автоматически. [Release plan](releases/v0.5.6.md).
+**Release v0.5.6 — published and delivered through GitHub/Pages.** No new Telegram tests, UDP captures, proxy/fake sweeps, or media research remain active. **Next owner-facing step** is a normal OPNsense **System → Firmware → Plugins** update check and installation/verification of `os-zapret2-restyle-0.5.6_1` (this cannot be attested remotely here). After the package is accepted there is **no pending Telegram experiment**; future product work requires a new owner request. [Verified full-release record](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
 
 ## Минимальное чтение
 
