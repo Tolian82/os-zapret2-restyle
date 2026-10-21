@@ -1,200 +1,230 @@
-# Strategy Lab — подробный план браузерных HTTP-проверок
+# Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Статус:** технический план согласованного направления с поправкой владельца от 21.10.2026: handshake достаточен, обязательный HTTP-ответ отменён, версия curl-impersonate не закрепляется. Реализация этапов 1–6 не начата.
-**Уточнения владельца:** 20–21.10.2026, включая уточнение о TLS/QUIC-handshake и FreeBSD latest. **Срез аудита:** исходники restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
-**Граница поручения:** оформить ТЗ и последовательность разработки. Изменение кода/пакета начинается по отдельной команде владельца. Этот документ не запускает релиз.
+**Status:** Approved technical plan; implementation stages 1–6 have not started.
+**Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
+**Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
+**Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
 
-## Назначение и конечная точка
+## Purpose and completion definition
 
-Первичный продуктовый контракт и определение готовности находятся в [REQUIREMENTS](../REQUIREMENTS.md), раздел «Strategy Lab — целевой результат браузерных HTTP-проверок», требования `BH-01`–`BH-12`. Здесь определены технические решения, участки кода, зависимости этапов и доказательства их завершения.
+The normative product requirements are `BH-01`–`BH-12` in [REQUIREMENTS](../REQUIREMENTS.md), section "Strategy Lab — browser-profile reachability target". This document defines code integration points, decisions, dependencies, stages and observable acceptance evidence.
 
-Результат разработки — установленная Strategy Lab, которая через один Chrome-профиль определяет прямую доступность по целевому TLS-handshake, при необходимости находит и подтверждает нативные стратегии Zapret2 (для QUIC — по handshake), показывает реально наблюдённые TLS/QUIC и необязательную HTTP-диагностику, а после любого исхода восстанавливает исходное состояние службы. HTTP/1.1 и HTTP/2 одинаково допустимы, если обнаружены, но **HTTP-ответ не требуется для успеха**. Отсутствие победителя при завершённом поиске допустимо; универсальный обход не обещается.
+The installed Strategy Lab must use one explicit Chrome profile to determine direct accessibility; if necessary, it must find and confirm native Zapret2 strategies; show what was actually observed; and restore the original service state after success, failure or cancellation. **An authentic HTTP response is affirmative evidence of accessibility even if no separately reported handshake observation is available.** An HTTP response with final status 2xx, 3xx, 4xx or 5xx qualifies, including an error page. HTTP/1.1 and HTTP/2 are equally valid. A 3xx response proves reachability of the checked endpoint, not reachability of a redirect destination. The response body and a 16 KiB depth target are not prerequisites. Conversely, a successful target TLS/QUIC handshake is sufficient even if no HTTP response arrives.
 
-Порядок: **1 → 2 → 3 → 4 → 5 → 6**. Номер этапа разработки не равен номеру стадии задания лаборатории. Для каждого этапа ниже заданы результат, задачи и приёмка. Обнаруженный блокирующий дефект исправляется в текущем этапе по `DEV-007`.
+"Accessible" here means that at least one accepted reachability signal was observed **for the checked endpoint**. It is not a guarantee that a complete browser page, JavaScript or all application features work, or that arbitrary providers can be bypassed. An exhaustive search without a winning strategy may legitimately end with no winner.
 
-## 1. Основание плана: что проверено в исходниках
+Development order: **1 → 2 → 3 → 4 → 5 → 6**. These are development stages, not runtime laboratory Stage 00–99 identifiers. Each development stage lists its tasks and acceptance criteria. A blocking same-scope defect must be fixed before proceeding (`DEV-007`).
 
-Это аудит кода, а не выполненная сборка или проверка новой версии на OPNsense.
+## 1. Evidence behind the plan: audited source
 
-| Источник | Проверенный срез | Практическое применение |
+This is a source audit, **not** evidence that a new package has been built or run on OPNsense.
+
+| Source | Audited snapshot | Decision based on that snapshot |
 | --- | --- | --- |
-| [restyle](https://github.com/Tolian82/os-zapret2-restyle/tree/8b31fa49cfcf00617f3137b8eb7bc80427d1f19f) | `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` | Сохраняем Python, Model C, CandidateSpec, ResourceInventory, фиксированные адреса, атрибуцию и Stage 90 |
-| [ugorur/os-zapret2](https://github.com/ugorur/os-zapret2/tree/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a) | `bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a` | Заимствуем получение текущего доступного пакета FreeBSD `latest` при **каждой** сборке, без pin версии, и приватное размещение |
-| [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate/tree/5e62540e0553f45b7ffcc9742ed9cb22b92172cc) | `5e62540e0553f45b7ffcc9742ed9cb22b92172cc` | Ориентир происхождения и возможностей Chrome; из текущего готового бинарника выбираем один доступный профиль, без pin его номера и без обязательного HTTP3 GET |
+| [restyle](https://github.com/Tolian82/os-zapret2-restyle/tree/8b31fa49cfcf00617f3137b8eb7bc80427d1f19f) | `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` | Keep Python, Model C, CandidateSpec, ResourceInventory, pinned endpoints, attribution and Stage 90 |
+| [ugorur/os-zapret2](https://github.com/ugorur/os-zapret2/tree/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a) | `bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a` | Fetch the current FreeBSD `latest` binary package for **each build**, without version pinning, and bundle it privately |
+| [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate/tree/5e62540e0553f45b7ffcc9742ed9cb22b92172cc) | `5e62540e0553f45b7ffcc9742ed9cb22b92172cc` | Browser impersonation reference; select one actual supported Chrome profile from the fetched binary |
 
-У ugorur [build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a/scripts/build-curl-h3.sh) использует `pkg fetch` с временной конфигурацией официального FreeBSD `latest`, извлекает бинарник и лицензии, проверяет HTTP3 и включает их в собственный пакет. Компиляции curl из исходников нет. [blockcheck.sh](https://github.com/ugorur/os-zapret2/blob/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a/src/opnsense/scripts/OPNsense/Zapret/blockcheck.sh) передаёт путь клиента upstream-проверке, но сам явно не выбирает Chrome-профиль. Его собственное управление PF/IPFW, службой и fallback на системный curl в restyle не переносится.
+The audited ugorur [build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a/scripts/build-curl-h3.sh) creates a temporary repository configuration for the official FreeBSD `latest`, uses `pkg fetch`, extracts the binary and licenses, checks the advertised HTTP3 capability, and includes the result in its own package. It does **not** compile curl. Its [blockcheck.sh](https://github.com/ugorur/os-zapret2/blob/bee24be58fb65d1f1fae0a9fd3f80c9dd5e5597a/src/opnsense/scripts/OPNsense/Zapret/blockcheck.sh) passes the private client path to upstream checks but does not itself set a Chrome profile. Do **not** copy ugorur's separate PF/IPFW/service ownership or fallback to ordinary system curl.
 
-У lexiforest [quick_start](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/docs/quick_start.rst) и [curl.patch](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/patches/curl.patch) подтверждают: имя бинарника не выбирает профиль; явные HTTP/TLS ограничения могут переопределить его; HTTP3 в возможностях бинарника и браузерный профиль HTTP/3 — разные свойства. Профиль Chrome допускает TLS 1.2/1.3. Поэтому для Standard принято штатное согласование, а принудительная TLS 1.2 остаётся отдельной проверкой Extended.
+Lexiforest's audited [quick start](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/docs/quick_start.rst) and [curl.patch](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/patches/curl.patch) show that the executable name does not implicitly select a browser profile, and explicit HTTP/TLS flags may override profile defaults. HTTP3 capability and Chrome-like HTTP3 fingerprinting are separate properties. A Chrome profile can negotiate TLS 1.2/1.3; Standard must use default negotiation, whereas forcing TLS 1.2 is an Extended-only branch.
 
-Проверенный срез upstream приведён только как историческое основание аудита, **не как закреплённая версия сборки**. Актуальный для каждой новой сборки бинарный пакет берётся из официального FreeBSD `latest` по процедуре ugorur; эта поставка не обязана совпадать по времени с самым новым релизом GitHub lexiforest. Версию не сравниваем с заранее заданным номером и не превращаем в блокирующий критерий.
+**Snapshot SHAs are audit references, not build pins.** For every new build use the currently available official FreeBSD `latest` package according to ugorur's acquisition method; it need not match lexiforest's most recent GitHub Release. Do not reject or choose a package based on a predetermined upstream version or Chrome version. The build artifact remains identifiable by its final package digest.
 
-### Карта реальных точек интеграции
+### Actual code integration points
 
-Пути Python ниже относительны к `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/`.
+The Python paths below are relative to `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/`.
 
-| Участок | Состояние проверенного кода | Изменение в плане |
+| Entrypoint | Audited behavior | Required change |
 | --- | --- | --- |
-| `scripts/build-pkg.sh` | Приватного curl-impersonate нет | Включить клиент, сведения о происхождении и лицензии до формирования plist |
-| `request.py` | Системный curl, принудительные HTTP/1.1 и TLS, `Connection: close`, GET с Range; QUIC через OpenSSL | Один Chrome-клиент для HTTP/HTTPS и единая классификация доказанного TLS/QUIC-handshake без обязательного прикладного ответа |
-| `probe.py`, `ip_target_support.py` | Прямая проверка и отдельный обработчик фиксированного IPv4/Host/SNI | Одинаковые параметры сравнения с кандидатами; фактический адрес из клиента |
-| `strategy_lab_python.py` | Устанавливает `ip_target_support.install()` и затем `truthful_result_support.install()` | Проверять именно этот установленный вход, включая заменённые обработчики |
-| `candidate.py`, `ip_target_support.py` | Несколько реализаций endpoint-probe; QUIC handshake может давать успех | Подключить общий HTTP-результат во все реально вызываемые обработчики |
-| `model_b_parallel.py`, `model_b_parallel_attribution.py`, `stage60_model_c.py` | Model C переиспользует эти функции; отдельные Range, исходящий порт, write-out и атрибуция | Мигрировать команды/разбор вместе, сохранить выбранный и фактический порт/IP |
-| `adaptive_validation.py` | GET-4K discovery/stability; глубокий HTTP-replay; QUIC исключён из проверки глубины | 3/3 и точный replay подтверждают handshake; HTTP-байты/глубина остаются необязательной диагностикой |
-| `truthful_result_support.py` | Обработка достоверных HTTP 4xx/5xx и отсутствующего Host/SNI | Сохранить эти решения для нового клиента и HTTP/3 |
-| `extended.py`, `strategy_lab/catalog/quic*` | Четыре QUIC-кандидата, остановка после первого `all_pass` | Прямой целевой QUIC-handshake и подтверждение кандидата без обязательного HTTP/3 GET, затем ограниченное расширение каталога |
-| `result.py`, `adaptive_result_compat.py` | QUIC уже является источником результатов; публикация до трёх профилей; отдельный circular handoff | Сохранить действующие границы, устранить ложные TLS/HTTP подписи |
-| `orchestrator.py` | `TARGET_ACCESSIBLE` завершает задание до поиска и Extended, затем Stage 90 | Сохранить ранний выход при доступном HTTPS; добавить точную причину пропуска HTTP/3 |
-| Представление, GUI, сохранённые результаты | Старые протокольные названия и неполные измерения | Отличать доказанный handshake от необязательного HTTP-ответа; не выдумывать старые измерения |
+| `scripts/build-pkg.sh` | Does not contain private curl-impersonate | Add client and licenses before plist creation |
+| `request.py` | System curl; forced HTTP/1.1 and TLS; `Connection: close`, ranged GET; OpenSSL QUIC | Common client command and parser for handshake **OR** authentic HTTP-response accessibility |
+| `probe.py`, `ip_target_support.py` | Direct probe and separately installed fixed-IPv4/Host/SNI handlers | Equivalent conditions and observed remote IP for baseline and candidates |
+| `strategy_lab_python.py` | Calls `ip_target_support.install()` then `truthful_result_support.install()` | Verify the actual installed production handlers, not only their unpatched originals |
+| `candidate.py`, `ip_target_support.py` | Multiple endpoint-probe implementations; QUIC handshake may count | Use one coherent success classification in every invoked handler |
+| `model_b_parallel.py`, `model_b_parallel_attribution.py`, `stage60_model_c.py` | Model C reuses parallel helpers; separate source-port, Range, write-out and interception | Migrate commands and parsing together; keep IP/port attribution |
+| `adaptive_validation.py` | GET-4K discovery/stability and deep replay; QUIC not in HTTP depth checks | Require three successful attempts and exact replay under the revised OR criterion; HTTP size remains optional |
+| `truthful_result_support.py` | Handles actual HTTP 4xx/5xx and missing Host/SNI | Treat a genuine HTTP error response as accessibility, not as automatic DPI failure |
+| `extended.py` and `strategy_lab/catalog/quic*` | Four QUIC candidates; stops after first `all_pass` | Confirm actual target QUIC success without mandatory HTTP3 GET, then extend catalog |
+| `result.py` and `adaptive_result_compat.py` | QUIC is already a result source; top three outputs; HTTPS circular handoff | Keep limits, prevent false TLS/HTTP claims, publish reachability evidence type |
+| `orchestrator.py` | `TARGET_ACCESSIBLE` terminates before search and Extended, then Stage 90 | Preserve early exit for **either** valid direct TLS handshake **or** genuine HTTPS response |
+| Existing view, GUI and persisted results | Historical protocol labels and partially observed data | Show observed facts only, support old jobs without inventing new values |
 
-Замена только `request.curl_request()` неполна: Model C вызывает построитель команды отдельно, а установленный Python-вход подменяет часть endpoint-функций. Эти пути входят в один этап миграции Standard.
+Replacing only `request.curl_request()` is insufficient: Model C constructs commands separately, and the production Python entrypoint installs replacement endpoint handlers. All are part of the same Stage 2 migration.
 
-## 2. Технические решения для реализации
+## 2. Implementation decisions
 
-### Клиент и поставка
+### Client acquisition and installation
 
-- Приватный путь: `/usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate`; системный curl не заменяется.
-- В **каждой новой сборке** получать доступный на момент сборки готовый бинарный пакет `curl-impersonate` из официального FreeBSD `latest` с проверкой подписей по схеме [ugorur/build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/main/scripts/build-curl-h3.sh). Источником проекта является [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate); не утверждать, что версия бинарника из FreeBSD `latest` обязана совпадать с последним GitHub Release.
-- Не закреплять номер релиза, curl upstream commit или версию Chrome в скрипте сборки, проверках либо ТЗ. Из реально поставляемого клиента централизованно выбрать **один поддерживаемый Chrome-профиль**; этот выбор одинаков для всех проверок конкретного установленного пакета. Обнаружение доступного профиля — техническая задача этапа 1, не новый выбор владельца.
-- Включить клиент и лицензии внутрь плагина без сетевого скачивания/компиляции при установке. Для трассировки собранного артефакта допустимы пакетный SHA-256/ABI/диагностическое имя, но не pin и не проверка минимальной/точной версии. Проверить наличие клиента, Chrome-профиля, CA и необходимой возможности до остановки службы; системная конфигурация не меняется, `-k` недопустим.
+- Private executable location: `/usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate`. Never replace `/usr/local/bin/curl`.
+- In **each new build**, fetch the available prebuilt `curl-impersonate` package from the official signed FreeBSD `latest` repository using the approach of [ugorur/build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/main/scripts/build-curl-h3.sh). The upstream project reference is [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate). Installing the plugin must not download or compile the client.
+- Do not pin upstream release, Git commit, package version, or Chrome version. From the fetched binary select **one supported Chrome profile** centrally; every check within a particular installed plugin uses that same profile. Deciding how to discover the supported profile is a Stage 1 implementation task, not a new product decision.
+- Bundle the binary and necessary licenses. Record enough to identify the **produced plugin package** (e.g., ABI and SHA-256); a diagnostic upstream version may be logged, but no upstream version is a selection gate.
+- Check required executable/profile/CA/capabilities **before stopping the regular service**. Use the existing FreeBSD/OPNsense trusted CA store, do not add `-k`, do not mutate system client/proxy settings. Report missing prerequisites as technical errors. No Firefox or ordinary curl fallback.
 
-### Единая политика проверки и критерий результата
+### Exact endpoint accessibility rule
 
-| Режим | Согласование | Достаточный положительный результат |
+For **each required endpoint**, the following independent evidence is sufficient:
+
+1. **TLS:** verified completion of a TLS handshake with the intended HTTPS endpoint using the prescribed host/SNI, server identity and address/attribution.
+2. **QUIC:** verified completion of a QUIC handshake with the intended UDP/443 endpoint, with the prescribed endpoint identity and attribution. Merely connecting with TCP does not prove QUIC.
+3. **HTTP response:** a genuine final HTTP response from the intended endpoint, with an observed final status code (2xx, 3xx, 4xx or 5xx), on an allowed HTTP version and transport. **Any** such response means that endpoint is accessible; 4xx and 5xx are positive reachability evidence, not automatic DPI failures. A separate handshake report, response body, deep download or expected status code is **not** required.
+
+In symbols: `accessible(endpoint) = verified_target_TLS_handshake OR verified_target_QUIC_handshake OR authentic_target_HTTP_response`, constrained by the requested transport/mode and endpoint identity. This is an **OR**, not an **AND**, and not a three-step sequence. It must not silently allow a TCP handshake to substitute for a requested QUIC handshake, or an HTTP response from another IP, an unexpected proxy, or a redirect destination to count for the pinned endpoint.
+
+A truncated transfer **after a genuine final HTTP status/headers have been received** does not revoke the positive HTTP-response evidence. A connection-only event, malformed response, 1xx-only interim status, timeout without proven evidence, or guessed TLS version/HTTP status does not qualify.
+
+| Mode | Request policy | Accepted positive evidence |
 | --- | --- | --- |
-| Standard HTTPS | `--impersonate <выбранный Chrome>`, штатный TLS 1.2/1.3, допускаются HTTP/1.1/HTTP/2 | **Один успешный TLS-handshake целевого endpoint** с корректными IP/Host/SNI и проверяемой атрибуцией; HTTP-ответ не нужен |
-| Extended TLS 1.2 | Тот же Chrome, `--tlsv1.2 --tls-max 1.2` | Успешный целевой TLS-handshake с указанной политикой |
-| Extended HTTP | HTTP TCP/80, тот же клиент | Для открытого HTTP без TLS сохраняется прикладной критерий проверки соединения/ответа этого отдельного режима; это не обязательный критерий для TLS/QUIC |
-| Extended QUIC | UDP/443 целевого endpoint, Enable QUIC ON | **Один успешный QUIC-handshake** с нужной идентичностью и атрибуцией; HTTP/3 GET и ответ не нужны, TCP fallback запрещён |
+| Standard HTTPS | `--impersonate <selected Chrome>`; Chrome-default TLS negotiation (1.2/1.3); HTTP/2 or HTTP/1.1 if negotiated | Verified intended TLS handshake **OR** genuine HTTPS response; neither needs the other |
+| Extended forced TLS 1.2 | Same Chrome with `--tlsv1.2 --tls-max 1.2` | Verified TLS 1.2 handshake **OR** genuine HTTPS response over that explicitly requested TLS policy |
+| Extended cleartext HTTP | Same private client over `http://`, TCP/80 | Genuine HTTP response from the intended endpoint, any final 2xx–5xx |
+| Extended QUIC | Intended UDP/443; Enable QUIC ON | Verified target QUIC handshake **OR** genuine HTTP/3 response on QUIC; no TCP fallback; no mandatory HTTP/3 GET response |
 
-- Успех фиксируется по реальному завершению соответствующего **целевого** TLS/QUIC-handshake, а не по запуску команды, TCP connect, пустому тайм-ауту или обмену с другим адресом. Сохраняются фиксированный IPv4 endpoint epoch, требуемые Host/SNI, CA, проверка наблюдённого remote IP и IPFW/source-port для кандидатов.
-- Для HTTP/HTTPS-клиента отключать сторонний curlrc (`-q`) и прокси окружения; без непредусмотренной переадресации на другой endpoint. Не использовать чужие cookies или Alt-Svc cache. Для TLS в Standard не навязывать TLS 1.3, `--http1.1`, `Connection: close` или ручной ALPN.
-- GET/HTTP/3 GET, HTTP-код, ALPN, байты/глубина, диапазоны Range и статус сертификата могут собираться как **дополнительная диагностика**, если клиент их реально сообщает. Неполученный HTTP-ответ/тайм-аут прикладного запроса **не отменяет уже доказанный handshake-успех**. Диагностический HTTP-результат и классификация handshake записываются отдельно; недоступные поля — `не измерено`.
-- Сохраняются конечные таймауты, отмена, одинаковые условия прямой проверки и кандидатов, три подтверждения на каждом обязательном endpoint и один точный replay финального профиля. 4/64 KiB и порог глубины 16 KiB допустимы для необязательных HTTP-полей, но не влияют на положительный критерий TLS/QUIC. HTTP/1.1 и HTTP/2 не ранжируются как разные уровни доступности.
+Transport correctness, selected/observed remote IP, Host/SNI, server certificate/CA when TLS is in use, and required IPFW/source-port interception evidence remain mandatory. HTTP replies from the wrong endpoint, through an unintended proxy or following an unintended redirect do not qualify.
 
-### Результаты и наблюдаемость
+### Request isolation, comparability and validation
 
-- Минимальная структура: режим, выбранный Chrome-профиль, URL/Host/SNI, выбранный IP и фактически наблюдённый remote IP, исходящий порт при требуемой атрибуции; вид и статус целевого TLS/QUIC-handshake, идентичность/CA, попытки и причина результата; job/search epoch, candidate/spec/resource, отмена/бюджет/восстановление.
-- Дополнительные HTTP-поля (HTTP-версия, код, полученные байты, глубина, HTTP3 GET) показываются **только если реально измерены**. Никогда не приписывать HTTP/3 по одному QUIC-handshake и не приписывать TLS 1.3 по старому внутреннему ключу `tls13`. HTTP-неуспех после успешного handshake показывается отдельно, без понижения принятой доступности.
-- Единый разбор поддерживает все действующие production-пути, включая Model C и подменённые IPv4-обработчики. Старые сохранённые результаты читаются без переписывания и без появления фиктивных измерений.
+- Use `-q` first to suppress user curlrc; clear ambient proxy use, keep cookies and Alt-Svc caches isolated per job. Do not change system-wide proxy settings.
+- Keep a fixed IPv4 destination epoch, the same URL and Host/SNI for baseline and candidates, `--resolve` where appropriate, no automatic cross-endpoint redirects, zero retries and bounded connect/overall timeouts.
+- Remove forced `--http1.1`, `Connection: close`, manual ciphers/ALPN and forced TLS 1.3 from Standard. An HTTP/1.1 response is as positive as HTTP/2; a Chrome-negotiated TLS 1.2 connection is as valid as TLS 1.3.
+- Ranged GET, actual HTTP version/status, response bytes, download completeness and 16 KiB depth can be retained as **extra diagnostics** where observed. The existing short GET-4K and deeper replay up to 64 KiB are not new hard success gates. Server ignoring Range, short complete content or a body transfer error does not revoke an independently established handshake or genuine response.
+- Existing candidate reliability rules remain: successful checks in **3/3 independent attempts on each mandatory endpoint**, then **one exact finalist profile replay** using the same protocol/port/flags/resources. Each attempt is successful if one allowed evidence type qualifies for its requested mode. A replay cannot be waived merely because one discovery attempt succeeded.
+- A technically invalid client/certificate/identity/attribution result is distinct from a valid network-negative attempt. Stopping/cancellation, budget expiration and restore failure also remain separate outcomes.
 
-### Ветвление QUIC
+### Evidence fields and display
 
-1. Успешный прямой TLS-handshake на всех обязательных HTTPS endpoints → `TARGET_ACCESSIBLE`, немедленное прекращение поиска, ноль последующих QUIC-кандидатов, Stage 90. HTTP3/QUIC не запускаются даже при Enable QUIC ON.
-2. Если основной HTTPS не подтверждён, QUIC рассматривается только в Extended при Enable QUIC ON и достаточной идентичности Host/SNI; OFF, Standard и bare IPv4 без имени пропускаются с точной причиной.
-3. Stage 30 остаётся вспомогательным контролем и не запрещает Stage 80 своим отрицательным результатом. Только handshake **целевого** endpoint с доказанным адресом/идентичностью может быть положительным фактом доступности, а не произвольный контрольный QUIC-сервер.
-4. Перед QUIC-кандидатами — один прямой целевой QUIC-handshake без dvtws2. При успехе показать `доступно напрямую по QUIC`, ноль кандидатов; HTTP/3 GET для этого не требуется.
-5. При отсутствии прямого QUIC-handshake выполняется конечный поиск кандидатов. QUIC-handshake достаточен для победы, но TCP fallback, чужой IP, неподтверждённый перехват или невалидное завершение не подходят.
-6. Сетевой тайм-аут не доказывает отсутствие поддержки QUIC либо DPI-блокировку. Ошибка запуска, CA, возможностей клиента, адреса/атрибуции или восстановления отдельно классифицируется как техническая.
+Reuse the existing structured results; do not introduce a second persistence or diagnostic subsystem.
 
-## 3. Этапы разработки
+Minimum evidence: mode, selected Chrome profile, target URL and Host/SNI, pinned IPv4 and actually observed remote IP, requested/observed local port where needed, success signal **type** (TLS handshake, QUIC handshake, HTTP response, possibly more than one), protocol/policy actually observed, relevant identity/certificate result, HTTP final status when present, process exit and timeout, attempt numbers, endpoint epoch, candidate/spec/resource identity, interception/attribution decision and terminal reason.
 
-### Этап 1 — готовый клиент внутри пакета
+HTTP version, HTTP/3 response, status, bytes and depth are reported only when measured. Do not label QUIC handshake as proven HTTP/3 GET; do not label all Standard successes as TLS 1.3 merely because an older internal key is `tls13`. A successful HTTP response is **not merely diagnostic**: it is independently positive reachability evidence. Missing optional data is "not measured" rather than a fabricated value.
 
-**Зависимость:** команда владельца на начало реализации. **Наблюдаемый результат:** пакет содержит исполняемый приватный `curl-impersonate` с одним доступным Chrome-профилем.
+One parser must serve the real installed Model C, fixed-IPv4 overrides and other active handlers. Read previous jobs without rewriting them or adding retroactive Chrome/QUIC/HTTP observations.
 
-1. По примеру ugorur добавить небольшой сборочный помощник и вызвать его в `scripts/build-pkg.sh` до формирования plist.
-2. В **каждой новой сборке** скачать пакет из официального FreeBSD `latest` для целевого ABI с обычной проверкой подписей, извлечь приватные файлы и лицензии; без pin версии, без собственной сборки исходников и без изменения системного curl.
-3. Выбрать из реально поставленного бинарника один поддерживаемый Chrome-профиль и проверить CA и необходимые TLS/QUIC возможности; не проверять номер версии как условие допуска.
-4. Добавить ограниченную проверку готовности клиента до остановки службы. Исходный production-код запросов переключается только на этапе 2.
+### QUIC branching
 
-**Приёмка:** состав pkg, SHA-256 итогового артефакта, исполняемость и выбранный Chrome-профиль; реальные целевые TLS- и QUIC-handshake в FreeBSD 15, включая TLS 1.2. HTTP/1.1/2 или HTTP/3 ответы при их получении могут быть дополнительной диагностикой, но **не обязательны**. Система и служба не изменены. FreeBSD CI не заменяет приёмку установленного OPNsense.
+1. If **all mandatory HTTPS endpoints** are directly accessible via an accepted target TLS handshake **or** genuine direct HTTPS response, immediately return `TARGET_ACCESSIBLE`, skip search/Extended/QUIC even with Enable QUIC ON, and perform Stage 90. QUIC candidate count is zero.
+2. Otherwise, QUIC is considered only for Extended with Enable QUIC ON and enough Host/SNI identity. Standard, OFF and bare IPv4 without necessary identity skip with a truthful reason.
+3. Stage 30 OpenSSL remains an auxiliary control. A negative Stage 30 result does **not** prevent Stage 80. A handshake with an unrelated control server is not proof that the target endpoint is reachable.
+4. Before starting QUIC candidates, run **one direct target QUIC check without dvtws2**. A verified target QUIC handshake or genuine HTTP/3 response proves direct QUIC availability, with zero winning candidate strategies; an HTTP/3 GET response is not mandatory.
+5. If direct QUIC is not confirmed, run the bounded candidate search. QUIC success is proven by the requested transport signal, not by TCP fallback. The candidate must also have actual IPFW interception and correct remote IP/identity.
+6. A timeout does not establish whether the remote server lacks QUIC or DPI interferes. Missing client capability, CA, options, attribution or restoration is a technical error, not a "blocked site" conclusion.
 
-### Этап 2 — сквозная основная HTTPS-проверка
+## 3. Development stages
 
-**Зависимость:** этап 1. **Наблюдаемый результат:** Standard от прямой проверки до готовой рекомендации классифицирует целевой TLS-handshake через один Chrome-профиль.
+### Stage 1 — bundle a ready-to-run private client
 
-1. В `request.py` реализовать единый построитель команд и разбор реального handshake; настроить локальную изоляцию curlrc/proxy, CA/Host/SNI и фиксированные IP. Если из клиента не удаётся получить факт handshake независимо от HTTP-ответа, исследовать достаточный штатный вывод/API на том же бинарнике; нельзя подменять handshake фактом запуска.
-2. Сквозным изменением перевести `probe.py`, `candidate.py`, `ip_target_support.py`, прямой `_curl_command` в `model_b_parallel.py`, атрибуцию в `model_b_parallel_attribution.py`, вызов через `stage60_model_c_production`/`stage60_model_c`, `adaptive_validation.py` и `truthful_result_support.py`.
-3. Для baseline/discovery/stability сравнивать одинаковый Chrome/TLS/URL/Host/SNI/IP/epoch/тайм-аут. Сохранить source-port leasing, IPFW, Model C до трёх, CandidateSpec/ResourceInventory и исходные endpoint-последовательности.
-4. Для рекомендации требовать 3/3 подтверждённых TLS-handshake на всех обязательных endpoints и точный replay полного кандидата; HTTP-ответ и глубина необязательны. Реально измеренные 4xx/5xx, ALPN, HTTP1.1/2 и байты записывать отдельно.
-5. Сохранить ранний `TARGET_ACCESSIBLE` в `orchestrator.py` при прямом TLS-handshake и обязательный Stage 90; в этом случае не запускать поисковые и QUIC-кандидаты. Не называть автоматически согласованный TLS 1.2 именем TLS 1.3.
-6. Удалить зависимость производственных HTTP/HTTPS путей Strategy Lab от обычного системного curl, не затрагивая прочие подсистемы плагина.
+**Dependency:** Explicit owner instruction to begin implementation.
+**Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
-**Приёмка:** прямой успешный TLS-handshake (включая TLS 1.2 и endpoint только HTTP/1.1) даёт положительный результат даже без HTTP-ответа; прямой неуспех приводит к реальному production Model C. 3/3 и точный replay подтверждают кандидата; чужие IP/порт, неверное имя/CA и отсутствие доказанной атрибуции не дают победителя. При прямом успехе последующие QUIC-кандидаты равны нулю.
+1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.
+2. For **each new package build**, obtain the current signed FreeBSD `latest` package for the target ABI; extract binary, required files and licenses. No upstream version pin, source compilation, system curl replacement or install-time download.
+3. Choose one Chrome profile supported by the fetched binary; determine usable CA and TLS/QUIC capabilities; never gate on a specific upstream version number.
+4. Add bounded client readiness checks before stopping the service. Keep production probe migration for Stage 2.
 
-### Этап 3 — Extended и QUIC-handshake
+**Acceptance:** Exact packaged content and final package digest are known; the private binary runs on FreeBSD 15, using the selected Chrome profile, and produces verifiable target TLS and QUIC handshake evidence, including TLS 1.2. Genuine HTTP responses (HTTP/1.1/2/3) also qualify as reachability evidence when obtained, **but no HTTP response is necessary after a confirmed handshake**. System curl/service configuration remain unchanged. FreeBSD CI is not owner-live installed acceptance.
 
-**Зависимость:** этап 2. **Наблюдаемый результат:** TLS 1.2 Extended и целевой QUIC/UDP443 оцениваются достоверно, без требования HTTP/3 GET.
+### Stage 2 — migrate the entire Standard HTTPS path
 
-1. Подключить принудительную TLS 1.2 к тому же Chrome-клиенту и доказательству handshake; HTTP TCP/80 оставить отдельным режимом без TLS с его собственным критерием.
-2. Для целевого QUIC использовать клиент/путь, подтверждающий завершение реального QUIC-handshake на UDP/443 с нужным IP/Host/SNI/идентичностью. Если используется `--http3-only`, это средство инициировать QUIC, **а не требование получить HTTP/3 GET-ответ**. Stage 30 не блокирует поиск своим отрицательным исходом.
-3. Провести прямую QUIC-проверку до запуска dvtws2; успешный handshake трактуется как прямая доступность, даже когда список стратегий пуст.
-4. Применить общий разбор и атрибуцию ко всем используемым QUIC candidate-probe, включая подменённые IPv4-обработчики, проверить UDP/443/remote IP/IPFW. Не принимать TCP fallback.
-5. Для первых четырёх QUIC-кандидатов добавить 3/3 handshake и один точный replay финалиста с ранним отказом при неустойчивости. Подтверждения выполняются новыми соединениями в одном endpoint epoch.
-6. Включить QUIC-финалистов в общий контур рекомендации, сохранив отдельный Generic UDP-контракт. Различать ошибки клиента/CA/опции, сетевой неуспех, бюджет и отмену; проверить ON/OFF, bare IPv4 и Host/SNI.
+**Dependency:** Stage 1.
+**Observable outcome:** Standard baseline, discovery, stability and finalist recommendation use the same Chrome profile and the OR accessibility rule.
 
-**Приёмка:** доказанный QUIC-handshake достаточен даже без HTTP/3-ответа; один успешный TLS handshake не маскирует отсутствие QUIC на UDP/443, и наоборот. Отрицательный Stage 30 не выключает ON; OFF и прямой HTTPS-успех не запускают QUIC. Прямой QUIC-успех не создаёт фиктивную стратегию; QUIC-финалист имеет 3/3 и точный replay.
+1. Create a shared command builder and evidence parser in `request.py`; isolate curlrc/proxy, CA, Host/SNI, fixed IP and timeouts. Distinguish authenticated handshake success from genuine HTTP response. If the client cannot expose handshake evidence independently of the HTTP result, establish a real supported observation method with that binary; do not guess from process invocation.
+2. Migrate `probe.py`, `candidate.py`, actual `ip_target_support.py` overrides, direct `_curl_command` callers in `model_b_parallel.py`, local-port/write-out parsing in `model_b_parallel_attribution.py` and their real `stage60_model_c_production`/`stage60_model_c` callers. Update `adaptive_validation.py` and installed `truthful_result_support.py` in the same scope.
+3. Compare baseline and candidates using equal Chrome/TLS policy, URL, Host/SNI, pinned address/epoch, Range and timeout conditions. Preserve source-port leasing, exact IPFW attribution, Model C width up to three, CandidateSpec/ResourceInventory, ranking and endpoint ordering.
+4. Enforce 3/3 allowed reachability signals per endpoint and one exact finalist replay; optional HTTP response/body/depth is not an extra gate when TLS handshake succeeds. Accept genuine 4xx/5xx as reachable.
+5. Preserve early `TARGET_ACCESSIBLE` for a valid direct TLS handshake **or** genuine HTTPS response, even if the other is not separately observed. Do not run QUIC/search afterward, but always restore through Stage 90; never incorrectly label negotiated TLS 1.2 as TLS 1.3.
+6. Remove ordinary system curl from **production** Strategy Lab HTTP/HTTPS checks, without changing unrelated plugin subsystems.
 
-### Этап 4 — ограниченное расширение QUIC-каталога
+**Acceptance:** Direct TLS 1.2, HTTP/1.1-only and HTTP/2 endpoints qualify by TLS handshake or their real HTTP response. A genuine HTTPS 4xx/5xx counts as reachable; a response with no body is enough. Negative baseline triggers the actual Model C production entrypoint, and an attributed candidate needs 3/3 and exact replay. Wrong IP/port, invalid server identity/certificate, wrong proxy and missing interception cannot win. Direct success yields zero QUIC candidates.
 
-**Зависимость:** этап 3; расширять поиск до исправления handshake-критерия победы нельзя. **Наблюдаемый результат:** больший конечный набор реальных нативных вариантов в существующем бюджете.
+### Stage 3 — Extended TLS/HTTP and target QUIC
 
-| Семейство | Значения | Число |
+**Dependency:** Stage 2.
+**Observable outcome:** Extended uses correct TLS 1.2/cleartext HTTP evidence and proves QUIC reachability without requiring HTTP/3 GET.
+
+1. Integrate forced TLS 1.2 with the same client and OR evidence classifier. Cleartext HTTP TCP/80 is independently positive on a genuine HTTP response.
+2. Use the client/path that actually proves a target UDP/443 QUIC handshake with required IP/Host/SNI/identity. `--http3-only`, if used, initiates QUIC; it does **not** mean an HTTP/3 response is mandatory or can be inferred. Stage 30 does not gate Stage 80.
+3. Implement one direct QUIC baseline check before dvtws2. Verified direct QUIC handshake **or** actual target HTTP/3 response is accessible without a strategy.
+4. Reuse the same parser in all live QUIC candidate handlers, including IPv4 replacements; verify real UDP/443, observed remote IP and IPFW attribution. Reject TCP fallback.
+5. For the initial four QUIC candidates, require 3/3 independent qualifying attempts and one exact finalist replay. If unstable, reject early and continue admissible search; reuse the same endpoint epoch.
+6. Include proven QUIC finalists in the existing recommendation pipeline, but keep Generic UDP separate. Distinguish technical/client/CA/option problems, network negatives, budget and cancellation. Cover ON/OFF, missing Host/SNI and bare IPv4.
+
+**Acceptance:** Genuine target QUIC handshake qualifies even with no HTTP/3 response. A real HTTP/3 response is also positive evidence. A successful HTTPS/TCP endpoint does **not** imply successful QUIC when the requested transport is UDP/443. Negative Stage 30 does not disable Enable QUIC ON; OFF and prior direct HTTPS success do not enter QUIC. Direct QUIC success does not create a fictitious strategy; candidate recommendations require 3/3 and replay.
+
+### Stage 4 — bounded QUIC catalog expansion
+
+**Dependency:** Stage 3. Do not broaden search until winner classification is correct.
+**Observable outcome:** More useful native candidates can be tested within the existing finite budget.
+
+| Family | Values | Initial count |
 | --- | --- | --- |
 | Fake | repeats `1, 2, 5, 10, 20` | 5 |
 | IP fragmentation | `8, 16, 32, 64` | 4 |
-| Fake + fragmentation | repeats `2`, fragmentation `8, 16, 32, 64` | 4 |
+| Fake + fragmentation | repeats `2` and fragmentation `8, 16, 32, 64` | 4 |
 
-Итого 13 исходных вариантов до исключения несовместимых/дублирующихся; исходные четыре ID/порядок: `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`. Параметры ориентируются на [upstream 90-quic.sh](https://github.com/bol-van/zapret2/blob/master/blockcheck2.d/standard/90-quic.sh), а конкретный синтаксис проверяется для установленного dvtws2.
+There are 13 initial variants before filtering duplicates/resource-incompatible cases. Preserve initial IDs and order: `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`. Use [upstream 90-quic.sh](https://github.com/bol-van/zapret2/blob/master/blockcheck2.d/standard/90-quic.sh) as an approach reference; capture the actually used upstream revision and validate native syntax with installed dvtws2.
 
-1. Реализовать варианты в существующих CandidateSpec/ResourceInventory без импорта blockcheck2 и без декартова перебора.
-2. Использовать встроенный либо установленный fake-ресурс; отсутствие ресурса явно исключает соответствующий вариант.
-3. Допускать кандидата с учётом остатка абсолютного времени, обязательных endpoints и стоимости 3/3 handshake, replay, Stage 85 и восстановления; учитывать действующий Python launcher.
-4. Сохранять бюджеты и первоначальный отсчёт, завершать при подтверждённом победителе, отмене или исчерпании допустимого времени; отчёт различает испытанные, несовместимые и отложенные.
+1. Model new variants using existing CandidateSpec/ResourceInventory, exact action order and real resources. Do not import blockcheck2 or produce a full Cartesian product.
+2. Use supported builtin or already installed fake resources; explicitly exclude variants when unavailable rather than silently substituting payloads.
+3. Admit only candidates whose estimated cost fits remaining absolute time across mandatory endpoints, 3/3 confirmation, replay, Stage 85 and mandatory restoration; account for the actual Python launcher and its QUIC timeout.
+4. Keep existing top-level budgets and their starting point; finish on a confirmed winner, cancel or no admissible time. Show tested, incompatible and time-deferred variants separately.
 
-**Приёмка:** аргументы каждого варианта воспроизводимы; подтверждённые handshake атрибутируются; при достаточном времени все допустимые варианты достижимы. При малом остатке итог честно неполный, исходное состояние восстановлено; увеличивать бюджеты без измерений нельзя.
+**Acceptance:** Each of the 13 initial argument sets is reproducible, and each executed candidate has proper attribution. With adequate time and no winner all eligible variants are reachable; with insufficient time the honest incomplete outcome and clean restoration are mandatory. Do not enlarge time budgets without measured need.
 
-### Этап 5 — результаты, GUI и сохранённые задания
+### Stage 5 — results, GUI and persisted jobs
 
-**Зависимость:** этапы 2–4. **Наблюдаемый результат:** экран различает доказанный handshake и необязательный HTTP-ответ.
+**Dependency:** Stages 2–4.
+**Observable outcome:** The UI distinguishes direct reachability, successful candidate reachability and precisely which evidence was observed.
 
-1. В существующем JSON/отчёте показать Chrome-профиль, целевой TLS/QUIC-handshake, адрес, подтверждение попыток/атрибуции и причину результата; HTTP-протокол, код, объём и глубину выводить лишь если они фактически получены.
-2. Отличать прямую доступность от успеха стратегии; не дисквалифицировать HTTP/1.1 и TLS 1.2. Для QUIC показывать выполненные кандидаты и причины пропуска/ограничения; не подписывать QUIC-handshake как подтверждённую HTTP/3 загрузку.
-3. Сохранить верхний список до трёх подтверждённых рекомендаций и предпочтение основной HTTPS-ветки; найденные кандидаты без 3/3 и replay не рекомендовать.
-4. Сохранить существующий circular handoff HTTPS и ручной Apply. Не добавлять QUIC circular и новую recovery-архитектуру.
-5. Сохранить RU/EN, F5, старые результаты как исторические с отсутствующими измерениями и Enable QUIC OFF по умолчанию. Синхронизировать руководство, архитектуру, QUIC control и live-матрицу по мере фактической реализации.
+1. Extend existing JSON/report/view to show Chrome profile, TLS/QUIC/HTTP positive signal type, endpoint/identity/attribution, attempts and reason. Show negotiated TLS/HTTP, status, response bytes and depth only if actually measured.
+2. A genuine HTTP response is an affirmative reachability observation, **not merely a diagnostic entry**. Treat HTTP/1.1 and HTTP/2 equally and TLS 1.2 as valid. Show how many QUIC candidates were actually tried, with skip/budget reasons. Never relabel a QUIC handshake as a verified HTTP/3 GET.
+3. Keep at most three confirmed recommendation profiles and current preference for primary HTTPS. Show other proven QUIC results in protocol details; do not recommend an unvalidated candidate after one discovery success.
+4. Preserve the existing separate HTTPS circular handoff and manual Apply. Do not add QUIC circular or a new lifecycle system.
+5. Preserve RU/EN GUI text, Enable QUIC default OFF and persistence after F5. Read historic results without making up new Chrome/QUIC/HTTP observations. Synchronize user guide, main architecture, QUIC control, shortlist and affected live-matrix entries when actual code changes are implemented.
 
-**Приёмка:** прямой TLS, кандидат TLS, прямой QUIC, кандидат QUIC, пустой/неполный поиск, техническая ошибка и отмена имеют честное отображение; F5 не меняет смысл. Отсутствие HTTP-ответа при доказанном handshake не понижает итог, но и не создаёт выдуманных HTTP-данных.
+**Acceptance:** Direct TLS success, direct HTTPS response without a separate handshake observation, TLS candidate, direct QUIC, QUIC candidate, cleartext HTTP response, no winner, incomplete budget, technical failure and cancellation have consistent detailed and summary display. F5 does not change the meaning. A real response without a complete body is positive evidence, but absent HTTP measurements remain "not measured". No auto-Apply.
 
-### Этап 6 — установленный пакет и завершение разработки
+### Stage 6 — installed-package qualification and completion
 
-**Зависимость:** этапы 1–5. **Наблюдаемый результат:** рабочая Strategy Lab в проверенном пакете для OPNsense.
+**Dependency:** Stages 1–5.
+**Observable outcome:** Owner has a usable Strategy Lab in an accurately verified OPNsense package.
 
-1. Собрать точный тестовый FreeBSD 15 amd64 пакет обычным GitHub-путём; указать source commit, точный pkg, SHA-256 поставки, Chrome-профиль и реальные проверки. Не подменять доставку Actions artifact.
-2. Выполнить выбранную матрицу на установленной OPNsense; повторно использовать доказательства того же артефакта/сценария, если изменения их не сделали устаревшими.
-3. В сравнениях времени фиксировать одинаковые цели, endpoints, режим и бюджет; новые правила handshake могут менять число найденных стратегий — это не автономное доказательство улучшения.
-4. При Stop/отрицательном поиске/ошибке проверить отсутствие временных процессов и IPFW-правил и восстановление RUNNING/STOPPED; `RESTORE_FAILED` блокирует приёмку.
-5. Закрыть BH-01–BH-12 ссылками на реально выполненные CI/FreeBSD/пакет/владелец-live строки и синхронизировать текущие документы; полный стабильный релиз — только по отдельной команде владельца.
+1. Build and deliver the exact test package for FreeBSD 15 amd64 through the normal persistent GitHub testing-package path. Record source commit, package, SHA-256, Chrome profile and actual checks; Actions artifacts alone are not delivery.
+2. Run only the selected matrix below on installed OPNsense. Reuse evidence from the same unchanged artifact/scenario when still applicable.
+3. For timing comparisons use the same targets, modes, endpoint set and budgets. Changing success criteria can change the winner count; that alone proves neither an optimization nor a regression.
+4. For Stop, negative search and technical failure, confirm no temporary processes/IPFW rules and the originally RUNNING/STOPPED state restored. `RESTORE_FAILED` blocks completion.
+5. Close `BH-01`–`BH-12` only with actual CI/package/FreeBSD/owner-live evidence. Reconcile current documentation. A full stable Web/pkg release requires a separate owner command.
 
-**Приёмка:** новые обязательные строки подтверждены, пакет доступен владельцу, критических дефектов результата/восстановления нет; недоказанная строка остаётся открытой.
+**Acceptance:** The required rows of the new matrix are proven, package delivery is persistent, documentation matches installed behavior and no known critical result/restoration defect remains. Unrun checks remain open.
 
-## 4. Минимальная матрица доказательств
+## 4. Minimum acceptance-evidence matrix
 
-Новые строки до реализации **НЕ ВЫПОЛНЕНЫ**. Прежние [live-проверки](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) доказывают лишь прежнюю версию, а не новые Chrome/TLS/QUIC-критерии.
+**All new rows are NOT RUN / NOT VERIFIED as of this plan.** The [older live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) supports the previous implementation, not this Chrome/handshake-or-HTTP-response path.
 
-| ID | Сценарий и ожидаемый результат | Достаточное доказательство | Этап / требования |
+| ID | Scenario and expected behavior | Required evidence | Stage / requirements |
 | --- | --- | --- | --- |
-| V1 | Приватный клиент, FreeBSD latest без pin версии, один Chrome-профиль, CA, целевые TLS/QUIC-handshake | Реальные handshake текущего бинарника в FreeBSD, упаковка/лицензии, SHA-256 конечного pkg | 1 / BH-01, BH-02 |
-| V2 | Direct HTTPS: один корректный TLS-handshake достаточен независимо от HTTP-ответа/ALPN; QUIC не запускается | Production-вход, контролируемые endpoints, один установленный direct-сценарий | 2 / BH-03, BH-04 |
-| V3 | Direct неуспех → Model C → 3/3 TLS-handshake → точный replay → рекомендация | Автоматическая проверка и воспроизводимый установленный поиск с атрибуцией | 2, 6 / BH-05, BH-08 |
-| V4 | Fixed IPv4 + Host/SNI, remote IP/порт/CA | Отрицательные случаи mismatches и установленный endpoint | 2, 3 / BH-05, BH-06 |
-| V5 | QUIC OFF / ON при отрицательном Stage 30; QUIC-handshake достаточен без HTTP/3 GET | Ветвление, целевой UDP/443 handshake, installed IPFW evidence | 3 / BH-04, BH-06 |
-| V6 | Прямой QUIC-успех / кандидат / тайм-аут / техническая ошибка, без TCP fallback | Отдельные исходы, реальный QUIC-handshake и replay кандидата | 3 / BH-06, BH-09 |
-| V7 | Каталог до 13 вариантов; ранний успех, бюджет, отмена | Аргументы/ресурсы, достижимость, честное количество попыток | 4 / BH-07 |
-| V8 | TLS/QUIC handshake успех без HTTP-ответа; при наличии HTTP: 4xx/5xx/короткий ответ/обрыв | Классификация handshake отдельно от необязательной HTTP-диагностики | 2, 3 / BH-08, BH-09 |
-| V9 | RU/EN, F5, старые результаты, отсутствие авто-Apply | Проверка данных + установленной страницы | 5, 6 / BH-09, BH-10 |
-| V10 | Stop/ошибка/пустой поиск, исходные RUNNING/STOPPED | Проверки временных процессов/IPFW и восстановления | 2–6 / BH-11 |
-| V11 | Точный тестовый GitHub pkg и итоговые документы | Постоянная поставка и запись installed-acceptance | 6 / BH-12 |
+| V1 | Private current FreeBSD `latest` client, no version pin, one Chrome profile/CA, actual TLS/QUIC | Actual intended-target handshake on FreeBSD, binary/license contents, final package SHA-256 | 1 / BH-01, BH-02 |
+| V2 | Direct HTTPS accepts verified TLS handshake **OR** genuine HTTP response (H1/H2, TLS 1.2); no QUIC afterward | Production entrypoint and controlled endpoints, one installed direct run | 2 / BH-03, BH-04 |
+| V3 | Failed direct check → Model C → 3/3 successful attempts → exact replay → recommendation | Automated production-path test and one reproducible attributed installed run | 2, 6 / BH-05, BH-08 |
+| V4 | Pinned IPv4 with Host/SNI, correct remote IP/source port and certificate | Mismatch-negative tests and an installed pinned target | 2, 3 / BH-05, BH-06 |
+| V5 | QUIC OFF/ON despite negative Stage 30; actual QUIC handshake or actual HTTP/3 response counts | Branching checks plus actual target UDP/443 and installed IPFW attribution | 3 / BH-04, BH-06 |
+| V6 | Direct QUIC / candidate / timeout / technical error; no TCP fallback | Distinct outcomes, real QUIC evidence and exact candidate replay | 3 / BH-06, BH-09 |
+| V7 | Up to 13 native candidates, early success, cancel and finite budget | Reproducible flags/resources, attribution and honest executed/remaining counts | 4 / BH-07 |
+| V8 | HTTP 2xx–5xx (including 4xx/5xx), missing/short/truncated body, and handshake without HTTP | OR classifier with positive genuine HTTP response and independent handshake success | 2, 3 / BH-08, BH-09 |
+| V9 | RU/EN, F5, old results, no auto-Apply | Data tests and installed GUI observation | 5, 6 / BH-09, BH-10 |
+| V10 | Stop/error/empty search from originally RUNNING and STOPPED | Automated restoration and selected installed checks, no residue | 2–6 / BH-11 |
+| V11 | Exact test package and accurate final documents | Persistent GitHub package delivery and recorded installed acceptance | 6 / BH-12 |
 
-Недоступный у провайдера QUIC не позволяет заявить live-успех; при необходимости используется контролируемый endpoint. Такой успех не выдается за доказанный обход любого реального сайта. Если установленный положительный кандидат не подтверждён, строка остаётся открытой без бесконечного перебора.
+If a provider does not allow QUIC, do not claim live QUIC success. A controlled QUIC endpoint may verify the client and integration, but that is **not** evidence of bypassing a specific blocked website. An unproven positive installed candidate leaves its acceptance row open; do not run unlimited speculative searches.
 
-Основные существующие тестовые точки: `test-strategy-lab-python-probes.sh`, `test-strategy-lab-python-candidate-family.sh`, `test-strategy-lab-python-orchestration.sh`, `test-strategy-lab-python-search-extended.sh`, `test-strategy-lab-adaptive-validation.sh`, `test-strategy-lab-ip-targets.sh`, `test-strategy-lab-truthful-results.sh`, `test-strategy-lab-python-final-results.sh`, Model C/атрибуция и semantic restoration. Не создавать новую параллельную тестовую систему; mock не заменяет реальный handshake на проводе.
+Relevant existing test entries include `test-strategy-lab-python-probes.sh`, `test-strategy-lab-python-candidate-family.sh`, `test-strategy-lab-python-orchestration.sh`, `test-strategy-lab-python-search-extended.sh`, `test-strategy-lab-adaptive-validation.sh`, `test-strategy-lab-ip-targets.sh`, `test-strategy-lab-truthful-results.sh`, `test-strategy-lab-python-final-results.sh`, Model C/attribution and semantic restoration. Update affected existing tests; do not create a competing test subsystem. A mock can prove branching, **not** an actual network handshake or response.
 
-## 5. Ведение реализации и документации
+## 5. Execution records and documentation ownership
 
-Текущий статус этапов находится в [PROJECT_STATE](../PROJECT_STATE.md), единственный ближайший шаг — в [START_HERE](../START_HERE.md), направления — в [ROADMAP](../ROADMAP.md), хронология — в [ledger v0.5.x](../history/current/v0.5.x.md). Новая поправка владельца от 21.10.2026 отменяет обязательный HTTP-ответ и pin версии, но не изменяет статус реализации. План не является журналом каждого push.
+Current stage/status: [PROJECT_STATE](../PROJECT_STATE.md). Exactly one next action: [START_HERE](../START_HERE.md). Product directions: [ROADMAP](../ROADMAP.md). Change chronology and evidence: [v0.5.x ledger](../history/current/v0.5.x.md). This technical plan is not a per-push diary.
 
-Для каждого реализуемого этапа: назвать сценарий и критерий приёмки; внести связные изменения; выполнить затронутые проверки; синхронизировать контракт/текущее состояние; завершить GitHub-процедуру по `GH-010`–`GH-030`. Не объявлять установленный сценарий работающим только на основании исходников или количества тестов (`DEV-011`, `CHAT-003`).
+At every implementation stage: define the observable owner scenario and acceptance evidence; implement the coherent scope; run affected checks; synchronize any changed requirements/current facts; follow the GitHub PR/CI/exact-head merge procedure in `GH-010`–`GH-030`. Distinguish source, CI/package and installed OPNsense proof (`DEV-011`, `CHAT-003`).
 
-Документационная фиксация сохраняет `VERSION=0.5.6`, `PLUGIN_REVISION=1`. При начале реального нового этапа разработки применяется `DEV-027`–`DEV-035`; конкретный будущий номер не является уже опубликованным пакетом. План не меняет ни действующую службу, ни опубликованный релиз v0.5.6, ни закрытый статус Telegram Voice.
+**Current documentation-only identity:** `VERSION=0.5.6` and `PLUGIN_REVISION=1`. On the first actual implementation scope apply `DEV-027`–`DEV-035`. A future candidate is not already built or released. This plan does not change the existing running service, published v0.5.6, or the closed Telegram Voice investigation.

@@ -2,23 +2,23 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Изменение только документационное; опубликованный пакет остаётся прежним.
+**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Documentation-only update; no change to the published package.
 
-## Текущая задача — подробный план модернизации Strategy Lab
+## Current task — approved Strategy Lab modernization
 
-Утверждённый [подробный план разработки](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) и [ТЗ](REQUIREMENTS.md) (`BH-01`–`BH-12`) скорректированы 21.10.2026 по новой инструкции владельца. **Одного доказанного TLS- или QUIC-handshake с целевым endpoint достаточно для положительной доступности; прикладной HTTP-ответ/HTTP3 GET не обязателен.** HTTP-измерения, если есть, остаются отдельной диагностикой. Шесть этапов, схема Python/Model C, атрибуция, ранний выход и восстановление сохранены.
+The [detailed English development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) and [requirements](REQUIREMENTS.md) (`BH-01`–`BH-12`) now specify an explicit independent-OR reachability rule: **verified target TLS handshake OR verified target QUIC handshake OR genuine final target HTTP response is sufficient**. An HTTP response counts as accessible, including 4xx/5xx and without requiring a complete body; a separate handshake report is not necessary if the response is genuine. Stages 1–6, Model C, attribution and Stage 90 remain unchanged.
 
-Владелец сохраняет равноправие HTTP/1.1 и HTTP/2 (если наблюдаются), штатное согласование TLS Chrome и пропуск QUIC после успешного прямого HTTPS TLS-handshake. Принудительная TLS 1.2 — отдельная ветка Extended. **На каждой новой сборке берём доступный пакет FreeBSD `latest` по схеме ugorur, ориентируясь на upstream lexiforest, без закрепления или отбора по версии**; один поддерживаемый Chrome-профиль выбирается из фактического бинарника. Повторное согласование этих пунктов не требуется.
+Chrome-default TLS 1.2/1.3 is allowed; HTTP/1.1 and HTTP/2 are equally acceptable. Direct HTTPS success by **either TLS handshake or real HTTPS response** skips QUIC. Forced TLS 1.2 stays in Extended. For every build, fetch the available FreeBSD `latest` package using ugorur's approach, referencing lexiforest; do not pin or select by version. Use one Chrome profile supported by the actual binary. These decisions are settled.
 
-**Граница:** код, клиент внутри pkg и новые HTTP3-проверки ещё не реализованы. Аудит исходников не является приёмкой установленного пакета. Состояние реализации и предыдущей поставки — в [PROJECT_STATE](PROJECT_STATE.md).
+**Implementation boundary:** No new client, probe migration or newly specified QUIC checks have been implemented yet. Source audit is not installed OPNsense acceptance. See [PROJECT_STATE](PROJECT_STATE.md).
 
-## Единственное следующее действие
+## Single next action
 
-**После отдельной команды владельца начать реализацию этапа 1: включить готовый FreeBSD `latest` curl-impersonate в приватную поставку плагина, выбрать один реально поддерживаемый Chrome-профиль, проверить целевые TLS/QUIC-handshake.** При начале нового этапа применять действующие правила версии; эта документационная запись сохраняет `v0.5.6_1`. Уже утверждённые критерии не переоткрывать.
+**After a separate owner instruction to start implementation, begin Stage 1:** bundle the current FreeBSD `latest` curl-impersonate privately, select one supported Chrome profile, and verify real target TLS/QUIC signals. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. Keep `v0.5.6_1` for this documentation-only change; no stable release is authorized.
 
-Результат этапа 1: клиент и лицензии внутри pkg, фактическая исполняемость, CA, профиль, SHA-256 конечного пакета и реальные TLS/QUIC-handshake на FreeBSD 15. **Версия внешнего curl-impersonate не закрепляется и не проверяется как условие допуска; HTTP-ответ необязателен.** Сквозной переход исходников — этап 2. Полный Web/pkg-релиз не назначен.
+Stage 1 outcome: executable client and licenses in pkg, CA, Chrome profile, final pkg SHA-256, real FreeBSD 15 TLS/QUIC signals; any genuine HTTP response is positive reachability evidence, not merely diagnostics. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
 
-## Минимальное чтение по этапу
+## Minimum stage-specific reading
 
 1. [REQUIREMENTS](REQUIREMENTS.md) — разделы Strategy Lab и `BH-01`–`BH-12`.
 2. [Подробный план](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — аудит, технические решения и этап 1.

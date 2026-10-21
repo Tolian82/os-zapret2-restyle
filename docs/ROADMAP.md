@@ -2,18 +2,18 @@
 
 ## Текущий приоритет — модернизация Strategy Lab через curl-impersonate
 
-Подготовлены [целевое ТЗ](REQUIREMENTS.md) и [подробный план](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), скорректированные по указанию владельца 21.10.2026: **одного целевого TLS- или QUIC-handshake достаточно для положительной доступности, обязательный HTTP-ответ отменён**. Chrome-клиент берётся из FreeBSD `latest` при каждой сборке по методу ugorur (upstream lexiforest) без pin версии; один доступный профиль Chrome, равноправные HTTP/1.1/HTTP/2, ранний выход при прямом TLS-успехе и подтверждённые нативные стратегии остаются. HTTP3 GET допускается как диагностика, но не обязателен.
+The [target requirements](REQUIREMENTS.md) and [detailed English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) include the owner's 21 October 2026 correction: **a verified target TLS handshake OR QUIC handshake OR genuine final HTTP response individually proves reachability**. HTTP/1.1 and HTTP/2 are equally positive when observed; 4xx/5xx replies count as accessible. Get the current FreeBSD `latest` curl-impersonate at each build per ugorur, with lexiforest as upstream reference, no version pin, and one supported Chrome profile. Direct HTTPS success by handshake or response skips QUIC.
 
 Последовательность принятых этапов:
 
 1. Поставка готового клиента FreeBSD `latest` без закреплённой версии и выбор доступного Chrome-профиля.
-2. Сквозная миграция Standard/Model C и финалистов на доказанный TLS-handshake.
-3. Extended TLS 1.2/HTTP и целевой QUIC-handshake без обязательного HTTP3 GET.
+2. Migrate Standard/Model C and finalists to the handshake **OR** authentic HTTP-response classifier.
+3. Extended TLS 1.2/cleartext HTTP and target QUIC handshake **OR** genuine HTTP/3 response (no mandatory HTTP3 GET).
 4. Ограниченное расширение QUIC-каталога в конечном бюджете.
 5. Достоверные результаты, RU/EN и совместимость сохранённых заданий.
 6. Поставка и приёмка установленного пакета.
 
-Реализация не начата; отдельная команда владельца открывает этап 1. Критерии и задачи в подробном плане. Firefox, обычный curl fallback, обязательный HTTP-ответ, закрепление версии клиента, замена Python/Model C и новая recovery-архитектура исключены. Планирование не меняет опубликованный v0.5.6 и не запускает стабильный релиз.
+Implementation has not started. A separate owner command begins Stage 1. No Firefox, ordinary curl fallback, mandatory HTTP body, upstream version pin, Python/Model C replacement or new recovery architecture. No change to published v0.5.6 and no automatic stable release.
 
 ## Основной завершённый путь
 

@@ -135,6 +135,10 @@ DOC-053. **Internal Markdown links are repository integrity.** Every tracked loc
 
 DOC-054. **Choose rule lifecycle actions by meaning, not convenience.** Create a new rule only for a new durable normative principle that is not already covered. Modify an existing active rule when its normative identity remains the same and the change only clarifies, narrows, strengthens, or otherwise refines that same principle. Cancel a rule when its requirement no longer applies and has no successor. Replace a rule when the old normative meaning ceases to apply and a materially different durable rule takes its place. One-off tasks, current implementation facts, test results, temporary plans, and ordinary handoff state are not new canonical rules; route them through the current-work flow in `DOC-024` and the appropriate state/history documents.
 
+## Language of active technical documentation
+
+DOC-055. **New and substantively revised engineering documentation is written in English.** Use precise, unambiguous technical English; preserving the exact normative meaning is more important than idiomatic style. Translate a whole current technical page when explicitly requested. Translate affected requirements, contracts and current handoffs consistently with the changed canon. Do not mechanically rewrite unrelated historical evidence or untouched legacy pages solely for language uniformity. This rule does not change Russian owner-facing chat or the product's RU/EN GUI localization.
+
 ## Cross-reference registry
 
 This registry is part of the rule contract. It is maintained with rule changes and validated by CI under `DOC-042`–`DOC-045`.

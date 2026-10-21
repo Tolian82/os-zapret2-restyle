@@ -18,8 +18,8 @@
 
 ## Level 2 — текущая линия v0.5.x, этап v0.5.6
 
-- [ТЗ конечного результата Strategy Lab](REQUIREMENTS.md) — BH-01–BH-12 с поправкой 21.10.2026: handshake достаточен, обязательный HTTP-ответ отменён, curl-impersonate из FreeBSD latest без закрепления версии.
-- [Подробный план Chrome TLS/QUIC](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — шесть этапов, точки интеграции и матрица handshake-проверок; код не начат.
+- [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response), FreeBSD `latest` without pin.
+- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; implementation not started.
 - [Состояние реализации](PROJECT_STATE.md) и [единственный следующий шаг](START_HERE.md).
 
 ### Поставка и доказательства завершённых работ
@@ -57,7 +57,7 @@
 
 ## Specialist routes по задаче
 
-- Laboratory: [подробный план Chrome TLS/QUIC (не реализован)](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), [основная архитектура](architecture/STRATEGY_LAB.md), [Model C](architecture/STRATEGY_LAB_MODEL_C.md), [Enable QUIC](architecture/STRATEGY_LAB_QUIC_CONTROL.md), [публикация финалистов](architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md), [Generic UDP](architecture/STRATEGY_LAB_UDP_INPUT.md), [user guide](USER_GUIDE_STRATEGY_LAB.md), [live matrix](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
+- Laboratory: [English Chrome TLS/QUIC/HTTP plan (not implemented)](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), [main architecture](architecture/STRATEGY_LAB.md), [Model C](architecture/STRATEGY_LAB_MODEL_C.md), [Enable QUIC](architecture/STRATEGY_LAB_QUIC_CONTROL.md), [finalist publishing](architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md), [Generic UDP](architecture/STRATEGY_LAB_UDP_INPUT.md), [user guide](USER_GUIDE_STRATEGY_LAB.md), [live matrix](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
 - Историческая Telegram PoC laboratory (**НЕ native entrypoint**): [operations/SSH/ручные маршруты](architecture/TELEGRAM_LAB_OPERATIONS.md), [traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md), [oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [Docker campaign](architecture/TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md), [helper reference](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md).
 - Точечное исследование: [UDP research](research/TELEGRAM_VOICE_UDP.md), [topology/TTL](research/TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md), [optional independent control](architecture/TELEGRAM_VOICE_INDEPENDENT_CONTROL.md).
 - Общая навигация: [architecture/](architecture/), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md).
