@@ -104,8 +104,9 @@ awk -F '\t' '
 # Bound finite requests remain Python-owned. Redirects cannot escape the exact
 # selected endpoint, and Patch 6 adds bound QUIC plus generic UDP request/response.
 grep -Fq 'resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip' "${REQUEST_PY}"
-grep -Fq 'command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{resolve_ip}"])' "${REQUEST_PY}"
-grep -Fq 'if bound_ip is None:' "${REQUEST_PY}"
+grep -Fq '"--request", "GET", "--max-redirs", "0"' "${REQUEST_PY}"
+grep -Fq 'command.extend(["--resolve", f"{host}:{port}:{resolve_ip}"])' "${REQUEST_PY}"
+grep -Fq 'if bound_ip is not None:' "${REQUEST_PY}"
 grep -Fq 'def quic_target_request(host: str, address: str)' "${REQUEST_PY}"
 grep -Fq 'def udp_response_request(host: str, port: int, payload_path: Path)' "${REQUEST_PY}"
 
@@ -116,7 +117,11 @@ grep -Fq 'before_packets, before_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'after_packets, after_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'endpoint_match = remote_ip == selected' "${CANDIDATE_PY}"
 grep -Fq 'intercepted = after_packets > before_packets' "${CANDIDATE_PY}"
-grep -Fq 'passed = exit_code == 0 and endpoint_match and intercepted' "${CANDIDATE_PY}"
+# Standard Chrome HTTPS is accepted only with authenticated endpoint evidence;
+# all candidate protocols still require selected IP and IPFW counter growth.
+grep -Fq 'request.chrome_https_evidence(execution, expected_ip=selected)' "${CANDIDATE_PY}"
+grep -Fq '(chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)' "${CANDIDATE_PY}"
+grep -Fq 'and endpoint_match and intercepted' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "tls12":' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "http":' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "quic":' "${CANDIDATE_PY}"

@@ -53,15 +53,15 @@ host=$(printf '%s' "${url}" | sed -e 's#^https://##' -e 's#^http://##' -e 's#/$#
 printf 'curl-stderr-%s\n' "${host}" >&2
 case "${MOCK_CURL_MODE:-baseline-fail}:${host}" in
     network-pass:yandex.ru)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=10'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=10 ssl_verify=0 appconnect=0.150000'
         exit 0
         ;;
     network-pass:one.one.one.one)
-        printf '%s\n' 'exit=0 remote_ip=2001:db8::10 http=1.1 code=200 bytes=10'
+        printf '%s\n' 'exit=0 remote_ip=2001:db8::10 http=1.1 code=200 bytes=10 ssl_verify=0 appconnect=0.150000'
         exit 0
         ;;
     *)
-        printf '%s\n' 'exit=28 remote_ip= http=0 code=000 bytes=0'
+        printf '%s\n' 'exit=28 remote_ip= http=0 code=000 bytes=0 ssl_verify=1 appconnect=0.000000'
         exit 28
         ;;
 esac
@@ -273,5 +273,35 @@ sh -n "${RUNNER}"
 sh -n "${REQUEST_SH}"
 sh -n "${EXTENDED_REQUEST_SH}"
 sh -n "${LAUNCHER}"
+
+# Stage 2 classifier: transport evidence, pinned destination and CA are distinct
+# from curl's process exit. A verified handshake can win without an HTTP body,
+# and a real HTTP 503 can win even after a later body-transfer failure.
+PYTHONPATH="$ZAPRET_DIR" "$PYTHON" - <<'PY'
+from strategy_lab_py import request
+
+def result(line: str, code: int = 0):
+    return request.CommandResult(
+        command=["mock-chrome"], returncode=code, stdout=line, stderr="",
+        timed_out=False, termination="completed", signal=None, duration_ms=1,
+    )
+base = "exit=0 remote_ip=203.0.113.10 http=2 code=200 bytes=0 ssl_verify=0 appconnect=0.137000"
+ok = request.chrome_https_evidence(result(base), expected_ip="203.0.113.10")
+assert ok["accessible"] and ok["tls_verified"] and ok["http_response"]
+assert ok["http_status"] == 200
+handshake_only = request.chrome_https_evidence(
+    result("exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=0 appconnect=0.137000", 28),
+    expected_ip="203.0.113.10",
+)
+assert handshake_only["accessible"] and handshake_only["tls_verified"] and not handshake_only["http_response"]
+http_error = request.chrome_https_evidence(
+    result("exit=18 remote_ip=203.0.113.10 http=1.1 code=503 bytes=0 ssl_verify=0 appconnect=0.000000", 18),
+    expected_ip="203.0.113.10",
+)
+assert http_error["accessible"] and http_error["http_response"] and not http_error["tls_verified"]
+assert not request.chrome_https_evidence(result(base), expected_ip="203.0.113.11")["accessible"]
+assert not request.chrome_https_evidence(result(base.replace("ssl_verify=0", "ssl_verify=60")), expected_ip="203.0.113.10")["accessible"]
+assert not request.chrome_https_evidence(result("exit=0 remote_ip=203.0.113.10 http=2 code=200 bytes=0"), expected_ip="203.0.113.10")["accessible"]
+PY
 
 echo 'PASS: Python 3.13 owns finite Strategy Lab requests/probes, answer-aware DNS parsing, and distinct subprocess diagnostics'

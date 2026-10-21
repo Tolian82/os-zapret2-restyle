@@ -30,5 +30,6 @@ jq -e '.protocols.tls12.working.id=="tls12-fake" and .protocols.http.working.id=
 grep -Fq 'strategy_lab_request_python tls12' "${MODULE_DIR}/extended_request.sh"
 grep -Fq 'strategy_lab_request_python http' "${MODULE_DIR}/extended_request.sh"
 grep -Fq '"--tls-max", tls_version' "${REQUEST_PY}"
-grep -Fq 'command = [binary("curl"), f"--{family}", "--proto", f"={scheme}"]' "${REQUEST_PY}"
+grep -Fq 'command = [binary("curl"), f"--{family}", "--proto", f"={scheme}",' "${REQUEST_PY}"
+grep -Fq '"--request", "GET", "--max-redirs", "0"' "${REQUEST_PY}"
 echo 'PASS: Strategy Lab extended TLS 1.2 and HTTP branches preserve protocol-specific contracts through the Python finite-request owner'

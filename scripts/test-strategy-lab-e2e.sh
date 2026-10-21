@@ -90,15 +90,15 @@ if [ "${MOCK_SCENARIO:-}" = timeout ] && [ "${host}" = yandex.ru ]; then
 fi
 case "${host}" in
     yandex.ru)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.1 http=1.1 code=200 bytes=100'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.1 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
         exit 0
         ;;
     accessible.example)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=100'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
         exit 0
         ;;
     *)
-        printf '%s\n' 'exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0'
+        printf '%s\n' 'exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=1 appconnect=0.000000'
         exit 28
         ;;
 esac
@@ -399,6 +399,7 @@ run_job()
     expected_state="$4"
     expected_outcome="$5"
     target="${6:-blocked.example}"
+    printf "E2E scenario=%s mode=%s target=%s\\n" "${scenario}" "${mode}" "${target}"
 
     export MOCK_SCENARIO="${scenario}"
     rm -f "${RESTORED_FILE}"
@@ -487,6 +488,7 @@ printf '%s\n' "${LAST_RESULT}" | jq -e '.initial_service_state=="STOPPED" and .r
     fail 'STOPPED restoration evidence is invalid'
 
 export MOCK_SCENARIO=success
+printf "E2E phase=circular-start\n"
 circular=$(api_call strategy_lab_circular_start "${SUCCESS_JOB}")
 printf '%s\n' "${circular}" | jq -e '.state=="queued" or .state=="running"' >/dev/null ||
     fail 'eligible circular validation did not start'
@@ -527,9 +529,13 @@ grep -Fq 'public function statusAction(): array' "${CONTROLLER}" || fail 'API st
 grep -Fq 'public function cancelAction(): array' "${CONTROLLER}" || fail 'API cancel action is missing'
 grep -Fq 'public function resultAction(): array' "${CONTROLLER}" || fail 'API result action is missing'
 
+printf "E2E phase=delegated-active-cancel\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh" >/dev/null
+printf "E2E phase=delegated-time-budget\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-time-budget.sh" >/dev/null
+printf "E2E phase=delegated-semantic-restoration\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-semantic-restoration.sh" >/dev/null
+printf "E2E phase=delegated-candidate-runtime\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh" >/dev/null
 
 sh -n "${LAUNCHER}"

@@ -73,7 +73,7 @@ cat > "${TMP}/bin/curl" <<'SH'
 counter=${MOCK_IPFW_COUNTER:?}
 packets=$(cat "$counter")
 printf '%s\n' "$((packets + 1))" > "$counter"
-printf 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=10\n'
+printf 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=10 ssl_verify=0 appconnect=0.153000\n'
 exit "${MOCK_CURL_STATUS:-0}"
 SH
 cat > "${TMP}/bin/nc" <<'SH'

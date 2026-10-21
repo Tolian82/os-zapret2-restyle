@@ -84,7 +84,7 @@ def _probe_endpoint(
 
         classification = (
             "pass"
-            if request.curl_exit(execution) == 0 and endpoint_match and intercepted and local_port_match
+            if request.chrome_https_evidence(execution, expected_ip=selected_ip)["accessible"] and endpoint_match and intercepted and local_port_match
             else "fail"
         )
         result = {

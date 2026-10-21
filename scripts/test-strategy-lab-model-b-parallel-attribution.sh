@@ -105,7 +105,7 @@ assert result["attribution_ok"] is False
 success = request.CommandResult(
     command=["curl", "--resolve", "blocked.test:443:203.0.113.20", "--local-port", "42000", "https://blocked.test/"],
     returncode=0,
-    stdout="exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=10 local_port=42000\n",
+    stdout="exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=10 ssl_verify=0 appconnect=0.153000 local_port=42000\n",
     stderr="",
     timed_out=False,
     termination="completed",
