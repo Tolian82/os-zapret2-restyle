@@ -90,15 +90,15 @@ if [ "${MOCK_SCENARIO:-}" = timeout ] && [ "${host}" = yandex.ru ]; then
 fi
 case "${host}" in
     yandex.ru)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.1 http=1.1 code=200 bytes=100'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.1 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
         exit 0
         ;;
     accessible.example)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=100'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
         exit 0
         ;;
     *)
-        printf '%s\n' 'exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0'
+        printf '%s\n' 'exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=1 appconnect=0.000000'
         exit 28
         ;;
 esac
