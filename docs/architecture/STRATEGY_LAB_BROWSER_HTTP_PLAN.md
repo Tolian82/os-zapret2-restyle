@@ -1,6 +1,6 @@
 # Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Status:** Approved technical plan; implementation stages 1–6 have not started.
+**Status:** Stage 1 source integration is in development and not yet accepted on FreeBSD 15/OPNsense. Stages 2–6 have not started.
 **Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
@@ -29,7 +29,7 @@ The audited ugorur [build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/
 
 Lexiforest's audited [quick start](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/docs/quick_start.rst) and [curl.patch](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/patches/curl.patch) show that the executable name does not implicitly select a browser profile, and explicit HTTP/TLS flags may override profile defaults. HTTP3 capability and Chrome-like HTTP3 fingerprinting are separate properties. A Chrome profile can negotiate TLS 1.2/1.3; Standard must use default negotiation, whereas forcing TLS 1.2 is an Extended-only branch.
 
-**Snapshot SHAs are audit references, not build pins.** For every new build use the currently available official FreeBSD `latest` package according to ugorur's acquisition method; it need not match lexiforest's most recent GitHub Release. Do not reject or choose a package based on a predetermined upstream version or Chrome version. The build artifact remains identifiable by its final package digest.
+**Snapshot SHAs are audit references, not build pins.** For every new build use the currently available official FreeBSD `latest` package according to ugorur's acquisition method; it need not match lexiforest's most recent GitHub Release. Do not reject or choose a package based on a predetermined upstream version or Chrome version. The build artifact remains identifiable by its final package digest. If FreeBSD `latest` metadata uses a newer 15.x OSVERSION than the 15.0 build host, `IGNORE_OSVERSION=yes` is allowed solely for repository catalog/fetch operations; executing the binary successfully on target FreeBSD remains mandatory. Never use that override for plugin installation.
 
 ### Actual code integration points
 
@@ -115,7 +115,7 @@ One parser must serve the real installed Model C, fixed-IPv4 overrides and other
 
 ### Stage 1 — bundle a ready-to-run private client
 
-**Dependency:** Explicit owner instruction to begin implementation.
+**Dependency:** Owner authorized implementation on 21 October 2026; Stage 1 acceptance remains gated on FreeBSD package/client evidence.
 **Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
 1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.

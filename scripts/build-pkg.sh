@@ -81,6 +81,15 @@ mkdir -p "${STAGE}/usr/local"
 
 cp -R src/opnsense "${STAGE}/usr/local/opnsense"
 
+# Include the current signed FreeBSD latest client before generating pkg-plist.
+# No client download or compilation occurs when the end user installs the pkg.
+sh scripts/build-curl-impersonate.sh \
+    "${STAGE}/usr/local/libexec/zapret2-restyle/curl-impersonate"
+mkdir -p "${STAGE}/usr/local/libexec/zapret2-restyle"
+cp scripts/check-curl-impersonate.sh \
+    "${STAGE}/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh"
+chmod 755 "${STAGE}/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh"
+
 if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi
