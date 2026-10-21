@@ -11,11 +11,11 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_1`**. По
 
 ## Strategy Lab — текущий код и согласованное направление
 
-Аудит выполнен по restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` и зафиксированным срезам upstream. Новая инструкция от 21.10.2026 **заменила критерий: TLS/QUIC-handshake целевого endpoint достаточен, обязательный HTTP-ответ/HTTP3 GET отменён**; номер curl-impersonate не закрепляется, на каждой сборке используется FreeBSD `latest` по схеме ugorur с ориентацией на lexiforest. [Карта интеграции и источники](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md).
+Audit was based on restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` and recorded upstream snapshots. On 21 October 2026, the owner approved **three independent sufficient reachability signals: verified target TLS handshake, verified target QUIC handshake, OR genuine final target HTTP response (including 4xx/5xx, without requiring a body)**. The available FreeBSD `latest` client is fetched anew per build without upstream version pin; one supported Chrome profile is selected. [Integration map](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md).
 
 **Реализовано в текущем исходном коде:** Python-планировщик, Model C как единственный нормальный production-путь, CandidateSpec/ResourceInventory, фиксированный endpoint epoch и source-port атрибуция, конечные бюджеты, отмена, Stage 90. Основной клиент пока обычный curl с HTTP/1.1/ограничением TLS; QUIC-кандидат пока проверяется handshake OpenSSL, а не HTTP3 GET. В Stage 80 есть четыре QUIC-кандидата; QUIC уже может быть источником Stage-85 результата. Ранний `TARGET_ACCESSIBLE` уже завершает задание до поиска/Extended.
 
-**Согласовано, но ещё не реализовано:** требования `BH-01`–`BH-12` и шесть этапов [подробного плана](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), с новым критерием handshake и политикой FreeBSD latest без pin версии. HTTP/ALPN/байты — дополнительная диагностика, а не условие победы; прямой TLS-успех завершает поиск до QUIC. Firefox, обычный curl fallback, новый Python-планировщик и новая recovery-архитектура исключены.
+**Approved but not implemented:** requirements `BH-01`–`BH-12` and six stages of the [English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), using the handshake-or-HTTP-response success rule and unpinned FreeBSD `latest` acquisition. An authentic HTTP response is affirmative evidence (not merely diagnostics); HTTP/ALPN/body fields not actually observed stay unknown. Direct HTTPS success by TLS **or** HTTP response skips QUIC. No Firefox, ordinary curl fallback, replacement Python scheduler or new recovery architecture.
 
 | Этап | Состояние |
 | --- | --- |
@@ -27,7 +27,7 @@ State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_1`**. По
 | 5. Результаты, GUI и сохранённые задания | Не начат |
 | 6. Приёмка установленного пакета | Не начат |
 
-Существующая [live-матрица](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) подтверждает прежнюю лабораторию; она не доказывает новый Chrome TLS/QUIC handshake путь. Новые доказательства V1–V11 и критерии завершения — в подробном плане; пока они не выполнялись.
+The [existing live matrix](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) demonstrates previous behavior only; it does not prove this new Chrome handshake-or-HTTP path. New evidence V1–V11 is defined in the detailed plan; none of these rows has been accepted yet.
 
 ## Сохранённые подтверждённые результаты остальных страниц
 
