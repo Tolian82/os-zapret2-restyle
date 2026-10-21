@@ -89,7 +89,7 @@ def _parallel_curl_request(endpoint: str, selected_ip: str, local_port: int) -> 
         endpoint,
         scheme="https",
         family="ipv4",
-        tls_version="1.3",
+        tls_version=None,
         bound_ip=selected_ip,
     )
     byte_limit = _positive_int_env(
@@ -153,7 +153,7 @@ def _probe_endpoint(
         local_port_match = observed_local_port == local_port
         classification = (
             "pass"
-            if request.curl_exit(execution) == 0 and endpoint_match and intercepted and local_port_match
+            if request.chrome_https_evidence(execution, expected_ip=selected_ip)["accessible"] and endpoint_match and intercepted and local_port_match
             else "fail"
         )
         result = {

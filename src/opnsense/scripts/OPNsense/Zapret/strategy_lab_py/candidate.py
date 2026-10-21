@@ -461,16 +461,23 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
         remote_ip = _remote_ip(execution.stdout)
         transport = "http-ipv4"
     else:
-        tls_version = "1.2" if spec.protocol == "tls12" else "1.3"
+        tls_version = "1.2" if spec.protocol == "tls12" else None
         execution = request.curl_request(endpoint, scheme="https", tls_version=tls_version, bound_ip=selected)
         exit_code = request.curl_exit(execution)
         remote_ip = _remote_ip(execution.stdout)
-        transport = f"{spec.protocol}-ipv4"
+        transport = "https-ipv4" if spec.protocol == "tls13" else f"{spec.protocol}-ipv4"
 
     after_packets, after_bytes = _counter(rule)
     endpoint_match = remote_ip == selected
     intercepted = after_packets > before_packets
-    passed = exit_code == 0 and endpoint_match and intercepted
+    chrome_proof = (
+        request.chrome_https_evidence(execution, expected_ip=selected)
+        if spec.protocol == "tls13" and not _is_ipv4(endpoint) else None
+    )
+    passed = (
+        (chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)
+        and endpoint_match and intercepted
+    )
     return {
         "endpoint": endpoint,
         "status": "PASS" if passed else "FAIL",
@@ -479,6 +486,7 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
         "detail": _detail(execution),
         "selected_ip": selected,
         "remote_ip": remote_ip,
+        "reachability": chrome_proof,
         "endpoint_match": endpoint_match,
         "firewall": {
             "rule": rule,

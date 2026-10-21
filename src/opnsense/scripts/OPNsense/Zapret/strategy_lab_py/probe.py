@@ -54,9 +54,9 @@ def _network(workdir: Path, result_path: Path) -> int:
         request.binary(name)
     route_available, route_result = request.ipv6_default_route()
     with ThreadPoolExecutor(max_workers=3) as pool:
-        ipv4_future = pool.submit(request.curl_request, "yandex.ru", scheme="https", family="ipv4", tls_version="1.3")
+        ipv4_future = pool.submit(request.curl_request, "yandex.ru", scheme="https", family="ipv4")
         ipv6_future = (
-            pool.submit(request.curl_request, "one.one.one.one", scheme="https", family="ipv6", tls_version="1.3")
+            pool.submit(request.curl_request, "one.one.one.one", scheme="https", family="ipv6")
             if route_available else None
         )
         quic_future = pool.submit(request.quic_ipv4_request)
@@ -111,16 +111,20 @@ def _dns_failure_public(endpoint: str, log_text: str) -> dict[str, Any]:
     }
 
 
-def _domain_public(endpoint: str, ipv4: request.CommandResult, ipv6: request.CommandResult | None) -> dict[str, Any]:
-    ipv4_status = "PASS" if ipv4.ok else "FAIL"
-    ipv6_status = "SKIPPED" if ipv6 is None else ("PASS" if ipv6.ok else "FAIL")
+def _domain_public(endpoint: str, ipv4: request.CommandResult, ipv6: request.CommandResult | None,
+                   ipv4_ip: str | None = None, ipv6_ip: str | None = None) -> dict[str, Any]:
+    ipv4_proof = request.chrome_https_evidence(ipv4, expected_ip=ipv4_ip)
+    ipv6_proof = request.chrome_https_evidence(ipv6, expected_ip=ipv6_ip) if ipv6 is not None else None
+    ipv4_status = "PASS" if ipv4_proof["accessible"] else "FAIL"
+    ipv6_status = "SKIPPED" if ipv6_proof is None else ("PASS" if ipv6_proof["accessible"] else "FAIL")
     ipv4_log = request.combined_log(ipv4)
     ipv6_log = request.combined_log(ipv6) if ipv6 is not None else ""
     return {
         "endpoint": endpoint,
         "status": ipv4_status,
         "exit_code": request.curl_exit(ipv4),
-        "transport": "tls13-ipv4",
+        "transport": "https-ipv4",
+        "reachability": ipv4_proof,
         "detail": request.tail20(ipv4_log),
         "ipv4": {
             "status": ipv4_status,
@@ -161,7 +165,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
                 endpoint,
                 scheme="https",
                 family="ipv4",
-                tls_version="1.3",
+                tls_version=None,
                 bound_ip=dns_a.answers[0],
             )
             if dns_a.ok and dns_a.answers
@@ -173,7 +177,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
                 endpoint,
                 scheme="https",
                 family="ipv6",
-                tls_version="1.3",
+                tls_version=None,
                 bound_ip=dns_aaaa.answers[0],
             )
             if ipv6_enabled and dns_aaaa is not None and dns_aaaa.ok and dns_aaaa.answers
@@ -203,7 +207,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
     if not dns_a.ok or tls4 is None:
         public = _dns_failure_public(endpoint, dns_a_log)
     else:
-        public = _domain_public(endpoint, tls4, tls6)
+        public = _domain_public(endpoint, tls4, tls6, dns_a.answers[0], dns_aaaa.answers[0] if dns_aaaa and dns_aaaa.ok and dns_aaaa.answers else None)
     return public, evidence, not dns_a.ok, dns_aaaa is not None and not dns_aaaa.ok
 
 

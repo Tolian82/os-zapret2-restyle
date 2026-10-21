@@ -19,7 +19,7 @@ EX_TIMEOUT = 124
 DNS_TIMEOUT_SECONDS = 15
 
 DEFAULT_BINARIES = {
-    "curl": "/usr/local/bin/curl",
+    "curl": "/usr/local/libexec/zapret2-restyle/run-curl-impersonate.sh",
     "drill": "/usr/bin/drill",
     "openssl": "/usr/bin/openssl",
     "netstat": "/usr/bin/netstat",
@@ -244,28 +244,27 @@ def _curl_command(
         raise UsageError("invalid curl address family")
     if scheme not in {"http", "https"}:
         raise UsageError("invalid curl scheme")
-    command = [binary("curl"), f"--{family}", "--proto", f"={scheme}"]
+    # The private launcher owns -q, explicit Chrome profile, CA and proxy
+    # bypass. Standard HTTPS leaves TLS/ALPN negotiation to Chrome.
+    command = [binary("curl"), f"--{family}", "--proto", f"={scheme}",
+               "--request", "GET", "--max-redirs", "0"]
     if tls_version is not None:
         if tls_version not in {"1.2", "1.3"}:
             raise UsageError("invalid TLS version")
         command.extend([f"--tlsv{tls_version}", "--tls-max", tls_version])
-    command.extend(["--http1.1", "--request", "GET"])
-    if bound_ip is None:
-        command.extend(["--location", "--max-redirs", "2"])
-    else:
+    if bound_ip is not None:
         port = 443 if scheme == "https" else 80
         resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip
-        command.extend(["--max-redirs", "0", "--resolve", f"{host}:{port}:{resolve_ip}"])
+        command.extend(["--resolve", f"{host}:{port}:{resolve_ip}"])
     command.extend([
         "--connect-timeout", "2",
         "--max-time", "3",
         "--retry", "0",
         "--silent",
         "--show-error",
-        "--header", "Connection: close",
         "--range", "0-65535",
         "--output", "/dev/null",
-        "--write-out", "exit=%{exitcode} remote_ip=%{remote_ip} http=%{http_version} code=%{response_code} bytes=%{size_download}\\n",
+        "--write-out", "exit=%{exitcode} remote_ip=%{remote_ip} http=%{http_version} code=%{response_code} bytes=%{size_download} ssl_verify=%{ssl_verify_result} appconnect=%{time_appconnect}\\n",
         f"{scheme}://{host}/",
     ])
     return command
@@ -294,6 +293,53 @@ def curl_exit(result: CommandResult) -> int:
     if result.returncode is not None and result.returncode >= 0:
         return result.returncode
     return 1
+
+
+# Observations from the completed private Chrome request, not subprocess success.
+_CHROME_TLS_RE = re.compile(
+    r"remote_ip=(?P<ip>[^\\s]*)\\s+http=(?P<http>[^\\s]*)"
+    r"\\s+code=(?P<code>\\d+)\\s+bytes=(?P<bytes>\\d+)"
+    r"\\s+ssl_verify=(?P<cert>-?\\d+)\\s+appconnect=(?P<handshake>\\d+(?:\\.\\d+)?)"
+)
+
+
+def chrome_https_evidence(result: CommandResult, *, expected_ip: str | None = None) -> dict[str, Any]:
+    """A verified target TLS handshake OR genuine HTTP response proves reachability.
+
+    Fail closed on missing writeout, wrong pinned IP or bad CA. A post-header
+    body error does not invalidate either successfully observed signal.
+    """
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    if match is None:
+        return {"accessible": False, "signal": None, "reason": "missing_chrome_evidence"}
+    remote_ip = match.group("ip")
+    try:
+        observed = ipaddress.ip_address(remote_ip)
+        expected = ipaddress.ip_address(expected_ip) if expected_ip is not None else None
+        destination_ok = expected is None or observed == expected
+    except ValueError:
+        destination_ok = False
+    cert_ok = match.group("cert") == "0"
+    handshake_time = float(match.group("handshake"))
+    status = int(match.group("code"))
+    version = match.group("http")
+    response = cert_ok and status in range(200, 600) and version in {"1", "1.0", "1.1", "2", "3"}
+    handshake = cert_ok and handshake_time > 0
+    accessible = bool(destination_ok and (handshake or response))
+    return {
+        "accessible": accessible,
+        "signal": ("tls_handshake" if handshake else "http_response") if accessible else None,
+        "tls_verified": bool(destination_ok and handshake),
+        "http_response": bool(destination_ok and response),
+        "remote_ip": remote_ip,
+        "http_version": version if response else None,
+        "http_status": status if response else None,
+        "ssl_verify_result": int(match.group("cert")),
+        "time_appconnect": handshake_time,
+        "reason": "reachable" if accessible else "certificate_identity_or_target_unverified",
+    }
 
 
 def ipv6_default_route() -> tuple[bool, CommandResult]:
