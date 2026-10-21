@@ -1,14 +1,15 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_2`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage 1 build integration has been merged, has passed FreeBSD 15 CI and has a published testing package. Owner-installed package identity and client readiness are confirmed; target TLS/QUIC network verification remains pending. Stages 2–6 are not implemented. The only next action задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_3`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage 1 build integration has been merged, has passed FreeBSD 15 CI and has a published testing package. Owner-installed `_2` package and local-readiness checks passed, but both actual TLS and QUIC probes failed with curl(77) on the default CA file. The `_3` corrective build and owner-live verification remain pending. Stages 2–6 are not implemented. The only next action задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия, пакет и граница доставки
 
-- `VERSION=0.5.6`, `PLUGIN_REVISION=2`, package candidate: `os-zapret2-restyle-0.5.6_2.pkg`.
+- `VERSION=0.5.6`, `PLUGIN_REVISION=3`, package candidate: `os-zapret2-restyle-0.5.6_3.pkg`.
 - **Testing publication:** [v0.5.6_2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_2), asset [download](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_2/os-zapret2-restyle-0.5.6_2.pkg), SHA-256 `e3d79a7a519b1d09ae755d0df9873b38b1adbe58bff7cf8eb8bb7001ec24acf2` (6,749,577 bytes), exact source/tag `4166a38d6653e7faa560c86205af25519895e989`. [FreeBSD15 source CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39583956850); packaged actual private curl-impersonate selected `chrome150` from official FreeBSD `latest` (observed `2.2.3_1`, no pin). [Evidence](verification/evidence/testing-publications/v0.5.6_2.md). Stable Pages/pkg repository NOT promoted; owner-installed binary readiness verified; network TLS/QUIC acceptance pending.
 - Полный Web/pkg-релиз [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) опубликован из `b319aafe748c1363712f5d7d6cbaaf40396bb64c`; immutable tag, pkg/SHA256SUMS и FreeBSD15 Pages/pkg deployment подтверждены. SHA-256 пакета: `9c4ba669ae0ac453bb59da37b240234b7b2c44b49482b88eb98c14108a3dc6fe`. [Доказательство публикации](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
 - Обновление владельцем через OPNsense GUI до `0.5.6_1` не подтверждено. Новое оформление ТЗ не меняет этот факт и не является новой сборкой.
 - **Owner-installed observation (21 October 2026):** `pkg info -x os-zapret2-restyle` returned `os-zapret2-restyle-0.5.6_2`; `/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh` returned `CURL_IMPERSONATE_READY profile=chrome150` on OPNsense. This proves install/readiness, not a network handshake or successful site check. [Exact observation](verification/evidence/2026-10-21-v0.5.6_2-private-curl-readiness-owner.md).
+- **Stage 1 CA blocker (21 October 2026):** owner HTTPS/TLS and QUIC/HTTP3-only attempts using `_2` returned curl(77) loading default `/etc/ssl/cert.pem`; no handshake or HTTP response verified. [Exact observed failure](verification/evidence/2026-10-21-v0.5.6_2-ca-trust-failure.md).
 - Поддерживаемая платформа: OPNsense 26.7 / FreeBSD 15 amd64, Python 3.13. Служба `zapret`, общий dvtws2/supervisor и native lifecycle сохраняются.
 
 ## Strategy Lab — текущий код и согласованное направление
@@ -22,7 +23,7 @@ Audit was based on restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` and record
 | Этап | Состояние |
 | --- | --- |
 | Аудит, уточнение требований и подробное планирование | Завершены на уровне документации |
-| 1. Private FreeBSD latest curl-impersonate bundling | Source + FreeBSD15 pkg CI PASS; testing prerelease published; owner-installed readiness PASS; real TLS/QUIC network evidence pending |
+| 1. Private FreeBSD latest curl-impersonate bundling | `_2` package/install PASS but TLS and QUIC failed CA trust loading; `_3` source fix pending CI, testing publication and installed network evidence |
 | 2. Сквозной TLS-handshake Standard | Не начат |
 | 3. Extended и целевой QUIC-handshake | Не начат |
 | 4. Расширение QUIC-каталога и допуск по бюджету | Не начат |

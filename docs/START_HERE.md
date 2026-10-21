@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_2`. `VERSION=0.5.6`, `PLUGIN_REVISION=2`. Stage 1 private curl-impersonate package passed FreeBSD 15 CI and was published as a GitHub testing prerelease; owner-confirmed installed package and read-only client readiness; target TLS/QUIC network acceptance remains pending.
+**Current handoff identity:** `v0.5.6_3`. `VERSION=0.5.6`, `PLUGIN_REVISION=3`. Stage 1 CA trust failure confirmed on installed `v0.5.6_2`; the explicit-CA private Chrome launcher and corrected local-readiness check are now under CI qualification as `_3`. No owner-live TLS/QUIC success has been observed.
 
 ## Current task — approved Strategy Lab modernization
 
@@ -14,9 +14,9 @@ Chrome-default TLS 1.2/1.3 is allowed; HTTP/1.1 and HTTP/2 are equally acceptabl
 
 ## Single next action
 
-**Single next action:** qualify the published `v0.5.6_2` testing package on installed OPNsense 26.7: preserve the owner-confirmed installation/readiness evidence and record real certificate-verified HTTPS/TLS and UDP/443 QUIC attempts with the bundled Chrome profile, target identity, IP and observed result. If runtime capability or CA is missing, fix that Stage 1 blocker before beginning Stage 2. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. The `v0.5.6_2` testing package is published; stable Pages/pkg release is unchanged and not authorized.
+**Single next action:** qualify the `v0.5.6_3` CA fix in FreeBSD 15 CI, publish the testing package and verify on installed OPNsense using `run-curl-impersonate.sh` for certificate-verified TLS and `--http3-only` QUIC. The launcher selects an existing OPNsense/FreeBSD trusted PEM bundle, fails clearly when absent, and never disables peer verification. The updated checker confirms **local** readiness only, not network reachability. Stay on Stage 1 until live handshake/HTTP response evidence is obtained. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. The `v0.5.6_2` test package remains published but its TLS/QUIC probes failed with curl(77) loading trust anchors. `v0.5.6_3` is an unpublished source candidate. The stable Pages/pkg release remains unchanged.
 
-Stage 1 package evidence: private executable, licenses, Chrome profile, source pkg digest, FreeBSD15 ABI and package SHA-256 `e3d79a7a519b1d09ae755d0df9873b38b1adbe58bff7cf8eb8bb7001ec24acf2` are known. Real network TLS/QUIC results are still **unverified**; no success is inferred from `curl -V`. Any genuine target HTTP response will be positive evidence as specified in the approved requirements. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
+Stage 1 package evidence: private executable, licenses, Chrome profile, source pkg digest, FreeBSD15 ABI and package SHA-256 `e3d79a7a519b1d09ae755d0df9873b38b1adbe58bff7cf8eb8bb7001ec24acf2` are known. The owner reported `TLS_EXIT=77` and `QUIC_EXIT=77` while loading `/etc/ssl/cert.pem`; neither handshake nor HTTP response was verified. [Live defect evidence](verification/evidence/2026-10-21-v0.5.6_2-ca-trust-failure.md). Any genuine target HTTP response will be positive evidence as specified in the approved requirements. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
 
 ## Minimum stage-specific reading
 

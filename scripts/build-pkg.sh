@@ -86,9 +86,10 @@ cp -R src/opnsense "${STAGE}/usr/local/opnsense"
 sh scripts/build-curl-impersonate.sh \
     "${STAGE}/usr/local/libexec/zapret2-restyle/curl-impersonate"
 mkdir -p "${STAGE}/usr/local/libexec/zapret2-restyle"
-cp scripts/check-curl-impersonate.sh \
-    "${STAGE}/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh"
-chmod 755 "${STAGE}/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh"
+cp scripts/check-curl-impersonate.sh scripts/run-curl-impersonate.sh \
+    "${STAGE}/usr/local/libexec/zapret2-restyle/"
+chmod 755 "${STAGE}/usr/local/libexec/zapret2-restyle/check-curl-impersonate.sh" \
+    "${STAGE}/usr/local/libexec/zapret2-restyle/run-curl-impersonate.sh"
 
 if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
