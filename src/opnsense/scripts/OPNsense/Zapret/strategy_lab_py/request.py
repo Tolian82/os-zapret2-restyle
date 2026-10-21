@@ -390,16 +390,50 @@ def quic_ipv4_request() -> CommandResult:
 
 
 def quic_target_request(host: str, address: str) -> CommandResult:
+    """Private Chrome, pinned target HTTPS/QUIC only: never fall back to TCP."""
     try:
         normalized = str(ipaddress.IPv4Address(address))
     except ipaddress.AddressValueError as exc:
         raise UsageError("invalid QUIC IPv4 endpoint") from exc
-    return run_command([
-        binary("openssl"), "s_client", "-4", "-quic",
-        "-connect", f"{normalized}:443", "-servername", host,
-        "-alpn", "h3", "-verify_hostname", host,
-        "-verify_return_error", "-brief", "-no-interactive",
-    ], timeout=3, stdin_devnull=True)
+    command = _curl_command(host, scheme="https", bound_ip=normalized)
+    command.insert(-1, "--http3-only")
+    return run_command(command, timeout=4)
+
+
+def chrome_quic_evidence(result: CommandResult, *, expected_ip: str) -> dict[str, Any]:
+    """Only authenticated pinned QUIC TLS or a real HTTP/3 response is positive.
+
+    Reject non-QUIC command identity, including any TCP/HTTP2 fallback.
+    """
+    if "--http3-only" not in result.command:
+        return {"accessible": False, "signal": None, "reason": "quic_only_not_requested"}
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    if match is None:
+        return {"accessible": False, "signal": None, "reason": "missing_quic_evidence"}
+    remote = match.group("ip")
+    try:
+        target_ok = ipaddress.ip_address(remote) == ipaddress.IPv4Address(expected_ip)
+    except ValueError:
+        target_ok = False
+    cert_ok = match.group("cert") == "0"
+    version = match.group("http")
+    handshake = bool(target_ok and cert_ok and version in {"0", "3"} and float(match.group("handshake")) > 0)
+    code = int(match.group("code"))
+    response = bool(target_ok and cert_ok and version == "3" and 200 <= code <= 599)
+    return {
+        "accessible": handshake or response,
+        "signal": "quic_handshake" if handshake else ("http3_response" if response else None),
+        "quic_verified": handshake,
+        "http3_response": response,
+        "remote_ip": remote,
+        "http_version": "3" if response else None,
+        "http_status": code if response else None,
+        "ssl_verify_result": int(match.group("cert")),
+        "time_appconnect": float(match.group("handshake")),
+        "reason": "reachable" if handshake or response else "quic_identity_transport_or_handshake_unverified",
+    }
 
 
 def tcp_request(host: str, port: int) -> CommandResult:

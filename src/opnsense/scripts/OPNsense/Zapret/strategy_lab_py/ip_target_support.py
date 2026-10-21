@@ -211,11 +211,11 @@ def _candidate_probe(
                 "QUIC hostname verification requires Host / SNI for an IPv4 target"
             )
             exit_code = 64
-            remote_ip = ""
         else:
             execution = request.quic_target_request(endpoint, selected)
             exit_code = candidate._execution_status(execution)
-            remote_ip = selected
+        quic_proof = request.chrome_quic_evidence(execution, expected_ip=selected)
+        remote_ip = str(quic_proof.get("remote_ip", ""))
         transport = "quic-ipv4"
     elif spec.protocol == "http":
         execution = request.curl_request(
@@ -241,10 +241,11 @@ def _candidate_probe(
     endpoint_match = remote_ip == selected
     intercepted = after_packets > before_packets
     chrome_proof = (
-        request.chrome_http_evidence(execution, expected_ip=selected)
-        if spec.protocol == "http"
-        else request.chrome_https_evidence(execution, expected_ip=selected)
-    ) if spec.protocol in {"tls13", "tls12", "http"} else None
+        quic_proof if spec.protocol == "quic" else
+        (request.chrome_http_evidence(execution, expected_ip=selected)
+         if spec.protocol == "http"
+         else request.chrome_https_evidence(execution, expected_ip=selected))
+    ) if spec.protocol in {"tls13", "tls12", "http", "quic"} else None
     passed = (
         (chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)
         and endpoint_match and intercepted

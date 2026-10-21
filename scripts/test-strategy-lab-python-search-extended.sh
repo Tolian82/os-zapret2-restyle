@@ -8,5 +8,6 @@ STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/strategy-lab-python
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-late-stage-containment.sh"
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-adaptive-validation.sh"
 STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-python-final-results.sh"
+STRATEGY_LAB_TEST_PYTHON="${PYTHON}" sh "${ROOT_DIR}/scripts/test-strategy-lab-quic-target-proof.sh"
 
 echo 'PASS: Python 3.13 migration continuity gate covers search/extended orchestration, late-stage containment, adaptive validation, and final-result ownership'

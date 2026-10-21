@@ -67,7 +67,10 @@ def _protocol_spec() -> ProtocolSpec:
     if protocol == "http":
         return ProtocolSpec("http", "tcp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "80"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "http"))
     if protocol == "quic":
-        return ProtocolSpec("quic", "udp", _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "443"), "candidate port"), os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "quic"))
+        port = _port(os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "443"), "candidate port")
+        if port != 443:
+            raise ValueError("Strategy Lab QUIC candidate must use UDP/443")
+        return ProtocolSpec("quic", "udp", port, os.environ.get("STRATEGY_LAB_CANDIDATE_L7", "quic"))
     if protocol == "udp":
         port = _port(os.environ.get("STRATEGY_LAB_UDP_PORT", os.environ.get("STRATEGY_LAB_CANDIDATE_PORT", "")), "UDP port")
         payload_raw = os.environ.get("STRATEGY_LAB_UDP_PAYLOAD_FILE", "")
@@ -444,11 +447,11 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
         if _is_ipv4(endpoint):
             execution = _unsupported_execution("QUIC hostname verification requires a domain endpoint")
             exit_code = 64
-            remote_ip = ""
         else:
             execution = request.quic_target_request(endpoint, selected)
             exit_code = _execution_status(execution)
-            remote_ip = selected
+        quic_proof = request.chrome_quic_evidence(execution, expected_ip=selected)
+        remote_ip = str(quic_proof.get("remote_ip", ""))
         transport = "quic-ipv4"
     elif _is_ipv4(endpoint):
         execution = request.tcp_request(selected, spec.port)
@@ -471,10 +474,11 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
     endpoint_match = remote_ip == selected
     intercepted = after_packets > before_packets
     chrome_proof = (
-        request.chrome_http_evidence(execution, expected_ip=selected)
-        if spec.protocol == "http"
-        else request.chrome_https_evidence(execution, expected_ip=selected)
-    ) if spec.protocol in {"tls13", "tls12", "http"} and not _is_ipv4(endpoint) else None
+        quic_proof if spec.protocol == "quic" else
+        (request.chrome_http_evidence(execution, expected_ip=selected)
+         if spec.protocol == "http"
+         else request.chrome_https_evidence(execution, expected_ip=selected))
+    ) if spec.protocol in {"tls13", "tls12", "http", "quic"} and not _is_ipv4(endpoint) else None
     passed = (
         (chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)
         and endpoint_match and intercepted
