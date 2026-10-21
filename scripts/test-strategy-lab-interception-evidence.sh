@@ -116,7 +116,11 @@ grep -Fq 'before_packets, before_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'after_packets, after_bytes = _counter(rule)' "${CANDIDATE_PY}"
 grep -Fq 'endpoint_match = remote_ip == selected' "${CANDIDATE_PY}"
 grep -Fq 'intercepted = after_packets > before_packets' "${CANDIDATE_PY}"
-grep -Fq 'passed = exit_code == 0 and endpoint_match and intercepted' "${CANDIDATE_PY}"
+# Standard Chrome HTTPS is accepted only with authenticated endpoint evidence;
+# all candidate protocols still require selected IP and IPFW counter growth.
+grep -Fq 'request.chrome_https_evidence(execution, expected_ip=selected)' "${CANDIDATE_PY}"
+grep -Fq '(chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)' "${CANDIDATE_PY}"
+grep -Fq 'and endpoint_match and intercepted' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "tls12":' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "http":' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "quic":' "${CANDIDATE_PY}"
