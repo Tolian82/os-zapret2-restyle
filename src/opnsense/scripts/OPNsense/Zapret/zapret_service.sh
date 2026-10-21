@@ -270,10 +270,34 @@ strategy_lab_internal_dispatch()
             strategy_lab_semantic_evidence
             ;;
         strategy-lab-stop)
+            if shared_apply_has_record_service; then
+                _lab_owner=$(shared_apply_inspect_service) || return 69
+                case "$_lab_owner" in
+                    committed\ *)
+                        preflight_shared_apply_journal strategy-lab-native || return 69
+                        shared_apply_stop_service "$_lab_owner"
+                        return $?
+                        ;;
+                    none|restored) ;;
+                    *) return 69 ;;
+                esac
+            fi
             preflight_shared_apply_journal || return 69
             stop_service
             ;;
         strategy-lab-start)
+            if shared_apply_has_record_service; then
+                _lab_owner=$(shared_apply_inspect_service) || return 69
+                case "$_lab_owner" in
+                    committed\ *)
+                        preflight_shared_apply_journal strategy-lab-native || return 69
+                        shared_apply_boot_service "$_lab_owner"
+                        return $?
+                        ;;
+                    none|restored) ;;
+                    *) return 69 ;;
+                esac
+            fi
             preflight_shared_apply_journal || return 69
             start_service
             ;;
@@ -1761,7 +1785,21 @@ service_with_lifecycle_lock()
                 preflight_shared_apply_journal common-apply || return 69
                 ;;
             strategy-lab|strategy-lab-circular|strategy-lab-recover)
-                preflight_shared_apply_journal || return 69
+                # Under the inherited FD9, a committed native owner can be
+                # temporarily stopped/restored only by native common service
+                # actions. Pending or foreign owners remain fail-closed.
+                if shared_apply_has_record_service; then
+                    _lab_launch_owner=$(shared_apply_inspect_service) || return 69
+                    case "$_lab_launch_owner" in
+                        committed\ *)
+                            preflight_shared_apply_journal strategy-lab-native || return 69
+                            ;;
+                        none|restored) preflight_shared_apply_journal || return 69 ;;
+                        *) return 69 ;;
+                    esac
+                else
+                    preflight_shared_apply_journal || return 69
+                fi
                 ;;
         esac
         service_dispatch "$@"

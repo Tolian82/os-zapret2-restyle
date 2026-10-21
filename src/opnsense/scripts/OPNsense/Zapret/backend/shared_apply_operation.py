@@ -351,6 +351,7 @@ def native_lifecycle_gate(action: str | None = None, *,
         "common-recover-activating": "activating",
         "common-recover-activated": "activated",
         "common-recover-reviewed-legacy": "requires-review",
+        "strategy-lab-native": "committed",
     }
     if action is not None and action not in exceptions:
         raise SharedOperationError("invalid native lifecycle gate action")
@@ -358,6 +359,11 @@ def native_lifecycle_gate(action: str | None = None, *,
     if record is None:
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
+    if action == "strategy-lab-native":
+        if phase == "committed" and committed_owner(record) is not None:
+            return {"state": "clear", "safe_to_mutate": True}
+        return {"state": "blocked", "reason": "strategy-lab-requires-committed-native-owner",
+                "phase": phase, "safe_to_mutate": False}
     if action is None and committed_owner(record) is not None:
         return {"state": "blocked", "reason": "shared-runtime-owned",
                 "phase": phase, "safe_to_mutate": False}
@@ -375,7 +381,7 @@ def main(argv: list[str]) -> int:
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
             "common-recover-activating", "common-recover-activated",
-            "common-recover-reviewed-legacy",
+            "common-recover-reviewed-legacy", "strategy-lab-native",
         )
     )
     review = len(argv) == 2 and argv[1] == "review-legacy"

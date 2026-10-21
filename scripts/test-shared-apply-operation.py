@@ -56,7 +56,9 @@ class TestJournal(unittest.TestCase):
             self.assertTrue(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             self.assertFalse(shared.exists())
             d1=detail()
+            self.assertTrue(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             j.advance("prepared",d1)
+            self.assertFalse(native_lifecycle_gate("strategy-lab-native",root=shared)["safe_to_mutate"])
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             j.advance("activating",d1)
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
@@ -70,6 +72,8 @@ class TestJournal(unittest.TestCase):
             j.advance("committed",d1)
             self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             self.assertTrue(native_lifecycle_gate("common-apply",root=shared)["safe_to_mutate"])
+            self.assertTrue(native_lifecycle_gate("strategy-lab-native",root=shared)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate(root=shared)["safe_to_mutate"])
             with self.assertRaises(SharedOperationError):
                 native_lifecycle_gate("legacy-skip",root=shared)
             (shared/"operation.json").write_text("untrusted")
