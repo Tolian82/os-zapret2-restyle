@@ -397,7 +397,21 @@ def quic_target_request(host: str, address: str) -> CommandResult:
         raise UsageError("invalid QUIC IPv4 endpoint") from exc
     command = _curl_command(host, scheme="https", bound_ip=normalized)
     command.insert(-1, "--http3-only")
-    return run_command(command, timeout=4)
+    execution = run_command(command, timeout=4)
+    # A client without HTTP/3 support is an infrastructure failure, not
+    # proof that the target cannot be reached or that candidates failed.
+    if execution.returncode == 4:
+        raise RequestError("Strategy Lab QUIC client has no HTTP/3 support (curl exit 4)")
+    if execution.returncode in {1, 2}:
+        detail = combined_log(execution).lower()
+        if "--http3-only" in detail and any(
+            phrase in detail for phrase in (
+                "not support", "unsupported", "unknown option",
+                "unrecognized option", "not built", "not recognized",
+            )
+        ):
+            raise RequestError("Strategy Lab QUIC client does not support --http3-only")
+    return execution
 
 
 def chrome_quic_evidence(result: CommandResult, *, expected_ip: str) -> dict[str, Any]:
