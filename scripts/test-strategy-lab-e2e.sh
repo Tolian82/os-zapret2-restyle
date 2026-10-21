@@ -399,6 +399,7 @@ run_job()
     expected_state="$4"
     expected_outcome="$5"
     target="${6:-blocked.example}"
+    printf "E2E scenario=%s mode=%s target=%s\\n" "${scenario}" "${mode}" "${target}"
 
     export MOCK_SCENARIO="${scenario}"
     rm -f "${RESTORED_FILE}"
