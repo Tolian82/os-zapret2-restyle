@@ -12,6 +12,26 @@ from unittest import mock
 
 from strategy_lab_py import candidate, extended, ip_target_support, orchestrator, request
 
+# Unsupported HTTP/3 in the private client is a technical error, not a
+# genuine negative QUIC target response or four failed strategies.
+def capability_result(rc, stderr):
+    def fake(command, **kwargs):
+        return request.CommandResult(list(command), rc, "", stderr, False, "completed", None, 7)
+    with mock.patch.object(request, "binary", return_value="/private/chrome"), mock.patch.object(request, "run_command", side_effect=fake):
+        return request.quic_target_request("blocked.example", "203.0.113.10")
+
+for rc, stderr in (
+    (4, "curl: (4) A requested feature or protocol was not built in"),
+    (2, "curl: option --http3-only: the installed libcurl version does not support this"),
+    (1, "curl: option --http3-only: unknown option"),
+):
+    try:
+        capability_result(rc, stderr)
+        assert False, (rc, stderr)
+    except request.RequestError as exc:
+        assert "QUIC client" in str(exc) and "support" in str(exc)
+assert capability_result(28, "curl: (28) Connection timed out").returncode == 28
+
 TARGET = "203.0.113.10"
 HOST = "blocked.example"
 BASE = f"remote_ip={TARGET} http=0 code=000 bytes=0 ssl_verify=0 appconnect=0.121000"
