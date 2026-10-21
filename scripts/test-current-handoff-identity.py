@@ -19,7 +19,7 @@ expect = {
         f"{q}PLUGIN_REVISION={revision}{q}",
     ],
     "docs/PROJECT_STATE.md": [
-        f"Текущий этап — **{q}{candidate}{q}**",
+        f"Current source stage — **{q}{candidate}{q}**",
         f"{q}PLUGIN_REVISION={revision}{q}",
         f"package candidate: {q}{package}{q}",
     ],

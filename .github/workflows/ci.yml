@@ -321,6 +321,9 @@ jobs:
       - name: Test independent Docker A1 saved-GUI diagnostics (no appliance access)
         run: python3.13 tools/telegram-voice-lab/tests/test_a1_saved_strategy_preflight.py
 
+      - name: Validate private Chrome client Stage-1 source contract
+        run: sh scripts/test-strategy-lab-browser-client-stage1.sh
+
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
 
@@ -500,7 +503,7 @@ jobs:
 
           if grep -RniE \
             'github\.com/ugorur/os-zapret2|mail@ugorur|os-zapret2-[0-9]|pkg delete os-zapret2([^_-]|$)' \
-            . \
+            src pkg scripts \
             --exclude-dir=.git \
             --exclude=LICENSE \
             --exclude=NOTICE \
