@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
+Текущий этап — **`v0.5.6_6`** (testing package опубликован, owner-live Stage 90 ещё открыт).
+
 State-line scope: **`v0.5.x`**. Текущий кандидат — **`v0.5.6_6`**, опубликован как testing prerelease, не как стабильный пакет. Проблема установленного `_5` подтверждена журналом: Strategy Lab отвергалась native common lifecycle guard (`shared-runtime-owned`) до этапа 00 и без snapshot, после чего показывала `RESTORE_FAILED`. В `_6` добавлен строго ограниченный committed-owner маршрут под FD9 через существующие native Stop/Boot. Project/Voice и FreeBSD15 CI PASS, идентичность testing пакета и SHA проверены. **Проверка на установленной OPNsense, включая Stage 90 и сохранение общего runtime, ещё не пройдена**. Stage 1 Chrome/TLS/QUIC на `_3` принята владельцем, Stage 2 остаётся OPEN. Стандартный `v0.5.6` не изменён. Остальные этапы Modernization 3–6 не начинались. Следующее действие задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия, пакет и граница доставки
