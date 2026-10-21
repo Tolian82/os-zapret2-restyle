@@ -498,16 +498,13 @@ jobs:
         run: |
           set -eu
 
+          # Check shipped code and build tooling, not the technical source
+          # citations in docs/ or attribution/legal/history records.
           if grep -RniE \
             'github\.com/ugorur/os-zapret2|mail@ugorur|os-zapret2-[0-9]|pkg delete os-zapret2([^_-]|$)' \
-            . \
-            --exclude-dir=.git \
-            --exclude=LICENSE \
-            --exclude=NOTICE \
-            --exclude=README.md \
-            --exclude=ci.yml
+            src pkg scripts repository
           then
-            echo "Legacy project reference found outside attribution files"
+            echo "Legacy project dependency found in executable/package paths"
             exit 1
           fi
 
