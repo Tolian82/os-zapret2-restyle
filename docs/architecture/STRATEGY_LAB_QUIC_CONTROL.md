@@ -1,7 +1,7 @@
 # Strategy Lab explicit QUIC control contract
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
-**Updated:** 2026-08-15
+**Updated:** 2026-10-21 (source audit and approved transition)
 **Execution gate introduced by:** `v0.4.1_14`
 **Owner-visible observability/localization published in:** `v0.4.1_15`
 
@@ -26,9 +26,11 @@ The checkbox behavior is:
 
 The UI may hide this control outside Extended mode because Stage 80 itself is an Extended-mode stage.
 
-## Sole execution gate
+## Explicit execution preference and job eligibility
 
-The saved **Enable QUIC** choice is the sole product decision that determines whether Stage 80 runs QUIC candidate tests.
+The saved **Enable QUIC** choice enables candidate testing when the job reaches Extended Stage 80. It does not override `TARGET_ACCESSIBLE`, cancellation, finite deadlines, or the requirement for Host/SNI on a bare IPv4 target. A successful direct HTTPS baseline terminates the job before Stage 80 even when Enable QUIC is ON.
+
+The approved [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md) preserves that early exit and replaces target handshake evidence with real HTTP3 GET. It is not yet implemented; the current four-candidate path still uses OpenSSL handshake evidence.
 
 Stage-30 QUIC control evidence (`quic_ipv4=available|closed`):
 
@@ -59,7 +61,7 @@ No QUIC candidate is launched. Ordinary UI text translates this state naturally 
 
 ### Enable QUIC ON
 
-Stage 80 executes the QUIC candidate catalog even when Stage 30 recorded the control path as blocked.
+If the job reaches Stage 80 and target identity/budget permit execution, Stage 80 executes the QUIC candidate catalog even when Stage 30 recorded the control path as blocked.
 
 Current catalog:
 
@@ -139,7 +141,7 @@ Repository tests prove at least:
 
 1. model default OFF and persistent checkbox behavior;
 2. start API validates/forwards only `0|1` and launcher persists immutable per-job intent;
-3. Stage 80 skips only because Enable QUIC is disabled;
+3. Enable QUIC OFF suppresses the catalog; direct baseline success and missing required Host/SNI retain their separate early-exit/eligibility behavior;
 4. with Enable QUIC ON, mocked `quic_ipv4=closed` still executes candidates;
 5. shell/reference and Python production paths contain no capability-based execution gate;
 6. Stage-30 RU/EN separates measured QUIC state from search enabled/disabled state;
@@ -149,7 +151,7 @@ Repository tests prove at least:
 
 Automated `_15` source acceptance and persistent testing-package publication are complete. Machine publication evidence is in [`../verification/evidence/testing-publications/v0.4.1_15.md`](../verification/evidence/testing-publications/v0.4.1_15.md).
 
-## Current owner-live `_15` acceptance
+## Historical `_15` owner-live acceptance scope
 
 After installing the published `_15` testing package:
 
@@ -158,3 +160,5 @@ After installing the published `_15` testing package:
 - Enable QUIC OFF must show natural disabled wording;
 - RU and EN help/Stage-30/Stage-80 presentation must follow selected UI language;
 - normal restoration/resource-cleanup requirements remain unchanged.
+
+The selected installed QUIC ON/OFF, preference-persistence and fixed-IP/Host-SNI rows were subsequently accepted in the [live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md). They do not prove the planned HTTP3 GET. New acceptance is scoped by the browser HTTP plan.

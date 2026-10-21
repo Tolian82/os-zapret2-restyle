@@ -1,50 +1,54 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.5.6: завершение Telegram Voice исследований и полный релиз
+## Текущий приоритет — модернизация Strategy Lab через curl-impersonate
 
-Owner (20.10.2026) **закрыл Telegram Voice лабораторию с отрицательным результатом на прямом UDP OPNsense**: OPNsense direct provider WAN TX fake/original confirmed, no Reflector RX, MEDIA/CALL failed; classic fake, TTL7, fake OFF and native synthetic STUN results do not prove media. Исходные Strategy #4 и TNAS маршруты восстановлены. GOST SOCKS5 UDP ASSOCIATION и OpenWrt `6×UDP64+STUN20` выходят, но не доказан звонок клиента. Главное новое наблюдение: pfSense `.1.140` имеет Telegram route `91.108.12.0/22 via 10.1.11.1 dev ovpnc6` и NAT на `10.1.11.2`; первый hop traceroute `10.1.11.1`. Следовательно, успешный pfSense `tgcalls_cli` VPN-route-confounded, **не** доказательство DPI bypass Zapret2 в локальном прямом тракте. Гипотеза блокировки локального UDP совместима с наблюдениями, но точный upstream cause не установлен. [Полное заключение](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+Подготовлены [целевое ТЗ](REQUIREMENTS.md) и [подробный план](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) на основе повторного аудита текущего кода и upstream. План предусматривает готовый приватный FreeBSD-клиент, один Chrome-профиль со штатным согласованием TLS, положительный HTTP/1.1 или HTTP/2, HTTP3 GET при необходимости и подтверждённые нативные стратегии. Прямой HTTPS-успех завершает поиск без HTTP/3.
 
-**Релиз `v0.5.6_1` опубликован и проверен на уровне GitHub/FreeBSD15/Pages:** exact merge/tag, pkg+SHA256SUMS и четыре задания release workflow PASS. Следующее — только owner GUI подтверждение обновления до `0.5.6_1`; никакие Telegram исследовательские тесты не запланированы. Voice GUI и остальные компоненты сохраняются. [Публикация](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
+Последовательность принятых этапов:
+
+1. Поставка готового клиента и фиксация профиля/происхождения.
+2. Сквозная миграция Standard, Model C и проверки финалистов.
+3. Extended TLS 1.2/HTTP и настоящий HTTP/3.
+4. Ограниченное расширение QUIC-каталога в конечном бюджете.
+5. Достоверные результаты, RU/EN и совместимость сохранённых заданий.
+6. Поставка и приёмка установленного пакета.
+
+Реализация не начата; отдельная команда владельца открывает этап 1. Конкретные задачи и критерии находятся в подробном плане. Firefox, обычный curl-контроль/fallback, замена Python/Model C и новая recovery-архитектура исключены. Планирование не меняет опубликованный v0.5.6 и не запускает стабильный релиз.
 
 ## Основной завершённый путь
 
 - Независимый native OPNsense plugin, обычный runtime/service lifecycle, Traffic Strategy и HOSTLIST/IPSET.
 - Zapret2 Service GUI для upstream install/update/reinstall/downgrade; Diagnostics и asynchronous Strategy Lab.
-- Python orchestration, adaptive search и finite budgets; выбор Model C, source-port attribution/leasing и readiness.
-- Generic UDP exact bytes, наблюдаемый QUIC и persisted Enable QUIC; domain/IPv4 + optional Host/SNI, truthful results и точный fixed-IP replay.
-- Owner-live закрытие линии v0.4.x; stable [v0.5.0](releases/v0.5.0.md), принятый file-picker corrective `_2` и опубликованный testing `_3`.
-- Форма/модель Voice и PoC начинались в v0.5.1; общий page/lifecycle реализован в feature-коде v0.5.2, но owner-live приёмка ещё не выполнена. [Архив](history/stages/v0.5.1/README.md).
+- Python orchestration, adaptive search, конечные бюджеты, Model C, source-port attribution/leasing и readiness.
+- Generic UDP exact bytes, persisted Enable QUIC и QUIC candidate search; domain/IPv4 + optional Host/SNI, truthful results и fixed-IP replay.
+- Owner-live закрытие выбранных сценариев линии v0.4.x и стабильная поставка [v0.5.0](releases/v0.5.0.md).
+- Общий backend Voice/Strategies, подтверждённый Voice Apply, сохранность Voice-конфигурации и принятый GUI/RU/EN; подтверждённый Strategies Apply после исправления большого неизменённого запроса. Границы доказательств — в [PROJECT_STATE](PROJECT_STATE.md).
+- Полный [v0.5.6](releases/v0.5.6.md) опубликован через GitHub/FreeBSD15/Pages. Установка владельцем через GUI остаётся неподтверждённой, без повторного открытия завершённой разработки.
 
-## Telegram Voice — закрытая кампания (20.10.2026)
+## Telegram Voice — закрытая кампания
 
-Owner stopped the experiment in this environment after failure of repeated direct-provider calls and discovery that the earlier positive pfSense control used a VPN-based reflector route. Preserve recorded observations and no false media/real-call PASS. `MEDIA_PASS=false`, `CALL_PASS=false`, reason of UDP response loss not pinpointed. **Historical proposed packet captures, fake/TTL sweeps, SOCKS5/UDP and Telegram real calls are not active backlog.** Reopen only upon separate explicit owner request and changed test rationale. [Final evidence](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+Владелец завершил исследования 20.10.2026 с отрицательным результатом на прямом UDP OPNsense. Положительный pfSense-контроль оказался связан с VPN-маршрутом; он не доказывает Zapret2-обход того же прямого провайдера. `MEDIA_PASS=false`, `CALL_PASS=false`; точная причина потери ответа не установлена. [Заключение](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+
+Старые предложения capture, fake/TTL, SOCKS/UDP и реальных звонков не являются активной очередью. Возобновление требует нового явного задания владельца. GUI/Config/Apply и действующие профили сохраняются.
 
 ## Независимая лаборатория и persistence
 
-- Сохранять документированную LAN/router-local/SOCKS базу: отдельные TCP/TLS parent и UDP/Zapret2 пути. Router-local без explicit SOCKS и SOCKS UDP ASSOCIATE требуют отдельной квалификации.
-- Предпочитать штатный OPNsense GUI/persistence; проверить сохранность non-GUI sing-box/ACL/alias/snapshot при regeneration и reboot. Уже рабочие LAN/SOCKS TCP-parent пути сохраняются.
-- Persistence выбранного Voice теперь реализуется общей native страницей; дополнительный hook/Cron enable не создаётся. После reboot проверить effective profiles, процессы/правила, LAN/SOCKS/router-local TCP и релевантный UDP до ручного исправления.
-- Ручные OPNsense→TNAS SSH/два host-route repair проверены; после реального TNAS reboot остаётся owner-manual проверка восстановления. Без route Cron/configd/boot scheduling и Docker autostart.
+Сохранённое направление вне текущей HTTP-модернизации: штатная OPNsense persistence и квалификация LAN/router-local/SOCKS при конкретном новом задании. Рабочие TCP/TLS parent-пути и отдельный UDP/Zapret2 тракт не объединяются. Non-GUI sing-box/ACL/alias/snapshot и фактический reboot проверяются только в относящемся к ним сценарии.
 
-Факты и команды находятся в [operations](architecture/TELEGRAM_LAB_OPERATIONS.md), [traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md), [oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md) и [helper reference](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). Эти задачи не добавляют TCP/proxy/routes в plugin.
+Ручные OPNsense→TNAS SSH/host-route repair остаются ручными; route Cron/configd/boot scheduling и Docker autostart не планируются. Старые Telegram-проверки из runbooks не возобновляются автоматически. Исторические факты и команды: [operations](architecture/TELEGRAM_LAB_OPERATIONS.md), [traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md), [oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md), [helper](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md). Эти направления не добавляют TCP/proxy/routes в плагин.
 
 ## Сохранённый будущий backlog
 
-- Cancellation/internal-failure containment; circular start/stop/TTL и stale-session recovery.
+- Cancellation/internal-failure containment; circular start/stop/TTL и stale-session recovery при конкретном основании.
 - Diagnostics persistence/reload; retention/cleanup; reboot/residue regression.
-- Runtime/service reliability и package/runtime visibility при новом основании; дальнейший RU/EN review выбранных дефектов.
+- Runtime/service reliability и package/runtime visibility; дальнейшие точечные RU/EN исправления.
 - IPv6 Laboratory target support — отдельная архитектурная задача.
-- Дополнительный BLOB repository GUI — только после согласованного технического контракта владельца.
+- Дополнительный BLOB repository GUI — после согласованного технического контракта владельца.
 
-Эти направления не становятся автоматически долгом страницы или уже опубликованного v0.5.0.
-
-## Согласованный предварительный план улучшения Strategy Lab
-
-- [Браузерные HTTPS/HTTP/2 и HTTP/3 проверки через curl-impersonate](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — согласованное направление **будущей** модернизации (20.10.2026), пока **только документация**, без разрешения на код: готовый FreeBSD `latest` клиент в приватном пакете, один Chrome-профиль, Standard TLS 1.3/HTTP/2, Extended HTTP/3 GET, расширенный QUIC-каталог, достоверная атрибуция и owner-live приёмка. Firefox, обычный curl-тест, fallback и новая система поиска исключены.
-- Эта работа не меняет текущую опубликованную `v0.5.6_1` или закрытую Telegram Voice-кампанию; начать реализацию только после отдельного поручения владельца.
+Эти направления не превращаются в обязательные блокеры текущей HTTP-модернизации или прежних релизов без конкретного затронутого сценария.
 
 ## Отложенные исследования
 
 Candidate parallel width выше трёх, endpoint parallelism, cross-batch keep-warm, BLOB/Lua/discovery optimization и Model-C timeout/deadline audit открываются только при новом конкретном дефекте/потребности, материальном изменении архитектуры либо выборе владельца. Завершённые измерения сохранены в истории.
 
-Текущая граница — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [working ledger](history/current/v0.5.x.md). Roadmap не накапливает ревизионные отчёты.
+Текущая граница — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md). Roadmap не накапливает ревизионные отчёты.
