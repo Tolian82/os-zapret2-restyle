@@ -488,6 +488,7 @@ printf '%s\n' "${LAST_RESULT}" | jq -e '.initial_service_state=="STOPPED" and .r
     fail 'STOPPED restoration evidence is invalid'
 
 export MOCK_SCENARIO=success
+printf "E2E phase=circular-start\n"
 circular=$(api_call strategy_lab_circular_start "${SUCCESS_JOB}")
 printf '%s\n' "${circular}" | jq -e '.state=="queued" or .state=="running"' >/dev/null ||
     fail 'eligible circular validation did not start'
@@ -528,9 +529,13 @@ grep -Fq 'public function statusAction(): array' "${CONTROLLER}" || fail 'API st
 grep -Fq 'public function cancelAction(): array' "${CONTROLLER}" || fail 'API cancel action is missing'
 grep -Fq 'public function resultAction(): array' "${CONTROLLER}" || fail 'API result action is missing'
 
+printf "E2E phase=delegated-active-cancel\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh" >/dev/null
+printf "E2E phase=delegated-time-budget\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-time-budget.sh" >/dev/null
+printf "E2E phase=delegated-semantic-restoration\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-semantic-restoration.sh" >/dev/null
+printf "E2E phase=delegated-candidate-runtime\n"
 sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh" >/dev/null
 
 sh -n "${LAUNCHER}"
