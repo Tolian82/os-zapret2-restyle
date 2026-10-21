@@ -80,7 +80,7 @@ require "${MATRIX}" 'bare-IP QUIC without Host/SNI'
 require "${MATRIX}" 'Stage-90 cleanup/restoration after selected IP runs'
 
 # QUIC specialist contract remains owner-selected and observable.
-require "${QUIC_DOC}" 'sole product decision that determines whether Stage 80 runs QUIC candidate tests'
+require "${QUIC_DOC}" 'The saved **Enable QUIC** choice enables candidate testing when the job reaches Extended Stage 80.'
 require "${QUIC_DOC}" 'does not produce a capability-based skip'
 require "${QUIC_DOC}" 'number of attempted QUIC candidates'
 require "${QUIC_DOC}" 'attempted candidate IDs'
