@@ -94,7 +94,7 @@ case "${host}" in
         exit 0
         ;;
     accessible.example)
-        printf '%s\n' 'exit=0 remote_ip=203.0.113.20 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
+        printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123000'
         exit 0
         ;;
     *)
