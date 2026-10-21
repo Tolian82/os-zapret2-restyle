@@ -193,7 +193,7 @@ Product requirements:
 
 ## Strategy Lab — browser-profile reachability target
 
-**Status:** Approved modernization requirements, amended by the owner on 21 October 2026; implementation has not started. The definitive accessibility rule is a logical **OR**: a verified target TLS handshake, a verified target QUIC handshake, **or a genuine final HTTP response from the target** is individually sufficient. A valid HTTP response is affirmative evidence, not just optional diagnostic data. No HTTP response is required if the intended handshake already succeeded. See [PROJECT_STATE](PROJECT_STATE.md) for implemented status and the [detailed development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) for the full algorithm, stages and acceptance matrix.
+**Status:** Approved modernization requirements, amended by the owner on 21 October 2026; Stage-1 source candidate exists; the installed client and handshake evidence are not yet accepted. The definitive accessibility rule is a logical **OR**: a verified target TLS handshake, a verified target QUIC handshake, **or a genuine final HTTP response from the target** is individually sufficient. A valid HTTP response is affirmative evidence, not just optional diagnostic data. No HTTP response is required if the intended handshake already succeeded. See [PROJECT_STATE](PROJECT_STATE.md) for implemented status and the [detailed development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) for the full algorithm, stages and acceptance matrix.
 
 ### Target outcome
 

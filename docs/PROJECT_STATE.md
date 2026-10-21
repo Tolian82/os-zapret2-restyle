@@ -1,12 +1,12 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_1`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Код модернизации ещё не начат. Единственное следующее действие задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Current source stage — **`v0.5.7_1`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage-1 client packaging and standalone read-only readiness code have been added in source; production HTTP probes have not yet migrated. Единственное следующее действие задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия, пакет и граница доставки
 
-- `VERSION=0.5.6`, `PLUGIN_REVISION=1`, package candidate: `os-zapret2-restyle-0.5.6_1.pkg`.
+- `VERSION=0.5.7`, `PLUGIN_REVISION=1`, source package candidate: `os-zapret2-restyle-0.5.7_1.pkg`..
 - Полный Web/pkg-релиз [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) опубликован из `b319aafe748c1363712f5d7d6cbaaf40396bb64c`; immutable tag, pkg/SHA256SUMS и FreeBSD15 Pages/pkg deployment подтверждены. SHA-256 пакета: `9c4ba669ae0ac453bb59da37b240234b7b2c44b49482b88eb98c14108a3dc6fe`. [Доказательство публикации](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
-- Обновление владельцем через OPNsense GUI до `0.5.6_1` не подтверждено. Новое оформление ТЗ не меняет этот факт и не является новой сборкой.
+- Обновление владельцем через OPNsense GUI до `0.5.6_1` не подтверждено. Stage-1 source work does not change the installed owner version or stable feed.
 - Поддерживаемая платформа: OPNsense 26.7 / FreeBSD 15 amd64, Python 3.13. Служба `zapret`, общий dvtws2/supervisor и native lifecycle сохраняются.
 
 ## Strategy Lab — текущий код и согласованное направление
@@ -15,12 +15,14 @@ Audit was based on restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` and record
 
 **Реализовано в текущем исходном коде:** Python-планировщик, Model C как единственный нормальный production-путь, CandidateSpec/ResourceInventory, фиксированный endpoint epoch и source-port атрибуция, конечные бюджеты, отмена, Stage 90. Основной клиент пока обычный curl с HTTP/1.1/ограничением TLS; QUIC-кандидат пока проверяется handshake OpenSSL, а не HTTP3 GET. В Stage 80 есть четыре QUIC-кандидата; QUIC уже может быть источником Stage-85 результата. Ранний `TARGET_ACCESSIBLE` уже завершает задание до поиска/Extended.
 
+**Implemented in Stage-1 source, package and installed qualification pending:** a signed FreeBSD `latest` fetch/packaging helper, private libcurl and licenses, dynamic plain Chrome profile selection, and standalone fail-closed client readiness API. Normal Strategy Lab still invokes system curl. Stage-2 is responsible for wiring the readiness check before service stop and migrating every production HTTP caller.
+
 **Approved but not implemented:** requirements `BH-01`–`BH-12` and six stages of the [English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), using the handshake-or-HTTP-response success rule and unpinned FreeBSD `latest` acquisition. An authentic HTTP response is affirmative evidence (not merely diagnostics); HTTP/ALPN/body fields not actually observed stay unknown. Direct HTTPS success by TLS **or** HTTP response skips QUIC. No Firefox, ordinary curl fallback, replacement Python scheduler or new recovery architecture.
 
 | Этап | Состояние |
 | --- | --- |
 | Аудит, уточнение требований и подробное планирование | Завершены на уровне документации |
-| 1. Приватная поставка curl-impersonate FreeBSD latest без pin версии | Не начат |
+| 1. Private current FreeBSD `latest` curl-impersonate client | Implemented in source candidate; FreeBSD CI/package/live acceptance pending |
 | 2. Сквозной TLS-handshake Standard | Не начат |
 | 3. Extended и целевой QUIC-handshake | Не начат |
 | 4. Расширение QUIC-каталога и допуск по бюджету | Не начат |

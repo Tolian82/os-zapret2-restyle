@@ -2,30 +2,27 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Documentation-only update; no change to the published package.
+**Current handoff identity:** `v0.5.7_1`. `VERSION=0.5.7`, `PLUGIN_REVISION=1`. This is the new Stage-1 source candidate, not a stable release.
 
-## Current task — approved Strategy Lab modernization
+## Current work — Stage 1 of Strategy Lab modernization
 
-The [detailed English development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) and [requirements](REQUIREMENTS.md) (`BH-01`–`BH-12`) now specify an explicit independent-OR reachability rule: **verified target TLS handshake OR verified target QUIC handshake OR genuine final target HTTP response is sufficient**. An HTTP response counts as accessible, including 4xx/5xx and without requiring a complete body; a separate handshake report is not necessary if the response is genuine. Stages 1–6, Model C, attribution and Stage 90 remain unchanged.
+The owner authorized implementation of the [six-stage English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md). The first implementation scope bundles signed, prebuilt FreeBSD `latest` `curl-impersonate` privately, without pinning its upstream version; it discovers one existing plain Chrome profile from the acquired package's wrapper set. Its own shared library and licenses are included and the system curl is unchanged.
 
-Chrome-default TLS 1.2/1.3 is allowed; HTTP/1.1 and HTTP/2 are equally acceptable. Direct HTTPS success by **either TLS handshake or real HTTPS response** skips QUIC. Forced TLS 1.2 stays in Extended. For every build, fetch the available FreeBSD `latest` package using ugorur's approach, referencing lexiforest; do not pin or select by version. Use one Chrome profile supported by the actual binary. These decisions are settled.
+Stage-1 source paths: `scripts/build-private-curl-impersonate.sh` called by `scripts/build-pkg.sh`; the package's private entrypoint is `/usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate`, with `PROFILE` and `PROVENANCE`. The standalone Python read-only readiness API is `strategy_lab_py/browser_client.py:check_ready`. **Stage 1 does not switch production Strategy Lab HTTP requests** or introduce a new service lifecycle. The actual Stage-00 call of the readiness API is part of the Stage-2 migration before stopping Zapret2. Do not claim Chrome probing is active in an installed plugin yet.
 
-**Implementation boundary:** No new client, probe migration or newly specified QUIC checks have been implemented yet. Source audit is not installed OPNsense acceptance. See [PROJECT_STATE](PROJECT_STATE.md).
+The accepted endpoint accessibility rule for future Stage 2/3 is independent OR: verified target TLS handshake **or** verified target QUIC handshake **or** a genuine final target HTTP response. HTTP 2xx–5xx count and a full body is unnecessary; all target identity, certificate and required attribution checks still apply. Standard HTTP/1.1 and HTTP/2 are equal, and direct HTTPS success skips QUIC.
 
 ## Single next action
 
-**After a separate owner instruction to start implementation, begin Stage 1:** bundle the current FreeBSD `latest` curl-impersonate privately, select one supported Chrome profile, and verify real target TLS/QUIC signals. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. Keep `v0.5.6_1` for this documentation-only change; no stable release is authorized.
+**Finish Stage-1 candidate qualification and persistent GitHub testing-package publication for `v0.5.7_1`; then begin Stage 2 on a new versioned candidate.** Qualification requires a successful FreeBSD 15 package build containing the private client/lib/licenses and the selected Chrome profile, a runnable binary, CA readiness, and available direct TLS/QUIC evidence. If real target handshake evidence has not been obtained, explicitly leave that acceptance item unverified; do not claim FreeBSD package existence proves wire behavior. Stable release requires a separate owner order.
 
-Stage 1 outcome: executable client and licenses in pkg, CA, Chrome profile, final pkg SHA-256, real FreeBSD 15 TLS/QUIC signals; any genuine HTTP response is positive reachability evidence, not merely diagnostics. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
+## Required specialist reading
 
-## Minimum stage-specific reading
+1. [Stage plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md), especially Stage 1 and the Stage-2 boundary.
+2. [BH-01–BH-12 requirements](REQUIREMENTS.md).
+3. `scripts/build-pkg.sh`, `scripts/build-private-curl-impersonate.sh` and the FreeBSD package job in `.github/workflows/ci.yml`.
+4. For actual probe migration later: [Strategy Lab architecture](architecture/STRATEGY_LAB.md), [Model C](architecture/STRATEGY_LAB_MODEL_C.md), [adaptive search](architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md), [budgets](architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md).
 
-1. [REQUIREMENTS](REQUIREMENTS.md) — разделы Strategy Lab и `BH-01`–`BH-12`.
-2. [Подробный план](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — аудит, технические решения и этап 1.
-3. Для изменения поиска: [основная архитектура](architecture/STRATEGY_LAB.md), [Model C](architecture/STRATEGY_LAB_MODEL_C.md), [adaptive search](architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md), [budgets](architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md).
-4. Для Extended/результатов: [QUIC control](architecture/STRATEGY_LAB_QUIC_CONTROL.md), [unified shortlist](architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md), [прежняя live-матрица](verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md).
+## Preserved boundaries
 
-## Сохранённые границы
-
-- Полный [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) опубликован из `b319aafe748c1363712f5d7d6cbaaf40396bb64c`; GitHub/FreeBSD15/Pages проверены, установка `0.5.6_1` через GUI владельцем не подтверждена. Это не блокирует документационную работу. [Запись публикации](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
-- Telegram Voice-исследования закрыты владельцем с отрицательным результатом в его прямом тракте. Новые звонки, STUN/capture, TTL/fake и маршрутные опыты не входят в текущую работу. [Заключение](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+The published stable [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) and its stable OPNsense package feed are unchanged. The Stage-1 test package does not authorize full release. The closed Telegram Voice provider experiment remains closed.

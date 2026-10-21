@@ -1,6 +1,6 @@
 # Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Status:** Approved technical plan; implementation stages 1–6 have not started.
+**Status:** Approved technical plan. Stage 1 has a source candidate (private FreeBSD client packaging and standalone readiness); package and wire evidence are pending. Stages 2–6 have not started.
 **Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
@@ -115,7 +115,7 @@ One parser must serve the real installed Model C, fixed-IPv4 overrides and other
 
 ### Stage 1 — bundle a ready-to-run private client
 
-**Dependency:** Explicit owner instruction to begin implementation.
+**Dependency:** Owner authorization granted on 21 October 2026; source work started.
 **Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
 1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.
@@ -201,7 +201,7 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ## 4. Minimum acceptance-evidence matrix
 
-**All new rows are NOT RUN / NOT VERIFIED as of this plan.** The [older live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) supports the previous implementation, not this Chrome/handshake-or-HTTP-response path.
+**Stage-1 source implementation exists but V1 has not yet been fully qualified; remaining new rows are NOT RUN / NOT VERIFIED.** The [older live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) supports the previous implementation, not this Chrome/handshake-or-HTTP-response path.
 
 | ID | Scenario and expected behavior | Required evidence | Stage / requirements |
 | --- | --- | --- | --- |

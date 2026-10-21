@@ -85,6 +85,11 @@ if [ -d src/etc ]; then
     cp -R src/etc "${STAGE}/usr/local/etc"
 fi
 
+# Fetch once per package build; never in plugin post-install or runtime.
+# Private client/license files must exist before plist is generated.
+sh scripts/build-private-curl-impersonate.sh \
+    "${STAGE}/usr/local/libexec/zapret2-restyle/curl-impersonate"
+
 find "${STAGE}" -type f -name "*.sh" -exec chmod 755 {} +
 find "${STAGE}" -type f -name "zapret" -path "*/rc.d/*" -exec chmod 755 {} +
 if [ -d "${STAGE}/usr/local/etc/rc.syshook.d" ]; then
