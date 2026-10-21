@@ -471,9 +471,10 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
     endpoint_match = remote_ip == selected
     intercepted = after_packets > before_packets
     chrome_proof = (
-        request.chrome_https_evidence(execution, expected_ip=selected)
-        if spec.protocol == "tls13" and not _is_ipv4(endpoint) else None
-    )
+        request.chrome_http_evidence(execution, expected_ip=selected)
+        if spec.protocol == "http"
+        else request.chrome_https_evidence(execution, expected_ip=selected)
+    ) if spec.protocol in {"tls13", "tls12", "http"} and not _is_ipv4(endpoint) else None
     passed = (
         (chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)
         and endpoint_match and intercepted
