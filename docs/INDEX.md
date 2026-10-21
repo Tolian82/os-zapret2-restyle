@@ -26,6 +26,7 @@
 
 Записи ниже сохраняют историю предыдущей кампании; описанные в них старые следующие эксперименты не являются активной очередью.
 
+- [Stage 1 v0.5.6_2 testing publication](verification/evidence/testing-publications/v0.5.6_2.md) — FreeBSD15 CI PASS, current signed latest Chrome binary, persistent GitHub pkg, installed TLS/QUIC acceptance pending.
 - [Фактическая публикация full Web/pkg v0.5.6](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md) — CI/FreeBSD15 и Pages PASS, pkg SHA256, owner GUI upgrade pending.
 - [Завершение Telegram Voice испытаний, pfSense VPN и release v0.5.6](verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md) — MEDIA/CALL не прошли на прямом OPNsense UDP, pfSense `ovpnc6` VPN маршрут; кампания закрыта.
 - [Релиз v0.5.6](releases/v0.5.6.md) — полный Web/pkg stage без новых алгоритмов и без обещания Telegram MEDIA.

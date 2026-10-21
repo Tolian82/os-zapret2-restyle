@@ -1,6 +1,6 @@
 # Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Status:** Stage 1 source integration is in development and not yet accepted on FreeBSD 15/OPNsense. Stages 2–6 have not started.
+**Status:** Stage 1 FreeBSD 15 private-client package build passed CI and the testing package has been published. Real TLS/QUIC proof on installed OPNsense is pending; stages 2–6 have not started.
 **Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.

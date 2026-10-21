@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_2`. `VERSION=0.5.6`, `PLUGIN_REVISION=2`. Stage 1 client bundling implementation candidate; release/installed acceptance not yet established.
+**Current handoff identity:** `v0.5.6_2`. `VERSION=0.5.6`, `PLUGIN_REVISION=2`. Stage 1 private curl-impersonate package passed FreeBSD 15 CI and was published as a GitHub testing prerelease; installed OPNsense TLS/QUIC acceptance remains pending.
 
 ## Current task — approved Strategy Lab modernization
 
@@ -10,13 +10,13 @@ The [detailed English development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_P
 
 Chrome-default TLS 1.2/1.3 is allowed; HTTP/1.1 and HTTP/2 are equally acceptable. Direct HTTPS success by **either TLS handshake or real HTTPS response** skips QUIC. Forced TLS 1.2 stays in Extended. For every build, fetch the available FreeBSD `latest` package using ugorur's approach, referencing lexiforest; do not pin or select by version. Use one Chrome profile supported by the actual binary. These decisions are settled.
 
-**Implementation boundary:** Stage 1 build scripts now retrieve and stage a private FreeBSD latest client with license/profile metadata and a read-only readiness script. Whether actual FreeBSD 15 packaging and network verification work depends on CI and installed evidence. Probe migration and updated QUIC checks are not yet implemented. Source audit is not installed OPNsense acceptance. See [PROJECT_STATE](PROJECT_STATE.md).
+**Stage 1 evidence:** [CI run 39583956850](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39583956850) qualified the FreeBSD 15 package and ran the actual private binary under FreeBSD 15.0. The [testing prerelease v0.5.6_2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_2) is tied to source `4166a38d6653e7faa560c86205af25519895e989` and [publication evidence](verification/evidence/testing-publications/v0.5.6_2.md). Its bundled Chrome profile is `chrome150` (upstream `2.2.3_1` was observed, **not pinned**). Network handshakes and installed OPNsense acceptance have NOT been performed. Stage 2/3 production probe migration is not implemented. Source audit is not installed OPNsense acceptance. See [PROJECT_STATE](PROJECT_STATE.md).
 
 ## Single next action
 
-**Current Stage 1 gate:** complete the FreeBSD 15 package CI, confirm signed latest fetching, bundled executable/licenses/profile and read-only readiness; obtain real TLS/QUIC evidence from FreeBSD/installed OPNsense. Do not enter Stage 2 before addressing any blocking build/runtime defect. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. Current source candidate is `v0.5.6_2`; no stable release is authorized.
+**Single next action:** qualify the published `v0.5.6_2` testing package on installed OPNsense 26.7: verify `pkg info`, run the bundled read-only `check-curl-impersonate.sh`, and record real certificate-verified HTTPS/TLS and UDP/443 QUIC attempts with the bundled Chrome profile, target identity, IP and observed result. If runtime capability or CA is missing, fix that Stage 1 blocker before beginning Stage 2. The genuine HTTP-response success path is a cross-cutting Stage 2/3 requirement. The `v0.5.6_2` testing package is published; stable Pages/pkg release is unchanged and not authorized.
 
-Stage 1 outcome: executable client and licenses in pkg, CA, Chrome profile, final pkg SHA-256, real FreeBSD 15 TLS/QUIC signals; any genuine HTTP response is positive reachability evidence, not merely diagnostics. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
+Stage 1 package evidence: private executable, licenses, Chrome profile, source pkg digest, FreeBSD15 ABI and package SHA-256 `e3d79a7a519b1d09ae755d0df9873b38b1adbe58bff7cf8eb8bb7001ec24acf2` are known. Real network TLS/QUIC results are still **unverified**; no success is inferred from `curl -V`. Any genuine target HTTP response will be positive evidence as specified in the approved requirements. No pin/check on upstream version. Cross-cutting source migration is Stage 2; stable release is not scheduled.
 
 ## Minimum stage-specific reading
 
