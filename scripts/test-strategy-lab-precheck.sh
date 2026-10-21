@@ -260,7 +260,7 @@ printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .status=
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="90" and .status=="PASS")' >/dev/null ||
     fail "IPv4 control failure did not restore service state"
 
-# Canonical bare IPv4 is accepted and uses a real TLS 1.3 baseline without DNS.
+# Canonical bare IPv4 uses the same authenticated Chrome HTTPS baseline without DNS.
 unset MOCK_IPV4_CONTROL_STATUS
 MOCK_TLS_PASS_HOST=203.0.113.10
 export MOCK_TLS_PASS_HOST
@@ -269,8 +269,8 @@ printf '%s\n' "${result}" | jq -e '.target=="203.0.113.10" and .target_type=="ip
     fail "bare IPv4 target was not normalized and classified"
 printf '%s\n' "${result}" | jq -e '.outcome=="TARGET_ACCESSIBLE" and .baseline.dns_a=="SKIPPED" and .baseline.all_accessible==true' >/dev/null ||
     fail "bare IPv4 target did not use DNS-free direct accessibility semantics"
-printf '%s\n' "${result}" | jq -e '.baseline.endpoints[0].transport=="tls13-ipv4" and .baseline.endpoints[0].status=="PASS"' >/dev/null ||
-    fail "bare IPv4 baseline was not a real TLS 1.3 probe"
+printf '%s\n' "${result}" | jq -e '.baseline.endpoints[0].transport=="https-ipv4" and .baseline.endpoints[0].status=="PASS" and .baseline.endpoints[0].reachability.accessible==true' >/dev/null ||
+    fail "bare IPv4 baseline did not use authenticated Chrome HTTPS evidence"
 [ "$(cat "${STATE_FILE}")" = RUNNING ] || fail "service was not restored after bare IPv4 baseline"
 unset MOCK_TLS_PASS_HOST
 
