@@ -302,6 +302,53 @@ assert http_error["accessible"] and http_error["http_response"] and not http_err
 assert not request.chrome_https_evidence(result(base), expected_ip="203.0.113.11")["accessible"]
 assert not request.chrome_https_evidence(result(base.replace("ssl_verify=0", "ssl_verify=60")), expected_ip="203.0.113.10")["accessible"]
 assert not request.chrome_https_evidence(result("exit=0 remote_ip=203.0.113.10 http=2 code=200 bytes=0"), expected_ip="203.0.113.10")["accessible"]
+
+# Stage-2 V2 controlled matrix: independently acceptable TLS/HTTP signals,
+# negotiated HTTP/1.x and H2, final HTTP 3xx-5xx, no-body/truncated transfer.
+def proof(*, version="1.1", status=200, handshake="0.000000",
+          cert=0, ip="203.0.113.10", exit_code=0, received=0):
+    stdout = (f"exit={exit_code} remote_ip={ip} http={version} "
+              f"code={status:03d} bytes={received} ssl_verify={cert} "
+              f"appconnect={handshake}")
+    return request.chrome_https_evidence(result(stdout, exit_code), expected_ip="203.0.113.10")
+
+for version in ("1", "1.0", "1.1", "2"):
+    for status in (200, 206, 301, 302, 403, 404, 429, 500, 503, 599):
+        value = proof(version=version, status=status, exit_code=18, received=0)
+        assert value["accessible"] and value["http_response"] and not value["tls_verified"], (version,status,value)
+        assert value["http_status"] == status
+for exit_code in (28, 52, 56):
+    value = proof(version="0", status=0, handshake="0.137000", exit_code=exit_code)
+    assert value["accessible"] and value["tls_verified"] and not value["http_response"], value
+for cert in (20, 60, 77):
+    assert not proof(cert=cert, handshake="0.150000")["accessible"]
+for invalid in (
+    {"ip":"203.0.113.11","handshake":"0.150000"},
+    {"ip":"","handshake":"0.150000"},
+    {"version":"0","status":0},
+    {"version":"1.1","status":100},
+    {"version":"0","status":200},
+    {"version":"invalid","status":200},
+):
+    assert not proof(**invalid)["accessible"], invalid
+
+# The actual Stage-40 domain presentation uses this classifier and pins IP.
+from strategy_lab_py import probe
+http404 = result("exit=18 remote_ip=203.0.113.10 http=1.1 code=404 bytes=0 ssl_verify=0 appconnect=0.000000",18)
+assert probe._domain_public("blocked.example",http404,None,"203.0.113.10")["status"]=="PASS"
+assert probe._domain_public("blocked.example",http404,None,"203.0.113.11")["status"]=="FAIL"
+
+# Production Standard does NOT force TLS 1.3 or HTTP/2: Chrome chooses.
+previous = request.binary
+request.binary = lambda name: "/private/run-curl-impersonate.sh"
+try:
+    cmd=request._curl_command("blocked.example",scheme="https",bound_ip="203.0.113.10")
+finally:
+    request.binary=previous
+assert cmd[0] == "/private/run-curl-impersonate.sh"
+assert cmd[cmd.index("--resolve")+1] == "blocked.example:443:203.0.113.10"
+assert cmd[-1] == "https://blocked.example/"
+assert not any(x.startswith("--tlsv") or x in ("--http1.1","--http2-prior-knowledge","--insecure","-k") for x in cmd)
 PY
 
 echo 'PASS: Python 3.13 owns finite Strategy Lab requests/probes, answer-aware DNS parsing, and distinct subprocess diagnostics'
