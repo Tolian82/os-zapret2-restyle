@@ -351,4 +351,56 @@ assert cmd[-1] == "https://blocked.example/"
 assert not any(x.startswith("--tlsv") or x in ("--http1.1","--http2-prior-knowledge","--insecure","-k") for x in cmd)
 PY
 
+
+# Stage 3: exercise real Extended TLS/HTTP candidate probe functions,
+# including the IP-target/Host-SNI override; all I/O is mocked.
+PYTHONPATH="$ZAPRET_DIR" "$PYTHON" - <<'PY'
+from unittest import mock
+from strategy_lab_py import request, candidate, ip_target_support
+binding={"endpoint":"service.example","selected_ip":"203.0.113.10","rule":19100}
+tls12=candidate.ProtocolSpec("tls12","tcp",443,"tls")
+http=candidate.ProtocolSpec("http","tcp",80,"http")
+
+def run(probe, spec, stdout, rc, *, intercepted=True):
+    seen=[]
+    def fake_request(host, *, scheme, family="ipv4", tls_version=None, bound_ip=None):
+        seen.append((host,scheme,tls_version,bound_ip))
+        return request.CommandResult(["chrome"],rc,stdout,"",False,"completed",None,100)
+    count=[(0,0),(1,60)] if intercepted else [(0,0),(0,0)]
+    with mock.patch.object(candidate,"_counter",side_effect=count), \
+         mock.patch.object(request,"curl_request",side_effect=fake_request), \
+         mock.patch.object(request,"tcp_request",side_effect=AssertionError("TCP is not HTTP/TLS evidence")):
+        result=probe(binding,spec)
+    assert seen==[("service.example","http" if spec.protocol=="http" else "https","1.2" if spec.protocol=="tls12" else None,"203.0.113.10")],seen
+    return result
+
+tls="exit=18 remote_ip=203.0.113.10 http=1.1 code=503 bytes=0 ssl_verify=0 appconnect=0.141000"
+hello="exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=0 appconnect=0.141000"
+plain="exit=18 remote_ip=203.0.113.10 http=1.1 code=404 bytes=0 ssl_verify=0 appconnect=0.000000"
+for probe in (candidate._probe_endpoint,ip_target_support._candidate_probe):
+    for spec,line,rc in ((tls12,tls,18),(tls12,hello,28),(http,plain,18)):
+        item=run(probe,spec,line,rc)
+        assert item["status"]=="PASS" and item["reachability"]["accessible"] and item["firewall"]["intercepted"],item
+    for spec,line in (
+        (tls12,tls.replace("ssl_verify=0","ssl_verify=60")),
+        (tls12,tls.replace("203.0.113.10","203.0.113.11")),
+        (http,plain.replace("code=404","code=100")),
+        (http,plain.replace("http=1.1","http=0")),
+        (http,plain.replace("203.0.113.10","203.0.113.11")),
+        (http,"exit=0 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=0 appconnect=0.000000"),
+    ):
+        assert run(probe,spec,line,0)["status"]=="FAIL",(spec.protocol,line)
+    assert run(probe,tls12,tls,18,intercepted=False)["status"]=="FAIL"
+    assert run(probe,http,plain,18,intercepted=False)["status"]=="FAIL"
+with mock.patch.object(request,"binary",return_value="/private/run-curl-impersonate.sh"):
+    tc=request._curl_command("service.example",scheme="https",tls_version="1.2",bound_ip="203.0.113.10")
+    hc=request._curl_command("service.example",scheme="http",bound_ip="203.0.113.10")
+assert tc[tc.index("--tlsv1.2")+1:tc.index("--tlsv1.2")+3]==["--tls-max","1.2"]
+assert tc[tc.index("--resolve")+1]=="service.example:443:203.0.113.10"
+assert hc[hc.index("--resolve")+1]=="service.example:80:203.0.113.10"
+assert "--tlsv1.2" not in hc
+assert hc[hc.index("--max-redirs")+1]=="0"
+print("PASS: Extended Chrome HTTP/TLS1.2 uses genuine pinned target evidence")
+PY
+
 echo 'PASS: Python 3.13 owns finite Strategy Lab requests/probes, answer-aware DNS parsing, and distinct subprocess diagnostics'

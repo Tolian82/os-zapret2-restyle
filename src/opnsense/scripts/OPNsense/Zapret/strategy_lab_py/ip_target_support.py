@@ -240,7 +240,11 @@ def _candidate_probe(
     after_packets, after_bytes = candidate._counter(rule)
     endpoint_match = remote_ip == selected
     intercepted = after_packets > before_packets
-    chrome_proof = request.chrome_https_evidence(execution, expected_ip=selected) if spec.protocol == "tls13" else None
+    chrome_proof = (
+        request.chrome_http_evidence(execution, expected_ip=selected)
+        if spec.protocol == "http"
+        else request.chrome_https_evidence(execution, expected_ip=selected)
+    ) if spec.protocol in {"tls13", "tls12", "http"} else None
     passed = (
         (chrome_proof["accessible"] if chrome_proof is not None else exit_code == 0)
         and endpoint_match and intercepted

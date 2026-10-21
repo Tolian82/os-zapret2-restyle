@@ -342,6 +342,36 @@ def chrome_https_evidence(result: CommandResult, *, expected_ip: str | None = No
     }
 
 
+def chrome_http_evidence(result: CommandResult, *, expected_ip: str) -> dict[str, Any]:
+    """A pinned, genuine final HTTP response proves cleartext HTTP reachability.
+
+    A bare process exit, TLS-only signal or interim response cannot qualify.
+    A truncated HTTP body after final headers can qualify.
+    """
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    if match is None:
+        return {"accessible": False, "signal": None, "reason": "missing_chrome_http_evidence"}
+    try:
+        destination_ok = ipaddress.ip_address(match.group("ip")) == ipaddress.ip_address(expected_ip)
+    except ValueError:
+        destination_ok = False
+    version = match.group("http")
+    status = int(match.group("code"))
+    response = destination_ok and version in {"1", "1.0", "1.1", "2"} and 200 <= status <= 599
+    return {
+        "accessible": bool(response),
+        "signal": "http_response" if response else None,
+        "tls_verified": False,
+        "http_response": bool(response),
+        "remote_ip": match.group("ip"),
+        "http_version": version if response else None,
+        "http_status": status if response else None,
+        "reason": "reachable" if response else "http_status_or_target_unverified",
+    }
+
+
 def ipv6_default_route() -> tuple[bool, CommandResult]:
     result = run_command([binary("netstat"), "-rn", "-f", "inet6"], timeout=2)
     available = result.ok and any(
