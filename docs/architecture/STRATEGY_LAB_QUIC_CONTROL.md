@@ -30,7 +30,7 @@ The UI may hide this control outside Extended mode because Stage 80 itself is an
 
 The saved **Enable QUIC** choice enables candidate testing when the job reaches Extended Stage 80. It does not override `TARGET_ACCESSIBLE`, cancellation, finite deadlines, or the requirement for Host/SNI on a bare IPv4 target. A successful direct HTTPS baseline terminates the job before Stage 80 even when Enable QUIC is ON.
 
-The approved [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md) preserves that early exit and replaces target handshake evidence with real HTTP3 GET. It is not yet implemented; the current four-candidate path still uses OpenSSL handshake evidence.
+The approved [browser reachability plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md) preserves that early exit. It accepts a verified target QUIC handshake **or** a genuine target HTTP/3 response as positive QUIC reachability evidence, without requiring an HTTP/3 GET response; successful direct HTTPS by TLS handshake or genuine HTTPS response skips QUIC. This new Chrome-backed verification is not yet implemented; the current four-candidate path still uses OpenSSL handshake evidence.
 
 Stage-30 QUIC control evidence (`quic_ipv4=available|closed`):
 
