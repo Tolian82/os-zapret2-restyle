@@ -137,7 +137,7 @@ DOC-054. **Choose rule lifecycle actions by meaning, not convenience.** Create a
 
 ## Language of active technical documentation
 
-DOC-055. **New and substantively revised engineering documentation is written in English.** Use precise, unambiguous technical English; preserving the exact normative meaning is more important than idiomatic style. Translate a whole current technical page when explicitly requested. Translate affected requirements, contracts and current handoffs consistently with the changed canon. Do not mechanically rewrite unrelated historical evidence or untouched legacy pages solely for language uniformity. This rule does not change Russian owner-facing chat under `CHAT-001` or the product's RU/EN GUI localization.
+DOC-055. **New and substantively revised engineering documentation is written in English.** Use precise, unambiguous technical English; preserving the exact normative meaning is more important than idiomatic style. Translate a whole current technical page when explicitly requested. Translate affected requirements, contracts and current handoffs consistently with the changed canon. Do not mechanically rewrite unrelated historical evidence or untouched legacy pages solely for language uniformity. This rule does not change Russian owner-facing chat or the product's RU/EN GUI localization.
 
 ## Cross-reference registry
 
