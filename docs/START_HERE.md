@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.7_1`. `VERSION=0.5.7`, `PLUGIN_REVISION=1`. This is the new Stage-1 source candidate, not a stable release.
+**Current handoff identity:** `v0.5.7_2`. `VERSION=0.5.7`, `PLUGIN_REVISION=2`. This is the new Stage-1 source candidate, not a stable release.
 
 ## Current work — Stage 1 of Strategy Lab modernization
 
@@ -14,7 +14,7 @@ The accepted endpoint accessibility rule for future Stage 2/3 is independent OR:
 
 ## Single next action
 
-**Finish Stage-1 candidate qualification and persistent GitHub testing-package publication for `v0.5.7_1`; then begin Stage 2 on a new versioned candidate.** Qualification requires a successful FreeBSD 15 package build containing the private client/lib/licenses and the selected Chrome profile, a runnable binary, CA readiness, and available direct TLS/QUIC evidence. If real target handshake evidence has not been obtained, explicitly leave that acceptance item unverified; do not claim FreeBSD package existence proves wire behavior. Stable release requires a separate owner order.
+**Finish Stage-1 candidate qualification and persistent GitHub testing-package publication for `v0.5.7_2`; then begin Stage 2 on a new versioned candidate.** Qualification requires a successful FreeBSD 15 package build containing the private client/lib/licenses and the selected Chrome profile, a runnable binary, CA readiness, and available direct TLS/QUIC evidence. If real target handshake evidence has not been obtained, explicitly leave that acceptance item unverified; do not claim FreeBSD package existence proves wire behavior. Stable release requires a separate owner order.
 
 ## Required specialist reading
 

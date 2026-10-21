@@ -227,4 +227,4 @@ Current stage/status: [PROJECT_STATE](../PROJECT_STATE.md). Exactly one next act
 
 At every implementation stage: define the observable owner scenario and acceptance evidence; implement the coherent scope; run affected checks; synchronize any changed requirements/current facts; follow the GitHub PR/CI/exact-head merge procedure in `GH-010`–`GH-030`. Distinguish source, CI/package and installed OPNsense proof (`DEV-011`, `CHAT-003`).
 
-**Current documentation-only identity:** `VERSION=0.5.6` and `PLUGIN_REVISION=1`. On the first actual implementation scope apply `DEV-027`–`DEV-035`. A future candidate is not already built or released. This plan does not change the existing running service, published v0.5.6, or the closed Telegram Voice investigation.
+**Current Stage-1 source candidate:** `VERSION=0.5.7`, `PLUGIN_REVISION=2`. This implements private client packaging in source only; FreeBSD/installed evidence and testing-release delivery require their own actual checks. Apply `DEV-027`–`DEV-035` to all later packaged-source increments. This plan does not change the existing running service, published v0.5.6, or the closed Telegram Voice investigation.

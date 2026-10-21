@@ -13,7 +13,7 @@ The [target requirements](REQUIREMENTS.md) and [detailed English plan](architect
 5. Достоверные результаты, RU/EN и совместимость сохранённых заданий.
 6. Поставка и приёмка установленного пакета.
 
-Implementation has not started. A separate owner command begins Stage 1. No Firefox, ordinary curl fallback, mandatory HTTP body, upstream version pin, Python/Model C replacement or new recovery architecture. No change to published v0.5.6 and no automatic stable release.
+Stage 1 private-client packaging has a source candidate; FreeBSD package qualification and installed acceptance are pending. Stages 2–6 have not started. No Firefox, ordinary curl fallback, mandatory HTTP body, upstream version pin, Python/Model C replacement or new recovery architecture. No change to published v0.5.6 and no automatic stable release.
 
 ## Основной завершённый путь
 

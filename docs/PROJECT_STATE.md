@@ -1,10 +1,10 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Current source stage — **`v0.5.7_1`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage-1 client packaging and standalone read-only readiness code have been added in source; production HTTP probes have not yet migrated. Единственное следующее действие задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Current source stage — **`v0.5.7_2`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage-1 client packaging and standalone read-only readiness code have been added in source; production HTTP probes have not yet migrated. Единственное следующее действие задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия, пакет и граница доставки
 
-- `VERSION=0.5.7`, `PLUGIN_REVISION=1`, source package candidate: `os-zapret2-restyle-0.5.7_1.pkg`..
+- `VERSION=0.5.7`, `PLUGIN_REVISION=2`, source package candidate: `os-zapret2-restyle-0.5.7_2.pkg`.
 - Полный Web/pkg-релиз [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) опубликован из `b319aafe748c1363712f5d7d6cbaaf40396bb64c`; immutable tag, pkg/SHA256SUMS и FreeBSD15 Pages/pkg deployment подтверждены. SHA-256 пакета: `9c4ba669ae0ac453bb59da37b240234b7b2c44b49482b88eb98c14108a3dc6fe`. [Доказательство публикации](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
 - Обновление владельцем через OPNsense GUI до `0.5.6_1` не подтверждено. Stage-1 source work does not change the installed owner version or stable feed.
 - Поддерживаемая платформа: OPNsense 26.7 / FreeBSD 15 amd64, Python 3.13. Служба `zapret`, общий dvtws2/supervisor и native lifecycle сохраняются.
