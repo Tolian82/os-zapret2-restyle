@@ -1,10 +1,11 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_2`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage 1 build integration is committed on the development branch but has not passed package CI or been owner-tested. Stages 2–6 remain unimplemented. The only next action задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
+State-line scope: **`v0.5.x`**. Текущий этап — **`v0.5.6_2`**. Полный релиз опубликован; активное направление — подготовленная модернизация Strategy Lab через curl-impersonate. Stage 1 build integration has been merged, has passed FreeBSD 15 CI and has a published testing package. Live TLS/QUIC verification on OPNsense remains pending; stages 2–6 are not implemented. The only next action задаёт [START_HERE](START_HERE.md). State-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
 ## Версия, пакет и граница доставки
 
 - `VERSION=0.5.6`, `PLUGIN_REVISION=2`, package candidate: `os-zapret2-restyle-0.5.6_2.pkg`.
+- **Testing publication:** [v0.5.6_2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_2), asset [download](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_2/os-zapret2-restyle-0.5.6_2.pkg), SHA-256 `e3d79a7a519b1d09ae755d0df9873b38b1adbe58bff7cf8eb8bb7001ec24acf2` (6,749,577 bytes), exact source/tag `4166a38d6653e7faa560c86205af25519895e989`. [FreeBSD15 source CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39583956850); packaged actual private curl-impersonate selected `chrome150` from official FreeBSD `latest` (observed `2.2.3_1`, no pin). [Evidence](verification/evidence/testing-publications/v0.5.6_2.md). Stable Pages/pkg repository NOT promoted; installed OPNsense network acceptance pending.
 - Полный Web/pkg-релиз [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) опубликован из `b319aafe748c1363712f5d7d6cbaaf40396bb64c`; immutable tag, pkg/SHA256SUMS и FreeBSD15 Pages/pkg deployment подтверждены. SHA-256 пакета: `9c4ba669ae0ac453bb59da37b240234b7b2c44b49482b88eb98c14108a3dc6fe`. [Доказательство публикации](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md).
 - Обновление владельцем через OPNsense GUI до `0.5.6_1` не подтверждено. Новое оформление ТЗ не меняет этот факт и не является новой сборкой.
 - Поддерживаемая платформа: OPNsense 26.7 / FreeBSD 15 amd64, Python 3.13. Служба `zapret`, общий dvtws2/supervisor и native lifecycle сохраняются.
@@ -15,12 +16,12 @@ Audit was based on restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` and record
 
 **Реализовано в текущем исходном коде:** Python-планировщик, Model C как единственный нормальный production-путь, CandidateSpec/ResourceInventory, фиксированный endpoint epoch и source-port атрибуция, конечные бюджеты, отмена, Stage 90. Основной клиент пока обычный curl с HTTP/1.1/ограничением TLS; QUIC-кандидат пока проверяется handshake OpenSSL, а не HTTP3 GET. В Stage 80 есть четыре QUIC-кандидата; QUIC уже может быть источником Stage-85 результата. Ранний `TARGET_ACCESSIBLE` уже завершает задание до поиска/Extended.
 
-**Approved requirements and implementation boundary:** `BH-01`–`BH-12` and six stages of the [English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md). Stage 1 build integration exists on the active source branch but is not yet FreeBSD/owner-live accepted; stages 2–6 are not implemented. Reachability will use the handshake-or-HTTP-response rule and unpinned FreeBSD `latest` acquisition. An authentic HTTP response is affirmative evidence (not merely diagnostics); HTTP/ALPN/body fields not actually observed stay unknown. Direct HTTPS success by TLS **or** HTTP response skips QUIC. No Firefox, ordinary curl fallback, replacement Python scheduler or new recovery architecture.
+**Approved requirements and implementation boundary:** `BH-01`–`BH-12` and six stages of the [English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md). Stage 1 package build passed FreeBSD15 CI and the exact testing asset has been published, but owner-installed TLS/QUIC checks remain open. Stages 2–6 are not implemented. Reachability will use the handshake-or-HTTP-response rule and unpinned FreeBSD `latest` acquisition. An authentic HTTP response is affirmative evidence (not merely diagnostics); HTTP/ALPN/body fields not actually observed stay unknown. Direct HTTPS success by TLS **or** HTTP response skips QUIC. No Firefox, ordinary curl fallback, replacement Python scheduler or new recovery architecture.
 
 | Этап | Состояние |
 | --- | --- |
 | Аудит, уточнение требований и подробное планирование | Завершены на уровне документации |
-| 1. Private FreeBSD latest curl-impersonate bundling | Source implementation submitted for CI; installed OPNsense acceptance pending |
+| 1. Private FreeBSD latest curl-impersonate bundling | Source + FreeBSD15 pkg CI PASS; testing prerelease published; installed OPNsense TLS/QUIC evidence pending |
 | 2. Сквозной TLS-handshake Standard | Не начат |
 | 3. Extended и целевой QUIC-handshake | Не начат |
 | 4. Расширение QUIC-каталога и допуск по бюджету | Не начат |
