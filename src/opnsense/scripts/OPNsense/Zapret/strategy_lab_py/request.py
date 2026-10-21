@@ -297,9 +297,9 @@ def curl_exit(result: CommandResult) -> int:
 
 # Observations from the completed private Chrome request, not subprocess success.
 _CHROME_TLS_RE = re.compile(
-    r"remote_ip=(?P<ip>[^\\s]*)\\s+http=(?P<http>[^\\s]*)"
-    r"\\s+code=(?P<code>\\d+)\\s+bytes=(?P<bytes>\\d+)"
-    r"\\s+ssl_verify=(?P<cert>-?\\d+)\\s+appconnect=(?P<handshake>\\d+(?:\\.\\d+)?)"
+    r"remote_ip=(?P<ip>[^\s]*)\s+http=(?P<http>[^\s]*)"
+    r"\s+code=(?P<code>\d+)\s+bytes=(?P<bytes>\d+)"
+    r"\s+ssl_verify=(?P<cert>-?\d+)\s+appconnect=(?P<handshake>\d+(?:\.\d+)?)"
 )
 
 

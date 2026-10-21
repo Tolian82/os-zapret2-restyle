@@ -44,7 +44,7 @@ WORK="${STRATEGY_LAB_JOBS_DIR}/job.ip"
 mkdir -p "${MOCK_BIN}"
 cat > "${MOCK_BIN}/curl" <<'EOF'
 #!/bin/sh
-printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=64'
+printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=200 bytes=64 ssl_verify=0 appconnect=0.153000'
 EOF
 cat > "${MOCK_BIN}/nc" <<'EOF'
 #!/bin/sh
@@ -65,7 +65,7 @@ STRATEGY_LAB_PYTHON_BIN="${PYTHON}" \
   .target=="203.0.113.10" and .target_type=="ip" and .all_accessible==true and
   (.endpoints|length)==1 and .endpoints[0].endpoint=="service.example" and
   .endpoints[0].status=="PASS" and .endpoints[0].exit_code==0 and
-  .endpoints[0].transport=="tls13-ipv4"
+  .endpoints[0].transport=="https-ipv4"
 ' "${WORK}/baseline.json" >/dev/null || {
     cat "${WORK}/baseline.json" >&2
     fail 'IP baseline did not use truthful TLS 1.3 semantics'

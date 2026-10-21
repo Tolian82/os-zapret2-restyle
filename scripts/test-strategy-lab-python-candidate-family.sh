@@ -88,7 +88,7 @@ chmod 0755 "${DRILL}"
 
 cat > "${CURL}" <<'EOF'
 #!/bin/sh
-printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=206 bytes=1'
+printf '%s\n' 'exit=0 remote_ip=203.0.113.10 http=1.1 code=206 bytes=1 ssl_verify=0 appconnect=0.153000'
 EOF
 chmod 0755 "${CURL}"
 
