@@ -107,6 +107,16 @@ assert control["reply_observed"] is True
 assert [item["reply_observed"] for item in control["attempts"]] == [True, False]
 PY
 
+# The final GUI must distinguish a tested candidate from an actually verified
+# profile, and never imply that HTTP/80 unlocks HTTPS/443 or QUIC/443.
+grep -Fq 'id="strategyLabProtocolScope"' "${VIEW}" || fail 'verified transport scope notice is missing'
+grep -Fq 'function renderProtocolScope(data, items)' "${VIEW}" || fail 'verified transport scope renderer is missing'
+grep -Fq 'renderProtocolScope(data, items);' "${VIEW}" || fail 'shortlist does not render verified transport scope'
+grep -Fq "protocol === 'tls13' || protocol === 'tls12'" "${VIEW}" || fail 'TLS/TCP443 scope is not bound to verified profiles'
+grep -Fq "protocol === 'quic' && port === 443" "${VIEW}" || fail 'QUIC/UDP443 scope is not bound to verified profiles'
+grep -Fq "protocol === 'http' && port === 80" "${VIEW}" || fail 'HTTP/TCP80 scope is not bound to verified profiles'
+grep -Fq 'HTTP/TCP 80 не подтверждает доступ по TLS/TCP 443 или QUIC/UDP 443.' "${VIEW}" || fail 'Russian scope warning is missing'
+grep -Fq 'HTTP/TCP 80 does not establish TLS/TCP 443 or QUIC/UDP 443 access.' "${VIEW}" || fail 'English scope warning is missing'
 grep -Fq "udpHelp:'Файл запроса должен иметь размер 1–4096 байт." "${VIEW}" || fail 'Russian Generic UDP help text is missing'
 grep -Fq "quicHelp:'Если включено, QUIC-стратегии проверяются" "${VIEW}" || fail 'Russian Enable QUIC help text is missing'
 grep -Fq "quicHelp:'When enabled, QUIC candidates are tested" "${VIEW}" || fail 'English Enable QUIC help text is missing'

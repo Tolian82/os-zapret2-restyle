@@ -72,7 +72,9 @@ $(document).ready(function () {
         genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
         modeLabel:'Режим',
         family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
-        completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние'
+        completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние',
+        verifiedScope:'Подтверждено финальным воспроизведением', scopeTcp:'TLS/TCP 443', scopeHttp:'HTTP/TCP 80', scopeQuic:'QUIC/UDP 443', scopeUdp:'другой UDP',
+        scopeExplanation:'Испытанные, но не прошедшие кандидаты сюда не входят. HTTP/TCP 80 не подтверждает доступ по TLS/TCP 443 или QUIC/UDP 443.'
     } : {
         running:'Strategy Lab is running.', completed:'The check is complete.', cancel:'Cancellation requested. Mandatory Zapret2 restoration is running.',
         failed:'The check ended with an error.', noCandidates:'No stable candidates were found.', circularReady:'The candidates can now be tested temporarily in a browser.',
@@ -91,7 +93,9 @@ $(document).ready(function () {
         genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
         modeLabel:'Mode',
         family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
-        completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State'
+        completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State',
+        verifiedScope:'Verified by final profile replay', scopeTcp:'TLS/TCP 443', scopeHttp:'HTTP/TCP 80', scopeQuic:'QUIC/UDP 443', scopeUdp:'other UDP',
+        scopeExplanation:'Tested candidates that failed qualification are excluded. HTTP/TCP 80 does not establish TLS/TCP 443 or QUIC/UDP 443 access.'
     };
 
     function setButtonText(selector, text) {
@@ -315,8 +319,27 @@ $(document).ready(function () {
         $('#strategyLabResultOutcome').text(label(outcomeLabels, data.outcome || data.state));
         $('#strategyLabResultRestoration').text(data.restoration && data.restoration.verified === true ? ui.restorationPass : '—');
     }
+    function renderProtocolScope(data, items) {
+        var notice = $('#strategyLabProtocolScope');
+        if (data.mode !== 'extended' || data.state !== 'completed') { notice.hide().text(''); return; }
+        var counts = {tcp443:0,http80:0,quic443:0,udp:0};
+        items.forEach(function (item) {
+            var port = Number(item.port), protocol = String(item.protocol || '');
+            if ((protocol === 'tls13' || protocol === 'tls12') && port === 443) counts.tcp443++;
+            else if (protocol === 'http' && port === 80) counts.http80++;
+            else if (protocol === 'quic' && port === 443) counts.quic443++;
+            else if (protocol === 'udp') counts.udp++;
+        });
+        notice.text(ui.verifiedScope + ': ' +
+            ui.scopeTcp + ' — ' + counts.tcp443 + '; ' +
+            ui.scopeHttp + ' — ' + counts.http80 + '; ' +
+            ui.scopeQuic + ' — ' + counts.quic443 + '; ' +
+            ui.scopeUdp + ' — ' + counts.udp + '. ' +
+            ui.scopeExplanation).show();
+    }
     function renderShortlist(data) {
         var items = shortlist(data), html = ''; renderedProfiles = [];
+        renderProtocolScope(data, items);
         items.forEach(function (item, index) {
             var profile = String(item.profile || item.strategy || ''), profileIndex = renderedProfiles.push(profile) - 1;
             var mark = index === 0 ? ' <span class="label label-success">#1</span>' : '';
@@ -549,6 +572,7 @@ $(document).ready(function () {
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
 <div id="strategyLabResultBox" class="well" style="display:none;"><h4>{{ lang._('Result summary') }}</h4><div class="row"><div class="col-sm-3"><strong>{{ lang._('Target') }}:</strong> <span id="strategyLabResultTarget">—</span></div><div class="col-sm-3"><strong>{{ lang._('Mode') }}:</strong> <span id="strategyLabResultMode">—</span></div><div class="col-sm-3"><strong>{{ lang._('Outcome') }}:</strong> <span id="strategyLabResultOutcome">—</span></div><div class="col-sm-3"><strong>{{ lang._('Restoration') }}:</strong> <span id="strategyLabResultRestoration">—</span></div></div></div>
+<p id="strategyLabProtocolScope" class="text-muted" style="display:none;margin:12px 0;"></p>
 <div id="strategyLabShortlistBox" style="display:none;"><h4>{{ lang._('Stable candidates') }}</h4><div class="table-responsive"><table class="table table-striped" id="strategyLabShortlist"><thead><tr><th>#</th><th>{{ lang._('Protocol') }}</th><th>{{ lang._('Port') }}</th><th>{{ lang._('Family') }}</th><th>{{ lang._('Endpoints') }}</th><th>{{ lang._('Replay') }}</th><th>{{ lang._('Complete Traffic Strategy profile') }}</th></tr></thead><tbody></tbody></table></div></div>
 <div id="circularControls" class="well" style="display:none;"><h4>{{ lang._('Temporary circular validation') }}</h4><button class="btn btn-success" id="circularStartBtn" type="button">{{ lang._('Start') }}</button> <button class="btn btn-warning" id="circularStopBtn" type="button" disabled>{{ lang._('Stop') }}</button><span style="margin-left:10px;"><strong>{{ lang._('Status') }}:</strong> <span id="circularState">idle</span></span><p id="circularMessage" style="margin-top:10px;"></p><pre id="circularRaw" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></div>
 <details><summary>{{ lang._('Full output (advanced)') }}</summary><pre id="strategyLabRaw" style="max-height:400px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></details>
