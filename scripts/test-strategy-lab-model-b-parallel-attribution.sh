@@ -36,7 +36,7 @@ class FakeCompleted:
         self.stderr = stderr
 
 
-def run_case(execution: request.CommandResult):
+def run_case(execution: request.CommandResult, after_counter=None):
     counter_calls = 0
     def fake_adapter(action, *args, timeout=15):
         nonlocal counter_calls
@@ -50,7 +50,7 @@ def run_case(execution: request.CommandResult):
         if action == "counter":
             assert args == (str(slot.rule),)
             counter_calls += 1
-            return FakeCompleted(stdout="0 0\n" if counter_calls == 1 else "1 60\n")
+            return FakeCompleted(stdout="0 0\n" if counter_calls == 1 else (after_counter if after_counter is not None else "1 60\n"))
         if action == "route-del":
             assert args == (str(slot.rule),)
             return FakeCompleted()
@@ -117,6 +117,34 @@ assert result["classification"] == "pass"
 assert result["endpoint_match"] is True
 assert result["local_port_match"] is True
 assert result["attribution_ok"] is True
+
+# The same attribution helper is invoked directly by production Model C.
+# Source-port/pinned IP command match alone never makes a failed HTTPS response win.
+def executed(stdout, exit_code=0):
+    return request.CommandResult(
+        command=["curl", "--resolve", "blocked.test:443:203.0.113.20",
+                 "--local-port", "42000", "https://blocked.test/"],
+        returncode=exit_code, stdout=stdout, stderr="", timed_out=False,
+        termination="completed", signal=None, duration_ms=120,
+    )
+
+response503 = executed(
+    "exit=18 remote_ip=203.0.113.20 http=1.1 code=503 "
+    "bytes=0 ssl_verify=0 appconnect=0.000000 local_port=42000\n",18)
+r = run_case(response503)
+assert r["classification"]=="pass" and r["attribution_ok"] is True
+
+for bad in (
+    "exit=0 remote_ip=203.0.113.21 http=2 code=200 bytes=10 ssl_verify=0 appconnect=0.121 local_port=42000\n",
+    "exit=0 remote_ip=203.0.113.20 http=2 code=200 bytes=10 ssl_verify=60 appconnect=0.121 local_port=42000\n",
+    "exit=0 remote_ip=203.0.113.20 http=2 code=200 bytes=10 ssl_verify=0 appconnect=0.121 local_port=42001\n",
+):
+    r=run_case(executed(bad))
+    assert r["classification"]=="fail",r
+    assert r["attribution_ok"] is True,r # route attribution != candidate success
+
+r=run_case(success, after_counter="0 0\n")
+assert r["classification"]=="fail" and r["attribution_ok"] is False
 PY
 
 sh -n "$0"

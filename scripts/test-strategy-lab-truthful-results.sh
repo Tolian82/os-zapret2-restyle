@@ -52,6 +52,11 @@ assert cloudflare["classification"] == "reachable_application_error", cloudflare
 assert cloudflare["accepted"] is True
 assert cloudflare["http_statuses"] == [502]
 assert cloudflare["reason"] == "http_application_response"
+for code in (400, 401, 403, 404, 429, 500, 503, 599):
+    checked = adaptive_validation.classify_deep_replay(replay(code), "tls13", 16384)
+    assert checked["accepted"] and checked["http_statuses"] == [code],checked
+assert adaptive_validation.classify_deep_replay(replay(404), "tls13", 65536)["accepted"]
+assert not adaptive_validation.classify_deep_replay(replay(403,status="FAIL"),"tls13",16384)["accepted"]
 
 # The corrective rule must not weaken interception/profile proof.
 not_intercepted = adaptive_validation.classify_deep_replay(
