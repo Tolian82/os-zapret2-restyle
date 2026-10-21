@@ -184,12 +184,43 @@ Product requirements:
 - finalist validation uses a real bounded GET and records whether at least 16 KiB of body data was obtained; a valid shorter resource is `inconclusive` for the 16-KiB depth criterion rather than falsely reported as PASS;
 - authenticated/intercepted HTTP `4xx`/`5xx` is application-layer status, not automatic DPI-path failure; such a response may remain accepted reachability evidence when endpoint/profile/interception proof succeeds;
 - operation, candidate, stage and job deadlines form a measured containing hierarchy and must be reviewed from timing telemetry rather than copied indefinitely as constants;
-- **Enable QUIC** is an explicit persisted setting, defaults OFF, and is the product decision that determines whether Extended Stage 80 runs the QUIC candidate catalog;
+- **Enable QUIC** is an explicit persisted setting, defaults OFF, and enables the QUIC catalog when the job reaches Extended Stage 80; direct target accessibility, cancellation, finite budgets and missing required Host/SNI retain their own termination/eligibility boundaries;
 - QUIC capability/precheck evidence is diagnostic and does not silently override the explicit Enable QUIC choice;
 - for a fixed IPv4 target with Host/SNI, QUIC attempts must connect to the fixed IP while verifying the supplied hostname; bare IPv4 QUIC without Host/SNI is skipped before candidate execution rather than falsely reported as tested;
 - Generic UDP is an optional Extended protocol path with explicit destination port and exact payload bytes, remains independent from Host/SNI/QUIC, and UDP silence is not proof that a port is closed;
 - complete fixed-IP recommendations include `--ipset-ip=<entered IPv4>` and undergo the same exact finalist replay discipline;
 - all terminal paths require bounded temporary-runtime cleanup and exact Stage-90 restoration of the original Zapret2 service/configuration state.
+
+## Strategy Lab — целевой результат браузерных HTTP-проверок
+
+**Статус:** согласованное ТЗ модернизации, уточнения владельца 20–21.10.2026; код ещё не реализован. Этот раздел заменяет прежнее целевое требование «Standard строго TLS 1.3/HTTP/2». Действующее поведение опубликованного пакета и состояние реализации указаны в [PROJECT_STATE](PROJECT_STATE.md). Порядок работ, точки интеграции и матрица приёмки находятся в [подробном плане](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md).
+
+### Конечный результат
+
+Пользователь устанавливает пакет на поддерживаемую OPNsense / FreeBSD 15 amd64, открывает существующую «Лабораторию», задаёт домен либо IPv4 с необходимым Host/SNI и запускает Standard или Extended. Лаборатория через один явно выбранный Chrome-профиль проверяет прямую доступность. Если HTTPS работает без обхода, она сообщает это и завершает поиск. Иначе она проверяет нативные стратегии Zapret2 и выдаёт до трёх подтверждённых готовых профилей с объяснением результата либо достоверно сообщает, что подтверждённая стратегия не найдена. При разрешённом HTTP/3 успех подтверждается HTTP-запросом поверх QUIC. Завершение, ошибка и отмена всегда оставляют службу в её исходном состоянии.
+
+Готовность означает работоспособность этой цепочки в поставленном пакете с подтверждением выбранных сценариев на установленной OPNsense. Наличие бинарника, зелёный CI или успешный TLS/QUIC-handshake по отдельности конечным результатом не являются. Гарантия обхода любого сайта/провайдера в ТЗ не входит.
+
+### Требования и признаки выполнения
+
+| ID | Требование | Проверяемый результат |
+| --- | --- | --- |
+| BH-01 | Единственный HTTP/HTTPS-клиент лаборатории — приватный готовый `curl-impersonate` из FreeBSD `latest`, явно включён один профиль Chrome | Бинарник и требуемые файлы/лицензии входят в пакет; известны источник, ABI, версия, SHA-256 и профиль; системный curl не изменён |
+| BH-02 | Поставка не требует компиляции или сетевой установки клиента при установке плагина; отсутствие клиента/профиля/нужной возможности/CA даёт техническую ошибку | Проверка готовности до остановки службы; нет обычного curl-контроля, fallback, Firefox или выбора браузера в GUI |
+| BH-03 | Standard использует штатное согласование TLS 1.2/1.3 выбранного Chrome-профиля и HTTP/2 с допустимым HTTP/1.1 | Достоверный HTTPS-ответ принимается при любой из этих согласованных комбинаций; HTTP/1.1 и TLS 1.2 не дисквалифицируют стратегию; фактические протоколы указаны честно |
+| BH-04 | Прямой HTTPS-успех на всех обязательных endpoints завершает поиск; HTTP/3 далее не требуется | `TARGET_ACCESSIBLE`, ноль HTTP3 GET/QUIC-кандидатов и выполненное восстановление; галочка Enable QUIC не отменяет этот ранний выход |
+| BH-05 | Прямая проверка и кандидат сравниваются при одинаковом клиенте, профиле, URL, политике запроса и фиксированном endpoint epoch | Сохранены Host/SNI/CA, фактический remote IP и требуемая атрибуция IPFW/source port; скрытый proxy, смена IP или уход по redirect не дают ложный успех |
+| BH-06 | Extended сохраняет отдельную принудительную TLS 1.2 и HTTP TCP/80; HTTP/3 выполняется только при Enable QUIC ON, если задание дошло до этой ветки и идентичность цели достаточна | HTTP/3 — реальный GET через `--http3-only` на UDP/443 без TCP fallback; сертификат/имя и адрес проверены; Stage-30 QUIC не запрещает поиск; bare IP без необходимого Host/SNI пропущен; прямой HTTP3-успех показан без фиктивного кандидата |
+| BH-07 | QUIC-каталог расширяется нативными fake/repeats, fragmentation и ограниченными комбинациями в существующей модели ресурсов/времени | Кандидаты достижимы и воспроизводимы; отмена/ранний успех/нехватка времени останавливают перебор; непроверенные варианты не объявлены испытанными |
+| BH-08 | Рекомендация опирается на устойчивость и точный полный профиль, а не только discovery | Для основной HTTPS-ветки и новых HTTP3-рекомендаций подтверждены 3/3 по всем обязательным endpoints и глубокий replay; короткий полный ресурс не является ложным FAIL, а недостигнутая глубина 16 KiB указана отдельно |
+| BH-09 | Отчёт различает доступность, прикладной ответ, сетевую неудачу, техническую ошибку, отмену и ограниченный бюджет | Видны профиль/версия клиента, реальные TLS/HTTP, IP/Host/SNI, HTTP-код, объём/глубина, попытки и причина вывода; достоверные 4xx/5xx не становятся автоматическим DPI FAIL; тайм-аут не доказывает причину блокировки |
+| BH-10 | Сохраняются существующая страница, RU/EN, настройки, история результатов, отдельный circular-контракт и ручное применение стратегии | F5 восстанавливает данные; Enable QUIC по умолчанию OFF и сохраняется; старому результату не приписываются новые Chrome/HTTP3-доказательства; автоматического Apply и нового HTTP3 circular нет |
+| BH-11 | Сохраняются Python/Model C, CandidateSpec/ResourceInventory, конечные бюджеты, отмена, временная собственность IPFW и Stage 90 | После успеха/ошибки/отмены нет временных процессов/правил; RUNNING восстановлен в RUNNING, STOPPED оставлен STOPPED; `RESTORE_FAILED` не скрыт успешной рекомендацией |
+| BH-12 | Модернизация поставлена и принята с явной границей доказательства | Точный тестовый пакет доступен на GitHub; выбранная матрица источники/CI/FreeBSD/установленная OPNsense заполнена фактическими данными; ТЗ, архитектура, руководство и текущий handoff согласованы |
+
+Профиль Chrome приближает сетевое поведение браузера. JavaScript, DOM, загрузка всех ресурсов страницы и точная эквивалентность полноценной браузерной сессии не входят в этот результат. Ограниченный GET, фиксированный IP и отдельное ограничение TLS 1.2 описываются как сознательные условия проверки.
+
+Обычный UDP/STUN сохраняет специализированные клиенты и точные пользовательские байты. Модернизация HTTP не возобновляет закрытые Telegram Voice-испытания, не заменяет Python-планировщик на blockcheck2 и не создаёт новую систему восстановления. Полный стабильный Web/pkg-релиз остаётся отдельным действием по команде владельца; принятие этого ТЗ не является командой начинать код или публиковать релиз.
 
 ## Service lifecycle
 

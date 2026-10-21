@@ -1,8 +1,6 @@
-# Strategy Lab architecture and delivery plan
+# Strategy Lab — current architecture
 
-==================================================
-DOCUMENT ROLE
-==================================================
+## DOCUMENT ROLE
 
 Question answered:
 How does the approved asynchronous Strategy Lab behave, and which product/lifecycle/stage contracts remain active?
@@ -22,9 +20,7 @@ Read after:
 Do not store here:
 Unrelated plugin architecture or release history.
 
-==================================================
-STATUS AND AUTHORITY
-==================================================
+## STATUS AND AUTHORITY
 
 Status:
 Initial architecture approved on 2026-08-04 and implemented. Search-policy portions were
@@ -39,19 +35,22 @@ authorities are:
 - `docs/architecture/STRATEGY_LAB_MODEL_C.md` — current Stage-60 runtime execution;
 - `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — implementation ownership/migration history.
 
-**Model C is selected as the normal production Stage-60 direction. A/B/C production
-model selection is closed.** Packaged source through `v0.4.1_12` still contains legacy
-B/A automatic fallback, but that is implementation transition debt scheduled for
-removal by `v0.4.1_13`, not an unresolved architecture choice.
+**Model C is the only normal production Stage-60 runtime. A/B/C selection is closed.**
+The production fallback to B/A was removed in `v0.4.1_13`. Shared helpers whose filenames
+contain `model_b` remain used by Model C; their names do not imply production fallback.
+
+**Approved future change, not implemented:** [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md)
+and [REQUIREMENTS](../REQUIREMENTS.md), `BH-01`–`BH-12`, define Chrome-profile HTTPS with
+natural TLS negotiation, successful HTTP/1.1 or HTTP/2, and application HTTP/3. The
+TLS 1.3 / HTTP/1.1 probe details below describe the current source snapshot, not the
+new target contract. The current implementation was audited at `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 
 The synchronous Blockcheck path has already been replaced. Historical initial-delivery
 sections below are retained as engineering history and do not override current
 `docs/PROJECT_PRINCIPLES.md`, `docs/START_HERE.md`, `docs/PROJECT_STATE.md`,
 `docs/ROADMAP.md`, or current specialist architecture.
 
-==================================================
-OBJECTIVE
-==================================================
+## OBJECTIVE
 
 Provide an asynchronous Strategy Lab that:
 
@@ -67,12 +66,11 @@ Provide an asynchronous Strategy Lab that:
 - restores the exact initial Zapret2 service state;
 - reports concise English or Russian results according to the OPNsense language;
 - finishes within bounded operation/stage/job budgets;
-- supports extended TLS 1.2, HTTP and configured UDP while keeping QUIC limited to the
-  fixed IPv4 UDP/443 capability/precheck and circular validation separate from discovery.
+- supports Extended TLS 1.2, HTTP, explicitly enabled QUIC candidates and configured UDP;
+- keeps circular validation separate from discovery. Current QUIC candidate success
+  is handshake evidence; future HTTP3 GET evidence is defined in the browser HTTP plan.
 
-==================================================
-NON-GOALS
-==================================================
+## NON-GOALS
 
 The work package does not:
 
@@ -85,9 +83,7 @@ The work package does not:
 - treat a global success percentage as sufficient when a required endpoint fails;
 - reopen A/B/C model selection because historical experiment text remains in the repository.
 
-==================================================
-HIGH-LEVEL FLOW
-==================================================
+## HIGH-LEVEL FLOW
 
 Diagnostics GUI
         ↓
@@ -115,9 +111,7 @@ restore the exact initial Zapret2 state
         ↓
 publish complete or partial results
 
-==================================================
-DELIVERY AUTHORITY
-==================================================
+## DELIVERY AUTHORITY
 
 Strategy Lab changes follow the current repository-wide authority in
 `docs/GITHUB_PUBLICATION.md` and the canonical principles in
@@ -132,9 +126,7 @@ A stale test/documentation contract never overrides newer owner canon. When a co
 asserts a superseded decision, correct the stale contract rather than bending current
 architecture back toward it.
 
-==================================================
-MANUAL VERIFICATION POLICY
-==================================================
+## MANUAL VERIFICATION POLICY
 
 Current live verification is governed by
 `docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`. Historical A/B/C and adaptive
@@ -153,9 +145,7 @@ Owner-assisted evidence is requested only when behavior cannot be proved faithfu
 repository CI, such as FreeBSD/IPFW routing, real-provider results or timing on the
 supported appliance.
 
-==================================================
-JOB MODEL
-==================================================
+## JOB MODEL
 
 The GUI uses an asynchronous job contract:
 
@@ -181,9 +171,7 @@ Recommended persistent runtime locations:
 State files never replace the lifecycle lock. They describe the job; they do not
 serialize firewall or process mutation.
 
-==================================================
-LIFECYCLE OWNERSHIP
-==================================================
+## LIFECYCLE OWNERSHIP
 
 The user's active Zapret2 service must not influence Strategy Lab results.
 
@@ -221,9 +209,7 @@ Final-state contract:
 
 The cleanup and restoration stage cannot be canceled by the user.
 
-==================================================
-CANCEL CONTRACT
-==================================================
+## CANCEL CONTRACT
 
 The GUI provides a separate `Stop test` / `Прервать тест` control.
 
@@ -251,9 +237,7 @@ The exact approved English spelling above is retained as the current product tex
 Internal state keys may use conventional machine-readable spelling, but the displayed
 message follows the approved text until the owner changes it.
 
-==================================================
-NUMBERED STAGES
-==================================================
+## NUMBERED STAGES
 
 00 — Target initialization
 
@@ -280,15 +264,17 @@ NUMBERED STAGES
 - verify IPv4 control connectivity;
 - determine whether usable IPv6 routing/connectivity exist;
 - perform the fixed QUIC/IPv4 precheck;
-- record IPv6/QUIC capability evidence; the adaptive target does not open a QUIC
-  strategy-search branch.
+- record IPv6/QUIC capability evidence; Stage-30 QUIC does not decide whether
+  explicitly enabled Stage-80 QUIC candidate search runs.
 
 40 — Clean target baseline
 
 - resolve/pin required target addresses;
 - test the target without Zapret2;
 - determine whether direct TLS 1.3 already works;
-- record results for every required endpoint.
+- record results for every required endpoint;
+- if all required endpoints pass, return `TARGET_ACCESSIBLE`, skip subsequent search
+  and Extended work, and execute Stage 90. Enable QUIC does not override this early exit.
 
 50 — Low-cost TLS 1.3 reconnaissance
 
@@ -316,10 +302,13 @@ NUMBERED STAGES
 
 - TLS 1.2;
 - plain HTTP;
+- QUIC candidates when Enable QUIC is ON and target identity is sufficient;
 - arbitrary UDP when a non-web UDP target is explicitly configured;
 - additional approved URIs/endpoints.
 
-The fixed IPv4 UDP/443 QUIC precheck remains Stage-30 diagnostic evidence only.
+The fixed IPv4 UDP/443 QUIC precheck is diagnostic only; Stage 80 is governed by
+[explicit QUIC control](STRATEGY_LAB_QUIC_CONTROL.md). The current candidate probe is
+OpenSSL QUIC handshake, not HTTP3 GET.
 
 85 — Shortlist and recommendation
 
@@ -340,9 +329,7 @@ The fixed IPv4 UDP/443 QUIC precheck remains Stage-30 diagnostic evidence only.
 - report restoration explicitly;
 - never discard completed data because a later stage was canceled/timed out.
 
-==================================================
-STAGE AND JOB STATUSES
-==================================================
+## STAGE AND JOB STATUSES
 
 User-visible stage statuses:
 
@@ -367,9 +354,7 @@ Internal job outcomes may distinguish:
 
 Cancellation produces a partial normal result after restoration.
 
-==================================================
-ONLINE PROGRESS OUTPUT
-==================================================
+## ONLINE PROGRESS OUTPUT
 
 The GUI polls job state approximately once per second and shows useful current progress,
 not only a spinner.
@@ -389,9 +374,7 @@ The snapshot may include:
 Detailed timing may be stored for diagnostics/timeout enforcement. The approved short
 report does not display elapsed time.
 
-==================================================
-TARGET AND ENDPOINT MODEL
-==================================================
+## TARGET AND ENDPOINT MODEL
 
 Supported target types:
 
@@ -414,9 +397,7 @@ information but cannot compensate for a failed required endpoint.
 For a destination IP representing a TLS service, hostname/SNI remain explicit. A raw IP
 URL must not silently replace service hostname identity.
 
-==================================================
-PROBE AND VALIDATION CONTRACT
-==================================================
+## PROBE AND VALIDATION CONTRACT
 
 Web probes use explicit settings:
 
@@ -433,8 +414,9 @@ Web probes use explicit settings:
 No `-k` certificate bypass is used for Strategy Lab validation.
 
 Current mass discovery uses bounded GET-4K, selected by the `_5/_6` measurement cycle.
-HEAD/GET-1 did not justify a production change. Historical long-GET finalist proposals
-are not automatic current requirements unless a current specialist contract selects them.
+HEAD/GET-1 did not justify a production change. Current publication performs one deep replay of each selected full profile after the
+primary 3/3 stability stage; see [unified shortlist](STRATEGY_LAB_UNIFIED_SHORTLIST.md).
+The 16-KiB depth criterion is separate from reachability of a short complete resource.
 
 Stability confirmation remains sequential/fresh and fail-fast under its current contract.
 
@@ -442,9 +424,7 @@ Model C may execute multiple logical candidates through compatible physical segm
 but every probe must remain deterministically attributable to exactly one candidate.
 See `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
 
-==================================================
-FIXED QUIC PRECHECK
-==================================================
+## FIXED QUIC PRECHECK
 
 The QUIC precheck is fixed and not configurable:
 
@@ -463,11 +443,10 @@ The runtime does not:
 - search local PF/IPFW rules for UDP/443 blocking;
 - repeat against another provider-selected host.
 
-PASS/FAIL is capability evidence only and does not open an adaptive QUIC candidate-search branch.
+PASS/FAIL is handshake capability evidence only. It neither enables nor vetoes the
+explicitly selected Extended QUIC candidate branch and does not prove HTTP3 GET.
 
-==================================================
-IPV6 POLICY
-==================================================
+## IPV6 POLICY
 
 AAAA records alone do not prove IPv6 availability.
 
@@ -477,9 +456,7 @@ IPv6 testing requires usable IPv6 routing and successful control connectivity. W
 - IPv6 candidate strategies are skipped;
 - IPv4 testing continues.
 
-==================================================
-DNS FACT BOUNDARY
-==================================================
+## DNS FACT BOUNDARY
 
 The historical local/container DNS problem is **closed**. DNS used to be slow/unreliable,
 but the owner fixed it. Treat DNS as currently working.
@@ -489,9 +466,7 @@ it is not evidence that DNS is currently broken. Reopen a DNS diagnosis only on 
 direct reproducible evidence, not an old log, old timeout, historical document or new-chat
 memory gap.
 
-==================================================
-TIMEOUT / BUDGET POLICY
-==================================================
+## TIMEOUT / BUDGET POLICY
 
 All operations remain bounded and preserve this containment hierarchy:
 
@@ -505,13 +480,11 @@ Historical fixed numeric stage/job values and the `_31/_32` measurement plan are
 in prior patch/decision/evidence records as implementation history; they do not override
 the current adaptive-budget contract.
 
-A previously observed admission concern involved the legacy `C -> B` fallback transition.
-Do not optimize that transition instead of completing `_13`. After Model-C-only production
-finalization, any Model-C-only timeout/deadline defect is a separate evidence-based task.
+A previously observed admission concern involved the retired `C -> B` fallback transition.
+Current Model-C-only timeout/deadline defects require concrete evidence; the retired
+fallback is not an optimization target.
 
-==================================================
-LIVE MEASUREMENT HISTORY
-==================================================
+## LIVE MEASUREMENT HISTORY
 
 Historical owner-supplied OPNsense measurements established initial implementation bounds
 and later measurement cycles refined Lua/BLOB/discovery/lifecycle behavior. Current accepted
@@ -519,9 +492,7 @@ conclusions are summarized in `docs/PROJECT_STATE.md` and specialist architectur
 
 The old DNS timing observations are historical only because DNS has since been fixed by the owner.
 
-==================================================
-STRATEGY SEARCH MODEL
-==================================================
+## STRATEGY SEARCH MODEL
 
 The search space uses native Zapret2 mechanisms. Technique/family tags may include:
 
@@ -550,21 +521,18 @@ Community presets are ordering evidence, not proof for the current provider/targ
 Known native/owner-proven strategies form a golden corpus for CandidateSpec/resource/graph
 representability; historical success changes priority only, never removes graph reachability.
 
-==================================================
-CANDIDATE RUNTIME ISOLATION — MODEL C SELECTED
-==================================================
+## CANDIDATE RUNTIME ISOLATION — MODEL C SELECTED
 
 Candidate effect must always be isolated and attributable.
 
 A/B/C selection is closed:
 
 - Model A — cold correctness/reference implementation;
-- Model B — warm/reference implementation and legacy `_12` automatic fallback only;
+- Model B — explicit warm/reference implementation; some helpers are reused by Model C;
 - Model C — selected normal production Stage-60 runtime.
 
-Current `_12` source still has `Model C -> Model B -> Model A cold` automatic replay. That
-is transition debt, not architecture authority. `_13` removes B/A from the normal
-production fallback chain.
+Normal production has no `Model C -> Model B -> Model A cold` replay since `_13`.
+A Model-C infrastructure failure is a bounded structural error.
 
 Model C must preserve:
 
@@ -578,9 +546,7 @@ Model C must preserve:
 Historical A/B/C experiment documentation is retained as evidence for how Model C was selected.
 It cannot reopen the selection question.
 
-==================================================
-SCREENING, EXPANSION, AND STABILITY
-==================================================
+## SCREENING, EXPANSION, AND STABILITY
 
 Reconnaissance:
 
@@ -604,9 +570,7 @@ Stability confirmation:
 - stop further attempts when required success becomes impossible;
 - combined percentage never hides a failed required endpoint.
 
-==================================================
-SHORTLIST AND RANKING
-==================================================
+## SHORTLIST AND RANKING
 
 The normal target is up to three strong stable strategies when enough candidates exist.
 A truthful smaller shortlist is valid.
@@ -624,23 +588,20 @@ Ranking order:
 
 Strategy number 1 is the recommendation. Strategy Lab never overwrites/merges saved Traffic Strategy.
 
-==================================================
-EXTENDED MODE
-==================================================
+## EXTENDED MODE
 
 Extended branches may include:
 
 - TLS 1.2;
 - plain HTTP;
 - approved URI paths;
+- explicitly enabled QUIC UDP/443 candidates;
 - arbitrary UDP with explicit port/probe contract.
 
 TLS 1.1 is outside normal interface unless separately approved. The fixed IPv4 UDP/443
 QUIC precheck remains diagnostic evidence only. Generic UDP is never reported as QUIC.
 
-==================================================
-CIRCULAR LIVE VALIDATION
-==================================================
+## CIRCULAR LIVE VALIDATION
 
 Circular validation is a separate second-stage bounded lifecycle transaction.
 
@@ -658,9 +619,7 @@ share the lifecycle lock. Its eligibility/TTL behavior is controlled by the curr
 circular contract; historical discovery winner targets do not force Strategy Lab to
 manufacture extra winners.
 
-==================================================
-BILINGUAL SHORT REPORT CONTRACT
-==================================================
+## BILINGUAL SHORT REPORT CONTRACT
 
 Language selection follows active OPNsense document language:
 
@@ -668,7 +627,10 @@ Language selection follows active OPNsense document language:
 - Russian when language begins with `ru`;
 - no plugin-specific language selector.
 
-Messages use stable keys with variable substitution. Approved examples follow.
+Messages use stable keys with variable substitution. The examples below retain the
+initial report vocabulary. Current QUIC presentation is owned by
+[QUIC control](STRATEGY_LAB_QUIC_CONTROL.md); future Chrome/TLS/HTTP presentation is
+defined in the browser HTTP plan and is not yet implemented.
 
 Target:
 
@@ -689,10 +651,10 @@ RU:
 Network capability, restricted:
 
 EN:
-`PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked; IPv6 and QUIC tests have been excluded.`
+`PASS — IPv4 is available; IPv6 is unavailable; QUIC/IPv4 is blocked; IPv6 is unavailable; QUIC strategy search is enabled.`
 
 RU:
-`PASS — IPv4 доступен; IPv6 недоступен; QUIC/IPv4 закрыт; проверки IPv6 и QUIC исключены.`
+`PASS — IPv4 доступен; IPv6 недоступен; QUIC/IPv4 закрыт; IPv6 недоступен; подбор QUIC-стратегий включён.`
 
 Network capability, full:
 
@@ -769,10 +731,10 @@ RU:
 Extended web results:
 
 EN:
-`PASS — TLS 1.2 and HTTP were tested; 2 additional profiles were found. QUIC and IPv6 were skipped because they are unavailable.`
+`PASS — TLS 1.2 and HTTP were tested; 2 additional profiles were found. QUIC strategy results are reported separately; IPv6 is unavailable.`
 
 RU:
-`PASS — TLS 1.2 и HTTP проверены; найдено 2 дополнительных профиля. QUIC и IPv6 пропущены как недоступные.`
+`PASS — TLS 1.2 и HTTP проверены; найдено 2 дополнительных профиля. результаты QUIC показаны отдельно; IPv6 недоступен.`
 
 UDP result:
 
@@ -844,21 +806,17 @@ Recommended message keys:
 - `test_completed`;
 - `stage_canceled`.
 
-==================================================
-HISTORICAL INITIAL IMPLEMENTATION PATCH SERIES
-==================================================
+## HISTORICAL INITIAL IMPLEMENTATION PATCH SERIES
 
 The original 13-patch implementation plan is retained in Git history and the prior
 version of this document, plus patch/devlog records. It is complete and is **not** the
 current roadmap. Its family-first, QUIC-search, serial-delivery and cold-candidate
 assumptions do not override current Python/adaptive/Model-C architecture.
 
-Current next source work is `v0.4.1_13` Model-C-only production finalization as defined in
-`docs/START_HERE.md` and `docs/ROADMAP.md`.
+Model-C-only finalization is complete. Current next work is defined only by
+[START_HERE](../START_HERE.md) and [ROADMAP](../ROADMAP.md).
 
-==================================================
-HISTORICAL VERIFICATION / ACCEPTANCE
-==================================================
+## HISTORICAL VERIFICATION / ACCEPTANCE
 
 Historical implementation-series verification and acceptance are preserved in
 `docs/verification/`, `docs/patches/`, `docs/devlog/`, decisions and Git history.
