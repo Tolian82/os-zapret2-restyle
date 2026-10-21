@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_5` (source candidate). `VERSION=0.5.6`, `PLUGIN_REVISION=5`. Stage 1 CA trust failure confirmed on installed `v0.5.6_2`; the explicit-CA private Chrome launcher and truthful local-readiness check are now included in the published FreeBSD 15 testing package `_3`. Owner-live `chrome150` HTTPS/TLS and UDP/443 QUIC/HTTP3 response acceptance has passed on installed `_3` using the private wrapper and verified CA. The final explicit TLS1.2-only test on GitHub returned TLSv1.2/HTTP2 200 with certificate validation and EXIT=0. **Stage 1 / V1 fully owner-live PASS.**
+**Current handoff identity:** `v0.5.6_5`. `VERSION=0.5.6`, `PLUGIN_REVISION=5`; unpublished development source candidate. Stage 1 CA trust failure confirmed on installed `v0.5.6_2`; the explicit-CA private Chrome launcher and truthful local-readiness check are now included in the published FreeBSD 15 testing package `_3`. Owner-live `chrome150` HTTPS/TLS and UDP/443 QUIC/HTTP3 response acceptance has passed on installed `_3` using the private wrapper and verified CA. The final explicit TLS1.2-only test on GitHub returned TLSv1.2/HTTP2 200 with certificate validation and EXIT=0. **Stage 1 / V1 fully owner-live PASS.**
 
 ## Current task — approved Strategy Lab modernization
 
