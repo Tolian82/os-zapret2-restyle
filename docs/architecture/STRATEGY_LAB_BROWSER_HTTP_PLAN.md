@@ -1,6 +1,6 @@
 # Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Status:** Stage 1 FreeBSD 15 private-client `_3` test package is published; owner-installed `chrome150` has certificate-verified HTTPS/HTTP2 and UDP443 QUIC/HTTP3-only response evidence ([record](../verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md)). The specific forced-TLS1.2-only handshake test required to close all Stage 1 V1 criteria is still pending. Stages 2–6 have not started.
+**Status:** Stage 1 FreeBSD 15 private-client `_3` test package is published; owner-installed `chrome150` has certificate-verified HTTPS/HTTP2 and UDP443 QUIC/HTTP3-only response evidence ([record](../verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md)). The owner then confirmed forced TLS1.2-only against GitHub: negotiated TLSv1.2, certificate verification PASS, HTTP2 200, exit 0. **Stage 1 / V1 is complete on installed OPNsense; Stage 2 Standard/Model C production migration is next.** Stages 2–6 have not yet been implemented.
 **Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
@@ -115,7 +115,7 @@ One parser must serve the real installed Model C, fixed-IPv4 overrides and other
 
 ### Stage 1 — bundle a ready-to-run private client
 
-**Dependency:** Owner authorized implementation on 21 October 2026; signed FreeBSD package, Chrome/CA and installed authenticated H2/H3 network responses have been observed. Forced TLS1.2-only handshake proof remains the sole outstanding Stage 1 client capability scenario.
+**Dependency:** Owner authorized implementation on 21 October 2026; signed FreeBSD package, Chrome/CA and installed authenticated H2/H3 network responses have been observed. The owner subsequently observed a forced TLS1.2-only GitHub handshake with verified server certificate and HTTP2 200; Stage 1 V1 is accepted.
 **Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
 1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.
@@ -201,7 +201,7 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ## 4. Minimum acceptance-evidence matrix
 
-**All new rows are NOT RUN / NOT VERIFIED as of this plan.** The [older live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) supports the previous implementation, not this Chrome/handshake-or-HTTP-response path.
+**V1 is now owner-live PASS for the private client on installed `_3`; V2–V11 remain not fully accepted.** The [older live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md) supports the previous implementation, not this Chrome/handshake-or-HTTP-response path.
 
 | ID | Scenario and expected behavior | Required evidence | Stage / requirements |
 | --- | --- | --- | --- |
