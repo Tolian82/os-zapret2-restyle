@@ -97,15 +97,15 @@ case "${host}" in
 esac
 if [ "${status}" -eq 0 ]; then
     if [ "${family}" = ipv6 ]; then
-        remote='2001:db8::1'
+        remote='2001:db8::10'
     else
         remote='203.0.113.10'
     fi
-    printf 'exit=0 remote_ip=%s http=1.1 code=200 bytes=100\n' "${remote}"
+    printf 'exit=0 remote_ip=%s http=1.1 code=200 bytes=100 ssl_verify=0 appconnect=0.123456\n' "${remote}"
     exit 0
 fi
 printf '%s\n' 'curl: (28) Connection timed out' >&2
-printf 'exit=%s remote_ip= http=0 code=000 bytes=0\n' "${status}"
+printf 'exit=%s remote_ip= http=0 code=000 bytes=0 ssl_verify=1 appconnect=0.000000\n' "${status}"
 exit "${status}"
 MOCK
 
