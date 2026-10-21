@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import endpoint_epoch, request, search
+from . import candidate, endpoint_epoch, request, search
 
 EX_OK = 0
 EX_USAGE = 64
@@ -234,6 +234,31 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
     }
     _atomic_json(output, result)
 
+    # Stage 20 stopped the managed service. Check the pinned target directly
+    # with QUIC-only Chrome before installing temporary dvtws2 candidates.
+    direct: list[dict[str, Any]] = []
+    for binding in epoch.bindings:
+        if search._cancel_requested(job_id):
+            return EX_CANCEL
+        host, ip = str(binding["endpoint"]), str(binding["selected_ip"])
+        if candidate._is_ipv4(host):
+            result.update(status="skipped", reason="host_sni_required", direct=direct)
+            _atomic_json(output, result)
+            return EX_OK
+        execution = request.quic_target_request(host, ip)
+        proof = request.chrome_quic_evidence(execution, expected_ip=ip)
+        direct.append({
+            "endpoint": host, "selected_ip": ip,
+            "status": "PASS" if proof["accessible"] else "FAIL",
+            "reachability": proof, "execution": execution.evidence(),
+        })
+    result["direct"] = direct
+    if direct and all(item["status"] == "PASS" for item in direct):
+        result["status"] = "direct_accessible"
+        _atomic_json(output, result)
+        return EX_OK
+    _atomic_json(output, result)
+
     catalog_path = Path(os.environ.get("STRATEGY_LAB_QUIC_CATALOG", str(module_dir() / "catalog/quic.tsv")))
     args_dir = Path(os.environ.get("STRATEGY_LAB_QUIC_ARGS_DIR", str(module_dir() / "catalog/quic")))
     rows = _catalog(catalog_path, 4)
@@ -248,17 +273,30 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
         strategy_path = args_dir / args_name
         if not strategy_path.is_file():
             raise RuntimeError(f"Strategy Lab QUIC args are unavailable: {strategy_path}")
-        candidate_path = work / f"{candidate_id}.json"
-        value = _candidate(
-            job_id, endpoints, candidate_path, candidate_id, family, strategy_path, hostlist,
-            runner=runner, timeout=timeout, protocol="quic", port="443", l7="quic",
-        )
-        if value == EX_CANCEL:
-            return EX_CANCEL
-        assert isinstance(value, dict)
-        result["tested"].append(value)
-        if value.get("all_pass") is True:
-            result["working"] = value
+        attempts: list[dict[str, Any]] = []
+        for attempt in range(1, 4):
+            if search._cancel_requested(job_id):
+                return EX_CANCEL
+            candidate_path = work / f"{candidate_id}.attempt-{attempt}.json"
+            value = _candidate(
+                job_id, endpoints, candidate_path, candidate_id, family, strategy_path, hostlist,
+                runner=runner, timeout=timeout, protocol="quic", port="443", l7="quic",
+            )
+            if value == EX_CANCEL:
+                return EX_CANCEL
+            assert isinstance(value, dict)
+            attempts.append(value)
+            if value.get("all_pass") is not True:
+                break
+        summary = dict(attempts[-1])
+        passed = sum(item.get("all_pass") is True for item in attempts)
+        summary.update(attempts=attempts, attempts_required=3,
+                       attempts_executed=len(attempts), pass_count=passed,
+                       stable=len(attempts) == 3 and passed == 3)
+        result["tested"].append(summary)
+        if summary["stable"]:
+            # The ordinary Stage 85 shortlist still performs exact replay.
+            result["working"] = summary
             result["status"] = "working"
             _atomic_json(output, result)
             return EX_OK

@@ -516,6 +516,15 @@ class Orchestrator:
             result = self._run_adapter(action, operation_timeout=timeout)
             if result.kind != "pass":
                 return self._handle_result("80", result)
+            if action == "80-quic":
+                evidence = _load_json(self.job_dir / "quic.json")
+                if evidence.get("status") == "direct_accessible":
+                    self._pass("80", (
+                        "PASS — целевой QUIC/UDP443 доступен напрямую; стратегия не требуется."
+                        if self.language == "ru" else
+                        "PASS — target QUIC/UDP443 is directly accessible; no strategy needed."
+                    ))
+                    return "TARGET_ACCESSIBLE"
         quic = _load_json(self.job_dir / "quic.json")
         udp = _load_json(self.job_dir / "udp.json")
         try:
@@ -675,6 +684,9 @@ class Orchestrator:
             outcome = self._run_stage80()
             if outcome == "ERROR":
                 state_persistence.skip_unfinished(self.job_id, str(self.state_path), _message(self.language, "error_skip"))
+                return self.finish(outcome, False)
+            if outcome == "TARGET_ACCESSIBLE":
+                state_persistence.skip_unfinished(self.job_id, str(self.state_path), _message(self.language, "accessible_skip"))
                 return self.finish(outcome, False)
             self.check_cancel()
             self.budget.require("85")

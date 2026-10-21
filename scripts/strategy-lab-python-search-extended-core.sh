@@ -135,11 +135,21 @@ env ${COMMON_ENV} \
 grep -Fq 'tls12|tls12-multisplit|' "${LOG}" || fail 'TLS 1.2 candidate protocol environment missing'
 grep -Fq 'http|http-multisplit|' "${LOG}" || fail 'HTTP candidate protocol environment missing'
 
-# The control probe may report QUIC blocked; explicit Enable QUIC must still run candidates.
+# Stage30 control may report QUIC closed: target QUIC has a separate
+# direct baseline, mocked here as an unsuccessful QUIC-only attempt.
+cat > "${TMP}/bin/quic-no-signal" <<'MOCK'
+#!/bin/sh
+printf '%s\n' 'exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=0 appconnect=0.000000'
+exit 28
+MOCK
+chmod 0755 "${TMP}/bin/quic-no-signal"
 printf '%s\n' '{"quic_ipv4":"closed"}' > "${TMP}/network-closed.json"
-env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" STRATEGY_LAB_QUIC_CANDIDATE_RUNNER="${FAKE}" \
+env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" \
+  STRATEGY_LAB_CURL_BIN="${TMP}/bin/quic-no-signal" STRATEGY_LAB_QUIC_CANDIDATE_RUNNER="${FAKE}" \
   sh "${LAUNCHER}" extended quic "${JOB}" "${TMP}/endpoints.txt" "${TMP}/network-closed.json" "${TMP}/quic-closed.json"
-"${JQ}" -e '.enabled==true and .status=="working" and .working.id=="quic-fake-2" and (.tested|length)==2' "${TMP}/quic-closed.json" >/dev/null || fail 'Python QUIC search was still gated by the blocked control probe'
+"${JQ}" -e '.enabled==true and .status=="working" and .working.id=="quic-fake-2" and
+   (.tested|length)==2 and .working.stable==true and .working.pass_count==3 and
+   .working.attempts_executed==3 and (.direct|length)==1 and .direct[0].status=="FAIL"' "${TMP}/quic-closed.json" >/dev/null || fail 'QUIC target/3-of-3 contract failed'
 grep -Fq 'quic|quic-fake-1|' "${LOG}" || fail 'QUIC candidate protocol environment missing'
 
 env ${COMMON_ENV} MODULE_DIR="${SCRIPT_DIR}/strategy_lab" STRATEGY_LAB_UDP_CANDIDATE_RUNNER="${FAKE}" \

@@ -77,6 +77,9 @@ def stage30_message(
 def _quic_summary(language: str, result: dict[str, Any]) -> str:
     ru = language == "ru"
     status = result.get("status")
+    if status == "direct_accessible":
+        return ("QUIC: целевой UDP/443 доступен напрямую; стратегия не требуется"
+                if ru else "QUIC: target UDP/443 directly accessible; no strategy needed")
     if status == "skipped":
         if result.get("reason") == "disabled":
             return "QUIC: подбор стратегий отключён" if ru else "QUIC: strategy search is disabled"
