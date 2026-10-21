@@ -19,14 +19,14 @@
 ## Level 2 — текущая линия v0.5.x, этап v0.5.6
 
 - [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response), FreeBSD `latest` without pin.
-- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stage 1 installed Chrome HTTPS and QUIC/HTTP3 PASS, pending narrow forced TLS1.2 check; Stage 2 is next.
+- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stage 1 V1 PASS on installed `_3` (Chrome HTTPS, TLS1.2 and QUIC/H3); Stage 2 Standard/Model C production migration is next.
 - [Состояние реализации](PROJECT_STATE.md) и [единственный следующий шаг](START_HERE.md).
 
 ### Поставка и доказательства завершённых работ
 
 Записи ниже сохраняют историю предыдущей кампании; описанные в них старые следующие эксперименты не являются активной очередью.
 
-- [Stage 1 owner-live Chrome HTTPS and QUIC HTTP/3 verification](verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md) — real HTTP/2 200 and HTTP/3 204 with certificate checks PASS; forced TLS1.2-only test pending.
+- [Stage 1 owner-live Chrome HTTPS and QUIC HTTP/3 verification](verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md) — real HTTP/2 200 and HTTP/3 204, plus explicit TLS1.2 HTTP/2 200, all with valid certificates; Stage 1 V1 PASS.
 - [Stage 1 v0.5.6_3 CA correction testing publication](verification/evidence/testing-publications/v0.5.6_3.md) — signed prerelease and FreeBSD15 CI PASS; installed TLS/QUIC acceptance pending.
 - [Stage 1 v0.5.6_2 testing publication](verification/evidence/testing-publications/v0.5.6_2.md) — FreeBSD15 CI PASS, current signed latest Chrome binary, persistent GitHub pkg, installed TLS/QUIC acceptance pending.
 - [Фактическая публикация full Web/pkg v0.5.6](verification/evidence/2026-10-20-v0.5.6-full-release-publication.md) — CI/FreeBSD15 и Pages PASS, pkg SHA256, owner GUI upgrade pending.
