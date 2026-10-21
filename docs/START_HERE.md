@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.6_1`; `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Documentation-only update; no change to the published package.
+**Current handoff identity:** `v0.5.6_1`. `VERSION=0.5.6`, `PLUGIN_REVISION=1`. Documentation-only update; no change to the published package.
 
 ## Current task — approved Strategy Lab modernization
 
