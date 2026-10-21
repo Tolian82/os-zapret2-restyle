@@ -1,6 +1,6 @@
 # Strategy Lab — detailed browser-profile HTTP verification development plan
 
-**Status:** Stage 1 FreeBSD 15 private-client package build passed CI and the testing package has been published. Real TLS/QUIC proof on installed OPNsense is pending; stages 2–6 have not started.
+**Status:** Stage 1 FreeBSD 15 private-client `_3` test package is published; owner-installed `chrome150` has certificate-verified HTTPS/HTTP2 and UDP443 QUIC/HTTP3-only response evidence ([record](../verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md)). The specific forced-TLS1.2-only handshake test required to close all Stage 1 V1 criteria is still pending. Stages 2–6 have not started.
 **Owner decisions:** 20–21 October 2026. The success rule is **logical OR**: a verified successful target TLS handshake, a verified successful target QUIC handshake, **or a genuine HTTP response from the intended endpoint** is individually sufficient to mark that endpoint accessible. No HTTP response is required after a successful handshake, and no body download is required after a valid HTTP response.
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
@@ -115,7 +115,7 @@ One parser must serve the real installed Model C, fixed-IPv4 overrides and other
 
 ### Stage 1 — bundle a ready-to-run private client
 
-**Dependency:** Owner authorized implementation on 21 October 2026; Stage 1 acceptance remains gated on FreeBSD package/client evidence.
+**Dependency:** Owner authorized implementation on 21 October 2026; signed FreeBSD package, Chrome/CA and installed authenticated H2/H3 network responses have been observed. Forced TLS1.2-only handshake proof remains the sole outstanding Stage 1 client capability scenario.
 **Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
 1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.
@@ -227,4 +227,4 @@ Current stage/status: [PROJECT_STATE](../PROJECT_STATE.md). Exactly one next act
 
 At every implementation stage: define the observable owner scenario and acceptance evidence; implement the coherent scope; run affected checks; synchronize any changed requirements/current facts; follow the GitHub PR/CI/exact-head merge procedure in `GH-010`–`GH-030`. Distinguish source, CI/package and installed OPNsense proof (`DEV-011`, `CHAT-003`).
 
-**Current documentation-only identity:** `VERSION=0.5.6` and `PLUGIN_REVISION=1`. On the first actual implementation scope apply `DEV-027`–`DEV-035`. A future candidate is not already built or released. This plan does not change the existing running service, published v0.5.6, or the closed Telegram Voice investigation.
+**Current implementation identity:** `VERSION=0.5.6` and `PLUGIN_REVISION=3`, published testing asset `v0.5.6_3` with source/tag/digest in [publication record](../verification/evidence/testing-publications/v0.5.6_3.md). A future source update follows `DEV-027`–`DEV-035`; this plan does not authorize changing the published stable v0.5.6 or reopening Telegram Voice.

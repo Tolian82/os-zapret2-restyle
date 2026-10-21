@@ -13,7 +13,7 @@ The [target requirements](REQUIREMENTS.md) and [detailed English plan](architect
 5. Достоверные результаты, RU/EN и совместимость сохранённых заданий.
 6. Поставка и приёмка установленного пакета.
 
-The owner authorized implementation. Stage 1 FreeBSD packaging passed CI and a [testing prerelease](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_2) is available; real installed TLS/QUIC acceptance is still open. Stages 2–6 have not started. No Firefox, ordinary curl fallback, mandatory HTTP body, upstream version pin, Python/Model C replacement or new recovery architecture. No change to published v0.5.6 and no automatic stable release.
+The owner authorized implementation. The [v0.5.6_3 testing package](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_3) passed FreeBSD15 CI and owner-installed default Chrome HTTPS/TLS and UDP443 HTTP3-only checks with certificate verification; [evidence](verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md). A single TLS1.2-only capability check remains before formal V1 closure, then Stage 2 production Model C migration is next. Stages 2–6 have not started. No Firefox, ordinary curl fallback, mandatory HTTP body, upstream version pin, Python/Model C replacement or new recovery architecture. No change to published v0.5.6 and no automatic stable release.
 
 ## Основной завершённый путь
 
