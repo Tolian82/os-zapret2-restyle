@@ -205,7 +205,7 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ### Stage 6 — installed-package qualification and completion
 
-**Current owner evidence (22 October 2026):** the owner ran **two consecutive GUI Stop checks** and reported no GUI problems: **PASS by owner report**, without raw Stage90/IPFW/process inspection or an explicitly recorded original RUNNING/STOPPED state. Do not repeat the same manual Stop scenario; prefer one bounded read-only hygiene inspection and existing CI test evidence. [Evidence](../verification/evidence/2026-10-22-v0.5.6_17-owner-stage5-closure-stage6-stop-gui.md).
+**Current Stage-6 owner evidence (22 October 2026):** two consecutive GUI Stop checks PASS by owner report, **followed by installed post-test hygiene inspection PASS**: `os-zapret2-restyle-0.5.6_17` installed, regular Zapret2 RUNNING, `active.job` empty, IPFW `19100–19131` empty, `9989` listener absent, only the normal `989` dvtws2 and supervisor processes visible. These observations satisfy the selected installed stop/cleanup acceptance but do not reconstruct initial state or every Stage-90 artifact. Controlled RUNNING/STOPPED/cancel/error coverage is reused; actual winning QUIC candidate and other unverified V1–V11 matrix rows are **not** recast as live PASS. [Bounded Stage-6 evidence](../verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md). No further repeated GUI/network tests. Owner sign-off on bounded completion and separate stable release authority are pending.
 
 **Dependency:** Stages 1–5.
 **Observable outcome:** Owner has a usable Strategy Lab in an accurately verified OPNsense package.
