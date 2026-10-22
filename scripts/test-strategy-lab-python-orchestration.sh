@@ -205,7 +205,11 @@ case "${action}" in
         emit pass ''
         ;;
     80-quic)
-        printf '%s\n' '{"status":"skipped"}' > "${jobdir}/quic.json"
+        if [ "${mode}" = direct-quic ]; then
+            printf '%s\n' '{"status":"direct_accessible","direct":[{"endpoint":"example.com","selected_ip":"203.0.113.10","status":"PASS","reachability":{"accessible":true,"signal":"quic_handshake"}}]}' > "${jobdir}/quic.json"
+        else
+            printf '%s\n' '{"status":"skipped"}' > "${jobdir}/quic.json"
+        fi
         state set-json-field "${job}" "${status}" quic "${jobdir}/quic.json"
         emit pass ''
         ;;
@@ -309,6 +313,39 @@ EXPECTED
 cmp -s "${TEST_ROOT}/expected-order" "${JOBS_DIR}/job.SUCCESS/adapter-order" ||
     fail 'Python orchestrator did not own the expected standard action order'
 [ ! -e "${ACTIVE_FILE}" ] || fail 'terminal success left active-job ownership behind'
+
+# Owner _14 regression: direct QUIC must not discard Stage70 TLS strategies.
+new_job job.DIRECTQUIC extended direct-quic
+printf '%s\n' '1' > "${JOBS_DIR}/job.DIRECTQUIC/quic-enabled"
+run_job job.DIRECTQUIC env
+DIRECT_STATUS="${JOBS_DIR}/job.DIRECTQUIC/status.json"
+"$(command -v jq)" -e '
+    .outcome=="SUCCESS" and
+    (.stages[]|select(.number=="80")|.status)=="PASS" and
+    (.stages[]|select(.number=="85")|.status)=="PASS" and
+    (.stages[]|select(.number=="90")|.status)=="PASS" and
+    (.stages[]|select(.number=="99")|.status)=="PASS" and
+    ([.stages[]|select(.number=="80")|.message]|join(" ")|contains("HTTPS/TCP443"))
+' "${DIRECT_STATUS}" >/dev/null || fail 'Direct QUIC incorrectly suppressed TLS shortlist or restoration'
+cat > "${TEST_ROOT}/expected-direct-order" <<'EXPECTED_DIRECT'
+00
+10
+20
+30
+40
+50
+60
+70
+80-tcp
+80-quic
+80-udp
+85
+restore
+eligibility
+clear-active
+EXPECTED_DIRECT
+cmp -s "${TEST_ROOT}/expected-direct-order" "${JOBS_DIR}/job.DIRECTQUIC/adapter-order" ||
+    fail 'Direct QUIC did not preserve Stage85 and Stage90'
 
 new_job job.RESTORE extended restore-fail
 run_job job.RESTORE env

@@ -78,8 +78,13 @@ def _quic_summary(language: str, result: dict[str, Any]) -> str:
     ru = language == "ru"
     status = result.get("status")
     if status == "direct_accessible":
-        return ("QUIC: целевой UDP/443 доступен напрямую; стратегия не требуется"
-                if ru else "QUIC: target UDP/443 directly accessible; no strategy needed")
+        return (
+            "QUIC/UDP443: прямое соединение подтверждено; QUIC-обход не требуется. "
+            "Это не подтверждает прямой HTTPS/TCP443; TLS-кандидаты сохраняются для этапа 85"
+            if ru else
+            "QUIC/UDP443: direct connection confirmed; QUIC bypass is not needed. "
+            "This does not establish direct HTTPS/TCP443; TLS candidates proceed to Stage 85"
+        )
     if status == "skipped":
         if result.get("reason") == "disabled":
             return "QUIC: подбор стратегий отключён" if ru else "QUIC: strategy search is disabled"

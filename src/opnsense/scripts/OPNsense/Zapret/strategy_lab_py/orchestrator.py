@@ -523,15 +523,9 @@ class Orchestrator:
             result = self._run_adapter(action, operation_timeout=timeout)
             if result.kind != "pass":
                 return self._handle_result("80", result)
-            if action == "80-quic":
-                evidence = _load_json(self.job_dir / "quic.json")
-                if evidence.get("status") == "direct_accessible":
-                    self._pass("80", (
-                        "PASS — целевой QUIC/UDP443 доступен напрямую; стратегия не требуется."
-                        if self.language == "ru" else
-                        "PASS — target QUIC/UDP443 is directly accessible; no strategy needed."
-                    ))
-                    return "TARGET_ACCESSIBLE"
+            # Direct QUIC reachability is transport-specific Stage-80 evidence.
+            # Only Stage-40 HTTPS/TCP may stop the whole job as accessible.
+            # Preserve Stage-70 TLS candidates and replay them at Stage 85.
         quic = _load_json(self.job_dir / "quic.json")
         udp = _load_json(self.job_dir / "udp.json")
         try:
