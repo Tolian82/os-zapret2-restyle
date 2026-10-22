@@ -25,6 +25,12 @@ require "${VIEW}" "${RU_FIRST}"
 require "${VIEW}" "${RU_SECOND}"
 
 # Owner-selected deterministic RU/EN diagnostics presentation.
+# Result summary is localized by the existing client-side RU/EN dictionary,
+# matching live and reloaded Strategy Lab results regardless of gettext coverage.
+require "${VIEW}" "resultSummary:'Сводка результатов'"
+require "${VIEW}" "resultSummary:'Result summary'"
+require "${VIEW}" 'id="strategyLabResultSummaryTitle"'
+require "${VIEW}" "\$('#strategyLabResultSummaryTitle').text(ui.resultSummary);"
 require "${VIEW}" "testDomainTitle:'Тестирование соединения с доменом'"
 require "${VIEW}" "testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.'"
 require "${VIEW}" "testAction:'Проверка'"
