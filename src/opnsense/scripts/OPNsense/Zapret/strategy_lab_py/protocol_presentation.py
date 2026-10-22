@@ -84,7 +84,7 @@ def _quic_summary(language: str, result: dict[str, Any]) -> str:
         if result.get("reason") == "disabled":
             return "QUIC: подбор стратегий отключён" if ru else "QUIC: strategy search is disabled"
         return "QUIC: проверка не выполнялась" if ru else "QUIC: testing was not performed"
-    if status not in {"working", "not_found"}:
+    if status not in {"working", "not_found", "incomplete_budget"}:
         raise ProtocolPresentationError("unexpected QUIC result status")
     ids = _tested_ids(result)
     count = len(ids)
@@ -96,9 +96,27 @@ def _quic_summary(language: str, result: dict[str, Any]) -> str:
         if ru:
             return f"QUIC: проверено стратегий {count} [{_ids_text(ids)}]; рабочая стратегия: {working_id}"
         return f"QUIC: {count} strategies tested [{_ids_text(ids)}]; working strategy: {working_id}"
+    incompatible = result.get("incompatible", [])
+    deferred = result.get("deferred", [])
+    if not isinstance(incompatible, list) or not isinstance(deferred, list):
+        raise ProtocolPresentationError("QUIC omissions are invalid")
+    for group in (incompatible, deferred):
+        if any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] for item in group):
+            raise ProtocolPresentationError("QUIC omitted candidate identity is invalid")
+    omission = ""
+    if incompatible:
+        names = _ids_text([item["id"] for item in incompatible])
+        omission += f"; несовместимые {len(incompatible)} [{names}]" if ru else f"; incompatible {len(incompatible)} [{names}]"
+    if deferred:
+        names = _ids_text([item["id"] for item in deferred])
+        omission += f"; отложенные по бюджету {len(deferred)} [{names}]" if ru else f"; budget-deferred {len(deferred)} [{names}]"
+    if status == "incomplete_budget":
+        if ru:
+            return f"QUIC: проверено стратегий {count} [{_ids_text(ids)}]{omission}; поиск частично выполнен, бюджет ограничен"
+        return f"QUIC: {count} strategies tested [{_ids_text(ids)}]{omission}; incomplete search, finite budget"
     if ru:
-        return f"QUIC: проверено стратегий {count} [{_ids_text(ids)}]; рабочая стратегия не найдена"
-    return f"QUIC: {count} strategies tested [{_ids_text(ids)}]; no working strategy found"
+        return f"QUIC: проверено стратегий {count} [{_ids_text(ids)}]{omission}; рабочая стратегия не найдена"
+    return f"QUIC: {count} strategies tested [{_ids_text(ids)}]{omission}; no working strategy found"
 
 
 def _udp_summary(language: str, result: dict[str, Any]) -> str:
@@ -173,6 +191,9 @@ def stage80_message(language: str, quic: dict[str, Any], udp: dict[str, Any]) ->
         raise ProtocolPresentationError("invalid Strategy Lab language")
     quic_text = _quic_summary(language, quic)
     udp_text = _udp_summary(language, udp)
+    incomplete = quic.get("status") == "incomplete_budget"
     if language == "ru":
-        return f"PASS — Расширенная проверка завершена. {quic_text}. {udp_text}."
-    return f"PASS — Extended testing completed. {quic_text}. {udp_text}."
+        prefix = "Расширенная проверка частично выполнена" if incomplete else "Расширенная проверка завершена"
+        return f"PASS — {prefix}. {quic_text}. {udp_text}."
+    prefix = "Extended testing partially completed" if incomplete else "Extended testing completed"
+    return f"PASS — {prefix}. {quic_text}. {udp_text}."

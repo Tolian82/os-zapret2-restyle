@@ -1,0 +1,5 @@
+--out-range=-d10
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=2
+--lua-desync=send:ipfrag:ipfrag_pos_udp=16
+--lua-desync=drop

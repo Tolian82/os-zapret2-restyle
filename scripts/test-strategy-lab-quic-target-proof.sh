@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from strategy_lab_py import candidate, extended, ip_target_support, orchestrator, request
+from strategy_lab_py import candidate, candidate_spec, extended, ip_target_support, orchestrator, request
 
 # Unsupported HTTP/3 in the private client is a technical error, not a
 # genuine negative QUIC target response or four failed strategies.
@@ -31,6 +31,32 @@ for rc, stderr in (
     except request.RequestError as exc:
         assert "QUIC client" in str(exc) and "support" in str(exc)
 assert capability_result(28, "curl: (28) Connection timed out").returncode == 28
+
+# The Stage-4 catalog is fixed, ordered and representable by CandidateSpec.
+catalog = extended._catalog(extended.module_dir() / "catalog/quic.tsv", 4)
+expected_ids = [
+    "quic-fake-1", "quic-fake-2", "quic-ipfrag-8", "quic-ipfrag-16",
+    "quic-fake-5", "quic-fake-10", "quic-fake-20", "quic-ipfrag-32",
+    "quic-ipfrag-64", "quic-fake-ipfrag-8", "quic-fake-ipfrag-16",
+    "quic-fake-ipfrag-32", "quic-fake-ipfrag-64",
+]
+assert [item[0] for item in catalog] == expected_ids
+for candidate_id, family, bound, filename in catalog:
+    content = (extended.module_dir() / "catalog/quic" / filename).read_text()
+    description = candidate_spec.CandidateSpec.from_strategy(
+        candidate_id=candidate_id, family=family, protocol="quic",
+        transport="udp", port=443, l7="quic", target_binding=bound == "1",
+        strategy=content,
+    )
+    assert description.strategy == content
+    assert all(blob.resource_class == "builtin" for blob in description.blob_requirements)
+    if candidate_id.startswith("quic-fake-ipfrag-"):
+        pos = candidate_id.rsplit("-", 1)[1]
+        assert [action.raw for action in description.lua_instances] == [
+            "--lua-desync=fake:blob=fake_default_quic:repeats=2",
+            f"--lua-desync=send:ipfrag:ipfrag_pos_udp={pos}",
+            "--lua-desync=drop",
+        ]
 
 TARGET = "203.0.113.10"
 HOST = "blocked.example"
@@ -113,6 +139,22 @@ with tempfile.TemporaryDirectory() as root:
     data=json.loads((root/"unstable.json").read_text())
     assert data["status"]=="not_found" and data["working"] is None and data["tested"][0]["pass_count"]==1
     assert data["tested"][0]["attempts_executed"]==2 and not data["tested"][0]["stable"]
+
+    # Insufficient finite time defers catalog entries without executing them.
+    with mock.patch.object(extended, "_search_epoch", return_value=epoch), mock.patch.object(extended, "job_dir", return_value=root), mock.patch.object(extended.search, "_cancel_requested", return_value=False), mock.patch.object(request, "quic_target_request", return_value=output(BASE.replace("appconnect=0.121000", "appconnect=0.000000"))), mock.patch.object(extended, "_catalog", return_value=[("candidate-1", "fake", "1", "one.args")]), mock.patch.object(extended, "_runner", return_value=Path("/bin/true")), mock.patch.object(extended, "_candidate", side_effect=AssertionError("budget-deferred entry must not run")), mock.patch.dict(extended.os.environ, {"STRATEGY_LAB_QUIC_ARGS_DIR":str(argsdir), "STRATEGY_LAB_OPERATION_TIMEOUT":"1"}):
+        assert extended.quic("job.test",str(endpoints),"ignored",str(root/"budget.json"))==0
+    data=json.loads((root/"budget.json").read_text())
+    assert data["status"]=="incomplete_budget" and data["tested"]==[]
+    assert data["deferred"]==[{"id":"candidate-1","reason":"insufficient_remaining_budget"}]
+    assert data["catalog_total"]==1
+
+    # Unsupported fake resources are marked incompatible before any runner.
+    (argsdir/"invalid.args").write_text("--payload=quic_initial\n--lua-desync=fake:blob=unavailable_fake:repeats=2\n")
+    with mock.patch.object(extended, "_search_epoch", return_value=epoch), mock.patch.object(extended, "job_dir", return_value=root), mock.patch.object(extended.search, "_cancel_requested", return_value=False), mock.patch.object(request, "quic_target_request", return_value=output(BASE.replace("appconnect=0.121000", "appconnect=0.000000"))), mock.patch.object(extended, "_catalog", return_value=[("bad", "fake", "1", "invalid.args")]), mock.patch.object(extended, "_runner", return_value=Path("/bin/true")), mock.patch.object(extended, "_candidate", side_effect=AssertionError("incompatible candidate must not run")), mock.patch.dict(extended.os.environ, {"STRATEGY_LAB_QUIC_ARGS_DIR":str(argsdir)}):
+        assert extended.quic("job.test",str(endpoints),"ignored",str(root/"invalid.json"))==0
+    data=json.loads((root/"invalid.json").read_text())
+    assert data["status"]=="not_found" and data["tested"]==[]
+    assert data["incompatible"][0]["id"]=="bad"
 
     # Actual Stage80 orchestrator returns TARGET_ACCESSIBLE before 85/99, and
     # its caller's established finish() path still performs Stage90 restoration.

@@ -63,12 +63,14 @@ No QUIC candidate is launched. Ordinary UI text translates this state naturally 
 
 If the job reaches Stage 80 and target identity/budget permit execution, Stage 80 executes the QUIC candidate catalog even when Stage 30 recorded the control path as blocked.
 
-Current catalog:
+Stage-4 source catalog `v0.5.6_14` (original four IDs and order unchanged):
 
-1. `quic-fake-1`;
-2. `quic-fake-2`;
-3. `quic-ipfrag-8`;
-4. `quic-ipfrag-16`.
+1. `quic-fake-1`, `quic-fake-2`, `quic-ipfrag-8`, `quic-ipfrag-16`;
+2. `quic-fake-5`, `quic-fake-10`, `quic-fake-20`;
+3. `quic-ipfrag-32`, `quic-ipfrag-64`;
+4. `quic-fake-ipfrag-8`, `quic-fake-ipfrag-16`, `quic-fake-ipfrag-32`, `quic-fake-ipfrag-64`.
+
+The existing `fake_default_quic` builtin is used, not an invented external BLOB. Python production checks canonical `CandidateSpec`/external resource compatibility and admits 3/3 attempts only inside the existing Stage-80 and overall deadlines while reserving follow-up/replay/Stage-90 work. `tested` includes only attempted variants; `incompatible` and `deferred` are separate, with `incomplete_budget` distinct from exhaustive `not_found`. The legacy shell reference runner reads the same catalog but is not the Python production owner.
 
 The production runner appends every executed candidate result to `tested`. It may return early when a working candidate is found; otherwise it reaches `not_found` only after the enabled catalog search completes.
 
