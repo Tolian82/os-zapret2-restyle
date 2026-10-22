@@ -188,9 +188,9 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ### Stage 5 — results, GUI and persisted jobs
 
-**Stage-5 first slice [published as `v0.5.6_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_16/os-zapret2-restyle-0.5.6_16.pkg); GUI refinement published as `_17`:** expose existing read-only historical `result` lookup by explicit validated job ID. Only user-selected history is restored within the same tab after F5 if active-job discovery is idle; do not auto-resurrect unrelated completed history. Disable circular mutations when reviewing history. Historical shortlist items lacking explicit `profile_replay.verified=true` remain viewable but cannot count as verified protocol winners. This is only the first Stage5 slice. The owner explicitly reports successful saved job retrieval, subsequent `_17` GUI behavior, **F5 and RU/EN PASS** ([record](../verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)). Do not rerun them. Detailed/summary Chrome/TLS/QUIC/HTTP semantic variants and untested legacy schemas still require bounded source/evidence reconciliation before Stage 5 closure.
+**Stage-5 delivered scope:** Published `_16` exposed the read-only historical result lookup by validated Job ID; selected history is restored after F5 only when current active-job discovery is idle. Historical result views disable circular mutations, do not automatically resurrect unrelated jobs, and require `profile_replay.verified=true` before calling an older shortlist entry a verified winner. Published `_17` added the compact Job ID clipboard control and RU/EN help. The owner reported successful saved-job retrieval, F5, RU/EN and GUI behavior. 
 
-
+**Stage-5 current decision (22 October 2026):** **CLOSED by explicit owner acceptance**, not by a claim that every previously listed result-semantic variation was independently audited. The `_16` read-only historical job and `_17` F5, RU/EN and GUI checks were reported PASS; avoid repeating them. See [Stage 5 closure and Stage 6 Stop evidence](../verification/evidence/2026-10-22-v0.5.6_17-owner-stage5-closure-stage6-stop-gui.md). Historical replay proof still requires `profile_replay.verified=true`; unsupported old schemas or unverified protocol signals cannot be relabeled wins. If a concrete critical report mismatch arises during Stage 6, treat it as a new reproducible defect rather than silently treating every untested branch as verified.
 
 **Dependency:** Stages 2–4.
 **Observable outcome:** The UI distinguishes direct reachability, successful candidate reachability and precisely which evidence was observed.
@@ -204,6 +204,8 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 **Acceptance:** Direct TLS success, direct HTTPS response without a separate handshake observation, TLS candidate, direct QUIC, QUIC candidate, cleartext HTTP response, no winner, incomplete budget, technical failure and cancellation have consistent detailed and summary display. F5 does not change the meaning. A real response without a complete body is positive evidence, but absent HTTP measurements remain "not measured". No auto-Apply.
 
 ### Stage 6 — installed-package qualification and completion
+
+**Current owner evidence (22 October 2026):** the owner ran **two consecutive GUI Stop checks** and reported no GUI problems: **PASS by owner report**, without raw Stage90/IPFW/process inspection or an explicitly recorded original RUNNING/STOPPED state. Do not repeat the same manual Stop scenario; prefer one bounded read-only hygiene inspection and existing CI test evidence. [Evidence](../verification/evidence/2026-10-22-v0.5.6_17-owner-stage5-closure-stage6-stop-gui.md).
 
 **Dependency:** Stages 1–5.
 **Observable outcome:** Owner has a usable Strategy Lab in an accurately verified OPNsense package.
