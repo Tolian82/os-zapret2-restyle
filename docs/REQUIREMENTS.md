@@ -17,6 +17,21 @@ The zapret2 engine remains an external runtime component managed by this plugin.
 
 General project-development principles are canonical only in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) (`DEV-*`). This file defines product-specific requirements and does not duplicate that general rule book.
 
+## Additional Zapret2 Lua/BLOB resources — owner-approved GUI (2026-10-22)
+
+**Approved target; not implemented yet.** The normative technical specification is [ZAPRET2_EXTRA_RESOURCES_GUI.md](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md).
+
+- Source repository: [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources), currently 19 supplementary Lua modules and 54 deduplicated packet-payload BIN files; inventory is revision-driven, not a fixed total.
+- The **Strategies** page (existing `general.volt`) must show a **separate manual button below the left-side «Статус:» block**, RU **«Установить дополнительные ресурсы»**, EN **“Install Additional Resources”**. Lua scripts and BLOB payloads are called *resources*, not *models*. Do not move or repurpose Start/Stop, upstream-release Apply or Strategies Apply. Native RU/EN status and help are mandatory.
+- The button initiates a separate, asynchronous, serialized install/update transaction with pinned source revision, per-file integrity checks, collision avoidance for the selected bol-van/zapret2 runtime, no user-file overwrite, rollback, and preservation of the original running/stopped state. **Do not download additions automatically during ordinary upstream install, package upgrade, or service restart**; retain previously installed managed extras safely across upstream version changes.
+- Successful installation must expose new Lua/BIN in a fresh job-scoped **ResourceInventory**, without altering snapshots for completed jobs.
+- Extend the **native Strategy Lab search graph** and `CandidateSpec` so new compatible BLOB payloads and Lua handlers are genuinely eligible for adaptive candidate selection. Installed availability alone is insufficient; unsupported resources are not forced into candidates.
+- Load only the Lua modules required by each candidate (plus existing mandatory common modules), preserving the bounded Model-C batching/ordered dependency behavior.
+- Preserve adaptive scheduling, final budgets and per-stage cancellation/restore; **never form a blind Cartesian product of all installed resources**.
+- Do not alter existing user-authored strategies, Voice Transmission settings or HOSTLIST/IPSET values; the historical strategies predate this catalog and remain independent of installing it.
+
+Implementation, installed-package acceptance and release require separate changes. This requirement is documentation-only and does not claim that the GUI button or expanded search works today.
+
 ## Voice UDP/STUN — approved product scope (2026-10-08)
 
 Implement the native **«Передача голоса»** page now, between Strategies and Laboratory, using the same native form design. It provides one Voice WAN selector, per-service enable checkbox and multiline parameters, and separate shared IPv4/CIDR IPSET fields for **Telegram, Discord, X (Twitter), SIP (VoIP), Custom**. No LAN selector or local-UDP/boot-restore toggles: matching local and forwarded outgoing UDP are included, and the saved selection restores through normal Zapret2 startup. Global service OFF remains respected. Exact UI, native input context, parameter capabilities, migration and acceptance live in [VOICE_TRANSMISSION_GUI.md](architecture/VOICE_TRANSMISSION_GUI.md).
