@@ -458,8 +458,20 @@ install_runtime()
     echo "${_completion_message}"
 }
 
+extra_resources_require_transaction()
+{
+    # Direct setup.sh must not bypass setup_transaction.sh's managed-resource
+    # snapshot/rollback. The internal parent-locked mode is used by that wrapper.
+    if [ -e "${STATE_DIR}/extra-resources/installed.json" ] ||
+       [ -L "${STATE_DIR}/extra-resources/installed.json" ]; then
+        echo "ERROR: installed extra resources require setup_transaction.sh; direct setup.sh installation is unsafe" >&2
+        return 75
+    fi
+}
+
 run_locked()
 {
+    extra_resources_require_transaction || return $?
     _zapret_ref="$1"
     mkdir -p "${STATE_DIR}" "${RUN_DIR}"
     "${LOCKF_BIN}" -s -t 30 "${LOCK_FILE}" "$0" install-locked "${_zapret_ref}"
@@ -511,6 +523,7 @@ main()
             install_runtime "${_zapret_ref}"
             ;;
         install-locked)
+            extra_resources_require_transaction || return $?
             [ "$#" -eq 2 ] || {
                 usage_error "internal install mode requires one VERSION"
                 return $?

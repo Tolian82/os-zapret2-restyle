@@ -130,6 +130,12 @@ extra_resources_upstream_guard()
 
 prepare_rollback()
 {
+    # A previous interrupted upgrade may still own backups. Never erase its
+    # rollback evidence before explicit audited recovery.
+    if [ -e "${ROLLBACK_DIR}" ] || [ -L "${ROLLBACK_DIR}" ]; then
+        echo "ERROR: RECOVERY_REQUIRED: previous upstream rollback snapshot exists: ${ROLLBACK_DIR}" >&2
+        return 69
+    fi
     PREVIOUS_COMMIT=""
     PREVIOUS_RELEASE=""
     PREVIOUS_BINARIES=0
@@ -143,7 +149,6 @@ prepare_rollback()
         PREVIOUS_COMMIT=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null || true)
     fi
 
-    rm -rf "${ROLLBACK_DIR}"
     mkdir -p "${ROLLBACK_DIR}"
 
     if [ -d "${ZAPRET_DIR}/binaries/my" ]; then
@@ -231,6 +236,9 @@ rollback_runtime()
         return 1
     fi
 
+    # Retain backups on any failed verification above; remove them only after
+    # the previous checkout AND native service state were fully restored.
+    rm -rf "${ROLLBACK_DIR}" || return 1
     status_write "failed"
     echo "Previous bol-van/zapret2 runtime and service state restored."
     return 0
@@ -267,10 +275,9 @@ install_transaction()
     fi
 
     prepare_rollback || {
-        # No upstream mutation has started. An incomplete extra-managed backup
-        # must not poison a later retry.
-        rm -rf "${ROLLBACK_DIR}"
-        echo "ERROR: rollback state could not be prepared" >&2
+        # Do not destroy a previous interrupted snapshot or partial evidence.
+        # An operator must review/recover it explicitly.
+        echo "ERROR: rollback state could not be prepared; preserve all evidence" >&2
         return 1
     }
 

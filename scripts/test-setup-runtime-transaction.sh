@@ -194,5 +194,19 @@ run_transaction v1.0.3 >/dev/null
 [ "$(stat -c %a "${ZAPRET_DIR}/files/fake/test.bin")" = 644 ] || fail "successful blob permissions were not normalized"
 [ ! -e "${ROLLBACK_DIR}" ] || fail "successful activation retained rollback data"
 
+# Power-loss evidence from an interrupted upstream upgrade is never deleted
+# simply to prepare a new operation. No changes to Git/service may occur.
+mkdir -p "${ROLLBACK_DIR}"
+printf '%s\n' protected > "${ROLLBACK_DIR}/pending-recovery"
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+before_service=$(cat "${SERVICE_STATE}")
+run_transaction v1.0.3 >/dev/null 2>&1 && fail "pending rollback evidence was overwritten"
+[ "$(cat "${ROLLBACK_DIR}/pending-recovery")" = protected ] ||
+    fail "pending recovery evidence was lost"
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] ||
+    fail "blocked setup changed Git checkout"
+[ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] ||
+    fail "blocked setup changed service state"
+
 sh -n "${TRANSACTION}"
 echo "PASS: transactional runtime release activation and rollback"
