@@ -110,6 +110,101 @@ class ServiceController extends ApiMutableServiceControllerBase
         return $state;
     }
 
+    /**
+     * Read-only status of manually installed Lua/BIN resources. No service
+     * restarts or downloads are made by the status endpoint.
+     */
+    private function getExtraResourceState(Backend $backend): array
+    {
+        $response = trim((string)$backend->configdRun('zapret extra_resources_status', false, 20));
+        $state = [
+            'busy' => false,
+            'phase' => 'unknown',
+            'revision' => '',
+            'lua' => 0,
+            'bin' => 0,
+            'detail' => '',
+        ];
+        foreach (preg_split('/\R/u', $response) as $line) {
+            if (!preg_match('/^([a-z]+)=(.*)$/D', trim($line), $matches)) {
+                continue;
+            }
+            $value = $matches[2];
+            switch ($matches[1]) {
+                case 'busy':
+                    $state['busy'] = $value === '1';
+                    break;
+                case 'phase':
+                    if (in_array($value, [
+                        'unknown', 'downloading', 'verifying', 'installing',
+                        'ready', 'failed', 'restore_failed', 'recovery_required',
+                        'recovering', 'restored', 'no_recovery_needed'
+                    ], true)) {
+                        $state['phase'] = $value;
+                    }
+                    break;
+                case 'revision':
+                    if ($value === '' || preg_match('/^[a-f0-9]{40}$/D', $value)) {
+                        $state['revision'] = $value;
+                    }
+                    break;
+                case 'lua':
+                case 'bin':
+                    if (preg_match('/^[0-9]{1,5}$/D', $value) && (int)$value <= 10000) {
+                        $state[$matches[1]] = (int)$value;
+                    }
+                    break;
+                case 'detail':
+                    $state['detail'] = substr($value, 0, 300);
+                    break;
+            }
+        }
+        return $state;
+    }
+
+    public function resourcesStatusAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+        try {
+            return array_merge(['status' => 'ok'], $this->getExtraResourceState(new Backend()));
+        } catch (\Throwable $exception) {
+            return ['status' => 'unavailable', 'busy' => true, 'phase' => 'unknown'];
+        }
+    }
+
+    public function resourcesInstallAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        $backend = new Backend();
+        $runtime = $this->getRuntimeState($backend);
+        $extras = $this->getExtraResourceState($backend);
+        if (!$runtime['installed'] || $runtime['service'] !== 'started' ||
+            $runtime['busy'] || $extras['busy'] ||
+            in_array($extras['phase'], ['restore_failed', 'recovery_required'], true)) {
+            throw new UserException(
+                gettext('Start Zapret2 and finish any pending runtime operation or recovery first.'),
+                gettext('Additional Resources unavailable')
+            );
+        }
+
+        $response = trim((string)$backend->configdpRun(
+            'zapret extra_resources_install', [], false, 30
+        ));
+        if ($response !== 'OK') {
+            throw new UserException(
+                gettext('The Additional Resources installation could not be started.'),
+                gettext('Additional Resources error')
+            );
+        }
+
+        return ['status' => 'ok', 'started' => true];
+    }
+
     public function releasesAction(): array
     {
         if (!$this->request->isPost()) {

@@ -50,6 +50,30 @@
                 ? 'Результат применения неизвестен. Перезагрузите страницу и проверьте состояние службы и настроек перед повтором.'
                 : 'Apply result is uncertain. Reload the page and inspect the service and settings before retrying.'
         };
+        const extrasText = {
+            install: isRussian ? 'Установить дополнительные ресурсы' : 'Install Additional Resources',
+            firstStart: isRussian ? 'Сначала запустите Zapret2' : 'Start Zapret2 first',
+            unavailable: isRussian ? 'Состояние ресурсов недоступно' : 'Resource status unavailable',
+            notInstalled: isRussian ? 'Дополнительные ресурсы не установлены' : 'Additional Resources not installed',
+            downloading: isRussian ? 'Загрузка ресурсов…' : 'Downloading resources…',
+            verifying: isRussian ? 'Проверка файлов…' : 'Verifying resources…',
+            installing: isRussian ? 'Установка и перезапуск Zapret2…' : 'Installing and restarting Zapret2…',
+            recovering: isRussian ? 'Восстановление после ошибки…' : 'Restoring previous resources…',
+            failed: isRussian ? 'Не удалось установить ресурсы' : 'Resource installation failed',
+            restoreFailed: isRussian ? 'Не удалось восстановить прежнее состояние' : 'Previous state could not be restored',
+            review: isRussian ? 'Требуется проверка результата перед повторной попыткой' :
+                'Review the previous result before trying again',
+            ready: isRussian ? 'Установлено' : 'Installed',
+            lua: 'Lua', bin: 'BIN',
+            log: '/var/log/zapret2/extra-resources.log'
+        };
+        let extraPoll = null;
+        let extraPollAttempts = 0;
+        let extraStateKnown = false;
+        let extraBusy = false;
+        let extraInstallPending = false;
+        let extraObservedBusy = false;
+        let extraNeedsReview = false;
         let runtimePoll = null;
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
@@ -114,7 +138,8 @@
             // Controls must stay locked for both operations, but each Apply
             // button owns only its own spinner.
             const controlsBusy = !!busy || releaseApplyPending ||
-                strategiesApplyPending || strategiesApplyNeedsReview;
+                strategiesApplyPending || strategiesApplyNeedsReview ||
+                extraBusy || extraInstallPending || extraNeedsReview;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
             }).length > 0;
@@ -124,8 +149,18 @@
             $('#zapretServiceControl').prop('disabled', controlsBusy || !serviceControllable);
             $('#zapretReleaseSelect').prop('disabled', controlsBusy || !releaseAvailable);
             $('#zapretReleaseApply').prop('disabled', controlsBusy || !releaseAvailable);
+            // Lower Strategies Apply is a separate action/spinner, but must
+            // never compete with an Additional Resources lifecycle transaction.
+            $('#reconfigureAct').prop('disabled', controlsBusy);
             $('#zapretReleaseApplyText').text(releaseApplyPending ? runtimeText.applying : runtimeText.apply);
             $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', releaseApplyPending);
+            const extrasAllowed = currentRuntimeInstalled && currentServiceState === 'started' &&
+                extraStateKnown && !controlsBusy;
+            $('#zapretExtraInstall').prop('disabled', !extrasAllowed);
+            $('#zapretExtraInstall').attr('title', currentServiceState === 'stopped'
+                ? extrasText.firstStart : (extraNeedsReview ? extrasText.review : extrasText.install));
+            $('#zapretExtraProgress').toggleClass('fa fa-spinner fa-pulse',
+                extraBusy || extraInstallPending);
         }
 
         function reconcileStrategiesApplyControls() {
@@ -238,12 +273,102 @@
             });
         }
 
+        function extrasLabel(data) {
+            const phase = data && data.phase || 'unknown';
+            if (phase === 'ready' && !(data && data.busy)) {
+                const revision = /^[a-f0-9]{40}$/.test(data.revision || '') ?
+                    ' · ' + data.revision.slice(0, 12) : '';
+                return extrasText.ready + ': Lua ' + (data.lua || 0) +
+                    ', BIN ' + (data.bin || 0) + revision;
+            }
+            switch (phase) {
+                case 'downloading': return extrasText.downloading;
+                case 'verifying': return extrasText.verifying;
+                case 'installing': return extrasText.installing;
+                case 'recovering': return extrasText.recovering;
+                case 'failed': return extrasText.failed + ' · ' + extrasText.log;
+                case 'restore_failed': return extrasText.restoreFailed + ' · ' + extrasText.log;
+                case 'recovery_required': return extrasText.review + ' · ' + extrasText.log;
+                default: return extrasText.notInstalled;
+            }
+        }
+
+        function stopExtrasPolling() {
+            if (extraPoll !== null) {
+                window.clearInterval(extraPoll);
+                extraPoll = null;
+            }
+            extraPollAttempts = 0;
+        }
+
+        function renderExtras(data) {
+            if (!data || data.status !== 'ok') {
+                extraStateKnown = false;
+                extraNeedsReview = true;
+                extraBusy = false;
+                $('#zapretExtraState').text(extrasText.unavailable);
+                stopExtrasPolling();
+                setRuntimeBusy(runtimeWasBusy);
+                return;
+            }
+
+            extraStateKnown = true;
+            extraBusy = !!data.busy;
+            extraObservedBusy = extraObservedBusy || extraBusy;
+            if (['restore_failed', 'recovery_required'].indexOf(data.phase) >= 0) {
+                extraNeedsReview = true;
+            }
+            $('#zapretExtraState').text(extrasLabel(data));
+            if (extraInstallPending && !extraBusy && extraObservedBusy) {
+                extraInstallPending = false;
+                if (data.phase !== 'ready') {
+                    extraNeedsReview = true;
+                }
+                refreshRuntime();
+            }
+            if (extraInstallPending || extraBusy) {
+                if (extraPoll === null) {
+                    extraPollAttempts = 0;
+                    extraPoll = window.setInterval(refreshExtrasStatus, 2000);
+                }
+            } else {
+                stopExtrasPolling();
+            }
+            setRuntimeBusy(runtimeWasBusy);
+        }
+
+        function refreshExtrasStatus() {
+            if (++extraPollAttempts > 300) {
+                extraNeedsReview = true;
+                extraInstallPending = false;
+                extraBusy = false;
+                stopExtrasPolling();
+                $('#zapretExtraState').text(extrasText.review + ' · ' + extrasText.log);
+                setRuntimeBusy(runtimeWasBusy);
+                return;
+            }
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/service/resourcesStatus',
+                dataType: 'json',
+                timeout: 15000
+            }).done(renderExtras).fail(function() {
+                extraStateKnown = false;
+                extraNeedsReview = true;
+                extraBusy = false;
+                stopExtrasPolling();
+                $('#zapretExtraState').text(extrasText.unavailable);
+                setRuntimeBusy(runtimeWasBusy);
+            });
+        }
+
         $('#zapretServiceTitle').text(runtimeText.title);
         $('#zapretRepositoryReleasesLabel').text(runtimeText.repositoryReleases);
 
         $('#zapretServiceControl').off('click').on('click', function(event) {
             event.preventDefault();
             if (strategiesApplyPending || strategiesApplyNeedsReview || runtimeWasBusy ||
+                extraBusy || extraInstallPending || extraNeedsReview ||
                 (currentServiceState !== 'started' && currentServiceState !== 'stopped')) {
                 return;
             }
@@ -268,7 +393,8 @@
             event.preventDefault();
             const version = $('#zapretReleaseSelect').val();
             if (!version || runtimeWasBusy || releaseApplyPending ||
-                strategiesApplyPending || strategiesApplyNeedsReview) {
+                strategiesApplyPending || strategiesApplyNeedsReview ||
+                extraBusy || extraInstallPending || extraNeedsReview) {
                 return;
             }
 
@@ -291,15 +417,50 @@
             });
         });
 
+        $('#zapretExtraInstallText').text(extrasText.install);
+        $('#zapretExtraState').text(extrasText.notInstalled);
+        $('#zapretExtraInstall').off('click').on('click', function(event) {
+            event.preventDefault();
+            if (!extraStateKnown || extraBusy || extraInstallPending || extraNeedsReview ||
+                runtimeWasBusy || releaseApplyPending || strategiesApplyPending ||
+                strategiesApplyNeedsReview || currentServiceState !== 'started') {
+                return;
+            }
+            extraInstallPending = true;
+            extraObservedBusy = false;
+            setRuntimeBusy(true);
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/service/resourcesInstall',
+                dataType: 'json',
+                timeout: 30000
+            }).done(function(data) {
+                if (!data || data.status !== 'ok' || !data.started) {
+                    extraNeedsReview = true;
+                    extraInstallPending = false;
+                    $('#zapretExtraState').text(extrasText.failed);
+                }
+                refreshExtrasStatus();
+            }).fail(function() {
+                extraInstallPending = false;
+                extraNeedsReview = true;
+                $('#zapretExtraState').text(extrasText.failed + ' · ' + extrasText.log);
+                refreshRuntime();
+            });
+        });
+
         reloadSettings();
         refreshRuntime();
         refreshReleases();
+        refreshExtrasStatus();
 
         // One original-FD9 Apply, same result handling as Voice. A network
         // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
-            if (strategiesApplyPending || strategiesApplyNeedsReview) return;
+            if (strategiesApplyPending || strategiesApplyNeedsReview ||
+                extraBusy || extraInstallPending || extraNeedsReview || runtimeWasBusy ||
+                releaseApplyPending) return;
             strategiesApplyPending = true;
             reconcileStrategiesApplyControls();
 
@@ -446,6 +607,17 @@
                                 <span id="zapretReleaseApplyText">{{ lang._("Apply") }}</span>
                                 <i id="zapretReleaseApplyProgress"></i>
                             </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="3">
+                        <div id="zapretExtraResourcesLine" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <button class="btn btn-default" id="zapretExtraInstall" type="button" disabled>
+                                <span id="zapretExtraInstallText">Install Additional Resources</span>
+                                <i id="zapretExtraProgress"></i>
+                            </button>
+                            <span id="zapretExtraState" role="status" aria-live="polite"></span>
                         </div>
                     </td>
                 </tr>

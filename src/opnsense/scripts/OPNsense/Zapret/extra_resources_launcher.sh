@@ -29,23 +29,39 @@ case "$MODE" in
     status)
         _busy=0
         pid_live "$PID_FILE" && _busy=1
-        _phase=unknown
+        # Whitelisted, newline-free metadata only. Never expose arbitrary
+        # status-file contents as shell assignments or render HTML from them.
         if [ -r "$STATUS" ] && [ ! -L "$STATUS" ]; then
-            _phase=$("$PYTHON_BIN" -c '
-import json,sys
+            "$PYTHON_BIN" -c '
+import json,re,sys
 try:
  x=json.load(open(sys.argv[1],encoding="utf-8"))
- p=x.get("phase","unknown")
- if isinstance(p,str) and p in {
-    "downloading","verifying","installing","ready","failed",
-    "restore_failed","recovery_required","recovering","restored",
-    "no_recovery_needed"}:
-  print(p)
- else: print("unknown")
-except Exception: print("unknown")
-' "$STATUS" 2>/dev/null) || _phase=unknown
+ phase=x.get("phase","unknown")
+ phases={"downloading","verifying","installing","ready","failed",
+         "restore_failed","recovery_required","recovering","restored",
+         "no_recovery_needed"}
+ if phase not in phases: phase="unknown"
+ revision=x.get("source_commit") or x.get("revision") or ""
+ if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{40}",revision):
+  revision=""
+ def count(k):
+  value=x.get(k)
+  return value if type(value) is int and 0<=value<=10000 else 0
+ detail=x.get("detail","")
+ if not isinstance(detail,str): detail=""
+ detail=re.sub(r"[\r\n\x00-\x1f]"," ",detail)[:300]
+ print("phase="+phase)
+ print("revision="+revision)
+ print("lua="+str(count("lua")))
+ print("bin="+str(count("bin")))
+ print("detail="+detail)
+except Exception:
+ print("phase=unknown")
+' "$STATUS" 2>/dev/null || printf 'phase=unknown\n'
+        else
+            printf 'phase=unknown\n'
         fi
-        printf 'busy=%s\nphase=%s\n' "$_busy" "$_phase"
+        printf 'busy=%s\n' "$_busy"
         ;;
     install|recover)
         [ "$#" -eq 1 ] || exit 64
