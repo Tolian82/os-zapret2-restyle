@@ -56,6 +56,15 @@ assert "UDP: порт 3478; payload 140 байт; endpoints 203.0.113.10" in ru8
 assert "контрольный ответ не получен (это не означает, что порт закрыт)" in ru80
 assert "проверено стратегий 2 [udp-ipfrag-8, udp-ipfrag-16]" in ru80
 assert "QUIC: 4 strategies tested" in en80
+partial = dict(quic, status="incomplete_budget",
+    incompatible=[{"id":"unsupported-blob","reason":"missing resource"}],
+    deferred=[{"id":"quic-fake-5","reason":"insufficient_remaining_budget"}])
+partial_ru = protocol_presentation.stage80_message("ru", partial, udp)
+partial_en = protocol_presentation.stage80_message("en", partial, udp)
+assert "частично выполнена" in partial_ru and "отложенные по бюджету 1 [quic-fake-5]" in partial_ru
+assert "partially completed" in partial_en and "budget-deferred 1 [quic-fake-5]" in partial_en
+assert "несовместимые 1 [unsupported-blob]" in partial_ru
+
 assert "no control reply observed (this does not mean the port is closed)" in en80
 assert "not_found" not in ru80 and "skipped" not in ru80
 assert "not_found" not in en80 and "skipped" not in en80

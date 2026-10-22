@@ -7,10 +7,12 @@ import os
 import re
 import sys
 import tempfile
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate, endpoint_epoch, request, search
+from . import candidate, candidate_spec, endpoint_epoch, request, resources, search
 
 EX_OK = 0
 EX_USAGE = 64
@@ -213,6 +215,68 @@ def tcp(job_id: str, endpoints_file: str, result_file: str) -> int:
     return EX_OK
 
 
+
+# No change to top-level Stage-80 or overall budgets. The three runner calls
+# must fit before a follow-up/replay/cleanup reserve, otherwise defer the
+# candidate without claiming it was tested.
+QUIC_LAUNCHER_OVERHEAD_SECONDS = 2
+QUIC_FOLLOWUP_RESERVE_SECONDS = 20
+
+
+def _quic_deadline(job_id: str) -> float | None:
+    """The earliest job or operation deadline, translated to monotonic time."""
+    remaining: list[float] = []
+    raw = os.environ.get("STRATEGY_LAB_OPERATION_TIMEOUT", "").strip()
+    if raw:
+        try:
+            seconds = float(raw)
+        except ValueError as exc:
+            raise RuntimeError("invalid Strategy Lab QUIC operation timeout") from exc
+        if not 0 < seconds < float("inf"):
+            raise RuntimeError("invalid Strategy Lab QUIC operation timeout")
+        remaining.append(seconds)
+    status_path = job_dir(job_id) / "status.json"
+    if status_path.is_file():
+        status = _load_json(status_path)
+        for name in ("stage80_deadline_at", "deadline_at"):
+            value = status.get(name)
+            if not isinstance(value, str) or not value:
+                continue
+            try:
+                deadline = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise RuntimeError(f"invalid Strategy Lab {name}") from exc
+            if deadline.tzinfo is None:
+                raise RuntimeError(f"unqualified Strategy Lab {name}")
+            remaining.append(deadline.timestamp() - time.time())
+    if not remaining:
+        return None  # Unit-level calls; production provides a Stage-80 deadline.
+    return time.monotonic() + min(remaining)
+
+
+def _quic_incompatible(
+    candidate_id: str, family: str, hostlist: str, strategy: str, job_id: str,
+) -> str | None:
+    """Check canonical CandidateSpec and resource availability before execution."""
+    try:
+        spec = candidate_spec.CandidateSpec.from_strategy(
+            candidate_id=candidate_id, family=family, protocol="quic",
+            transport="udp", port=443, l7="quic", strategy=strategy,
+            target_binding=hostlist == "1",
+        )
+    except candidate_spec.CandidateSpecError as exc:
+        return str(exc)
+    external = [req for req in spec.blob_requirements if req.resource_class == "external"]
+    if external:
+        try:
+            inventory = resources.ensure_job_inventory(job_dir(job_id))
+            for requirement in external:
+                inventory.external_blob_path(requirement.filename or requirement.name)
+        except resources.ResourceInventoryError as exc:
+            return str(exc)
+    return None
+
+
 def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) -> int:
     if not JOB_RE.fullmatch(job_id):
         return EX_USAGE
@@ -231,6 +295,9 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
         "status": "pending",
         "tested": [],
         "working": None,
+        "incompatible": [],
+        "deferred": [],
+        "catalog_total": 0,
     }
     _atomic_json(output, result)
 
@@ -262,17 +329,39 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
     catalog_path = Path(os.environ.get("STRATEGY_LAB_QUIC_CATALOG", str(module_dir() / "catalog/quic.tsv")))
     args_dir = Path(os.environ.get("STRATEGY_LAB_QUIC_ARGS_DIR", str(module_dir() / "catalog/quic")))
     rows = _catalog(catalog_path, 4)
+    if len({entry[0] for entry in rows}) != len(rows):
+        raise RuntimeError("Strategy Lab QUIC catalog has duplicate candidate IDs")
+    result["catalog_total"] = len(rows)
+    _atomic_json(output, result)
     runner = _runner("STRATEGY_LAB_QUIC_CANDIDATE_RUNNER")
     timeout = _timeout("STRATEGY_LAB_QUIC_CANDIDATE_TIMEOUT")
+    deadline = _quic_deadline(job_id)
+    admission_seconds = 3 * (timeout + QUIC_LAUNCHER_OVERHEAD_SECONDS) + QUIC_FOLLOWUP_RESERVE_SECONDS
     work = job_dir(job_id) / "quic"
     work.mkdir(parents=True, exist_ok=True)
 
-    for candidate_id, family, hostlist, args_name in rows:
+    for index, (candidate_id, family, hostlist, args_name) in enumerate(rows):
         if search._cancel_requested(job_id):
             return EX_CANCEL
         strategy_path = args_dir / args_name
         if not strategy_path.is_file():
             raise RuntimeError(f"Strategy Lab QUIC args are unavailable: {strategy_path}")
+        reason = _quic_incompatible(
+            candidate_id, family, hostlist, strategy_path.read_text(encoding="utf-8"), job_id
+        )
+        if reason is not None:
+            result["incompatible"].append({"id": candidate_id, "reason": reason})
+            _atomic_json(output, result)
+            continue
+        remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+        if remaining is not None and remaining < admission_seconds:
+            result["deferred"] = [
+                {"id": entry[0], "reason": "insufficient_remaining_budget"}
+                for entry in rows[index:]
+            ]
+            result["status"] = "incomplete_budget"
+            _atomic_json(output, result)
+            return EX_OK
         attempts: list[dict[str, Any]] = []
         for attempt in range(1, 4):
             if search._cancel_requested(job_id):
