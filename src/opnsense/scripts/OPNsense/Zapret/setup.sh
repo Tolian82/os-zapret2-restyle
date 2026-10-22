@@ -22,6 +22,8 @@ PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 FIND_BIN="${FIND_BIN:-/usr/bin/find}"
 ENABLED_FREEBSD_REPO=0
+EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
 
 set -eu
 
@@ -315,6 +317,18 @@ REPO_EOF
     fi
 }
 
+extra_resources_upstream_guard()
+{
+    [ -f "${STATE_DIR}/extra-resources/installed.json" ] ||
+        [ -L "${STATE_DIR}/extra-resources/installed.json" ] || return 0
+    [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] || {
+        echo "ERROR: additional resource preservation guard is unavailable" >&2
+        return 69
+    }
+    ZAPRET_DIR="${ZAPRET_DIR}" STATE_DIR="${STATE_DIR}" GIT_BIN="$(command -v git)" \
+        "${EXTRA_PYTHON}" "${EXTRA_GUARD}" "$@"
+}
+
 install_runtime()
 {
     _zapret_ref="$1"
@@ -366,10 +380,20 @@ install_runtime()
     if [ -d "${ZAPRET_DIR}/.git" ]; then
         echo "Checking out bol-van/zapret2 ${_zapret_ref}..."
         git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${_zapret_ref}"
+        extra_resources_upstream_guard preflight FETCH_HEAD || {
+            status_write "failed"
+            return 1
+        }
         git -C "${ZAPRET_DIR}" checkout --detach FETCH_HEAD
         git -C "${ZAPRET_DIR}" reset --hard FETCH_HEAD
     else
         echo "Downloading bol-van/zapret2 ${_zapret_ref}..."
+        [ ! -e "${STATE_DIR}/extra-resources/installed.json" ] &&
+        [ ! -L "${STATE_DIR}/extra-resources/installed.json" ] || {
+            echo "ERROR: installed extra resources require the existing tracked runtime" >&2
+            status_write "failed"
+            return 1
+        }
         rm -rf "${ZAPRET_DIR}"
         git clone --depth 1 --branch "${_zapret_ref}" "${ZAPRET_REPO}" "${ZAPRET_DIR}"
     fi
@@ -377,6 +401,12 @@ install_runtime()
     echo "Compiling zapret2 runtime..."
     make -C "${ZAPRET_DIR}" clean >/dev/null 2>&1 || true
     make -C "${ZAPRET_DIR}"
+
+    extra_resources_upstream_guard verify || {
+        status_write "failed"
+        echo "ERROR: managed Additional Resources changed during upstream setup" >&2
+        return 1
+    }
 
     [ -x "${ZAPRET_DIR}/binaries/my/dvtws2" ] || {
         status_write "failed"
@@ -470,6 +500,15 @@ main()
         refresh-releases-locked)
             [ "$#" -eq 1 ] || return 64
             refresh_release_cache_locked
+            ;;
+        install-under-parent-lock)
+            [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || {
+                echo "ERROR: missing setup transaction lock owner" >&2
+                return 75
+            }
+            [ "$#" -le 2 ] || return 64
+            _zapret_ref=$(resolve_release "${2:-}") || return $?
+            install_runtime "${_zapret_ref}"
             ;;
         install-locked)
             [ "$#" -eq 2 ] || {

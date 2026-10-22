@@ -16,6 +16,11 @@ ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE:-${STATE_DIR}/runtime.release}"
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 MODE="${1:-install}"
 VERSION="${2:-}"
+RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
+LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
+SETUP_LOCK_FILE="${SETUP_LOCK_FILE:-${RUN_DIR}/setup.lock}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
 
 set -eu
 umask 022
@@ -110,6 +115,19 @@ configctl_exact_ok()
     return 0
 }
 
+extra_resources_upstream_guard()
+{
+    [ -f "${STATE_DIR}/extra-resources/installed.json" ] ||
+        [ -L "${STATE_DIR}/extra-resources/installed.json" ] || return 0
+    [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] || {
+        echo "ERROR: managed resource recovery guard unavailable" >&2
+        return 69
+    }
+    ZAPRET_DIR="${ZAPRET_DIR}" STATE_DIR="${STATE_DIR}" \
+    ROLLBACK_DIR="${ROLLBACK_DIR}" GIT_BIN="${GIT_BIN}" \
+        "${EXTRA_PYTHON}" "${EXTRA_GUARD}" "$@"
+}
+
 prepare_rollback()
 {
     PREVIOUS_COMMIT=""
@@ -134,6 +152,7 @@ prepare_rollback()
         PREVIOUS_BINARIES=1
     fi
 
+    extra_resources_upstream_guard snapshot || return 1
     return 0
 }
 
@@ -153,6 +172,7 @@ restore_previous_checkout()
     fi
 
     normalize_runtime_permissions || return 1
+    extra_resources_upstream_guard restore || return 1
     return 0
 }
 
@@ -247,6 +267,9 @@ install_transaction()
     fi
 
     prepare_rollback || {
+        # No upstream mutation has started. An incomplete extra-managed backup
+        # must not poison a later retry.
+        rm -rf "${ROLLBACK_DIR}"
         echo "ERROR: rollback state could not be prepared" >&2
         return 1
     }
@@ -259,13 +282,13 @@ install_transaction()
     }
 
     if [ -n "${VERSION}" ]; then
-        if "${SETUP_SCRIPT}" install "${VERSION}"; then
+        if "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
             _setup_result=0
         else
             _setup_result=$?
         fi
     else
-        if "${SETUP_SCRIPT}" install; then
+        if "${SETUP_SCRIPT}" install-under-parent-lock; then
             _setup_result=0
         else
             _setup_result=$?
@@ -276,6 +299,13 @@ install_transaction()
         normalize_runtime_permissions || {
             status_write "failed"
             echo "ERROR: installed runtime permissions could not be normalized" >&2
+            rollback_runtime || true
+            return 1
+        }
+
+        extra_resources_upstream_guard verify || {
+            status_write "failed"
+            echo "ERROR: resource integrity lost after upstream refresh" >&2
             rollback_runtime || true
             return 1
         }
@@ -318,6 +348,19 @@ case "${MODE}" in
             echo "ERROR: invalid release version: ${VERSION}" >&2
             exit 64
         fi
+        mkdir -p "${RUN_DIR}"
+        [ -x "${LOCKF_BIN}" ] || {
+            echo "ERROR: setup lock utility unavailable" >&2
+            exit 69
+        }
+        "${LOCKF_BIN}" -s -t 600 "${SETUP_LOCK_FILE}" \
+            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 "$0" install-under-parent-lock "${VERSION}"
+        ;;
+    install-under-parent-lock)
+        [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || {
+            echo "ERROR: setup transaction was invoked without its setup.lock" >&2
+            exit 75
+        }
         install_transaction
         ;;
     *)
