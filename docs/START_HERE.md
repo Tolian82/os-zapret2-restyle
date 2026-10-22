@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.7_6`. `VERSION=0.5.7`, `PLUGIN_REVISION=6`. **Development: read-only extra-resource preflight in source; no package or full release has been published for this candidate.** Previous owner authorization for a full Web/pkg release applied to the earlier prepared candidate and remains separately pending from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-installed testing asset was `v0.5.6_17`. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
+**Current handoff identity:** `v0.5.7_7`. `VERSION=0.5.7`, `PLUGIN_REVISION=7`. **Development: read-only extra-resource preflight in source; no package or full release has been published for this candidate.** Previous owner authorization for a full Web/pkg release applied to the earlier prepared candidate and remains separately pending from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-installed testing asset was `v0.5.6_17`. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
 
 **Release preparation:** bundle [RU/EN Result summary correction](patches/v0.5.6_18.md), [independent upper/lower Strategies Apply indicators](patches/v0.5.6_19.md), verified owner-accepted Strategy Lab Stages 1–6, the [README capability audit](../README.md), star invitation and [lexiforest upstream attribution](../CONTRIBUTORS.md). Pre-release source/FreeBSD CI and full Web/pkg publication must PASS before declaring release success. This is not proof of owner-installed `v0.5.7_1` GUI operation.
 
@@ -13,17 +13,27 @@ On 22 October 2026 the owner instructed implementation of the approved
 The source catalog Stage 1 descriptor/validation foundation is merged at
 [`ccdd8fae`](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2),
 with [catalog CI success](https://github.com/Tolian82/zapret2-extra-resources/actions/runs/39830826402).
-The descriptors are data, **not** an implemented plugin installer or search integration.
-Stage 2 now has a read-only source preflight (revision pin, verified catalog bytes,
-manifest/capability check, managed-file drift and upstream/user collision refusal);
-the plugin code revision advanced to `v0.5.7_3`. The managed-file transaction now has a source-wired manually launched native backend: the launcher holds setup.lock before entering original FD9, calls existing native Strategy Lab stop/start callbacks and checks replacement PIDs. No GUI button, owner-installed proof or full upstream-retention protection exists yet. This is an incomplete Stage-2 candidate, **not** a production-ready installer. The preflight is callable through the
-`zapret extra_resources_preflight` configd action, but is NOT a file installer,
-transaction, service restart, GUI control, or packaged/installed proof.
+The external catalog descriptors remain *data*, not an executable strategy list.
+Plugin development through `v0.5.7_7` now includes immutable-commit catalog
+verification, managed Lua/BIN transaction/rollback, manually invoked asynchronous
+configd backend under setup.lock → original FD9, process-replacement proof,
+upstream file-collision/retention guards, and the source-wired bilingual Settings
+button directly below Status. It uses explicit POST install/status actions and
+finite polling. No automatic resource fetch occurs on pkg/upstream updates,
+normal service startup, or page load.
 
-**Current single next action:** finish Stage 2 with safety proof: the source now refuses direct setup.sh install when extras exist, so updates must use the transaction; a leftover upstream rollback snapshot is explicitly RECOVERY_REQUIRED and is no longer erased at the next install attempt. Confirm the source/FreeBSD regression gates and plan a bounded manual recovery mechanism for interrupted upstream setup (the snapshot alone is NOT automatic recovery). Installed native restart, GUI and Strategy Lab dynamic candidates remain unverified/unimplemented.
-The source-only preflight is NOT eligible to report installation success. Do not display or enable the GUI
-button before the backend truly implements the contract. Keep automatic
-resource download disabled.
+**Acceptance boundary:** The source GUI is **not owner-tested on installed OPNsense**;
+neither the native restart nor complete power-failure recovery of the upstream
+release transaction has live proof. An interrupted upstream setup leaves a
+RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy Lab
+dynamic executable candidate generation from these files is still pending.
+Do not claim that a CI-built package is a released/installed feature.
+
+**Current single next action:** finish source/FreeBSD GUI gate, then validate
+manual install, real Stop → Start/PID replacement, errors, F5 and RU/EN on the
+owner's OPNsense. Complete bounded upstream recovery, then integrate the
+dynamic Lua/BIN capability descriptors into fresh Strategy Lab jobs without
+hardcoding resource names.
 
 **Release boundary:** The prior owner-authorized `v0.5.7_1` full release
 remains pending its own exact-head publication checks. This new owner-directed

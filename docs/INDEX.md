@@ -18,7 +18,7 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
-- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_6 with source-wired native Stop→Start, shared upstream preservation guard and fail-closed direct-install/pending-rollback protection; installed acceptance and GUI still pending.
+- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_7 with source-wired native Stop→Start, shared upstream preservation guard, fail-closed direct-install/pending-rollback protection and bilingual manual Settings-page GUI; installed acceptance and GUI still pending.
 - [Additional Resources normative specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — manual GUI, transaction/restart and fully dynamic new-Job candidate generation; not yet implemented in the plugin.
 
 ## Earlier v0.5.x release preparation, v0.5.7
