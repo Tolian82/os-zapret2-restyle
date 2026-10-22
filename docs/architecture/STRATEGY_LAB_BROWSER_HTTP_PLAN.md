@@ -18,6 +18,12 @@
 **Audited restyle source:** `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
 **Execution boundary:** This document specifies requirements and order. Source changes and packages start only on a separate implementation instruction from the owner. It does not authorize a stable release.
 
+## Owner decision: unified ECH-disabled Chrome probes (23 October 2026)
+
+The owner reproduced a controlled A/B test on OPNsense: private Chrome-profile `curl-impersonate` with ECH enabled timed out against `rutracker.org` on pinned IPv4 `104.21.32.39`; the same client, IP and timeout with `--ech false` completed TLS 1.3, verified certificate and HTTP/2 301 in approximately 1.17 seconds. This demonstrates that ECH is the decisive tested client-setting difference; it does **not** identify which middlebox drops ECH traffic or prove that all browsers behave identically.
+
+The accepted production policy is simple and global: the **single private Chrome launcher** must append `--ech false` to every request. This covers the top-level Domain Connectivity check, Strategy Lab direct probes, Standard and Extended family/candidate probes, HTTP/3 controls and finalist replay without separate toggles or dual-probe modes. Do not change negotiated TLS/ALPN, HTTP response rules, target IP/SNI identity, CA verification, IPFW attribution, timeout budgets or mandatory Stage 90 restoration. `TARGET_ACCESSIBLE` proves reachability under ECH-disabled Chrome, not browser ECH-on compatibility. Owner-installed validation of the packaged change remains open.
+
 ## Purpose and completion definition
 
 The normative product requirements are `BH-01`–`BH-12` in [REQUIREMENTS](../REQUIREMENTS.md), section "Strategy Lab — browser-profile reachability target". This document defines code integration points, decisions, dependencies, stages and observable acceptance evidence.
