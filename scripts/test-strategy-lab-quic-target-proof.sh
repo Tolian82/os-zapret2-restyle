@@ -156,19 +156,23 @@ with tempfile.TemporaryDirectory() as root:
     assert data["status"]=="not_found" and data["tested"]==[]
     assert data["incompatible"][0]["id"]=="bad"
 
-    # Actual Stage80 orchestrator returns TARGET_ACCESSIBLE before 85/99, and
-    # its caller's established finish() path still performs Stage90 restoration.
+    # Target direct QUIC success must not short-circuit the TLS shortlist.
     (root/"quic.json").write_text(json.dumps({"status":"direct_accessible"}))
+    (root/"udp.json").write_text(json.dumps({"status":"skipped","reason":"udp_port_not_configured"}))
     seen=[]
+    reports=[]
     budget=SimpleNamespace(begin_stage80=lambda:None,timeout_for=lambda *args:60)
     def adapter(action,**kwargs):
         seen.append(action)
         return orchestrator.AdapterResult(kind="pass",message="PASS",initial_state=None)
     fake=SimpleNamespace(mode="extended",job_dir=root,language="ru",budget=budget,
       _begin=lambda stage:seen.append("begin-"+stage),_operation_limit=lambda stage:60,
-      check_cancel=lambda:None,_run_adapter=adapter,_pass=lambda stage,msg:seen.append("pass-"+stage))
-    assert orchestrator.Orchestrator._run_stage80(fake)=="TARGET_ACCESSIBLE"
-    assert seen==["begin-80","80-tcp","80-quic","pass-80"],seen
+      check_cancel=lambda:None,_run_adapter=adapter,_pass=lambda stage,msg:reports.append((stage,msg)))
+    assert orchestrator.Orchestrator._run_stage80(fake) is None
+    assert seen==["begin-80","80-tcp","80-quic","80-udp"],seen
+    assert reports[0][0]=="80"
+    assert "QUIC/UDP443" in reports[0][1] and "HTTPS/TCP443" in reports[0][1]
+    assert "этапа 85" in reports[0][1]
 
-print("PASS: pinned Chrome QUIC-only identity, direct target outcome, 3/3, IPFW, no TCP fallback")
+print("PASS: pinned QUIC proof, transport-scoped direct result, Stage85 continuity, 3/3, IPFW")
 PY

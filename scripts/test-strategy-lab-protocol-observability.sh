@@ -65,6 +65,15 @@ assert "частично выполнена" in partial_ru and "отложенн
 assert "partially completed" in partial_en and "budget-deferred 1 [quic-fake-5]" in partial_en
 assert "несовместимые 1 [unsupported-blob]" in partial_ru
 
+# Direct QUIC success never implies that TCP/HTTPS is directly accessible.
+for lang, marker, scope in (("ru", "прямое соединение подтверждено", "Это не подтверждает прямой HTTPS/TCP443"),
+                            ("en", "direct connection confirmed", "This does not establish direct HTTPS/TCP443")):
+    text = protocol_presentation.stage80_message(
+        lang, {"status":"direct_accessible","direct":[{"endpoint":"x.com","status":"PASS"}]},
+        {"status":"skipped","reason":"udp_port_not_configured"})
+    assert marker in text and scope in text and "85" in text
+    assert "TARGET_ACCESSIBLE" not in text
+
 assert "no control reply observed (this does not mean the port is closed)" in en80
 assert "not_found" not in ru80 and "skipped" not in ru80
 assert "not_found" not in en80 and "skipped" not in en80
