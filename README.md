@@ -2,6 +2,11 @@
 
 > Native OPNsense plugin for **bol-van/zapret2**: manage the runtime, build DPI-bypass profiles, and automatically search for strategies that actually work from your firewall.
 
+[![GitHub stars](https://img.shields.io/github/stars/Tolian82/os-zapret2-restyle?style=social)](https://github.com/Tolian82/os-zapret2-restyle)
+
+> ⭐ **Like this project?** [Give it a star on GitHub](https://github.com/Tolian82/os-zapret2-restyle) — it helps others discover os-zapret2-restyle.  
+> ⭐ **Понравился проект?** [Поставьте звёздочку на GitHub](https://github.com/Tolian82/os-zapret2-restyle) — это поможет другим пользователям найти os-zapret2-restyle.
+
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) · `os-zapret2-restyle-0.5.6_1.pkg` · FreeBSD 15 stable pkg repository |
