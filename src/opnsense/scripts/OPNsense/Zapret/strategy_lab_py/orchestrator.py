@@ -215,7 +215,10 @@ def terminal_report_status(outcome: str) -> str:
     return "FAIL" if outcome in {"ERROR", "TIMEOUT", "RESTORE_FAILED"} else "PASS"
 
 
-def terminal_message(language: str, mode: str, outcome: str, canceled: bool, count: int = 0) -> str:
+def terminal_message(
+    language: str, mode: str, outcome: str, canceled: bool, count: int = 0,
+    *, certificate_failure: bool = False,
+) -> str:
     ru = language == "ru"
     if outcome == "SUCCESS":
         if ru and mode == "standard":
@@ -234,6 +237,10 @@ def terminal_message(language: str, mode: str, outcome: str, canceled: bool, cou
             return "NO_CANDIDATE — Standard search completed; no stable working strategy was found."
         return "NO_CANDIDATE — Extended search completed; no stable working strategy was found."
     if outcome == "TARGET_ACCESSIBLE":
+        if certificate_failure:
+            return ("CERTIFICATE VERIFICATION FAILED — Цель доступна без обхода; поиск стратегий не требуется."
+                    if ru else
+                    "CERTIFICATE VERIFICATION FAILED — The target is accessible without bypass; strategy search is not required.")
         return "TARGET_ACCESSIBLE — Цель доступна без обхода; поиск стратегий не требуется." if ru else "TARGET_ACCESSIBLE — The target is accessible without bypass; strategy search is not required."
     if outcome == "PARTIAL":
         if canceled:
@@ -605,7 +612,26 @@ class Orchestrator:
             outcome = "ERROR"
             final_state = terminal_state(outcome)
             report_status = terminal_report_status(outcome)
-        message = terminal_message(self.language, self.mode, outcome, canceled, count)
+        certificate_failure = False
+        if outcome == "TARGET_ACCESSIBLE":
+            try:
+                baseline = _load_json(self.job_dir / "baseline.json")
+                endpoints = baseline.get("endpoints")
+                certificate_failure = (
+                    isinstance(endpoints, list) and bool(endpoints)
+                    and all(isinstance(item, dict) and item.get("status") == "PASS" for item in endpoints)
+                    and any(
+                        isinstance(item.get("reachability"), dict)
+                        and item["reachability"].get("signal") == "certificate_verification_failed"
+                        for item in endpoints
+                    )
+                )
+            except OrchestrationError:
+                pass  # Preserve direct-QUIC and historical TARGET_ACCESSIBLE semantics.
+        message = terminal_message(
+            self.language, self.mode, outcome, canceled, count,
+            certificate_failure=certificate_failure,
+        )
         self.current_stage = "99"
         self._update_stage("99", report_status, message)
         try:

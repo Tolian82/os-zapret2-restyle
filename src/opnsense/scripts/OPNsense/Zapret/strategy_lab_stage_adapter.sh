@@ -182,8 +182,18 @@ case "${ACTION}" in
         case "${status}" in
             0)
                 if strategy_lab_baseline_all_accessible "${BASELINE_FILE}"; then
-                    msg='PASS — All required endpoints are accessible without Zapret2.'
-                    [ "${LANGUAGE}" != ru ] || msg='PASS — Все обязательные endpoints доступны без Zapret2.'
+                    if "${STRATEGY_LAB_JQ}" -e 'any(.endpoints[]?; .status == "PASS" and .reachability.signal == "certificate_verification_failed")' "${BASELINE_FILE}" >/dev/null; then
+                        if [ "${TARGET_TYPE}" = ip ]; then
+                            msg='PASS — Direct TLS reached certificate verification; certificate verification failed.'
+                            [ "${LANGUAGE}" != ru ] || msg='PASS — Прямое TLS-соединение достигло проверки сертификата; ошибка сертификата.'
+                        else
+                            msg='PASS — DNS: OK; direct TLS reaches the server, but certificate verification failed.'
+                            [ "${LANGUAGE}" != ru ] || msg='PASS — DNS: OK; прямое TLS-соединение проходит, но ошибка сертификата.'
+                        fi
+                    else
+                        msg='PASS — All required endpoints are accessible without Zapret2.'
+                        [ "${LANGUAGE}" != ru ] || msg='PASS — Все обязательные endpoints доступны без Zapret2.'
+                    fi
                     accessible "${msg}"
                 fi
                 total=$(strategy_lab_baseline_total_count "${BASELINE_FILE}")

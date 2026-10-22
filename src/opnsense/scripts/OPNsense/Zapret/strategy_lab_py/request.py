@@ -239,6 +239,7 @@ def _curl_command(
     family: str = "ipv4",
     tls_version: str | None = None,
     bound_ip: str | None = None,
+    insecure: bool = False,
 ) -> list[str]:
     if family not in {"ipv4", "ipv6"}:
         raise UsageError("invalid curl address family")
@@ -256,6 +257,10 @@ def _curl_command(
         port = 443 if scheme == "https" else 80
         resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip
         command.extend(["--resolve", f"{host}:{port}:{resolve_ip}"])
+    if insecure:
+        if scheme != "https" or bound_ip is None:
+            raise UsageError("unverified retry is only valid for pinned HTTPS")
+        command.append("--insecure")
     command.extend([
         "--connect-timeout", "2",
         "--max-time", "3",
@@ -277,9 +282,13 @@ def curl_request(
     family: str = "ipv4",
     tls_version: str | None = None,
     bound_ip: str | None = None,
+    insecure: bool = False,
 ) -> CommandResult:
     return run_command(
-        _curl_command(host, scheme=scheme, family=family, tls_version=tls_version, bound_ip=bound_ip),
+        _curl_command(
+            host, scheme=scheme, family=family, tls_version=tls_version,
+            bound_ip=bound_ip, insecure=insecure,
+        ),
         timeout=4,
     )
 
@@ -303,11 +312,16 @@ _CHROME_TLS_RE = re.compile(
 )
 
 
-def chrome_https_evidence(result: CommandResult, *, expected_ip: str | None = None) -> dict[str, Any]:
-    """A verified target TLS handshake OR genuine HTTP response proves reachability.
+def chrome_https_evidence(
+    result: CommandResult, *, expected_ip: str | None = None,
+    allow_certificate_error: bool = False,
+) -> dict[str, Any]:
+    """Classify pinned Chrome HTTPS evidence, with a direct-baseline-only CA exception.
 
-    Fail closed on missing writeout, wrong pinned IP or bad CA. A post-header
-    body error does not invalidate either successfully observed signal.
+    Candidate probes retain strict certificate verification. In the direct
+    domain baseline, curl(60) with nonzero TLS verification and the exact
+    pinned peer IP proves that the connection reached certificate validation.
+    It does not prove a completed verified handshake or an HTTP response.
     """
     match = None
     for match in _CHROME_TLS_RE.finditer(result.stdout):
@@ -327,10 +341,24 @@ def chrome_https_evidence(result: CommandResult, *, expected_ip: str | None = No
     version = match.group("http")
     response = cert_ok and status in range(200, 600) and version in {"1", "1.0", "1.1", "2", "3"}
     handshake = cert_ok and handshake_time > 0
-    accessible = bool(destination_ok and (handshake or response))
+    certificate_failure = bool(
+        allow_certificate_error
+        and not result.timed_out
+        and curl_exit(result) == 60
+        and int(match.group("cert")) != 0
+        and destination_ok
+    )
+    accessible = bool(destination_ok and (handshake or response) or certificate_failure)
+    signal = (
+        "tls_handshake" if destination_ok and handshake
+        else "http_response" if destination_ok and response
+        else "certificate_verification_failed" if certificate_failure
+        else None
+    )
     return {
         "accessible": accessible,
-        "signal": ("tls_handshake" if handshake else "http_response") if accessible else None,
+        "signal": signal,
+        "certificate_verification_failed": certificate_failure,
         "tls_verified": bool(destination_ok and handshake),
         "http_response": bool(destination_ok and response),
         "remote_ip": remote_ip,
@@ -338,7 +366,54 @@ def chrome_https_evidence(result: CommandResult, *, expected_ip: str | None = No
         "http_status": status if response else None,
         "ssl_verify_result": int(match.group("cert")),
         "time_appconnect": handshake_time,
-        "reason": "reachable" if accessible else "certificate_identity_or_target_unverified",
+        "reason": ("certificate_verification_failed" if certificate_failure else
+                   "reachable" if accessible else "certificate_identity_or_target_unverified"),
+    }
+
+
+def chrome_cert_verify_code(result: CommandResult) -> int | None:
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    return int(match.group("cert")) if match is not None else None
+
+
+def chrome_certificate_error(result: CommandResult) -> bool:
+    """Only a completed curl(60) with an observed certificate error qualifies for retry."""
+    if result.timed_out or curl_exit(result) != 60:
+        return False
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    return match is not None and int(match.group("cert")) != 0
+
+
+def chrome_certificate_retry_evidence(result: CommandResult, *, expected_ip: str) -> dict[str, Any]:
+    """Evaluate an explicit --insecure retry solely as peer-identity/TLS evidence.
+
+    Never call this for ordinary candidate probes or as a replacement for
+    regular CA validation. Caller must first observe a real curl(60) error.
+    """
+    match = None
+    for match in _CHROME_TLS_RE.finditer(result.stdout):
+        pass
+    if match is None or result.timed_out or "--insecure" not in result.command:
+        return {"accessible": False, "reason": "missing_retry_or_timed_out"}
+    try:
+        target_ok = ipaddress.ip_address(match.group("ip")) == ipaddress.ip_address(expected_ip)
+    except ValueError:
+        target_ok = False
+    tls_seen = float(match.group("handshake")) > 0
+    status = int(match.group("code"))
+    version = match.group("http")
+    http_seen = 200 <= status <= 599 and version in {"1", "1.0", "1.1", "2", "3"}
+    accessible = bool(target_ok and (tls_seen or http_seen))
+    return {
+        "accessible": accessible,
+        "remote_ip": match.group("ip"),
+        "tls_handshake_observed": bool(target_ok and tls_seen),
+        "http_response_observed": bool(target_ok and http_seen),
+        "reason": "pinned_untrusted_tls_confirmed" if accessible else "retry_target_or_tls_unverified",
     }
 
 

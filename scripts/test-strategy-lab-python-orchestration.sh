@@ -38,6 +38,12 @@ assert terminal_state("TIMEOUT") == "error"
 assert terminal_state("ERROR") == "error"
 assert terminal_state("RESTORE_FAILED") == "error"
 assert terminal_report_status("SUCCESS") == "PASS"
+assert terminal_report_status("TARGET_ACCESSIBLE") == "PASS"
+for language, fragment in (("ru", "Цель доступна без обхода"), ("en", "The target is accessible without bypass")):
+    text = terminal_message(language, "standard", "TARGET_ACCESSIBLE", False, certificate_failure=True)
+    assert text.startswith("CERTIFICATE VERIFICATION FAILED — ")
+    assert fragment in text
+assert terminal_message("ru", "standard", "TARGET_ACCESSIBLE", False).startswith("TARGET_ACCESSIBLE —")
 assert terminal_report_status("NO_CANDIDATE") == "PASS"
 assert terminal_report_status("RESTORE_FAILED") == "FAIL"
 assert terminal_message("en", "standard", "SUCCESS", False, 2) == "SUCCESS — Standard search completed with 2 stable working strategies."
@@ -266,7 +272,11 @@ SUCCESS_STATUS="${JOBS_DIR}/job.SUCCESS/status.json"
     .progress.percent==100 and
     ([.stages[].number]==["00","10","20","30","40","50","60","70","80","85","90","99"]) and
     ([.stages[].status]==["PASS","PASS","PASS","PASS","PASS","PASS","PASS","PASS","SKIPPED","PASS","PASS","PASS"])
-' "${SUCCESS_STATUS}" >/dev/null || fail 'Python standard stage machine or terminal result is invalid'
+' "${SUCCESS_STATUS}" >/dev/null || {
+    echo "Standard terminal state diagnostics:" >&2
+    "$(command -v jq)" -c '{state,outcome,current_stage,progress,stages:[.stages[]|{number,status,message}]}' "${SUCCESS_STATUS}" >&2
+    fail 'Python standard stage machine or terminal result is invalid'
+}
 "$(command -v jq)" -e '
     .schema==1 and (.inventory_id|startswith("ri1-")) and
     [.lua[].name]==["inventory-only.lua","zapret-antidpi.lua","zapret-auto.lua","zapret-lib.lua"] and
