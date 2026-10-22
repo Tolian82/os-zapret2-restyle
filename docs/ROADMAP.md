@@ -6,7 +6,7 @@ The owner explicitly started the approved [five-stage implementation plan](archi
 on 22 October 2026. Catalog-side Stage 1 capability metadata and validation
 are [merged and CI-verified](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2);
 the plugin has a new read-only immutable-revision catalog/collision preflight
-in source (`v0.5.7_5`) and a manually invoked lifecycle-serialized transaction plus guarded upstream-retention backend; installed OPNsense verification remains open. No GUI or dynamic candidate generator yet,
+in source (`v0.5.7_6`), including refusal of direct setup bypass and preservation of pending upstream rollback evidence, and a manually invoked lifecycle-serialized transaction plus guarded upstream-retention backend; installed OPNsense verification remains open. No GUI or dynamic candidate generator yet,
 installed package or owner-live result yet. Stage 2 continues with serialized
 file publication, rollback, upstream retention and mandatory verified restart. The `v0.5.7_1` release preparation remains pending
 separately; do not silently publish this new feature.

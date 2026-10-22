@@ -110,6 +110,16 @@ run_setup
 [ "$(tail -2 "${SETUP_LOCK_ARGS}")" = 'install-locked
 v1.0.4' ] || fail "default install did not select latest cached tag"
 
+# Once a managed resource manifest exists, direct setup.sh is a bypass of
+# setup_transaction.sh rollback and MUST NOT even acquire a setup install lock.
+mkdir -p "${STATE_DIR}/extra-resources"
+printf '%s\n' '{"schema":1,"files":{}}' > "${STATE_DIR}/extra-resources/installed.json"
+rm -f "${SETUP_LOCK_ARGS}"
+run_setup install v1.0.3 >/dev/null 2>&1 && fail "direct setup overwrote managed resources"
+run_setup install-locked v1.0.3 >/dev/null 2>&1 && fail "hidden direct install bypass accepted"
+[ ! -e "${SETUP_LOCK_ARGS}" ] || fail "direct setup acquired lock despite managed resources"
+rm -f "${STATE_DIR}/extra-resources/installed.json"
+
 # A failed stale refresh returns the old validated cache and does not replace it.
 touch -t 200001010000 "${CACHE}"
 CACHE_BEFORE=$(cat "${CACHE}")
