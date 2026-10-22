@@ -381,6 +381,9 @@ jobs:
       - name: Test extra-resources read-only preflight
         run: python3.13 scripts/test-extra-resources-preflight.py
 
+      - name: Test durable resource transaction and rollback
+        run: python3.13 scripts/test-extra-resources-transaction.py
+
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
 
