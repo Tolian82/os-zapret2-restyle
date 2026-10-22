@@ -1,6 +1,17 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — выпуск принятой модернизации Strategy Lab
+## Текущий приоритет — Additional Resources implementation
+
+The owner explicitly started the approved [five-stage implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md)
+on 22 October 2026. Catalog-side Stage 1 capability metadata and validation
+are [merged and CI-verified](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2);
+the plugin-side installer, GUI, actual dynamic candidate generation, installed
+package and owner-live results are **not yet implemented**. Stage 2 is now
+the active incremental task: collision-safe manual transaction with mandatory
+verified Zapret2 restart. The `v0.5.7_1` release preparation remains pending
+separately; do not silently publish this new feature.
+
+## Previously prioritized — accepted Strategy Lab release preparation
 
 The [target requirements](REQUIREMENTS.md) and [detailed English plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) include the owner's 21 October 2026 correction: **a verified target TLS handshake OR QUIC handshake OR genuine final HTTP response individually proves reachability**. HTTP/1.1 and HTTP/2 are equally positive when observed; 4xx/5xx replies count as accessible. Get the current FreeBSD `latest` curl-impersonate at each build per ugorur, with lexiforest as upstream reference, no version pin, and one supported Chrome profile. Direct HTTPS success by handshake or response skips QUIC.
 
@@ -43,7 +54,7 @@ The owner has accepted the bounded Stages 1–6 completion and authorized a subs
 - Diagnostics persistence/reload; retention/cleanup; reboot/residue regression.
 - Runtime/service reliability и package/runtime visibility; дальнейшие точечные RU/EN исправления.
 - IPv6 Laboratory target support — отдельная архитектурная задача.
-- **Дополнительные Lua/BLOB ресурсы — ТЗ согласовано 22.10.2026, реализация ожидает отдельного этапа.** Отдельная ручная кнопка «Установить дополнительные ресурсы» / “Install Additional Resources” под статусом на странице «Стратегия»; источник [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Установка транзакционная, **по явному нажатию при запущенной службе** с обязательным **Stop→Start и health-check Zapret2** перед успехом; при `Stopped` сначала требуется штатный Start. Без перезаписи штатных/пользовательских файлов и без загрузки автоматически при смене upstream-релиза. Динамический `ResourceInventory` + **генерация совместимых кандидатов из фактически установленных Lua/BIN без hardcode имён файлов и без переписывания кода при обновлении набора**, адресный `--lua-init`, конечный бюджет, прежние стратегии не меняются. [Утверждённое ТЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) и [принятый пятиэтапный рабочий план](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md). **Кнопка/интеграция ещё не реализованы.**
+- **Дополнительные Lua/BLOB ресурсы — owner-approved 22.10.2026; catalog descriptor/validator Stage 1 merged and checked, plugin-side Stages 2–5 pending.** Отдельная ручная кнопка «Установить дополнительные ресурсы» / “Install Additional Resources” под статусом на странице «Стратегия»; источник [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Установка транзакционная, **по явному нажатию при запущенной службе** с обязательным **Stop→Start и health-check Zapret2** перед успехом; при `Stopped` сначала требуется штатный Start. Без перезаписи штатных/пользовательских файлов и без загрузки автоматически при смене upstream-релиза. Динамический `ResourceInventory` + **генерация совместимых кандидатов из фактически установленных Lua/BIN без hardcode имён файлов и без переписывания кода при обновлении набора**, адресный `--lua-init`, конечный бюджет, прежние стратегии не меняются. [Утверждённое ТЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) и [принятый пятиэтапный рабочий план](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md). **Кнопка/интеграция ещё не реализованы.**
 
 Эти направления не превращаются в обязательные блокеры текущей HTTP-модернизации или прежних релизов без конкретного затронутого сценария.
 
