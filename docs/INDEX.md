@@ -16,13 +16,15 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — текущая линия v0.5.x, этап v0.5.6
+## Level 2 — текущая линия v0.5.x, этап v0.5.7
 
 - [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response), FreeBSD `latest` without pin.
-- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stage 1 V1 PASS on installed `_3` (Chrome HTTPS, TLS1.2 and QUIC/H3); Stage 2 Standard/Model C production migration is next.
+- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stages 1–6 accepted by owner within bounded installed `_17` evidence, now preparing `v0.5.7_1` full release with two focused GUI fixes.
 - [Состояние реализации](PROJECT_STATE.md) и [единственный следующий шаг](START_HERE.md).
 
 ### Поставка и доказательства завершённых работ
+
+- [v0.5.7 full Web/pkg release preparation](releases/v0.5.7.md) — owner-authorized new version, post-acceptance GUI corrections, README audit, release CI and package metadata gates.
 
 Записи ниже сохраняют историю предыдущей кампании; описанные в них старые следующие эксперименты не являются активной очередью.
 

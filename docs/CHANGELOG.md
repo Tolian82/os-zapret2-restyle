@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [v0.5.7] — full Web/pkg release preparation, 2026-10-22
+
+- Bundle the owner-accepted Strategy Lab browser/HTTP modernization Stages 1–6 with selected installed `v0.5.6_17` evidence, keeping unverified transport/provider cases explicitly outside positive claims.
+- Include `v0.5.6_18` RU/EN `Result summary` heading localization and `v0.5.6_19` independent upper/lower Strategies Apply spinners; backend behavior unchanged.
+- Audit README, document `lexiforest/curl-impersonate` and contributor attribution, add a bilingual GitHub Star request.
+- Prepare the first available new semantic tag `v0.5.7` with package candidate `0.5.7_1`, rather than retargeting published `v0.5.6`.
+- Full FreeBSD15 build, GitHub Release/pkg asset and Pages repository publication require observed successful workflows; no outcome is presumed before verification.
+
 ## [v0.5.4] — full Web/pkg release, 2026-10-19
 
 - Advanced project stage to `0.5.4_1` at the owner's explicit request, preserving the production shared Voice/Strategies backend from installed `0.5.3_28`.
