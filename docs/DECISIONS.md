@@ -2440,3 +2440,11 @@ Full rationale and supersession:
 
 Status:
 Active.
+
+## 2026-10-22 — zapret2 v1.0.6 review: no plugin changes
+
+**Decision:** The owner upgraded the upstream zapret2 engine to v1.0.6 through the OPNsense GUI and confirmed normal operation. After reviewing `veryquick`, `COVERAGE`, `CURL_PAD`, and `PACE`, no changes to Strategy Lab are justified or approved.
+
+**Reason:** The current single-target laboratory already implements adaptive search and early stopping; the other reviewed features do not address an identified need. Direct tests of `telegram.org` (`149.154.167.99:443`) failed to establish TCP both with and without the service; native `dvtws2` `syndata` modified outgoing SYN packets but did not restore connectivity. The exact external filtering mechanism remains unproven.
+
+**Consequences:** No new requirements or work items; code, GUI, roadmap, version, package, and release plans remain unchanged. **Status: Closed.**
