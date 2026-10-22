@@ -117,6 +117,28 @@ grep -Fq 'configctl_exact_ok zapret start' "${TRANSACTION}" ||
 sh -n "${LAUNCHER}"
 sh -n "${TRANSACTION}"
 
+# Each Apply button must show its own spinner. Cross-operation locking stays
+# shared, but a Strategies Apply must never animate the upper release button.
+grep -Fq 'let releaseApplyPending = false;' "${VIEW}" ||
+    fail "release Apply has no independent progress owner"
+grep -Fq 'const controlsBusy = !!busy || releaseApplyPending ||' "${VIEW}" ||
+    fail "release and Strategies controls no longer share the busy lock"
+grep -Fq "toggleClass('fa fa-spinner fa-pulse', releaseApplyPending)" "${VIEW}" ||
+    fail "upper Apply spinner is not owned by release Apply"
+grep -Fq "toggleClass('fa fa-spinner fa-pulse'," "${VIEW}" ||
+    fail "Strategies Apply spinner contract missing"
+grep -Fq "                strategiesApplyPending);" "${VIEW}" ||
+    fail "lower Apply spinner does not track Strategies Apply"
+grep -Fq 'id="reconfigureActProgress"' "${VIEW}" ||
+    fail "lower Strategies Apply spinner element is missing"
+grep -Fq 'releaseApplyPending = true;' "${VIEW}" ||
+    fail "release Apply click does not start its spinner"
+grep -Fq 'releaseApplyPending = false;' "${VIEW}" ||
+    fail "release Apply does not clear its spinner"
+if grep -Fq 'busy = !!busy || strategiesApplyPending || strategiesApplyNeedsReview;' "${VIEW}"; then
+    fail "Strategies Apply still animates upper Apply through shared busy"
+fi
+
 # Existing GUI state and geometry contract stays intact.
 grep -Fq "notInstalled: 'not installed'" "${VIEW}" || fail "not installed label is missing"
 grep -Fq 'serviceButton.hide()' "${VIEW}" || fail "service control is not hidden without runtime"

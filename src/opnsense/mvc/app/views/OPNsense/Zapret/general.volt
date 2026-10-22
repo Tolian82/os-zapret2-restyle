@@ -54,6 +54,7 @@
         let runtimeWasBusy = false;
         let currentServiceState = 'error';
         let currentRuntimeInstalled = false;
+        let releaseApplyPending = false;
         let strategiesApplyPending = false;
         let strategiesApplyNeedsReview = false;
 
@@ -110,23 +111,28 @@
         }
 
         function setRuntimeBusy(busy) {
-            busy = !!busy || strategiesApplyPending || strategiesApplyNeedsReview;
+            // Controls must stay locked for both operations, but each Apply
+            // button owns only its own spinner.
+            const controlsBusy = !!busy || releaseApplyPending ||
+                strategiesApplyPending || strategiesApplyNeedsReview;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
             }).length > 0;
             const serviceControllable = currentRuntimeInstalled &&
                 (currentServiceState === 'started' || currentServiceState === 'stopped');
 
-            $('#zapretServiceControl').prop('disabled', busy || !serviceControllable);
-            $('#zapretReleaseSelect').prop('disabled', busy || !releaseAvailable);
-            $('#zapretReleaseApply').prop('disabled', busy || !releaseAvailable);
-            $('#zapretReleaseApplyText').text(busy ? runtimeText.applying : runtimeText.apply);
-            $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', busy);
+            $('#zapretServiceControl').prop('disabled', controlsBusy || !serviceControllable);
+            $('#zapretReleaseSelect').prop('disabled', controlsBusy || !releaseAvailable);
+            $('#zapretReleaseApply').prop('disabled', controlsBusy || !releaseAvailable);
+            $('#zapretReleaseApplyText').text(releaseApplyPending ? runtimeText.applying : runtimeText.apply);
+            $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', releaseApplyPending);
         }
 
         function reconcileStrategiesApplyControls() {
             $('#reconfigureAct').prop('disabled',
                 strategiesApplyPending || strategiesApplyNeedsReview);
+            $('#reconfigureActProgress').toggleClass('fa fa-spinner fa-pulse',
+                strategiesApplyPending);
             setRuntimeBusy(runtimeWasBusy);
         }
 
@@ -161,6 +167,9 @@
                 serviceButton.hide().prop('disabled', true);
             }
 
+            if (releaseApplyPending && !busy && runtimeWasBusy) {
+                releaseApplyPending = false;
+            }
             setRuntimeBusy(busy);
 
             if (runtimeWasBusy && !busy && data && data.setup === 'failed') {
@@ -258,11 +267,12 @@
         $('#zapretReleaseApply').off('click').on('click', function(event) {
             event.preventDefault();
             const version = $('#zapretReleaseSelect').val();
-            if (!version || runtimeWasBusy ||
+            if (!version || runtimeWasBusy || releaseApplyPending ||
                 strategiesApplyPending || strategiesApplyNeedsReview) {
                 return;
             }
 
+            releaseApplyPending = true;
             setRuntimeBusy(true);
             $.ajax({
                 type: 'POST',
@@ -275,6 +285,7 @@
                 refreshRuntime();
                 refreshReleases(data && data.version ? data.version : version);
             }).fail(function() {
+                releaseApplyPending = false;
                 setRuntimeBusy(false);
                 refreshRuntime();
             });
@@ -448,7 +459,7 @@
             class="btn btn-primary __mr"
             id="reconfigureAct"
             type="button">
-            {{ lang._("Apply") }}
+            {{ lang._("Apply") }} <i id="reconfigureActProgress"></i>
         </button>
     </div>
 </section>

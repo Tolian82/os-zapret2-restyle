@@ -2,18 +2,25 @@
 
 > Native OPNsense plugin for **bol-van/zapret2**: manage the runtime, build DPI-bypass profiles, and automatically search for strategies that actually work from your firewall.
 
+[![GitHub stars](https://img.shields.io/github/stars/Tolian82/os-zapret2-restyle?style=social)](https://github.com/Tolian82/os-zapret2-restyle)
+
+> ⭐ **Like this project?** [Give it a star on GitHub](https://github.com/Tolian82/os-zapret2-restyle) — it helps others discover os-zapret2-restyle.
+>
+> ⭐ **Понравился проект?** [Поставьте звёздочку на GitHub](https://github.com/Tolian82/os-zapret2-restyle) — это поможет другим пользователям найти os-zapret2-restyle.
+
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) · `os-zapret2-restyle-0.5.6_1.pkg` · FreeBSD 15 stable pkg repository |
-| **Current development candidate** | `v0.5.6_1` — owner-closed direct-provider Telegram Voice lab; MEDIA/CALL not achieved |
+| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · FreeBSD 15 stable pkg repository (publication pending) |
+| **Latest published testing package** | [v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17) · Strategy Lab owner-tested, not a stable Web/pkg release |
+| **Current development candidate** | `v0.5.7_1` · contains the accepted Strategy Lab and latest RU/EN / Apply-button corrections; owner-installed qualification applies to earlier `_17` test package |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
-`os-zapret2-restyle` is an independent OPNsense integration around [bol-van/zapret2](https://github.com/bol-van/zapret2). It provides the managed engine, normal Traffic Strategies, Strategy Lab, and a five-service native Voice Transmission editor. The owner installed testing `0.5.3_28` on FreeBSD 15 OPNsense and **successfully saved Telegram ON through the shared Config/FD9/runtime/IPFW Apply**. The service and supervisor were running, the transaction journal was `committed`, and the Voice inspector reported `ready`. This confirms configuration and kernel interception, **not a working media call**.
+`os-zapret2-restyle` integrates the [bol-van/zapret2](https://github.com/bol-van/zapret2) native `dvtws2` engine with OPNsense: transactional Traffic Strategies, automatic Strategy Lab testing, upstream runtime management and a configurable Voice Transmission page. The plugin and upstream Zapret2 engine have separate installation/update lifecycles.
 
-On 20 October 2026 the owner **closed the Telegram Voice direct-provider research campaign with an unsuccessful media/call result**. On OPNsense, the native engine emitted original UDP, fake and synthetic STUN packets but reflector replies and `MEDIA_PASS/CALL_PASS` were not achieved despite bounded tests. The prior successful `tgcalls_cli` via pfSense is **not a comparable direct ISP control**: its route to Telegram Reflector uses the OpenVPN interface `ovpnc6`, next-hop `10.1.11.1`. Exact upstream blocking root cause remains undetermined; no universal impossibility of Telegram bypass is claimed. This `v0.5.6` stage **preserves Voice GUI and Config/Apply** but advertises **no verified Telegram voice-bypass profile**. [Closure evidence](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+**Verification limits:** the owner accepted Strategy Lab Stages 1–6 on installed testing `v0.5.6_17`, including two GUI Stop tests and a clean post-test runtime/IPFW inspection. Results prove the observed scenarios, not every possible DPI/ISP/QUIC bypass. The five Voice/STUN profiles are configurable, but **no successful Telegram media/call bypass has been confirmed on the owner's direct ISP route**; other services likewise have no validated voice presets. See [Strategy Lab evidence](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md) and [Voice research closure](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
 
 ## Architecture overview
 
@@ -73,7 +80,7 @@ flowchart LR
 
 ## Strategy Lab — find a working bypass strategy instead of guessing
 
-**Strategy Lab is the flagship feature of the project.** Give it a blocked domain or IPv4 address and it automatically tests real Zapret2 strategy families from the OPNsense firewall, verifies stable winners, and returns complete profiles ready to copy into **Traffic Strategy**.
+**Strategy Lab is a major feature of the project.** Give it a target domain or IPv4 address and it evaluates real Zapret2 strategy families on the OPNsense firewall, checks stability, and returns verified candidates for **manual** use in Traffic Strategy. It cannot guarantee a working bypass on every ISP or target.
 
 The Laboratory is designed around one practical question:
 
@@ -83,19 +90,20 @@ What it does:
 
 - accepts a blocked **domain or IPv4 address**;
 - supports optional **Host / SNI** for fixed-IP HTTPS/TLS/QUIC testing;
-- measures a clean baseline before trying bypass candidates;
+- measures direct reachability with private [curl-impersonate](https://github.com/lexiforest/curl-impersonate) Chrome-compatible TLS/HTTP/HTTP/3 probing before trying bypass candidates; direct accessible targets are not reported as needing bypass;
 - runs deterministic native Zapret2 strategy candidates with temporary runtime and firewall rules;
 - attributes candidate traffic to exact controlled source ports and temporary firewall rules;
-- checks stability and replays finalists before recommending them;
-- keeps HTTP application errors such as `4xx`/`5xx` separate from DPI-path reachability, so a reachable server is not falsely discarded just because the application returned an error;
+- checks stability, maintains at most three confirmed finalists, and replays selected profiles before recommending them;
+- counts a verified TLS or QUIC handshake **or** an authentic final HTTP response (including 4xx/5xx) as endpoint reachability; preserves the distinction between target identity, transport evidence and successful bypass;
 - supports **Extended** protocol checks for TLS 1.2, HTTP, QUIC and optional Generic UDP;
 - treats bare-IP QUIC truthfully: without Host/SNI it is skipped rather than reported as tested;
 - can test Generic UDP independently against an IPv4 destination;
 - emits complete final profiles, including `--ipset-ip=<target>` for fixed-IP strategies;
-- supports Russian and English UI/status presentation;
-- always performs bounded cleanup and restores the original Zapret2 service state after success, failure or cancellation.
+- supports Russian and English UI/status presentation, saved-job read-only lookup by Job ID, F5 persistence of selected saved results and an inline Job ID copy control;
+- supports temporary, explicitly started browser circular validation for eligible verified TLS 1.3 candidates; it can affect other LAN clients while active and automatically stops/restores service state;
+- includes bounded cleanup and restoration of original Zapret2 service state after success, failure or cancellation, with restoration errors reported rather than hidden.
 
-The result is not a synthetic recommendation. Strategy Lab executes candidates on the real appliance and reports the strategies that survived the selected verification path.
+A result reflects the selected measured path rather than a speculative recommendation. A candidate is not a proven winner without its required verification and replay. QUIC/HTTP/3 availability at one endpoint does not establish bypass on a blocked service.
 
 ## Native OPNsense integration
 
@@ -108,7 +116,7 @@ The result is not a synthetic recommendation. Strategy Lab executes candidates o
 
 ## Traffic Strategy editor
 
-The Settings page provides one multiline editor using native Zapret2 syntax plus project-managed target placeholders:
+The **Strategies / Стратегия** Settings page provides one multiline editor using native Zapret2 syntax plus project-managed target placeholders:
 
 ```text
 <HOSTLIST:name>
@@ -121,9 +129,9 @@ Profiles are separated with the normal Zapret2 boundary:
 --new
 ```
 
-The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime.
+The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime. The **upper Apply** in the Zapret2 Service panel installs or changes the selected *upstream Zapret2 release*; the **lower Apply** saves and activates *Traffic Strategies*. They are separate operations and are serialized for safety.
 
-## Voice Transmission — native common engine (v0.5.6)
+## Voice Transmission — shared native runtime
 
 The **Services → Zapret2 → Voice Transmission / Передача голоса** page is a native editor for five independent, initially disabled STUN profiles: **Telegram, Discord, X (Twitter), SIP (VoIP), and Custom**. It is not a separate daemon, VPN, proxy, or a library of proven call-bypass presets.
 
@@ -153,7 +161,7 @@ No OPNsense reboot is required after a successful managed operation.
 
 ## Installation from the OPNsense Web GUI
 
-The stable release is published through the project-owned FreeBSD package repository on GitHub Pages. Register it once:
+Full releases are published through the project-owned FreeBSD package repository on GitHub Pages. Register it once using the OPNsense **root shell**:
 
 ```sh
 fetch -o /usr/local/etc/pkg/repos/zapret2-restyle.conf \
@@ -171,7 +179,7 @@ The repository is transported over HTTPS and uses the project-approved unsigned 
 2. Open **Zapret2 Service / Служба Zapret2** and install/select an upstream bol-van/zapret2 release.
 3. Configure your managed targets and **Traffic Strategy**.
 4. Apply the settings.
-5. In **v0.5.2 and later**, optionally open **Services → Zapret2 → Voice Transmission** to configure destination-restricted STUN/UDP services; all profiles are OFF until explicitly enabled and applied.
+5. Optionally open **Services → Zapret2 → Voice Transmission** to configure destination-restricted STUN/UDP services; all profiles are OFF until explicitly enabled and applied.
 6. Open **Services → Zapret2 → Laboratory** when you need to find a working bypass strategy for a blocked target.
 7. Review a stable Laboratory result and add the required profile to the Traffic Strategy currently in use.
 
@@ -273,7 +281,7 @@ The Web GUI uses the same authoritative backend available to administrators:
 /var/log/zapret2/supervisor.log
 ```
 
-`dvtws2` drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
+The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
 ## Removal policy
 
@@ -292,7 +300,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-Full Web/pkg release: **[v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) / 0.5.6_1**. This stage preserves native GUI/engine and closes Telegram provider-path research with no MEDIA/CALL acceptance. The pfSense success was VPN-route-confounded. No new tested bypass algorithm is claimed. See [release notes](docs/releases/v0.5.6.md) and [closure](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+The **v0.5.7** release is being prepared with installable candidate `0.5.7_1`; publication must be verified before this version can be called available through the Web/pkg repository. The previously published stable release is **[v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) / 0.5.6_1**, and the last owner-installed testing package is **[v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17)**. See [new release notes](docs/releases/v0.5.7.md) and [accepted Stage 6 results](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md).
 
 Useful entry points:
 
