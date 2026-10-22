@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.7_1`. `VERSION=0.5.7`, `PLUGIN_REVISION=1`. **Owner authorized next full Web/pkg release** from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-installed testing asset was `v0.5.6_17`. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
+**Current handoff identity:** `v0.5.7_3`. `VERSION=0.5.7`, `PLUGIN_REVISION=3`. **Development: read-only extra-resource preflight in source; no package or full release has been published for this candidate.** Previous owner authorization for a full Web/pkg release applied to the earlier prepared candidate and remains separately pending from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-installed testing asset was `v0.5.6_17`. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
 
 **Release preparation:** bundle [RU/EN Result summary correction](patches/v0.5.6_18.md), [independent upper/lower Strategies Apply indicators](patches/v0.5.6_19.md), verified owner-accepted Strategy Lab Stages 1–6, the [README capability audit](../README.md), star invitation and [lexiforest upstream attribution](../CONTRIBUTORS.md). Pre-release source/FreeBSD CI and full Web/pkg publication must PASS before declaring release success. This is not proof of owner-installed `v0.5.7_1` GUI operation.
 
@@ -14,14 +14,17 @@ The source catalog Stage 1 descriptor/validation foundation is merged at
 [`ccdd8fae`](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2),
 with [catalog CI success](https://github.com/Tolian82/zapret2-extra-resources/actions/runs/39830826402).
 The descriptors are data, **not** an implemented plugin installer or search integration.
-No plugin `VERSION` or `PLUGIN_REVISION` change, package delivery, or service restart
-was part of Stage 1.
+Stage 2 now has a read-only source preflight (revision pin, verified catalog bytes,
+manifest/capability check, managed-file drift and upstream/user collision refusal);
+the plugin code revision advanced to `v0.5.7_3`. A separate offline-tested, durable managed-file snapshot/publish/rollback engine is now present but is intentionally NOT wired to the privileged service; it requires shared setup+FD9 lock and native lifecycle binding first. The preflight is callable through the
+`zapret extra_resources_preflight` configd action, but is NOT a file installer,
+transaction, service restart, GUI control, or packaged/installed proof.
 
-**Current single next action:** implement Stage 2 in the existing plugin
-configd/setup/service lifecycle: a manually requested, serialized,
-transactional resource installer with collision protection, rollback and
-mandatory verified Stop→Start. Inspect the current lifecycle and upstream
-replacement paths before changing them. Do not display or enable the GUI
+**Current single next action:** complete Stage 2 from the verified preflight:
+add the serialized manually requested transaction, durable managed-file ownership,
+rollback and mandatory verified Stop→Start through the existing lifecycle;
+protect managed additions across upstream runtime replacement and power loss.
+The source-only preflight is NOT eligible to report installation success. Do not display or enable the GUI
 button before the backend truly implements the contract. Keep automatic
 resource download disabled.
 

@@ -18,7 +18,7 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
-- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 metadata/validator merged with CI proof, current plugin-side Stage 2 installer/restart pending.
+- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_3; serialized native service wiring/restart still pending.
 - [Additional Resources normative specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — manual GUI, transaction/restart and fully dynamic new-Job candidate generation; not yet implemented in the plugin.
 
 ## Earlier v0.5.x release preparation, v0.5.7

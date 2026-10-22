@@ -5,10 +5,11 @@
 The owner explicitly started the approved [five-stage implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md)
 on 22 October 2026. Catalog-side Stage 1 capability metadata and validation
 are [merged and CI-verified](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2);
-the plugin-side installer, GUI, actual dynamic candidate generation, installed
-package and owner-live results are **not yet implemented**. Stage 2 is now
-the active incremental task: collision-safe manual transaction with mandatory
-verified Zapret2 restart. The `v0.5.7_1` release preparation remains pending
+the plugin has a new read-only immutable-revision catalog/collision preflight
+in source (`v0.5.7_3`) and a source-only durable rollback/publication engine,
+but no privileged lifecycle adapter, GUI, dynamic candidate generator,
+installed package or owner-live result yet. Stage 2 continues with serialized
+file publication, rollback, upstream retention and mandatory verified restart. The `v0.5.7_1` release preparation remains pending
 separately; do not silently publish this new feature.
 
 ## Previously prioritized — accepted Strategy Lab release preparation

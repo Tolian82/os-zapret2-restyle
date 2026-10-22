@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""Targeted offline resource-transaction checks; no FreeBSD services invoked."""
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
+sys.path.insert(0, str(SRC))
+spec = importlib.util.spec_from_file_location("extra_resources_transaction", SRC / "extra_resources_transaction.py")
+assert spec and spec.loader
+tx = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tx)
+
+REV = "a" * 40
+LUA = b"function user_dynamic(ctx, d) return true end\n"
+BIN = b"\x16\x03\x03\x00\x07\x01\x00\x00\x03yes"
+
+
+class Lifecycle:
+    def __init__(self):
+        self.running = True
+        self.pid = 41
+        self.stops = 0
+        self.starts = 0
+        self.fail_once = False
+        self.crash_once = False
+
+    def assert_started(self):
+        if not self.running:
+            raise RuntimeError("not running")
+        return str(self.pid)
+
+    def assert_stopped(self):
+        if self.running:
+            raise RuntimeError("not stopped")
+
+    def stop(self):
+        self.stops += 1
+        self.running = False
+
+    def start(self):
+        self.starts += 1
+        if self.crash_once:
+            self.crash_once = False
+            raise KeyboardInterrupt()
+        if self.fail_once:
+            self.fail_once = False
+            raise RuntimeError("start failure")
+        self.running = True
+        self.pid += 1
+
+
+class TestResourceTransaction(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name) / "zapret2"
+        self.state = Path(self.temp.name) / "state"
+        (self.root / "lua").mkdir(parents=True)
+        (self.root / "files/fake").mkdir(parents=True)
+        self.lifecycle = Lifecycle()
+        self.payloads = {"lua/user_dynamic.lua": LUA,
+                         "files/fake/user_dynamic.bin": BIN}
+
+    def install(self, payloads=None):
+        return tx.install(payloads if payloads is not None else self.payloads,
+                          REV, self.root, self.state, self.lifecycle,
+                          capabilities={"schema": 1, "resources": []})
+
+    def test_first_install_and_restart(self):
+        result = self.install()
+        self.assertEqual(result["status"], "INSTALLED")
+        self.assertTrue(result["restarted"])
+        self.assertEqual(self.lifecycle.stops, 1)
+        self.assertEqual(self.lifecycle.starts, 1)
+        self.assertEqual((self.root / "lua/user_dynamic.lua").read_bytes(), LUA)
+        self.assertEqual(json.loads((self.state / "installed.json").read_text())["source_commit"], REV)
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_identical_second_click_still_restarts(self):
+        self.install()
+        first = self.lifecycle.pid
+        self.install()
+        self.assertNotEqual(first, self.lifecycle.pid)
+        self.assertEqual((self.lifecycle.starts, self.lifecycle.stops), (2, 2))
+        self.assertEqual(list((self.root / "lua").glob("*.lua")),
+                         [self.root / "lua/user_dynamic.lua"])
+
+    def test_dynamic_add_remove_and_update(self):
+        self.install()
+        next_set = {"lua/next_dynamic.lua": b"function next_dynamic() end\n",
+                    "files/fake/user_dynamic.bin": b"new-payload"}
+        result = self.install(next_set)
+        self.assertEqual((result["lua"], result["bin"]), (1, 1))
+        self.assertFalse((self.root / "lua/user_dynamic.lua").exists())
+        self.assertEqual((self.root / "lua/next_dynamic.lua").read_bytes(),
+                         b"function next_dynamic() end\n")
+        self.assertEqual((self.root / "files/fake/user_dynamic.bin").read_bytes(),
+                         b"new-payload")
+
+    def test_upstream_filename_collision_rejected_before_stop(self):
+        (self.root / "lua/user_dynamic.lua").write_bytes(LUA)
+        with self.assertRaisesRegex(tx.TransactionError, "upstream/user"):
+            self.install()
+        self.assertEqual(self.lifecycle.stops, 0)
+        self.assertFalse(self.state.joinpath("transaction").exists())
+
+    def test_initial_stopped_service_rejected_without_write(self):
+        self.lifecycle.running = False
+        with self.assertRaisesRegex(RuntimeError, "not running"):
+            self.install()
+        self.assertFalse((self.root / "lua/user_dynamic.lua").exists())
+
+    def test_start_failure_rolls_back_previous_managed_files(self):
+        self.install()
+        old_metadata = (self.state / "installed.json").read_bytes()
+        self.lifecycle.fail_once = True
+        with self.assertRaisesRegex(tx.TransactionError, "INSTALL_FAILED_RESTORED"):
+            self.install({"lua/user_dynamic.lua": b"modified", "files/fake/user_dynamic.bin": BIN})
+        self.assertEqual((self.root / "lua/user_dynamic.lua").read_bytes(), LUA)
+        self.assertEqual((self.state / "installed.json").read_bytes(), old_metadata)
+        self.assertTrue(self.lifecycle.running)
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_crash_keeps_backups_and_recovery_restores(self):
+        self.install()
+        self.lifecycle.crash_once = True
+        with self.assertRaises(KeyboardInterrupt):
+            self.install({"lua/user_dynamic.lua": b"updated", "files/fake/user_dynamic.bin": BIN})
+        self.assertTrue((self.state / "transaction/journal.json").exists())
+        with self.assertRaisesRegex(tx.TransactionError, "RECOVERY_REQUIRED"):
+            self.install()
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual((self.root / "lua/user_dynamic.lua").read_bytes(), LUA)
+        self.assertTrue(self.lifecycle.running)
+
+    def test_recovery_rejects_unexpected_user_modifications(self):
+        self.install()
+        self.lifecycle.crash_once = True
+        with self.assertRaises(KeyboardInterrupt):
+            self.install({"lua/user_dynamic.lua": b"updated", "files/fake/user_dynamic.bin": BIN})
+        (self.root / "lua/user_dynamic.lua").write_bytes(b"not from either revision")
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue((self.state / "transaction/journal.json").exists())
+
+    def test_invalid_paths_and_revision_are_refused(self):
+        with self.assertRaisesRegex(tx.TransactionError, "immutable Git SHA"):
+            tx.install(self.payloads, "main", self.root, self.state, self.lifecycle)
+        with self.assertRaisesRegex(tx.TransactionError, "unsafe"):
+            self.install({"../escape.lua": b"bad"})
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_managed_file_drift_fails_without_stop(self):
+        self.install()
+        (self.root / "lua/user_dynamic.lua").write_bytes(b"modified outside ownership")
+        old_stops = self.lifecycle.stops
+        with self.assertRaisesRegex(tx.TransactionError, "changed or missing"):
+            self.install()
+        self.assertEqual(self.lifecycle.stops, old_stops)
+
+
+if __name__ == "__main__":
+    unittest.main()
