@@ -12,7 +12,7 @@
 |---|---|
 | **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · FreeBSD 15 stable pkg repository (publication pending) |
 | **Latest published testing package** | [v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17) · Strategy Lab owner-tested, not a stable Web/pkg release |
-| **Current development candidate** | `v0.5.7_1` · contains the accepted Strategy Lab and latest RU/EN / Apply-button corrections; owner-installed qualification applies to earlier `_17` test package |
+| **Current development candidate** | `v0.5.7_10` · source-only ECH-disabled private Chrome reachability policy plus ongoing Additional Resources development; owner-installed `_10` qualification and package publication pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -90,7 +90,7 @@ What it does:
 
 - accepts a blocked **domain or IPv4 address**;
 - supports optional **Host / SNI** for fixed-IP HTTPS/TLS/QUIC testing;
-- measures direct reachability with private [curl-impersonate](https://github.com/lexiforest/curl-impersonate) Chrome-compatible TLS/HTTP/HTTP/3 probing before trying bypass candidates; direct accessible targets are not reported as needing bypass;
+- measures direct reachability with private [curl-impersonate](https://github.com/lexiforest/curl-impersonate) Chrome-compatible TLS/HTTP/HTTP/3 probing with ECH disabled for consistent accessibility checks (not a browser ECH-on compatibility test) before trying bypass candidates; direct accessible targets are not reported as needing bypass;
 - runs deterministic native Zapret2 strategy candidates with temporary runtime and firewall rules;
 - attributes candidate traffic to exact controlled source ports and temporary firewall rules;
 - checks stability, maintains at most three confirmed finalists, and replays selected profiles before recommending them;
