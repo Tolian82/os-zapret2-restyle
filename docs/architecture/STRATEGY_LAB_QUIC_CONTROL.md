@@ -72,6 +72,8 @@ Stage-4 source catalog `v0.5.6_14` (original four IDs and order unchanged):
 
 The existing `fake_default_quic` builtin is used, not an invented external BLOB. Python production checks canonical `CandidateSpec`/external resource compatibility and admits 3/3 attempts only inside the existing Stage-80 and overall deadlines while reserving follow-up/replay/Stage-90 work. `tested` includes only attempted variants; `incompatible` and `deferred` are separate, with `incomplete_budget` distinct from exhaustive `not_found`. The legacy shell reference runner reads the same catalog but is not the Python production owner.
 
+**Direct QUIC confirmation is scoped to QUIC/UDP443:** when pinned QUIC-only verification succeeds before catalog search, store `quic.status=direct_accessible` and skip QUIC bypass candidates, but do **not** terminate the overall Extended job as `TARGET_ACCESSIBLE` if the Stage-40 HTTPS/TCP direct baseline failed. Finish the optional UDP branch and run Stage 85 exact finalist replay for TLS candidates found at Stages 60/70. This transport-specific rule corrects an owner-observed `v0.5.6_14` defect in `v0.5.6_15`. Report that direct QUIC reachability does not prove direct TCP/HTTPS availability.
+
 The production runner appends every executed candidate result to `tested`. It may return early when a working candidate is found; otherwise it reaches `not_found` only after the enabled catalog search completes.
 
 Structured terminal state remains:
