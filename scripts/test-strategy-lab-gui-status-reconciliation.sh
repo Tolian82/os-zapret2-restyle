@@ -51,8 +51,14 @@ grep -Fq 'function renderTransientStatus()' "${VIEW}" || fail 'transient status 
 grep -Fq 'if (transientReply(data)) { renderTransientStatus(); setBusy(true); schedulePoll(pollStatus); return; }' "${VIEW}" ||
     fail 'active polling does not retry transient status reads'
 grep -Fq 'function discoverActive(attempt)' "${VIEW}" || fail 'active reload discovery is missing'
-grep -Fq "if (data.status === 'idle') { activeJobId=''; setBusy(false); return; }" "${VIEW}" ||
+grep -Fq "if (data.status === 'idle') {" "${VIEW}" ||
     fail 'reload discovery no longer distinguishes explicit idle'
+grep -Fq "activeJobId=''; setBusy(false);" "${VIEW}" ||
+    fail 'idle reload does not stop live job controls'
+grep -Fq 'if (remembered) openSavedResult(remembered);' "${VIEW}" ||
+    fail 'idle reload cannot restore an explicitly selected read-only saved job'
+grep -Fq "if (jobSnapshot(data)) {" "${VIEW}" ||
+    fail 'active job discovery no longer prefers live persisted state'
 grep -Fq 'discoverActive(0);' "${VIEW}" || fail 'Diagnostics does not use reconciled active discovery on load'
 
 # Start presents an accepted job as queued immediately, then switches to authoritative

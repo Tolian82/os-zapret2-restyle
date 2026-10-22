@@ -2,6 +2,7 @@
 <script>
 $(document).ready(function () {
     var activeJobId = '', pollTimer = null, circularTimer = null, renderedProfiles = [];
+    var historicalView = false, savedLookupToken = 0, savedJobKey = 'zapret2.strategyLab.selectedSavedJob';
     var udpPayloadMaxBytes = 4096, discoveryRetryLimit = 5;
     var strategyLabBusy = false, quicPreferenceReady = false, quicPreferenceSaving = false;
     var udpPayloadSelection = {generation:0, ready:false, reading:false, fileName:'', bytes:0, base64:''};
@@ -64,6 +65,8 @@ $(document).ready(function () {
         quicHelp:'Если включено, QUIC-стратегии проверяются даже когда контрольная проверка показывает, что QUIC заблокирован.',
         quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
         copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
+        savedJobLabel:'Сохранённое задание', openSavedJob:'Открыть результат', savedJobInvalid:'Укажите ID вида job.XXXX.', savedJobUnavailable:'Сохранённый результат не найден или задание не завершено.',
+        unverifiedReplay:'не подтверждено', savedProfiles:'Сохранённые профили (финальное воспроизведение не подтверждено)', unverifiedScope:'без подтверждённого финального воспроизведения',
         progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
         statusRetry:'Статус Strategy Lab временно недоступен. Повторная попытка…', statusFailed:'Не удалось получить актуальный статус Strategy Lab.',
         testDomainTitle:'Тестирование соединения с доменом', testDomainHelp:'Введите домен и нажмите «Проверка», чтобы проверить HTTPS-соединение.',
@@ -85,6 +88,8 @@ $(document).ready(function () {
         quicHelp:'When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.',
         quicSaveFailed:'The Enable QUIC setting could not be saved.',
         copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
+        savedJobLabel:'Saved job', openSavedJob:'Open result', savedJobInvalid:'Enter a valid job ID such as job.XXXX.', savedJobUnavailable:'Saved result not found or job is not completed.',
+        unverifiedReplay:'not verified', savedProfiles:'Saved profiles (final replay not verified)', unverifiedScope:'without verified final replay',
         progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
         statusRetry:'Strategy Lab status is temporarily unavailable. Retrying…', statusFailed:'The current Strategy Lab status could not be read.',
         testDomainTitle:'Test Domain Connectivity', testDomainHelp:'Enter a domain and click Test to check HTTPS connectivity.',
@@ -125,6 +130,8 @@ $(document).ready(function () {
         $('#strategyLabState,#circularState').text(label(statusLabels,'IDLE'));
         $('#strategyLabResultOutcome').prev('strong').text(ui.outcome + ':');
         $('#strategyLabResultRestoration').prev('strong').text(ui.restoration + ':');
+        $('#strategyLabSavedJobLabel').text(ui.savedJobLabel + ':');
+        $('#strategyLabOpenSavedJob').text(ui.openSavedJob);
         var headers=$('#strategyLabShortlist thead th');
         headers.eq(3).text(ui.family); headers.eq(4).text(ui.endpoints); headers.eq(5).text(ui.replay); headers.eq(6).text(ui.completeProfile);
         $('#strategyLabRaw').closest('details').find('summary').first().text(ui.fullOutput);
@@ -161,6 +168,7 @@ $(document).ready(function () {
         $('#strategyLabBtn').prop('disabled', busy); $('#strategyLabCancelBtn').prop('disabled', !busy || !activeJobId);
         $('#strategyLabEnableQuic').prop('disabled', busy || !quicPreferenceReady || quicPreferenceSaving);
         $('#strategyLabUdpPayload,#strategyLabUdpPayloadButton,#strategyLabUdpPort,#strategyLabServiceHostInput').prop('disabled', busy);
+        $('#strategyLabSavedJobInput,#strategyLabOpenSavedJob').prop('disabled', busy);
     }
     function stopPolling() { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } }
     function schedulePoll(callback) { stopPolling(); pollTimer = setTimeout(callback, 1000); }
@@ -299,6 +307,18 @@ $(document).ready(function () {
         $('#strategyLabStages tbody').html(html);
     }
     function shortlist(data) { return data.shortlist && Array.isArray(data.shortlist.items) ? data.shortlist.items : []; }
+    function verifiedReplay(item) { return !!(item && item.profile_replay && item.profile_replay.verified === true); }
+    function savedJobId(value) { return /^job\.[A-Za-z0-9]+$/.test(String(value || '')); }
+    function selectedSavedJob() {
+        try { var saved=sessionStorage.getItem(savedJobKey); return savedJobId(saved) ? saved : ''; }
+        catch (error) { return ''; }
+    }
+    function rememberSavedJob(jobId) {
+        try {
+            if (savedJobId(jobId)) sessionStorage.setItem(savedJobKey, jobId);
+            else sessionStorage.removeItem(savedJobKey);
+        } catch (error) { /* session storage is optional; manual read still works */ }
+    }
     function endpointText(item) {
         var values = [], seen = {};
         (Array.isArray(item.endpoints) ? item.endpoints : []).forEach(function (endpoint) {
@@ -309,8 +329,11 @@ $(document).ready(function () {
     }
     function replayText(item) {
         var replay = item.profile_replay || {};
-        if (replay.attempt_count != null) return String(replay.pass_count || 0) + '/' + String(replay.attempt_count);
-        return replay.verified === true ? (isRussian ? 'проверено' : 'verified') : '—';
+        if (replay.attempt_count != null) {
+            var counts=String(replay.pass_count == null ? 0 : replay.pass_count) + '/' + String(replay.attempt_count);
+            return verifiedReplay(item) ? counts : counts + ' (' + ui.unverifiedReplay + ')';
+        }
+        return verifiedReplay(item) ? (isRussian ? 'проверено' : 'verified') : '—';
     }
     function renderResultSummary(data) {
         var visible = terminal(data.state); $('#strategyLabResultBox').toggle(visible); if (!visible) return;
@@ -322,8 +345,9 @@ $(document).ready(function () {
     function renderProtocolScope(data, items) {
         var notice = $('#strategyLabProtocolScope');
         if (data.mode !== 'extended' || data.state !== 'completed') { notice.hide().text(''); return; }
-        var counts = {tcp443:0,http80:0,quic443:0,udp:0};
+        var counts = {tcp443:0,http80:0,quic443:0,udp:0}, unverified=0;
         items.forEach(function (item) {
+            if (!verifiedReplay(item)) { unverified++; return; }
             var port = Number(item.port), protocol = String(item.protocol || '');
             if ((protocol === 'tls13' || protocol === 'tls12') && port === 443) counts.tcp443++;
             else if (protocol === 'http' && port === 80) counts.http80++;
@@ -334,8 +358,9 @@ $(document).ready(function () {
             ui.scopeTcp + ' — ' + counts.tcp443 + '; ' +
             ui.scopeHttp + ' — ' + counts.http80 + '; ' +
             ui.scopeQuic + ' — ' + counts.quic443 + '; ' +
-            ui.scopeUdp + ' — ' + counts.udp + '. ' +
-            ui.scopeExplanation).show();
+            ui.scopeUdp + ' — ' + counts.udp + '.' +
+            (unverified ? ' ' + unverified + ' ' + ui.unverifiedScope + '.' : '') +
+            ' ' + ui.scopeExplanation).show();
     }
     function renderShortlist(data) {
         var items = shortlist(data), html = ''; renderedProfiles = [];
@@ -348,7 +373,8 @@ $(document).ready(function () {
                 '<td><pre style="margin:0;white-space:pre-wrap;">' + esc(profile) + '</pre><button type="button" class="btn btn-xs btn-default strategyLabCopyProfile" data-profile-index="' + profileIndex + '">' + esc(ui.copy) + '</button></td></tr>';
         });
         $('#strategyLabShortlist tbody').html(html); $('#strategyLabShortlistBox').toggle(items.length > 0);
-        var circularReady = data.circular_eligible === true; $('#circularControls').toggle(circularReady);
+        $('#strategyLabShortlistBox h4').first().text(items.some(function (item) { return !verifiedReplay(item); }) ? ui.savedProfiles : (isRussian ? 'Стабильные кандидаты' : 'Stable candidates'));
+        var circularReady = data.circular_eligible === true && !historicalView; $('#circularControls').toggle(circularReady);
         if (data.state === 'completed') { if (circularReady) $('#strategyLabMessage').text(ui.circularReady); else if (!items.length) $('#strategyLabMessage').text(ui.noCandidates); }
     }
     function renderJob(data) {
@@ -373,6 +399,27 @@ $(document).ready(function () {
     $(document).on('click', '.strategyLabCopyProfile', function () {
         var profile = renderedProfiles[Number($(this).attr('data-profile-index'))] || ''; if (!profile) return;
         copyProfile(profile).then(function () { $('#strategyLabMessage').text(ui.copied); }, function () { $('#strategyLabMessage').text(ui.copyFailed); });
+    });
+    function openSavedResult(jobId) {
+        if (strategyLabBusy) return;
+        if (!savedJobId(jobId)) { showInputError(ui.savedJobInvalid); return; }
+        var lookup=++savedLookupToken;
+        apiPost('/api/zapret/strategy_lab/result', {job_id:jobId}, function (data) {
+            if (strategyLabBusy || lookup !== savedLookupToken) return;
+            if (!jobSnapshot(data) || data.job_id !== jobId || !terminal(data.state)) {
+                $('#strategyLabMessage').text((data && data.message) || ui.savedJobUnavailable);
+                return;
+            }
+            stopPolling(); historicalView=true; activeJobId=jobId;
+            $('#strategyLabSavedJobInput').val(jobId);
+            rememberSavedJob(jobId); renderJob(data); setBusy(false);
+        });
+    }
+    $('#strategyLabOpenSavedJob').click(function () {
+        clearInputError(); openSavedResult($('#strategyLabSavedJobInput').val().trim());
+    });
+    $('#strategyLabSavedJobInput').on('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); $('#strategyLabOpenSavedJob').click(); }
     });
     function fetchResult() {
         if (!activeJobId) return;
@@ -402,12 +449,17 @@ $(document).ready(function () {
     function discoverActive(attempt) {
         apiPost('/api/zapret/strategy_lab/status', {job_id:'-'}, function (data) {
             if (jobSnapshot(data)) {
-                activeJobId=data.job_id; renderJob(data);
+                historicalView=false; activeJobId=data.job_id; renderJob(data);
                 if (terminal(data.state)) { setBusy(false); fetchResult(); }
                 else { setBusy(true); pollStatus(); }
                 return;
             }
-            if (data.status === 'idle') { activeJobId=''; setBusy(false); return; }
+            if (data.status === 'idle') {
+                activeJobId=''; setBusy(false);
+                var remembered=selectedSavedJob();
+                if (remembered) openSavedResult(remembered);
+                return;
+            }
             if (transientReply(data) && attempt < discoveryRetryLimit) {
                 renderTransientStatus(); setBusy(true); schedulePoll(function(){ discoverActive(attempt + 1); }); return;
             }
@@ -465,7 +517,7 @@ $(document).ready(function () {
             if (udpPayloadSelection.reading) { showInputError(ui.udpNotReady); return; }
         }
         function beginStart(payloadBase64) {
-            clearInputError(); stopPolling(); activeJobId=''; renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
+            clearInputError(); stopPolling(); activeJobId=''; historicalView=false; savedLookupToken++; rememberSavedJob(''); renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
             $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide(); $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
             $('#strategyLabState').text(label(statusLabels,'QUEUED'));
             renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
@@ -568,7 +620,13 @@ $(document).ready(function () {
 <tr id="strategyLabServiceHostRow" style="display:none;"><td class="zapret-field-label">Host / SNI (optional)</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput" placeholder="example.com"/></td><td colspan="2"><small id="strategyLabServiceHostHelp"></small></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><div class="strategy-lab-file-picker"><button type="button" class="btn btn-default" id="strategyLabUdpPayloadButton" aria-controls="strategyLabUdpPayload">Choose file</button><span id="strategyLabUdpPayloadName" class="text-muted" aria-live="polite">No file selected</span><input type="file" class="strategy-lab-native-file-input" id="strategyLabUdpPayload" tabindex="-1" aria-hidden="true"/></div><small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Enable QUIC') }}</td><td class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
-<div id="strategyLabSummary"></div><p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
+<div id="strategyLabSummary"></div>
+<div class="form-inline" id="strategyLabSavedJobControls" style="margin:10px 0;">
+    <label for="strategyLabSavedJobInput" id="strategyLabSavedJobLabel">Saved job:</label>
+    <input type="text" class="form-control input-sm" id="strategyLabSavedJobInput" placeholder="job.XXXXXXXX" maxlength="100" autocomplete="off" style="max-width:220px;" />
+    <button type="button" class="btn btn-default btn-sm" id="strategyLabOpenSavedJob">Open result</button>
+</div>
+<p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
 <div id="strategyLabResultBox" class="well" style="display:none;"><h4>{{ lang._('Result summary') }}</h4><div class="row"><div class="col-sm-3"><strong>{{ lang._('Target') }}:</strong> <span id="strategyLabResultTarget">—</span></div><div class="col-sm-3"><strong>{{ lang._('Mode') }}:</strong> <span id="strategyLabResultMode">—</span></div><div class="col-sm-3"><strong>{{ lang._('Outcome') }}:</strong> <span id="strategyLabResultOutcome">—</span></div><div class="col-sm-3"><strong>{{ lang._('Restoration') }}:</strong> <span id="strategyLabResultRestoration">—</span></div></div></div>

@@ -151,7 +151,7 @@ grep -Fq 'strategy-lab-circular)' "${SERVICE_SCRIPT}"
 grep -Fq '[strategy_lab_circular_start]' "${ACTIONS}"
 grep -Fq 'strategy_lab_circular_session_create' "${LAUNCHER_SCRIPT}"
 grep -Fq 'STRATEGY_LAB_JOBS_DIR="${STRATEGY_LAB_CIRCULAR_SESSIONS_DIR}"' "${WORKER_SCRIPT}"
-grep -Fq 'var circularReady = data.circular_eligible === true;' "${VIEW}"
+grep -Fq 'var circularReady = data.circular_eligible === true && !historicalView;' "${VIEW}"
 ! grep -Fq 'items.length >= 3 && items.length <= 5' "${VIEW}"
 
 # A lifecycle-lock failure must be recorded only in the private session state.
