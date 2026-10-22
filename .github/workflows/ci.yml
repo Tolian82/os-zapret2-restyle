@@ -387,6 +387,12 @@ jobs:
       - name: Check extra-resources native lifecycle and launcher wiring
         run: python3.13 scripts/test-extra-resources-native-wiring.py
 
+      - name: Test owned resources across upstream updates
+        run: python3.13 scripts/test-extra-resources-upstream-guard.py
+
+      - name: Test original upstream setup transaction under shared lock
+        run: sh scripts/test-setup-runtime-transaction.sh
+
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
 

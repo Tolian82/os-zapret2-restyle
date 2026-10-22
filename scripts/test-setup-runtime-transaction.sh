@@ -26,6 +26,7 @@ SETUP_MOCK="${TMP_ROOT}/setup"
 SERVICE_MOCK="${TMP_ROOT}/service"
 CONFIGCTL_MOCK="${TMP_ROOT}/configctl"
 GIT_MOCK="${TMP_ROOT}/git"
+LOCKF_MOCK="${TMP_ROOT}/lockf"
 
 mkdir -p \
     "${ZAPRET_DIR}/.git" \
@@ -106,9 +107,21 @@ esac
 MOCK
 chmod +x "${GIT_MOCK}"
 
+cat > "${LOCKF_MOCK}" <<'MOCK'
+#!/bin/sh
+[ "$1" = -s ] || exit 64
+shift
+[ "$1" = -t ] || exit 64
+shift 2
+[ -n "${1:-}" ] || exit 64
+shift
+exec "$@"
+MOCK
+chmod +x "${LOCKF_MOCK}"
+
 cat > "${SETUP_MOCK}" <<'MOCK'
 #!/bin/sh
-[ "${1:-}" = install ] || exit 64
+[ "${1:-}" = install-under-parent-lock ] || exit 64
 version=${2:-v1.0.4}
 printf '%s\n' "${version}" > "${TEST_GIT_RELEASE_STATE}"
 printf '%s\n' candidatecommit > "${TEST_GIT_COMMIT_STATE}"
@@ -137,6 +150,8 @@ run_transaction()
     TEST_SETUP_STATUS="${SETUP_STATUS}" \
     TEST_ZAPRET_DIR="${ZAPRET_DIR}" \
     SETUP_SCRIPT="${SETUP_MOCK}" \
+    LOCKF_BIN="${LOCKF_MOCK}" \
+    RUN_DIR="${TMP_ROOT}/run" \
     SERVICE_SCRIPT="${SERVICE_MOCK}" \
     CONFIGCTL="${CONFIGCTL_MOCK}" \
     GIT_BIN="${GIT_MOCK}" \
