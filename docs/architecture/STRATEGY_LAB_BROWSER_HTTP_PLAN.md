@@ -188,7 +188,7 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ### Stage 5 — results, GUI and persisted jobs
 
-**Bounded source slice `v0.5.6_16`, not published:** expose existing read-only historical `result` lookup by explicit validated job ID. Only user-selected history is restored within the same tab after F5 if active-job discovery is idle; do not auto-resurrect unrelated completed history. Disable circular mutations when reviewing history. Historical shortlist items lacking explicit `profile_replay.verified=true` remain viewable but cannot count as verified protocol winners. This is only the first Stage5 slice; complete measured Chrome/QUIC/HTTP evidence, RU/EN and old-snapshot acceptance remain OPEN.
+**Bounded testing slice [published as `v0.5.6_16`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_16/os-zapret2-restyle-0.5.6_16.pkg), installed acceptance OPEN:** expose existing read-only historical `result` lookup by explicit validated job ID. Only user-selected history is restored within the same tab after F5 if active-job discovery is idle; do not auto-resurrect unrelated completed history. Disable circular mutations when reviewing history. Historical shortlist items lacking explicit `profile_replay.verified=true` remain viewable but cannot count as verified protocol winners. This is only the first Stage5 slice; complete measured Chrome/QUIC/HTTP evidence, RU/EN and old-snapshot acceptance remain OPEN.
 
 
 
