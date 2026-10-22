@@ -25,6 +25,21 @@ https://github.com/ugorur/os-zapret2
 
 Copyright (c) 2026 Umur Gorur
 
+## Browser-compatible HTTPS/HTTP/3 client (Strategy Lab)
+
+Project:
+
+https://github.com/lexiforest/curl-impersonate
+
+Upstream MIT license:
+
+https://github.com/lexiforest/curl-impersonate/blob/main/LICENSE
+
+Copyright (c) 2026 curl_cffi developers
+
+This credits the external client used by Strategy Lab. It is an upstream
+component, not a claim of direct contributions to this plugin.
+
 ## os-zapret2-restyle
 
 Project:

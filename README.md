@@ -306,8 +306,8 @@ Useful entry points:
 
 ## Acknowledgements
 
-This independent project builds on open-source work by **bol-van** and **Umur Gorur**. Their copyright notices and licenses are preserved in [`NOTICE`](NOTICE).
+This independent project builds on open-source work by **bol-van** and **Umur Gorur**, and uses the browser-compatible HTTP client from **[lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate)**. See [`CONTRIBUTORS.md`](CONTRIBUTORS.md) for project credits and [`NOTICE`](NOTICE) for copyright attribution.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+MIT. See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) and [`CONTRIBUTORS.md`](CONTRIBUTORS.md) for upstream attribution.
