@@ -43,7 +43,7 @@ The owner has accepted the bounded Stages 1–6 completion and authorized a subs
 - Diagnostics persistence/reload; retention/cleanup; reboot/residue regression.
 - Runtime/service reliability и package/runtime visibility; дальнейшие точечные RU/EN исправления.
 - IPv6 Laboratory target support — отдельная архитектурная задача.
-- Дополнительный BLOB repository GUI — после согласованного технического контракта владельца.
+- **Дополнительные Lua/BLOB ресурсы — ТЗ согласовано 22.10.2026, реализация ожидает отдельного этапа.** Отдельная ручная кнопка «Установить дополнительные ресурсы» / “Install Additional Resources” под статусом на странице «Стратегия»; источник [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Установка транзакционная, без перезаписи штатных/пользовательских файлов и без загрузки автоматически при смене upstream-релиза. Новый `ResourceInventory` + реальные совместимые кандидаты в адаптивном графе, адресный `--lua-init`, конечный бюджет, прежние стратегии не меняются. [Утверждённое ТЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md). **Кнопка/интеграция ещё не реализованы.**
 
 Эти направления не превращаются в обязательные блокеры текущей HTTP-модернизации или прежних релизов без конкретного затронутого сценария.
 
