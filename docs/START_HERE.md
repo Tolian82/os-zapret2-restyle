@@ -6,7 +6,30 @@
 
 **Release preparation:** bundle [RU/EN Result summary correction](patches/v0.5.6_18.md), [independent upper/lower Strategies Apply indicators](patches/v0.5.6_19.md), verified owner-accepted Strategy Lab Stages 1–6, the [README capability audit](../README.md), star invitation and [lexiforest upstream attribution](../CONTRIBUTORS.md). Pre-release source/FreeBSD CI and full Web/pkg publication must PASS before declaring release success. This is not proof of owner-installed `v0.5.7_1` GUI operation.
 
-## Current task — approved Strategy Lab modernization
+## Active implementation override — Additional Resources
+
+On 22 October 2026 the owner instructed implementation of the approved
+[Additional Resources plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
+The source catalog Stage 1 descriptor/validation foundation is merged at
+[`ccdd8fae`](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2),
+with [catalog CI success](https://github.com/Tolian82/zapret2-extra-resources/actions/runs/39830826402).
+The descriptors are data, **not** an implemented plugin installer or search integration.
+No plugin `VERSION` or `PLUGIN_REVISION` change, package delivery, or service restart
+was part of Stage 1.
+
+**Current single next action:** implement Stage 2 in the existing plugin
+configd/setup/service lifecycle: a manually requested, serialized,
+transactional resource installer with collision protection, rollback and
+mandatory verified Stop→Start. Inspect the current lifecycle and upstream
+replacement paths before changing them. Do not display or enable the GUI
+button before the backend truly implements the contract. Keep automatic
+resource download disabled.
+
+**Release boundary:** The prior owner-authorized `v0.5.7_1` full release
+remains pending its own exact-head publication checks. This new owner-directed
+development work does not itself authorize or claim a release.
+
+## Previous task — approved Strategy Lab modernization
 
 The [detailed English development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) and [requirements](REQUIREMENTS.md) (`BH-01`–`BH-12`) now specify an explicit independent-OR reachability rule: **verified target TLS handshake OR verified target QUIC handshake OR genuine final target HTTP response is sufficient**. An HTTP response counts as accessible, including 4xx/5xx and without requiring a complete body; a separate handshake report is not necessary if the response is genuine. Stages 1–6, Model C, attribution and Stage 90 remain unchanged.
 
@@ -16,9 +39,9 @@ Chrome-default TLS 1.2/1.3 is allowed; HTTP/1.1 and HTTP/2 are equally acceptabl
 
 **Stage 1 `_3` installed evidence:** [FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39588528210), [published testing package](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_3) and [owner-live TLS/QUIC results](verification/evidence/2026-10-21-v0.5.6_3-owner-live-chrome-tls-quic.md): CA PEM `/usr/local/etc/ssl/cert.pem`, `chrome150`, successful certificate-verified HTTP/2 200 for example.com, GitHub, Google and Cloudflare without ECH; real Google `--http3-only` HTTP/3 204; all five `EXIT=0`, `CERT=0`. Cloudflare with ECH previously timed out; no causal blocking claim. The installed `_3` Standard/Model C is unchanged; the `_6` native-lifecycle correction has owner-live Standard and Stage 90 GUI PASS.
 
-## Single next action
+## Earlier release-publication handoff (pending, not the current development action)
 
-**Single next action:** Publish authorized full `v0.5.7_1` candidate through the existing exact-subject GitHub release-preparation PR and triggered FreeBSD15 GitHub Release + Pages/pkg deployment, **only after exact-head CI including runtime/lifecycle suites is green**. Verify tag/source/asset/digest/pkg metadata/Web install path; then record actual publication results and close only PRs superseded by the released files. Existing stable `v0.5.6` tag/assets are immutable. Stages 1–6 owner acceptance remains limited to observed `_17` scenarios and does not establish winning blocked-target QUIC candidate. [Release notes](releases/v0.5.7.md).
+**Previously requested release task:** Publish authorized full `v0.5.7_1` candidate through the existing exact-subject GitHub release-preparation PR and triggered FreeBSD15 GitHub Release + Pages/pkg deployment, **only after exact-head CI including runtime/lifecycle suites is green**. Verify tag/source/asset/digest/pkg metadata/Web install path; then record actual publication results and close only PRs superseded by the released files. Existing stable `v0.5.6` tag/assets are immutable. Stages 1–6 owner acceptance remains limited to observed `_17` scenarios and does not establish winning blocked-target QUIC candidate. [Release notes](releases/v0.5.7.md).
 
 Previous testing publication boundary: `_17` exact source merge `b735b0bb55933f0abab007f3165cbb733ceb6d33`, [source CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362), [testing asset](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [record](verification/evidence/testing-publications/v0.5.6_17.md), [publisher package/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS; GitHub Actions permission denied automatic record-PR creation, reconciled through PR #484. Owner-reported bounded `_17` GUI acceptance **PASS** ([record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); F5 and RU/EN owner-reported PASS; clipboard bytes, installed digest and kernel-level recovery are not separately established.
 
