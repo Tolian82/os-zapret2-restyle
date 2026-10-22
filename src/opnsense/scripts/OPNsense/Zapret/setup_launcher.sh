@@ -17,6 +17,7 @@ LOG_DIR="${LOG_DIR:-/var/log/zapret2}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/setup.log}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
 PID_FILE="${PID_FILE:-${RUN_DIR}/setup.pid}"
+EXTRA_RESOURCES_PID_FILE="${EXTRA_RESOURCES_PID_FILE:-${RUN_DIR}/extra-resources.pid}"
 MODE="${1:-install}"
 VERSION="${2:-}"
 
@@ -37,9 +38,15 @@ release_tag_valid()
 
 setup_pid_running()
 {
-    [ -r "${PID_FILE}" ] || return 1
+    pid_file_running "${PID_FILE}"
+}
+
+pid_file_running()
+{
+    _pid_checked="$1"
+    [ -r "${_pid_checked}" ] || return 1
     _setup_pid=""
-    IFS= read -r _setup_pid < "${PID_FILE}" || true
+    IFS= read -r _setup_pid < "${_pid_checked}" || true
     case "${_setup_pid}" in
         ''|*[!0-9]*)
             return 1
@@ -140,8 +147,8 @@ launch_install()
         exit 1
     }
 
-    if setup_pid_running; then
-        echo "ERROR: a zapret2 runtime operation is already in progress" >&2
+    if setup_pid_running || pid_file_running "${EXTRA_RESOURCES_PID_FILE}"; then
+        echo "ERROR: a zapret2 runtime or additional-resources operation is already in progress" >&2
         exit 75
     fi
 
