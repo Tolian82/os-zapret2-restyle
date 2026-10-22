@@ -65,6 +65,8 @@ $(document).ready(function () {
         quicHelp:'Если включено, QUIC-стратегии проверяются даже когда контрольная проверка показывает, что QUIC заблокирован.',
         quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
         copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
+        copyJob:'Копировать Job ID', jobCopied:'Job ID скопирован.', jobCopyFailed:'Не удалось скопировать Job ID.',
+        circularTitle:'Временная циклическая проверка', circularHelp:'Только для 3–5 подтверждённых TLS 1.3 стратегий: до 5 минут временно чередует тестовые варианты для проверки сайта в браузере. Запускает отдельный dvtws2 и IPFW-перехват для целевых адресов, что может затронуть другие устройства сети. Настройки Стратегий не сохраняются; после завершения выполняется восстановление Zapret2.',
         savedJobLabel:'Сохранённое задание', openSavedJob:'Открыть результат', savedJobInvalid:'Укажите ID вида job.XXXX.', savedJobUnavailable:'Сохранённый результат не найден или задание не завершено.',
         unverifiedReplay:'не подтверждено', savedProfiles:'Сохранённые профили (финальное воспроизведение не подтверждено)', unverifiedScope:'без подтверждённого финального воспроизведения',
         progress:'Прогресс', restorationPass:'Успешно', requestFailed:'Ошибка запроса: ',
@@ -88,6 +90,8 @@ $(document).ready(function () {
         quicHelp:'When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.',
         quicSaveFailed:'The Enable QUIC setting could not be saved.',
         copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
+        copyJob:'Copy Job ID', jobCopied:'Job ID copied.', jobCopyFailed:'Could not copy Job ID.',
+        circularTitle:'Temporary circular validation', circularHelp:'Only for 3–5 verified TLS 1.3 strategies: temporarily cycles test profiles for up to 5 minutes to check the site in a browser. Runs a separate dvtws2 and IPFW interception for target addresses, potentially affecting other network clients. Saved Traffic Strategies are not changed; Zapret2 is restored afterward.',
         savedJobLabel:'Saved job', openSavedJob:'Open result', savedJobInvalid:'Enter a valid job ID such as job.XXXX.', savedJobUnavailable:'Saved result not found or job is not completed.',
         unverifiedReplay:'not verified', savedProfiles:'Saved profiles (final replay not verified)', unverifiedScope:'without verified final replay',
         progress:'Progress', restorationPass:'Pass', requestFailed:'Request failed: ',
@@ -132,6 +136,9 @@ $(document).ready(function () {
         $('#strategyLabResultRestoration').prev('strong').text(ui.restoration + ':');
         $('#strategyLabSavedJobLabel').text(ui.savedJobLabel + ':');
         $('#strategyLabOpenSavedJob').text(ui.openSavedJob);
+        $('#strategyLabCopyJob').attr('title',ui.copyJob).attr('aria-label',ui.copyJob);
+        $('#circularControls h4').first().text(ui.circularTitle);
+        $('#strategyLabCircularHelp').text(ui.circularHelp);
         var headers=$('#strategyLabShortlist thead th');
         headers.eq(3).text(ui.family); headers.eq(4).text(ui.endpoints); headers.eq(5).text(ui.replay); headers.eq(6).text(ui.completeProfile);
         $('#strategyLabRaw').closest('details').find('summary').first().text(ui.fullOutput);
@@ -309,6 +316,13 @@ $(document).ready(function () {
     function shortlist(data) { return data.shortlist && Array.isArray(data.shortlist.items) ? data.shortlist.items : []; }
     function verifiedReplay(item) { return !!(item && item.profile_replay && item.profile_replay.verified === true); }
     function savedJobId(value) { return /^job\.[A-Za-z0-9]+$/.test(String(value || '')); }
+    function displayJobId(jobId) {
+        var value=String(jobId || ''), valid=savedJobId(value);
+        $('#strategyLabJob').text(value || '—');
+        $('#strategyLabCopyJob').prop('disabled',!valid).toggle(valid)
+            .removeClass('strategy-lab-job-copied').attr('title',ui.copyJob).attr('aria-label',ui.copyJob);
+        $('#strategyLabCopyJobFeedback').text('');
+    }
     function selectedSavedJob() {
         try { var saved=sessionStorage.getItem(savedJobKey); return savedJobId(saved) ? saved : ''; }
         catch (error) { return ''; }
@@ -380,14 +394,14 @@ $(document).ready(function () {
     function renderJob(data) {
         if (!jobSnapshot(data)) return false;
         clearInputError(); renderProgress(data); renderStages(data); renderResultSummary(data); renderShortlist(data);
-        $('#strategyLabRaw').text(JSON.stringify(data, null, 2)); $('#strategyLabJob').text(data.job_id);
+        $('#strategyLabRaw').text(JSON.stringify(data, null, 2)); displayJobId(data.job_id);
         $('#strategyLabState').text(label(statusLabels, String(data.state).toUpperCase()));
         if (data.message) $('#strategyLabMessage').text(data.message);
         return true;
     }
     function renderTransientStatus() {
         $('#strategyLabMessage').text(ui.statusRetry);
-        if (activeJobId) $('#strategyLabJob').text(activeJobId);
+        if (activeJobId) displayJobId(activeJobId);
     }
     function copyProfile(profile) {
         if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(profile);
@@ -396,6 +410,17 @@ $(document).ready(function () {
             try { document.execCommand('copy') ? resolve() : reject(); } catch (error) { reject(error); } area.remove();
         });
     }
+    $('#strategyLabCopyJob').on('click', function () {
+        var id=$('#strategyLabJob').text().trim(), button=$(this);
+        if (!savedJobId(id)) return;
+        copyProfile(id).then(function () {
+            if ($('#strategyLabJob').text().trim() !== id) return;
+            button.addClass('strategy-lab-job-copied').attr('title',ui.jobCopied).attr('aria-label',ui.jobCopied);
+            $('#strategyLabCopyJobFeedback').text(ui.jobCopied);
+        }, function () {
+            $('#strategyLabCopyJobFeedback').text(ui.jobCopyFailed);
+        });
+    });
     $(document).on('click', '.strategyLabCopyProfile', function () {
         var profile = renderedProfiles[Number($(this).attr('data-profile-index'))] || ''; if (!profile) return;
         copyProfile(profile).then(function () { $('#strategyLabMessage').text(ui.copied); }, function () { $('#strategyLabMessage').text(ui.copyFailed); });
@@ -478,7 +503,7 @@ $(document).ready(function () {
     function startStrategyLab(target, serviceHost, mode, enableQuic, udpPort, udpPayloadBase64) {
         apiPost('/api/zapret/strategy_lab/start', {target:target,service_host:serviceHost,mode:mode,language:isRussian?'ru':'en',enable_quic:enableQuic,udp_port:udpPort,udp_payload_base64:udpPayloadBase64}, function (data) {
             if (data.status === 'busy' && /^job\.[A-Za-z0-9]+$/.test(String(data.job_id || ''))) {
-                activeJobId=data.job_id; $('#strategyLabJob').text(activeJobId); setBusy(true); pollStatus(); return;
+                activeJobId=data.job_id; displayJobId(activeJobId); setBusy(true); pollStatus(); return;
             }
             if (data.status !== 'ok' || !data.job_id) {
                 if (transientReply(data)) { renderTransientStatus(); setBusy(true); discoverActive(0); return; }
@@ -517,7 +542,7 @@ $(document).ready(function () {
             if (udpPayloadSelection.reading) { showInputError(ui.udpNotReady); return; }
         }
         function beginStart(payloadBase64) {
-            clearInputError(); stopPolling(); activeJobId=''; historicalView=false; savedLookupToken++; rememberSavedJob(''); renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
+            clearInputError(); stopPolling(); activeJobId=''; displayJobId(''); historicalView=false; savedLookupToken++; rememberSavedJob(''); renderedProfiles=[]; $('#strategyLabStages tbody,#strategyLabShortlist tbody').empty();
             $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide(); $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
             $('#strategyLabState').text(label(statusLabels,'QUEUED'));
             renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
@@ -605,6 +630,23 @@ $(document).ready(function () {
     opacity:0;
     overflow:hidden;
 }
+.strategy-lab-job-inline { display:inline-flex; align-items:center; vertical-align:middle; white-space:nowrap; gap:3px; }
+.strategy-lab-copy-job {
+    position:relative; display:inline-flex; width:24px; height:22px;
+    padding:0; border:0; border-radius:3px; background:transparent;
+    color:#5cb85c; vertical-align:middle; cursor:pointer;
+}
+.strategy-lab-copy-job::before,.strategy-lab-copy-job::after {
+    content:''; position:absolute; box-sizing:border-box;
+    width:12px; height:11px; border:2px solid currentColor; border-radius:2px;
+}
+.strategy-lab-copy-job::before { left:5px; top:3px; }
+.strategy-lab-copy-job::after { left:9px; top:7px; }
+.strategy-lab-copy-job:hover,.strategy-lab-copy-job:focus,.strategy-lab-job-copied {
+    color:#449d44; background:rgba(92,184,92,.14);
+}
+.strategy-lab-copy-job:focus-visible { outline:2px solid #5cb85c; outline-offset:1px; }
+.strategy-lab-copy-job:disabled { opacity:.45; cursor:default; }
 #strategyLabUdpPayloadName {
     min-width:0;
     overflow:hidden;
@@ -626,12 +668,12 @@ $(document).ready(function () {
     <input type="text" class="form-control input-sm" id="strategyLabSavedJobInput" placeholder="job.XXXXXXXX" maxlength="100" autocomplete="off" style="max-width:220px;" />
     <button type="button" class="btn btn-default btn-sm" id="strategyLabOpenSavedJob">Open result</button>
 </div>
-<p><strong>Job:</strong> <code id="strategyLabJob">—</code> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
+<p><strong>Job:</strong> <span class="strategy-lab-job-inline"><code id="strategyLabJob">—</code><button type="button" id="strategyLabCopyJob" class="strategy-lab-copy-job" style="display:none;" title="Copy Job ID" aria-label="Copy Job ID" disabled></button></span><span id="strategyLabCopyJobFeedback" class="sr-only" aria-live="polite"></span> &nbsp; <strong>{{ lang._('Status') }}:</strong> <span id="strategyLabState">idle</span></p><p id="strategyLabMessage"></p>
 <div id="strategyLabProgressBox"><div class="progress" style="margin-bottom:5px;"><div id="strategyLabProgressBar" class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width:0%;">0%</div></div><p id="strategyLabProgressText"></p></div>
 <div class="table-responsive"><table class="table table-condensed" id="strategyLabStages"><thead><tr><th>#</th><th>{{ lang._('Stage') }}</th><th>{{ lang._('Status') }}</th><th>{{ lang._('Details') }}</th></tr></thead><tbody></tbody></table></div>
 <div id="strategyLabResultBox" class="well" style="display:none;"><h4>{{ lang._('Result summary') }}</h4><div class="row"><div class="col-sm-3"><strong>{{ lang._('Target') }}:</strong> <span id="strategyLabResultTarget">—</span></div><div class="col-sm-3"><strong>{{ lang._('Mode') }}:</strong> <span id="strategyLabResultMode">—</span></div><div class="col-sm-3"><strong>{{ lang._('Outcome') }}:</strong> <span id="strategyLabResultOutcome">—</span></div><div class="col-sm-3"><strong>{{ lang._('Restoration') }}:</strong> <span id="strategyLabResultRestoration">—</span></div></div></div>
 <p id="strategyLabProtocolScope" class="text-muted" style="display:none;margin:12px 0;"></p>
 <div id="strategyLabShortlistBox" style="display:none;"><h4>{{ lang._('Stable candidates') }}</h4><div class="table-responsive"><table class="table table-striped" id="strategyLabShortlist"><thead><tr><th>#</th><th>{{ lang._('Protocol') }}</th><th>{{ lang._('Port') }}</th><th>{{ lang._('Family') }}</th><th>{{ lang._('Endpoints') }}</th><th>{{ lang._('Replay') }}</th><th>{{ lang._('Complete Traffic Strategy profile') }}</th></tr></thead><tbody></tbody></table></div></div>
-<div id="circularControls" class="well" style="display:none;"><h4>{{ lang._('Temporary circular validation') }}</h4><button class="btn btn-success" id="circularStartBtn" type="button">{{ lang._('Start') }}</button> <button class="btn btn-warning" id="circularStopBtn" type="button" disabled>{{ lang._('Stop') }}</button><span style="margin-left:10px;"><strong>{{ lang._('Status') }}:</strong> <span id="circularState">idle</span></span><p id="circularMessage" style="margin-top:10px;"></p><pre id="circularRaw" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></div>
+<div id="circularControls" class="well" style="display:none;"><h4>{{ lang._('Temporary circular validation') }}</h4><p id="strategyLabCircularHelp" class="text-muted"></p><button class="btn btn-success" id="circularStartBtn" type="button">{{ lang._('Start') }}</button> <button class="btn btn-warning" id="circularStopBtn" type="button" disabled>{{ lang._('Stop') }}</button><span style="margin-left:10px;"><strong>{{ lang._('Status') }}:</strong> <span id="circularState">idle</span></span><p id="circularMessage" style="margin-top:10px;"></p><pre id="circularRaw" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></div>
 <details><summary>{{ lang._('Full output (advanced)') }}</summary><pre id="strategyLabRaw" style="max-height:400px;overflow-y:auto;white-space:pre-wrap;font-size:11px;"></pre></details>
 </div></div>

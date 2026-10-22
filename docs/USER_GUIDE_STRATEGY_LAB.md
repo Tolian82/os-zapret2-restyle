@@ -32,4 +32,6 @@ The page shows State, Outcome, and stages 00–99 and retains completed evidence
 
 The stable-candidate table shows up to three candidates. Candidate number one is the default recommendation, but Strategy Lab never writes it to Settings automatically.
 
-**Temporary circular validation** is offered only after a completed successful domain job has a valid three-to-five-item shortlist and verified restoration. It starts one temporary target-scoped profile for browser or application testing. Stop it when testing is complete. The saved Traffic Strategy remains unchanged.
+The compact green two-rectangle icon beside `Job: job.XXXX` copies exactly that displayed Job ID to the clipboard; it does not start or modify a job. Use it to reopen a saved result.
+
+**Temporary circular validation** is offered only after a completed successful domain job has a valid three-to-five-item shortlist and verified restoration. It starts one temporary target-scoped profile for browser or application testing. Stop it when testing is complete (there is also a 300-second safety limit). It temporarily runs a separate dvtws2 and IPFW interception for matching TLS/TCP443 target addresses; the rules may affect other LAN clients accessing those addresses during the test. It cycles 3–5 eligible TLS 1.3 finalists rather than installing a permanent configuration. The saved Traffic Strategy remains unchanged, and Zapret2 state is restored on successful cleanup.
