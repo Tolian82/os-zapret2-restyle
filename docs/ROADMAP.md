@@ -6,7 +6,7 @@ The owner explicitly started the approved [five-stage implementation plan](archi
 on 22 October 2026. Catalog-side Stage 1 capability metadata and validation
 are [merged and CI-verified](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2);
 the plugin has a new read-only immutable-revision catalog/collision preflight
-in source (`v0.5.7_8`), including a new manually invoked bilingual Settings-page GUI and bounded result polling, refusal of direct setup bypass, preservation of pending upstream rollback evidence, and a lifecycle-serialized transaction plus guarded upstream-retention backend; installed OPNsense verification remains open. GUI is source-wired, **not owner-tested**; dynamic candidate generation and installed package/live result are not yet proved. Stage 2 native restart and upstream interruption/recovery remain acceptance gates. The `v0.5.7_1` release preparation remains pending
+in source (`v0.5.7_9`), including a new manually invoked bilingual Settings-page GUI and bounded result polling, refusal of direct setup bypass, preservation of pending upstream rollback evidence, and a lifecycle-serialized transaction plus guarded upstream-retention backend; installed OPNsense verification remains open. GUI is source-wired, **not owner-tested**; dynamic candidate generation and installed package/live result are not yet proved. Stage 2 native restart and upstream interruption/recovery remain acceptance gates. The `v0.5.7_1` release preparation remains pending
 separately; do not silently publish this new feature.
 
 ## Previously prioritized — accepted Strategy Lab release preparation
