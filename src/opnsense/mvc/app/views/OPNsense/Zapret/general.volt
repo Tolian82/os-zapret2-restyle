@@ -149,6 +149,9 @@
             $('#zapretServiceControl').prop('disabled', controlsBusy || !serviceControllable);
             $('#zapretReleaseSelect').prop('disabled', controlsBusy || !releaseAvailable);
             $('#zapretReleaseApply').prop('disabled', controlsBusy || !releaseAvailable);
+            // Lower Strategies Apply is a separate action/spinner, but must
+            // never compete with an Additional Resources lifecycle transaction.
+            $('#reconfigureAct').prop('disabled', controlsBusy);
             $('#zapretReleaseApplyText').text(releaseApplyPending ? runtimeText.applying : runtimeText.apply);
             $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', releaseApplyPending);
             const extrasAllowed = currentRuntimeInstalled && currentServiceState === 'started' &&
@@ -365,6 +368,7 @@
         $('#zapretServiceControl').off('click').on('click', function(event) {
             event.preventDefault();
             if (strategiesApplyPending || strategiesApplyNeedsReview || runtimeWasBusy ||
+                extraBusy || extraInstallPending || extraNeedsReview ||
                 (currentServiceState !== 'started' && currentServiceState !== 'stopped')) {
                 return;
             }
@@ -389,7 +393,8 @@
             event.preventDefault();
             const version = $('#zapretReleaseSelect').val();
             if (!version || runtimeWasBusy || releaseApplyPending ||
-                strategiesApplyPending || strategiesApplyNeedsReview) {
+                strategiesApplyPending || strategiesApplyNeedsReview ||
+                extraBusy || extraInstallPending || extraNeedsReview) {
                 return;
             }
 
@@ -453,7 +458,9 @@
         // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
-            if (strategiesApplyPending || strategiesApplyNeedsReview) return;
+            if (strategiesApplyPending || strategiesApplyNeedsReview ||
+                extraBusy || extraInstallPending || extraNeedsReview || runtimeWasBusy ||
+                releaseApplyPending) return;
             strategiesApplyPending = true;
             reconcileStrategiesApplyControls();
 

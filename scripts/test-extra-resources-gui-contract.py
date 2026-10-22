@@ -40,6 +40,10 @@ require("currentServiceState === 'started'" in view,
 require("/api/zapret/service/resourcesStatus" in view and
         "/api/zapret/service/resourcesInstall" in view,
         "resource status/install routes absent")
+require("$('#reconfigureAct').prop('disabled', controlsBusy)" in view,
+        "lower Strategies Apply must be disabled during resource lifecycle")
+require("extraBusy || extraInstallPending || extraNeedsReview" in view,
+        "other manual controls ignore resource runtime ownership")
 require("extraPollAttempts > 300" in view and "window.clearInterval(extraPoll)" in view,
         "resource polling is not bounded")
 require("extraObservedBusy" in view and "extraNeedsReview" in view,
