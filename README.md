@@ -12,6 +12,7 @@
 |---|---|
 | **Full Web/pkg release** | [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) · `os-zapret2-restyle-0.5.6_1.pkg` · FreeBSD 15 stable pkg repository |
 | **Latest published testing package** | [v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17) · Strategy Lab owner-tested, not a stable Web/pkg release |
+| **Current development candidate** | `v0.5.6_17` is the latest published/testing baseline; pending source-only UI fixes are tracked in [PR #491](https://github.com/Tolian82/os-zapret2-restyle/pull/491) and [PR #493](https://github.com/Tolian82/os-zapret2-restyle/pull/493). No unpublished source build is presented as installed. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
