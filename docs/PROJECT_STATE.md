@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.5.x
 
-Текущий этап — **`v0.5.7_1`** (owner-approved full Web/pkg release preparation after accepted Stages 1–6; publication PENDING verification).
+Текущий этап — **`v0.5.7_2`** (Additional Resources development: source-only read-only preflight; package and full release NOT PUBLISHED).
 
 **Active new implementation scope (22 October 2026): Additional Resources.**
 The external source catalog now contains an optional, reviewed
@@ -8,15 +8,18 @@ The external source catalog now contains an optional, reviewed
 [ccdd8fae](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2)
 ([integrity CI passed](https://github.com/Tolian82/zapret2-extra-resources/actions/runs/39830826402)).
 The initial two descriptors demonstrate data-driven BIN/Lua metadata, not
-executable Strategy Lab coverage. No extra-resource transaction, GUI button,
-automatic download, verified Zapret2 restart, or plugin pkg is implemented.
-The owner's newer instruction starts the approved five-stage implementation;
-next is the Stage 2 safe manual installer with mandatory service restart.
+executable Strategy Lab coverage. A read-only extra-resource preflight now resolves a fixed source commit,
+verifies the archive contents and source metadata, and refuses collisions with
+upstream/user files or modified managed files. It is wired as configd action
+`zapret extra_resources_preflight`. It does not publish any files, restart
+Zapret2, install a package, or change the Strategy Lab graph.
+The next Stage 2 increment is the serialized, rollback-capable manual installer
+with mandatory service restart and upstream-change retention.
 The earlier `v0.5.7_1` release request remains a separate pending publication,
 not an approval to release this unfinished feature.
 
 
-Current package candidate: `os-zapret2-restyle-0.5.7_1.pkg`, `VERSION=0.5.7`, `PLUGIN_REVISION=1` — **FULL RELEASE REQUESTED; NOT YET PUBLISHED**. This is the first fresh semantic tag after immutable stable `v0.5.6`. Includes the owner-accepted `_17` Strategy Lab plus source fixes formerly staged as `_18` (RU/EN result-summary heading) and `_19` (separate Apply-button spinners), maintained attribution to lexiforest/curl-impersonate, a checked README and the Star invitation. [Release plan](releases/v0.5.7.md). Prior stable release remains `v0.5.6`; last owner-installed testing `v0.5.6_17` ([record](verification/evidence/testing-publications/v0.5.6_17.md)). New version/source CI, FreeBSD15 asset, tag, package signature/digest and Web/pkg repository must be verified before claiming available. No owner-installed `v0.5.7_1` proof exists yet.
+Current package candidate: `os-zapret2-restyle-0.5.7_2.pkg`, `VERSION=0.5.7`, `PLUGIN_REVISION=2` — **SOURCE-ONLY DEVELOPMENT; NOT PUBLISHED**. The earlier `v0.5.7_1` full-release request is separately pending and cannot be silently applied to an unfinished new feature. This is the first fresh semantic tag after immutable stable `v0.5.6`. Includes the owner-accepted `_17` Strategy Lab plus source fixes formerly staged as `_18` (RU/EN result-summary heading) and `_19` (separate Apply-button spinners), maintained attribution to lexiforest/curl-impersonate, a checked README and the Star invitation. [Release plan](releases/v0.5.7.md). Prior stable release remains `v0.5.6`; last owner-installed testing `v0.5.6_17` ([record](verification/evidence/testing-publications/v0.5.6_17.md)). New version/source CI, FreeBSD15 asset, tag, package signature/digest and Web/pkg repository must be verified before claiming available. No owner-installed `v0.5.7_1` proof exists yet.
 
 **Stage 5 CLOSED by owner decision** following accepted `_17` GUI, F5, RU/EN and saved-job retrieval (`job.OK9Mn5`, `job.jAQJMx`). **Stage 6 selected installed Stop/runtime gate PASS:** two owner GUI Stop checks, then post-test OPNsense console `pkg info` confirms installed `0.5.6_17`, `zapret is running`, no active job, no rules `19100–19131`, no `9989` listener, no matching temporary Lab worker and only regular `dvtws2 --port=989`/supervisor processes. The source-controlled recovery tests include RUNNING/STOPPED semantics, cancellation, technical error and `RESTORE_FAILED`. [Detailed Stage 6 evidence and V1–V11 limitations](verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md). This post-test snapshot **does not** prove the exact initial state of both Stop runs, an installed-package hash, a working blocked-target QUIC candidate or comprehensive V1–V11 live coverage. **Stage 6 is now ACCEPTED / CLOSED by explicit owner decision on 22 October 2026** ([acceptance record](verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md)); prior caveats remain unverified, not PASS. The owner **subsequently expressly authorized publishing a new stable release** with corrected documentation and post-release stale-PR cleanup. This supersedes the earlier no-release instruction for the *new* `v0.5.7` preparation only; immutable prior release artifacts remain protected. No repeat of already accepted `_17` GUI/Stage6 tests is required.
 
