@@ -8,7 +8,7 @@ The project starts its own version history at `0.1.0`.
 
 ## [v0.5.7] — full Web/pkg release preparation, 2026-10-22
 
-- `v0.5.7_10` source-only: force `--ech false` for private Chrome HTTP/HTTPS/HTTP3 probes via the shared launcher, retaining endpoint identity and certificate/attribution requirements. Owner-reproduced `rutracker.org` ECH-on timeout versus ECH-off TLS 1.3 / HTTP 301 motivates the change. A focused launcher test covers HTTPS, HTTP3 and attempted caller override. Release and owner-installed retest pending.
+- `v0.5.7_10` testing-package source: force `--ech false` for private Chrome HTTP/HTTPS/HTTP3 probes via the shared launcher, retaining endpoint identity and certificate/attribution requirements. Owner-reproduced `rutracker.org` ECH-on timeout versus ECH-off TLS 1.3 / HTTP 301 motivates the change. A focused launcher test covers HTTPS, HTTP3 and attempted caller override. [Testing package published](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) for FreeBSD 15 amd64 (SHA-256 `69fe9cc7206f1ebcd77edb4f91bd65ca95b975d974c6e4a8417551ac166edea0`); full release and owner-installed retest pending.
 
 - Bundle the owner-accepted Strategy Lab browser/HTTP modernization Stages 1–6 with selected installed `v0.5.6_17` evidence, keeping unverified transport/provider cases explicitly outside positive claims.
 - Include `v0.5.6_18` RU/EN `Result summary` heading localization and `v0.5.6_19` independent upper/lower Strategies Apply spinners; backend behavior unchanged.
