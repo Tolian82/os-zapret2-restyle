@@ -188,6 +188,8 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 ### Stage 5 — results, GUI and persisted jobs
 
+**Stage-5 delivered scope:** Published `_16` exposed the read-only historical result lookup by validated Job ID; selected history is restored after F5 only when current active-job discovery is idle. Historical result views disable circular mutations, do not automatically resurrect unrelated jobs, and require `profile_replay.verified=true` before calling an older shortlist entry a verified winner. Published `_17` added the compact Job ID clipboard control and RU/EN help. The owner reported successful saved-job retrieval, F5, RU/EN and GUI behavior. 
+
 **Stage-5 current decision (22 October 2026):** **CLOSED by explicit owner acceptance**, not by a claim that every previously listed result-semantic variation was independently audited. The `_16` read-only historical job and `_17` F5, RU/EN and GUI checks were reported PASS; avoid repeating them. See [Stage 5 closure and Stage 6 Stop evidence](../verification/evidence/2026-10-22-v0.5.6_17-owner-stage5-closure-stage6-stop-gui.md). Historical replay proof still requires `profile_replay.verified=true`; unsupported old schemas or unverified protocol signals cannot be relabeled wins. If a concrete critical report mismatch arises during Stage 6, treat it as a new reproducible defect rather than silently treating every untested branch as verified.
 
 **Dependency:** Stages 2–4.
