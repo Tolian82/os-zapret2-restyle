@@ -222,6 +222,8 @@ def install() -> None:
         outcome: str,
         canceled: bool,
         count: int = 0,
+        *,
+        certificate_failure: bool = False,
     ) -> str:
         if _host_sni_terminal_context and outcome == "PARTIAL" and not canceled:
             if language == "ru":
@@ -233,7 +235,10 @@ def install() -> None:
                 "PARTIAL — The IPv4 target TLS certificate cannot be verified without the service identity; "
                 "provide Host / SNI and run the test again."
             )
-        return original_terminal_message(language, mode, outcome, canceled, count)
+        return original_terminal_message(
+            language, mode, outcome, canceled, count,
+            certificate_failure=certificate_failure,
+        )
 
     orchestrator.terminal_message = terminal_message
 

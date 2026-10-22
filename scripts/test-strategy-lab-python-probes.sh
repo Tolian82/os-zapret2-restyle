@@ -301,6 +301,28 @@ http_error = request.chrome_https_evidence(
 assert http_error["accessible"] and http_error["http_response"] and not http_error["tls_verified"]
 assert not request.chrome_https_evidence(result(base), expected_ip="203.0.113.11")["accessible"]
 assert not request.chrome_https_evidence(result(base.replace("ssl_verify=0", "ssl_verify=60")), expected_ip="203.0.113.10")["accessible"]
+# A direct HTTPS peer can be reachable even when curl aborts on a bad certificate.
+# curl(60) usually occurs before time_appconnect is populated; require pinned IP
+# and genuine nonzero SSL verification evidence rather than a finished HTTP reply.
+bad_cert = result("exit=60 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=19 appconnect=0.000000", 60)
+baseline_cert = request.chrome_https_evidence(
+    bad_cert, expected_ip="203.0.113.10", allow_certificate_error=True
+)
+assert baseline_cert["accessible"] and baseline_cert["signal"] == "certificate_verification_failed"
+assert baseline_cert["certificate_verification_failed"] and not baseline_cert["tls_verified"]
+assert not baseline_cert["http_response"] and baseline_cert["ssl_verify_result"] == 19
+assert not request.chrome_https_evidence(bad_cert, expected_ip="203.0.113.10")["accessible"]
+assert not request.chrome_https_evidence(
+    bad_cert, expected_ip="203.0.113.11", allow_certificate_error=True
+)["accessible"]
+assert not request.chrome_https_evidence(
+    result("exit=28 remote_ip=203.0.113.10 http=0 code=000 bytes=0 ssl_verify=19 appconnect=0.000000", 28),
+    expected_ip="203.0.113.10", allow_certificate_error=True
+)["accessible"]
+assert not request.chrome_https_evidence(
+    result("exit=60 remote_ip= http=0 code=000 bytes=0 ssl_verify=19 appconnect=0.000000", 60),
+    expected_ip="203.0.113.10", allow_certificate_error=True
+)["accessible"]
 assert not request.chrome_https_evidence(result("exit=0 remote_ip=203.0.113.10 http=2 code=200 bytes=0"), expected_ip="203.0.113.10")["accessible"]
 
 # Stage-2 V2 controlled matrix: independently acceptable TLS/HTTP signals,
@@ -337,6 +359,32 @@ from strategy_lab_py import probe
 http404 = result("exit=18 remote_ip=203.0.113.10 http=1.1 code=404 bytes=0 ssl_verify=0 appconnect=0.000000",18)
 assert probe._domain_public("blocked.example",http404,None,"203.0.113.10")["status"]=="PASS"
 assert probe._domain_public("blocked.example",http404,None,"203.0.113.11")["status"]=="FAIL"
+direct_cert = probe._domain_public("bank.example",bad_cert,None,"203.0.113.10")
+assert direct_cert["status"] == "PASS"
+assert direct_cert["reachability"]["signal"] == "certificate_verification_failed"
+assert probe._domain_public("bank.example",bad_cert,None,"203.0.113.11")["status"] == "FAIL"
+# The owner screenshot's curl(60) leaves Remote IP empty. The first probe
+# alone remains unverified; one --insecure retry must prove the *same* DNS IPv4.
+bad_cert_blank = result("exit=60 remote_ip= http=0 code=000 bytes=0 ssl_verify=19 appconnect=0.000000", 60)
+retry = request.CommandResult(
+    command=["/private/run-curl-impersonate.sh", "--resolve", "bank.example:443:203.0.113.10", "--insecure"],
+    returncode=0,
+    stdout="exit=0 remote_ip=203.0.113.10 http=2 code=200 bytes=10 ssl_verify=19 appconnect=0.137000",
+    stderr="", timed_out=False, termination="completed", signal=None, duration_ms=1,
+)
+assert request.chrome_certificate_error(bad_cert_blank)
+assert not probe._domain_public("bank.example",bad_cert_blank,None,"203.0.113.10")["status"] == "PASS"
+with_retry = probe._domain_public("bank.example",bad_cert_blank,None,"203.0.113.10", ipv4_cert_retry=retry)
+assert with_retry["status"] == "PASS"
+assert with_retry["reachability"]["signal"] == "certificate_verification_failed"
+assert not with_retry["reachability"]["tls_verified"]
+assert with_retry["reachability"]["untrusted_retry"]["remote_ip"] == "203.0.113.10"
+assert probe._domain_public("bank.example",bad_cert_blank,None,"203.0.113.11",ipv4_cert_retry=retry)["status"] == "FAIL"
+wrong_retry = request.CommandResult(**{**retry.__dict__,
+    "stdout": retry.stdout.replace("203.0.113.10", "192.168.1.2")})
+assert probe._domain_public("bank.example",bad_cert_blank,None,"203.0.113.10",ipv4_cert_retry=wrong_retry)["status"] == "FAIL"
+timeout_retry = request.CommandResult(**{**retry.__dict__, "timed_out": True})
+assert probe._domain_public("bank.example",bad_cert_blank,None,"203.0.113.10",ipv4_cert_retry=timeout_retry)["status"] == "FAIL"
 
 # Production Standard does NOT force TLS 1.3 or HTTP/2: Chrome chooses.
 previous = request.binary

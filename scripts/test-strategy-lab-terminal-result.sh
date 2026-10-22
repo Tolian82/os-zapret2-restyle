@@ -38,6 +38,13 @@ assert "Standard search completed with 2 stable working strategies" in terminal_
 assert "Extended search completed with 1 stable working strategies" in terminal_message("en", "extended", "SUCCESS", False, 1)
 assert "no stable working strategy was found" in terminal_message("en", "standard", "NO_CANDIDATE", False, 0)
 assert "Цель доступна без обхода" in terminal_message("ru", "standard", "TARGET_ACCESSIBLE", False, 0)
+for language, text in (("ru", "Цель доступна без обхода"), ("en", "The target is accessible without bypass")):
+    message = terminal_message(
+        language, "standard", "TARGET_ACCESSIBLE", False, 0,
+        certificate_failure=True,
+    )
+    assert message.startswith("CERTIFICATE VERIFICATION FAILED — ")
+    assert text in message
 assert "Test canceled" in terminal_message("en", "standard", "PARTIAL", True, 0)
 assert "Поиск завершён не полностью" in terminal_message("ru", "standard", "PARTIAL", False, 0)
 assert "time limit was reached" in terminal_message("en", "extended", "TIMEOUT", False, 0)
@@ -60,7 +67,8 @@ grep -Fq 'def terminal_state(outcome: str)' "${ORCHESTRATOR}" ||
     fail 'Python terminal state mapping is missing'
 grep -Fq 'def terminal_report_status(outcome: str)' "${ORCHESTRATOR}" ||
     fail 'Python terminal report mapping is missing'
-grep -Fq 'def terminal_message(language: str, mode: str, outcome: str, canceled: bool, count: int = 0)' "${ORCHESTRATOR}" ||
+grep -Fq 'def terminal_message(' "${ORCHESTRATOR}" &&
+grep -Fq 'certificate_failure: bool = False' "${ORCHESTRATOR}" ||
     fail 'Python localized terminal message mapping is missing'
 grep -Fq 'outcome = self._restore(outcome)' "${ORCHESTRATOR}" ||
     fail 'Python finalization does not enforce restoration before terminal persistence'

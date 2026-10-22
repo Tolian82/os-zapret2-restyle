@@ -112,9 +112,35 @@ def _dns_failure_public(endpoint: str, log_text: str) -> dict[str, Any]:
 
 
 def _domain_public(endpoint: str, ipv4: request.CommandResult, ipv6: request.CommandResult | None,
-                   ipv4_ip: str | None = None, ipv6_ip: str | None = None) -> dict[str, Any]:
-    ipv4_proof = request.chrome_https_evidence(ipv4, expected_ip=ipv4_ip)
-    ipv6_proof = request.chrome_https_evidence(ipv6, expected_ip=ipv6_ip) if ipv6 is not None else None
+                   ipv4_ip: str | None = None, ipv6_ip: str | None = None,
+                   ipv4_cert_retry: request.CommandResult | None = None) -> dict[str, Any]:
+    ipv4_proof = request.chrome_https_evidence(
+        ipv4, expected_ip=ipv4_ip, allow_certificate_error=True
+    )
+    # Some curl builds omit remote_ip on exit 60. Do not infer a pinned peer
+    # from --resolve alone: use one separate bounded --insecure retry ONLY
+    # after the original certificate failure and require exact observed IP.
+    if (not ipv4_proof["accessible"] and ipv4_cert_retry is not None and
+            ipv4_ip is not None and request.chrome_certificate_error(ipv4)):
+        retry_proof = request.chrome_certificate_retry_evidence(
+            ipv4_cert_retry, expected_ip=ipv4_ip
+        )
+        if retry_proof["accessible"]:
+            ipv4_proof = {
+                **ipv4_proof,
+                "accessible": True,
+                "signal": "certificate_verification_failed",
+                "certificate_verification_failed": True,
+                "remote_ip": retry_proof["remote_ip"],
+                "ssl_verify_result": request.chrome_cert_verify_code(ipv4),
+                "tls_verified": False,
+                "http_response": False,
+                "untrusted_retry": retry_proof,
+                "reason": "certificate_verification_failed",
+            }
+    ipv6_proof = request.chrome_https_evidence(
+        ipv6, expected_ip=ipv6_ip, allow_certificate_error=True
+    ) if ipv6 is not None else None
     ipv4_status = "PASS" if ipv4_proof["accessible"] else "FAIL"
     ipv6_status = "SKIPPED" if ipv6_proof is None else ("PASS" if ipv6_proof["accessible"] else "FAIL")
     ipv4_log = request.combined_log(ipv4)
@@ -186,6 +212,23 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
         tls4 = tls4_future.result() if tls4_future is not None else None
         tls6 = tls6_future.result() if tls6_future is not None else None
 
+    tls4_cert_retry: request.CommandResult | None = None
+    if (
+        tls4 is not None and dns_a.ok and dns_a.answers
+        and request.chrome_certificate_error(tls4)
+        and not request.chrome_https_evidence(
+            tls4, expected_ip=dns_a.answers[0], allow_certificate_error=True
+        )["accessible"]
+    ):
+        tls4_cert_retry = request.curl_request(
+            endpoint, scheme="https", family="ipv4",
+            bound_ip=dns_a.answers[0], insecure=True,
+        )
+        request.write_text(
+            workdir / f"endpoint-{index}.tls-ipv4-certificate-retry.log",
+            request.combined_log(tls4_cert_retry),
+        )
+
     dns_a_log = request.combined_log(dns_a.execution)
     request.write_text(workdir / f"endpoint-{index}.a.log", dns_a_log)
     if dns_aaaa is not None:
@@ -202,12 +245,17 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
         "dns_a": dns_a.evidence(),
         "dns_aaaa": dns_aaaa.evidence() if dns_aaaa is not None else None,
         "tls_ipv4": tls4.evidence() if tls4 is not None else None,
+        "tls_ipv4_certificate_retry": tls4_cert_retry.evidence() if tls4_cert_retry is not None else None,
         "tls_ipv6": tls6.evidence() if tls6 is not None else None,
     }
     if not dns_a.ok or tls4 is None:
         public = _dns_failure_public(endpoint, dns_a_log)
     else:
-        public = _domain_public(endpoint, tls4, tls6, dns_a.answers[0], dns_aaaa.answers[0] if dns_aaaa and dns_aaaa.ok and dns_aaaa.answers else None)
+        public = _domain_public(
+            endpoint, tls4, tls6, dns_a.answers[0],
+            dns_aaaa.answers[0] if dns_aaaa and dns_aaaa.ok and dns_aaaa.answers else None,
+            ipv4_cert_retry=tls4_cert_retry,
+        )
     return public, evidence, not dns_a.ok, dns_aaaa is not None and not dns_aaaa.ok
 
 
