@@ -12,7 +12,7 @@
 |---|---|
 | **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · FreeBSD 15 stable pkg repository (publication pending) |
 | **Latest published testing package** | [v0.5.7_10](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) · ECH-disabled Chrome reachability; owner-installed verification pending; not a stable Web/pkg release |
-| **Current development candidate** | `v0.5.7_21` · source-only Additional Resources installer, manual RU/EN GUI button and dynamic Stage-60 BIN/Lua candidates; symlinked resources excluded from job inventory; fast manual installs have correlated terminal receipts; failed upstream snapshot preparation no longer leaves a false pending rollback. Cold-IPFW old-package replacement still requires controlled owner recovery; ECH-off retained. Owner-installed acceptance and FreeBSD qualification pending |
+| **Current development candidate** | `v0.5.7_22` · source-only Additional Resources installer, manual RU/EN GUI button and dynamic Stage-60 BIN/Lua candidates; symlinked resources excluded from job inventory; fast manual installs have correlated terminal receipts; failed snapshot preparation is retryable; interrupted upstream upgrades now record a durable checkpoint inspectable without mutations. Explicit interrupted-upgrade restoration remains pending. Cold-IPFW old-package replacement still requires controlled owner recovery; ECH-off retained. Owner-installed acceptance and FreeBSD qualification pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

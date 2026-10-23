@@ -128,6 +128,87 @@ extra_resources_upstream_guard()
         "${EXTRA_PYTHON}" "${EXTRA_GUARD}" "$@"
 }
 
+
+# A minimal, strict, non-executable checkpoint. Do not source or eval it.
+# The file is written atomically and synced BEFORE any runtime mutation.
+write_recovery_checkpoint()
+{
+    _checkpoint_phase="$1"
+    case "${_checkpoint_phase}" in prepared|mutating) ;; *) return 64 ;; esac
+    _saved_commit="${PREVIOUS_COMMIT:-none}"
+    _saved_release="${PREVIOUS_RELEASE:-none}"
+    if [ "${_saved_commit}" != none ]; then
+        printf '%s\n' "${_saved_commit}" | grep -Eq '^[0-9a-f]{40}$' || return 65
+    fi
+    if [ "${_saved_release}" != none ]; then
+        release_tag_valid "${_saved_release}" || return 65
+    fi
+    case "${SERVICE_WAS_RUNNING}" in 0|1) ;; *) return 65 ;; esac
+    case "${PREVIOUS_BINARIES}" in 0|1) ;; *) return 65 ;; esac
+    [ -d "${ROLLBACK_DIR}" ] && [ ! -L "${ROLLBACK_DIR}" ] || return 69
+    [ ! -L "${ROLLBACK_DIR}/checkpoint" ] || return 69
+    _tmp=$(mktemp "${ROLLBACK_DIR}/checkpoint.XXXXXXXX") || return 1
+    if ! {
+        printf 'schema=1\nprevious_commit=%s\nprevious_release=%s\n' "${_saved_commit}" "${_saved_release}"
+        printf 'service_was_running=%s\nprevious_binaries=%s\n' "${SERVICE_WAS_RUNNING}" "${PREVIOUS_BINARIES}"
+        printf 'phase=%s\n' "${_checkpoint_phase}"
+    } > "${_tmp}" || ! chmod 0600 "${_tmp}" || ! mv -f "${_tmp}" "${ROLLBACK_DIR}/checkpoint"; then
+        rm -f "${_tmp}"
+        return 1
+    fi
+    # Flush file + directory metadata as a single conservative pre-mutation
+    # barrier on both FreeBSD and Linux; do not switch runtime if it fails.
+    sync
+}
+
+read_recovery_checkpoint()
+{
+    _checkpoint="${ROLLBACK_DIR}/checkpoint"
+    [ -d "${ROLLBACK_DIR}" ] && [ ! -L "${ROLLBACK_DIR}" ] || return 69
+    [ -f "${_checkpoint}" ] && [ ! -L "${_checkpoint}" ] || return 69
+    [ "$(wc -l < "${_checkpoint}" | tr -d '[:space:]')" = 6 ] || return 69
+    _schema=$(sed -n '1p' "${_checkpoint}")
+    _commit=$(sed -n '2p' "${_checkpoint}")
+    _release=$(sed -n '3p' "${_checkpoint}")
+    _service=$(sed -n '4p' "${_checkpoint}")
+    _binaries=$(sed -n '5p' "${_checkpoint}")
+    _phase=$(sed -n '6p' "${_checkpoint}")
+    [ "${_schema}" = schema=1 ] || return 69
+    case "${_commit}" in previous_commit=*) PREVIOUS_COMMIT=${_commit#previous_commit=} ;; *) return 69 ;; esac
+    case "${_release}" in previous_release=*) PREVIOUS_RELEASE=${_release#previous_release=} ;; *) return 69 ;; esac
+    case "${_service}" in service_was_running=*) SERVICE_WAS_RUNNING=${_service#service_was_running=} ;; *) return 69 ;; esac
+    case "${_binaries}" in previous_binaries=*) PREVIOUS_BINARIES=${_binaries#previous_binaries=} ;; *) return 69 ;; esac
+    case "${_phase}" in phase=*) RECOVERY_PHASE=${_phase#phase=} ;; *) return 69 ;; esac
+    case "${RECOVERY_PHASE}" in prepared|mutating) ;; *) return 69 ;; esac
+    case "${SERVICE_WAS_RUNNING}:${PREVIOUS_BINARIES}" in 0:0|0:1|1:0|1:1) ;; *) return 69 ;; esac
+    if [ "${PREVIOUS_COMMIT}" != none ]; then
+        printf '%s\n' "${PREVIOUS_COMMIT}" | grep -Eq '^[0-9a-f]{40}$' || return 69
+    fi
+    if [ "${PREVIOUS_RELEASE}" != none ]; then
+        release_tag_valid "${PREVIOUS_RELEASE}" || return 69
+    fi
+}
+
+inspect_interrupted_recovery()
+{
+    # Read-only; serialized by the existing setup.lock, not the firewall FD9.
+    if [ ! -e "${ROLLBACK_DIR}" ] && [ ! -L "${ROLLBACK_DIR}" ]; then
+        printf 'recovery=none\n'
+        return 0
+    fi
+    if ! read_recovery_checkpoint; then
+        printf 'recovery=unverified\n'
+        return 69
+    fi
+    if [ "${RECOVERY_PHASE}" = prepared ]; then
+        printf 'recovery=prepared\n'
+    else
+        printf 'recovery=required\n'
+    fi
+    printf 'phase=%s\nprevious_commit=%s\nprevious_release=%s\n' "${RECOVERY_PHASE}" "${PREVIOUS_COMMIT}" "${PREVIOUS_RELEASE}"
+    printf 'service_was_running=%s\nprevious_binaries=%s\n' "${SERVICE_WAS_RUNNING}" "${PREVIOUS_BINARIES}"
+}
+
 prepare_rollback()
 {
     # A previous interrupted upgrade may still own backups. Never erase its
@@ -142,7 +223,6 @@ prepare_rollback()
 
     if _release=$(read_active_release); then
         PREVIOUS_RELEASE="${_release}"
-        write_active_release "${PREVIOUS_RELEASE}" || return 1
     fi
 
     if [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ]; then
@@ -168,6 +248,13 @@ prepare_rollback()
     if ! extra_resources_upstream_guard snapshot; then
         # This guard only reads runtime bytes and writes its own backup.
         echo "ERROR: managed-resource snapshot preparation failed" >&2
+        rm -rf "${ROLLBACK_DIR}" || true
+        return 1
+    fi
+    # Persist the original state while all old bytes still exist. A reader of
+    # a power-cut snapshot can now distinguish it from a legacy/unverified one.
+    if ! write_recovery_checkpoint prepared; then
+        echo "ERROR: durable recovery checkpoint could not be prepared" >&2
         rm -rf "${ROLLBACK_DIR}" || true
         return 1
     fi
@@ -295,6 +382,14 @@ install_transaction()
         return 1
     }
 
+    # Mark possible mutation durably BEFORE the first chmod/checkout/Stop.
+    # Any interrupted snapshot at this phase requires explicit review.
+    if ! write_recovery_checkpoint mutating; then
+        status_write "failed" || true
+        echo "ERROR: durable upstream recovery intent cannot be committed" >&2
+        return 1
+    fi
+
     # Repair restrictive modes left by an older checkout before setup attempts a
     # same-version reinstall, and impose a safe inherited umask for all new files.
     normalize_runtime_permissions || {
@@ -360,6 +455,17 @@ install_transaction()
 }
 
 case "${MODE}" in
+    inspect-recovery)
+        [ "$#" -eq 1 ] || exit 64
+        mkdir -p "${RUN_DIR}"
+        [ -x "${LOCKF_BIN}" ] || exit 69
+        "${LOCKF_BIN}" -s -t 30 "${SETUP_LOCK_FILE}" \
+            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 "$0" inspect-recovery-under-parent-lock
+        ;;
+    inspect-recovery-under-parent-lock)
+        [ "$#" -eq 1 ] && [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || exit 75
+        inspect_interrupted_recovery
+        ;;
     install)
         [ "$#" -le 2 ] || {
             echo "usage: setup_transaction.sh install [VERSION]" >&2
@@ -385,7 +491,7 @@ case "${MODE}" in
         install_transaction
         ;;
     *)
-        echo "usage: setup_transaction.sh install [VERSION]" >&2
+        echo "usage: setup_transaction.sh {install [VERSION]|inspect-recovery}" >&2
         exit 64
         ;;
 esac

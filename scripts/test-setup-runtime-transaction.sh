@@ -29,6 +29,7 @@ GIT_MOCK="${TMP_ROOT}/git"
 LOCKF_MOCK="${TMP_ROOT}/lockf"
 EXTRA_GUARD_MOCK="${TMP_ROOT}/extra-guard"
 EXTRA_GUARD_FAIL=0
+RECEIPT_CAPTURE="${TMP_ROOT}/captured-checkpoint"
 
 mkdir -p \
     "${ZAPRET_DIR}/.git" \
@@ -42,7 +43,7 @@ printf '%s\n' old-blob > "${ZAPRET_DIR}/files/fake/test.bin"
 chmod 0755 "${ZAPRET_DIR}/binaries/my/dvtws2"
 chmod 0640 "${ZAPRET_DIR}/lua/zapret-lib.lua" "${ZAPRET_DIR}/files/fake/test.bin"
 printf '%s\n' v1.0.4 > "${GIT_RELEASE_STATE}"
-printf '%s\n' oldcommit > "${GIT_COMMIT_STATE}"
+printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "${GIT_COMMIT_STATE}"
 printf '%s\n' running > "${SERVICE_STATE}"
 printf '%s\n' fail > "${SETUP_RESULT}"
 printf '%s\n' ready > "${SETUP_STATUS}"
@@ -98,7 +99,7 @@ case "${1:-}" in
         target=${3:-}
         [ -n "${target}" ] || exit 64
         printf '%s\n' "${target}" > "${TEST_GIT_COMMIT_STATE}"
-        if [ "${target}" = oldcommit ]; then
+        if [ "${target}" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ]; then
             printf '%s\n' v1.0.4 > "${TEST_GIT_RELEASE_STATE}"
         fi
         ;;
@@ -137,8 +138,11 @@ cat > "${SETUP_MOCK}" <<'MOCK'
 #!/bin/sh
 [ "${1:-}" = install-under-parent-lock ] || exit 64
 version=${2:-v1.0.4}
+[ -f "${TEST_ROLLBACK_DIR}/checkpoint" ] || exit 65
+grep -Fqx 'phase=mutating' "${TEST_ROLLBACK_DIR}/checkpoint" || exit 65
+cp "${TEST_ROLLBACK_DIR}/checkpoint" "${TEST_RECEIPT_CAPTURE}" || exit 65
 printf '%s\n' "${version}" > "${TEST_GIT_RELEASE_STATE}"
-printf '%s\n' candidatecommit > "${TEST_GIT_COMMIT_STATE}"
+printf '%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "${TEST_GIT_COMMIT_STATE}"
 printf '%s\n' new-binary > "${TEST_ZAPRET_DIR}/binaries/my/dvtws2"
 printf '%s\n' candidate-lua > "${TEST_ZAPRET_DIR}/lua/zapret-lib.lua"
 printf '%s\n' candidate-blob > "${TEST_ZAPRET_DIR}/files/fake/test.bin"
@@ -154,6 +158,13 @@ printf '%s\n' ready > "${TEST_SETUP_STATUS}"
 exit 0
 MOCK
 chmod +x "${SETUP_MOCK}"
+
+inspect_recovery()
+{
+    ROLLBACK_DIR="${ROLLBACK_DIR}" \
+    RUN_DIR="${TMP_ROOT}/run" LOCKF_BIN="${LOCKF_MOCK}" \
+    "${TRANSACTION}" inspect-recovery
+}
 
 run_transaction()
 {
@@ -179,6 +190,7 @@ run_transaction()
     EXTRA_GUARD="${EXTRA_GUARD_MOCK}" \
     TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
     TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
+    TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
     "${TRANSACTION}" install "$1"
 }
 
@@ -189,10 +201,18 @@ if run_transaction v1.0.3 >/dev/null 2>&1; then
 fi
 [ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] || fail "active release marker was not restored"
 [ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.4 ] || fail "previous Git release was not restored"
-[ "$(cat "${GIT_COMMIT_STATE}")" = oldcommit ] || fail "previous Git commit was not restored"
+[ "$(cat "${GIT_COMMIT_STATE}")" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ] || fail "previous Git commit was not restored"
 [ "$(cat "${ZAPRET_DIR}/binaries/my/dvtws2")" = old-binary ] || fail "previous binary was not restored"
 [ "$(cat "${SERVICE_STATE}")" = running ] || fail "previous running state was not restored"
 [ "$(cat "${SETUP_STATUS}")" = failed ] || fail "failed operation did not remain visible"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "automatic rollback leaked checkpoint"
+[ "$(sed -n '1p' "${RECEIPT_CAPTURE}")" = schema=1 ] || fail "missing checkpoint schema"
+grep -Fqx 'phase=mutating' "${RECEIPT_CAPTURE}" || fail "snapshot not marked before mutation"
+grep -Fqx 'previous_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${RECEIPT_CAPTURE}" || fail "old commit not persisted"
+grep -Fqx 'previous_release=v1.0.4' "${RECEIPT_CAPTURE}" || fail "old release not persisted"
+grep -Fqx 'service_was_running=1' "${RECEIPT_CAPTURE}" || fail "old service state not persisted"
+grep -Fqx 'previous_binaries=1' "${RECEIPT_CAPTURE}" || fail "old binaries not persisted"
+[ "$(inspect_recovery)" = 'recovery=none' ] || fail "no-snapshot view failed"
 [ "$(stat -c %a "${ZAPRET_DIR}/lua/zapret-lib.lua")" = 644 ] || fail "Lua permissions were not normalized"
 [ "$(stat -c %a "${ZAPRET_DIR}/files/fake/test.bin")" = 644 ] || fail "blob permissions were not normalized"
 
@@ -201,7 +221,7 @@ fi
 printf '%s\n' success > "${SETUP_RESULT}"
 printf '%s\n' running > "${SERVICE_STATE}"
 printf '%s\n' v1.0.4 > "${GIT_RELEASE_STATE}"
-printf '%s\n' oldcommit > "${GIT_COMMIT_STATE}"
+printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "${GIT_COMMIT_STATE}"
 printf '%s\n' old-binary > "${ZAPRET_DIR}/binaries/my/dvtws2"
 run_transaction v1.0.3 >/dev/null
 [ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "successful activation did not publish selected release"
@@ -225,6 +245,13 @@ run_transaction v1.0.3 >/dev/null 2>&1 && fail "pending rollback evidence was ov
     fail "blocked setup changed Git checkout"
 [ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] ||
     fail "blocked setup changed service state"
+if inspect_recovery > "${TMP_ROOT}/legacy-inspection"; then
+    fail "unidentified legacy rollback was trusted"
+fi
+grep -Fqx 'recovery=unverified' "${TMP_ROOT}/legacy-inspection" ||
+    fail "legacy rollback refusal not diagnostic"
+[ "$(cat "${ROLLBACK_DIR}/pending-recovery")" = protected ] ||
+    fail "inspection changed legacy evidence"
 
 # An error while preparing a NEW snapshot cannot block the next attempt.
 # Only a preexisting interrupted rollback must remain untouched.
@@ -247,6 +274,26 @@ EXTRA_GUARD_FAIL=0
 run_transaction v1.0.3 >/dev/null || fail "retry after failed snapshot did not succeed"
 [ ! -e "${ROLLBACK_DIR}" ] || fail "retry left rollback data"
 [ "$(cat "${SETUP_STATUS}")" = ready ] || fail "retry did not reach ready"
+
+mkdir "${ROLLBACK_DIR}"
+cp "${RECEIPT_CAPTURE}" "${ROLLBACK_DIR}/checkpoint"
+output=$(inspect_recovery) || fail "durable checkpoint unreadable"
+printf '%s\n' "${output}" | grep -Fqx 'recovery=required' || fail "required phase not shown"
+printf '%s\n' "${output}" | grep -Fqx 'previous_commit=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' || fail "previous commit absent"
+printf '%s\n' "${output}" | grep -Fqx 'previous_release=v1.0.3' || fail "previous release absent"
+printf '%s\n' "${output}" | grep -Fqx 'service_was_running=1' || fail "previous service state absent"
+grep -Fqx 'phase=mutating' "${ROLLBACK_DIR}/checkpoint" || fail "inspection changed evidence"
+sed -i 's/phase=mutating/phase=invalid/' "${ROLLBACK_DIR}/checkpoint"
+if inspect_recovery > "${TMP_ROOT}/invalid-inspection"; then
+    fail "tampered checkpoint trusted"
+fi
+grep -Fqx 'recovery=unverified' "${TMP_ROOT}/invalid-inspection" || fail "tamper not reported"
+rm "${ROLLBACK_DIR}/checkpoint"
+ln -s "${RECEIPT_CAPTURE}" "${ROLLBACK_DIR}/checkpoint"
+if inspect_recovery > "${TMP_ROOT}/symlink-inspection"; then
+    fail "symlinked checkpoint trusted"
+fi
+[ -L "${ROLLBACK_DIR}/checkpoint" ] || fail "inspection changed symlink"
 
 sh -n "${TRANSACTION}"
 echo "PASS: transactional runtime activation and pre-mutation snapshot failure retry"
