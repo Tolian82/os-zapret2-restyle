@@ -12,9 +12,13 @@ and its [operator instructions](verification/LEGACY_COLD_IPFW_PREFLIGHT.md)
 allow bounded, read-only inspection on already-installed `0.5.7_10`
 without installing a replacement. It checks original sealed native STOPPED
 evidence, FreeBSD unloaded IPFW signature, absent exact engine/supervisor,
-and two full independent kernel/service/inspector/process-census passes
-under native FD9. Wrapped daemon/shell processes or inconsistent evidence
-refuse, never report a stopped owner. Success still means
+and two independent kernel/inspector/process-census passes under native
+FD9. The old `status` locks FD9 itself; it is checked separately before
+and after that sequence to avoid the confirmed recursive-lock defect in
+the first standalone script. Wrapped daemon/shell processes or inconsistent
+evidence refuse with bounded diagnostic gate labels; they never report a
+stopped owner. The owner's prior generic `REFUSED` does not yet prove
+which live checks actually pass. Success still means
 `UPGRADE_AUTHORIZED=no`: the historical PRE_DEINSTALL and upgrade blockade
 remain unchanged. This is a repository diagnostic/CI change, not a packaged
 revision or owner-live acceptance. Do not load IPFW modules or run pkg add

@@ -38,6 +38,11 @@ done
 installed=$($PKG_BIN query '%v' os-zapret2-restyle 2>/dev/null) || refuse 'installed package identity unavailable'
 [ "$installed" = 0.5.7_10 ] || refuse 'this probe is only for the installed 0.5.7_10'
 
+# The published _10 service dispatcher always locks FD9 for 'status'.
+# Observe that public API outside our locked read-only inspector passes.
+"$SERVICE_SCRIPT" status >/dev/null 2>&1
+[ "$?" -eq 2 ] || refuse 'old native service status is not the expected incomplete state'
+
 (
     # Lock against the OLD native FD9 owner. The lock file is the only
     # possible on-disk side effect; no persistent runtime/journal mutations.
@@ -60,9 +65,9 @@ installed=$($PKG_BIN query '%v' os-zapret2-restyle 2>/dev/null) || refuse 'insta
 
     native_stopped_evidence()
     {
-        "$SERVICE_SCRIPT" status >/dev/null 2>&1
-        [ "$?" -eq 2 ] || return 1
-
+        # The OLD _10 'status' itself obtains native FD9. Calling it here
+        # would nest the lock and turn a healthy cold kernel into REFUSED.
+        # Only the inspector runs inside our original held FD9.
         inspection=$("$PYTHON_BIN" "$COLD_INSPECT_BIN" 2>/dev/null)
         [ "$?" -eq 2 ] || return 1
         printf '%s\n' "$inspection" | "$PYTHON_BIN" -c '
@@ -102,20 +107,36 @@ except (ValueError,TypeError,KeyError,AssertionError):
     }
 
     # A single clean process census is not a stable snapshot. Repeat ALL
-    # observations while holding FD9 so a late engine/supervisor, altered
-    # old journal or kernel state cannot retain an earlier STOPPED receipt.
+    # kernel, sealed-native-inspector and process observations under FD9.
+    # Native service 'status' runs OUTSIDE this lock; old _10 status already
+    # acquires it. Require status=2 both before and after the locked probe.
     for pass in 1 2; do
-        cold_signature || exit 69
-        native_stopped_evidence || exit 69
-        no_owned_processes || exit 69
+        cold_signature || {
+            printf 'FAILED_CHECK=kernel-signature-pass-%s\n' "$pass" >&2
+            exit 69
+        }
+        native_stopped_evidence || {
+            printf 'FAILED_CHECK=native-inspector-pass-%s\n' "$pass" >&2
+            exit 69
+        }
+        no_owned_processes || {
+            printf 'FAILED_CHECK=process-census-pass-%s\n' "$pass" >&2
+            exit 69
+        }
     done
 
-    printf 'PACKAGE=0.5.7_10\nDIAGNOSIS=cold-ipfw-committed-stopped\nUPGRADE_AUTHORIZED=no\nNEXT=owner-reviewed-recovery-required\n'
     exit 0
 ) 9>"$LIFECYCLE_LOCK_FILE"
 rc=$?
 case "$rc" in
-    0) exit 0 ;;
+    0)
+        # No success receipt is printed before this second independent
+        # old-native-status check; unknown status always refuses.
+        "$SERVICE_SCRIPT" status >/dev/null 2>&1
+        [ "$?" -eq 2 ] || refuse 'old native service status changed after inspection'
+        printf 'PACKAGE=0.5.7_10\nDIAGNOSIS=cold-ipfw-committed-stopped\nUPGRADE_AUTHORIZED=no\nNEXT=owner-reviewed-recovery-required\n'
+        exit 0
+        ;;
     75) refuse 'the native lifecycle is busy; no diagnosis established' ;;
     *) refuse 'native ownership or exact cold-IPFW state could not be verified' ;;
 esac

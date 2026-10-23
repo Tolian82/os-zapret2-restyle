@@ -15,7 +15,14 @@ diagnostic's positive result as permission to bypass the old hook.
 
 ## Checks performed
 
-Under the existing native lifecycle FD9 lock, the probe demands:
+The published `v0.5.7_10` `zapret_service.sh status` **acquires FD9 by itself**.
+The first source-only diagnostic incorrectly called it while already holding
+FD9. The owner observed `REFUSED`, which is consistent with this nested-lock
+defect but does not establish that all other checks passed. The corrected
+diagnostic calls the old public `status` *before* and *after* the separately
+locked inspection. It does not reenter the old lock.
+
+The probe demands:
 
 1. Root execution, the **exact** installed `0.5.7_10` identity, the original
    readable non-symlinked journal and native inspection dependencies.
@@ -25,14 +32,19 @@ Under the existing native lifecycle FD9 lock, the probe demands:
 3. The original, **installed** `voice_live_inspect.py` returns status 2 and
    JSON containing the native common owner, the exact cold-kernel false-foreign
    condition, `can_activate=false` and `runtime.state=stopped`. The installed
-   service itself must also return status 2.
+   service itself must also return status 2 in two **separate** calls, one
+   before acquiring our FD9 lock and the other after releasing it.
 4. An independent process census examines each full process command line,
    including `daemon`/`sh` wrappers, and refuses any engine or supervisor
    reference. Empty, malformed, or unreadable `ps` output is not proof of
    absence.
-5. The entire kernel/service/native-inspector/process-census sequence runs
-   **twice** under the same original FD9. Any second-pass disagreement refuses
-   rather than returning a stale positive observation.
+5. The kernel-signature, native-inspector and process-census sequence runs
+   **twice** under one original FD9 lock. The two separate old-service status
+   calls occur **outside** that lock to avoid the old nested-lock bug.
+   A failure emits only a bounded `FAILED_CHECK=kernel-signature-pass-N`,
+   `native-inspector-pass-N`, or `process-census-pass-N` label (or a
+   concise old-service-status refusal), not the raw journal or process output.
+   These separated observations are not an atomic proof of host state.
 
 An ambiguous, changing or partial state, a busy lifecycle, another package
 version, foreign process, missing evidence or unexpected exit code means
@@ -71,8 +83,9 @@ is part of this workflow.
 Source regression: `python3.13 scripts/test-legacy-cold-ipfw-preflight.py`
 with mocked versions, kernel exit codes, inspector replies, direct and
 wrapped engine/supervisor census, invalid or empty process output, second-pass
-process/status/inspector changes, lock refusal, linked/missing evidence and
-marker preservation.
+process/inspector changes, **old _10 status rejecting inherited FD9**, first
+and post-lock status changes, bounded refusal gates, lock refusal,
+linked/missing evidence and marker preservation.
 CI success demonstrates only the mocked source contract; real FreeBSD behavior
 and **owner-installed _10** remain unverified until actual root-console output
 is provided. A safe recovery procedure must be separately reasoned about,
