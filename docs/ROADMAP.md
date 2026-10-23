@@ -1,6 +1,10 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — Additional Resources implementation
+## Текущий приоритет — безопасное восстановление после холодной перезагрузки
+
+Владелец восстановил запущенный `0.5.7_1` после ошибки холодного IPFW: при сохранённом committed-журнале и отсутствии модулей исходный старый статус был 2; с независимой консоли проверен default-allow, вручную загружены ipfw/ipdivert, статус стал 1, затем штатный Start дал статус 0. Source `v0.5.7_30` устраняет опасный порядок `kldload ipfw` до `kenv default_to_accept=1` и ужесточает холодное наблюдение. Требуются CI и отдельная установленная проверка полноценного reboot→safe auto-start, без автоматической публикации пакета.
+
+## Предыдущий приоритет — Additional Resources implementation
 
 Stage-4 source update v0.5.7_18 adds bounded dynamic TLS BIN/Lua nodes to the existing Stage-60 graph using reviewed installed descriptors and job inventory; native on-appliance execution/health evidence and package lifecycle repairs remain open. No release is authorized by this step.
 

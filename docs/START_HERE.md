@@ -2,7 +2,10 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.7_29`. `VERSION=0.5.7`, `PLUGIN_REVISION=29`. **Source development candidate; not published or owner-tested.** Previous `v0.5.7_10` testing package remains published but failed owner-installed lifecycle checks. The earlier owner-authorized stable `v0.5.7_1` was published on 22 October 2026 ([release record](releases/v0.5.7.md), [publication evidence](verification/evidence/2026-10-22-v0.5.7-full-release-publication.md)); this does **not** authorize publication of `_29` or any unfinished Additional Resources candidate. The last owner-accepted installed Stage-6 testing asset was `v0.5.6_17`; the owner also reported installed `v0.5.7_1` during the ECH investigation. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. The earlier `v0.5.6` release is immutable; stable `v0.5.7_1` and its Pages/pkg deployment were published subsequently.
+**Current handoff identity:** `v0.5.7_30`. `VERSION=0.5.7`, `PLUGIN_REVISION=30`. **Source development candidate; not published or owner-tested.** Previous `v0.5.7_10` testing package remains published but failed owner-installed lifecycle checks. The earlier owner-authorized stable `v0.5.7_1` was published on 22 October 2026 ([release record](releases/v0.5.7.md), [publication evidence](verification/evidence/2026-10-22-v0.5.7-full-release-publication.md)); this does **not** authorize publication of `_30` or any unfinished Additional Resources candidate. The last owner-accepted installed Stage-6 testing asset was `v0.5.6_17`; the owner also reported installed `v0.5.7_1` during the ECH investigation. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. The earlier `v0.5.6` release is immutable; stable `v0.5.7_1` and its Pages/pkg deployment were published subsequently.
+
+
+**Owner-live recovery and active source priority (23 October 2026):** After the previous _10 cold-IPFW preflight confirmed an intentionally stopped, schema-1 committed common owner, the owner restored the published stable `0.5.7_1` with `pkg add -f -I` (pkg scripts bypassed), rebooted OPNsense and cleared the stale Volt cache. The preserved native owner stayed status 2 while ipfw/ipdivert were absent; the owner used a hypervisor console and verified `kenv net.inet.ip.fw.default_to_accept=1`, loaded ipfw with rule `65535 allow`, loaded ipdivert, enabled firewall, observed status 1, then `configctl zapret start` returned OK and native status 0 RUNNING. Settings and journal survived. This is **owner-live rescue of the installed _1**, not acceptance of candidate _30 or a reboot-cycle test. Source _30 fixes the current cold-loader risk by pre-seeding/verifying default allow **before** loading an absent IPFW kernel and checking exact empty/default-allow rule shape; independent read-only cold-status evidence is also strengthened. Full FreeBSD CI and owner-installed reboot/start/stop acceptance are pending. No testing package or stable release was requested. Do not automatically change `/boot/loader.conf` or delete the committed journal.
 
 **Previously completed full release:** stable [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) (`0.5.7_1`) was published from immutable commit `5d53ae7120b0e1dfe612850c804dea0294e17178` on 22 October 2026. [Release workflow #39804529650](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39804529650) passed FreeBSD 15 packaging, GitHub Release publication and Pages/pkg deployment. That earlier artifact includes the accepted Strategy Lab baseline, RU/EN Result summary, separate Strategies Apply indicators, README audit, Star invitation and attribution; publication is **not** owner-installed GUI acceptance and is not an approval to publish the later `_22` source.
 
@@ -31,25 +34,27 @@ it **does not** fix or bypass the unsafe old PRE_DEINSTALL. See the
 [preflight usage and limitations](verification/LEGACY_COLD_IPFW_PREFLIGHT.md).
 Offline CI is not owner-installed FreeBSD acceptance.
 
-## Critical owner-installed issue — absent IPFW kernel in 0.5.7_10
+## Owner-restored prior outage — cold IPFW, installed _1 (23 October 2026)
 
-23 October 2026 owner evidence: installed `0.5.7_10` had a sealed,
-committed shared-Apply owner but a stopped engine/supervisor and *neither*
-FreeBSD `ipfw` nor `ipdivert` module loaded; `ipfw -q list` returned
-"Protocol not available", exit 71. The prior observer incorrectly called
-this "foreign-or-modified-rules"; package PRE-INSTALL could not determine
-service state and refused replacement. Source `v0.5.7_18` classifies only
-this exact unloaded-kernel case as a stopped committed owner. However, the
-OLD installed package PRE-DEINSTALL will still call its old broken status
-then Stop when that status returns 2; new PRE-INSTALL explicitly refuses
-the unresolved transition until controlled owner-side recovery. This is NOT
-a seamless in-place upgrade or a completed owner-live repair. An operator
-can subsequently use
-a subsequent explicitly requested native Start prepare firewall via the
-existing original FD9 lifecycle. It does not reset journals, unload modules,
-clear rules or auto-repair the appliance. ECH-off `--ech false` from
-`v0.5.7_10` is retained. Source and FreeBSD CI plus owner installed testing
-are still required before any new package release.
+The previous `0.5.7_10` cold-IPFW package blockade was confirmed by owner
+read-only preflight and resolved on the **installed appliance** through an
+owner-controlled, scriptless downgrade to the published stable `0.5.7_1`.
+After rebooting and removing the stale Volt cache, the owner confirmed
+native schema-1 `committed`/STOPPED with ipfw/ipdivert absent, then used
+a **hypervisor console** to seed `kenv default_to_accept=1`, load IPFW
+and verify kernel policy 1 / `65535 allow`, load ipdivert and enable
+firewall. Native status became 1 (stopped); `configctl zapret start`
+returned OK and native status became 0 RUNNING. Saved native ownership and
+strategies were preserved. A pre-existing failed `setup.status` receipt
+does not supersede the live service observation.
+
+**This is manual rescue, not a validated automated cold boot.** Candidate
+`v0.5.7_30` safeguards the missing production transition: strict cold
+inspection plus safe policy seeding **before** any `kldload ipfw`,
+verification of effective default allow and no unexpected initial rules,
+then ipdivert and the existing FD9 sealed native start. Never treat the
+previous `_10` PRE_DEINSTALL as fixed, never load modules from package
+hooks, and do not claim `_30` installed acceptance or release.
 
 ## Active implementation override — Additional Resources
 
@@ -77,9 +82,9 @@ RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy La
 candidate generation is source-wired, but actual installed-host execution remains unverified.
 Do not claim that a CI-built package is a released/installed feature.
 
-**Current single next action:** collect and review a read-only preflight result for the *installed old* `_10` cold-IPFW condition using the documented standalone script; then design and owner-verify a controlled recovery path before any package replacement. The old installed PRE_DEINSTALL must independently observe STOPPED before any package replacement; do not trick status, preload kernel modules in pkg hooks, or claim the new future-hook guard repaired the old package. After that gate, verify operator-only `recover-mutating-stopped` on OPNsense, then manually install Additional Resources and run real GUI/Stage-60 acceptance including Stop→Start/PID replacement, RU/EN, F5, Model C, budgets and diagnostics.
+**Current single next action:** finish CI/FreeBSD package qualification of the one source-only `v0.5.7_30` safe cold-IPFW startup correction; then plan owner-approved installed testing of fresh reboot→safe auto-Start→native status/Stop/Start, with independent hypervisor access. Do not reboot the restored stable `_1` for this test without explicit preparation. After that gate, continue operator-only upstream recovery and Additional Resources installed acceptance. No package publication has been authorized.
 
-**Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. New Additional Resources work in source `v0.5.7_29` remains separately unpublished and not installed/accepted; ordinary `продолжаем разработку` does not authorize a new testing-package or stable release.
+**Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. New Additional Resources work in source `v0.5.7_30` remains separately unpublished and not installed/accepted; ordinary `продолжаем разработку` does not authorize a new testing-package or stable release.
 
 ## Previous task — approved Strategy Lab modernization
 
