@@ -87,3 +87,6 @@
 
 
 Source stage `v0.5.7_27` now seals saved compiled-binary SHA-256 file/dir inventory and installed-resource manifest identity in a synchronized sidecar before the schema-2 upstream checkpoint. Read-only attestation is required for prepared cleanup and immediate automatic rollback, but a separate controlled and owner-tested mutating-phase recovery executor is still pending.
+
+
+Source `v0.5.7_28` implements explicitly invoked schema-2 mutating upstream recovery only for a fully STOPPED native owner under setup.lock→original FD9. It verifies saved compiled binary/resource evidence, Git checkout/tag, tracked working-tree cleanliness and foreign snapshot entries before mutation, and checks original service state after using native Start when applicable. Running/incomplete/foreign owners and untrusted evidence fail closed; installed OPNsense acceptance and old cold-IPFW package replacement remain open.

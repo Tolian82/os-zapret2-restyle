@@ -1637,6 +1637,15 @@ service_dispatch()
                 "${RULE_BASE}" "${RULE_MAX}" "${STAGE_FILE}" \
                 "${2:-dvtws2 runtime failure}"
             ;;
+        upstream-recover-mutating)
+            # setup_transaction acquired setup.lock first, and the native
+            # service owns the original FD9. Never start a second firewall
+            # implementation or hide a Stop inside the setup shell script.
+            [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || return 75
+            [ -x "${SCRIPT_DIR}/setup_transaction.sh" ] || return 69
+            STRATEGY_LAB_LIFECYCLE_OWNER=1 UPSTREAM_RECOVERY_LIFECYCLE_OWNER=1 \
+                "${SCRIPT_DIR}/setup_transaction.sh" recover-mutating-under-parent-lock
+            ;;
         extra-resources-install|extra-resources-recover)
             # Launcher owns setup.lock before acquiring original FD9.
             # Native lifecycle callbacks never acquire a second lock.
@@ -1827,7 +1836,7 @@ service_with_lifecycle_lock()
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
                 ;;
-            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover)
+            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|upstream-recover-mutating)
                 # Under the inherited FD9, a committed native owner can be
                 # temporarily stopped/restored only by native common service
                 # actions. Pending or foreign owners remain fail-closed.
@@ -1878,7 +1887,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|upstream-recover-mutating)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

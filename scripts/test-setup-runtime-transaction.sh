@@ -31,6 +31,8 @@ EXTRA_GUARD_MOCK="${TMP_ROOT}/extra-guard"
 EXTRA_GUARD_FAIL=0
 EXTRA_GUARD_VERIFY_FAIL=0
 EXTRA_GUARD_EVIDENCE_FAIL=0
+GIT_DIRTY=0
+RECOVERY_SERVICE_CALLS="${TMP_ROOT}/recovery-service-calls"
 RECEIPT_CAPTURE="${TMP_ROOT}/captured-checkpoint"
 EVIDENCE_CAPTURE="${TMP_ROOT}/captured-attestation"
 
@@ -61,6 +63,25 @@ case "${1:-}" in
             incomplete) exit 2 ;;
             *) exit 64 ;;
         esac
+        ;;
+    strategy-lab-status)
+        case "$(cat "${TEST_SERVICE_STATE}")" in
+            running) exit 0 ;;
+            stopped) exit 1 ;;
+            *) exit 2 ;;
+        esac
+        ;;
+    strategy-lab-start)
+        printf '%s\n' started >> "${TEST_RECOVERY_SERVICE_CALLS}"
+        printf '%s\n' running > "${TEST_SERVICE_STATE}"
+        exit 0
+        ;;
+    upstream-recover-mutating)
+        [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || exit 75
+        printf '%s\n' native-fd9 >> "${TEST_RECOVERY_SERVICE_CALLS}"
+        ( UPSTREAM_RECOVERY_LIFECYCLE_OWNER=1 \
+            "${TEST_TRANSACTION}" recover-mutating-under-parent-lock ) \
+            9>"${TEST_LIFECYCLE_LOCK}"
         ;;
     stop)
         printf '%s\n' stopped > "${TEST_SERVICE_STATE}"
@@ -96,7 +117,25 @@ case "${1:-}" in
         cat "${TEST_GIT_RELEASE_STATE}"
         ;;
     rev-parse)
-        cat "${TEST_GIT_COMMIT_STATE}"
+        case "${3:-}" in
+            v1.0.4\^\{commit\}) printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;;
+            v1.0.3\^\{commit\}) printf '%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+            v1.0.2\^\{commit\}) printf '%s\n' cccccccccccccccccccccccccccccccccccccccc ;;
+            HEAD) cat "${TEST_GIT_COMMIT_STATE}" ;;
+            *) exit 64 ;;
+        esac
+        ;;
+    cat-file)
+        [ "${2:-}" = -e ] || exit 64
+        case "${3:-}" in
+            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\^\{commit\}|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\^\{commit\}) exit 0 ;;
+            *) exit 64 ;;
+        esac
+        ;;
+    status)
+        [ "${2:-}" = --porcelain ] || exit 64
+        [ "${3:-}" = --untracked-files=no ] || exit 64
+        if [ "${TEST_GIT_DIRTY:-0}" = 1 ]; then echo ' M user-owned-file'; fi
         ;;
     checkout|reset)
         target=${3:-}
@@ -104,6 +143,8 @@ case "${1:-}" in
         printf '%s\n' "${target}" > "${TEST_GIT_COMMIT_STATE}"
         if [ "${target}" = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ]; then
             printf '%s\n' v1.0.4 > "${TEST_GIT_RELEASE_STATE}"
+        elif [ "${target}" = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ]; then
+            printf '%s\n' v1.0.3 > "${TEST_GIT_RELEASE_STATE}"
         fi
         ;;
     *)
@@ -219,6 +260,10 @@ run_setup_action()
     TEST_EXTRA_GUARD_VERIFY_FAIL="${EXTRA_GUARD_VERIFY_FAIL}" \
     TEST_EXTRA_GUARD_EVIDENCE_FAIL="${EXTRA_GUARD_EVIDENCE_FAIL}" \
     TEST_EVIDENCE_CAPTURE="${EVIDENCE_CAPTURE}" \
+    TEST_RECOVERY_SERVICE_CALLS="${RECOVERY_SERVICE_CALLS}" \
+    TEST_TRANSACTION="${TRANSACTION}" \
+    TEST_LIFECYCLE_LOCK="${TMP_ROOT}/native-fd9" \
+    TEST_GIT_DIRTY="${GIT_DIRTY}" \
     TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
     "${TRANSACTION}" "${_action}" "$@"
 }
@@ -231,6 +276,11 @@ run_transaction()
 recover_prepared()
 {
     run_setup_action recover-prepared
+}
+
+recover_mutating_stopped()
+{
+    run_setup_action recover-mutating-stopped
 }
 
 # Candidate activation fails after changing checkout, binaries, permissions, and
@@ -424,6 +474,74 @@ output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
 [ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] || fail "recovery changed service"
 [ "$(cat "${SETUP_STATUS}")" = failed ] || fail "recovery did not record prior aborted setup"
 [ "$(inspect_recovery)" = 'recovery=none' ] || fail "recovery left pending state"
+
+# Exact schema-2 `mutating` evidence from a power cut: an explicitly
+# requested operation may restore ONLY a verified STOPPED native owner. Test
+# both refused states and a successful original-state restoration.
+mkdir -p "${ROLLBACK_DIR}/binaries"
+cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"
+cp "${RECEIPT_CAPTURE}" "${ROLLBACK_DIR}/checkpoint"
+cp "${EVIDENCE_CAPTURE}" "${ROLLBACK_DIR}/backup-attestation.json"
+printf '%s\n' cccccccccccccccccccccccccccccccccccccccc > "${GIT_COMMIT_STATE}"
+printf '%s\n' v1.0.2 > "${GIT_RELEASE_STATE}"
+printf '%s\n' damaged-candidate > "${ZAPRET_DIR}/binaries/my/dvtws2"
+before=$(cat "${GIT_COMMIT_STATE}")
+if run_setup_action recover-mutating-under-parent-lock >/dev/null 2>&1; then
+    fail "direct recovery without setup+native owner was accepted"
+fi
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before}" ] || fail "unauthorized recovery mutated checkout"
+
+if recover_mutating_stopped >/dev/null 2>&1; then
+    fail "mutating recovery stopped an already running service"
+fi
+[ "$(cat "${SERVICE_STATE}")" = running ] || fail "recovery changed running service"
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+if recover_mutating_stopped >/dev/null 2>&1; then
+    fail "mutating recovery accepted incomplete native owner"
+fi
+printf '%s\n' stopped > "${SERVICE_STATE}"
+GIT_DIRTY=1
+if recover_mutating_stopped >/dev/null 2>&1; then
+    fail "mutating recovery reset dirty tracked upstream tree"
+fi
+GIT_DIRTY=0
+EXTRA_GUARD_EVIDENCE_FAIL=1
+if recover_mutating_stopped >/dev/null 2>&1; then
+    fail "mutating recovery accepted corrupt saved binary proof"
+fi
+EXTRA_GUARD_EVIDENCE_FAIL=0
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before}" ] || fail "unsafe preflight changed checkout"
+[ -f "${ROLLBACK_DIR}/checkpoint" ] || fail "preflight erased restoration evidence"
+sed 's/schema=2/schema=1/' "${RECEIPT_CAPTURE}" > "${ROLLBACK_DIR}/checkpoint"
+if recover_mutating_stopped >/dev/null 2>&1; then
+    fail "schema-1 mutating snapshot was promoted to safe recovery"
+fi
+cp "${RECEIPT_CAPTURE}" "${ROLLBACK_DIR}/checkpoint"
+output=$(recover_mutating_stopped) || fail "attested stopped-owner recovery failed"
+printf '%s\n' "${output}" | grep -Fq 'RECOVERY_MUTATING_RESTORED:' ||
+    fail "explicit stopped-owner recovery reported incorrect result"
+[ "$(cat "${GIT_COMMIT_STATE}")" = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ] ||
+    fail "original checkout was not restored after interruption"
+[ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.3 ] || fail "original git release was not restored"
+[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.3 ] || fail "original release marker was not restored"
+[ "$(cat "${ZAPRET_DIR}/binaries/my/dvtws2")" = new-binary ] ||
+    fail "original compiled binary was not restored"
+[ "$(cat "${SERVICE_STATE}")" = running ] || fail "original running service not restarted"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "restored recovery retained active rollback blocker"
+grep -Fqx native-fd9 "${RECOVERY_SERVICE_CALLS}" || fail "native FD9 route not exercised"
+grep -Fqx started "${RECOVERY_SERVICE_CALLS}" || fail "native Start route not exercised"
+
+# Initially STOPPED services stay stopped after an otherwise valid recovery.
+mkdir -p "${ROLLBACK_DIR}/binaries"
+cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"
+sed 's/service_was_running=1/service_was_running=0/' "${RECEIPT_CAPTURE}" > "${ROLLBACK_DIR}/checkpoint"
+cp "${EVIDENCE_CAPTURE}" "${ROLLBACK_DIR}/backup-attestation.json"
+printf '%s\n' stopped > "${SERVICE_STATE}"
+printf '%s\n' cccccccccccccccccccccccccccccccccccccccc > "${GIT_COMMIT_STATE}"
+printf '%s\n' damaged-candidate > "${ZAPRET_DIR}/binaries/my/dvtws2"
+recover_mutating_stopped >/dev/null || fail "stopped-before upgrade recovery failed"
+[ "$(cat "${SERVICE_STATE}")" = stopped ] || fail "recovery unexpectedly started previously stopped service"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "stopped state recovery retained evidence"
 
 # The native status exit code must be preserved. Incomplete/foreign owner
 # cannot start a new upstream transaction or acquire a backup directory.
