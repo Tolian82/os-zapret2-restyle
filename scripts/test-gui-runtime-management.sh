@@ -116,8 +116,14 @@ grep -Fq 'ROLLBACK_DIR=' "${TRANSACTION}" || fail "transaction wrapper has no ro
 grep -Fq 'Previous bol-van/zapret2 runtime and service state restored.' "${TRANSACTION}" ||
     fail "transaction wrapper has no successful rollback contract"
 grep -Fq 'chmod 0644' "${TRANSACTION}" || fail "transaction wrapper does not normalize readable runtime data"
-grep -Fq 'configctl_exact_ok zapret start' "${TRANSACTION}" ||
-    fail "transaction wrapper does not restore a previously running service"
+# Under the original held FD9, configctl would try to acquire the same
+# lifecycle lock again. The updater must use native internal Start instead.
+grep -Fq '"${SERVICE_SCRIPT}" strategy-lab-start' "${TRANSACTION}" ||
+    fail "transaction wrapper does not restore through inherited native FD9"
+grep -Fq '"${SERVICE_SCRIPT}" strategy-lab-stop' "${TRANSACTION}" ||
+    fail "transaction wrapper does not Stop under native FD9"
+grep -Fq '"${SERVICE_SCRIPT}" upstream-install' "${TRANSACTION}" ||
+    fail "transaction wrapper does not route setup.lock to native FD9"
 sh -n "${LAUNCHER}"
 sh -n "${TRANSACTION}"
 
