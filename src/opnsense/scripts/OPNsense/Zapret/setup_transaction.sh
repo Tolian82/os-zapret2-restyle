@@ -209,6 +209,78 @@ inspect_interrupted_recovery()
     printf 'service_was_running=%s\nprevious_binaries=%s\n' "${SERVICE_WAS_RUNNING}" "${PREVIOUS_BINARIES}"
 }
 
+# A snapshot still marked "prepared" was fully persisted before *any*
+# chmod/checkout/service operation. Only this narrow state can be released
+# without restoring a runtime; anything potentially mutating stays blocked.
+verify_prepared_recovery()
+{
+    if ! read_recovery_checkpoint || [ "${RECOVERY_PHASE}" != prepared ]; then
+        echo "ERROR: recovery evidence is missing, malformed, or may have mutated runtime" >&2
+        return 69
+    fi
+    # Without a complete previous identity, we cannot attest that the
+    # checkout and release marker stayed unchanged during the interruption.
+    [ "${PREVIOUS_COMMIT}" != none ] && [ "${PREVIOUS_RELEASE}" != none ] || return 69
+    [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ] || return 69
+    _current_commit=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null) || return 69
+    [ "${_current_commit}" = "${PREVIOUS_COMMIT}" ] || return 69
+    [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] || return 69
+    _current_release=$(cat "${ACTIVE_RELEASE_FILE}") || return 69
+    [ "${_current_release}" = "${PREVIOUS_RELEASE}" ] || return 69
+
+    if service_state; then
+        _running=1
+    else
+        _state=$?
+        [ "${_state}" -eq 1 ] || return 69
+        _running=0
+    fi
+    [ "${_running}" = "${SERVICE_WAS_RUNNING}" ] || return 69
+
+    # Reject unknown data or symlinked backup entries. No foreign content is
+    # removed merely because it sits beside the checkpoint.
+    for _entry in "${ROLLBACK_DIR}"/* "${ROLLBACK_DIR}"/.[!.]* "${ROLLBACK_DIR}"/..?*; do
+        [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
+        case "${_entry##*/}" in
+            checkpoint|binaries|extra-managed) ;;
+            *) return 69 ;;
+        esac
+    done
+    [ ! -L "${ROLLBACK_DIR}/binaries" ] && [ ! -L "${ROLLBACK_DIR}/extra-managed" ] || return 69
+    if [ "${PREVIOUS_BINARIES}" -eq 1 ]; then
+        [ -d "${ROLLBACK_DIR}/binaries/my" ] && [ ! -L "${ROLLBACK_DIR}/binaries/my" ] || return 69
+        [ -d "${ZAPRET_DIR}/binaries/my" ] && [ ! -L "${ZAPRET_DIR}/binaries/my" ] || return 69
+        [ -z "$("${FIND_BIN}" "${ROLLBACK_DIR}/binaries/my" -type l -print)" ] || return 69
+        [ -z "$("${FIND_BIN}" "${ZAPRET_DIR}/binaries/my" -type l -print)" ] || return 69
+        diff -r "${ROLLBACK_DIR}/binaries/my" "${ZAPRET_DIR}/binaries/my" >/dev/null || return 69
+    else
+        [ ! -e "${ROLLBACK_DIR}/binaries" ] && [ ! -L "${ROLLBACK_DIR}/binaries" ] || return 69
+        [ ! -e "${ZAPRET_DIR}/binaries/my" ] && [ ! -L "${ZAPRET_DIR}/binaries/my" ] || return 69
+    fi
+
+    if [ ! -f "${STATE_DIR}/extra-resources/installed.json" ] &&
+       { [ -e "${ROLLBACK_DIR}/extra-managed" ] || [ -L "${ROLLBACK_DIR}/extra-managed" ]; }; then
+        return 69
+    fi
+    # The managed-resource guard compares current and saved bytes with the
+    # installed manifest. This is read-only and rejects tampered snapshots.
+    extra_resources_upstream_guard verify-snapshot || return 69
+    return 0
+}
+
+recover_prepared()
+{
+    # Serialized by the exact same setup.lock as install/inspect. Never call
+    # rollback_runtime() or any native Stop/Start from this action.
+    if ! verify_prepared_recovery; then
+        echo "ERROR: RECOVERY_REQUIRED: prepared snapshot cannot be verified; preserving evidence" >&2
+        return 69
+    fi
+    rm -rf "${ROLLBACK_DIR}" || return 1
+    status_write failed || return 1
+    echo "RECOVERY_PREPARED_CLEARED: previous runtime and service are unchanged"
+}
+
 prepare_rollback()
 {
     # A previous interrupted upgrade may still own backups. Never erase its
@@ -455,6 +527,17 @@ install_transaction()
 }
 
 case "${MODE}" in
+    recover-prepared)
+        [ "$#" -eq 1 ] || exit 64
+        mkdir -p "${RUN_DIR}"
+        [ -x "${LOCKF_BIN}" ] || exit 69
+        "${LOCKF_BIN}" -s -t 30 "${SETUP_LOCK_FILE}" \
+            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 "$0" recover-prepared-under-parent-lock
+        ;;
+    recover-prepared-under-parent-lock)
+        [ "$#" -eq 1 ] && [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || exit 75
+        recover_prepared
+        ;;
     inspect-recovery)
         [ "$#" -eq 1 ] || exit 64
         mkdir -p "${RUN_DIR}"
@@ -491,7 +574,7 @@ case "${MODE}" in
         install_transaction
         ;;
     *)
-        echo "usage: setup_transaction.sh {install [VERSION]|inspect-recovery}" >&2
+        echo "usage: setup_transaction.sh {install [VERSION]|inspect-recovery|recover-prepared}" >&2
         exit 64
         ;;
 esac
