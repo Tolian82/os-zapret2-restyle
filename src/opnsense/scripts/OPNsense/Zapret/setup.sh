@@ -384,6 +384,12 @@ install_runtime()
             status_write "failed"
             return 1
         }
+        # Verify both old installed and target resource inventories before
+        # checkout can change tracked Lua/BIN or the native runtime.
+        extra_resources_upstream_guard preflight-exact FETCH_HEAD || {
+            status_write "failed"
+            return 1
+        }
         git -C "${ZAPRET_DIR}" checkout --detach FETCH_HEAD
         git -C "${ZAPRET_DIR}" reset --hard FETCH_HEAD
     else
@@ -405,6 +411,11 @@ install_runtime()
     extra_resources_upstream_guard verify || {
         status_write "failed"
         echo "ERROR: managed Additional Resources changed during upstream setup" >&2
+        return 1
+    }
+    extra_resources_upstream_guard verify-exact || {
+        status_write "failed"
+        echo "ERROR: installed upstream/extras set diverged after checkout" >&2
         return 1
     }
 

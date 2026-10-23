@@ -222,5 +222,120 @@ class UpstreamResources(unittest.TestCase):
         self.assertEqual(guard._owned(), {})
 
 
+
+
+class ExactReleaseSwitch(unittest.TestCase):
+    """Two real immutable local Git commits; no network or service mutation."""
+
+    def setUp(self):
+        import subprocess
+        self.sp = subprocess
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        self.runtime = self.base / "upstream"
+        (self.runtime / "lua").mkdir(parents=True)
+        (self.runtime / "files/fake").mkdir(parents=True)
+        self.git("init", "-q")
+        self.git("config", "user.name", "Test")
+        self.git("config", "user.email", "test@example.invalid")
+        self.native = self.runtime / "lua/native.lua"
+        self.native.write_bytes(b"function native_old() end\n")
+        (self.runtime / "files/fake/legacy.bin").write_bytes(b"legacy")
+        self.git("add", "lua", "files")
+        self.git("commit", "-qm", "upstream v1")
+        self.old = self.git_out("rev-parse", "HEAD")
+        (self.runtime / "files/fake/legacy.bin").unlink()
+        (self.runtime / "files/fake/next.bin").write_bytes(b"new native")
+        self.native.write_bytes(b"function native_new() end\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "upstream v2")
+        self.new = self.git_out("rev-parse", "HEAD")
+        self.git("checkout", "-q", "--detach", self.old)
+        self.extra = self.runtime / "lua/managed.lua"
+        self.extra.write_bytes(b"function managed() end\n")
+        self.state = self.base / "state/extra-resources"
+        self.state.mkdir(parents=True)
+        self.manifest = self.state / "installed.json"
+        self.manifest.write_text(json.dumps({
+            "schema": 1, "files": {"lua/managed.lua": guard.sha256(self.extra.read_bytes())},
+            "source_commit": "f" * 40,
+        }))
+        self.before = (guard.RUNTIME, guard.STATE, guard.ROLLBACK,
+                       guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION)
+        guard.RUNTIME = self.runtime
+        guard.STATE = self.state
+        guard.GIT = self.sp.run(["which", "git"], capture_output=True,
+                                text=True, check=True).stdout.strip()
+        guard.ROLLBACK = self.base / "rollback/extra-managed"
+        guard.BACKUP_ROOT = guard.ROLLBACK.parent
+        guard.ATTESTATION = guard.BACKUP_ROOT / "backup-attestation.json"
+        self.addCleanup(self.restore_globals)
+
+    def restore_globals(self):
+        (guard.RUNTIME, guard.STATE, guard.ROLLBACK,
+         guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION) = self.before
+
+    def git(self, *args):
+        self.sp.run(["git", "-C", str(self.runtime), *args], check=True,
+                    capture_output=True)
+
+    def git_out(self, *args):
+        return self.sp.run(["git", "-C", str(self.runtime), *args],
+                           check=True, capture_output=True, text=True).stdout.strip()
+
+    def test_exact_old_and_target_reconcile_by_git_checkout(self):
+        guard.preflight_exact(self.old)
+        guard.preflight_exact(self.new)
+        self.git("checkout", "-q", "--detach", self.new)
+        guard.verify_exact()
+        self.assertFalse((self.runtime / "files/fake/legacy.bin").exists())
+        self.assertTrue((self.runtime / "files/fake/next.bin").exists())
+        self.assertTrue(self.extra.exists())
+
+    def test_orphan_refuses_before_snapshot_and_checkout(self):
+        (self.runtime / "lua/orphan.lua").write_bytes(b"foreign")
+        with self.assertRaisesRegex(guard.TransactionError, "exact upstream/extras"):
+            guard.preflight_exact(self.new)
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.old)
+
+    def test_target_new_conflict_with_extra_refuses_without_checkout(self):
+        self.git("checkout", "-q", "--detach", self.new)
+        (self.runtime / "lua/managed.lua").write_bytes(b"new upstream content")
+        self.git("add", "lua/managed.lua")
+        self.git("commit", "-qm", "target collision")
+        conflicted = self.git_out("rev-parse", "HEAD")
+        self.git("checkout", "-q", "--detach", self.old)
+        # Checkout removes the tracked target-only file; restore the original
+        # untracked managed copy before old-HEAD resource validation.
+        self.extra.write_bytes(b"function managed() end\n")
+        with self.assertRaisesRegex(guard.TransactionError, "target upstream conflicts"):
+            guard.preflight_exact(conflicted)
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.old)
+
+    def test_upstream_modified_bytes_refused_pre_mutation(self):
+        self.native.write_bytes(b"corrupt tracked")
+        with self.assertRaisesRegex(Exception, "Git-tracked resource changed"):
+            guard.preflight_exact(self.new)
+
+    def test_post_checkout_untracked_drift_refused(self):
+        guard.preflight_exact(self.new)
+        self.git("checkout", "-q", "--detach", self.new)
+        (self.runtime / "files/fake/orphan.bin").write_bytes(b"unexpected")
+        with self.assertRaisesRegex(guard.TransactionError, "exact upstream/extras"):
+            guard.verify_exact()
+
+    def test_post_checkout_missing_extra_refused(self):
+        self.git("checkout", "-q", "--detach", self.new)
+        self.extra.unlink()
+        with self.assertRaisesRegex(guard.TransactionError, "missing or changed"):
+            guard.verify_exact()
+
+    def test_preflight_symlinked_extra_refused(self):
+        self.extra.unlink()
+        self.extra.symlink_to(self.native)
+        with self.assertRaisesRegex(Exception, "symlink"):
+            guard.preflight_exact(self.new)
+
 if __name__ == "__main__":
     unittest.main()

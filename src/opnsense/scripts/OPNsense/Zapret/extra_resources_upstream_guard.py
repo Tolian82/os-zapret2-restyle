@@ -14,7 +14,8 @@ import shutil
 import subprocess
 import sys
 
-from extra_resources_preflight import sha256, validate_runtime_path
+from extra_resources_preflight import sha256, validate_runtime_path, resource_path
+from extra_resources_reconcile import tracked_resources, installed_resources, previous_metadata
 from extra_resources_transaction import (
     TransactionError, _owned_metadata, _safe_subdir, _sync_dir, _write_atomic,
 )
@@ -220,15 +221,113 @@ def restore() -> None:
     verify()
 
 
+
+def _git_target_names(ref: str) -> set[str]:
+    """Inspect target tracked Lua/BIN paths without touching installed files.
+
+    A Git commit ref is resolved by Git, not guessed from a moving upstream.
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_./^{}-]{1,100}", ref):
+        raise TransactionError("invalid target Git revision")
+    result = subprocess.run(
+        [GIT, "-C", str(RUNTIME), "ls-tree", "-r", "-z", ref,
+         "--", "lua", "files/fake"],
+        capture_output=True, timeout=30, check=False,
+    )
+    if result.returncode:
+        raise TransactionError("target upstream Git tree cannot be inspected")
+    names: set[str] = set()
+    for item in result.stdout.split(b"\0"):
+        if not item:
+            continue
+        try:
+            header, raw = item.split(b"\t", 1)
+            mode, kind, oid = header.decode("ascii").split()
+            name = raw.decode("utf-8", "strict")
+        except (ValueError, UnicodeError) as exc:
+            raise TransactionError("malformed target upstream tree") from exc
+        if not resource_path(name):
+            continue
+        if (mode not in {"100644", "100755"} or kind != "blob"
+                or not re.fullmatch(r"[0-9a-f]{40}", oid) or name in names):
+            raise TransactionError(f"unsafe target upstream Git resource: {name}")
+        names.add(name)
+        if len(names) > 4096:
+            raise TransactionError("target upstream resource limit exceeded")
+    return names
+
+
+def verify_exact() -> None:
+    """Read-only exact-set check at the current Git HEAD.
+
+    Require prior manual extras reconciliation before release switching.
+    Unknown/unowned resources are never deleted by the release updater.
+    """
+    _owned()
+    upstream = tracked_resources(RUNTIME, GIT)
+    actual = installed_resources(RUNTIME)
+    managed = previous_metadata(STATE / "installed.json")
+    if set(upstream) & set(managed):
+        raise TransactionError("an additional resource is now upstream-owned")
+    expected = set(upstream) | set(managed)
+    if set(actual) != expected:
+        extra = sorted(set(actual) - expected)
+        missing = sorted(expected - set(actual))
+        raise TransactionError(
+            "exact upstream/extras set is not satisfied; "
+            f"unexpected={extra[:3]} missing={missing[:3]}; "
+            "run the manual Additional Resources action on the current version"
+        )
+    for name, digest in upstream.items():
+        if actual[name] != digest:
+            raise TransactionError(f"upstream tracked resource drift: {name}")
+    for name, digest in managed.items():
+        if actual[name] != digest:
+            raise TransactionError(f"managed resource drift: {name}")
+
+
+def preflight_exact(ref: str = "FETCH_HEAD") -> None:
+    """Both old and target inventories verified BEFORE checkout/Stop.
+
+    This increment accepts only exact old sets and disjoint target resources.
+    Deleting foreign files or reassigning an overlapping path is deferred
+    until a separately attested old/target rollback is available.
+    """
+    verify_exact()
+    desired = _git_target_names(ref)
+    managed = previous_metadata(STATE / "installed.json")
+    collisions = sorted(desired & set(managed))
+    if collisions:
+        raise TransactionError("target upstream conflicts with managed extras: "
+                               + ", ".join(collisions[:5]))
+    # Do not silently break saved strategies if a target drops a native file.
+    removed = sorted(set(tracked_resources(RUNTIME, GIT)) - desired)
+    if RUNTIME == Path("/usr/local/etc/zapret2"):
+        config = Path("/conf/config.xml")
+        if config.is_symlink():
+            raise TransactionError("saved OPNsense configuration is symlinked")
+        if config.is_file():
+            raw = config.read_bytes()
+            for name in removed:
+                if name.encode() in raw or name.rsplit("/", 1)[1].encode() in raw:
+                    raise TransactionError(f"saved strategy references removed upstream resource: {name}")
+
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-evidence", "verify-evidence"}:
-        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-evidence", "verify-evidence"}:
+        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
-        if argv[1] == "preflight":
+        if argv[1] in {"preflight", "preflight-exact"}:
             if len(argv) > 3:
                 return 64
-            preflight(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+            if argv[1] == "preflight":
+                preflight(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+            else:
+                preflight_exact(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+        elif argv[1] == "verify-exact":
+            if len(argv) != 2:
+                return 64
+            verify_exact()
         elif argv[1] in {"snapshot-evidence", "verify-evidence"}:
             if len(argv) != 3 or argv[2] not in {"0", "1"}:
                 return 64

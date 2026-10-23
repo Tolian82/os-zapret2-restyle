@@ -492,6 +492,7 @@ restore_previous_checkout()
 
     normalize_runtime_permissions || return 1
     extra_resources_upstream_guard restore || return 1
+    extra_resources_upstream_guard verify-exact || return 1
     return 0
 }
 
@@ -595,6 +596,13 @@ install_transaction()
                 ;;
         esac
     fi
+
+    # Inspect the old upstream Git tree and all installed Lua/BIN before
+    # arming a mutating checkpoint. Orphans require a manual resource sync.
+    extra_resources_upstream_guard preflight-exact HEAD || {
+        echo "ERROR: existing Lua/BIN files are not an attested exact set" >&2
+        return 1
+    }
 
     prepare_rollback || {
         # The only cleanable artifact is this attempt's incomplete snapshot.

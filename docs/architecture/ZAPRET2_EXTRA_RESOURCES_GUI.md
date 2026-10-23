@@ -79,6 +79,17 @@ untracked bytes, then reconcile without automatically downloading extras.
 Until this switch-specific old/target rollback is proved, uncertain
 switches must be blocked rather than pretending the manual sync covers them.
 
+### Release-switch source increment (v0.5.7_32)
+
+An old/target Git resource inventory and exact-set check now guard the
+upstream checkout. The updater refuses pre-existing orphan files,
+colliding target names and modified tracked blobs before mutation, and
+checks the final exact set before native service restart. No automatic
+orphan deletion is yet enabled for upstream switching: it still requires
+a separately attested all-untracked snapshot and recoverable rollback.
+This is an incomplete intermediate implementation of the accepted final
+contract, not a change to the owner's approved target behavior.
+
 ## 4. Strategy Lab: обязательные функциональные требования
 
 1. **Автоматическая регистрация.** После успешной установки доступные дополнительные `.lua` и `.bin` обнаруживаются текущим `ResourceInventory`. Новый Job формирует свежий снимок каталогов; ранее созданные Job не менять задним числом. Проверять читаемость и непустое содержимое. Важно: **обнаружение не равно участию в поиске**.
