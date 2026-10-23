@@ -2493,4 +2493,3 @@ docs/DECISIONS.md
 Status:
 Active decision to retain the ideas for future discussion; implementation
 not approved.
-
