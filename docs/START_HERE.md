@@ -34,25 +34,27 @@ it **does not** fix or bypass the unsafe old PRE_DEINSTALL. See the
 [preflight usage and limitations](verification/LEGACY_COLD_IPFW_PREFLIGHT.md).
 Offline CI is not owner-installed FreeBSD acceptance.
 
-## Critical owner-installed issue — absent IPFW kernel in 0.5.7_10
+## Owner-restored prior outage — cold IPFW, installed _1 (23 October 2026)
 
-23 October 2026 owner evidence: installed `0.5.7_10` had a sealed,
-committed shared-Apply owner but a stopped engine/supervisor and *neither*
-FreeBSD `ipfw` nor `ipdivert` module loaded; `ipfw -q list` returned
-"Protocol not available", exit 71. The prior observer incorrectly called
-this "foreign-or-modified-rules"; package PRE-INSTALL could not determine
-service state and refused replacement. Source `v0.5.7_18` classifies only
-this exact unloaded-kernel case as a stopped committed owner. However, the
-OLD installed package PRE-DEINSTALL will still call its old broken status
-then Stop when that status returns 2; new PRE-INSTALL explicitly refuses
-the unresolved transition until controlled owner-side recovery. This is NOT
-a seamless in-place upgrade or a completed owner-live repair. An operator
-can subsequently use
-a subsequent explicitly requested native Start prepare firewall via the
-existing original FD9 lifecycle. It does not reset journals, unload modules,
-clear rules or auto-repair the appliance. ECH-off `--ech false` from
-`v0.5.7_10` is retained. Source and FreeBSD CI plus owner installed testing
-are still required before any new package release.
+The previous `0.5.7_10` cold-IPFW package blockade was confirmed by owner
+read-only preflight and resolved on the **installed appliance** through an
+owner-controlled, scriptless downgrade to the published stable `0.5.7_1`.
+After rebooting and removing the stale Volt cache, the owner confirmed
+native schema-1 `committed`/STOPPED with ipfw/ipdivert absent, then used
+a **hypervisor console** to seed `kenv default_to_accept=1`, load IPFW
+and verify kernel policy 1 / `65535 allow`, load ipdivert and enable
+firewall. Native status became 1 (stopped); `configctl zapret start`
+returned OK and native status became 0 RUNNING. Saved native ownership and
+strategies were preserved. A pre-existing failed `setup.status` receipt
+does not supersede the live service observation.
+
+**This is manual rescue, not a validated automated cold boot.** Candidate
+`v0.5.7_30` safeguards the missing production transition: strict cold
+inspection plus safe policy seeding **before** any `kldload ipfw`,
+verification of effective default allow and no unexpected initial rules,
+then ipdivert and the existing FD9 sealed native start. Never treat the
+previous `_10` PRE_DEINSTALL as fixed, never load modules from package
+hooks, and do not claim `_30` installed acceptance or release.
 
 ## Active implementation override — Additional Resources
 
@@ -80,9 +82,9 @@ RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy La
 candidate generation is source-wired, but actual installed-host execution remains unverified.
 Do not claim that a CI-built package is a released/installed feature.
 
-**Current single next action:** collect and review a read-only preflight result for the *installed old* `_10` cold-IPFW condition using the documented standalone script; then design and owner-verify a controlled recovery path before any package replacement. The old installed PRE_DEINSTALL must independently observe STOPPED before any package replacement; do not trick status, preload kernel modules in pkg hooks, or claim the new future-hook guard repaired the old package. After that gate, verify operator-only `recover-mutating-stopped` on OPNsense, then manually install Additional Resources and run real GUI/Stage-60 acceptance including Stop→Start/PID replacement, RU/EN, F5, Model C, budgets and diagnostics.
+**Current single next action:** finish CI/FreeBSD package qualification of the one source-only `v0.5.7_30` safe cold-IPFW startup correction; then plan owner-approved installed testing of fresh reboot→safe auto-Start→native status/Stop/Start, with independent hypervisor access. Do not reboot the restored stable `_1` for this test without explicit preparation. After that gate, continue operator-only upstream recovery and Additional Resources installed acceptance. No package publication has been authorized.
 
-**Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. New Additional Resources work in source `v0.5.7_29` remains separately unpublished and not installed/accepted; ordinary `продолжаем разработку` does not authorize a new testing-package or stable release.
+**Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. New Additional Resources work in source `v0.5.7_30` remains separately unpublished and not installed/accepted; ordinary `продолжаем разработку` does not authorize a new testing-package or stable release.
 
 ## Previous task — approved Strategy Lab modernization
 
