@@ -18,14 +18,14 @@ MAX_FILES = 4096
 MAX_FILE = 2 * 1024 * 1024
 
 
-def tracked_resources(root: Path) -> dict[str, str]:
+def tracked_resources(root: Path, git_bin: str = "git") -> dict[str, str]:
     if root.is_symlink() or not root.is_dir() or not (root / ".git").exists():
         raise PreflightError("installed Zapret2 Git checkout is missing or unsafe")
-    top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+    top = subprocess.run([git_bin, "-C", str(root), "rev-parse", "--show-toplevel"],
                          capture_output=True, text=True, timeout=30, check=False)
     if top.returncode or top.stdout.strip() != str(root.resolve()):
         raise PreflightError("unexpected upstream Git working tree")
-    listing = subprocess.run(["git", "-C", str(root), "ls-tree", "-r", "-z",
+    listing = subprocess.run([git_bin, "-C", str(root), "ls-tree", "-r", "-z",
                               "HEAD", "--", "lua", "files/fake"],
                              capture_output=True, timeout=30, check=False)
     if listing.returncode:

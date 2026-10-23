@@ -33,6 +33,14 @@ are never silently modified. Uncertain upstream release switches require
 old/target inventories and their own durable rollback before applying
 automatic exact reconciliation. No engine reinstall is needed.
 
+### Release-switch verification increment (v0.5.7_32)
+
+New source verification checks both old and target upstream Git resource
+trees and the managed extras inventory before/after checkout. Only
+previously normalized, noncolliding changes are eligible. Automatic
+orphan cleanup on an upstream switch remains blocked until all untracked
+Lua/BIN can be durably snapshotted, attested, and restored after failure.
+
 ## Этап 1. Каталог и данные о возможностях
 
 **Задача:** определить минимальный устойчивый контракт между каталогом, установщиком и динамической лабораторией.
