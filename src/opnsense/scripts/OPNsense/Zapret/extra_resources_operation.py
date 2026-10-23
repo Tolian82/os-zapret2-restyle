@@ -93,8 +93,13 @@ class NativeLifecycle:
 
 
 def _status(stage: str, **extra) -> None:
+    operation = os.environ.get("EXTRA_RESOURCES_OPERATION_ID", "")
+    if operation and re.fullmatch(r"[a-f0-9]{32}", operation) is None:
+        raise TransactionError("invalid resource operation identity")
     _safe_state(STATE)
-    _json_write(STATE / "status.json", {"schema": 1, "phase": stage, **extra})
+    _json_write(STATE / "status.json", {
+        "schema": 1, "operation": operation, "phase": stage, **extra,
+    })
 
 
 def main(argv: list[str]) -> int:
@@ -102,6 +107,11 @@ def main(argv: list[str]) -> int:
         print("usage: extra_resources_operation.py {install|recover}", file=sys.stderr)
         return 64
     mode = argv[1]
+    if mode == "install" and re.fullmatch(
+        r"[a-f0-9]{32}", os.environ.get("EXTRA_RESOURCES_OPERATION_ID", "")
+    ) is None:
+        print("missing or invalid resource operation identity", file=sys.stderr)
+        return 64
     try:
         lifecycle = NativeLifecycle()
         if mode == "recover":

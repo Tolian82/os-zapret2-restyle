@@ -18,7 +18,7 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
-- Stage 4 `v0.5.7_19`: bounded reviewed BIN/Lua Stage-60 candidates, plus symlink-safe per-job ResourceInventory and negative linked-resource regression; on-device acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
+- Stage 4/GUI gate `v0.5.7_20`: bounded dynamic BIN/Lua candidates, symlink-safe inventory and per-click correlated install result even for fast jobs; installed OPNsense acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
 
 
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;

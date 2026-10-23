@@ -1,6 +1,6 @@
 # Дополнительные ресурсы Zapret2 — GUI, установка и Strategy Lab (ТЗ)
 
-**Статус:** согласованное владельцем ТЗ от 22.10.2026; **пока не реализовано в коде плагина**. Изменения в этом документе не означают, что кнопка уже доступна или BIN/Lua участвуют в поиске. Подготовка отдельного каталога GitHub завершена. Выпуск пакета и релиз — отдельное решение владельца.
+**Status:** owner-approved requirements (22 October 2026). Source implementation now includes the manual Settings button, resource transaction, dynamic BIN/Lua search candidates, and per-click terminal status correlation (`v0.5.7_20`). These remain unverified on installed OPNsense; package publication and stable release are separate decisions.
 
 ## 1. Назначение и терминология
 

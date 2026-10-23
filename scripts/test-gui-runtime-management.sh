@@ -95,7 +95,11 @@ grep -Fq "'zapret setup_install'" "${CONTROLLER}" || fail "dedicated selected-re
 grep -Fq '[$version]' "${CONTROLLER}" || fail "selected release is not passed as the only parameter"
 grep -Fq 'false,' "${CONTROLLER}" || fail "launcher acceptance is not read synchronously"
 grep -Fq "\$response !== 'OK'" "${CONTROLLER}" || fail "launcher acceptance does not require exact OK"
-if grep -Fq "['install', \$version]" "${CONTROLLER}" || grep -Fq "'operation' =>" "${CONTROLLER}"; then
+# Limit the historical setup contract check to the upstream release handler.
+# Additional Resources now legitimately returns its own per-click operation ID.
+if grep -Fq "['install', \$version]" "${CONTROLLER}" ||
+   sed -n '/public function installAction()/,/public function reconfigureAction()/p' "${CONTROLLER}" |
+       grep -Fq "'operation' =>"; then
     fail "old detached two-parameter setup contract remains"
 fi
 
