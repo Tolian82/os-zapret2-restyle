@@ -111,9 +111,18 @@ except (ValueError,TypeError,KeyError,AssertionError):
     # Native service 'status' runs OUTSIDE this lock; old _10 status already
     # acquires it. Require status=2 both before and after the locked probe.
     for pass in 1 2; do
-        cold_signature || exit 69
-        native_stopped_evidence || exit 69
-        no_owned_processes || exit 69
+        cold_signature || {
+            printf 'FAILED_CHECK=kernel-signature-pass-%s\n' "$pass" >&2
+            exit 69
+        }
+        native_stopped_evidence || {
+            printf 'FAILED_CHECK=native-inspector-pass-%s\n' "$pass" >&2
+            exit 69
+        }
+        no_owned_processes || {
+            printf 'FAILED_CHECK=process-census-pass-%s\n' "$pass" >&2
+            exit 69
+        }
     done
 
     exit 0
