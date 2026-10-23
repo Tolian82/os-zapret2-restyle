@@ -75,11 +75,15 @@ read_service_status()
         ) 9>"${LIFECYCLE_LOCK_FILE}"
         _pkg_status=$?
     fi
-    # The cold-state read is safe even when the old installed service's
-    # status already acquires FD9. Never retry that service inside its lock.
+    # The old installed package's PRE-DEINSTALL runs AFTER this hook,
+    # using its OLD service script. Its status still returns 2 in this exact
+    # cold-kernel case, and it then calls stop on an unverified owner.
+    # Thus detection is diagnostic only; a safe path must repair the OLD
+    # runtime first. Never report status 1 here just to advance pkg.
     if [ "${_pkg_status}" -ne 0 ] && [ "${_pkg_status}" -ne 1 ] &&
        cold_committed_stopped; then
-        _pkg_status=1
+        echo "ERROR: old PRE-DEINSTALL cannot verify a stopped committed owner with IPFW unloaded; controlled recovery before package replacement is required" >&2
+        return 69
     fi
     return "${_pkg_status}"
 }

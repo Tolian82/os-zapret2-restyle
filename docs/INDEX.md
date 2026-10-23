@@ -20,7 +20,7 @@
 
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;
   absent IPFW/ipdivert made stopped common owner appear foreign. The
-  `v0.5.7_13` source candidate explicitly retains ECH-off and repairs
+  `v0.5.7_14` source candidate explicitly retains ECH-off and repairs
   only the attested cold-kernel case; CI/owner-live result still pending.
 
 - [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_9 with source-wired native Stop→Start, shared upstream preservation guard, fail-closed direct-install/pending-rollback protection and bilingual manual Settings-page GUI; installed acceptance and GUI still pending.

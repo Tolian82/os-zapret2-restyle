@@ -78,7 +78,22 @@ with tempfile.TemporaryDirectory() as td:
         )
         return result
 
-    assert run().returncode == 0, "sealed stopped/no-module owner was refused"
+    safe_refusal = run()
+    assert safe_refusal.returncode != 0, "unsafe old hook transition was permitted"
+    assert "old PRE-DEINSTALL" in safe_refusal.stderr, (
+        "missing actionable refusal for installed old package's unsafe hook"
+    )
+    # The old installed PRE-DEINSTALL is unpatched during incoming pre-install.
+    # It still calls its OLD service with status (2) then stop, not a safe
+    # stopped-state no-op. Do not claim that this incoming hook can fix it.
+    trace.unlink(missing_ok=True)
+    old_hook = root / "pkg/+PRE_DEINSTALL"
+    old_result = subprocess.run(["sh", str(old_hook)], env=env,
+                                capture_output=True, text=True)
+    assert old_result.returncode != 0
+    assert trace.read_text().splitlines() == ["status", "stop"], (
+        "old package's PRE-DEINSTALL failure path changed"
+    )
     for overrides in (
         {"MOCK_LOADED_MODULE": "ipfw"},
         {"MOCK_LOADED_MODULE": "ipdivert"},
@@ -91,4 +106,4 @@ with tempfile.TemporaryDirectory() as td:
     journal.unlink()
     assert run().returncode != 0, "missing committed journal accepted"
 
-print("PASS: replacement preinstall permits only attested stopped cold kernel")
+print("PASS: preinstall refuses unsafe old PRE-DEINSTALL after verified cold kernel")
