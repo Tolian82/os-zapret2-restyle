@@ -402,6 +402,9 @@ jobs:
       - name: Test bilingual manual extra-resources GUI contract
         run: python3.13 scripts/test-extra-resources-gui-contract.py
 
+      - name: Test job-local managed Lua/BIN capability classification
+        run: python3.13 scripts/test-extra-capabilities.py
+
       - name: Test original upstream setup transaction under shared lock
         run: sh scripts/test-setup-runtime-transaction.sh
 
