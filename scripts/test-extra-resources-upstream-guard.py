@@ -407,6 +407,120 @@ class ExactReleaseSwitch(unittest.TestCase):
             guard.snapshot_untracked()
         self.assertFalse((guard.BACKUP_ROOT / "untracked-resources").exists())
 
+    def _seal_switch_snapshot(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        checkpoint = guard.BACKUP_ROOT / "checkpoint"
+        checkpoint.write_text(
+            "schema=2\nprevious_commit=" + self.old
+            + "\nprevious_release=v1.0.4\nservice_was_running=1\n"
+            + "previous_binaries=0\nphase=mutating\n"
+        )
+
+    def test_orphan_is_reconciled_and_target_checkout_remains_exact(self):
+        orphan = self.runtime / "files/fake/unowned.bin"
+        orphan.write_bytes(b"unowned original bytes")
+        self.assertEqual(guard.preflight_switch(self.new), ["files/fake/unowned.bin"])
+        self._seal_switch_snapshot()
+        guard.prune_orphans(self.new)
+        self.assertFalse(orphan.exists())
+        self.assertTrue(self.extra.exists())
+        guard.preflight_exact(self.new)
+        self.git("checkout", "-q", "--detach", self.new)
+        guard.verify_switch_complete()
+        self.assertFalse(orphan.exists())
+        self.assertTrue((self.runtime / "files/fake/next.bin").exists())
+
+    def test_failed_switch_restores_unowned_and_managed_bytes(self):
+        orphan = self.runtime / "files/fake/unowned.bin"
+        orphan.write_bytes(b"owner's original bytes")
+        self._seal_switch_snapshot()
+        guard.prune_orphans(self.new)
+        self.git("checkout", "-q", "--detach", self.new)
+        self.extra.unlink()  # interrupted target activation lost the extra Lua
+        self.git("checkout", "-q", "--detach", self.old)
+        guard.restore()
+        guard.restore_untracked()
+        guard.verify_live_untracked()
+        self.assertEqual(orphan.read_bytes(), b"owner's original bytes")
+        self.assertEqual(self.extra.read_bytes(), b"function managed() end\n")
+
+    def test_pruning_requires_sealed_original(self):
+        orphan = self.runtime / "lua/unowned.lua"
+        orphan.write_bytes(b"function x() end")
+        guard.BACKUP_ROOT.mkdir(parents=True)
+        with self.assertRaisesRegex(guard.TransactionError, "attestation"):
+            guard.prune_orphans(self.new)
+        self.assertEqual(orphan.read_bytes(), b"function x() end")
+
+    def test_pruning_requires_mutating_checkpoint(self):
+        orphan = self.runtime / "lua/unowned.lua"
+        orphan.write_bytes(b"function x() end")
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        with self.assertRaisesRegex(guard.TransactionError, "checkpoint"):
+            guard.prune_orphans(self.new)
+        self.assertTrue(orphan.exists())
+
+    def test_pruning_rejects_modified_original_without_partial_deletion(self):
+        a = self.runtime / "lua/unowned.lua"
+        b = self.runtime / "files/fake/unowned.bin"
+        a.write_bytes(b"unowned old")
+        b.write_bytes(b"unowned blob")
+        self._seal_switch_snapshot()
+        b.write_bytes(b"user modified")
+        with self.assertRaisesRegex(guard.TransactionError, "changed after snapshot"):
+            guard.prune_orphans(self.new)
+        self.assertEqual(a.read_bytes(), b"unowned old")
+        self.assertEqual(b.read_bytes(), b"user modified")
+
+    def test_pruning_rejects_corrupt_saved_orphan(self):
+        orphan = self.runtime / "lua/unowned.lua"
+        orphan.write_bytes(b"unowned old")
+        self._seal_switch_snapshot()
+        (guard.BACKUP_ROOT / "untracked-resources/lua/unowned.lua").write_bytes(b"tamper")
+        with self.assertRaisesRegex(guard.TransactionError, "untracked snapshot bytes changed"):
+            guard.prune_orphans(self.new)
+        self.assertEqual(orphan.read_bytes(), b"unowned old")
+
+    def test_pruning_rejects_target_managed_collision_before_deletion(self):
+        self.git("checkout", "-q", "--detach", self.new)
+        self.extra.write_bytes(b"new upstream content")
+        self.git("add", "lua/managed.lua")
+        self.git("commit", "-qm", "upstream introduces managed file")
+        conflict = self.git_out("rev-parse", "HEAD")
+        self.git("checkout", "-q", "--detach", self.old)
+        self.extra.write_bytes(b"function managed() end\n")
+        orphan = self.runtime / "files/fake/unowned.bin"
+        orphan.write_bytes(b"unowned")
+        self._seal_switch_snapshot()
+        with self.assertRaisesRegex(guard.TransactionError, "target upstream conflicts"):
+            guard.prune_orphans(conflict)
+        self.assertEqual(orphan.read_bytes(), b"unowned")
+
+    def test_failed_target_name_adoption_restores_original_orphan(self):
+        orphan = self.runtime / "files/fake/next.bin"
+        orphan.write_bytes(b"pre-existing user BIN on target path")
+        self._seal_switch_snapshot()
+        guard.prune_orphans(self.new)
+        self.assertFalse(orphan.exists())
+        self.git("checkout", "-q", "--detach", self.new)
+        self.git("checkout", "-q", "--detach", self.old)
+        guard.restore_untracked()
+        self.assertEqual(orphan.read_bytes(), b"pre-existing user BIN on target path")
+        guard.verify_live_untracked()
+
+    def test_prune_cannot_resume_without_recovery(self):
+        orphan = self.runtime / "lua/unowned.lua"
+        orphan.write_bytes(b"original")
+        self._seal_switch_snapshot()
+        guard.prune_orphans(self.new)
+        with self.assertRaisesRegex(guard.TransactionError, "changed after snapshot"):
+            guard.prune_orphans(self.new)
+        self.assertFalse(orphan.exists())
+
     def test_preflight_symlinked_extra_refused(self):
         self.extra.unlink()
         self.extra.symlink_to(self.native)
