@@ -239,6 +239,23 @@ if LEGACY_FD9_REQUIRED=1 run_pre_install > "${TMP_ROOT}/still-incomplete" 2>&1; 
 fi
 grep -Fxq incomplete "${SERVICE_STATE}" || fail "real incomplete owner was stopped"
 
+# A future PRE_DEINSTALL must refuse an incomplete owner before Stop and
+# retain earlier replacement intent. This does not patch installed _10.
+reset_case
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+: > "${LEGACY_MARKER}"
+: > "${REPLACEMENT_MARKER}"
+if run_pre_deinstall > "${TMP_ROOT}/deinstall-incomplete" 2>&1; then
+    fail "PRE_DEINSTALL accepted an unverified owner"
+fi
+grep -Fq 'aborted before Stop' "${TMP_ROOT}/deinstall-incomplete" ||
+    fail "PRE_DEINSTALL omitted refusal reason"
+assert_present "${LEGACY_MARKER}"
+assert_present "${REPLACEMENT_MARKER}"
+if grep -Fq 'service:stop' "${TRACE}"; then
+    fail "PRE_DEINSTALL called Stop on status 2"
+fi
+
 # Stop failure aborts replacement and clears restart intent.
 reset_case
 printf '%s\n' running > "${SERVICE_STATE}"

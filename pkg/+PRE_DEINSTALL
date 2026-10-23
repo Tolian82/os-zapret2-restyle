@@ -26,7 +26,11 @@ if [ -x "${SERVICE_SCRIPT}" ]; then
             # an interrupted replacement retry.
             ;;
         2)
-            rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+            # An unknown owner is NEVER safe to Stop. The published _10
+            # hook instead called Stop in this state, breaking cold-IPFW
+            # replacement. Retain restart markers on refusal.
+            echo "ERROR: incomplete zapret lifecycle; package removal aborted before Stop" >&2
+            exit 1
             ;;
         *)
             echo "ERROR: cannot determine zapret service state before package removal" >&2
