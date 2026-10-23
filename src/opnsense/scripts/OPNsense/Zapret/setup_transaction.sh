@@ -265,12 +265,13 @@ verify_prepared_recovery()
     for _entry in "${ROLLBACK_DIR}"/* "${ROLLBACK_DIR}"/.[!.]* "${ROLLBACK_DIR}"/..?*; do
         [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
         case "${_entry##*/}" in
-            checkpoint|binaries|extra-managed) ;;
+            checkpoint|binaries|extra-managed|untracked-resources) ;;
             backup-attestation.json) [ "${RECOVERY_SCHEMA}" = 2 ] || return 69 ;;
             *) return 69 ;;
         esac
     done
-    [ ! -L "${ROLLBACK_DIR}/binaries" ] && [ ! -L "${ROLLBACK_DIR}/extra-managed" ] || return 69
+    [ ! -L "${ROLLBACK_DIR}/binaries" ] && [ ! -L "${ROLLBACK_DIR}/extra-managed" ] &&
+        [ ! -L "${ROLLBACK_DIR}/untracked-resources" ] || return 69
     if [ "${PREVIOUS_BINARIES}" -eq 1 ]; then
         # Snapshot creation stores only binaries/my. Foreign siblings must not
         # be swept up by rm -rf, even when the actual binary bytes match.
@@ -299,6 +300,7 @@ verify_prepared_recovery()
     extra_resources_upstream_guard verify-snapshot || return 69
     if [ "${RECOVERY_SCHEMA}" = 2 ]; then
         backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || return 69
+        backup_evidence verify-live-untracked || return 69
     else
         # Legacy prepared-only snapshots cannot be promoted to safe mutating
         # recovery; unchanged-live diff above is the sole cleanup proof.
@@ -334,7 +336,7 @@ recover_mutating_stopped()
     for _entry in "${ROLLBACK_DIR}"/* "${ROLLBACK_DIR}"/.[!.]* "${ROLLBACK_DIR}"/..?*; do
         [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
         case "${_entry##*/}" in
-            checkpoint|backup-attestation.json|binaries|extra-managed) ;;
+            checkpoint|backup-attestation.json|binaries|extra-managed|untracked-resources) ;;
             *) echo "ERROR: RECOVERY_REQUIRED: foreign upstream backup entry" >&2; return 69 ;;
         esac
         [ ! -L "${_entry}" ] || return 69
@@ -378,6 +380,7 @@ recover_mutating_stopped()
     [ "${_restored_head}" = "${PREVIOUS_COMMIT}" ] || return 70
     extra_resources_upstream_guard verify || return 70
     backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || return 70
+    backup_evidence verify-live-untracked || return 70
     if [ "${PREVIOUS_BINARIES}" -eq 1 ]; then
         diff -r "${ROLLBACK_DIR}/binaries/my" "${ZAPRET_DIR}/binaries/my" >/dev/null || return 70
     else
@@ -457,6 +460,13 @@ prepare_rollback()
         rm -rf "${ROLLBACK_DIR}" || true
         return 1
     fi
+    # Seal all original non-Git Lua/BIN, even files without plugin ownership,
+    # before checkout or service mutation. Automatic deletion is NOT enabled.
+    if ! backup_evidence snapshot-untracked; then
+        echo "ERROR: full untracked-resource snapshot preparation failed" >&2
+        rm -rf "${ROLLBACK_DIR}" || true
+        return 1
+    fi
     # Refuse to arm a transaction that could not later identify its original
     # exact release/checkout. Seal all backup and manifest digests BEFORE the
     # recoverable checkpoint and before any mutation.
@@ -492,6 +502,8 @@ restore_previous_checkout()
 
     normalize_runtime_permissions || return 1
     extra_resources_upstream_guard restore || return 1
+    backup_evidence restore-untracked || return 1
+    backup_evidence verify-live-untracked || return 1
     extra_resources_upstream_guard verify-exact || return 1
     return 0
 }
@@ -663,6 +675,13 @@ install_transaction()
             rollback_runtime || true
             return 1
         fi
+
+        backup_evidence verify-live-untracked || {
+            status_write "failed"
+            echo "ERROR: non-Git resource files changed during upstream switch" >&2
+            rollback_runtime || true
+            return 1
+        }
 
         write_active_release "${_installed_release}" || {
             status_write "failed"

@@ -331,6 +331,81 @@ class ExactReleaseSwitch(unittest.TestCase):
         with self.assertRaisesRegex(guard.TransactionError, "missing or changed"):
             guard.verify_exact()
 
+
+    def test_untracked_snapshot_restores_lost_managed_lua(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        record = json.loads(guard.ATTESTATION.read_text())
+        self.assertEqual(record["schema"], 2)
+        self.assertIn("lua/managed.lua", record["untracked"])
+        self.extra.unlink()
+        guard.verify_backup_attestation(False)
+        with self.assertRaisesRegex(guard.TransactionError, "live untracked"):
+            guard.verify_live_untracked()
+        guard.restore_untracked()
+        self.assertEqual(self.extra.read_bytes(), b"function managed() end\n")
+        guard.verify_live_untracked()
+
+    def test_untracked_snapshot_tampering_refuses_recovery(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        self.extra.unlink()
+        saved = guard.BACKUP_ROOT / "untracked-resources/lua/managed.lua"
+        saved.write_bytes(b"corrupted")
+        with self.assertRaisesRegex(guard.TransactionError, "untracked snapshot bytes changed"):
+            guard.verify_backup_attestation(False)
+        with self.assertRaisesRegex(guard.TransactionError, "untracked snapshot bytes changed"):
+            guard.restore_untracked()
+        self.assertFalse(self.extra.exists())
+
+    def test_untracked_snapshot_rejects_foreign_backup_entry(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        (guard.BACKUP_ROOT / "untracked-resources/lua/foreign.lua").write_bytes(b"foreign")
+        with self.assertRaisesRegex(guard.TransactionError, "untracked snapshot bytes changed"):
+            guard.verify_backup_attestation(False)
+
+    def test_untracked_snapshot_rejects_symlink(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        saved = guard.BACKUP_ROOT / "untracked-resources/lua/managed.lua"
+        saved.unlink()
+        saved.symlink_to(self.extra)
+        with self.assertRaisesRegex(guard.TransactionError, "untracked backup symlink"):
+            guard.verify_backup_attestation(False)
+
+    def test_untracked_snapshot_preserves_orphan_without_deletion(self):
+        orphan = self.runtime / "files/fake/old-unowned.bin"
+        orphan.write_bytes(b"owner orphan content")
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        self.assertEqual(orphan.read_bytes(), b"owner orphan content")
+        self.assertEqual(
+            (guard.BACKUP_ROOT / "untracked-resources/files/fake/old-unowned.bin").read_bytes(),
+            b"owner orphan content",
+        )
+        guard.verify_backup_attestation(False)
+
+    def test_untracked_snapshot_rejects_live_conflict(self):
+        guard.snapshot()
+        guard.snapshot_untracked()
+        guard.create_backup_attestation(False)
+        self.extra.write_bytes(b"user changed after snapshot")
+        with self.assertRaisesRegex(guard.TransactionError, "live untracked conflict"):
+            guard.restore_untracked()
+        self.assertEqual(self.extra.read_bytes(), b"user changed after snapshot")
+
+    def test_untracked_snapshot_rejects_corrupt_git_blob(self):
+        self.native.write_bytes(b"corrupted upstream file")
+        with self.assertRaisesRegex(Exception, "Git-tracked resource changed"):
+            guard.snapshot_untracked()
+        self.assertFalse((guard.BACKUP_ROOT / "untracked-resources").exists())
+
     def test_preflight_symlinked_extra_refused(self):
         self.extra.unlink()
         self.extra.symlink_to(self.native)
