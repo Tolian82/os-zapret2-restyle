@@ -30,7 +30,9 @@ LOCKF_MOCK="${TMP_ROOT}/lockf"
 EXTRA_GUARD_MOCK="${TMP_ROOT}/extra-guard"
 EXTRA_GUARD_FAIL=0
 EXTRA_GUARD_VERIFY_FAIL=0
+EXTRA_GUARD_EVIDENCE_FAIL=0
 RECEIPT_CAPTURE="${TMP_ROOT}/captured-checkpoint"
+EVIDENCE_CAPTURE="${TMP_ROOT}/captured-attestation"
 
 mkdir -p \
     "${ZAPRET_DIR}/.git" \
@@ -131,6 +133,19 @@ if [ "${1:-}" = snapshot ] && [ "${TEST_EXTRA_GUARD_FAIL}" = 1 ]; then
     printf '%s\n' partial > "${TEST_ROLLBACK_DIR}/extra-managed/partial"
     exit 70
 fi
+# When snapshot identity cannot be sealed, the attempt must abort before
+# checkout, leave no fake committed checkpoint and permit safe retry.
+if [ "${1:-}" = snapshot-evidence ]; then
+    printf '%s\n' '{"schema":1,"mock":"original backups"}' > "${TEST_ROLLBACK_DIR}/backup-attestation.json"
+    [ "${TEST_EXTRA_GUARD_EVIDENCE_FAIL}" != 1 ] || exit 70
+    exit 0
+fi
+if [ "${1:-}" = verify-evidence ]; then
+    [ "${TEST_EXTRA_GUARD_EVIDENCE_FAIL}" != 1 ] || exit 70
+    [ "${2:-}" = 1 ] || exit 70
+    grep -Fqx '{"schema":1,"mock":"original backups"}' "${TEST_ROLLBACK_DIR}/backup-attestation.json" || exit 70
+    exit 0
+fi
 # Prepared cleanup requires live-resource verification as well as a saved
 # backup verification, even though a mutating checkout may remove live files.
 if [ "${1:-}" = verify ] && [ "${TEST_EXTRA_GUARD_VERIFY_FAIL}" = 1 ]; then
@@ -149,6 +164,7 @@ version=${2:-v1.0.4}
 [ -f "${TEST_ROLLBACK_DIR}/checkpoint" ] || exit 65
 grep -Fqx 'phase=mutating' "${TEST_ROLLBACK_DIR}/checkpoint" || exit 65
 cp "${TEST_ROLLBACK_DIR}/checkpoint" "${TEST_RECEIPT_CAPTURE}" || exit 65
+cp "${TEST_ROLLBACK_DIR}/backup-attestation.json" "${TEST_EVIDENCE_CAPTURE}" || exit 65
 printf '%s\n' "${version}" > "${TEST_GIT_RELEASE_STATE}"
 printf '%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "${TEST_GIT_COMMIT_STATE}"
 printf '%s\n' new-binary > "${TEST_ZAPRET_DIR}/binaries/my/dvtws2"
@@ -201,6 +217,8 @@ run_setup_action()
     TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
     TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
     TEST_EXTRA_GUARD_VERIFY_FAIL="${EXTRA_GUARD_VERIFY_FAIL}" \
+    TEST_EXTRA_GUARD_EVIDENCE_FAIL="${EXTRA_GUARD_EVIDENCE_FAIL}" \
+    TEST_EVIDENCE_CAPTURE="${EVIDENCE_CAPTURE}" \
     TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
     "${TRANSACTION}" "${_action}" "$@"
 }
@@ -227,7 +245,8 @@ fi
 [ "$(cat "${SERVICE_STATE}")" = running ] || fail "previous running state was not restored"
 [ "$(cat "${SETUP_STATUS}")" = failed ] || fail "failed operation did not remain visible"
 [ ! -e "${ROLLBACK_DIR}" ] || fail "automatic rollback leaked checkpoint"
-[ "$(sed -n '1p' "${RECEIPT_CAPTURE}")" = schema=1 ] || fail "missing checkpoint schema"
+[ "$(sed -n '1p' "${RECEIPT_CAPTURE}")" = schema=2 ] || fail "missing sealed checkpoint schema"
+[ -s "${EVIDENCE_CAPTURE}" ] || fail "upstream backup identity was not sealed before mutation"
 grep -Fqx 'phase=mutating' "${RECEIPT_CAPTURE}" || fail "snapshot not marked before mutation"
 grep -Fqx 'previous_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${RECEIPT_CAPTURE}" || fail "old commit not persisted"
 grep -Fqx 'previous_release=v1.0.4' "${RECEIPT_CAPTURE}" || fail "old release not persisted"
@@ -292,12 +311,23 @@ fi
 [ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] || fail "snapshot failure changed service"
 [ "$(cat "${ACTIVE_RELEASE_FILE}")" = "${before_release}" ] || fail "snapshot failure changed release"
 EXTRA_GUARD_FAIL=0
+# Failure while sealing old compiled binary bytes is still pre-mutation and
+# must not leave an unrelated RECOVERY_REQUIRED blocker.
+EXTRA_GUARD_EVIDENCE_FAIL=1
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "failed sealed backup unexpectedly activated upstream"
+fi
+[ ! -e "${ROLLBACK_DIR}" ] || fail "failed backup seal left partial snapshot"
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] || fail "backup seal changed checkout"
+EXTRA_GUARD_EVIDENCE_FAIL=0
 run_transaction v1.0.3 >/dev/null || fail "retry after failed snapshot did not succeed"
 [ ! -e "${ROLLBACK_DIR}" ] || fail "retry left rollback data"
 [ "$(cat "${SETUP_STATUS}")" = ready ] || fail "retry did not reach ready"
 
 mkdir "${ROLLBACK_DIR}"
 cp "${RECEIPT_CAPTURE}" "${ROLLBACK_DIR}/checkpoint"
+cp "${EVIDENCE_CAPTURE}" "${ROLLBACK_DIR}/backup-attestation.json"
 output=$(inspect_recovery) || fail "durable checkpoint unreadable"
 printf '%s\n' "${output}" | grep -Fqx 'recovery=required' || fail "required phase not shown"
 printf '%s\n' "${output}" | grep -Fqx 'previous_commit=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' || fail "previous commit absent"
@@ -323,6 +353,7 @@ rm -rf "${ROLLBACK_DIR}"
 mkdir -p "${ROLLBACK_DIR}/binaries"
 cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"
 sed 's/phase=mutating/phase=prepared/' "${RECEIPT_CAPTURE}" > "${ROLLBACK_DIR}/checkpoint"
+cp "${EVIDENCE_CAPTURE}" "${ROLLBACK_DIR}/backup-attestation.json"
 grep -Fqx 'phase=prepared' "${ROLLBACK_DIR}/checkpoint" || fail "prepared fixture missing"
 before_commit=$(cat "${GIT_COMMIT_STATE}")
 before_release=$(cat "${ACTIVE_RELEASE_FILE}")
@@ -376,6 +407,13 @@ fi
 [ -f "${ROLLBACK_DIR}/checkpoint" ] ||
     fail "live-resource mismatch erased prepared snapshot"
 EXTRA_GUARD_VERIFY_FAIL=0
+# Even matching current bytes cannot authorize cleanup after evidence tamper.
+printf '%s\n' modified > "${ROLLBACK_DIR}/backup-attestation.json"
+if recover_prepared >/dev/null 2>&1; then
+    fail "prepared recovery removed tampered binary attestation"
+fi
+[ -f "${ROLLBACK_DIR}/checkpoint" ] || fail "tampered attestation was deleted"
+cp "${EVIDENCE_CAPTURE}" "${ROLLBACK_DIR}/backup-attestation.json"
 
 output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
 [ "${output}" = 'RECOVERY_PREPARED_CLEARED: previous runtime and service are unchanged' ] ||

@@ -39,13 +39,17 @@ class UpstreamResources(unittest.TestCase):
         self.git = self.base / "git"
         self.git.write_text("#!/bin/sh\necho lua/zapret-lib.lua\n")
         self.git.chmod(0o755)
-        self.previous = (guard.RUNTIME, guard.STATE, guard.ROLLBACK, guard.GIT)
+        self.previous = (guard.RUNTIME, guard.STATE, guard.ROLLBACK, guard.GIT,
+                         guard.BACKUP_ROOT, guard.ATTESTATION)
         guard.RUNTIME, guard.STATE, guard.ROLLBACK, guard.GIT = (
             self.runtime, self.state, self.backup, str(self.git))
+        guard.BACKUP_ROOT = self.backup.parent
+        guard.ATTESTATION = guard.BACKUP_ROOT / "backup-attestation.json"
         self.addCleanup(self.restore_globals)
 
     def restore_globals(self):
-        guard.RUNTIME, guard.STATE, guard.ROLLBACK, guard.GIT = self.previous
+        (guard.RUNTIME, guard.STATE, guard.ROLLBACK, guard.GIT,
+         guard.BACKUP_ROOT, guard.ATTESTATION) = self.previous
 
     def test_unrelated_upstream_file(self):
         guard.preflight()
@@ -140,6 +144,71 @@ class UpstreamResources(unittest.TestCase):
         self.backup.mkdir(parents=True)
         with self.assertRaisesRegex(guard.TransactionError, "unexpected managed backup"):
             guard.verify_snapshot()
+
+
+    def _compiled_backup(self):
+        saved = self.backup.parent / "binaries/my/dvtws2"
+        saved.parent.mkdir(parents=True)
+        saved.write_bytes(b"compiled binary from original checkout")
+        return saved
+
+    def test_sealed_binary_backup_survives_missing_live_managed_lua(self):
+        guard.snapshot()
+        saved = self._compiled_backup()
+        guard.create_backup_attestation(True)
+        guard.verify_backup_attestation(True)
+        self.lua.unlink()
+        guard.verify_backup_attestation(True)
+        saved.write_bytes(b"tampered compiled binary")
+        with self.assertRaisesRegex(guard.TransactionError, "compiled binary backup changed"):
+            guard.verify_backup_attestation(True)
+        self.assertTrue(guard.ATTESTATION.exists())
+
+    def test_sealed_manifest_identity_rejects_mutation_and_presence_change(self):
+        guard.snapshot()
+        self._compiled_backup()
+        guard.create_backup_attestation(True)
+        self.manifest.write_text(json.dumps({
+            "schema": 1, "files": {"lua/a-dynamic.lua": guard.sha256(self.original)},
+            "source_commit": "b" * 40,
+        }))
+        with self.assertRaisesRegex(guard.TransactionError, "managed resource manifest changed"):
+            guard.verify_backup_attestation(True)
+        self.assertTrue(guard.ATTESTATION.exists())
+
+    def test_sealed_binary_backup_rejects_foreign_entry_and_symlink(self):
+        guard.snapshot()
+        saved = self._compiled_backup()
+        guard.create_backup_attestation(True)
+        foreign = saved.parent / "unexpected"
+        foreign.write_bytes(b"foreign")
+        with self.assertRaisesRegex(guard.TransactionError, "compiled binary backup changed"):
+            guard.verify_backup_attestation(True)
+        foreign.unlink()
+        saved.unlink()
+        saved.symlink_to(self.lua)
+        with self.assertRaisesRegex(guard.TransactionError, "binary backup symlink"):
+            guard.verify_backup_attestation(True)
+
+    def test_sealed_binary_backup_rejects_manifest_absence_change(self):
+        self.manifest.unlink()
+        # A real setup transaction created runtime-rollback before evidence.
+        guard.BACKUP_ROOT.mkdir()
+        guard.create_backup_attestation(False)
+        guard.verify_backup_attestation(False)
+        self.manifest.write_text(json.dumps({"schema": 1, "files": {}}))
+        with self.assertRaisesRegex(guard.TransactionError, "managed resource manifest changed"):
+            guard.verify_backup_attestation(False)
+
+    def test_sealed_backup_presence_requires_explicit_binary_identity(self):
+        guard.snapshot()
+        self._compiled_backup()
+        with self.assertRaisesRegex(guard.TransactionError, "presence differs"):
+            guard.create_backup_attestation(False)
+        self.assertFalse(guard.ATTESTATION.exists())
+        guard.create_backup_attestation(True)
+        with self.assertRaisesRegex(guard.TransactionError, "compiled binary backup changed"):
+            guard.verify_backup_attestation(False)
 
     def test_pending_extra_transaction_refuses_upstream(self):
         (self.state / "transaction").mkdir()

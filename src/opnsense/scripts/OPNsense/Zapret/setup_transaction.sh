@@ -133,6 +133,16 @@ extra_resources_upstream_guard()
 }
 
 
+# Always invoke the evidence guard, including when no Additional Resources
+# manifest exists; absence itself is part of the sealed pre-mutation identity.
+backup_evidence()
+{
+    [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] || return 69
+    ZAPRET_DIR="${ZAPRET_DIR}" STATE_DIR="${STATE_DIR}" \
+    ROLLBACK_DIR="${ROLLBACK_DIR}" GIT_BIN="${GIT_BIN}" \
+        "${EXTRA_PYTHON}" "${EXTRA_GUARD}" "$@"
+}
+
 # A minimal, strict, non-executable checkpoint. Do not source or eval it.
 # The file is written atomically and synced BEFORE any runtime mutation.
 write_recovery_checkpoint()
@@ -153,7 +163,7 @@ write_recovery_checkpoint()
     [ ! -L "${ROLLBACK_DIR}/checkpoint" ] || return 69
     _tmp=$(mktemp "${ROLLBACK_DIR}/checkpoint.XXXXXXXX") || return 1
     if ! {
-        printf 'schema=1\nprevious_commit=%s\nprevious_release=%s\n' "${_saved_commit}" "${_saved_release}"
+        printf 'schema=2\nprevious_commit=%s\nprevious_release=%s\n' "${_saved_commit}" "${_saved_release}"
         printf 'service_was_running=%s\nprevious_binaries=%s\n' "${SERVICE_WAS_RUNNING}" "${PREVIOUS_BINARIES}"
         printf 'phase=%s\n' "${_checkpoint_phase}"
     } > "${_tmp}" || ! chmod 0600 "${_tmp}" || ! mv -f "${_tmp}" "${ROLLBACK_DIR}/checkpoint"; then
@@ -177,7 +187,11 @@ read_recovery_checkpoint()
     _service=$(sed -n '4p' "${_checkpoint}")
     _binaries=$(sed -n '5p' "${_checkpoint}")
     _phase=$(sed -n '6p' "${_checkpoint}")
-    [ "${_schema}" = schema=1 ] || return 69
+    case "${_schema}" in
+        schema=1) RECOVERY_SCHEMA=1 ;; # Legacy: prepared-only verified cleanup.
+        schema=2) RECOVERY_SCHEMA=2 ;; # Pre-mutation sealed binary/manifest evidence.
+        *) return 69 ;;
+    esac
     case "${_commit}" in previous_commit=*) PREVIOUS_COMMIT=${_commit#previous_commit=} ;; *) return 69 ;; esac
     case "${_release}" in previous_release=*) PREVIOUS_RELEASE=${_release#previous_release=} ;; *) return 69 ;; esac
     case "${_service}" in service_was_running=*) SERVICE_WAS_RUNNING=${_service#service_was_running=} ;; *) return 69 ;; esac
@@ -247,6 +261,7 @@ verify_prepared_recovery()
         [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
         case "${_entry##*/}" in
             checkpoint|binaries|extra-managed) ;;
+            backup-attestation.json) [ "${RECOVERY_SCHEMA}" = 2 ] || return 69 ;;
             *) return 69 ;;
         esac
     done
@@ -277,6 +292,14 @@ verify_prepared_recovery()
     # useful when a mutating checkout legitimately removed live resources.
     extra_resources_upstream_guard verify || return 69
     extra_resources_upstream_guard verify-snapshot || return 69
+    if [ "${RECOVERY_SCHEMA}" = 2 ]; then
+        backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || return 69
+    else
+        # Legacy prepared-only snapshots cannot be promoted to safe mutating
+        # recovery; unchanged-live diff above is the sole cleanup proof.
+        [ ! -e "${ROLLBACK_DIR}/backup-attestation.json" ] &&
+            [ ! -L "${ROLLBACK_DIR}/backup-attestation.json" ] || return 69
+    fi
     return 0
 }
 
@@ -335,8 +358,16 @@ prepare_rollback()
         rm -rf "${ROLLBACK_DIR}" || true
         return 1
     fi
-    # Persist the original state while all old bytes still exist. A reader of
-    # a power-cut snapshot can now distinguish it from a legacy/unverified one.
+    # Refuse to arm a transaction that could not later identify its original
+    # exact release/checkout. Seal all backup and manifest digests BEFORE the
+    # recoverable checkpoint and before any mutation.
+    if [ -z "${PREVIOUS_COMMIT}" ] || [ -z "${PREVIOUS_RELEASE}" ] ||
+       ! backup_evidence snapshot-evidence "${PREVIOUS_BINARIES}"; then
+        echo "ERROR: original runtime identity or backup attestation unavailable" >&2
+        rm -rf "${ROLLBACK_DIR}" || true
+        return 1
+    fi
+    # A power cut can now distinguish legacy backups from schema-2 evidence.
     if ! write_recovery_checkpoint prepared; then
         echo "ERROR: durable recovery checkpoint could not be prepared" >&2
         rm -rf "${ROLLBACK_DIR}" || true
@@ -402,6 +433,14 @@ restore_previous_service_state()
 rollback_runtime()
 {
     echo "Restoring the previously active bol-van/zapret2 runtime..."
+    # Never overwrite a checkout with binaries/managed files from an
+    # unverified or damaged backup, even during immediate automatic rollback.
+    if ! read_recovery_checkpoint || [ "${RECOVERY_SCHEMA}" != 2 ] ||
+       [ "${RECOVERY_PHASE}" != mutating ] ||
+       ! backup_evidence verify-evidence "${PREVIOUS_BINARIES}"; then
+        echo "ERROR: RESTORE_FAILED: saved upstream bytes/manifest not attested; evidence retained" >&2
+        return 1
+    fi
 
     if ! restore_previous_checkout; then
         echo "ERROR: previous bol-van/zapret2 checkout could not be restored" >&2

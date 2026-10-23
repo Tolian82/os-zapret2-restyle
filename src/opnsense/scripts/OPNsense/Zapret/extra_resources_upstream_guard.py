@@ -6,7 +6,9 @@ No Git release, package metadata, OPNsense Config or user file is modified.
 """
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -21,6 +23,8 @@ RUNTIME = Path(os.environ.get("ZAPRET_DIR", "/usr/local/etc/zapret2"))
 STATE = Path(os.environ.get("STATE_DIR", "/var/db/zapret2-restyle")) / "extra-resources"
 ROLLBACK = Path(os.environ.get("ROLLBACK_DIR", "/var/db/zapret2-restyle/runtime-rollback")) / "extra-managed"
 GIT = os.environ.get("GIT_BIN", "/usr/local/bin/git")
+BACKUP_ROOT = ROLLBACK.parent
+ATTESTATION = BACKUP_ROOT / "backup-attestation.json"
 
 
 def _owned() -> dict:
@@ -114,6 +118,85 @@ def verify_snapshot() -> None:
             raise TransactionError(f"managed backup missing or changed: {name}")
 
 
+
+def _binary_snapshot_inventory() -> dict:
+    """Enumerate only saved compiled binaries; reject links and foreign siblings."""
+    binaries = BACKUP_ROOT / "binaries"
+    if binaries.is_symlink():
+        raise TransactionError("binary backup directory is a symlink")
+    if not binaries.exists():
+        return {"present": False, "dirs": [], "files": {}}
+    if not binaries.is_dir():
+        raise TransactionError("binary backup is not a directory")
+    if {entry.name for entry in binaries.iterdir()} != {"my"}:
+        raise TransactionError("unexpected binary backup entry")
+    saved = binaries / "my"
+    if saved.is_symlink() or not saved.is_dir():
+        raise TransactionError("binary my backup missing or linked")
+    dirs: list[str] = []
+    files: dict[str, str] = {}
+    for entry in saved.rglob("*"):
+        relative = entry.relative_to(saved).as_posix()
+        if entry.is_symlink():
+            raise TransactionError(f"binary backup symlink: {relative}")
+        if entry.is_dir():
+            dirs.append(relative)
+        elif entry.is_file():
+            files[relative] = sha256(entry.read_bytes())
+        else:
+            raise TransactionError(f"unsafe binary backup entry: {relative}")
+        if len(dirs) + len(files) > 4096:
+            raise TransactionError("binary backup entry count exceeded")
+    return {"present": True, "dirs": sorted(dirs), "files": files}
+
+
+def _manifest_identity() -> str | None:
+    if STATE.is_symlink() or (STATE / "transaction").exists() or (STATE / "transaction").is_symlink():
+        raise TransactionError("unfinished Additional Resources transaction blocks recovery")
+    metadata = STATE / "installed.json"
+    _owned_metadata(metadata)  # Reject unsafe or malformed ownership metadata.
+    if not metadata.exists():
+        return None
+    return sha256(metadata.read_bytes())
+
+
+def create_backup_attestation(expected_binaries: bool) -> None:
+    """Commit saved binary/manifest identity before a prepared checkpoint."""
+    if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir():
+        raise TransactionError("unsafe upstream backup root")
+    if ATTESTATION.exists() or ATTESTATION.is_symlink():
+        raise TransactionError("previous upstream backup attestation exists")
+    inventory = _binary_snapshot_inventory()
+    if inventory["present"] != expected_binaries:
+        raise TransactionError("binary backup presence differs from checkpoint")
+    # Saved managed files also need to be intact before the checkpoint is armed.
+    verify_snapshot()
+    evidence = {"schema": 1, "binaries": inventory, "managed_manifest_sha256": _manifest_identity()}
+    _write_atomic(ATTESTATION, (json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    _sync_dir(BACKUP_ROOT)
+
+
+def verify_backup_attestation(expected_binaries: bool) -> None:
+    """Fail closed on lost/altered saved bytes without requiring live binaries/Lua."""
+    if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir() or ATTESTATION.is_symlink() or not ATTESTATION.is_file():
+        raise TransactionError("upstream backup attestation missing or linked")
+    try:
+        evidence = json.loads(ATTESTATION.read_text(encoding="utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise TransactionError("invalid upstream backup attestation") from exc
+    if (not isinstance(evidence, dict) or set(evidence) !=
+            {"schema", "binaries", "managed_manifest_sha256"} or evidence["schema"] != 1):
+        raise TransactionError("unsupported upstream backup attestation")
+    manifest = evidence["managed_manifest_sha256"]
+    if manifest is not None and (not isinstance(manifest, str) or re.fullmatch(r"[0-9a-f]{64}", manifest) is None):
+        raise TransactionError("invalid saved managed manifest digest")
+    inventory = _binary_snapshot_inventory()
+    if inventory["present"] != expected_binaries or evidence["binaries"] != inventory:
+        raise TransactionError("compiled binary backup changed since snapshot")
+    if manifest != _manifest_identity():
+        raise TransactionError("managed resource manifest changed since snapshot")
+    verify_snapshot()
+
 def restore() -> None:
     metadata = _owned_metadata(STATE / "installed.json")["files"]
     if not metadata:
@@ -138,14 +221,21 @@ def restore() -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "snapshot", "verify", "verify-snapshot", "restore"}:
-        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|snapshot|verify|verify-snapshot|restore}", file=sys.stderr)
+    if len(argv) < 2 or argv[1] not in {"preflight", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-evidence", "verify-evidence"}:
+        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
         if argv[1] == "preflight":
             if len(argv) > 3:
                 return 64
             preflight(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+        elif argv[1] in {"snapshot-evidence", "verify-evidence"}:
+            if len(argv) != 3 or argv[2] not in {"0", "1"}:
+                return 64
+            if argv[1] == "snapshot-evidence":
+                create_backup_attestation(argv[2] == "1")
+            else:
+                verify_backup_attestation(argv[2] == "1")
         elif len(argv) != 2:
             return 64
         elif argv[1] == "snapshot":
