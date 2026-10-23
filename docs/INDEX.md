@@ -18,6 +18,9 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
+- Stage 4 `v0.5.7_18`: source-wired bounded reviewed BIN/Lua Stage-60 candidates via existing ResourceInventory / native graph and Model-C renderer; on-device acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
+
+
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;
   absent IPFW/ipdivert made stopped common owner appear foreign. The
   `v0.5.7_15` source candidate explicitly retains ECH-off and repairs

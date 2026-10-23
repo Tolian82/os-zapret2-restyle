@@ -242,7 +242,7 @@ class CandidateSpec:
             for argument in instance.arguments:
                 if argument.value is None:
                     continue
-                if argument.name == "blob" or argument.name.endswith("_pattern"):
+                if argument.name in {"blob", "fake_blob"} or argument.name.endswith("_pattern"):
                     requirements.append(_blob_reference(argument.value, declarations))
         line_in_ranges = [line.removeprefix("--in-range=") for line in lines if line.startswith("--in-range=")]
         line_out_ranges = [line.removeprefix("--out-range=") for line in lines if line.startswith("--out-range=")]

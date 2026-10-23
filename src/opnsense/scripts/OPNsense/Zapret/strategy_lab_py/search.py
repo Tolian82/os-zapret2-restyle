@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, endpoint_epoch, resources, search_graph, state as state_persistence, telemetry
+from . import candidate_spec, dynamic_graph, endpoint_epoch, resources, search_graph, state as state_persistence, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -328,9 +328,10 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
     if family_result.get("search_epoch_id") != epoch.epoch_id:
         raise RuntimeError("Strategy Lab Stage-50 evidence belongs to another search epoch")
     inventory = resources.ensure_job_inventory(job_dir(job_id))
-    graph = search_graph.native_tls13_graph()
+    graph, extra_evidence = dynamic_graph.job_tls13_graph(inventory)
     plan = graph.plan("expansion", accepted_raw, inventory)
     plan_evidence = plan.to_dict()
+    plan_evidence["extra_capabilities"] = extra_evidence
     plan_evidence["search_epoch_id"] = epoch.epoch_id
     _atomic_json(job_dir(job_id) / "search-graph.json", plan_evidence)
     runner = _candidate_runner("STRATEGY_LAB_EXPANSION_CANDIDATE_RUNNER")
@@ -356,6 +357,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         "failed": [],
         "golden_ids": list(plan.golden_ids),
         "skipped": list(plan.skipped),
+        "extra_capabilities": extra_evidence,
         "schedule": [],
         "winner_band": {"minimum": minimum, "target": target},
         "early_stop": {"triggered": False, "winner_count": 0},
