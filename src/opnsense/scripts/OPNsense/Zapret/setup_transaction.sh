@@ -97,7 +97,12 @@ service_state()
     # Preserve the *status command's* exit code. An if with no else returns
     # 0 on a false test in POSIX sh, accidentally treating stopped (1) or
     # incomplete/unknown (2+) native ownership as RUNNING.
-    if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+    # Under the original native FD9, never recursively acquire lifecycle.lock.
+    _status_mode=status
+    if [ "${UPSTREAM_RECOVERY_LIFECYCLE_OWNER:-0}" = 1 ]; then
+        _status_mode=strategy-lab-status
+    fi
+    if "${SERVICE_SCRIPT}" "${_status_mode}" >/dev/null 2>&1; then
         return 0
     else
         return $?
@@ -303,6 +308,100 @@ verify_prepared_recovery()
     return 0
 }
 
+# This mode is intentionally restricted to a COMPLETELY stopped native owner.
+# It never stops a running process or guesses who owns incomplete IPFW state.
+# The dispatcher holds setup.lock -> original native lifecycle FD9 until the
+# final semantic status check; any preflight failure leaves every byte alone.
+recover_mutating_stopped()
+{
+    if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" != 1 ] ||
+       [ "${UPSTREAM_RECOVERY_LIFECYCLE_OWNER:-0}" != 1 ] ||
+       ! ( : >&9 ) 2>/dev/null; then
+        echo "ERROR: both setup.lock and native lifecycle FD9 are required" >&2
+        return 75
+    fi
+    if ! read_recovery_checkpoint || [ "${RECOVERY_SCHEMA}" != 2 ] ||
+       [ "${RECOVERY_PHASE}" != mutating ] ||
+       [ "${PREVIOUS_COMMIT}" = none ] ||
+       [ "${PREVIOUS_RELEASE}" = none ]; then
+        echo "ERROR: RECOVERY_REQUIRED: unverified or legacy mutating checkpoint" >&2
+        return 69
+    fi
+    # An interrupted checkout may replace live Lua/BIN. Verify saved bytes
+    # only, plus the raw original manifest, not the modified live files.
+    backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || return 69
+    # No unexpected/linked evidence is allowed to be swept up by cleanup.
+    for _entry in "${ROLLBACK_DIR}"/* "${ROLLBACK_DIR}"/.[!.]* "${ROLLBACK_DIR}"/..?*; do
+        [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
+        case "${_entry##*/}" in
+            checkpoint|backup-attestation.json|binaries|extra-managed) ;;
+            *) echo "ERROR: RECOVERY_REQUIRED: foreign upstream backup entry" >&2; return 69 ;;
+        esac
+        [ ! -L "${_entry}" ] || return 69
+    done
+    [ ! -L "${ZAPRET_DIR}/binaries" ] &&
+        [ ! -L "${ZAPRET_DIR}/binaries/my" ] || return 69
+    [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ] &&
+        [ ! -L "${ZAPRET_DIR}/.git" ] || return 69
+    "${GIT_BIN}" -C "${ZAPRET_DIR}" cat-file -e "${PREVIOUS_COMMIT}^{commit}" >/dev/null 2>&1 || return 69
+    # Prevent restoring a tag name which does not resolve to the saved commit.
+    _release_commit=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify "${PREVIOUS_RELEASE}^{commit}" 2>/dev/null) || return 69
+    [ "${_release_commit}" = "${PREVIOUS_COMMIT}" ] || return 69
+    _recovery_head=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null) || return 69
+    printf '%s\n' "${_recovery_head}" | grep -Eq '^[0-9a-f]{40}$' || return 69
+    # Never run reset --hard across uncommitted tracked user changes or a
+    # partially checked-out dirty tree. Such a case needs owner investigation.
+    _recovery_dirty=$("${GIT_BIN}" -C "${ZAPRET_DIR}" status --porcelain --untracked-files=no 2>/dev/null) || return 69
+    [ -z "${_recovery_dirty}" ] || {
+        echo "ERROR: RECOVERY_REQUIRED: upstream tree has uncommitted tracked changes" >&2
+        return 69
+    }
+    # The only safe automated action is on a verified STOPPED native owner.
+    if service_state; then
+        echo "ERROR: RECOVERY_REQUIRED: service is running; no automatic Stop" >&2
+        return 69
+    else
+        [ "$?" -eq 1 ] || {
+            echo "ERROR: RECOVERY_REQUIRED: incomplete or foreign service owner" >&2
+            return 69
+        }
+    fi
+    # From this point only an explicitly owner-requested recovery can mutate.
+    # Do not remove the journal until Git, saved resources and native lifecycle
+    # have all been semantically restored.
+    if ! restore_previous_checkout; then
+        echo "ERROR: RESTORE_FAILED: original upstream checkout/binaries not restored" >&2
+        status_write failed || true
+        return 70
+    fi
+    _restored_head=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null) || return 70
+    [ "${_restored_head}" = "${PREVIOUS_COMMIT}" ] || return 70
+    extra_resources_upstream_guard verify || return 70
+    backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || return 70
+    if [ "${PREVIOUS_BINARIES}" -eq 1 ]; then
+        diff -r "${ROLLBACK_DIR}/binaries/my" "${ZAPRET_DIR}/binaries/my" >/dev/null || return 70
+    else
+        [ ! -e "${ZAPRET_DIR}/binaries/my" ] || return 70
+    fi
+    write_active_release "${PREVIOUS_RELEASE}" || return 70
+    if [ "${SERVICE_WAS_RUNNING}" -eq 1 ]; then
+        "${SERVICE_SCRIPT}" strategy-lab-start >/dev/null 2>&1 || {
+            echo "ERROR: RESTORE_FAILED: native service refused Start" >&2
+            return 70
+        }
+        service_state || return 70
+    else
+        if service_state; then
+            return 70
+        else
+            [ "$?" -eq 1 ] || return 70
+        fi
+    fi
+    rm -rf "${ROLLBACK_DIR}" || return 70
+    status_write failed || return 70
+    echo "RECOVERY_MUTATING_RESTORED: original upstream checkout and native service state verified"
+}
+
 recover_prepared()
 {
     # Serialized by the exact same setup.lock as install/inspect. Never call
@@ -386,9 +485,9 @@ restore_previous_checkout()
     "${GIT_BIN}" -C "${ZAPRET_DIR}" reset --hard "${PREVIOUS_COMMIT}" >/dev/null 2>&1 || return 1
 
     if [ "${PREVIOUS_BINARIES}" -eq 1 ] && [ -d "${ROLLBACK_DIR}/binaries/my" ]; then
-        rm -rf "${ZAPRET_DIR}/binaries/my"
-        mkdir -p "${ZAPRET_DIR}/binaries"
-        cp -Rp "${ROLLBACK_DIR}/binaries/my" "${ZAPRET_DIR}/binaries/"
+        rm -rf "${ZAPRET_DIR}/binaries/my" || return 1
+        mkdir -p "${ZAPRET_DIR}/binaries" || return 1
+        cp -Rp "${ROLLBACK_DIR}/binaries/my" "${ZAPRET_DIR}/binaries/" || return 1
     fi
 
     normalize_runtime_permissions || return 1
@@ -578,6 +677,18 @@ install_transaction()
 }
 
 case "${MODE}" in
+    recover-mutating-stopped)
+        [ "$#" -eq 1 ] || exit 64
+        mkdir -p "${RUN_DIR}"
+        [ -x "${LOCKF_BIN}" ] && [ -x "${SERVICE_SCRIPT}" ] || exit 69
+        "${LOCKF_BIN}" -s -t 60 "${SETUP_LOCK_FILE}" \
+            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 \
+            "${SERVICE_SCRIPT}" upstream-recover-mutating
+        ;;
+    recover-mutating-under-parent-lock)
+        [ "$#" -eq 1 ] || exit 64
+        recover_mutating_stopped
+        ;;
     recover-prepared)
         [ "$#" -eq 1 ] || exit 64
         mkdir -p "${RUN_DIR}"
@@ -625,7 +736,7 @@ case "${MODE}" in
         install_transaction
         ;;
     *)
-        echo "usage: setup_transaction.sh {install [VERSION]|inspect-recovery|recover-prepared}" >&2
+        echo "usage: setup_transaction.sh {install [VERSION]|inspect-recovery|recover-prepared|recover-mutating-stopped}" >&2
         exit 64
         ;;
 esac
