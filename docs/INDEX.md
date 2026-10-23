@@ -27,7 +27,7 @@
 
 - Installed `_10` read-only [cold-IPFW preflight](verification/LEGACY_COLD_IPFW_PREFLIGHT.md): self-contained script [source](../scripts/legacy-cold-ipfw-preflight.sh), not a repair or package upgrade authorization.
 
-- Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;
+- Historical defect (owner restored stable `_1` manually on 23 October 2026): testing package `v0.5.7_10` owner-installed lifecycle failed;
   absent IPFW/ipdivert made stopped common owner appear foreign. The
   `v0.5.7_15` source candidate explicitly retains ECH-off and repairs
   only the attested cold-kernel case; CI/owner-live result still pending.
