@@ -89,7 +89,9 @@ def verify_snapshot() -> None:
                      ("/".join(name.split("/")[:i]) for i in range(1, len(name.split("/"))))}
     for entry in ROLLBACK.rglob("*"):
         relative = entry.relative_to(ROLLBACK).as_posix()
-        if entry.is_symlink() or not (
+        if entry.is_symlink():
+            raise TransactionError(f"managed backup symlink: {relative}")
+        if not (
             (entry.is_dir() and relative in expected_dirs)
             or (entry.is_file() and relative in expected_files)
         ):

@@ -372,5 +372,23 @@ output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
 [ "$(cat "${SETUP_STATUS}")" = failed ] || fail "recovery did not record prior aborted setup"
 [ "$(inspect_recovery)" = 'recovery=none' ] || fail "recovery left pending state"
 
+# The native status exit code must be preserved. Incomplete/foreign owner
+# cannot start a new upstream transaction or acquire a backup directory.
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "incomplete native owner was accepted for a new upgrade"
+fi
+[ ! -e "${ROLLBACK_DIR}" ] || fail "unsafe native status created backup data"
+printf '%s\n' stopped > "${SERVICE_STATE}"
+printf '%s\n' fail > "${SETUP_RESULT}"
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "mocked failed install from stopped state unexpectedly succeeded"
+fi
+[ "$(cat "${SERVICE_STATE}")" = stopped ] ||
+    fail "stopped native service was erroneously restarted on rollback"
+[ ! -e "${ROLLBACK_DIR}" ] ||
+    fail "failed upgrade from stopped state left rollback evidence"
+printf '%s\n' running > "${SERVICE_STATE}"
+
 sh -n "${TRANSACTION}"
 echo "PASS: transactional runtime activation and pre-mutation snapshot failure retry"

@@ -94,10 +94,14 @@ normalize_runtime_permissions()
 
 service_state()
 {
+    # Preserve the *status command's* exit code. An if with no else returns
+    # 0 on a false test in POSIX sh, accidentally treating stopped (1) or
+    # incomplete/unknown (2+) native ownership as RUNNING.
     if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
         return 0
+    else
+        return $?
     fi
-    return $?
 }
 
 configctl_exact_ok()
