@@ -2493,3 +2493,22 @@ docs/DECISIONS.md
 Status:
 Active decision to retain the ideas for future discussion; implementation
 not approved.
+
+## 2026-10-23 — Limited Network Inspection Theory
+
+Decision:
+Adopt the following concise theoretical framework for future DPI/TSPU research:
+
+**Limited Network Inspection Theory.** A TSPU is not a connection endpoint, but an on-path observer with finite computational resources. It reconstructs IP/TCP/TLS traffic and examines TLS fingerprints and encrypted-flow behavior. Deeper inspection costs more resources; greater simplification increases the risk that the DPI's interpretation diverges from the endpoint's actual connection state. Two conceptual circumvention principles follow: **desynchronization** — DPI and server interpret the same stream differently; **mimicry** — a concealed connection becomes harder to distinguish from permitted traffic. Overload exposes inspection capacity limits, but the outcome depends on failure policy: traffic may be forwarded or blocked. Zapret2's architecture, separating a C packet-processing core from Lua traffic-manipulation logic, provides a framework for investigating these principles.
+
+Reason:
+This unifies the TCP/TLS reconstruction limits, TLS fingerprinting, and encrypted-proxy behavior discussed in the Zapret Wiki and the upstream bol-van/zapret2 manual. It is a conceptual model, not proof of any particular TSPU implementation or overload response.
+
+Consequences:
+Research and discussion only. No new strategy, test, overload experiment, requirement, implementation task, roadmap commitment, package change, or change to current development priorities is approved by this entry.
+
+Affected documents:
+docs/DECISIONS.md
+
+Status:
+Active owner-approved theoretical concept; implementation not approved.
