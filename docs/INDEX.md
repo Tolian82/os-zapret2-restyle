@@ -26,18 +26,18 @@
   `v0.5.7_15` source candidate explicitly retains ECH-off and repairs
   only the attested cold-kernel case; CI/owner-live result still pending.
 
-- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_9 with source-wired native Stop→Start, shared upstream preservation guard, fail-closed direct-install/pending-rollback protection and bilingual manual Settings-page GUI; installed acceptance and GUI still pending.
+- [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_9 with source-wired native Stop→Start, shared upstream preservation guard, fail-closed direct-install/pending-rollback protection and bilingual manual Settings-page GUI; installed GUI acceptance still pending.
 - [Additional Resources normative specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — manual GUI, transaction/restart and fully dynamic new-Job candidate generation; not yet implemented in the plugin.
 
-## Earlier v0.5.x release preparation, v0.5.7
+## Published stable v0.5.7 (historical release)
 
 - [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response), FreeBSD `latest` without pin.
-- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stages 1–6 accepted by owner within bounded installed `_17` evidence, now preparing `v0.5.7_1` full release with two focused GUI fixes.
+- [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stages 1–6 accepted by owner within bounded installed `_17` evidence, the earlier `v0.5.7_1` full release was published with two focused GUI fixes.
 - [Состояние реализации](PROJECT_STATE.md) и [единственный следующий шаг](START_HERE.md).
 
 ### Поставка и доказательства завершённых работ
 
-- [v0.5.7 full Web/pkg release preparation](releases/v0.5.7.md) — owner-authorized new version, post-acceptance GUI corrections, README audit, release CI and package metadata gates.
+- [v0.5.7 stable release and FreeBSD15 Pages/pkg](releases/v0.5.7.md) — published 22 Oct 2026 with `0.5.7_1`, immutable tag and GitHub/Pages CI evidence. [Publication evidence](verification/evidence/2026-10-22-v0.5.7-full-release-publication.md) records commit, asset SHA-256 and owner-installed limits.
 
 Записи ниже сохраняют историю предыдущей кампании; описанные в них старые следующие эксперименты не являются активной очередью.
 
