@@ -2448,3 +2448,49 @@ Active.
 **Reason:** The current single-target laboratory already implements adaptive search and early stopping; the other reviewed features do not address an identified need. Direct tests of `telegram.org` (`149.154.167.99:443`) failed to establish TCP both with and without the service; native `dvtws2` `syndata` modified outgoing SYN packets but did not restore connectivity. The exact external filtering mechanism remains unproven.
 
 **Consequences:** No new requirements or work items; code, GUI, roadmap, version, package, and release plans remain unchanged. **Status: Closed.**
+
+==================================================
+2026-10-23 — DEFERRED IDEAS FROM ZAPRET2-FORK REVIEW
+==================================================
+
+Decision:
+Preserve two upstream-inspired engineering ideas for possible future discussion.
+The owner approved recording them, not implementing them:
+
+1. Consider a bounded independent Lua guard timer for temporary Strategy Lab
+   dvtws2 instances as a final safeguard against orphan processes if their
+   controller crashes. Never apply this timer to the normal managed service;
+   avoid truncating valid test budgets. A timer is not a replacement for
+   lifecycle ownership, IPFW cleanup, or Stage-90 restoration.
+2. Consider a small set of explicit upstream compatibility contract checks
+   when qualifying a new bol-van/zapret2 version. Cover only concrete fragile
+   assumptions used by this plugin (for example dvtws2 invocation, Lua/BIN
+   resource-loading semantics). Prefer behavior checks when feasible and avoid
+   duplicating existing CI and tests.
+
+Reason:
+Review of zapret-discordyoutube/zapret2-fork identified reusable safety and
+maintenance techniques, but its Windows WinDivert implementation is not a
+FreeBSD dvtws2 solution. The relevant reference examples are:
+- https://github.com/bol-van/zapret2/commit/98757082b856a9fb5345fd2cc4650f83fae0d32c
+  (guard timer in blockcheck2, including FreeBSD);
+- https://github.com/zapret-discordyoutube/zapret2-fork/blob/main/nfq2/winnative/tests/check_upstream.py
+  (checks that critical upstream assumptions remain true).
+
+Consequences:
+Both items remain discussion-only ideas, not approved technical requirements,
+architecture changes, implementation tasks, or roadmap commitments. Do not
+change current Strategy Lab or upstream setup code, add broad test suites,
+bump the package revision, or alter the active Additional Resources and
+cold-IPFW recovery priorities on this basis. Reevaluate each idea against
+current code, existing safeguards, measured risks, and owner approval before
+any implementation. GitHub Issue #514 was created in error rather than using
+the established Engineering Memory document.
+
+Affected documents:
+docs/DECISIONS.md
+
+Status:
+Active decision to retain the ideas for future discussion; implementation
+not approved.
+
