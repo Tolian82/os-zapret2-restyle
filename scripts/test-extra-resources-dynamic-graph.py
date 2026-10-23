@@ -48,11 +48,31 @@ with tempfile.TemporaryDirectory() as temp:
         state.write_text(json.dumps(owner))
         inv = snapshot_inventory(lua, fake)
         return (*dynamic_graph.job_tls13_graph(inv, state), inv)
+    # The common inventory must never resolve a Lua/BIN symlink into an
+    # executable resource, even when the target is readable.
+    outside_lua = root / "outside.lua"
+    outside_lua.write_text("function outside() end\n")
+    (lua / "foreign.lua").symlink_to(outside_lua)
+    assert all(item.name != "foreign.lua"
+               for item in snapshot_inventory(lua, fake).lua)
     base = search_graph.native_tls13_graph()
     g, evidence, inv = graph()
     assert g.golden_ids == base.golden_ids
     assert len(g.nodes) == len(base.nodes) + 2
     assert [x["status"] for x in evidence] == ["eligible", "eligible"], evidence
+    # A formerly managed BIN replaced by a symlink must disappear from the
+    # next job's inventory and become "missing", not a runnable extra.
+    moved_blob = root / "elsewhere.bin"
+    binary.rename(moved_blob)
+    binary.symlink_to(moved_blob)
+    try:
+        g_link, e_link, i_link = graph()
+        assert all(item.name != "invented_tls.bin" for item in i_link.external_blobs)
+        assert e_link[0]["status"] == "missing", e_link
+        assert len(g_link.nodes) == len(base.nodes) + 1
+    finally:
+        binary.unlink()
+        moved_blob.rename(binary)
     extension = g.nodes[len(base.nodes):]
     assert {x.spec.family for x in extension} == {"fake", "fake+split"}
     plan = g.plan("expansion", ["fake", "fake+split"], inv)

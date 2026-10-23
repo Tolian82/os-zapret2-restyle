@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -181,18 +182,22 @@ def _installed_files(root: Path, suffix: str) -> tuple[bool, tuple[InstalledReso
     except OSError as exc:
         raise ResourceInventoryError(f"installed resource directory is unreadable: {root}") from exc
     for entry in entries:
-        if entry.suffix != suffix or not entry.is_file():
+        if entry.suffix != suffix:
             continue
+        # Do not follow symlinks, including links into the same directory.
+        # A link must not make a foreign Lua/BIN file runnable by Stage 60.
         try:
-            stat = entry.stat()
+            metadata = entry.lstat()
         except OSError as exc:
             raise ResourceInventoryError(f"installed resource is unreadable: {entry}") from exc
+        if not stat.S_ISREG(metadata.st_mode):
+            continue
         items.append(
             InstalledResource(
                 name=entry.name,
-                path=str(entry.resolve(strict=False)),
-                size=stat.st_size,
-                mtime_ns=stat.st_mtime_ns,
+                path=str(entry),
+                size=metadata.st_size,
+                mtime_ns=metadata.st_mtime_ns,
             )
         )
     return True, tuple(items)
