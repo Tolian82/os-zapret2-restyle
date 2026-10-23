@@ -58,13 +58,14 @@ installed=$($PKG_BIN query '%v' os-zapret2-restyle 2>/dev/null) || refuse 'insta
         esac
     }
 
-    cold_signature || exit 69
-    "$SERVICE_SCRIPT" status >/dev/null 2>&1
-    [ "$?" -eq 2 ] || exit 69
+    native_stopped_evidence()
+    {
+        "$SERVICE_SCRIPT" status >/dev/null 2>&1
+        [ "$?" -eq 2 ] || return 1
 
-    inspection=$("$PYTHON_BIN" "$COLD_INSPECT_BIN" 2>/dev/null)
-    [ "$?" -eq 2 ] || exit 69
-    printf '%s\n' "$inspection" | "$PYTHON_BIN" -c '
+        inspection=$("$PYTHON_BIN" "$COLD_INSPECT_BIN" 2>/dev/null)
+        [ "$?" -eq 2 ] || return 1
+        printf '%s\n' "$inspection" | "$PYTHON_BIN" -c '
 import json,sys
 try:
     x=json.load(sys.stdin)
@@ -77,22 +78,37 @@ try:
     assert x["runtime"].get("state")=="stopped"
 except (ValueError,TypeError,KeyError,AssertionError):
     sys.exit(1)
-' || exit 69
+'
+    }
 
-    # Additional independent exact-executable census. A missing PID file
-    # alone is not evidence that an orphan dvtws2 engine is absent.
-    processes=$("$PS_BIN" ax -o pid= -o command= 2>/dev/null) || exit 69
-    printf '%s\n' "$processes" | awk -v expected="$DVTWS_BIN" -v monitor="$SUPERVISOR_LOOP" '
-        $1 ~ /^[0-9]+$/ && $2 == expected { found=1 }
-        $1 ~ /^[0-9]+$/ { for (i=2; i<=NF; i++) if ($i == monitor) found=1 }
-        END { exit (found ? 1 : 0) }
-    ' || exit 69
+    no_owned_processes()
+    {
+        # Inspect the *whole* command line, not only argv[0]. The old
+        # service may run via daemon or sh wrappers, so requiring a bare
+        # executable first token can produce a false negative.
+        processes=$("$PS_BIN" ax -o pid= -o command= 2>/dev/null) || return 1
+        printf '%s\n' "$processes" | awk -v expected="$DVTWS_BIN" -v monitor="$SUPERVISOR_LOOP" '
+            NF == 0 { next }
+            $1 !~ /^[0-9]+$/ || NF < 2 { invalid=1; next }
+            {
+                seen=1
+                command=$0
+                sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "", command)
+                if (index(command, expected) || index(command, monitor))
+                    found=1
+            }
+            END { exit (seen && !invalid && !found ? 0 : 1) }
+        '
+    }
 
-    # A fresh read prevents one changed kernel/service state being mistaken
-    # for two independent compatible observations within original FD9.
-    cold_signature || exit 69
-    "$SERVICE_SCRIPT" status >/dev/null 2>&1
-    [ "$?" -eq 2 ] || exit 69
+    # A single clean process census is not a stable snapshot. Repeat ALL
+    # observations while holding FD9 so a late engine/supervisor, altered
+    # old journal or kernel state cannot retain an earlier STOPPED receipt.
+    for pass in 1 2; do
+        cold_signature || exit 69
+        native_stopped_evidence || exit 69
+        no_owned_processes || exit 69
+    done
 
     printf 'PACKAGE=0.5.7_10\nDIAGNOSIS=cold-ipfw-committed-stopped\nUPGRADE_AUTHORIZED=no\nNEXT=owner-reviewed-recovery-required\n'
     exit 0
