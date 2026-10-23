@@ -27,6 +27,8 @@ SERVICE_MOCK="${TMP_ROOT}/service"
 CONFIGCTL_MOCK="${TMP_ROOT}/configctl"
 GIT_MOCK="${TMP_ROOT}/git"
 LOCKF_MOCK="${TMP_ROOT}/lockf"
+EXTRA_GUARD_MOCK="${TMP_ROOT}/extra-guard"
+EXTRA_GUARD_FAIL=0
 
 mkdir -p \
     "${ZAPRET_DIR}/.git" \
@@ -119,6 +121,18 @@ exec "$@"
 MOCK
 chmod +x "${LOCKF_MOCK}"
 
+cat > "${EXTRA_GUARD_MOCK}" <<'MOCK'
+#!/bin/sh
+# Fail after writing only backup data; never mutate the running runtime.
+if [ "${1:-}" = snapshot ]; then
+    mkdir -p "${TEST_ROLLBACK_DIR}/extra-managed"
+    printf '%s\n' partial > "${TEST_ROLLBACK_DIR}/extra-managed/partial"
+    [ "${TEST_EXTRA_GUARD_FAIL}" != 1 ] || exit 70
+fi
+exit 0
+MOCK
+chmod +x "${EXTRA_GUARD_MOCK}"
+
 cat > "${SETUP_MOCK}" <<'MOCK'
 #!/bin/sh
 [ "${1:-}" = install-under-parent-lock ] || exit 64
@@ -161,6 +175,10 @@ run_transaction()
     SETUP_STATUS="${SETUP_STATUS}" \
     ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE}" \
     ROLLBACK_DIR="${ROLLBACK_DIR}" \
+    EXTRA_PYTHON="$(command -v sh)" \
+    EXTRA_GUARD="${EXTRA_GUARD_MOCK}" \
+    TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
+    TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
     "${TRANSACTION}" install "$1"
 }
 
@@ -208,5 +226,27 @@ run_transaction v1.0.3 >/dev/null 2>&1 && fail "pending rollback evidence was ov
 [ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] ||
     fail "blocked setup changed service state"
 
+# An error while preparing a NEW snapshot cannot block the next attempt.
+# Only a preexisting interrupted rollback must remain untouched.
+rm -rf "${ROLLBACK_DIR}"
+mkdir -p "${STATE_DIR}/extra-resources"
+printf '%s\n' '{"schema":1,"files":{}}' > "${STATE_DIR}/extra-resources/installed.json"
+EXTRA_GUARD_FAIL=1
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+before_service=$(cat "${SERVICE_STATE}")
+before_release=$(cat "${ACTIVE_RELEASE_FILE}")
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "failed snapshot unexpectedly completed"
+fi
+[ ! -e "${ROLLBACK_DIR}" ] || fail "failed snapshot left false recovery-required state"
+[ "$(cat "${SETUP_STATUS}")" = failed ] || fail "snapshot failure status was not recorded"
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] || fail "snapshot failure changed checkout"
+[ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] || fail "snapshot failure changed service"
+[ "$(cat "${ACTIVE_RELEASE_FILE}")" = "${before_release}" ] || fail "snapshot failure changed release"
+EXTRA_GUARD_FAIL=0
+run_transaction v1.0.3 >/dev/null || fail "retry after failed snapshot did not succeed"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "retry left rollback data"
+[ "$(cat "${SETUP_STATUS}")" = ready ] || fail "retry did not reach ready"
+
 sh -n "${TRANSACTION}"
-echo "PASS: transactional runtime release activation and rollback"
+echo "PASS: transactional runtime activation and pre-mutation snapshot failure retry"

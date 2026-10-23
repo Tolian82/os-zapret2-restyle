@@ -149,15 +149,28 @@ prepare_rollback()
         PREVIOUS_COMMIT=$("${GIT_BIN}" -C "${ZAPRET_DIR}" rev-parse --verify HEAD 2>/dev/null || true)
     fi
 
-    mkdir -p "${ROLLBACK_DIR}"
+    # No checkout, service or IPFW mutation has happened at this point.
+    # Discard ONLY our own incomplete snapshot if pre-mutation preparation
+    # fails. A preexisting interrupted snapshot is rejected above.
+    mkdir -p "${STATE_DIR}" || return 1
+    mkdir "${ROLLBACK_DIR}" || return 1
 
     if [ -d "${ZAPRET_DIR}/binaries/my" ]; then
-        mkdir -p "${ROLLBACK_DIR}/binaries"
-        cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"
+        if ! mkdir -p "${ROLLBACK_DIR}/binaries" ||
+           ! cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"; then
+            echo "ERROR: previous binaries could not be snapshotted" >&2
+            rm -rf "${ROLLBACK_DIR}" || true
+            return 1
+        fi
         PREVIOUS_BINARIES=1
     fi
 
-    extra_resources_upstream_guard snapshot || return 1
+    if ! extra_resources_upstream_guard snapshot; then
+        # This guard only reads runtime bytes and writes its own backup.
+        echo "ERROR: managed-resource snapshot preparation failed" >&2
+        rm -rf "${ROLLBACK_DIR}" || true
+        return 1
+    fi
     return 0
 }
 
@@ -275,9 +288,10 @@ install_transaction()
     fi
 
     prepare_rollback || {
-        # Do not destroy a previous interrupted snapshot or partial evidence.
-        # An operator must review/recover it explicitly.
-        echo "ERROR: rollback state could not be prepared; preserve all evidence" >&2
+        # The only cleanable artifact is this attempt's incomplete snapshot.
+        # An older interrupted rollback remains untouched.
+        status_write "failed" || true
+        echo "ERROR: rollback snapshot could not be prepared; no upstream switch attempted" >&2
         return 1
     }
 
