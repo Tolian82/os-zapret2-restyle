@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 
-from extra_resources_preflight import sha256, validate_runtime_path, resource_path
+from extra_resources_preflight import PreflightError, sha256, validate_runtime_path, resource_path
 from extra_resources_reconcile import tracked_resources, installed_resources, previous_metadata
 from extra_resources_transaction import (
     TransactionError, _owned_metadata, _safe_subdir, _sync_dir, _write_atomic,
@@ -397,8 +397,21 @@ def _protect_config_paths(names: set[str]) -> None:
                 raise TransactionError(f"saved strategy references replaced/removed resource: {name}")
 
 
+def _require_clean_upstream_tree() -> None:
+    """A hard reset must not destroy modifications to unrelated tracked files."""
+    status = subprocess.run(
+        [GIT, "-C", str(RUNTIME), "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True, timeout=30, check=False,
+    )
+    if status.returncode != 0:
+        raise TransactionError("cannot verify complete upstream tracked working tree")
+    if status.stdout.strip():
+        raise TransactionError("upstream contains modified tracked files; refusing checkout/reset")
+
+
 def preflight_switch(ref: str = "FETCH_HEAD") -> list[str]:
     """Read-only old and target check; tolerate only non-Git original orphans."""
+    _require_clean_upstream_tree()
     managed = _owned()
     upstream = tracked_resources(RUNTIME, GIT)
     live = installed_resources(RUNTIME)
@@ -444,6 +457,12 @@ def prune_orphans(ref: str = "FETCH_HEAD") -> None:
     lines = checkpoint.read_text(encoding="ascii").splitlines()
     if len(lines) != 6 or lines[0] != "schema=2" or lines[5] != "phase=mutating":
         raise TransactionError("upstream mutation checkpoint is not armed")
+    old = subprocess.run([GIT, "-C", str(RUNTIME), "rev-parse", "--verify", "HEAD"],
+                         capture_output=True, text=True, timeout=30, check=False)
+    if old.returncode or lines[1] != "previous_commit=" + old.stdout.strip():
+        raise TransactionError("mutating checkpoint does not identify current old Git HEAD")
+    if lines[4] != "previous_binaries=" + ("1" if inventory["present"] else "0"):
+        raise TransactionError("checkpoint and attested binary snapshot disagree")
     for name in orphans:
         path = validate_runtime_path(RUNTIME, name)
         if not path.is_file() or sha256(path.read_bytes()) != original[name]:
@@ -541,7 +560,7 @@ def main(argv: list[str]) -> int:
             restore()
         print("PASS: managed additional resources are preserved")
         return 0
-    except (TransactionError, OSError, subprocess.TimeoutExpired) as exc:
+    except (TransactionError, PreflightError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"RESOURCE_UPSTREAM_GUARD_FAILED: {exc}", file=sys.stderr)
         return 70
 

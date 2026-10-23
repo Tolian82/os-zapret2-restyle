@@ -242,7 +242,8 @@ class ExactReleaseSwitch(unittest.TestCase):
         self.native = self.runtime / "lua/native.lua"
         self.native.write_bytes(b"function native_old() end\n")
         (self.runtime / "files/fake/legacy.bin").write_bytes(b"legacy")
-        self.git("add", "lua", "files")
+        (self.runtime / "README").write_bytes(b"original non-resource tracked data\n")
+        self.git("add", "lua", "files", "README")
         self.git("commit", "-qm", "upstream v1")
         self.old = self.git_out("rev-parse", "HEAD")
         (self.runtime / "files/fake/legacy.bin").unlink()
@@ -520,6 +521,25 @@ class ExactReleaseSwitch(unittest.TestCase):
         with self.assertRaisesRegex(guard.TransactionError, "changed after snapshot"):
             guard.prune_orphans(self.new)
         self.assertFalse(orphan.exists())
+
+    def test_preflight_refuses_modified_unrelated_tracked_source(self):
+        orphan = self.runtime / "files/fake/unowned.bin"
+        orphan.write_bytes(b"untracked and intact")
+        (self.runtime / "README").write_bytes(b"user edited upstream file\n")
+        with self.assertRaisesRegex(guard.TransactionError, "modified tracked files"):
+            guard.preflight_switch(self.new)
+        self.assertEqual(orphan.read_bytes(), b"untracked and intact")
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.old)
+
+    def test_prune_refuses_wrong_previous_commit_checkpoint(self):
+        orphan = self.runtime / "lua/unowned.lua"
+        orphan.write_bytes(b"unowned")
+        self._seal_switch_snapshot()
+        checkpoint = guard.BACKUP_ROOT / "checkpoint"
+        checkpoint.write_text(checkpoint.read_text().replace(self.old, "0" * 40))
+        with self.assertRaisesRegex(guard.TransactionError, "does not identify current old Git HEAD"):
+            guard.prune_orphans(self.new)
+        self.assertEqual(orphan.read_bytes(), b"unowned")
 
     def test_preflight_symlinked_extra_refused(self):
         self.extra.unlink()
