@@ -37,16 +37,27 @@ with tempfile.TemporaryDirectory() as td:
                           'echo "$MOCK_IPFW_TEXT" >&2\nexit "$MOCK_IPFW_RC"\n')
     ps_bin = executable("ps", 'echo "ps:$*" >> "$TRACE"\n'
                         '[ "$*" = "ax -o pid= -o command=" ] || exit 99\n'
-                        'echo "$MOCK_PROCESSES"\n')
+                        'if [ "$MOCK_PS_RACE" = 1 ] && '
+                        '[ "$(grep -c "^ps:" "$TRACE")" -eq 2 ]; then\n'
+                        '  echo "2233 /usr/sbin/daemon -f /usr/local/etc/zapret2/binaries/my/dvtws2 --sockarg=0x200"\n'
+                        'else echo "$MOCK_PROCESSES"; fi\n')
     service = executable("service", 'echo "service:$*" >> "$TRACE"\n'
-                         '[ "$*" = status ] || exit 99\nexit "$MOCK_STATUS"\n')
+                         '[ "$*" = status ] || exit 99\n'
+                         'if [ "$MOCK_STATUS_RACE" = 1 ] && '
+                         '[ "$(grep -c "^service:status" "$TRACE")" -eq 2 ]; '
+                         'then exit 0; fi\n'
+                         'exit "$MOCK_STATUS"\n')
     inspector = base / "inspect.py"
     inspector.write_text(
         'import json,os,sys\n'
         'with open(os.environ["TRACE"],"a") as f: f.write("inspector\\n")\n'
         'os.fstat(9)\n'
+        'read_count=sum(1 for line in open(os.environ["TRACE"]) '
+        'if line.strip()=="inspector")\n'
+        'state="ready" if os.getenv("MOCK_INSPECT_RACE")=="1" and '
+        'read_count==2 else os.getenv("MOCK_STATE","foreign-or-modified-rules")\n'
         'print(json.dumps(dict(source="native-common",'
-        'state=os.getenv("MOCK_STATE","foreign-or-modified-rules"),'
+        'state=state,'
         'condition=os.getenv("MOCK_CONDITION","common-stopped-with-kernel-objects"),'
         'can_activate=os.getenv("MOCK_CAN_ACTIVATE","0")=="1",'
         'runtime=dict(state=os.getenv("MOCK_RUNTIME_STATE","stopped")))))\n'
@@ -71,6 +82,7 @@ with tempfile.TemporaryDirectory() as td:
            "MOCK_IPFW_RC": "71",
            "MOCK_IPFW_TEXT": "ipfw: retrieving config failed: Protocol not available",
            "MOCK_STATUS": "2", "MOCK_PROCESSES": "1234 /usr/sbin/syslogd -s",
+           "MOCK_PS_RACE": "0", "MOCK_STATUS_RACE": "0", "MOCK_INSPECT_RACE": "0",
            "MOCK_STATE": "foreign-or-modified-rules",
            "MOCK_CONDITION": "common-stopped-with-kernel-objects",
            "MOCK_CAN_ACTIVATE": "0", "MOCK_RUNTIME_STATE": "stopped",
@@ -95,8 +107,9 @@ with tempfile.TemporaryDirectory() as td:
         "PACKAGE=0.5.7_10", "DIAGNOSIS=cold-ipfw-committed-stopped",
         "UPGRADE_AUTHORIZED=no", "NEXT=owner-reviewed-recovery-required"]
     assert events.count("lockf:-s -t 5 9") == 1
-    assert events.count("inspector") == 1
+    assert events.count("inspector") == 2
     assert events.count("service:status") == 2
+    assert events.count("ps:ax -o pid= -o command=") == 2
     assert events.count("ipfw:-q list") == 2
 
     for variant in (
@@ -106,12 +119,19 @@ with tempfile.TemporaryDirectory() as td:
         {"MOCK_IPFW_RC": "0"}, {"MOCK_IPFW_RC": "70"},
         {"MOCK_IPFW_TEXT": "permission denied"}, {"MOCK_LOCK": "busy"},
         {"MOCK_STATUS": "0"}, {"MOCK_STATUS": "1"},
+        {"MOCK_STATUS_RACE": "1"}, {"MOCK_PS_RACE": "1"},
+        {"MOCK_INSPECT_RACE": "1"},
         {"MOCK_RUNTIME_STATE": "running"}, {"MOCK_RUNTIME_STATE": "partial"},
         {"MOCK_STATE": "ready"}, {"MOCK_STATE": "stopped"},
         {"MOCK_CONDITION": "unexpected"}, {"MOCK_CAN_ACTIVATE": "1"},
         {"MOCK_INSPECT_RC": "3"},
         {"MOCK_PROCESSES": "2233 /usr/local/etc/zapret2/binaries/my/dvtws2 --port=989"},
         {"MOCK_PROCESSES": "2233 /bin/sh /usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh"},
+        {"MOCK_PROCESSES": "2233 /usr/sbin/daemon -f /usr/local/etc/zapret2/binaries/my/dvtws2 --port=989"},
+        {"MOCK_PROCESSES": "2233 /bin/sh -c /usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh"},
+        {"MOCK_PROCESSES": "not-a-pid /usr/sbin/syslogd -s"},
+        {"MOCK_PROCESSES": ""},
+        {"MOCK_PROCESSES": "1234"},
     ):
         response, events = run(**variant)
         assert response.returncode != 0, (variant, response, events)

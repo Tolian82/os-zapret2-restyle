@@ -26,10 +26,13 @@ Under the existing native lifecycle FD9 lock, the probe demands:
    JSON containing the native common owner, the exact cold-kernel false-foreign
    condition, `can_activate=false` and `runtime.state=stopped`. The installed
    service itself must also return status 2.
-4. An independent process census finds no exact `dvtws2` engine executable
-   and no matching native supervisor loop command.
-5. A second kernel-signature/status observation inside the same lock matches
-   the first one, before printing a result.
+4. An independent process census examines each full process command line,
+   including `daemon`/`sh` wrappers, and refuses any engine or supervisor
+   reference. Empty, malformed, or unreadable `ps` output is not proof of
+   absence.
+5. The entire kernel/service/native-inspector/process-census sequence runs
+   **twice** under the same original FD9. Any second-pass disagreement refuses
+   rather than returning a stale positive observation.
 
 An ambiguous, changing or partial state, a busy lifecycle, another package
 version, foreign process, missing evidence or unexpected exit code means
@@ -66,8 +69,10 @@ is part of this workflow.
 ## Evidence and remaining gate
 
 Source regression: `python3.13 scripts/test-legacy-cold-ipfw-preflight.py`
-with mocked versions, kernel exit codes, inspector replies, engine/supervisor
-census, status, lock refusal, linked/missing evidence and marker preservation.
+with mocked versions, kernel exit codes, inspector replies, direct and
+wrapped engine/supervisor census, invalid or empty process output, second-pass
+process/status/inspector changes, lock refusal, linked/missing evidence and
+marker preservation.
 CI success demonstrates only the mocked source contract; real FreeBSD behavior
 and **owner-installed _10** remain unverified until actual root-console output
 is provided. A safe recovery procedure must be separately reasoned about,
