@@ -595,6 +595,16 @@ fi
     fail "failed upgrade from stopped state left rollback evidence"
 printf '%s\n' running > "${SERVICE_STATE}"
 
+# Reset the standalone fault fixture after previous recovery scenarios:
+# those deliberately leave the v1.0.3 checkout installed. The new target is
+# ALSO v1.0.3, so we must restore a distinct v1.0.4 ORIGINAL first to prove
+# that target-Start failure does not poison the old release's restart.
+printf '%s\n' v1.0.4 > "${GIT_RELEASE_STATE}"
+printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "${GIT_COMMIT_STATE}"
+printf '%s\n' v1.0.4 > "${ACTIVE_RELEASE_FILE}"
+printf '%s\n' old-binary > "${ZAPRET_DIR}/binaries/my/dvtws2"
+printf '%s\n' running > "${SERVICE_STATE}"
+
 # A refused native Stop must leave both original service and sealed recovery
 # evidence untouched. The test harness alone discards the fixture afterwards.
 TEST_STOP_FAIL=1
