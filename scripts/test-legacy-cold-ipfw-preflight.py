@@ -41,8 +41,15 @@ with tempfile.TemporaryDirectory() as td:
                         '[ "$(grep -c "^ps:" "$TRACE")" -eq 2 ]; then\n'
                         '  echo "2233 /usr/sbin/daemon -f /usr/local/etc/zapret2/binaries/my/dvtws2 --sockarg=0x200"\n'
                         'else echo "$MOCK_PROCESSES"; fi\n')
+    # Published _10 service status takes its own original FD9. A parent
+    # already holding FD9 must NOT call it: model that as a nested-lock
+    # refusal rather than mocking a status that happily runs unlocked.
     service = executable("service", 'echo "service:$*" >> "$TRACE"\n'
                          '[ "$*" = status ] || exit 99\n'
+                         'if ( : >&9 ) 2>/dev/null; then\n'
+                         '  echo "nested-status-lock" >> "$TRACE"\n'
+                         '  exit 75\n'
+                         'fi\n'
                          'if [ "$MOCK_STATUS_RACE" = 1 ] && '
                          '[ "$(grep -c "^service:status" "$TRACE")" -eq 2 ]; '
                          'then exit 0; fi\n'
@@ -109,6 +116,9 @@ with tempfile.TemporaryDirectory() as td:
     assert events.count("lockf:-s -t 5 9") == 1
     assert events.count("inspector") == 2
     assert events.count("service:status") == 2
+    assert "nested-status-lock" not in events
+    assert events.index("service:status") < events.index("lockf:-s -t 5 9")
+    assert events[-1] == "service:status", events
     assert events.count("ps:ax -o pid= -o command=") == 2
     assert events.count("ipfw:-q list") == 2
 
