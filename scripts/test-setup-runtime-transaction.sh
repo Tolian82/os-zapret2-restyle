@@ -73,8 +73,25 @@ case "${1:-}" in
         ;;
     strategy-lab-start)
         printf '%s\n' started >> "${TEST_RECOVERY_SERVICE_CALLS}"
+        if [ "${TEST_START_FAIL:-0}" = 1 ] &&
+           [ "$(cat "${TEST_GIT_RELEASE_STATE}")" = v1.0.3 ]; then
+            exit 70
+        fi
         printf '%s\n' running > "${TEST_SERVICE_STATE}"
         exit 0
+        ;;
+    strategy-lab-stop)
+        printf '%s\n' stopped >> "${TEST_RECOVERY_SERVICE_CALLS}"
+        [ "${TEST_STOP_FAIL:-0}" != 1 ] || exit 70
+        printf '%s\n' stopped > "${TEST_SERVICE_STATE}"
+        exit 0
+        ;;
+    upstream-install)
+        [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || exit 75
+        printf '%s\n' native-install-fd9 >> "${TEST_RECOVERY_SERVICE_CALLS}"
+        ( STRATEGY_LAB_LIFECYCLE_OWNER=1 UPSTREAM_RUNTIME_LIFECYCLE_OWNER=1 \
+            "${TEST_TRANSACTION}" install-under-native-lock "${2:-}" ) \
+            9>"${TEST_LIFECYCLE_LOCK}"
         ;;
     upstream-recover-mutating)
         [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || exit 75
@@ -84,6 +101,7 @@ case "${1:-}" in
             9>"${TEST_LIFECYCLE_LOCK}"
         ;;
     stop)
+        [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" != 1 ] || exit 75
         printf '%s\n' stopped > "${TEST_SERVICE_STATE}"
         exit 0
         ;;
@@ -202,6 +220,10 @@ cat > "${SETUP_MOCK}" <<'MOCK'
 #!/bin/sh
 [ "${1:-}" = install-under-parent-lock ] || exit 64
 version=${2:-v1.0.4}
+[ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] || exit 75
+[ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] || exit 75
+[ "$(cat "${TEST_SERVICE_STATE}")" = stopped ] || exit 75
+printf '%s\n' candidate-build-under-fd9 >> "${TEST_RECOVERY_SERVICE_CALLS}"
 [ -f "${TEST_ROLLBACK_DIR}/checkpoint" ] || exit 65
 grep -Fqx 'phase=mutating' "${TEST_ROLLBACK_DIR}/checkpoint" || exit 65
 cp "${TEST_ROLLBACK_DIR}/checkpoint" "${TEST_RECEIPT_CAPTURE}" || exit 65
@@ -265,6 +287,8 @@ run_setup_action()
     TEST_LIFECYCLE_LOCK="${TMP_ROOT}/native-fd9" \
     TEST_GIT_DIRTY="${GIT_DIRTY}" \
     TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
+    TEST_STOP_FAIL="${TEST_STOP_FAIL:-0}" \
+    TEST_START_FAIL="${TEST_START_FAIL:-0}" \
     "${TRANSACTION}" "${_action}" "$@"
 }
 
@@ -283,8 +307,16 @@ recover_mutating_stopped()
     run_setup_action recover-mutating-stopped
 }
 
-# Candidate activation fails after changing checkout, binaries, permissions, and
-# service state. The previous release and running service must be restored.
+# Bypass of the original native lifecycle FD9 must be refused.
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+if run_setup_action install-under-parent-lock v1.0.3 >/dev/null 2>&1; then
+    fail "native-lockless upstream install was accepted"
+fi
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] ||
+    fail "native-lockless install changed upstream Git"
+
+# Candidate activation fails after Stop/checkpoint and candidate checkout.
+# Original checkout and running service must both be restored.
 if run_transaction v1.0.3 >/dev/null 2>&1; then
     fail "failed candidate activation reported success"
 fi
@@ -303,6 +335,8 @@ grep -Fqx 'previous_release=v1.0.4' "${RECEIPT_CAPTURE}" || fail "old release no
 grep -Fqx 'service_was_running=1' "${RECEIPT_CAPTURE}" || fail "old service state not persisted"
 grep -Fqx 'previous_binaries=1' "${RECEIPT_CAPTURE}" || fail "old binaries not persisted"
 [ "$(inspect_recovery)" = 'recovery=none' ] || fail "no-snapshot view failed"
+[ "$(head -n 4 "${RECOVERY_SERVICE_CALLS}" | tr '\n' '|')" = 'native-install-fd9|stopped|candidate-build-under-fd9|started|' ] ||
+    fail "FD9 -> native Stop -> build -> native Start ordering not proven"
 [ "$(stat -c %a "${ZAPRET_DIR}/lua/zapret-lib.lua")" = 644 ] || fail "Lua permissions were not normalized"
 [ "$(stat -c %a "${ZAPRET_DIR}/files/fake/test.bin")" = 644 ] || fail "blob permissions were not normalized"
 
@@ -561,5 +595,49 @@ fi
     fail "failed upgrade from stopped state left rollback evidence"
 printf '%s\n' running > "${SERVICE_STATE}"
 
+# A refused native Stop must leave both original service and sealed recovery
+# evidence untouched. The test harness alone discards the fixture afterwards.
+TEST_STOP_FAIL=1
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "failed native Stop permitted upstream mutation"
+fi
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] ||
+    fail "refused native Stop mutated Git"
+[ "$(cat "${SERVICE_STATE}")" = running ] ||
+    fail "failed Stop changed original running service"
+[ -f "${ROLLBACK_DIR}/checkpoint" ] &&
+grep -Fqx 'phase=mutating' "${ROLLBACK_DIR}/checkpoint" ||
+    fail "failed Stop discarded mutating recovery evidence"
+rm -rf "${ROLLBACK_DIR}" # test fixture only
+TEST_STOP_FAIL=0
+
+# Fault injection after checkout/build but before new native Start. Only the
+# original release may restart; target failure must roll back bytes and state.
+printf '%s\n' success > "${SETUP_RESULT}"
+TEST_START_FAIL=1
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "failed target native Start reported upgrade success"
+fi
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] ||
+    fail "failed target Start did not roll back checkout"
+[ "$(cat "${GIT_RELEASE_STATE}")" = v1.0.4 ] ||
+    fail "failed target Start did not restore previous Git release"
+[ "$(cat "${SERVICE_STATE}")" = running ] ||
+    fail "original native service was not restarted after target Start failure"
+[ "$(cat "${ACTIVE_RELEASE_FILE}")" = v1.0.4 ] ||
+    fail "failed target Start left changed active release"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "successful original rollback retained state"
+TEST_START_FAIL=0
+
+# Real production entrypoint and setup must agree about inherited FD9.
+grep -Fq 'upstream-install)' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh" ||
+    fail "native upstream-install dispatcher is missing"
+grep -Fq 'strategy-lab-stop' "${TRANSACTION}" ||
+    fail "upstream mutation does not invoke native stop under FD9"
+grep -Fq 'install-under-native-lock' "${TRANSACTION}" ||
+    fail "upstream transaction does not demand inherited FD9"
+grep -Fq 'UPSTREAM_RUNTIME_LIFECYCLE_OWNER' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/setup.sh" ||
+    fail "setup backend does not recognize inherited FD9"
 sh -n "${TRANSACTION}"
-echo "PASS: transactional runtime activation and pre-mutation snapshot failure retry"
+echo "PASS: original FD9 upstream Stop/build/Start, failure rollback and recovery evidence"

@@ -351,7 +351,13 @@ install_runtime()
         return 1
     }
 
-    if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+    # The parent holds original FD9; a normal 'status' would try to acquire
+    # that same lock recursively. Inspect through the inherited-FD9 path.
+    _setup_status_mode=status
+    if [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ]; then
+        _setup_status_mode=strategy-lab-status
+    fi
+    if "${SERVICE_SCRIPT}" "${_setup_status_mode}" >/dev/null 2>&1; then
         _initial_service_status=0
     else
         _initial_service_status=$?
@@ -457,6 +463,13 @@ install_runtime()
         return 1
     }
 
+    if [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] &&
+       [ "${_service_was_running}" -ne 0 ]; then
+        echo "ERROR: upstream build requires an already STOPPED native owner" >&2
+        status_write "failed"
+        return 75
+    fi
+
     if [ "${_service_was_running}" -eq 1 ]; then
         echo "Refreshing the previously running zapret service..."
         if _service_output=$("${CONFIGCTL}" zapret restart 2>&1); then
@@ -478,7 +491,7 @@ install_runtime()
         fi
         _completion_message="Runtime installation and service refresh completed successfully."
     else
-        if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
+        if "${SERVICE_SCRIPT}" "${_setup_status_mode}" >/dev/null 2>&1; then
             _service_status=0
         else
             _service_status=$?
@@ -551,7 +564,10 @@ main()
             refresh_release_cache_locked
             ;;
         install-under-parent-lock)
-            [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || {
+            [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ] &&
+            [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] &&
+            ( : >&9 ) 2>/dev/null || {
                 echo "ERROR: missing setup transaction lock owner" >&2
                 return 75
             }
