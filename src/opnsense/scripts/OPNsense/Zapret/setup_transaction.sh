@@ -683,6 +683,15 @@ install_transaction()
             rollback_runtime || true
             return 1
         }
+        # No success/backup disposal unless the entire saved rollback corpus
+        # (compiled binaries, original untracked bytes, managed manifest)
+        # still verifies after the target has been activated.
+        backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || {
+            status_write "failed"
+            echo "ERROR: upstream recovery backup changed during activation" >&2
+            rollback_runtime || true
+            return 1
+        }
 
         write_active_release "${_installed_release}" || {
             status_write "failed"

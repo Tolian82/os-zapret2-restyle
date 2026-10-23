@@ -396,16 +396,22 @@ install_runtime()
             status_write "failed"
             return 1
         }
-        # Target collision and saved-config protection before removing any files.
-        # Original bytes and mutating intent are persisted by the parent wrapper.
-        all_resources_upstream_guard preflight-switch FETCH_HEAD || {
-            status_write "failed"
-            return 1
-        }
-        all_resources_upstream_guard prune-orphans FETCH_HEAD || {
-            status_write "failed"
-            return 1
-        }
+        if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ]; then
+            # Only the wrapper arms a durable mutating checkpoint and seals
+            # the original non-Git bytes. All pruning is restricted to it.
+            all_resources_upstream_guard preflight-switch FETCH_HEAD || {
+                status_write "failed"
+                return 1
+            }
+            all_resources_upstream_guard prune-orphans FETCH_HEAD || {
+                status_write "failed"
+                return 1
+            }
+        else
+            # Preserve direct setup.sh compatibility on *already exact*
+            # runtimes. Direct use cannot prune orphans without rollback.
+            echo "Direct setup: verifying exact resources; cleanup requires the transaction wrapper."
+        fi
         all_resources_upstream_guard preflight-exact FETCH_HEAD || {
             status_write "failed"
             return 1
