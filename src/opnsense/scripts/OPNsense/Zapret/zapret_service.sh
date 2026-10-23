@@ -878,6 +878,23 @@ shared_apply_stop_service()
 # Reapply the saved COMMON candidate after reboot, without changing Config.
 # Every boot must prove the same completed journal, release and native saved
 # model. The original apply_runtime code owns dvtws2, supervisor and IPFW.
+# Only exact cold-kernel ENOPROTOOPT is eligible; no rules are removed.
+shared_apply_ipfw_kernel_absent_service()
+{
+    _kldstat_bin="${SHARED_APPLY_KLDSTAT_BIN:-/sbin/kldstat}"
+    _ipfw_bin="${SHARED_APPLY_IPFW_BIN:-/sbin/ipfw}"
+    [ -x "$_kldstat_bin" ] && [ -x "$_ipfw_bin" ] || return 1
+    "$_kldstat_bin" -q -m ipfw >/dev/null 2>&1 && return 1
+    "$_kldstat_bin" -q -m ipdivert >/dev/null 2>&1 && return 1
+    _absent_message=$(LC_ALL=C "$_ipfw_bin" -q list 2>&1)
+    _absent_rc=$?
+    [ "$_absent_rc" = 71 ] || return 1
+    case "$_absent_message" in
+        *"Protocol not available"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 shared_apply_boot_service()
 {
     [ "$#" -eq 1 ] || return 64
@@ -918,10 +935,22 @@ shared_apply_boot_service()
         printf "native-common-boot=%s\n" "$_shared_boot_id"
         return 0
     fi
-    # A kernel rebuilt after reboot has no durable IPFW tables; the existing
-    # common runtime adapter validates the kernel owner before any mutation.
-    # A partial failure is NOT a successful boot and never falls back to
-    # legacy Telegram Voice service.
+    # After verifying the sealed owner and absence of an engine/monitor,
+    # FreeBSD may have no IPFW module loaded after a cold boot. First attest
+    # that there are no untracked engines. Only then prepare native firewall
+    # prerequisites under original FD9; the normal adapter still verifies
+    # exact IPFW ownership before startup. No legacy fallback or reset.
+    if shared_apply_ipfw_kernel_absent_service; then
+        _apply_engine=0
+        apply_runtime_attest_engine_inventory || return 69
+        if [ "$_shared_boot_mode" = 0 ]; then
+            printf "native-common-boot-stopped=%s\n" "$_shared_boot_id"
+            return 0
+        fi
+        prepare_firewall_prerequisites || return 70
+    fi
+
+    # A partial failure is never a successful boot.
     apply_runtime_activate "$_shared_boot_dir/release" "$_shared_boot_mode" || return 70
     apply_runtime_commit || return 70
     # A successful IPFW commit is not a running service receipt. The

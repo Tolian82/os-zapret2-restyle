@@ -2,6 +2,12 @@
 
 ## Текущий приоритет — Additional Resources implementation
 
+**Immediate blocking priority (v0.5.7_15 source):** narrow correction for
+owner-installed 0.5.7_10 failed kernel cold-state observation (ipfw/ipdivert
+unloaded, FreeBSD ipfw exit 71), preserving committed journal and the
+already merged ECH-off Chrome behavior. The old installed PRE-DEINSTALL still fails for this cold state; new PRE-INSTALL must refuse replacement rather than claim safe migration. Owner-installed boot/restart
+acceptance is required before further dynamic Lua/BIN job execution.
+
 The owner explicitly started the approved [five-stage implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md)
 on 22 October 2026. Catalog-side Stage 1 capability metadata and validation
 are [merged and CI-verified](https://github.com/Tolian82/zapret2-extra-resources/commit/ccdd8fae375e9d3fcb2592a803e10a10d52c49f2);

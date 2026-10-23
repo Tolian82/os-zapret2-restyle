@@ -336,6 +336,9 @@ jobs:
       - name: Test private Chrome ECH-disabled policy
         run: sh scripts/test-curl-impersonate-ech-policy.sh
 
+      - name: Test stopped committed owner with cold IPFW kernel
+        run: python3.13 scripts/test-common-cold-ipfw-kernel.py
+
       - name: Test Strategy Lab Python candidate and family screening
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh
 
@@ -377,6 +380,9 @@ jobs:
 
       - name: Test package lifecycle service refresh
         run: sh scripts/test-package-lifecycle-restart.sh
+
+      - name: Test package replacement on attested cold kernel
+        run: python3.13 scripts/test-package-cold-kernel.py
 
       - name: Test setup release selection
         run: sh scripts/test-setup-release-selection.sh
@@ -581,6 +587,7 @@ jobs:
             sh scripts/test-voice-atomic-rollback-preflight.sh
             /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
             sh scripts/build-pkg.sh
+            sh scripts/test-private-curl-native-ech.sh
 
       - name: Inspect built FreeBSD 15 package
         run: |

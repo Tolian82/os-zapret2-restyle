@@ -12,7 +12,7 @@
 |---|---|
 | **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · FreeBSD 15 stable pkg repository (publication pending) |
 | **Latest published testing package** | [v0.5.7_10](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) · ECH-disabled Chrome reachability; owner-installed verification pending; not a stable Web/pkg release |
-| **Current development candidate** | `v0.5.7_10` · testing package published; ECH-disabled private Chrome checks plus ongoing Additional Resources development; owner-installed `_10` qualification pending |
+| **Current development candidate** | `v0.5.7_15` · source-only cold-IPFW inspection/boot fix; old broken package needs controlled recovery before replacing; ECH-off retained. ECH-disabled private Chrome checks plus ongoing Additional Resources development; owner-installed `_10` qualification pending |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

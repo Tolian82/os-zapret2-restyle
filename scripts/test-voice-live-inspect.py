@@ -152,8 +152,24 @@ class InspectionTests(unittest.TestCase):
                     bundle_verify=lambda _: None,
                     manifest_reader=lambda _: manifest,
                     adapter_factory=lambda *args: FakeAdapter(manifest),
-                    runtime_probe=lambda *args: {"state":"stopped","services":{}})
+                    runtime_probe=lambda *args: {"state":"stopped","services":{}},
+                    # Simulate a genuinely loaded kernel with foreign rules,
+                    # not the host VM's intentionally absent IPFW modules.
+                    kernel_absent=lambda: False)
             self.assertEqual("foreign-or-modified-rules",dirty["state"])
+            # Regression: a missing kernel IPFW module does NOT mean that
+            # the stopped sealed owner has foreign rules (FreeBSD exit 71).
+            absent=examine_shared(record,work_root=Path(root),
+                    bundle_verify=lambda _: None,
+                    manifest_reader=lambda _: manifest,
+                    adapter_factory=lambda *args: FakeAdapter(manifest),
+                    runtime_probe=lambda *args: {"state":"stopped","services":{}},
+                    kernel_absent=lambda: True)
+            self.assertEqual("stopped",absent["state"])
+            self.assertEqual("common-stopped-ipfw-kernel-absent",absent["condition"])
+            self.assertEqual(0,absent["rule_count"])
+            self.assertFalse(absent["can_activate"])
+
 
             # A healthy kernel cannot hide a partial engine/monitor or
             # an installed runtime different from the sealed candidate.
