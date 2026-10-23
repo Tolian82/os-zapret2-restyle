@@ -125,11 +125,13 @@ chmod +x "${LOCKF_MOCK}"
 cat > "${EXTRA_GUARD_MOCK}" <<'MOCK'
 #!/bin/sh
 # Fail after writing only backup data; never mutate the running runtime.
-if [ "${1:-}" = snapshot ]; then
+if [ "${1:-}" = snapshot ] && [ "${TEST_EXTRA_GUARD_FAIL}" = 1 ]; then
     mkdir -p "${TEST_ROLLBACK_DIR}/extra-managed"
     printf '%s\n' partial > "${TEST_ROLLBACK_DIR}/extra-managed/partial"
-    [ "${TEST_EXTRA_GUARD_FAIL}" != 1 ] || exit 70
+    exit 70
 fi
+# The mock manifest is empty; a successful snapshot has no managed backup.
+[ "${1:-}" != verify-snapshot ] || [ ! -e "${TEST_ROLLBACK_DIR}/extra-managed" ] || exit 70
 exit 0
 MOCK
 chmod +x "${EXTRA_GUARD_MOCK}"
@@ -166,8 +168,10 @@ inspect_recovery()
     "${TRANSACTION}" inspect-recovery
 }
 
-run_transaction()
+run_setup_action()
 {
+    _action="$1"
+    shift
     TEST_SERVICE_STATE="${SERVICE_STATE}" \
     TEST_GIT_RELEASE_STATE="${GIT_RELEASE_STATE}" \
     TEST_GIT_COMMIT_STATE="${GIT_COMMIT_STATE}" \
@@ -191,7 +195,17 @@ run_transaction()
     TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
     TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
     TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
-    "${TRANSACTION}" install "$1"
+    "${TRANSACTION}" "${_action}" "$@"
+}
+
+run_transaction()
+{
+    run_setup_action install "$1"
+}
+
+recover_prepared()
+{
+    run_setup_action recover-prepared
 }
 
 # Candidate activation fails after changing checkout, binaries, permissions, and
@@ -294,6 +308,87 @@ if inspect_recovery > "${TMP_ROOT}/symlink-inspection"; then
     fail "symlinked checkpoint trusted"
 fi
 [ -L "${ROLLBACK_DIR}/checkpoint" ] || fail "inspection changed symlink"
+
+# Only a fully attested PREPARED snapshot (no runtime mutation) may be
+# released. Any possible runtime mutation remains blocked for future audited
+# recovery; the rejected evidence must survive untouched.
+rm -rf "${ROLLBACK_DIR}"
+mkdir -p "${ROLLBACK_DIR}/binaries"
+cp -Rp "${ZAPRET_DIR}/binaries/my" "${ROLLBACK_DIR}/binaries/"
+sed 's/phase=mutating/phase=prepared/' "${RECEIPT_CAPTURE}" > "${ROLLBACK_DIR}/checkpoint"
+grep -Fqx 'phase=prepared' "${ROLLBACK_DIR}/checkpoint" || fail "prepared fixture missing"
+before_commit=$(cat "${GIT_COMMIT_STATE}")
+before_release=$(cat "${ACTIVE_RELEASE_FILE}")
+before_service=$(cat "${SERVICE_STATE}")
+cp "${ROLLBACK_DIR}/checkpoint" "${TMP_ROOT}/prepared.original"
+
+printf '%s\n' modified > "${ROLLBACK_DIR}/binaries/my/dvtws2"
+if recover_prepared >/dev/null 2>&1; then
+    fail "tampered binary backup was cleared"
+fi
+[ -f "${ROLLBACK_DIR}/checkpoint" ] || fail "tampered backup evidence was erased"
+cp -Rp "${ZAPRET_DIR}/binaries/my/dvtws2" "${ROLLBACK_DIR}/binaries/my/dvtws2"
+
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+if recover_prepared >/dev/null 2>&1; then
+    fail "incomplete service owner was allowed to clear snapshot"
+fi
+printf '%s\n' running > "${SERVICE_STATE}"
+
+printf '%s\n' cccccccccccccccccccccccccccccccccccccccc > "${GIT_COMMIT_STATE}"
+if recover_prepared >/dev/null 2>&1; then
+    fail "foreign checkout cleared prepared backup"
+fi
+printf '%s\n' "${before_commit}" > "${GIT_COMMIT_STATE}"
+
+sed 's/phase=prepared/phase=mutating/' "${TMP_ROOT}/prepared.original" > "${ROLLBACK_DIR}/checkpoint"
+if recover_prepared >/dev/null 2>&1; then
+    fail "possibly mutated snapshot incorrectly cleared"
+fi
+[ -d "${ROLLBACK_DIR}" ] || fail "mutating backup evidence was erased"
+
+cp "${TMP_ROOT}/prepared.original" "${ROLLBACK_DIR}/checkpoint"
+printf '%s\n' foreign > "${ROLLBACK_DIR}/unexpected"
+if recover_prepared >/dev/null 2>&1; then
+    fail "foreign snapshot entry was silently erased"
+fi
+[ -f "${ROLLBACK_DIR}/unexpected" ] || fail "foreign evidence changed"
+rm "${ROLLBACK_DIR}/unexpected"
+
+mkdir "${ROLLBACK_DIR}/binaries/foreign"
+if recover_prepared >/dev/null 2>&1; then
+    fail "unexpected nested binary backup entry was erased"
+fi
+[ -d "${ROLLBACK_DIR}/binaries/foreign" ] || fail "nested backup evidence lost"
+rmdir "${ROLLBACK_DIR}/binaries/foreign"
+
+output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
+[ "${output}" = 'RECOVERY_PREPARED_CLEARED: previous runtime and service are unchanged' ] ||
+    fail "prepared recovery reported incorrect result"
+[ ! -e "${ROLLBACK_DIR}" ] || fail "verified prepared snapshot was not released"
+[ "$(cat "${GIT_COMMIT_STATE}")" = "${before_commit}" ] || fail "recovery changed checkout"
+[ "$(cat "${ACTIVE_RELEASE_FILE}")" = "${before_release}" ] || fail "recovery changed active release"
+[ "$(cat "${SERVICE_STATE}")" = "${before_service}" ] || fail "recovery changed service"
+[ "$(cat "${SETUP_STATUS}")" = failed ] || fail "recovery did not record prior aborted setup"
+[ "$(inspect_recovery)" = 'recovery=none' ] || fail "recovery left pending state"
+
+# The native status exit code must be preserved. Incomplete/foreign owner
+# cannot start a new upstream transaction or acquire a backup directory.
+printf '%s\n' incomplete > "${SERVICE_STATE}"
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "incomplete native owner was accepted for a new upgrade"
+fi
+[ ! -e "${ROLLBACK_DIR}" ] || fail "unsafe native status created backup data"
+printf '%s\n' stopped > "${SERVICE_STATE}"
+printf '%s\n' fail > "${SETUP_RESULT}"
+if run_transaction v1.0.3 >/dev/null 2>&1; then
+    fail "mocked failed install from stopped state unexpectedly succeeded"
+fi
+[ "$(cat "${SERVICE_STATE}")" = stopped ] ||
+    fail "stopped native service was erroneously restarted on rollback"
+[ ! -e "${ROLLBACK_DIR}" ] ||
+    fail "failed upgrade from stopped state left rollback evidence"
+printf '%s\n' running > "${SERVICE_STATE}"
 
 sh -n "${TRANSACTION}"
 echo "PASS: transactional runtime activation and pre-mutation snapshot failure retry"

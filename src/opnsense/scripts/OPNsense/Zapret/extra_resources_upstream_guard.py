@@ -73,6 +73,41 @@ def verify() -> None:
     _owned()
 
 
+def verify_snapshot() -> None:
+    """Read-only attestation of managed files and their saved backup bytes."""
+    metadata = _owned()
+    if ROLLBACK.is_symlink():
+        raise TransactionError("managed backup is a symlink")
+    if not metadata:
+        if ROLLBACK.exists():
+            raise TransactionError("unexpected managed backup with empty manifest")
+        return
+    if not ROLLBACK.is_dir():
+        raise TransactionError("managed snapshot missing")
+    expected_files = set(metadata)
+    expected_dirs = {part for name in metadata for part in
+                     ("/".join(name.split("/")[:i]) for i in range(1, len(name.split("/"))))}
+    for entry in ROLLBACK.rglob("*"):
+        relative = entry.relative_to(ROLLBACK).as_posix()
+        if entry.is_symlink():
+            raise TransactionError(f"managed backup symlink: {relative}")
+        if not (
+            (entry.is_dir() and relative in expected_dirs)
+            or (entry.is_file() and relative in expected_files)
+        ):
+            raise TransactionError(f"unexpected managed backup entry: {relative}")
+    for name, digest in metadata.items():
+        src = ROLLBACK / name
+        # Reject symlinks in *any* intermediate directory as well as leaves.
+        cursor = src
+        while cursor != ROLLBACK:
+            if cursor.is_symlink():
+                raise TransactionError(f"managed backup symlink: {name}")
+            cursor = cursor.parent
+        if not src.is_file() or sha256(src.read_bytes()) != digest:
+            raise TransactionError(f"managed backup missing or changed: {name}")
+
+
 def restore() -> None:
     metadata = _owned_metadata(STATE / "installed.json")["files"]
     if not metadata:
@@ -97,8 +132,8 @@ def restore() -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "snapshot", "verify", "restore"}:
-        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|snapshot|verify|restore}", file=sys.stderr)
+    if len(argv) < 2 or argv[1] not in {"preflight", "snapshot", "verify", "verify-snapshot", "restore"}:
+        print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|snapshot|verify|verify-snapshot|restore}", file=sys.stderr)
         return 64
     try:
         if argv[1] == "preflight":
@@ -111,6 +146,8 @@ def main(argv: list[str]) -> int:
             snapshot()
         elif argv[1] == "verify":
             verify()
+        elif argv[1] == "verify-snapshot":
+            verify_snapshot()
         else:
             restore()
         print("PASS: managed additional resources are preserved")

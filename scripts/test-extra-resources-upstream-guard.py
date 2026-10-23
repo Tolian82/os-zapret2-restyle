@@ -80,6 +80,39 @@ class UpstreamResources(unittest.TestCase):
             guard.restore()
         self.assertFalse(self.lua.exists())
 
+    def test_snapshot_attestation_before_prepared_cleanup(self):
+        guard.snapshot()
+        guard.verify_snapshot()
+        saved = self.backup / "lua/a-dynamic.lua"
+        saved.write_bytes(b"tampered backup")
+        with self.assertRaisesRegex(guard.TransactionError, "backup missing or changed"):
+            guard.verify_snapshot()
+
+    def test_snapshot_attestation_rejects_symlinked_parent(self):
+        guard.snapshot()
+        lua_backup = self.backup / "lua"
+        saved = self.base / "foreign-backup"
+        lua_backup.rename(saved)
+        lua_backup.symlink_to(saved, target_is_directory=True)
+        with self.assertRaisesRegex(guard.TransactionError, "backup symlink"):
+            guard.verify_snapshot()
+        self.assertEqual(self.lua.read_bytes(), self.original)
+
+    def test_snapshot_attestation_rejects_extra_file(self):
+        guard.snapshot()
+        foreign = self.backup / "lua/foreign.lua"
+        foreign.write_bytes(b"not part of manifest")
+        with self.assertRaisesRegex(guard.TransactionError, "unexpected managed backup"):
+            guard.verify_snapshot()
+        self.assertEqual(foreign.read_bytes(), b"not part of manifest")
+
+    def test_empty_manifest_rejects_unexpected_backup(self):
+        self.manifest.unlink()
+        guard.verify_snapshot()
+        self.backup.mkdir(parents=True)
+        with self.assertRaisesRegex(guard.TransactionError, "unexpected managed backup"):
+            guard.verify_snapshot()
+
     def test_pending_extra_transaction_refuses_upstream(self):
         (self.state / "transaction").mkdir()
         with self.assertRaisesRegex(guard.TransactionError, "unfinished"):
