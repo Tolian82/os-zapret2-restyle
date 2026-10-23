@@ -147,6 +147,12 @@ with tempfile.TemporaryDirectory() as td:
         assert response.returncode != 0, (variant, response, events)
         assert "UPGRADE_AUTHORIZED=no" in response.stderr, variant
         assert "DIAGNOSIS=" not in response.stdout, variant
+        if "MOCK_PS_RACE" in variant or "MOCK_PROCESSES" in variant:
+            assert "FAILED_CHECK=process-census-pass-" in response.stderr, variant
+        if "MOCK_INSPECT_RACE" in variant or "MOCK_INSPECT_RC" in variant:
+            assert "FAILED_CHECK=native-inspector-pass-" in response.stderr, variant
+        if "MOCK_IPFW_RC" in variant or "MOCK_IPFW_TEXT" in variant:
+            assert "FAILED_CHECK=kernel-signature-pass-" in response.stderr, variant
 
     journal.unlink()
     failed, _ = run()
