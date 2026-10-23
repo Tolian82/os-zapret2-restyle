@@ -84,3 +84,6 @@
 - **Каждый этап — измеримый результат**, короткие целевые проверки и устранение блокирующего дефекта до перехода дальше. Не раздувать проект повторением закрытых тестов.
 - Каждый push с изменением кода повышает ревизию плагина по принятой политике. Документационные изменения могут не повышать версию. Не публиковать релиз по инициативе исполнителя.
 - Для каждого кандидата — нативная семантика zapret2, воспроизводимость и честное доказательство результата; наличие файла в каталоге не равно способности обойти DPI.
+
+
+Source stage `v0.5.7_27` now seals saved compiled-binary SHA-256 file/dir inventory and installed-resource manifest identity in a synchronized sidecar before the schema-2 upstream checkpoint. Read-only attestation is required for prepared cleanup and immediate automatic rollback, but a separate controlled and owner-tested mutating-phase recovery executor is still pending.
