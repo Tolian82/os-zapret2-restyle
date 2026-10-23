@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.5.7_16`. `VERSION=0.5.7`, `PLUGIN_REVISION=16`. **Source development candidate; not published or owner-tested.** Previous `v0.5.7_10` testing package remains published but failed owner-installed lifecycle checks. Previous owner authorization for a full Web/pkg release applied to the earlier prepared candidate and remains separately pending from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-accepted installed Stage-6 testing asset was `v0.5.6_17`; the owner also reported installed `v0.5.7_1` during the ECH investigation. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
+**Current handoff identity:** `v0.5.7_17`. `VERSION=0.5.7`, `PLUGIN_REVISION=17`. **Source development candidate; not published or owner-tested.** Previous `v0.5.7_10` testing package remains published but failed owner-installed lifecycle checks. Previous owner authorization for a full Web/pkg release applied to the earlier prepared candidate and remains separately pending from accepted Strategy Lab + bounded GUI fixes. [Release plan](releases/v0.5.7.md) (publishing pending verification). The last owner-accepted installed Stage-6 testing asset was `v0.5.6_17`; the owner also reported installed `v0.5.7_1` during the ECH investigation. **Stage-5 GUI testing package published:** [direct `.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.6_17/os-zapret2-restyle-0.5.6_17.pkg), [publication record](verification/evidence/testing-publications/v0.5.6_17.md), immutable source/tag `b735b0bb55933f0abab007f3165cbb733ceb6d33`, SHA-256 `efc30af18df4104895f17eefec1294d057a7180d2c5e3b900cbca53703295948`. [Project/Voice/FreeBSD15 CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39779317362); [publisher FreeBSD/manifest/digest/tag validation](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39780767016) PASS. Publisher failed only when GitHub Actions could not create a PR; authorized connector opened [record PR #484](https://github.com/Tolian82/os-zapret2-restyle/pull/484). Owner confirmed `_16` read-only retrieval of `job.OK9Mn5` and `job.jAQJMx`. The owner subsequently [reported that Strategy Lab works as expected](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md) after `_17` delivery: bounded GUI acceptance **PASS (owner report)**. The owner has since **explicitly confirmed F5 and RU/EN PASS** ([updated acceptance record](verification/evidence/2026-10-22-v0.5.6_17-owner-gui-acceptance.md)); copied clipboard bytes, installed pkg hash, negative auto-Apply and raw Stage90 recovery remain individually unverified. Stable `v0.5.6` and Pages/pkg unchanged.
 
 **Release preparation:** bundle [RU/EN Result summary correction](patches/v0.5.6_18.md), [independent upper/lower Strategies Apply indicators](patches/v0.5.6_19.md), verified owner-accepted Strategy Lab Stages 1–6, the [README capability audit](../README.md), star invitation and [lexiforest upstream attribution](../CONTRIBUTORS.md). Pre-release source/FreeBSD CI and full Web/pkg publication must PASS before declaring release success. This is not proof of owner-installed `v0.5.7_1` GUI operation.
 
@@ -17,7 +17,7 @@ committed shared-Apply owner but a stopped engine/supervisor and *neither*
 FreeBSD `ipfw` nor `ipdivert` module loaded; `ipfw -q list` returned
 "Protocol not available", exit 71. The prior observer incorrectly called
 this "foreign-or-modified-rules"; package PRE-INSTALL could not determine
-service state and refused replacement. Source `v0.5.7_16` classifies only
+service state and refused replacement. Source `v0.5.7_17` classifies only
 this exact unloaded-kernel case as a stopped committed owner. However, the
 OLD installed package PRE-DEINSTALL will still call its old broken status
 then Stop when that status returns 2; new PRE-INSTALL explicitly refuses
@@ -32,7 +32,7 @@ are still required before any new package release.
 
 ## Active implementation override — Additional Resources
 
-Stage 4 source increment v0.5.7_16 introduces read-only, job-local eligibility classification against real ResourceInventory entries, pinned installed capability descriptors, and managed SHA-256 values. It does not yet add executable search graph candidates or change the native runtime. All Chrome/ECH-off and cold-IPFW protections inherited unchanged from _15.
+Stage 4 v0.5.7_17 extends the existing native Stage-60 graph with bounded data-driven, CandidateSpec-normalized TLS fake BIN and reviewed fake+split Lua candidates. The job-local classifier checks actual files, SHA-256, TLS record / Lua export signatures and dependencies. Both cold and warm Stage-60 execution models receive the same graph; the original golden corpus is unchanged. Source tests validate native runtime argument rendering, dynamic add/remove/tamper and pruned/unsupported/missing results; no owner-live execution proof yet. Chrome ECH-off and cold-IPFW safeguards remain unchanged from _15.
 
 
 On 22 October 2026 the owner instructed implementation of the approved
@@ -53,14 +53,13 @@ normal service startup, or page load.
 neither the native restart nor complete power-failure recovery of the upstream
 release transaction has live proof. An interrupted upstream setup leaves a
 RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy Lab
-dynamic executable candidate generation from these files is still pending.
+candidate generation is source-wired, but actual installed-host execution remains unverified.
 Do not claim that a CI-built package is a released/installed feature.
 
 **Current single next action:** finish source/FreeBSD GUI gate, then validate
 manual install, real Stop → Start/PID replacement, errors, F5 and RU/EN on the
-owner's OPNsense. Complete bounded upstream recovery, then integrate the
-dynamic Lua/BIN capability descriptors into fresh Strategy Lab jobs without
-hardcoding resource names.
+owner's OPNsense. Complete bounded upstream recovery, then owner-verify the new Stage-60 TLS Lua/BIN candidates with real jobs,
+including Model-C fallback, budgets and unsupported-resource diagnostics.
 
 **Release boundary:** The prior owner-authorized `v0.5.7_1` full release
 remains pending its own exact-head publication checks. This new owner-directed

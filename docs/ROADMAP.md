@@ -2,6 +2,9 @@
 
 ## Текущий приоритет — Additional Resources implementation
 
+Stage-4 source update v0.5.7_17 adds bounded dynamic TLS BIN/Lua nodes to the existing Stage-60 graph using reviewed installed descriptors and job inventory; native on-appliance execution/health evidence and package lifecycle repairs remain open. No release is authorized by this step.
+
+
 **Immediate blocking priority (v0.5.7_15 source):** narrow correction for
 owner-installed 0.5.7_10 failed kernel cold-state observation (ipfw/ipdivert
 unloaded, FreeBSD ipfw exit 71), preserving committed journal and the

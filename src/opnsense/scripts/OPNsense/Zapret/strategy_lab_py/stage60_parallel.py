@@ -30,6 +30,7 @@ from . import (
     resources,
     search,
     search_graph,
+    dynamic_graph,
     telemetry,
 )
 
@@ -565,9 +566,10 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         raise Stage60ParallelError("Strategy Lab Stage-50 evidence belongs to another search epoch")
 
     inventory = resources.ensure_job_inventory(search.job_dir(job_id))
-    graph = search_graph.native_tls13_graph()
+    graph, extra_evidence = dynamic_graph.job_tls13_graph(inventory)
     plan = graph.plan("expansion", accepted_raw, inventory)
     plan_evidence = plan.to_dict()
+    plan_evidence["extra_capabilities"] = extra_evidence
     plan_evidence["search_epoch_id"] = epoch.epoch_id
     search._atomic_json(search.job_dir(job_id) / "search-graph.json", plan_evidence)
 
@@ -595,6 +597,7 @@ def expand(job_id: str, endpoints_file: str, family_result_file: str, result_fil
         "failed": [],
         "golden_ids": list(plan.golden_ids),
         "skipped": list(plan.skipped),
+        "extra_capabilities": extra_evidence,
         "schedule": [],
         "winner_band": {"minimum": minimum, "target": target},
         "early_stop": {"triggered": False, "winner_count": 0},

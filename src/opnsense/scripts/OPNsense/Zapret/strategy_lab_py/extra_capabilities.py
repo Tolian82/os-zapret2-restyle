@@ -84,13 +84,28 @@ def inspect_extra_capabilities(inventory: ResourceInventory, state_file: Path) -
                 detail["reason"] = "unsafe installed resource path"
             else:
                 try:
-                    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+                    content = path.read_bytes()
+                    actual = hashlib.sha256(content).hexdigest()
                 except OSError:
                     detail.update(status="missing", reason="resource unreadable")
                 else:
                     if actual != digest:
                         detail["reason"] = "managed file checksum mismatch"
+                    elif target.startswith("files/fake/") and not (
+                        len(content) >= 6 and content[0] == 0x16 and content[1] == 0x03 and content[5] == 0x01
+                    ):
+                        detail["reason"] = "declared TLS record signature missing"
+                    elif target.startswith("lua/") and not re.search(
+                        rb"(?m)^\s*function\s+" + re.escape(desc["export"].encode("ascii")) + rb"\s*\(",
+                        content,
+                    ):
+                        detail["reason"] = "declared top-level Lua export missing"
                     else:
-                        detail.update(status="eligible", reason="verified installed file and reviewed capability")
+                        detail.update(
+                            status="eligible",
+                            reason="verified installed file and reviewed capability",
+                            digest=digest,
+                            descriptor=desc,
+                        )
         results.append(detail)
     return results

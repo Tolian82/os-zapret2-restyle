@@ -68,6 +68,8 @@
 
 **Готово, когда:** без обновления Python-кода добавление/удаление совместимых BIN и Lua(+description) меняет **новый** граф кандидатов; проверены хотя бы по одному исполняемому новому BIN и Lua. Старый набор остаётся доступен без новых ресурсов.
 
+**Stage 4 source progress (`v0.5.7_17`, not installed proof):** reviewed TLS BIN and fake+split Lua descriptors now create bounded, native CandidateSpec/Stage-60 candidates via the existing per-job ResourceInventory; unsupported/missing/pruned are recorded and the golden graph is retained. Offline candidate-rendering tests are not proof of working DPI evasion or live native execution. Owner-installed stage-60 readiness/cancel/fallback and power-loss tests remain required.
+
 ## Этап 5. Проверка установленного пакета и подготовка выпуска
 
 Провести **только узкие проверки этого функционала**: установка/обновление/без изменений, неработающий GitHub или некорректный hash, конфликт имени, откат после неисправного restart, Start/Stop после операции, обновление штатного Zapret2, GUI RU/EN/F5, динамическое появление/удаление BIN и Lua без правок Python, один новый исполняемый BIN и Lua в Job. Проверить отсутствие оставшихся PID/IPFW/lock, сохранение пользовательской конфигурации и адекватность причин skip.
