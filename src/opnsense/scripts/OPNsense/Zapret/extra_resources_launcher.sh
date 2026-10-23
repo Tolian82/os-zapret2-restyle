@@ -41,6 +41,9 @@ try:
          "restore_failed","recovery_required","recovering","restored",
          "no_recovery_needed"}
  if phase not in phases: phase="unknown"
+ operation=x.get("operation","")
+ if not isinstance(operation,str) or not re.fullmatch(r"[a-f0-9]{32}",operation):
+  operation=""
  revision=x.get("source_commit") or x.get("revision") or ""
  if not isinstance(revision,str) or not re.fullmatch(r"[0-9a-f]{40}",revision):
   revision=""
@@ -51,6 +54,7 @@ try:
  if not isinstance(detail,str): detail=""
  detail=re.sub(r"[\r\n\x00-\x1f]"," ",detail)[:300]
  print("phase="+phase)
+ print("operation="+operation)
  print("revision="+revision)
  print("lua="+str(count("lua")))
  print("bin="+str(count("bin")))
@@ -64,7 +68,15 @@ except Exception:
         printf 'busy=%s\n' "$_busy"
         ;;
     install|recover)
-        [ "$#" -eq 1 ] || exit 64
+        if [ "$MODE" = install ]; then
+            [ "$#" -eq 2 ] || exit 64
+            _operation_id="$2"
+            case "$_operation_id" in ''|*[!a-f0-9]*) exit 64 ;; esac
+            [ "${#_operation_id}" -eq 32 ] || exit 64
+        else
+            [ "$#" -eq 1 ] || exit 64
+            _operation_id=""
+        fi
         [ -x "$SERVICE_SCRIPT" ] && [ -x "$DAEMON_BIN" ] && [ -x "$LOCKF_BIN" ] || {
             echo "ERROR: resource service tools missing" >&2; exit 69;
         }
@@ -82,6 +94,7 @@ except Exception:
         exec "$DAEMON_BIN" -f -o "$LOG_FILE" -p "$PID_FILE" \
             "$LOCKF_BIN" -s -t 60 "$LOCK_FILE" \
             /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+            "EXTRA_RESOURCES_OPERATION_ID=${_operation_id}" \
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)

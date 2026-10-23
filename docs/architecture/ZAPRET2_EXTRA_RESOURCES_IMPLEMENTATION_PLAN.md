@@ -47,6 +47,8 @@
 
 ## Этап 3. GUI «Стратегия»
 
+**Source correction in v0.5.7_20 (installed acceptance pending):** each click receives a fresh 128-bit operation identifier from the POST API, preserved through configd/launcher/worker into durable status. UI accepts completion only for that identifier; a fast job can finish without an observed daemon busy pulse. A previous terminal result cannot complete a new click.
+
 **Задача:** добавить кнопку без нарушения существующей разметки и логики.
 
 1. В `general.volt` разместить кнопку **во второй строке под блоком «Статус:»** слева. Не перемещать Start/Stop, список релизов и две разные кнопки Apply.

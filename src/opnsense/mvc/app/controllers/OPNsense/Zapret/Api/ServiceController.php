@@ -120,6 +120,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         $state = [
             'busy' => false,
             'phase' => 'unknown',
+            'operation' => '',
             'revision' => '',
             'lua' => 0,
             'bin' => 0,
@@ -133,6 +134,11 @@ class ServiceController extends ApiMutableServiceControllerBase
             switch ($matches[1]) {
                 case 'busy':
                     $state['busy'] = $value === '1';
+                    break;
+                case 'operation':
+                    if ($value === '' || preg_match('/^[a-f0-9]{32}$/D', $value)) {
+                        $state['operation'] = $value;
+                    }
                     break;
                 case 'phase':
                     if (in_array($value, [
@@ -192,8 +198,10 @@ class ServiceController extends ApiMutableServiceControllerBase
             );
         }
 
+        // A token is tied to this request, not a transient daemon PID.
+        $operation = bin2hex(random_bytes(16));
         $response = trim((string)$backend->configdpRun(
-            'zapret extra_resources_install', [], false, 30
+            'zapret extra_resources_install', [$operation], false, 30
         ));
         if ($response !== 'OK') {
             throw new UserException(
@@ -202,7 +210,7 @@ class ServiceController extends ApiMutableServiceControllerBase
             );
         }
 
-        return ['status' => 'ok', 'started' => true];
+        return ['status' => 'ok', 'started' => true, 'operation' => $operation];
     }
 
     public function releasesAction(): array

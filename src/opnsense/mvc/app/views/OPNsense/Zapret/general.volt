@@ -72,7 +72,7 @@
         let extraStateKnown = false;
         let extraBusy = false;
         let extraInstallPending = false;
-        let extraObservedBusy = false;
+        let extraExpectedOperation = '';
         let extraNeedsReview = false;
         let runtimePoll = null;
         let runtimeWasBusy = false;
@@ -301,6 +301,14 @@
             extraPollAttempts = 0;
         }
 
+        // A fast operation may finish without a polled busy=1 transition.
+        // Match the persisted terminal receipt to this exact user click.
+        function extraOperationTerminal(data, operation) {
+            return !!operation && !!data && data.operation === operation &&
+                !data.busy && ['ready', 'failed', 'restore_failed',
+                    'recovery_required'].indexOf(data.phase) !== -1;
+        }
+
         function renderExtras(data) {
             if (!data || data.status !== 'ok') {
                 extraStateKnown = false;
@@ -314,13 +322,13 @@
 
             extraStateKnown = true;
             extraBusy = !!data.busy;
-            extraObservedBusy = extraObservedBusy || extraBusy;
             if (['restore_failed', 'recovery_required'].indexOf(data.phase) >= 0) {
                 extraNeedsReview = true;
             }
             $('#zapretExtraState').text(extrasLabel(data));
-            if (extraInstallPending && !extraBusy && extraObservedBusy) {
+            if (extraInstallPending && extraOperationTerminal(data, extraExpectedOperation)) {
                 extraInstallPending = false;
+                extraExpectedOperation = '';
                 if (data.phase !== 'ready') {
                     extraNeedsReview = true;
                 }
@@ -427,7 +435,7 @@
                 return;
             }
             extraInstallPending = true;
-            extraObservedBusy = false;
+            extraExpectedOperation = '';
             setRuntimeBusy(true);
             $.ajax({
                 type: 'POST',
@@ -435,14 +443,18 @@
                 dataType: 'json',
                 timeout: 30000
             }).done(function(data) {
-                if (!data || data.status !== 'ok' || !data.started) {
+                if (!data || data.status !== 'ok' || !data.started ||
+                    !/^[a-f0-9]{32}$/.test(data.operation || '')) {
                     extraNeedsReview = true;
                     extraInstallPending = false;
                     $('#zapretExtraState').text(extrasText.failed);
+                } else {
+                    extraExpectedOperation = data.operation;
                 }
                 refreshExtrasStatus();
             }).fail(function() {
                 extraInstallPending = false;
+                extraExpectedOperation = '';
                 extraNeedsReview = true;
                 $('#zapretExtraState').text(extrasText.failed + ' · ' + extrasText.log);
                 refreshRuntime();
