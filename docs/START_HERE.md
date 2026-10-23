@@ -14,6 +14,17 @@ Owner-approved on 23 October 2026: the installed Chrome-profile client is used f
 
 **Source `v0.5.7_29` future-package hardening:** `pkg/+PRE_DEINSTALL` now refuses an unknown owner (service status 2) **before** invoking Stop, retaining old restart intent. A pinned historical fixture independently verifies that the already published `_10` hook still calls Stop on status 2. This protects *future installed revisions only*, not the owner's old installed `_10` cold-IPFW upgrade; no firewall modules, rules or processes are changed. Source/CI is distinct from installed OPNsense acceptance.
 
+**Standalone source-only _10 diagnostic (current _29 tool-only change):**
+[`scripts/legacy-cold-ipfw-preflight.sh`](../scripts/legacy-cold-ipfw-preflight.sh)
+is a root-operator-invoked, read-only tool intended to run on an already
+installed `0.5.7_10` without requiring a new package. It requires the exact
+old-kernel failure signature, old sealed native inspector, independent
+engine/supervisor census and repeated status evidence under original FD9.
+Even a positive diagnostic explicitly prints `UPGRADE_AUTHORIZED=no`;
+it **does not** fix or bypass the unsafe old PRE_DEINSTALL. See the
+[preflight usage and limitations](verification/LEGACY_COLD_IPFW_PREFLIGHT.md).
+Offline CI is not owner-installed FreeBSD acceptance.
+
 ## Critical owner-installed issue — absent IPFW kernel in 0.5.7_10
 
 23 October 2026 owner evidence: installed `0.5.7_10` had a sealed,
@@ -60,7 +71,7 @@ RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy La
 candidate generation is source-wired, but actual installed-host execution remains unverified.
 Do not claim that a CI-built package is a released/installed feature.
 
-**Current single next action:** establish and owner-verify a controlled recovery path for the *installed old* `_10` cold-IPFW condition. The old installed PRE_DEINSTALL must independently observe STOPPED before any package replacement; do not trick status, preload kernel modules in pkg hooks, or claim the new future-hook guard repaired the old package. After that gate, verify operator-only `recover-mutating-stopped` on OPNsense, then manually install Additional Resources and run real GUI/Stage-60 acceptance including Stop→Start/PID replacement, RU/EN, F5, Model C, budgets and diagnostics.
+**Current single next action:** collect and review a read-only preflight result for the *installed old* `_10` cold-IPFW condition using the documented standalone script; then design and owner-verify a controlled recovery path before any package replacement. The old installed PRE_DEINSTALL must independently observe STOPPED before any package replacement; do not trick status, preload kernel modules in pkg hooks, or claim the new future-hook guard repaired the old package. After that gate, verify operator-only `recover-mutating-stopped` on OPNsense, then manually install Additional Resources and run real GUI/Stage-60 acceptance including Stop→Start/PID replacement, RU/EN, F5, Model C, budgets and diagnostics.
 
 **Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. New Additional Resources work in source `v0.5.7_29` remains separately unpublished and not installed/accepted; ordinary `продолжаем разработку` does not authorize a new testing-package or stable release.
 
