@@ -384,6 +384,9 @@ jobs:
       - name: Test package replacement on attested cold kernel
         run: python3.13 scripts/test-package-cold-kernel.py
 
+      - name: Test standalone old-package cold-IPFW read-only inspection
+        run: python3.13 scripts/test-legacy-cold-ipfw-preflight.py
+
       - name: Test setup release selection
         run: sh scripts/test-setup-release-selection.sh
 

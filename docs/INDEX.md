@@ -21,6 +21,8 @@
 - Stage 4/GUI/upstream gate `v0.5.7_29`: dynamic BIN/Lua, correlated GUI receipts and durable upstream checkpoint. Manual `recover-prepared` clears only fully attested pre-mutation snapshots without Stop/Start/IPFW, preserving suspicious or `mutating` evidence. Saved managed-resource bytes can now be attested after a mutating checkout removed/changed live files; prepared-phase cleanup still requires intact live and saved bytes. New schema-2 snapshots seal and verify binary SHA-256 inventory and managed-manifest identity before runtime mutation; prepared-only cleanup and immediate rollback reject tampered saved proof. Explicit operator-only schema-2 recovery of an attested, fully STOPPED native owner is implemented under setup.lock→original FD9; RUNNING/INCOMPLETE/foreign cases fail closed. Installed OPNsense acceptance and old `_10` cold-IPFW package upgrade remain pending. `_29` hardens future PRE_DEINSTALL against unverified native status 2 before Stop (the published `_10` hook remains unchanged); pinned old-hook regression prevents a false migration claim. ECH-off and IPFW package gate remain based on `_15`.
 
 
+- Installed `_10` read-only [cold-IPFW preflight](verification/LEGACY_COLD_IPFW_PREFLIGHT.md): self-contained script [source](../scripts/legacy-cold-ipfw-preflight.sh), not a repair or package upgrade authorization.
+
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;
   absent IPFW/ipdivert made stopped common owner appear foreign. The
   `v0.5.7_15` source candidate explicitly retains ECH-off and repairs

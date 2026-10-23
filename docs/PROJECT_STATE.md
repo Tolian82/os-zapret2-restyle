@@ -6,6 +6,18 @@
 
 **Source `v0.5.7_29` package safety:** Current `pkg/+PRE_DEINSTALL` refuses native status 2 before Stop and preserves existing restart markers. A frozen source fixture from published `v0.5.7_10` verifies the original, still-installed hook takes the unsafe Stop path. The incoming PRE_INSTALL keeps refusing cold-IPFW replacement with that old hook. This is a future-installation safety guard, not a solution for the owner's old package, and has no OPNsense live acceptance. No kernel or service actions are introduced.
 
+**Source-only _10 migration evidence gate (same `v0.5.7_29` package identity):**
+[`scripts/legacy-cold-ipfw-preflight.sh`](../scripts/legacy-cold-ipfw-preflight.sh)
+and its [operator instructions](verification/LEGACY_COLD_IPFW_PREFLIGHT.md)
+allow bounded, read-only inspection on already-installed `0.5.7_10`
+without installing a replacement. It checks original sealed native STOPPED
+evidence, FreeBSD unloaded IPFW signature, absent exact engine/supervisor,
+and double-checked old service status under native FD9. Success still means
+`UPGRADE_AUTHORIZED=no`: the historical PRE_DEINSTALL and upgrade blockade
+remain unchanged. This is a repository diagnostic/CI change, not a packaged
+revision or owner-live acceptance. Do not load IPFW modules or run pkg add
+on the strength of this classification.
+
 **Owner-approved Chrome/ECH correction (23 October 2026; testing package published):** The shared private `run-curl-impersonate.sh` forces `--ech false` after caller arguments for HTTPS/TLS, HTTP/3, Strategy Lab candidate/replay paths and the standalone Domain Connectivity diagnostic. On owner-installed `0.5.7_1` the owner reproduced `rutracker.org` against pinned `104.21.32.39`: original Chrome ECH-on exit 28 / HTTP 000 after five seconds versus ECH-off Chrome TLS 1.3, valid certificate and HTTP/2 301 in 1.165 seconds. This is a client-policy A/B result, not installed `_10` verification or proof of the exact blocking middlebox. `_10` owner-live GUI Stage 40 / Stage 90 retest remains open. The [testing prerelease v0.5.7_10](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) is verified from source/tag commit `72da22eca30f9b00fd6f7a831d0266ab8072c1db`: FreeBSD15 package SHA-256 `69fe9cc7206f1ebcd77edb4f91bd65ca95b975d974c6e4a8417551ac166edea0`, [publication record](verification/evidence/testing-publications/v0.5.7_10.md). Source/main CI passed; the [publisher workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39857587580) built and verified the asset but its automatic record PR creation was denied by GitHub Actions token policy; companion PR #505 handles that documentation tail. The owner forbade promoting that ECH testing candidate `_10` to an additional full stable release; this does not undo the already published stable `v0.5.7_1`.
 
 **Current blocking owner-installed evidence (23 October 2026):** `0.5.7_10`
