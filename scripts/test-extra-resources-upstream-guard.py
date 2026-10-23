@@ -80,6 +80,34 @@ class UpstreamResources(unittest.TestCase):
             guard.restore()
         self.assertFalse(self.lua.exists())
 
+    def test_snapshot_attestation_after_upstream_deletes_live_resource(self):
+        guard.snapshot()
+        self.lua.unlink()
+        # The original checkout may have removed a managed Lua file during a
+        # power cut. The complete saved snapshot is still independently valid.
+        guard.verify_snapshot()
+        with self.assertRaisesRegex(guard.TransactionError, "missing or changed"):
+            guard.verify()
+        self.assertEqual((self.backup / "lua/a-dynamic.lua").read_bytes(), self.original)
+
+    def test_snapshot_attestation_after_upstream_modifies_live_resource(self):
+        guard.snapshot()
+        self.lua.write_bytes(b"candidate checkout")
+        guard.verify_snapshot()
+        with self.assertRaisesRegex(guard.TransactionError, "missing or changed"):
+            guard.verify()
+        (self.backup / "lua/a-dynamic.lua").write_bytes(b"corrupt backup")
+        with self.assertRaisesRegex(guard.TransactionError, "backup missing or changed"):
+            guard.verify_snapshot()
+
+    def test_snapshot_attestation_rejects_pending_transaction_without_live_files(self):
+        guard.snapshot()
+        self.lua.unlink()
+        (self.state / "transaction").mkdir()
+        with self.assertRaisesRegex(guard.TransactionError, "unfinished"):
+            guard.verify_snapshot()
+        self.assertTrue(self.backup.exists())
+
     def test_snapshot_attestation_before_prepared_cleanup(self):
         guard.snapshot()
         guard.verify_snapshot()

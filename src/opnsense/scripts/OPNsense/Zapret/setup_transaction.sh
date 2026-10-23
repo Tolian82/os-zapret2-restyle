@@ -272,8 +272,10 @@ verify_prepared_recovery()
        { [ -e "${ROLLBACK_DIR}/extra-managed" ] || [ -L "${ROLLBACK_DIR}/extra-managed" ]; }; then
         return 69
     fi
-    # The managed-resource guard compares current and saved bytes with the
-    # installed manifest. This is read-only and rejects tampered snapshots.
+    # A prepared checkpoint must prove BOTH unchanged live managed files
+    # and immutable saved backup bytes. The saved-byte check alone is also
+    # useful when a mutating checkout legitimately removed live resources.
+    extra_resources_upstream_guard verify || return 69
     extra_resources_upstream_guard verify-snapshot || return 69
     return 0
 }

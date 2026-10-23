@@ -74,8 +74,14 @@ def verify() -> None:
 
 
 def verify_snapshot() -> None:
-    """Read-only attestation of managed files and their saved backup bytes."""
-    metadata = _owned()
+    """Read-only saved-byte attestation, valid even after a checkout removes live files.
+
+    The prepared-phase caller must also call verify() to prove the working
+    runtime is unchanged. Mutating-phase analysis cannot assume that.
+    """
+    if STATE.is_symlink() or (STATE / "transaction").exists() or (STATE / "transaction").is_symlink():
+        raise TransactionError("unfinished Additional Resources operation blocks snapshot verification")
+    metadata = _owned_metadata(STATE / "installed.json")["files"]
     if ROLLBACK.is_symlink():
         raise TransactionError("managed backup is a symlink")
     if not metadata:

@@ -29,6 +29,7 @@ GIT_MOCK="${TMP_ROOT}/git"
 LOCKF_MOCK="${TMP_ROOT}/lockf"
 EXTRA_GUARD_MOCK="${TMP_ROOT}/extra-guard"
 EXTRA_GUARD_FAIL=0
+EXTRA_GUARD_VERIFY_FAIL=0
 RECEIPT_CAPTURE="${TMP_ROOT}/captured-checkpoint"
 
 mkdir -p \
@@ -130,6 +131,11 @@ if [ "${1:-}" = snapshot ] && [ "${TEST_EXTRA_GUARD_FAIL}" = 1 ]; then
     printf '%s\n' partial > "${TEST_ROLLBACK_DIR}/extra-managed/partial"
     exit 70
 fi
+# Prepared cleanup requires live-resource verification as well as a saved
+# backup verification, even though a mutating checkout may remove live files.
+if [ "${1:-}" = verify ] && [ "${TEST_EXTRA_GUARD_VERIFY_FAIL}" = 1 ]; then
+    exit 70
+fi
 # The mock manifest is empty; a successful snapshot has no managed backup.
 [ "${1:-}" != verify-snapshot ] || [ ! -e "${TEST_ROLLBACK_DIR}/extra-managed" ] || exit 70
 exit 0
@@ -194,6 +200,7 @@ run_setup_action()
     EXTRA_GUARD="${EXTRA_GUARD_MOCK}" \
     TEST_ROLLBACK_DIR="${ROLLBACK_DIR}" \
     TEST_EXTRA_GUARD_FAIL="${EXTRA_GUARD_FAIL}" \
+    TEST_EXTRA_GUARD_VERIFY_FAIL="${EXTRA_GUARD_VERIFY_FAIL}" \
     TEST_RECEIPT_CAPTURE="${RECEIPT_CAPTURE}" \
     "${TRANSACTION}" "${_action}" "$@"
 }
@@ -361,6 +368,14 @@ if recover_prepared >/dev/null 2>&1; then
 fi
 [ -d "${ROLLBACK_DIR}/binaries/foreign" ] || fail "nested backup evidence lost"
 rmdir "${ROLLBACK_DIR}/binaries/foreign"
+
+EXTRA_GUARD_VERIFY_FAIL=1
+if recover_prepared >/dev/null 2>&1; then
+    fail "prepared recovery cleared backup despite altered live resources"
+fi
+[ -f "${ROLLBACK_DIR}/checkpoint" ] ||
+    fail "live-resource mismatch erased prepared snapshot"
+EXTRA_GUARD_VERIFY_FAIL=0
 
 output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
 [ "${output}" = 'RECOVERY_PREPARED_CLEARED: previous runtime and service are unchanged' ] ||
