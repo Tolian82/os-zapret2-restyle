@@ -98,6 +98,14 @@ class UpstreamResources(unittest.TestCase):
             guard.verify_snapshot()
         self.assertEqual(self.lua.read_bytes(), self.original)
 
+    def test_snapshot_attestation_rejects_extra_file(self):
+        guard.snapshot()
+        foreign = self.backup / "lua/foreign.lua"
+        foreign.write_bytes(b"not part of manifest")
+        with self.assertRaisesRegex(guard.TransactionError, "unexpected managed backup"):
+            guard.verify_snapshot()
+        self.assertEqual(foreign.read_bytes(), b"not part of manifest")
+
     def test_empty_manifest_rejects_unexpected_backup(self):
         self.manifest.unlink()
         guard.verify_snapshot()

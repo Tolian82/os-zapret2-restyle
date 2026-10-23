@@ -355,6 +355,13 @@ fi
 [ -f "${ROLLBACK_DIR}/unexpected" ] || fail "foreign evidence changed"
 rm "${ROLLBACK_DIR}/unexpected"
 
+mkdir "${ROLLBACK_DIR}/binaries/foreign"
+if recover_prepared >/dev/null 2>&1; then
+    fail "unexpected nested binary backup entry was erased"
+fi
+[ -d "${ROLLBACK_DIR}/binaries/foreign" ] || fail "nested backup evidence lost"
+rmdir "${ROLLBACK_DIR}/binaries/foreign"
+
 output=$(recover_prepared) || fail "attested pre-mutation recovery was refused"
 [ "${output}" = 'RECOVERY_PREPARED_CLEARED: previous runtime and service are unchanged' ] ||
     fail "prepared recovery reported incorrect result"

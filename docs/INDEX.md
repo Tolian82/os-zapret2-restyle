@@ -18,7 +18,7 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
-- Stage 4/GUI/upstream gate `v0.5.7_23`: dynamic BIN/Lua, correlated GUI receipts and durable upstream checkpoint. Manual `recover-prepared` clears only fully attested pre-mutation snapshots without Stop/Start/IPFW, preserving suspicious or `mutating` evidence. Mutating-phase recovery and installed OPNsense acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
+- Stage 4/GUI/upstream gate `v0.5.7_24`: dynamic BIN/Lua, correlated GUI receipts and durable upstream checkpoint. Manual `recover-prepared` clears only fully attested pre-mutation snapshots without Stop/Start/IPFW, preserving suspicious or `mutating` evidence. Mutating-phase recovery and installed OPNsense acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
 
 
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;

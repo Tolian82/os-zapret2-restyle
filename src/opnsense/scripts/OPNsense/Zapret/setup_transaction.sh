@@ -248,6 +248,12 @@ verify_prepared_recovery()
     done
     [ ! -L "${ROLLBACK_DIR}/binaries" ] && [ ! -L "${ROLLBACK_DIR}/extra-managed" ] || return 69
     if [ "${PREVIOUS_BINARIES}" -eq 1 ]; then
+        # Snapshot creation stores only binaries/my. Foreign siblings must not
+        # be swept up by rm -rf, even when the actual binary bytes match.
+        for _saved_entry in "${ROLLBACK_DIR}/binaries"/* "${ROLLBACK_DIR}/binaries"/.[!.]* "${ROLLBACK_DIR}/binaries"/..?*; do
+            [ -e "${_saved_entry}" ] || [ -L "${_saved_entry}" ] || continue
+            [ "${_saved_entry}" = "${ROLLBACK_DIR}/binaries/my" ] || return 69
+        done
         [ -d "${ROLLBACK_DIR}/binaries/my" ] && [ ! -L "${ROLLBACK_DIR}/binaries/my" ] || return 69
         [ -d "${ZAPRET_DIR}/binaries/my" ] && [ ! -L "${ZAPRET_DIR}/binaries/my" ] || return 69
         [ -z "$("${FIND_BIN}" "${ROLLBACK_DIR}/binaries/my" -type l -print)" ] || return 69

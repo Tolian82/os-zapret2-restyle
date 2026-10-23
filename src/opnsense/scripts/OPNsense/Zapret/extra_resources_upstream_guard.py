@@ -84,6 +84,16 @@ def verify_snapshot() -> None:
         return
     if not ROLLBACK.is_dir():
         raise TransactionError("managed snapshot missing")
+    expected_files = set(metadata)
+    expected_dirs = {part for name in metadata for part in
+                     ("/".join(name.split("/")[:i]) for i in range(1, len(name.split("/"))))}
+    for entry in ROLLBACK.rglob("*"):
+        relative = entry.relative_to(ROLLBACK).as_posix()
+        if entry.is_symlink() or not (
+            (entry.is_dir() and relative in expected_dirs)
+            or (entry.is_file() and relative in expected_files)
+        ):
+            raise TransactionError(f"unexpected managed backup entry: {relative}")
     for name, digest in metadata.items():
         src = ROLLBACK / name
         # Reject symlinks in *any* intermediate directory as well as leaves.
