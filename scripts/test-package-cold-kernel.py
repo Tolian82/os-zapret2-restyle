@@ -83,17 +83,33 @@ with tempfile.TemporaryDirectory() as td:
     assert "old PRE-DEINSTALL" in safe_refusal.stderr, (
         "missing actionable refusal for installed old package's unsafe hook"
     )
-    # The old installed PRE-DEINSTALL is unpatched during incoming pre-install.
+    # Historical fixture is the published _10 hook, not the current source.
     # It still calls its OLD service with status (2) then stop, not a safe
     # stopped-state no-op. Do not claim that this incoming hook can fix it.
     trace.unlink(missing_ok=True)
-    old_hook = root / "pkg/+PRE_DEINSTALL"
+    old_hook = root / "scripts/fixtures/v0.5.7_10-pre-deinstall.sh"
     old_result = subprocess.run(["sh", str(old_hook)], env=env,
                                 capture_output=True, text=True)
     assert old_result.returncode != 0
     assert trace.read_text().splitlines() == ["status", "stop"], (
-        "old package's PRE-DEINSTALL failure path changed"
+        "published _10 PRE_DEINSTALL fixture changed"
     )
+    # A future-installed current hook fails closed, without Stop or loss
+    # of restart markers, while the historical installed _10 still does not.
+    state_dir = base / "state"
+    state_dir.mkdir(exist_ok=True)
+    (state_dir / "pkg-upgrade.restart").touch()
+    (state_dir / "pkg-replacement.restart").touch()
+    trace.unlink(missing_ok=True)
+    future = subprocess.run(["sh", str(root / "pkg/+PRE_DEINSTALL")],
+                            env=env, capture_output=True, text=True)
+    assert future.returncode != 0
+    assert "aborted before Stop" in future.stderr
+    assert trace.read_text().splitlines() == ["status"]
+    assert (state_dir / "pkg-upgrade.restart").exists()
+    assert (state_dir / "pkg-replacement.restart").exists()
+    (state_dir / "pkg-upgrade.restart").unlink()
+    (state_dir / "pkg-replacement.restart").unlink()
     for overrides in (
         {"MOCK_LOADED_MODULE": "ipfw"},
         {"MOCK_LOADED_MODULE": "ipdivert"},
