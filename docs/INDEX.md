@@ -18,7 +18,7 @@
 
 ## Level 2 — current owner-directed implementation: Additional Resources
 
-- Stage 4/GUI/upstream gate `v0.5.7_21`: dynamic BIN/Lua search, per-click install receipt, and no spurious upstream recovery block on pre-mutation snapshot errors; installed OPNsense acceptance and interrupted-upstream recovery pending. ECH-off and IPFW package gate remain based on `_15`.
+- Stage 4/GUI/upstream gate `v0.5.7_22`: dynamic BIN/Lua, correlated GUI receipts, retryable pre-mutation errors and durable read-only upstream recovery checkpoint. Explicit interrupted-upstream restoration and installed OPNsense acceptance pending. ECH-off and IPFW package gate remain based on `_15`.
 
 
 - Blocker: testing package `v0.5.7_10` owner-installed lifecycle failed;
