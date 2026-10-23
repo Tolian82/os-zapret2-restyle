@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory() as tmp:
         return inspect_extra_capabilities(snapshot_inventory(lua, fake), state)
     assert [r["status"] for r in assess()] == ["eligible", "eligible"]
     new = fake / "another.bin"
-    new.write_bytes(b"another")
+    new.write_bytes(blob.read_bytes())
     data["files"]["files/fake/another.bin"] = digest(new)
     data["capabilities"]["resources"].append(dict(data["capabilities"]["resources"][1], target="files/fake/another.bin"))
     state.write_text(json.dumps(data))
@@ -47,6 +47,11 @@ with tempfile.TemporaryDirectory() as tmp:
     new.write_bytes(b"wrong")
     assert assess()[2]["status"] == "unsupported"
     assert "checksum" in assess()[2]["reason"]
+    # Correct ownership hash never makes malformed TLS content eligible.
+    data["files"]["files/fake/another.bin"] = digest(new)
+    state.write_text(json.dumps(data))
+    assert assess()[2]["status"] == "unsupported"
+    assert "TLS record signature" in assess()[2]["reason"]
     data["capabilities"]["resources"].append({"target":"files/fake/no-descriptor.bin","kind":"blob"})
     state.write_text(json.dumps(data))
     assert assess()[-1]["status"] == "unsupported"
