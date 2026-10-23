@@ -18,8 +18,14 @@ Owner-approved on 23 October 2026: the installed Chrome-profile client is used f
 [`scripts/legacy-cold-ipfw-preflight.sh`](../scripts/legacy-cold-ipfw-preflight.sh)
 is a root-operator-invoked, read-only tool intended to run on an already
 installed `0.5.7_10` without requiring a new package. It requires the exact
-old-kernel failure signature, old sealed native inspector, full-command engine/supervisor census and **two complete**
-independent kernel/status/inspector/census passes under original FD9.
+old-kernel failure signature, old sealed native inspector, full-command
+engine/supervisor census, and **two independent kernel/inspector/census
+passes** under original FD9. The published _10 native `status` itself
+locks FD9, so it is verified separately **before and after** the locked
+read-only sequence, never recursively. The owner reported a generic REFUSED
+from the previous script; source examination proved its nested-lock defect,
+but the other installed-host observations remain unknown. The corrected
+script prints bounded failure-gate labels for review.
 Even a positive diagnostic explicitly prints `UPGRADE_AUTHORIZED=no`;
 it **does not** fix or bypass the unsafe old PRE_DEINSTALL. See the
 [preflight usage and limitations](verification/LEGACY_COLD_IPFW_PREFLIGHT.md).
