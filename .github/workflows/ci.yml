@@ -381,6 +381,9 @@ jobs:
       - name: Test package lifecycle service refresh
         run: sh scripts/test-package-lifecycle-restart.sh
 
+      - name: Test package replacement on attested cold kernel
+        run: python3.13 scripts/test-package-cold-kernel.py
+
       - name: Test setup release selection
         run: sh scripts/test-setup-release-selection.sh
 
