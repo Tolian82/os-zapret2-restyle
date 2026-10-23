@@ -242,15 +242,37 @@ def _ipfw_kernel_confirmed_absent() -> bool:
                 ["/sbin/kldstat", "-q", "-m", module],
                 capture_output=True, text=True, timeout=4, check=False,
             )
-            if result.returncode == 0:
+            # kldstat -q -m returns exactly 1 when the module is absent;
+            # errors such as denied/unsupported queries must NOT prove absence.
+            if result.returncode != 1:
                 return False
         probe = subprocess.run(
             ["/sbin/ipfw", "-q", "list"],
             capture_output=True, text=True, timeout=4, check=False,
             env={**os.environ, "LC_ALL": "C"},
         )
-        return (probe.returncode == 71
-                and "Protocol not available" in (probe.stderr + probe.stdout))
+        if probe.returncode != 71 or (
+            "retrieving config failed: Protocol not available"
+            not in (probe.stderr + probe.stdout)
+        ):
+            return False
+        census = subprocess.run(
+            ["/bin/ps", "axww", "-o", "pid=", "-o", "command="],
+            capture_output=True, text=True, timeout=4, check=False,
+        )
+        if census.returncode != 0 or not census.stdout.strip() or (
+            len(census.stdout) > 1048576
+        ):
+            return False
+        for row in census.stdout.splitlines():
+            match = re.fullmatch(r"\s*[0-9]+\s+(.+)", row)
+            if not match:
+                return False
+            # Detect exact live command references even through daemon/sh
+            # wrappers, without relying only on potentially stale PID files.
+            if CHILD_EXEC in match.group(1) or MONITOR_EXEC in match.group(1):
+                return False
+        return True
     except (OSError, subprocess.SubprocessError):
         return False
 

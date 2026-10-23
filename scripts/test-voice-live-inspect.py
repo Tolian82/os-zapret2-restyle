@@ -39,6 +39,36 @@ class FakeAdapter:
 
 
 class InspectionTests(unittest.TestCase):
+    def test_cold_kernel_requires_exact_module_errors_and_empty_process_census(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from voice_live_inspect import (_ipfw_kernel_confirmed_absent,
+                                        CHILD_EXEC, MONITOR_EXEC)
+        def item(rc, out="", err=""):
+            return SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+        healthy_ps = "42 /sbin/init\n43 /usr/local/bin/python3.13 voice_live_inspect.py\n"
+        good = [item(1), item(1),
+                item(71, err="ipfw: retrieving config failed: Protocol not available"),
+                item(0, out=healthy_ps)]
+        cases = [
+            ("genuine-cold", good, True),
+            ("already-loaded", [item(0)], False),
+            ("query-failure", [item(70)], False),
+            ("divert-query-failure", [item(1), item(70)], False),
+            ("unexpected-ipfw-rc", [item(1), item(1), item(70)], False),
+            ("wrong-ipfw-error", [item(1), item(1), item(71, err="permission denied")], False),
+            ("unreadable-processes", good[:3] + [item(70)], False),
+            ("empty-processes", good[:3] + [item(0, out="")], False),
+            ("malformed-processes", good[:3] + [item(0, out="not a ps line")], False),
+            ("orphan-engine", good[:3] + [item(0, out="52 " + CHILD_EXEC + " --foo\n")], False),
+            ("wrapped-monitor", good[:3] + [item(0, out="53 /bin/sh " + MONITOR_EXEC + "\n")], False),
+        ]
+        for label, observations, expected in cases:
+            with self.subTest(label=label), patch(
+                "voice_live_inspect.subprocess.run", side_effect=observations
+            ) as invoked:
+                self.assertEqual(_ipfw_kernel_confirmed_absent(), expected)
+                self.assertEqual(invoked.call_count, len(observations))
     def test_main_refuses_historic_ledger_without_common_owner(self):
         from unittest.mock import patch
         import contextlib, io, json

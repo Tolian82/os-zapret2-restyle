@@ -56,12 +56,70 @@ firewall_configure_reinject()
     /sbin/pfctl -e >/dev/null 2>&1 || return 1
 }
 
+# Cold FreeBSD boot: loading ipfw with the default-deny policy can interrupt
+# remote OPNsense administration before the first allow rule can be installed.
+# Only an EXACT unloaded-kernel signature permits staging default-accept via
+# kenv BEFORE kldload. Never use this path to overwrite a live/foreign IPFW.
+firewall_cold_load_ipfw()
+{
+    _cold_kldstat="${FIREWALL_KLDSTAT_BIN:-/sbin/kldstat}"
+    _cold_kldload="${FIREWALL_KLDLOAD_BIN:-/sbin/kldload}"
+    _cold_kenv="${FIREWALL_KENV_BIN:-/bin/kenv}"
+    _cold_sysctl="${FIREWALL_SYSCTL_BIN:-/sbin/sysctl}"
+    [ -x "$_cold_kldstat" ] && [ -x "$_cold_kldload" ] &&
+    [ -x "$_cold_kenv" ] && [ -x "$_cold_sysctl" ] &&
+    [ -x "$IPFW_BIN" ] || return 1
+
+    for _cold_module in ipfw ipdivert; do
+        "$_cold_kldstat" -q -m "$_cold_module" >/dev/null 2>&1
+        _cold_module_rc=$?
+        [ "$_cold_module_rc" -eq 1 ] || return 1
+    done
+    _cold_error=$(LC_ALL=C "$IPFW_BIN" -q list 2>&1)
+    _cold_rc=$?
+    [ "$_cold_rc" -eq 71 ] || return 1
+    case "$_cold_error" in
+        *"retrieving config failed: Protocol not available"*) ;;
+        *) return 1 ;;
+    esac
+
+    "$_cold_kenv" 'net.inet.ip.fw.default_to_accept=1' >/dev/null || return 1
+    _cold_setting=$("$_cold_kenv" -qv net.inet.ip.fw.default_to_accept 2>/dev/null) || return 1
+    case "$_cold_setting" in
+        'net.inet.ip.fw.default_to_accept="1"'|'net.inet.ip.fw.default_to_accept=1') ;;
+        *) return 1 ;;
+    esac
+
+    "$_cold_kldload" ipfw || return 1
+    [ "$("$_cold_sysctl" -n net.inet.ip.fw.default_to_accept 2>/dev/null)" = 1 ] || return 1
+    _cold_rules=$("$IPFW_BIN" -q list) || return 1
+    # FreeBSD 15 may show an orphaned-dynamic-states counter in addition
+    # to the sole default allow rule. No plugin/foreign rules are accepted.
+    printf '%s\n' "$_cold_rules" | awk '
+        $0 == "65535 allow ip from any to any" { allow++; next }
+        /^65535 count ip from any to any not( |$)/ { next }
+        { unexpected=1 }
+        END { exit (unexpected || allow != 1) ? 1 : 0 }
+    ' || return 1
+}
+
 firewall_prepare()
 {
     [ "${_firewall_prepared:-0}" = "1" ] && return 0
 
-    kldstat -q -m ipdivert || kldload ipdivert || return 1
-    kldstat -q -m ipfw || kldload ipfw || return 1
+    _firewall_kldstat="${FIREWALL_KLDSTAT_BIN:-/sbin/kldstat}"
+    _firewall_kldload="${FIREWALL_KLDLOAD_BIN:-/sbin/kldload}"
+    [ -x "$_firewall_kldstat" ] && [ -x "$_firewall_kldload" ] || return 1
+    if "$_firewall_kldstat" -q -m ipfw; then
+        "$_firewall_kldstat" -q -m ipdivert ||
+            "$_firewall_kldload" ipdivert || return 1
+    else
+        firewall_cold_load_ipfw || {
+            echo "ERROR: unverified cold IPFW; refusing unsafe module load" >&2
+            return 1
+        }
+        "$_firewall_kldload" ipdivert || return 1
+    fi
     firewall_ensure_default_accept || return 1
     firewall_configure_reinject || return 1
 

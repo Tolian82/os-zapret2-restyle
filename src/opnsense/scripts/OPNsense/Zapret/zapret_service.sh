@@ -884,8 +884,12 @@ shared_apply_ipfw_kernel_absent_service()
     _kldstat_bin="${SHARED_APPLY_KLDSTAT_BIN:-/sbin/kldstat}"
     _ipfw_bin="${SHARED_APPLY_IPFW_BIN:-/sbin/ipfw}"
     [ -x "$_kldstat_bin" ] && [ -x "$_ipfw_bin" ] || return 1
-    "$_kldstat_bin" -q -m ipfw >/dev/null 2>&1 && return 1
-    "$_kldstat_bin" -q -m ipdivert >/dev/null 2>&1 && return 1
+    "$_kldstat_bin" -q -m ipfw >/dev/null 2>&1
+    _ipfw_absence_rc=$?
+    [ "$_ipfw_absence_rc" -eq 1 ] || return 1
+    "$_kldstat_bin" -q -m ipdivert >/dev/null 2>&1
+    _ipdivert_absence_rc=$?
+    [ "$_ipdivert_absence_rc" -eq 1 ] || return 1
     _absent_message=$(LC_ALL=C "$_ipfw_bin" -q list 2>&1)
     _absent_rc=$?
     [ "$_absent_rc" = 71 ] || return 1
