@@ -10,9 +10,9 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · FreeBSD 15 stable pkg repository (publication pending) |
+| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · published 22 Oct 2026; FreeBSD 15 Pages/pkg deployment PASS (owner Web install not verified) |
 | **Latest published testing package** | [v0.5.7_10](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) · ECH-disabled Chrome reachability; owner-installed verification pending; not a stable Web/pkg release |
-| **Current development candidate** | `v0.5.7_22` · source-only Additional Resources installer, manual RU/EN GUI button and dynamic Stage-60 BIN/Lua candidates; symlinked resources excluded from job inventory; fast manual installs have correlated terminal receipts; failed snapshot preparation is retryable; interrupted upstream upgrades now record a durable checkpoint inspectable without mutations. Explicit interrupted-upgrade restoration remains pending. Cold-IPFW old-package replacement still requires controlled owner recovery; ECH-off retained. Owner-installed acceptance and FreeBSD qualification pending |
+| **Current development candidate** | `v0.5.7_22` · source-only Additional Resources installer, manual RU/EN GUI button and dynamic Stage-60 BIN/Lua candidates; symlinked resources excluded from job inventory; fast manual installs have correlated terminal receipts; failed snapshot preparation is retryable; interrupted upstream upgrades now record a durable checkpoint inspectable without mutations. Explicit interrupted-upgrade restoration remains pending. Cold-IPFW old-package replacement still requires controlled owner recovery; ECH-off retained. Owner-installed acceptance pending; source Project/Voice/FreeBSD15 CI qualified in workflow #39935619952 |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -300,7 +300,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-The **v0.5.7** release is being prepared with installable candidate `0.5.7_1`; publication must be verified before this version can be called available through the Web/pkg repository. The previously published stable release is **[v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) / 0.5.6_1**, and the last owner-installed testing package is **[v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17)**. See [new release notes](docs/releases/v0.5.7.md) and [accepted Stage 6 results](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md).
+The stable **[v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7)** was published on 22 October 2026 from immutable source `5d53ae7120b0e1dfe612850c804dea0294e17178` with `os-zapret2-restyle-0.5.7_1.pkg`; [release workflow #39804529650](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39804529650) reports PASS for FreeBSD 15 package creation, GitHub Release and GitHub Pages pkg repository deployment. The former stable [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) remains immutable. The newest confirmed owner-accepted Stage-6 installed scenarios were on [v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17); this publication does **not** verify an OPNsense Web upgrade or current source-only `_22` code. See [release record](docs/releases/v0.5.7.md) and [release evidence](docs/verification/evidence/2026-10-22-v0.5.7-full-release-publication.md).
 
 Useful entry points:
 
