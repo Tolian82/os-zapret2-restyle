@@ -231,7 +231,32 @@ def inspect_common_runtime(release: Path, manifest: dict, *,
     }
 
 
+def _ipfw_kernel_confirmed_absent() -> bool:
+    """Only ENOPROTOOPT with both modules absent proves no kernel IPFW state.
+
+    No writes; any unknown error or loaded module stays blocked.
+    """
+    try:
+        for module in ("ipfw", "ipdivert"):
+            result = subprocess.run(
+                ["/sbin/kldstat", "-q", "-m", module],
+                capture_output=True, text=True, timeout=4, check=False,
+            )
+            if result.returncode == 0:
+                return False
+        probe = subprocess.run(
+            ["/sbin/ipfw", "-q", "list"],
+            capture_output=True, text=True, timeout=4, check=False,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+        return (probe.returncode == 71
+                and "Protocol not available" in (probe.stderr + probe.stdout))
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def examine_shared(record: dict | None, *, work_root: Path = WORK,
+                   kernel_absent=_ipfw_kernel_confirmed_absent,
                    bundle_verify=verify_seal,
                    manifest_reader=shared_release_manifest,
                    adapter_factory=FreeBSDIPFWAdapter,
@@ -281,6 +306,16 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
         try:
             verify_prior_state(adapter, empty, empty)
         except VoiceFirewallError:
+            # A validated stopped owner with neither module and ipfw errno 71
+            # cannot own a kernel IPFW rule. Other errors remain fail-closed.
+            if kernel_absent():
+                return {
+                    "state": "stopped", "source": "native-common",
+                    "config_digest": owner["candidate"],
+                    "condition": "common-stopped-ipfw-kernel-absent",
+                    "can_activate": False, "rule_count": 0,
+                    "table_count": 0, "runtime": runtime,
+                }
             return {
                 "state": "foreign-or-modified-rules", "source": "native-common",
                 "condition": "common-stopped-with-kernel-objects",
