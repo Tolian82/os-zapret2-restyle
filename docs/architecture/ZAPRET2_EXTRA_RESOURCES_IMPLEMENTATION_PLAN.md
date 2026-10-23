@@ -20,6 +20,19 @@
 
 **Ключевая приёмка динамичности:** положить новый совместимый BIN → новый Job обнаружил его и породил допустимого кандидата; убрать BIN → в следующем Job кандидата нет; аналогично для нового Lua **с описанием вызова/зависимостей**. Во всех четырёх сценариях **без изменения/пересборки кода плагина**. Старый сохранённый Job не меняется. Для неподдерживаемого файла — запись причины исключения, а не ложная рекомендация.
 
+## Exact-set reconciliation amendment — 23 October 2026
+
+The owner superseded the previous blanket rule forbidding any change to
+untracked Lua/BIN. The installed namespace must instead equal the local
+upstream Git HEAD resource tree plus a pinned, checksum-verified extras
+catalog. The manual installer saves all pre-existing untracked files,
+removes orphans, replaces incoming-name collisions, validates the exact
+result, and restarts via the existing native lifecycle; rollback restores
+the former bytes and metadata. Upstream tracked files and saved strategies
+are never silently modified. Uncertain upstream release switches require
+old/target inventories and their own durable rollback before applying
+automatic exact reconciliation. No engine reinstall is needed.
+
 ## Этап 1. Каталог и данные о возможностях
 
 **Задача:** определить минимальный устойчивый контракт между каталогом, установщиком и динамической лабораторией.

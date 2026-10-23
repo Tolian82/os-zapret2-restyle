@@ -166,5 +166,89 @@ class TestResourceTransaction(unittest.TestCase):
         self.assertEqual(self.lifecycle.stops, old_stops)
 
 
+
+class TestExactReconciliation(unittest.TestCase):
+    """A real local Git checkout; no network or OPNsense service invoked."""
+
+    def setUp(self):
+        TestResourceTransaction.setUp(self)
+        import subprocess
+        self.subprocess = subprocess
+        self.git("init", "-q")
+        self.git("config", "user.name", "Resource Test")
+        self.git("config", "user.email", "test@example.invalid")
+        (self.root / "lua/native.lua").write_bytes(b"function native() end\n")
+        (self.root / "files/fake/native.bin").write_bytes(b"native")
+        self.git("add", "lua/native.lua", "files/fake/native.bin")
+        self.git("commit", "-qm", "upstream fixture")
+        (self.root / "lua/orphan.lua").write_bytes(b"orphaned bytes")
+        (self.root / "files/fake/user_dynamic.bin").write_bytes(b"unmanaged existing bytes")
+
+    def git(self, *args):
+        self.subprocess.run(["git", "-C", str(self.root), *args],
+                            check=True, capture_output=True)
+
+    def install(self, payloads=None):
+        return tx.install(payloads if payloads is not None else self.payloads,
+                          REV, self.root, self.state, self.lifecycle,
+                          capabilities={"schema": 1, "resources": []},
+                          reconcile=True)
+
+    def test_replaces_preexisting_and_prunes_orphans(self):
+        result = self.install()
+        self.assertEqual(result["removed"], 1)
+        self.assertFalse((self.root / "lua/orphan.lua").exists())
+        self.assertEqual((self.root / "files/fake/user_dynamic.bin").read_bytes(), BIN)
+        self.assertEqual((self.root / "files/fake/native.bin").read_bytes(), b"native")
+        self.assertEqual((self.root / "lua/native.lua").read_bytes(), b"function native() end\n")
+        self.assertEqual(self.lifecycle.stops, 1)
+        self.assertEqual(self.lifecycle.starts, 1)
+
+    def test_restart_failure_restores_every_unmanaged_file(self):
+        self.lifecycle.fail_once = True
+        with self.assertRaisesRegex(tx.TransactionError, "INSTALL_FAILED_RESTORED"):
+            self.install()
+        self.assertTrue(self.lifecycle.running)
+        self.assertEqual((self.root / "lua/orphan.lua").read_bytes(), b"orphaned bytes")
+        self.assertEqual((self.root / "files/fake/user_dynamic.bin").read_bytes(),
+                         b"unmanaged existing bytes")
+        self.assertFalse((self.root / "lua/user_dynamic.lua").exists())
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_recover_after_interrupted_restart(self):
+        self.lifecycle.crash_once = True
+        with self.assertRaises(KeyboardInterrupt):
+            self.install()
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual((self.root / "lua/orphan.lua").read_bytes(), b"orphaned bytes")
+        self.assertEqual((self.root / "files/fake/user_dynamic.bin").read_bytes(),
+                         b"unmanaged existing bytes")
+
+    def test_upstream_tracked_file_change_refuses_before_stop(self):
+        (self.root / "lua/native.lua").write_bytes(b"changed")
+        with self.assertRaisesRegex(tx.TransactionError, "Git-tracked resource changed"):
+            self.install()
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_conflicting_upstream_filename_refuses(self):
+        with self.assertRaisesRegex(tx.TransactionError, "upstream/additional resource collision"):
+            self.install({"lua/native.lua": b"foreign"})
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_symlinked_orphan_refuses_before_stop(self):
+        (self.root / "lua/orphan.lua").unlink()
+        (self.root / "lua/orphan.lua").symlink_to(self.root / "lua/native.lua")
+        with self.assertRaisesRegex(tx.TransactionError, "unsafe current runtime resource"):
+            self.install()
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_second_install_still_restarts_with_exact_files(self):
+        self.install()
+        old_pid = self.lifecycle.pid
+        second = self.install()
+        self.assertEqual(second["removed"], 0)
+        self.assertNotEqual(self.lifecycle.pid, old_pid)
+        self.assertFalse((self.root / "lua/orphan.lua").exists())
+
 if __name__ == "__main__":
     unittest.main()

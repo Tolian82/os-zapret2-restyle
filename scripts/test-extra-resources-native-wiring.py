@@ -8,6 +8,7 @@ root = Path(__file__).resolve().parents[1]
 src = root / "src/opnsense/scripts/OPNsense/Zapret"
 for name in (
     "extra_resources_preflight.py",
+    "extra_resources_reconcile.py",
     "extra_resources_transaction.py",
     "extra_resources_operation.py",
 ):
@@ -39,6 +40,8 @@ require('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"' in servic
 require('"strategy-lab-stop"' in operation and '"strategy-lab-start"' in operation,
         "native start/stop not used")
 require('pass_fds=(9,)' in operation, "FD9 not inherited by child callbacks")
+require('reconcile=True' in operation and 'make_plan(payloads' in operation,
+        "production resource worker does not use exact reconciliation")
 require('EXTRA_RESOURCES_PID_FILE' in setup and
         'pid_file_running "${EXTRA_RESOURCES_PID_FILE}"' in setup,
         "normal upstream launcher ignores active resource job")

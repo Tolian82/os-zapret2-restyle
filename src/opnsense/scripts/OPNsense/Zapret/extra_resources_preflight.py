@@ -240,7 +240,15 @@ def inspect_collisions(payloads: dict[str, bytes], runtime: Path, managed: Path)
 def preflight(archive: bytes, revision: str, runtime: Path, managed: Path) -> dict:
     files = unpack_verified_archive(archive, revision)
     payloads, eligible_descriptors = verified_resources(files)
-    plan = inspect_collisions(payloads, runtime, managed)
+    if (runtime / ".git").exists():
+        from extra_resources_reconcile import make_plan
+        plan_full = make_plan(payloads, runtime, managed)
+        plan = {key: plan_full[key] for key in ("new", "updated", "unchanged")}
+        plan["orphaned_to_remove"] = len(plan_full["removed"])
+        plan["upstream_count"] = len(plan_full["upstream"])
+    else:
+        # Offline legacy fixture: production requires a verified Git checkout.
+        plan = inspect_collisions(payloads, runtime, managed)
     return {"status": "preflight_only", "source_commit": revision,
             "lua": sum(p.startswith("lua/") for p in payloads),
             "bin": sum(p.startswith("files/fake/") for p in payloads),
