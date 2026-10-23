@@ -1,8 +1,8 @@
 #!/usr/local/bin/python3.13
-"""Preserve *only* the extras owned by this plugin across upstream git checkout.
+"""Attest and reconcile Lua/BIN only inside the native upstream setup transaction.
 
-Invoked by the ordinary setup transaction while setup.lock is held.
-No Git release, package metadata, OPNsense Config or user file is modified.
+No Config or Git tag mutation. Unowned file deletion needs an independently
+sealed original-byte snapshot and the parent durable mutating checkpoint.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import shutil
 import subprocess
 import sys
 
-from extra_resources_preflight import sha256, validate_runtime_path, resource_path
+from extra_resources_preflight import PreflightError, sha256, validate_runtime_path, resource_path
 from extra_resources_reconcile import tracked_resources, installed_resources, previous_metadata
 from extra_resources_transaction import (
     TransactionError, _owned_metadata, _safe_subdir, _sync_dir, _write_atomic,
@@ -383,12 +383,106 @@ def _git_target_names(ref: str) -> set[str]:
     return names
 
 
-def verify_exact() -> None:
-    """Read-only exact-set check at the current Git HEAD.
+def _protect_config_paths(names: set[str]) -> None:
+    """Fail closed when a saved OPNsense strategy uses a removed/replaced path."""
+    if RUNTIME != Path("/usr/local/etc/zapret2") or not names:
+        return
+    config = Path("/conf/config.xml")
+    if config.is_symlink():
+        raise TransactionError("saved OPNsense configuration is symlinked")
+    if config.is_file():
+        raw = config.read_bytes()
+        for name in sorted(names):
+            if name.encode() in raw or name.rsplit("/", 1)[1].encode() in raw:
+                raise TransactionError(f"saved strategy references replaced/removed resource: {name}")
 
-    Require prior manual extras reconciliation before release switching.
-    Unknown/unowned resources are never deleted by the release updater.
-    """
+
+def _require_clean_upstream_tree() -> None:
+    """A hard reset must not destroy modifications to unrelated tracked files."""
+    status = subprocess.run(
+        [GIT, "-C", str(RUNTIME), "status", "--porcelain", "--untracked-files=no"],
+        capture_output=True, timeout=30, check=False,
+    )
+    if status.returncode != 0:
+        raise TransactionError("cannot verify complete upstream tracked working tree")
+    if status.stdout.strip():
+        raise TransactionError("upstream contains modified tracked files; refusing checkout/reset")
+
+
+def preflight_switch(ref: str = "FETCH_HEAD") -> list[str]:
+    """Read-only old and target check; tolerate only non-Git original orphans."""
+    _require_clean_upstream_tree()
+    managed = _owned()
+    upstream = tracked_resources(RUNTIME, GIT)
+    live = installed_resources(RUNTIME)
+    if set(upstream) & set(managed):
+        raise TransactionError("an additional resource is now upstream-owned")
+    original = {**upstream, **managed}
+    for name, digest in original.items():
+        if live.get(name) != digest:
+            raise TransactionError(f"original tracked or managed resource drift: {name}")
+    desired = _git_target_names(ref)
+    collisions = sorted(set(managed) & desired)
+    if collisions:
+        raise TransactionError("target upstream conflicts with managed extras: "
+                               + ", ".join(collisions[:5]))
+    orphans = sorted(set(live) - set(original))
+    # A target can adopt an orphan's filename but not its historical semantics.
+    _protect_config_paths(set(orphans) | (set(upstream) - desired))
+    return orphans
+
+
+def prune_orphans(ref: str = "FETCH_HEAD") -> None:
+    """Remove only previously attested non-managed bytes; leave Git/extra files."""
+    if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir():
+        raise TransactionError("no safe upstream snapshot to reconcile")
+    inventory = _binary_snapshot_inventory()
+    verify_backup_attestation(inventory["present"])
+    original = _attested_untracked()
+    if original is None:
+        raise TransactionError("full original Lua/BIN attestation required")
+    orphans = preflight_switch(ref)
+    live = installed_resources(RUNTIME)
+    upstream = tracked_resources(RUNTIME, GIT)
+    current = {name: digest for name, digest in live.items() if name not in upstream}
+    if current != original:
+        raise TransactionError("original non-Git Lua/BIN changed after snapshot")
+    managed = previous_metadata(STATE / "installed.json")
+    if set(orphans) != set(original) - set(managed):
+        raise TransactionError("orphan plan and original snapshot disagree")
+    # The setup wrapper must have written a recoverable 'mutating' intent.
+    checkpoint = BACKUP_ROOT / "checkpoint"
+    if checkpoint.is_symlink() or not checkpoint.is_file():
+        raise TransactionError("upstream mutation checkpoint is unavailable")
+    lines = checkpoint.read_text(encoding="ascii").splitlines()
+    if len(lines) != 6 or lines[0] != "schema=2" or lines[5] != "phase=mutating":
+        raise TransactionError("upstream mutation checkpoint is not armed")
+    old = subprocess.run([GIT, "-C", str(RUNTIME), "rev-parse", "--verify", "HEAD"],
+                         capture_output=True, text=True, timeout=30, check=False)
+    if old.returncode or lines[1] != "previous_commit=" + old.stdout.strip():
+        raise TransactionError("mutating checkpoint does not identify current old Git HEAD")
+    if lines[4] != "previous_binaries=" + ("1" if inventory["present"] else "0"):
+        raise TransactionError("checkpoint and attested binary snapshot disagree")
+    for name in orphans:
+        path = validate_runtime_path(RUNTIME, name)
+        if not path.is_file() or sha256(path.read_bytes()) != original[name]:
+            raise TransactionError(f"orphan changed before removal: {name}")
+        path.unlink()
+    if orphans:
+        _sync_dir(RUNTIME / "lua")
+        _sync_dir(RUNTIME / "files/fake")
+    verify_exact()
+
+
+def verify_switch_complete() -> None:
+    """Target Git HEAD and managed extras are exact; old backup still attested."""
+    if _attested_untracked() is None:
+        raise TransactionError("new upstream switch lacks full original snapshot")
+    verify_exact()
+
+
+def verify_exact() -> None:
+    """Read-only exact-set check: native upstream HEAD plus pinned extras."""
     _owned()
     upstream = tracked_resources(RUNTIME, GIT)
     actual = installed_resources(RUNTIME)
@@ -413,43 +507,30 @@ def verify_exact() -> None:
 
 
 def preflight_exact(ref: str = "FETCH_HEAD") -> None:
-    """Both old and target inventories verified BEFORE checkout/Stop.
-
-    This increment accepts only exact old sets and disjoint target resources.
-    Deleting foreign files or reassigning an overlapping path is deferred
-    until a separately attested old/target rollback is available.
-    """
+    """Old HEAD must be exactly reconciled before the Git checkout starts."""
     verify_exact()
-    desired = _git_target_names(ref)
-    managed = previous_metadata(STATE / "installed.json")
-    collisions = sorted(desired & set(managed))
-    if collisions:
-        raise TransactionError("target upstream conflicts with managed extras: "
-                               + ", ".join(collisions[:5]))
-    # Do not silently break saved strategies if a target drops a native file.
-    removed = sorted(set(tracked_resources(RUNTIME, GIT)) - desired)
-    if RUNTIME == Path("/usr/local/etc/zapret2"):
-        config = Path("/conf/config.xml")
-        if config.is_symlink():
-            raise TransactionError("saved OPNsense configuration is symlinked")
-        if config.is_file():
-            raw = config.read_bytes()
-            for name in removed:
-                if name.encode() in raw or name.rsplit("/", 1)[1].encode() in raw:
-                    raise TransactionError(f"saved strategy references removed upstream resource: {name}")
+    preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
-        if argv[1] in {"preflight", "preflight-exact"}:
+        if argv[1] in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans"}:
             if len(argv) > 3:
                 return 64
             if argv[1] == "preflight":
                 preflight(argv[2] if len(argv) == 3 else "FETCH_HEAD")
-            else:
+            elif argv[1] == "preflight-exact":
                 preflight_exact(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+            elif argv[1] == "preflight-switch":
+                preflight_switch(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+            else:
+                prune_orphans(argv[2] if len(argv) == 3 else "FETCH_HEAD")
+        elif argv[1] == "verify-switch-complete":
+            if len(argv) != 2:
+                return 64
+            verify_switch_complete()
         elif argv[1] == "verify-exact":
             if len(argv) != 2:
                 return 64
@@ -479,7 +560,7 @@ def main(argv: list[str]) -> int:
             restore()
         print("PASS: managed additional resources are preserved")
         return 0
-    except (TransactionError, OSError, subprocess.TimeoutExpired) as exc:
+    except (TransactionError, PreflightError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"RESOURCE_UPSTREAM_GUARD_FAILED: {exc}", file=sys.stderr)
         return 70
 

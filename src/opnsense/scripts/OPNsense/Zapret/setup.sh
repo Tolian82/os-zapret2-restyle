@@ -24,6 +24,7 @@ FIND_BIN="${FIND_BIN:-/usr/bin/find}"
 ENABLED_FREEBSD_REPO=0
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 
 set -eu
 
@@ -317,6 +318,17 @@ REPO_EOF
     fi
 }
 
+# Must run even without installed.json: unowned files exist independently.
+all_resources_upstream_guard()
+{
+    [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] || {
+        echo "ERROR: upstream resource reconciliation guard is unavailable" >&2
+        return 69
+    }
+    ZAPRET_DIR="${ZAPRET_DIR}" STATE_DIR="${STATE_DIR}" ROLLBACK_DIR="${ROLLBACK_DIR}" \
+        GIT_BIN="$(command -v git)" "${EXTRA_PYTHON}" "${EXTRA_GUARD}" "$@"
+}
+
 extra_resources_upstream_guard()
 {
     [ -f "${STATE_DIR}/extra-resources/installed.json" ] ||
@@ -384,9 +396,23 @@ install_runtime()
             status_write "failed"
             return 1
         }
-        # Verify both old installed and target resource inventories before
-        # checkout can change tracked Lua/BIN or the native runtime.
-        extra_resources_upstream_guard preflight-exact FETCH_HEAD || {
+        if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ]; then
+            # Only the wrapper arms a durable mutating checkpoint and seals
+            # the original non-Git bytes. All pruning is restricted to it.
+            all_resources_upstream_guard preflight-switch FETCH_HEAD || {
+                status_write "failed"
+                return 1
+            }
+            all_resources_upstream_guard prune-orphans FETCH_HEAD || {
+                status_write "failed"
+                return 1
+            }
+        else
+            # Preserve direct setup.sh compatibility on *already exact*
+            # runtimes. Direct use cannot prune orphans without rollback.
+            echo "Direct setup: verifying exact resources; cleanup requires the transaction wrapper."
+        fi
+        all_resources_upstream_guard preflight-exact FETCH_HEAD || {
             status_write "failed"
             return 1
         }
@@ -413,7 +439,7 @@ install_runtime()
         echo "ERROR: managed Additional Resources changed during upstream setup" >&2
         return 1
     }
-    extra_resources_upstream_guard verify-exact || {
+    all_resources_upstream_guard verify-exact || {
         status_write "failed"
         echo "ERROR: installed upstream/extras set diverged after checkout" >&2
         return 1

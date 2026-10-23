@@ -504,7 +504,8 @@ restore_previous_checkout()
     extra_resources_upstream_guard restore || return 1
     backup_evidence restore-untracked || return 1
     backup_evidence verify-live-untracked || return 1
-    extra_resources_upstream_guard verify-exact || return 1
+    # Original checkout may legitimately contain its former unowned Lua/BIN.
+    backup_evidence verify-live-untracked || return 1
     return 0
 }
 
@@ -609,10 +610,10 @@ install_transaction()
         esac
     fi
 
-    # Inspect the old upstream Git tree and all installed Lua/BIN before
-    # arming a mutating checkpoint. Orphans require a manual resource sync.
-    extra_resources_upstream_guard preflight-exact HEAD || {
-        echo "ERROR: existing Lua/BIN files are not an attested exact set" >&2
+    # Validate old tracked/managed bytes and saved strategy references.
+    # Unowned Lua/BIN are allowed ONLY with the complete sealed snapshot below.
+    backup_evidence preflight-switch HEAD || {
+        echo "ERROR: original Git/managed Lua/BIN failed safe preflight" >&2
         return 1
     }
 
@@ -640,13 +641,13 @@ install_transaction()
     }
 
     if [ -n "${VERSION}" ]; then
-        if "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
+        if ROLLBACK_DIR="${ROLLBACK_DIR}" "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
             _setup_result=0
         else
             _setup_result=$?
         fi
     else
-        if "${SETUP_SCRIPT}" install-under-parent-lock; then
+        if ROLLBACK_DIR="${ROLLBACK_DIR}" "${SETUP_SCRIPT}" install-under-parent-lock; then
             _setup_result=0
         else
             _setup_result=$?
@@ -676,9 +677,18 @@ install_transaction()
             return 1
         fi
 
-        backup_evidence verify-live-untracked || {
+        backup_evidence verify-switch-complete || {
             status_write "failed"
-            echo "ERROR: non-Git resource files changed during upstream switch" >&2
+            echo "ERROR: target Git/managed resource set diverged after upstream switch" >&2
+            rollback_runtime || true
+            return 1
+        }
+        # No success/backup disposal unless the entire saved rollback corpus
+        # (compiled binaries, original untracked bytes, managed manifest)
+        # still verifies after the target has been activated.
+        backup_evidence verify-evidence "${PREVIOUS_BINARIES}" || {
+            status_write "failed"
+            echo "ERROR: upstream recovery backup changed during activation" >&2
             rollback_runtime || true
             return 1
         }
