@@ -11,7 +11,7 @@
 
 **Source `_32` guarded upstream switch:** Validates old Git HEAD/managed resources before rollback, target Git resources before checkout, and exact installed resource set before restart/after rollback. Unknown orphans and target collisions are not deleted.
 
-**Source `_37` syntax/fail-fast correction:** PR CI caught an extra `)` in upstream `preflight_exact()` (original `_36` failed before new resource tests could run). The corrected source is accompanied by an early GitHub Actions gate running Python AST parse, all upstream resource tests and the setup runtime transaction BEFORE the expensive Strategy Lab matrix. This is a same-root-cause correction in PR #534, not independent product scope; the new candidate still needs current-head CI.
+**Source `_37` implementation verified and merged:** [PR #534](https://github.com/Tolian82/os-zapret2-restyle/pull/534), merged commit `7cfac2b27a05efc330e57f9aa95b17f440244aa6`, [Project/Voice/FreeBSD15 CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40028007363) successful (44 local Git resource tests and shared runtime transaction), [main integrity](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40029479980) successful. The same-scope syntax fix and new fail-fast AST/upstream tests prevent expensive late discovery. Actual OPNsense upstream checkout, native Stop/Start and after-power-cut recovery remain unverified. `_37` is **source-only, not a published installable testing package**.
 
 **Source `_36` same-scope tracked-file protection (unqualified):** The old Git checkout must have zero modified tracked files, not merely intact Lua/BIN; otherwise the upstream switch refuses before removing or resetting anything. Pruning also checks the saved original HEAD and binary-presence flags against the committed recovery checkpoint. Two new real-Git regressions cover modified unrelated tracked source and a mismatched old-HEAD checkpoint.
 
@@ -96,7 +96,7 @@ RECOVERY_REQUIRED snapshot (preserved, not automatically recovered). Strategy La
 candidate generation is source-wired, but actual installed-host execution remains unverified.
 Do not claim that a CI-built package is a released/installed feature.
 
-**Current single next action:** qualify `_37` after the early upstream fault/syntax gate and full Project/Voice/FreeBSD15 CI; fix any same-scope failures before exact-head merge. Record source evidence, main integrity and the separate installed OPNsense upstream/STOPPED-recovery acceptance boundary. No testing package or full release requested; installed `_30` remains untouched.
+**Current single next action:** audit and test the full upstream-switch lifecycle around mutation: establish exclusive native FD9 ownership and safe stopped-service semantics before removing/rewriting Lua/BIN, then exercise fault injection across Stop, orphan removal, Git checkout, build, Start and interrupted recovery with original-byte proof. Fix a demonstrated blocker as the next forward-only source increment; source CI does not establish appliance/after-power-loss success. No testing package or full release requested; installed `_30` untouched.
 
 **Release boundary:** Full stable `v0.5.7_1` publication is **complete**, not pending. The source changes through `v0.5.7_30` are available only in the published **testing** prerelease; Additional Resources and the cold-boot change are not yet installed/accepted by the owner. This testing delivery does not promote a stable release or authorize later publications.
 
