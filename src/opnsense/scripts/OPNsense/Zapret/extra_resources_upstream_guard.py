@@ -509,7 +509,7 @@ def verify_exact() -> None:
 def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     """Old HEAD must be exactly reconciled before the Git checkout starts."""
     verify_exact()
-    preflight_switch(ref))
+    preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence"}:
