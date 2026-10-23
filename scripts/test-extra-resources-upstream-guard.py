@@ -401,6 +401,7 @@ class ExactReleaseSwitch(unittest.TestCase):
         self.assertEqual(self.extra.read_bytes(), b"user changed after snapshot")
 
     def test_untracked_snapshot_rejects_corrupt_git_blob(self):
+        guard.BACKUP_ROOT.mkdir(parents=True)
         self.native.write_bytes(b"corrupted upstream file")
         with self.assertRaisesRegex(Exception, "Git-tracked resource changed"):
             guard.snapshot_untracked()
