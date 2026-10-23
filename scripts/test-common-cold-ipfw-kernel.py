@@ -170,4 +170,3 @@ firewall_prepare
         assert response.returncode != 0, label
         assert actions == prefix, (label, actions)
 print("PASS: cold IPFW loader stages default allow before kldload and refuses ambiguity")
-
