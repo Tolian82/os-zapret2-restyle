@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — Additional Resources implementation
 
-**Immediate blocking priority (v0.5.7_12 source):** narrow correction for
+**Immediate blocking priority (v0.5.7_13 source):** narrow correction for
 owner-installed 0.5.7_10 failed kernel cold-state observation (ipfw/ipdivert
 unloaded, FreeBSD ipfw exit 71), preserving committed journal and the
 already merged ECH-off Chrome behavior. Owner-installed boot/restart

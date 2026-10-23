@@ -152,7 +152,10 @@ class InspectionTests(unittest.TestCase):
                     bundle_verify=lambda _: None,
                     manifest_reader=lambda _: manifest,
                     adapter_factory=lambda *args: FakeAdapter(manifest),
-                    runtime_probe=lambda *args: {"state":"stopped","services":{}})
+                    runtime_probe=lambda *args: {"state":"stopped","services":{}},
+                    # Simulate a genuinely loaded kernel with foreign rules,
+                    # not the host VM's intentionally absent IPFW modules.
+                    kernel_absent=lambda: False)
             self.assertEqual("foreign-or-modified-rules",dirty["state"])
             # Regression: a missing kernel IPFW module does NOT mean that
             # the stopped sealed owner has foreign rules (FreeBSD exit 71).
