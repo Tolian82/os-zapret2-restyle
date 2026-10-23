@@ -20,6 +20,7 @@ from extra_resources_preflight import (
 from extra_resources_transaction import (
     TransactionError, install, recover, _safe_state, _json_write,
 )
+from extra_resources_reconcile import make_plan
 
 SCRIPT = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -131,10 +132,11 @@ def main(argv: list[str]) -> int:
         _status("verifying", source_commit=revision)
         files = unpack_verified_archive(archive, revision)
         payloads, capabilities_count = verified_resources(files)
-        inspect_collisions(payloads, RUNTIME, STATE / "installed.json")
+        make_plan(payloads, RUNTIME, STATE / "installed.json")
         catalog = json.loads(files["inventory/capabilities.json"].decode("utf-8"))
         _status("installing", source_commit=revision)
-        result = install(payloads, revision, RUNTIME, STATE, lifecycle, capabilities=catalog)
+        result = install(payloads, revision, RUNTIME, STATE, lifecycle,
+                         capabilities=catalog, reconcile=True)
         _status("ready", **result, described_capabilities=capabilities_count)
         print(json.dumps(result, sort_keys=True))
         return 0

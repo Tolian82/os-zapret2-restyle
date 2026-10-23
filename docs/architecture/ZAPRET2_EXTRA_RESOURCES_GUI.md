@@ -1,6 +1,6 @@
 # Дополнительные ресурсы Zapret2 — GUI, установка и Strategy Lab (ТЗ)
 
-**Status:** owner-approved requirements (22 October 2026). Source implementation now includes the manual Settings button, resource transaction, dynamic BIN/Lua search candidates, and per-click terminal status correlation (`v0.5.7_20`). These remain unverified on installed OPNsense; package publication and stable release are separate decisions.
+**Status:** owner-approved requirements (22 October 2026), amended 23 October 2026 for exact resource-set reconciliation. Source implementation now includes the manual Settings button, resource transaction, dynamic BIN/Lua search candidates, and per-click terminal status correlation (`v0.5.7_20`). These remain unverified on installed OPNsense; package publication and stable release are separate decisions.
 
 ## 1. Назначение и терминология
 
@@ -41,12 +41,43 @@
   - `/usr/local/etc/zapret2/lua/<name>.lua`;
   - `/usr/local/etc/zapret2/files/fake/<name>.bin`.
 - Источник содержит `lua/` и `files/fake/`, как и ожидает ResourceInventory; `LICENSE`, `NOTICE`, `CONTRIBUTORS.md`, `inventory/sources.json`, `docs/ALIASES.md` доступны для аудита и сохраняются в управляемой метаинформации инсталляции, не загружаются в dvtws2 как Lua.
-- Не перезаписывать файлы upstream **ни выбранной установленной версии, ни более свежей**; перед монтажом сравнить имена, контрольные суммы и происхождение файлов. При имени с другим содержимым — конфликт с отчётом, **не** тихая подмена. Не перезаписывать пользовательские Lua/BIN и не удалять чужие файлы.
+- Не перезаписывать файлы upstream **ни выбранной установленной версии, ни более свежей**; перед монтажом сравнить имена, контрольные суммы и происхождение файлов. При имени с другим содержимым — конфликт с отчётом, **не** тихая подмена. By the owner's 23 October amendment, existing untracked Lua/BIN are replaced or removed only by the manual exact-set reconciliation transaction after their original bytes have been durably backed up; upstream-owned files are never overwritten.
 - Не копировать дубликаты по содержимому и не создавать лишние алиасы. Для существующих стратегий, ссылающихся на удалённые алиасы, обеспечить отдельную проверку совместимости и понятную диагностику без неявного переписывания текста стратегии.
 - Безопасность: запрет обхода путей и symlink, строгий список расширений/путей, проверка формата и размера файлов, закрытые права на временные файлы, итоговые права `0644` на Lua/BIN и `0755` на каталоги для UID/GID 65534.
 - Выполнить транзакционную установку: предварительная загрузка/проверка → снимок **только управляемых файлов** и состояния → публикация файлов → инвентаризация/проверка → **обязательный контролируемый перезапуск Zapret2** → проверка готовности всей службы → commit либо rollback. При сбое вернуть прежние дополнительные файлы, штатные файлы Zapret2 и исходное состояние службы. Ошибка сети до публикации не меняет работающий runtime. Любая ошибка перезапуска или health-check означает **ошибку всей установки**, а не успех копирования файлов.
 - **Решение владельца (22.10.2026): после каждого успешного нажатия «Установить дополнительные ресурсы» обязателен именно перезапуск службы Zapret2, а не перезагрузка всей OPNsense.** Даже если повторная загрузка не изменила состав файлов, после успешной проверки/установки выполнить `Stop → Start` через **существующий** serialized lifecycle с проверкой нового PID/работоспособности и сохранением настройки службы. Завершённым успехом считать только `Started → restarted healthy Started`; простого копирования файлов или записи `ResourceInventory` недостаточно. При сбое запуска восстановить прежний управляемый набор и попробовать вернуть прежнюю рабочую службу; если восстановление не удалось, явно сообщить `RESTORE_FAILED`. Запуск нового Job после установки формирует свежий инвентарь, но это **не отменяет** обязательного service restart для данного GUI-действия. Из состояния `Stopped` установку кнопкой не начинать: сначала штатный Start, затем отдельное нажатие кнопки.
-- Последующее обновление/понижение версии официального Zapret2 **не инициирует новую загрузку** дополнений, но обязано **сохранить уже установленные управляемые файлы** и проверять конфликты с целевой версией. При невозможности сохранения не выдавать успешную установку; обеспечить rollback или явную ошибку. Не забирать ответственность за локальные пользовательские файлы.
+- Последующее обновление/понижение версии официального Zapret2 **не инициирует новую загрузку** дополнений, но обязано **сохранить уже установленные управляемые файлы** и проверять конфликты с целевой версией. При невозможности сохранения не выдавать успешную установку; обеспечить rollback или явную ошибку. During an explicitly requested manual resource reconciliation, untracked Lua/BIN are backed up and brought into the approved exact set; during upstream version switching, old and target inventories and verified rollback are required before any removal.
+
+## Exact resource-set amendment (owner-approved 23 October 2026)
+
+After a successful manual Additional Resources operation, the top-level
+`lua/*.lua` and `files/fake/*.bin` files MUST equal the union of the
+resources tracked by the **locally installed upstream Zapret2 Git HEAD** and
+the verified Lua/BIN catalog at its immutable extra-resources commit.
+These sets change with both upstream and extra-catalog revisions; never
+hardcode names or counts. Verify upstream blob bytes against its local Git
+tree before mutation. For an identical path in both catalogs, upstream
+owns the file; if bytes differ, stop before touching the service.
+
+An untracked Lua/BIN that is neither upstream nor the desired extra is
+an orphan, even when created by a user or a previous failed installation.
+An untracked file whose name collides with a desired extra is replaceable.
+Back up and hash **all** untracked pre-operation Lua/BIN (orphans and
+replacements) durably under the existing transaction before native Stop.
+After native Stop, remove or replace only the planned untracked files,
+install verified extras, check exact inventory and digests, then restart
+and attest a newly running native service process. On any failure restore
+all previous bytes and ownership metadata, and restore service state.
+Refuse unexpected symlinks, tracked-file drift, unresolved transactions,
+and saved configuration references to resources scheduled for removal.
+No user strategy, Voice settings, HOSTLIST/IPSET or OPNsense Config values
+may be modified by this operation.
+
+An upstream-version switch is a separate transaction: capture the old and
+target Git resource inventories before checkout, preserve old tracked and
+untracked bytes, then reconcile without automatically downloading extras.
+Until this switch-specific old/target rollback is proved, uncertain
+switches must be blocked rather than pretending the manual sync covers them.
 
 ## 4. Strategy Lab: обязательные функциональные требования
 

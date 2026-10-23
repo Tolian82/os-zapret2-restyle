@@ -16,6 +16,7 @@ import shutil
 from extra_resources_preflight import (
     PreflightError, inspect_collisions, resource_path, sha256, validate_runtime_path,
 )
+from extra_resources_reconcile import make_plan
 
 SCHEMA = 1
 
@@ -221,7 +222,8 @@ def recover(root: Path, state: Path, lifecycle) -> str:
 
 
 def install(payloads: dict[str, bytes], revision: str, root: Path,
-            state: Path, lifecycle, capabilities: dict | None = None) -> dict:
+            state: Path, lifecycle, capabilities: dict | None = None,
+            reconcile: bool = False) -> dict:
     """Prepare, stop, publish, restart and prove a new native process owner.
 
     Not a public entrypoint: the caller owns the existing FD9 and setup lock.
@@ -237,11 +239,15 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
     installed_file = state / "installed.json"
     old_metadata = _owned_metadata(installed_file)
     try:
-        inspect_collisions(payloads, root, installed_file)
+        if reconcile:
+            plan = make_plan(payloads, root, installed_file)
+            previous, incoming = plan["previous"], plan["incoming"]
+        else:
+            inspect_collisions(payloads, root, installed_file)
+            previous = old_metadata["files"]
+            incoming = {name: sha256(data) for name, data in payloads.items()}
     except PreflightError as exc:
         raise TransactionError(str(exc)) from exc
-    previous = old_metadata["files"]
-    incoming = {name: sha256(data) for name, data in payloads.items()}
     # Existing native service must be genuinely running; stopped operation is
     # forbidden even if all incoming bytes are unchanged.
     old_identity = lifecycle.assert_started()
@@ -258,8 +264,8 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
             if sha256(data) != previous[name]:
                 raise TransactionError(f"managed resource drift before snapshot: {name}")
             _store_file(work / "backup", name, data)
-        for name, body in payloads.items():
-            _store_file(work / "staged", name, body)
+        for name in incoming:
+            _store_file(work / "staged", name, payloads[name])
         _write_phase(work, "prepared", previous, incoming, revision)
     except Exception:
         shutil.rmtree(work)
@@ -279,6 +285,10 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
         for name, digest in incoming.items():
             if sha256(validate_runtime_path(root, name).read_bytes()) != digest:
                 raise TransactionError(f"post-publication mismatch: {name}")
+        if reconcile:
+            verified = make_plan(payloads, root, installed_file)
+            if verified["removed"] or verified["previous"] != incoming:
+                raise TransactionError("exact Lua/BIN set not reached after publication")
         _write_phase(work, "restarting", previous, incoming, revision)
         lifecycle.start()
         new_identity = lifecycle.assert_started()
@@ -290,6 +300,7 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
         return {"status": "INSTALLED", "revision": revision,
                 "lua": sum(x.startswith("lua/") for x in incoming),
                 "bin": sum(x.startswith("files/fake/") for x in incoming),
+                "removed": len(plan["removed"]) if reconcile else 0,
                 "restarted": True}
     except Exception as exc:
         try:
