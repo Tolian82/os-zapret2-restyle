@@ -104,7 +104,7 @@ class Stage2ViewTests(unittest.TestCase):
         self.git("commit", "-qm", "upstream adopts extra")
         # Stale ownership is unsafe. In production an upstream-switch
         # transaction retires/reconciles the old managed manifest first.
-        with self.assertRaisesRegex(PreflightError, "managed resource is now upstream-owned"):
+        with self.assertRaisesRegex(PreflightError, "managed resource ownership differs from disk"):
             with self.view():
                 pass
         self.state.unlink()
