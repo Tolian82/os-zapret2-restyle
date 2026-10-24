@@ -8,6 +8,10 @@ Prior M0–M6 campaign remains owner-closed; **M6 cold-boot/IPFW/Voice regressio
 
 Once the release succeeds, update current project state with exact tag, package SHA-256, pkg metadata and public availability; then stop the finished project rather than reopening historical milestones.
 
+## Newly approved follow-up — remove non-upstream Lua/BIN (specification only)
+
+Owner-approved on 24 October 2026: add a bilingual **Remove Additional Resources** button below Install, visible only in native Advanced mode. The future action physically removes all non-upstream Lua/BIN (including manual/orphan files) but only **after** a read-only native compatibility preflight confirms both saved Strategies and Voice (including meaningful disabled drafts) can use **only the installed Git HEAD standard resources**. On incompatible/unknown dependency, warn and perform no mutation. Use existing snapshot/rollback/native FD9/Stop→Start; on success cache/Help reports additional resources not installed and new Lab Jobs see upstream-only inventory. [Requirements](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) · [implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md). **Documentation accepted; code not implemented, no new package or release approved by this follow-up.** The already owner-authorized v0.5.8 delivery is a separate earlier scope.
+
 ## Предыдущий приоритет — Additional Resources implementation
 
 Stage-4 source update v0.5.7_18 adds bounded dynamic TLS BIN/Lua nodes to the existing Stage-60 graph using reviewed installed descriptors and job inventory; native on-appliance execution/health evidence and package lifecycle repairs remain open. No release is authorized by this step.

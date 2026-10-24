@@ -16,6 +16,11 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
+## Level 2 — newly approved follow-up: safe removal of extra resources
+
+- [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — physically retain only installed upstream HEAD Lua/BIN, block on incompatible saved Strategies or Voice (including meaningful OFF drafts), protect native lifecycle/rollback, and provide Advanced-only bilingual Remove UI.
+- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — eleven bounded implementation/CI/appliance-acceptance stages; documentation approved, **no source/package/release authorization inferred**.
+
 ## Level 2 — active M0–M7 completion and acceptance
 
 - [Owner-approved completion plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — bounded milestones, acceptance gates, and no speculative Git provenance expansion.
