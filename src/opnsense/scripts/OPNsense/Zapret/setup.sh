@@ -398,18 +398,27 @@ install_runtime()
     if [ -d "${ZAPRET_DIR}/.git" ]; then
         echo "Checking out bol-van/zapret2 ${_zapret_ref}..."
         git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${_zapret_ref}"
-        extra_resources_upstream_guard preflight FETCH_HEAD || {
+        _target_sha=$(git -C "${ZAPRET_DIR}" rev-parse --verify "FETCH_HEAD^{commit}") || return 69
+        printf '%s\n' "${_target_sha}" | grep -Eq '^[0-9a-f]{40}$' || return 69
+        if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ]; then
+            # Target identity must be durable before Lua/BIN pruning or Git checkout.
+            all_resources_upstream_guard bind-target "${_zapret_ref}" "${_target_sha}" || {
+                status_write "failed"
+                return 1
+            }
+        fi
+        extra_resources_upstream_guard preflight "${_target_sha}" || {
             status_write "failed"
             return 1
         }
         if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ]; then
             # Only the wrapper arms a durable mutating checkpoint and seals
             # the original non-Git bytes. All pruning is restricted to it.
-            all_resources_upstream_guard preflight-switch FETCH_HEAD || {
+            all_resources_upstream_guard preflight-switch "${_target_sha}" || {
                 status_write "failed"
                 return 1
             }
-            all_resources_upstream_guard prune-orphans FETCH_HEAD || {
+            all_resources_upstream_guard prune-orphans "${_target_sha}" || {
                 status_write "failed"
                 return 1
             }
@@ -418,12 +427,12 @@ install_runtime()
             # runtimes. Direct use cannot prune orphans without rollback.
             echo "Direct setup: verifying exact resources; cleanup requires the transaction wrapper."
         fi
-        all_resources_upstream_guard preflight-exact FETCH_HEAD || {
+        all_resources_upstream_guard preflight-exact "${_target_sha}" || {
             status_write "failed"
             return 1
         }
-        git -C "${ZAPRET_DIR}" checkout --detach FETCH_HEAD
-        git -C "${ZAPRET_DIR}" reset --hard FETCH_HEAD
+        git -C "${ZAPRET_DIR}" checkout --detach "${_target_sha}"
+        git -C "${ZAPRET_DIR}" reset --hard "${_target_sha}"
     else
         echo "Downloading bol-van/zapret2 ${_zapret_ref}..."
         [ ! -e "${STATE_DIR}/extra-resources/installed.json" ] &&

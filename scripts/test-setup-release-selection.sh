@@ -146,9 +146,9 @@ grep -Fq 'git -C "${ZAPRET_DIR}" fetch --depth 1 origin tag "${_zapret_ref}"' "$
 grep -Fq 'git clone --depth 1 --branch "${_zapret_ref}"' "${SETUP_SH}" || fail "new-tree exact tag clone missing"
 grep -Fq 'if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ]; then' "${SETUP_SH}" ||
     fail "snapshot-less direct setup does not have explicit mutation exclusion"
-grep -Fq 'all_resources_upstream_guard prune-orphans FETCH_HEAD' "${SETUP_SH}" ||
+grep -Fq 'all_resources_upstream_guard prune-orphans "${_target_sha}"' "${SETUP_SH}" ||
     fail "parent transaction does not reconcile attested orphans"
-grep -Fq 'all_resources_upstream_guard preflight-exact FETCH_HEAD' "${SETUP_SH}" ||
+grep -Fq 'all_resources_upstream_guard preflight-exact "${_target_sha}"' "${SETUP_SH}" ||
     fail "direct setup lacks strict old/target exact-resource verification"
 
 echo "PASS: setup release cache and selection contract"

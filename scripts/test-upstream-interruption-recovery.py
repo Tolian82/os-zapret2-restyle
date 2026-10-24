@@ -70,6 +70,8 @@ class UpstreamInterrupted(unittest.TestCase):
         self.git("tag", "v1.0.3")
         self.new_sha = self.git_out("rev-parse", "HEAD")
         self.git("checkout", "-q", "--detach", self.old_sha)
+        # Local fetch is the same immutable target-selection boundary as setup.sh.
+        self.git("fetch", "-q", ".", "tag", "v1.0.3")
         self.resources = {
             "lua/managed.lua": self.managed,
             "lua/unowned.lua": self.orphan_lua,
@@ -157,6 +159,10 @@ esac
 [ "$(cat "$TEST_SERVICE_STATE")" = stopped ] || exit 75
 [ "$UPSTREAM_RUNTIME_LIFECYCLE_OWNER" = 1 ] || exit 75
 [ -f "$TEST_ROLLBACK/checkpoint" ] || exit 69
+target_sha="$TEST_TARGET_SHA"
+if [ "$TEST_CUT_POINT" = bind-wrong ]; then target_sha="$TEST_OLD_SHA"; fi
+"$TEST_PYTHON" "$TEST_GUARD" bind-target v1.0.3 "$target_sha" || exit 69
+echo TARGET_BOUND >> "$TEST_NATIVE_EVENTS"
 "$TEST_PYTHON" "$TEST_GUARD" preflight-switch "$TEST_TARGET_SHA"
 "$TEST_PYTHON" "$TEST_GUARD" prune-orphans "$TEST_TARGET_SHA"
 echo PRUNED >> "$TEST_NATIVE_EVENTS"
@@ -203,6 +209,7 @@ fi
             "TEST_ZAPRET_DIR": str(self.runtime),
             "TEST_TRANSACTION": str(TRANSACTION),
             "TEST_TARGET_SHA": self.new_sha,
+            "TEST_OLD_SHA": self.old_sha,
             "TEST_FD9_FILE": str(self.root / "fd9"),
             "TEST_PYTHON": sys.executable,
             "TEST_GUARD": str(GUARD),
@@ -235,6 +242,11 @@ fi
         checkpoint = self.state / "runtime-rollback/checkpoint"
         self.assertTrue(checkpoint.is_file(), "hard cut lost sealed checkpoint")
         self.assertIn("phase=mutating", checkpoint.read_text())
+        target = self.state / "runtime-rollback/target-identity.json"
+        self.assertTrue(target.is_file(), "target SHA not sealed before mutating resources")
+        identity = json.loads(target.read_text())
+        self.assertEqual(identity, {"schema": 1, "previous_commit": self.old_sha,
+                                    "target_release": "v1.0.3", "target_commit": self.new_sha})
         self.assertEqual(self.service_state.read_text().strip(),
                          "running" if point == "start" else "stopped")
         original_saved = self.state / "runtime-rollback/untracked-resources"
@@ -243,8 +255,8 @@ fi
         actual_events = self.log.read_text().splitlines()
         # If the original service was already stopped, repeating Stop is
         # neither required nor desirable; FD9 must still remain inherited.
-        self.assertEqual(actual_events[:2], ["FD9", "STOP"] if
-                         self.originally_running else ["FD9", "PRUNED"])
+        self.assertEqual(actual_events[:3], ["FD9", "STOP", "TARGET_BOUND"] if
+                         self.originally_running else ["FD9", "TARGET_BOUND", "PRUNED"])
 
     def recover(self, point: str, expect_ok: bool) -> subprocess.CompletedProcess[str]:
         result = subprocess.run([str(TRANSACTION), "recover-mutating-stopped"],
@@ -355,6 +367,34 @@ fi
         self.assert_original()
         self.assertIn("STOP", self.log.read_text())
         self.assertIn("START", self.log.read_text())
+
+    def test_target_binding_mismatch_refuses_before_prune(self) -> None:
+        result = subprocess.run(
+            [str(TRANSACTION), "install", "v1.0.3"],
+            env=self.environment("bind-wrong"), capture_output=True,
+            text=True, timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("PRUNED", self.log.read_text())
+        self.assert_original()
+
+    def test_tampered_target_sha_refuses_recovery_and_preserves_evidence(self) -> None:
+        self.cut("prune")
+        target = self.state / "runtime-rollback/target-identity.json"
+        identity = json.loads(target.read_text())
+        identity["target_commit"] = "0" * 40
+        target.write_text(json.dumps(identity))
+        self.recover("prune", False)
+        self.assertEqual(self.service_state.read_text(), "stopped\n")
+        self.assertTrue(target.exists())
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.old_sha)
+
+    def test_moved_release_tag_refuses_recovery(self) -> None:
+        self.cut("checkout")
+        self.git("tag", "-f", "v1.0.3", self.old_sha)
+        self.recover("checkout", False)
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.new_sha)
+        self.assertTrue((self.state / "runtime-rollback/target-identity.json").exists())
 
     def test_tampered_saved_orphan_refuses_and_retains_evidence(self) -> None:
         self.cut("checkout")

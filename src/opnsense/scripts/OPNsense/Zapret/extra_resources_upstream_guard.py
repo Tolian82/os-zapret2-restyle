@@ -26,6 +26,7 @@ ROLLBACK = Path(os.environ.get("ROLLBACK_DIR", "/var/db/zapret2-restyle/runtime-
 GIT = os.environ.get("GIT_BIN", "/usr/local/bin/git")
 BACKUP_ROOT = ROLLBACK.parent
 ATTESTATION = BACKUP_ROOT / "backup-attestation.json"
+TARGET_IDENTITY = BACKUP_ROOT / "target-identity.json"
 
 
 def _owned() -> dict:
@@ -348,6 +349,89 @@ def restore() -> None:
 
 
 
+
+def _commit_sha(ref: str) -> str:
+    """Resolve a full immutable commit OID, not a mutable tag or FETCH_HEAD."""
+    result = subprocess.run(
+        [GIT, "-C", str(RUNTIME), "rev-parse", "--verify", ref + "^{commit}"],
+        capture_output=True, text=True, timeout=30, check=False,
+    )
+    sha = result.stdout.strip()
+    if result.returncode or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise TransactionError("cannot resolve upstream Git commit: " + ref)
+    return sha
+
+
+def _mutating_old_identity() -> str:
+    checkpoint = BACKUP_ROOT / "checkpoint"
+    if BACKUP_ROOT.is_symlink() or not BACKUP_ROOT.is_dir() or checkpoint.is_symlink() or not checkpoint.is_file():
+        raise TransactionError("upstream checkpoint missing or linked")
+    try:
+        lines = checkpoint.read_text(encoding="ascii").splitlines()
+    except UnicodeError as exc:
+        raise TransactionError("non-ASCII upstream checkpoint") from exc
+    if (len(lines) != 6 or lines[0] != "schema=2" or
+            lines[5] != "phase=mutating" or
+            not re.fullmatch(r"previous_commit=[0-9a-f]{40}", lines[1])):
+        raise TransactionError("valid mutating checkpoint required for target binding")
+    return lines[1].split("=", 1)[1]
+
+
+def bind_target(release: str, sha: str) -> None:
+    """Seal fetched target before Lua/BIN pruning or checkout, under original FD9."""
+    if (os.environ.get("SETUP_TRANSACTION_LOCK_OWNER") != "1" or
+            os.environ.get("UPSTREAM_RUNTIME_LIFECYCLE_OWNER") != "1" or
+            os.environ.get("STRATEGY_LAB_LIFECYCLE_OWNER") != "1"):
+        raise TransactionError("target binding requires both lifecycle locks")
+    try:
+        os.fstat(9)
+    except OSError as exc:
+        raise TransactionError("native lifecycle FD9 unavailable") from exc
+    if not re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", release):
+        raise TransactionError("invalid selected upstream release")
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise TransactionError("invalid selected upstream commit")
+    if TARGET_IDENTITY.exists() or TARGET_IDENTITY.is_symlink():
+        raise TransactionError("upstream target identity already sealed")
+    old = _mutating_old_identity()
+    if _commit_sha("HEAD") != old:
+        raise TransactionError("old checkout changed before target binding")
+    if _commit_sha("FETCH_HEAD") != sha or _commit_sha("refs/tags/" + release) != sha:
+        raise TransactionError("selected release tag, fetched commit and SHA differ")
+    verify_backup_attestation(_binary_snapshot_inventory()["present"])
+    record = {"schema": 1, "previous_commit": old,
+              "target_release": release, "target_commit": sha}
+    _write_atomic(TARGET_IDENTITY, (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    _sync_dir(BACKUP_ROOT)
+
+
+def verify_target_identity(ref: str | None = None) -> dict:
+    """Read-only verification even when checkout or tracked worktree is partial."""
+    old = _mutating_old_identity()
+    if TARGET_IDENTITY.is_symlink() or not TARGET_IDENTITY.is_file():
+        raise TransactionError("upstream target identity missing or linked")
+    try:
+        identity = json.loads(TARGET_IDENTITY.read_text(encoding="ascii"))
+    except (ValueError, UnicodeError) as exc:
+        raise TransactionError("invalid upstream target identity") from exc
+    if (not isinstance(identity, dict) or set(identity) !=
+            {"schema", "previous_commit", "target_release", "target_commit"} or
+            identity["schema"] != 1 or identity["previous_commit"] != old or
+            not isinstance(identity["target_release"], str) or
+            not re.fullmatch(r"v[0-9]+(?:\.[0-9]+)+", identity["target_release"]) or
+            not isinstance(identity["target_commit"], str) or
+            not re.fullmatch(r"[0-9a-f]{40}", identity["target_commit"])):
+        raise TransactionError("malformed or contradictory upstream target identity")
+    target = identity["target_commit"]
+    if _commit_sha(target) != target or _commit_sha(old) != old:
+        raise TransactionError("saved old/target Git objects unavailable")
+    if _commit_sha("refs/tags/" + identity["target_release"]) != target:
+        raise TransactionError("upstream release tag differs from sealed target")
+    if ref is not None and _commit_sha(ref) != target:
+        raise TransactionError("Git checkout target differs from sealed commit")
+    return identity
+
+
 def _git_target_names(ref: str) -> set[str]:
     """Inspect target tracked Lua/BIN paths without touching installed files.
 
@@ -442,6 +526,7 @@ def prune_orphans(ref: str = "FETCH_HEAD") -> None:
     if original is None:
         raise TransactionError("full original Lua/BIN attestation required")
     orphans = preflight_switch(ref)
+    verify_target_identity(ref)
     live = installed_resources(RUNTIME)
     upstream = tracked_resources(RUNTIME, GIT)
     current = {name: digest for name, digest in live.items() if name not in upstream}
@@ -478,6 +563,7 @@ def verify_switch_complete() -> None:
     """Target Git HEAD and managed extras are exact; old backup still attested."""
     if _attested_untracked() is None:
         raise TransactionError("new upstream switch lacks full original snapshot")
+    verify_target_identity("HEAD")
     verify_exact()
 
 
@@ -512,11 +598,22 @@ def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "bind-target", "verify-target", "inspect-target"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
-        if argv[1] in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans"}:
+        if argv[1] == "bind-target":
+            if len(argv) != 4:
+                return 64
+            bind_target(argv[2], argv[3])
+        elif argv[1] in {"verify-target", "inspect-target"}:
+            if len(argv) != 2:
+                return 64
+            identity = verify_target_identity()
+            if argv[1] == "inspect-target":
+                print("target_release=" + identity["target_release"])
+                print("target_commit=" + identity["target_commit"])
+        elif argv[1] in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans"}:
             if len(argv) > 3:
                 return 64
             if argv[1] == "preflight":
