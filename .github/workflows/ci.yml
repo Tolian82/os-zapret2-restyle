@@ -419,6 +419,11 @@ jobs:
 
       - name: Test dynamic runnable Lua/BIN Stage-60 search graph
         run: python3.13 scripts/test-extra-resources-dynamic-graph.py
+      - name: Test cached installed Lua/BIN names and Git ownership
+        run: python3.13 scripts/test-extra-resources-inventory-cache.py
+
+      - name: Test two-column resource help and cache-only GUI wiring
+        run: python3.13 scripts/test-extra-resources-inventory-gui.py
 
       - name: Test original upstream setup transaction under shared lock
         run: sh scripts/test-setup-runtime-transaction.sh

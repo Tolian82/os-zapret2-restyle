@@ -21,9 +21,21 @@ LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 SETUP_LOCK_FILE="${SETUP_LOCK_FILE:-${RUN_DIR}/setup.lock}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
+EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
 
 set -eu
 umask 022
+
+refresh_inventory_help_cache()
+{
+    # Safe, nonessential display snapshot. Never relax native transaction
+    # rollback or turn a valid upstream switch into false failure.
+    if [ -f "${EXTRA_INVENTORY_CACHE}" ] && [ -x "${EXTRA_PYTHON}" ]; then
+        if ! "${EXTRA_PYTHON}" "${EXTRA_INVENTORY_CACHE}" refresh >/dev/null; then
+            echo "WARNING: Strategies resource inventory cache refresh failed" >&2
+        fi
+    fi
+}
 
 release_tag_valid()
 {
@@ -421,6 +433,7 @@ recover_mutating_stopped()
         fi
     fi
     rm -rf "${ROLLBACK_DIR}" || return 70
+    refresh_inventory_help_cache
     status_write failed || return 70
     echo "RECOVERY_MUTATING_RESTORED: original upstream checkout and native service state verified"
 }
@@ -642,6 +655,7 @@ rollback_runtime()
     # Retain backups on any failed verification above; remove them only after
     # the previous checkout AND native service state were fully restored.
     rm -rf "${ROLLBACK_DIR}" || return 1
+    refresh_inventory_help_cache
     status_write "failed"
     echo "Previous bol-van/zapret2 runtime and service state restored."
     return 0
@@ -804,6 +818,7 @@ install_transaction()
             return 1
         fi
         rm -rf "${ROLLBACK_DIR}" || return 1
+        refresh_inventory_help_cache
         return 0
     fi
 
