@@ -21,6 +21,7 @@
 - [Owner-approved completion plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — bounded milestones, acceptance gates, and no speculative Git provenance expansion.
 - [Additional Resources normative TЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — normal update, exact-set reconciliation, and explicit plugin-only clean repair.
 - [Single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) — actual candidate, evidence, pass/fail status, blocker and next action.
+- [M5 clean-plugin repair qualification gate](verification/EXTRA_RESOURCES_CLEAN_REPAIR_GATE.md) — scope and safety preconditions for a separately operator-selected console clean reinstall; not executable or owner-live qualified.
 
 ## Level 2 — urgent owner-proven cold-IPFW lifecycle correction
 
