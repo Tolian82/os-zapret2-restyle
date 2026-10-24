@@ -240,6 +240,7 @@ jobs:
           python3.13 -c 'import ast, pathlib; ast.parse(pathlib.Path("src/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py").read_text())'
           python3.13 scripts/test-extra-resources-upstream-guard.py
           sh scripts/test-setup-runtime-transaction.sh
+          python3.13 scripts/test-upstream-interruption-recovery.py
 
       - name: Validate project identity and version
         shell: bash
