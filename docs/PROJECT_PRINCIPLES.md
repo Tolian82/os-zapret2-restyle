@@ -115,6 +115,12 @@ DEV-045. **Optimization decisions are measurement-driven.** If measured data doe
 
 DEV-046. **A development-rule change is not complete until its references are reconciled.** Apply `DOC-008` and the cross-reference integrity contract `DOC-042`–`DOC-045`. The owner's newly binding meaning still takes effect immediately while that same-scope repository reconciliation is being completed.
 
+DEV-047. **Progress is measured by accepted functionality.** A user-facing feature is complete only after its approved acceptance criteria are evidenced at the required source, CI/package, and installed-appliance levels. Commit counts, revision increments, test volume, and speculative hardening do not substitute for end-to-end acceptance. Once a usable implementation exists, prioritize its qualified delivery and owner-observed verification over unrelated internal expansion.
+
+DEV-048. **Safety is proportional to demonstrated risk.** Preserve all established fail-closed, transactional, ownership, and restoration guarantees. New safety machinery must address an approved requirement or a concrete reproducible defect; prefer the simplest sound solution. An unknown or externally modified state must not be destructively guessed or automatically reset. Defer unproven enhancements rather than blocking already qualified user-facing acceptance indefinitely.
+
+DEV-049. **Model initiative improves the approved plan, but does not silently extend it.** The model shall identify and propose demonstrably useful changes to decisions, requirements, design, or priorities, explaining evidence, expected benefit, cost, and risk. New, unapproved research directions are outside the mandatory current delivery scope; an initiative becomes a required workstream only after owner agreement. The model continues to execute already approved work without unnecessary reapproval.
+
 ## Cross-reference registry
 
 ### Outbound references
