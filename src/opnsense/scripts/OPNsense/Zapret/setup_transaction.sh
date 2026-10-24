@@ -99,7 +99,8 @@ service_state()
     # incomplete/unknown (2+) native ownership as RUNNING.
     # Under the original native FD9, never recursively acquire lifecycle.lock.
     _status_mode=status
-    if [ "${UPSTREAM_RECOVERY_LIFECYCLE_OWNER:-0}" = 1 ]; then
+    if [ "${UPSTREAM_RECOVERY_LIFECYCLE_OWNER:-0}" = 1 ] ||
+       [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" = 1 ]; then
         _status_mode=strategy-lab-status
     fi
     if "${SERVICE_SCRIPT}" "${_status_mode}" >/dev/null 2>&1; then
@@ -509,6 +510,24 @@ restore_previous_checkout()
     return 0
 }
 
+# Called ONLY with inherited native FD9. Never let rollback reset Git or
+# restore binaries while dvtws2 is still serving from those same paths.
+stop_for_upstream_mutation()
+{
+    if service_state; then
+        "${SERVICE_SCRIPT}" strategy-lab-stop >/dev/null 2>&1 || return 1
+    else
+        _stop_state=$?
+        [ "${_stop_state}" -eq 1 ] || return 1
+    fi
+    if service_state; then
+        echo "ERROR: upstream transaction cannot prove native STOPPED state" >&2
+        return 1
+    else
+        [ "$?" -eq 1 ]
+    fi
+}
+
 restore_previous_service_state()
 {
     if service_state; then
@@ -518,18 +537,16 @@ restore_previous_service_state()
     fi
 
     case "${_current_state}" in
-        0|2)
-            "${SERVICE_SCRIPT}" stop >/dev/null 2>&1 || return 1
+        0)
+            # Under original FD9; recursive external stop would deadlock.
+            "${SERVICE_SCRIPT}" strategy-lab-stop >/dev/null 2>&1 || return 1
             ;;
-        1)
-            ;;
-        *)
-            return 1
-            ;;
+        1) ;;
+        *) return 1 ;; # Foreign/incomplete owner is NEVER forcibly stopped.
     esac
 
     if [ "${SERVICE_WAS_RUNNING}" -eq 1 ]; then
-        configctl_exact_ok zapret start || return 1
+        "${SERVICE_SCRIPT}" strategy-lab-start >/dev/null 2>&1 || return 1
         service_state || return 1
     else
         if service_state; then
@@ -552,6 +569,11 @@ rollback_runtime()
        [ "${RECOVERY_PHASE}" != mutating ] ||
        ! backup_evidence verify-evidence "${PREVIOUS_BINARIES}"; then
         echo "ERROR: RESTORE_FAILED: saved upstream bytes/manifest not attested; evidence retained" >&2
+        return 1
+    fi
+
+    if ! stop_for_upstream_mutation; then
+        echo "ERROR: RESTORE_FAILED: cannot prove stopped native owner before rollback" >&2
         return 1
     fi
 
@@ -582,6 +604,15 @@ rollback_runtime()
 
 install_transaction()
 {
+    # Mandatory original FD9 protection for the whole transaction, not just
+    # the final restart. setup.lock precedes FD9 in the parent dispatcher.
+    if [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" != 1 ] ||
+       [ "${UPSTREAM_RUNTIME_LIFECYCLE_OWNER:-0}" != 1 ] ||
+       [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" != 1 ] ||
+       ! ( : >&9 ) 2>/dev/null; then
+        echo "ERROR: upstream install requires setup.lock and inherited native FD9" >&2
+        return 75
+    fi
     [ -x "${SETUP_SCRIPT}" ] || {
         echo "ERROR: setup backend is unavailable: ${SETUP_SCRIPT}" >&2
         return 1
@@ -633,10 +664,17 @@ install_transaction()
         return 1
     fi
 
-    # Repair restrictive modes left by an older checkout before setup attempts a
-    # same-version reinstall, and impose a safe inherited umask for all new files.
+    # STOP under the same held native FD9 *before* chmod, pruning, checkout
+    # or make. An interrupted Stop leaves the sealed checkpoint for recovery.
+    if ! stop_for_upstream_mutation; then
+        echo "ERROR: RECOVERY_REQUIRED: native owner could not be stopped safely" >&2
+        status_write "failed" || true
+        return 1
+    fi
+
     normalize_runtime_permissions || {
-        echo "ERROR: current runtime permissions could not be normalized" >&2
+        echo "ERROR: runtime permissions could not be normalized" >&2
+        rollback_runtime || true
         return 1
     }
 
@@ -655,6 +693,19 @@ install_transaction()
     fi
 
     if [ "${_setup_result}" -eq 0 ]; then
+        # The setup backend must not have started anything while binaries
+        # were being rebuilt. Any unexpected running/incomplete owner fails.
+        if service_state; then
+            echo "ERROR: upstream backend started native service during build" >&2
+            rollback_runtime || true
+            return 1
+        else
+            if [ "$?" -ne 1 ]; then
+                echo "ERROR: native service ownership changed during upstream build" >&2
+                rollback_runtime || true
+                return 1
+            fi
+        fi
         normalize_runtime_permissions || {
             status_write "failed"
             echo "ERROR: installed runtime permissions could not be normalized" >&2
@@ -700,7 +751,16 @@ install_transaction()
             return 1
         }
 
-        rm -rf "${ROLLBACK_DIR}"
+        # Activation is one native Stop->Start operation under inherited FD9.
+        # Do not publish success if the original running/stopped semantics
+        # cannot be re-established with the new upstream bytes.
+        if ! restore_previous_service_state; then
+            echo "ERROR: target upstream native service activation failed" >&2
+            status_write "failed" || true
+            rollback_runtime || true
+            return 1
+        fi
+        rm -rf "${ROLLBACK_DIR}" || return 1
         return 0
     fi
 
@@ -763,13 +823,16 @@ case "${MODE}" in
             exit 69
         }
         "${LOCKF_BIN}" -s -t 600 "${SETUP_LOCK_FILE}" \
-            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 "$0" install-under-parent-lock "${VERSION}"
+            /usr/bin/env SETUP_TRANSACTION_LOCK_OWNER=1 \
+            "${SERVICE_SCRIPT}" upstream-install "${VERSION}"
         ;;
     install-under-parent-lock)
-        [ "${SETUP_TRANSACTION_LOCK_OWNER:-0}" = 1 ] || {
-            echo "ERROR: setup transaction was invoked without its setup.lock" >&2
-            exit 75
-        }
+        # Legacy internal entrypoint cannot acquire FD9 by itself. Refuse
+        # direct/bypassed callers rather than mutate files without native lock.
+        install_transaction
+        ;;
+    install-under-native-lock)
+        [ "$#" -eq 2 ] || exit 64
         install_transaction
         ;;
     *)
