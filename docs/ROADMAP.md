@@ -1,14 +1,12 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — завершение и приёмка Additional Resources
+## Current priority — owner-authorized stable v0.5.8 delivery
 
-The approved final contract is [ZAPRET2_EXTRA_RESOURCES_GUI.md](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md). The original five functional stages retain authority; [the bounded M0–M7 plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) and [the single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) now govern execution. The owner-installed `v0.5.7_47` has passed manual resources installation, native BIN/Lua execution, the dynamic graph and Stage-90 restoration; M3 specialized resource/reference cases, M5 remaining failure gates and M6 boot regressions remain.
+The owner accepted the new cached Lua/BIN Full Help (H1) on published `v0.5.7_48`, signed off the [final acceptance report](verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md), explicitly closed M6, and **authorized full stable `v0.5.8` publication**. The exact release-preparation identity is `VERSION=0.5.8`, `PLUGIN_REVISION=1`. First verify release PR CI and FreeBSD15 `0.5.8_1.pkg`; then immutable tag/GitHub non-prerelease release and Pages package repository/Web setup.
 
-**Current owner direction (24 October 2026):** prior M0–M6 acceptance campaign CLOSED without further tests; outstanding M2 snapshot, M3 specialized collision/reference, M5 special failure, and M6 cold-boot cases remain honestly UNVERIFIED. New immediate task H1 is to implement **cached two-column installed Lua/BIN names** beneath Install Additional Resources, visible only in native Full Help, upstream Git HEAD names green and other names blue; explanation before first additional-resource install. Source candidate `v0.5.7_48` is being verified separately; installed owner appliance remains `_47`. **The owner cancelled development and testing of a new clean-plugin reinstall mechanism on 24 October 2026; it is not a release gate.** No repeat Strategy Lab Job, live managed-file deletion or speculative hardening. A later stable **v0.5.8** requires separate owner authorization, exact release-package qualification, OPNsense repo and Web-install verification.
+Prior M0–M6 campaign remains owner-closed; **M6 cold-boot/IPFW/Voice regression was not performed** and is not relabelled PASS, and selected M2/M3/M5 negative cases remain unverified. M4 normal-path native BIN/Lua/Stage-90 restoration passed on installed `_47`. No extra clean reinstall development (cancelled by owner), repeated Strategy Lab Jobs, or new fault injections. Treat publication readiness separately from unobserved owner Web-upgrade clicks. See [acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md), [normative requirements](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) and [release plan](releases/v0.5.8.md).
 
-Do not automatically expand per-path Git write-ahead recovery from the diagnostic `_46` work. Preserve attested backups, FD9/setup.lock, clean-Git fail-closed safeguards and existing successful source evidence. New research directions require owner agreement as new work; the model may recommend meaningful evidence-based improvements. Acceptance is measured by qualified user-visible behavior rather than iteration count.
-
-**Stable v0.5.8 release remains explicitly NOT authorized**. Source CI does not count as installed H1 GUI acceptance. No new Strategy Lab Jobs or additional testing of prior owner-closed gates.
+Once the release succeeds, update current project state with exact tag, package SHA-256, pkg metadata and public availability; then stop the finished project rather than reopening historical milestones.
 
 ## Предыдущий приоритет — Additional Resources implementation
 
