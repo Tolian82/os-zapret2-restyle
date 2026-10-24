@@ -172,6 +172,19 @@ fi
 printf 'new compiled executable\n' > "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
 chmod 0755 "$TEST_ZAPRET_DIR/binaries/my/dvtws2"
 echo BUILT >> "$TEST_NATIVE_EVENTS"
+if [ "$TEST_CUT_POINT" = soft-foreign ] || [ "$TEST_CUT_POINT" = soft-staged ]; then
+    printf 'foreign tracked user bytes\n' > "$TEST_ZAPRET_DIR/README"
+    if [ "$TEST_CUT_POINT" = soft-staged ]; then
+        git -C "$TEST_ZAPRET_DIR" add README
+    fi
+    # Ordinary build failure (NOT SIGKILL): the parent must NOT run a
+    # destructive git reset on the now-dirty checkout.
+    exit 71
+fi
+if [ "$TEST_CUT_POINT" = soft-clean ]; then
+    # A normal failed build with clean tracked files must still auto-rollback.
+    exit 71
+fi
 if [ "$TEST_CUT_POINT" = dirty ]; then
     printf 'foreign post-cut tracked edit\n' > "$TEST_ZAPRET_DIR/README"
 fi
@@ -300,6 +313,48 @@ fi
         self.assertTrue((self.state / "runtime-rollback/checkpoint").exists())
         self.assertEqual(self.git_out("rev-parse", "HEAD"), self.new_sha)
         self.assertEqual(self.service_state.read_text(), "stopped\n")
+
+    def _assert_immediate_dirty_rollback_refusal(self, point: str) -> None:
+        result = subprocess.run(
+            [str(TRANSACTION), "install", "v1.0.3"],
+            env=self.environment(point), capture_output=True,
+            text=True, timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("RECOVERY_REQUIRED: tracked upstream checkout is dirty",
+                      result.stderr)
+        self.assertEqual((self.runtime / "README").read_bytes(),
+                         b"foreign tracked user bytes\n")
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.new_sha)
+        self.assertNotEqual(self.git_out("status", "--porcelain", "--untracked-files=no"), "")
+        self.assertEqual(self.service_state.read_text(), "stopped\n")
+        saved_root = self.state / "runtime-rollback"
+        self.assertTrue((saved_root / "checkpoint").is_file())
+        self.assertIn("phase=mutating", (saved_root / "checkpoint").read_text())
+        self.assertEqual((saved_root / "binaries/my/dvtws2").read_bytes(),
+                         self.old_binary)
+        self.assertEqual((saved_root / "untracked-resources/lua/unowned.lua").read_bytes(),
+                         self.orphan_lua)
+        self.assertEqual((self.state / "runtime.release").read_text(), "v1.0.4\n")
+
+    def test_immediate_failed_build_preserves_foreign_tracked_edit(self) -> None:
+        self._assert_immediate_dirty_rollback_refusal("soft-foreign")
+
+    def test_immediate_failed_build_preserves_staged_tracked_edit(self) -> None:
+        self._assert_immediate_dirty_rollback_refusal("soft-staged")
+
+    def test_immediate_clean_failed_build_restores_original(self) -> None:
+        result = subprocess.run(
+            [str(TRANSACTION), "install", "v1.0.3"],
+            env=self.environment("soft-clean"), capture_output=True,
+            text=True, timeout=20,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("RECOVERY_REQUIRED: tracked upstream checkout is dirty",
+                         result.stderr)
+        self.assert_original()
+        self.assertIn("STOP", self.log.read_text())
+        self.assertIn("START", self.log.read_text())
 
     def test_tampered_saved_orphan_refuses_and_retains_evidence(self) -> None:
         self.cut("checkout")

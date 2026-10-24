@@ -486,13 +486,36 @@ prepare_rollback()
     return 0
 }
 
+# A failed build can return normally AFTER an upstream checkout has partly
+# rewritten the index/worktree. Native FD9 prevents competing service actions,
+# but does not serialize a user's direct Git edits. Never let the automatic
+# rollback's reset --hard silently discard tracked bytes: this same gate also
+# applies to explicit stopped-owner recovery.
+require_clean_recovery_checkout()
+{
+    [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ] &&
+        [ ! -L "${ZAPRET_DIR}/.git" ] || return 69
+    _tracked_status=$("${GIT_BIN}" -C "${ZAPRET_DIR}" status --porcelain --untracked-files=no 2>/dev/null) || {
+        echo "ERROR: RECOVERY_REQUIRED: cannot inspect tracked upstream files; saved evidence retained" >&2
+        return 69
+    }
+    if [ -n "${_tracked_status}" ]; then
+        echo "ERROR: RECOVERY_REQUIRED: tracked upstream checkout is dirty; old/target origin is not durably attested; saved evidence retained for manual review" >&2
+        return 69
+    fi
+}
+
 restore_previous_checkout()
 {
     [ -n "${PREVIOUS_COMMIT}" ] || return 1
     [ -x "${GIT_BIN}" ] || return 1
     [ -d "${ZAPRET_DIR}/.git" ] || return 1
 
+    # Before checkout and AGAIN before reset: a clean HEAD is not enough to
+    # prove a partially interrupted index or late direct-user edits are safe.
+    require_clean_recovery_checkout || return 1
     "${GIT_BIN}" -C "${ZAPRET_DIR}" checkout --detach "${PREVIOUS_COMMIT}" >/dev/null 2>&1 || return 1
+    require_clean_recovery_checkout || return 1
     "${GIT_BIN}" -C "${ZAPRET_DIR}" reset --hard "${PREVIOUS_COMMIT}" >/dev/null 2>&1 || return 1
 
     if [ "${PREVIOUS_BINARIES}" -eq 1 ] && [ -d "${ROLLBACK_DIR}/binaries/my" ]; then
