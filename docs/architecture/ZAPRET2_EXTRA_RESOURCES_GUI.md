@@ -135,3 +135,32 @@ contract, not a change to the owner's approved target behavior.
 5. Отдельная квалификация пакета и релиз **только по явной команде владельца**.
 
 **Решение владельца 22.10.2026:** кнопка на странице «Стратегия» имеет окончательную подпись RU «Установить дополнительные ресурсы» / EN “Install Additional Resources”; каталог GitHub и пять требований Strategy Lab выше обязательны. Ранее планировавшаяся автоматическая загрузка при переключении runtime **заменена** ручной установкой. После каждого успешного нажатия **перезапуск службы Zapret2 обязателен** с проверкой здоровья, без перезагрузки OPNsense. Пока служба `Stopped`, сначала требуется штатный Start. Старые файлы и стратегии не изменяются автоматически.
+
+## 8. Owner-approved final acceptance and repair contract (24 October 2026)
+
+This section clarifies the accepted resource-sync policy without removing existing runtime safety requirements.
+
+### Two distinct operational paths
+
+**Normal package replacement and manual Additional Resources installation** retain existing configuration, user strategies, managed resource provenance, native lifecycle guarantees and verified rollback. The Additional Resources button is allowed only for a fully Started service; it is not a repair control. A successful manual action restarts the service even when resource contents are unchanged.
+
+**Explicit recovery clean reinstall** is a separately selected operator action for a damaged or inconsistent plugin installation that cannot be safely replaced through the normal path. Its required result is a clean installable/operational plugin that can be configured through OPNsense; retention of the plugin's prior strategies, settings, jobs, managed resources and transaction history is best effort, not a success prerequisite. Only plugin-owned package/runtime/configuration state may be reset. OPNsense system configuration, firewall safety, other plugins, other people's data and unrelated runtime state must not be damaged. This contract does not promise repair of a broken operating system, filesystem or FreeBSD pkg database. A broken/unverifiable native owner may not be silently treated as Stopped: a repair path must be explicit, observable, bounded and tested. Console access through the hypervisor is confirmed available.
+
+The explicit recovery procedure may initially be console-based; a second Web UI, new background service or general-purpose Git recovery engine is **not** required. Do not promise that generic `pkg add -f` already repairs all damaged states: package hooks currently reject incomplete owner state. First test existing recovery capabilities; implement only the smallest demonstrated missing repair path.
+
+### Exact resource-set ownership and retained strategy references
+
+The final manual resource set is exactly the local installed upstream Git HEAD tracked Lua/BIN union the immutable, verified extra catalog. Unknown pre-existing files, including an untracked filename matching a catalog payload, are backed up and attested before replacement/removal. A historical untracked name alone is never sufficient reason to refuse reconciliation. The specific old `files/fake/fake_http_lichess.bin` failure is **one historical example**, not a hard-coded requirement or a privileged exception.
+
+At the same path, identical upstream and catalog content is represented once with upstream ownership; different content is a blocking conflict. No installed user strategy may be silently edited. Detect references to removed resources **and to changed resource contents** before mutation; when compatibility of a referenced replacement is not established, fail safely with a concrete explanation rather than unexpectedly changing the meaning of an existing strategy. Unsupported resources remain visible to inventory but are never run without an acceptable capability descriptor. Installed resources plus reviewed descriptors, not filenames in Python, determine bounded native candidate eligibility.
+
+On upstream release changes use the same ownership/conflict semantics, with independent old/target snapshots and transaction safety. The operation must not automatically download a new extra catalog. Ordinary valid upstream switches must remain usable; unknown or conflicting states may fail closed without pretending that the switch succeeded.
+
+### Practical boundaries and evidence
+
+A safely blocked operation counts as correct only for the specified invalid/unknown state; it cannot replace successful handling of legitimate, supported operations. Automatic reconstruction of arbitrarily dirty, independently edited Git index/worktree bytes is not a deliverable. Retain current read-only inspection and hard no-destructive-reset boundary; defer experimental per-path write-ahead provenance absent a reproduced blocking defect or a separate owner decision.
+
+The test candidate must be persistently published as an immutable `v0.5.7_N` testing package **before** the final live acceptance campaign. Confirm the actual package bytes, provenance, successful FreeBSD 15 build and the installed OPNsense behavior separately. During acceptance, distinguish a clean repair installation from a normal preserving update; test both. Only after all mandatory acceptance gates pass, prepare the separately owner-approved stable `v0.5.8` release with a new package identity and a separate release-package verification.
+
+The owner has confirmed independent hypervisor-console access. Test actual owner-live operations where source CI cannot provide their evidence. The owner-approved bounded execution and acceptance board is [EXTRA_RESOURCES_ACCEPTANCE.md](../verification/EXTRA_RESOURCES_ACCEPTANCE.md); it is the sole operational checklist and cannot invent PASS results.
+

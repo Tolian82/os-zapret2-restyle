@@ -16,6 +16,12 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
+## Level 2 — active M0–M7 completion and acceptance
+
+- [Owner-approved completion plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — bounded milestones, acceptance gates, and no speculative Git provenance expansion.
+- [Additional Resources normative TЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — normal update, exact-set reconciliation, and explicit plugin-only clean repair.
+- [Single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) — actual candidate, evidence, pass/fail status, blocker and next action.
+
 ## Level 2 — urgent owner-proven cold-IPFW lifecycle correction
 
 - Source `v0.5.7_30`: safe cold IPFW module loading with `kenv` default-allow staged and verified **before** `kldload ipfw`; strict cold owner inspector process/module evidence. Prior installed stable `_1` rescue achieved RUNNING after manual safe IPFW/ipdivert bring-up via hypervisor console; not evidence of `_30` installed boot acceptance. No new release approved. See [handoff](START_HERE.md) and [current state](PROJECT_STATE.md).

@@ -1,28 +1,12 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — безопасное восстановление после холодной перезагрузки
+## Текущий приоритет — завершение и приёмка Additional Resources
 
-Владелец восстановил запущенный `0.5.7_1` после ошибки холодного IPFW: при сохранённом committed-журнале и отсутствии модулей исходный старый статус был 2; с независимой консоли проверен default-allow, вручную загружены ipfw/ipdivert, статус стал 1, затем штатный Start дал статус 0. Source `v0.5.7_30` устраняет опасный порядок `kldload ipfw` до `kenv default_to_accept=1` и ужесточает холодное наблюдение. Требуются CI и отдельная установленная проверка полноценного reboot→safe auto-start, без автоматической публикации пакета.
+The approved final contract is [ZAPRET2_EXTRA_RESOURCES_GUI.md](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md). The original five functional stages retain authority; [the bounded M0–M7 plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) and [the single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) now govern execution. Source `v0.5.7_46` passed CI, but the last owner-installed testing package is `v0.5.7_30`; this is **not** a completed live acceptance.
 
-## Текущий согласованный шаг — точный состав Lua/BIN
+Next, persistently publish and verify one immutable `v0.5.7_N` testing package, then accept exact resource reconciliation, GUI, native dynamic BIN/Lua Stage-60 execution, operator-selected clean plugin repair, upstream switch, cold IPFW reboot and bounded regressions. The owner confirms hypervisor-console access. Ordinary updates preserve settings, but explicitly selected clean repair may discard damaged plugin-owned settings; system/other-plugin safety remains mandatory. A later stable **v0.5.8** requires a separately authorized, exact release-package build, repository and Web-install verification.
 
-Владелец установил тестовый `_30` и подтвердил работающую службу; ручная
-установка дополнений отказалась из-за уже существующего чужого BIN.
-Одобрена точная синхронизация Lua/BIN по локальному Git HEAD Zapret2 и
-проверенному каталогу дополнительных ресурсов с резервной копией
-заменяемых/удаляемых файлов, восстановлением и нативным Stop/Start.
-Этап `_31` реализовал точную ручную установку и прошёл CI.
-Этап `_32` охраняет старый/целевой Git-инвентарь при смене upstream.
-Этап `_33` аттестует полные снимки нештатных Lua/BIN до переключения.
-В `_34` реализована очистка только после сохранения исходных байтов
-и durable checkpoint, с проверкой старого/целевого Git и откатом.
-`_35` оставляет прямую установку без очистки чужих файлов
-и повторно проверяет весь бэкап перед завершением транзакции.
-`_36` блокирует удаление и Git reset при локально изменённых
-отслеживаемых файлах и связывает journal с исходным коммитом.
-`_37` исправляет синтаксис guard по фактическому логу CI и ставит
-быстрые тесты upstream/rollback перед длительной матрицей.
-CI, FreeBSD 15 и установленная проверка остаются независимыми воротами.
+Do not automatically expand per-path Git write-ahead recovery from the diagnostic `_46` work. Preserve attested backups, FD9/setup.lock, clean-Git fail-closed safeguards and existing successful source evidence. New research directions require owner agreement as new work; the model may recommend meaningful evidence-based improvements. Acceptance is measured by qualified user-visible behavior rather than iteration count.
 
 ## Предыдущий приоритет — Additional Resources implementation
 

@@ -1,0 +1,52 @@
+# Additional Resources — acceptance board M0–M7
+
+**Status:** owner-approved delivery scope, 24 October 2026. **No installed-candidate PASS is inferred from source CI.** This file is the sole live acceptance scoreboard. Normative scope: [requirements](../architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md); milestone meanings and gates: [implementation plan](../architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
+
+## Current baseline
+
+- Source: `VERSION=0.5.7`, `PLUGIN_REVISION=46`, introducing commit [065280e](https://github.com/Tolian82/os-zapret2-restyle/commit/065280eef9a03d540c220820380e7103993a07eb).
+- Source verification: [Project/Voice/FreeBSD15 PR CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40070741846); [main post-merge integrity PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40071292437).
+- Last installed package observed by owner: [v0.5.7_30 testing release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_30).
+- Installer/extras end-to-end and dynamic extra-candidate execution on `_46`: **NOT RUN**.
+- Independent hypervisor console: **confirmed available** by owner.
+- Explicit clean reinstall of an incomplete/corrupted plugin: **NOT RUN / not yet implemented if required by test**.
+- Testing-package release for `_46`: **NOT PUBLISHED**. Stable `v0.5.8`: **NOT AUTHORIZED / NOT PUBLISHED**.
+
+## Milestone scoreboard
+
+| ID | Required deliverable / gate | Status | Evidence / blocking detail |
+|---|---|---|---|
+| M0 | Approved requirements, governing rules and finite acceptance checklist merged to main, docs CI and post-merge integrity pass | IN PROGRESS | This document and normative PR must be merged and verified |
+| M1 | One persistent immutable `v0.5.7_N` testing package, verified source/tag/assets/hash and FreeBSD15 qualification | NOT RUN | Source `_46` CI PASS is not package publication |
+| M2 | Read-only appliance baseline, backup/snapshot and console recovery | NOT RUN | Console access confirmed; exact baseline and snapshot unverified |
+| M3 | Owner-live manual exact-set extras installation, restart and GUI; ordinary update preserves plugin settings | NOT RUN | Historical orphan name is merely one example |
+| M4 | Owner-live native execution for one reviewed extra BIN and one reviewed Lua; dynamic new Jobs and correct bounded cleanup | NOT RUN | Offline graph tests cannot prove installed execution |
+| M5 | Failure matrix, upstream change and explicit clean reinstall after corrupted plugin; unrelated OPNsense state preserved | NOT RUN | Native package hooks currently fail closed on incomplete owner; repair must be demonstrated |
+| M6 | Cold restart IPFW/ipdivert, Voice, GUI, saved settings and no lingering firewall/PID/lock residues | NOT RUN | Previous _30 boot acceptance pending |
+| M7 | Mandatory rows PASS, concise final report, separately approved `v0.5.8` exact package and OPNsense Web repo delivery | NOT RUN | Stable publication is a separate owner-controlled operation |
+
+## Mandatory proof matrix
+
+| Test | Gate | Expected observable result | Status |
+|---|---|---|---|
+| GitHub package identity and checksum | M1 | Uploaded persistent `.pkg` matches tested immutable commit and FreeBSD15 build | NOT RUN |
+| Source and runtime snapshots, hypervisor access | M2 | Known restore entry point and no destructive diagnostic | NOT RUN |
+| Orphan/colliding untracked Lua/BIN | M3 | Backed up, then replaced/removed to exact desired inventory; no ad hoc filename exceptions | NOT RUN |
+| Upstream/catalog identical and different-name collisions | M3/M5 | Identical content single upstream owner; divergent bytes safely block | NOT RUN |
+| Saved strategy references changed/deleted resource | M3 | No silent semantic break or config rewrite | NOT RUN |
+| Idempotent repeat click | M3 | Same bytes, real new native Stop/Start, verified health | NOT RUN |
+| Started vs Stopped and concurrent action | M3 | Only Started authorized; proper busy/status handling | NOT RUN |
+| RU/EN, F5, two Apply buttons | M3 | User GUI function and layout preserved | NOT RUN |
+| Extra BIN and reviewed Lua | M4 | New bounded native candidates execute with correct dependencies | NOT RUN |
+| Add/remove compatible descriptors without code change | M4 | New Jobs follow inventory; saved Job unchanged | NOT RUN |
+| Network/hash/payload and native Stop/Start failures | M5 | No false success, safe rollback or explicit RESTORE_FAILED | NOT RUN |
+| Upstream switch with extras and collisions | M5 | Valid switch succeeds with preserved extras; invalid target refused before unsafe writes | NOT RUN |
+| Explicit clean repair of damaged plugin | M5 | Fresh usable plugin; plugin-owned settings may reset; unrelated OPNsense state remains safe | NOT RUN |
+| Boot/IPFW/Voice and common lifecycle | M6 | Safe postboot service and no new common owner/rule regressions | NOT RUN |
+| Final installed package and stable Web delivery | M7 | Release `v0.5.8` exact bytes after separate approval and corresponding final test | NOT RUN |
+
+## Execution rules
+
+A test becomes **PASS** only with a recorded exact candidate, environment, executed procedure, observed result and evidence source. Allowed states: **NOT RUN**, **IN PROGRESS**, **PASS**, **FAIL**, **BLOCKED**. A blocking FAIL requires the smallest reproducible scoped repair, a new test candidate when packaged source changes, and re-execution of impacted tests. Do not silently waive a mandatory row or spin out speculative hardening. Move to the next milestone when the gate is satisfied; propose useful new work with evidence, but acquire owner approval before enlarging the mandatory scope.
+
+**Single next action:** finish M0 documentation PR/CI/main-integrity and update the scoreboard to PASS, then execute M1 testing-package qualification and persistent publication. No product changes are authorized merely by writing this board.
