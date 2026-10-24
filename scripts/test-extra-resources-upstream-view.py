@@ -102,6 +102,12 @@ class Stage2ViewTests(unittest.TestCase):
             self.assertFalse((view / "lua/extra.lua").exists())
         self.git("add", "lua/extra.lua")
         self.git("commit", "-qm", "upstream adopts extra")
+        # Stale ownership is unsafe. In production an upstream-switch
+        # transaction retires/reconciles the old managed manifest first.
+        with self.assertRaisesRegex(PreflightError, "managed resource is now upstream-owned"):
+            with self.view():
+                pass
+        self.state.unlink()
         with self.view() as (plan, view):
             self.assertEqual(plan["counts"]["lua"], 0)
             self.assertTrue((view / "lua/extra.lua").is_file())
