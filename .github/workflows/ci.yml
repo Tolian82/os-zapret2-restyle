@@ -244,6 +244,12 @@ jobs:
           sh scripts/test-setup-runtime-transaction.sh
           python3.13 scripts/test-upstream-interruption-recovery.py
 
+      - name: Test isolated prospective upstream resource view and native Blob resolver
+        run: python3.13 scripts/test-extra-resources-upstream-view.py
+
+      - name: Test full native Strategies candidate against upstream-only resources
+        run: python3.13 scripts/test-extra-resources-native-strategies.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
@@ -406,9 +412,6 @@ jobs:
 
       - name: Test read-only prospective removal plan with real Git HEAD
         run: python3.13 scripts/test-extra-resources-remove-plan.py
-
-      - name: Test isolated prospective upstream resource view and native Blob resolver
-        run: python3.13 scripts/test-extra-resources-upstream-view.py
 
       - name: Test durable resource transaction and rollback
         run: python3.13 scripts/test-extra-resources-transaction.py
