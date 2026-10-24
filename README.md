@@ -10,9 +10,9 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · published 22 Oct 2026; FreeBSD 15 Pages/pkg deployment PASS (owner Web install not verified) |
-| **Latest published testing package** | [v0.5.7_48](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_48) · [FreeBSD15 package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.7_48/os-zapret2-restyle-0.5.7_48.pkg) · SHA-256 `4c6d6f17e2c390b9ed0c142802b4595b9d6dbcecc0e3437fbdb311d92c838f91` · **published for owner GUI testing; not stable** |
-| **Current development candidate** | `v0.5.7_48` · source and FreeBSD15 build/packaging CI PASS; immutable testing asset published. Cached Lua/BIN two-column Full Help still needs owner-installed GUI verification (last installed `_47`). Stable `v0.5.8` **NOT authorized** |
+| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) remains the latest *verified published* stable at release-preparation time; **owner-authorized `v0.5.8` / `0.5.8_1.pkg`** is being qualified for full GitHub + FreeBSD 15 Pages/pkg publication ([release plan](docs/releases/v0.5.8.md)) |
+| **Last owner-accepted testing package** | [v0.5.7_48](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_48) · Lua/BIN two-column cached Full Help **PASS (owner report)**; previous native additional-resource/Stage-90 evidence accepted separately ([sign-off](docs/verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md)) |
+| **Current development candidate** | `v0.5.8_1` (`VERSION=0.5.8`, `PLUGIN_REVISION=1`); full release explicitly authorized by owner and being built/validated; **not yet published until workflow and repository verification pass** |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -21,6 +21,8 @@
 `os-zapret2-restyle` integrates the [bol-van/zapret2](https://github.com/bol-van/zapret2) native `dvtws2` engine with OPNsense: transactional Traffic Strategies, automatic Strategy Lab testing, upstream runtime management and a configurable Voice Transmission page. The plugin and upstream Zapret2 engine have separate installation/update lifecycles.
 
 **Verification limits:** the owner accepted Strategy Lab Stages 1–6 on installed testing `v0.5.6_17`, including two GUI Stop tests and a clean post-test runtime/IPFW inspection. Results prove the observed scenarios, not every possible DPI/ISP/QUIC bypass. The five Voice/STUN profiles are configurable, but **no successful Telegram media/call bypass has been confirmed on the owner's direct ISP route**; other services likewise have no validated voice presets. See [Strategy Lab evidence](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md) and [Voice research closure](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
+
+**Full-release verification boundary:** A successful source build does not itself establish a GitHub full release or reachable OPNsense repository. The planned `v0.5.8` must be verified against its **own** `0.5.8_1.pkg`, tag, SHA256SUMS and FreeBSD15 Pages pkg metadata. Owner-closed M6 cold reboot was **not performed**; the release does not imply a completed real cold-boot acceptance. Details: [v0.5.8 release notes](docs/releases/v0.5.8.md) and [owner sign-off](docs/verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md).
 
 ## Architecture overview
 
@@ -133,7 +135,7 @@ The backend expands managed targets while preserving the rest of the user-author
 
 ## Additional Resources — installed Lua/BIN help
 
-The **Install Additional Resources / Установить дополнительные ресурсы** button remains a manual, user-initiated action with native restart and state verification. From source candidate `v0.5.7_48`, enabling native **Full Help / Справка** on Strategies shows the installed Lua and BIN filenames in two columns below that button: **green** for files tracked in the installed upstream Zapret2 Git HEAD, **blue** for other installed files. The lists come from an atomically written JSON cache generated on resource/upstream/package changes, not a new Git scan on every help view. Before additional resources are installed, the help describes what the button installs. This feature passed source and FreeBSD15 build checks and is now available as a testing prerelease; **installed OPNsense GUI acceptance for `_48` is still pending**. No automatic extra resource installation or stable release is authorized.
+The **Install Additional Resources / Установить дополнительные ресурсы** button remains a manual, user-initiated action with native restart and state verification. From source candidate `v0.5.7_48`, enabling native **Full Help / Справка** on Strategies shows the installed Lua and BIN filenames in two columns below that button: **green** for files tracked in the installed upstream Zapret2 Git HEAD, **blue** for other installed files. The lists come from an atomically written JSON cache generated on resource/upstream/package changes, not a new Git scan on every help view. Before additional resources are installed, the help describes what the button installs. This feature passed source and FreeBSD15 testing qualification and the owner explicitly accepted it on the published `v0.5.7_48` testing package. The owner accepted the final report and authorized the separate full `v0.5.8` release. Additional-resource installation remains **manual**, and there is no automatic Strategy Lab profile Apply.
 
 ## Voice Transmission — shared native runtime
 

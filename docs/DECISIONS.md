@@ -2551,3 +2551,17 @@ Active owner-approved theoretical concept; implementation not approved.
 **Документы:** [ТЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md), [приёмка](verification/EXTRA_RESOURCES_ACCEPTANCE.md), [продолжение](START_HERE.md).
 
 **Статус:** утверждено.
+
+## 2026-10-24 — Final H1 acceptance, M6 closure and explicit stable v0.5.8 release authorization
+
+**Owner decision (verbatim):** «Я всё проверил. Всё отлично. Эту задачу по добавлению списка .lua и .bin закрываем. M6 и M7 закрываем если еще не закрыто. Отчёт о приёмке считаем сданным. Выпускаем релиз.»
+
+**Scope:** The published `v0.5.7_48` Strategies Full Help two-column cached Lua/BIN enhancement (H1) is **PASS by owner sign-off**, and the final acceptance report is accepted. **M6 is CLOSED BY OWNER**; this is a process closure/waiver, **not** an assertion that a new cold reboot, postboot IPFW/ipdivert or complete Voice boot regression was actually performed. Historical M2/M3/M5 unrun fault/reference/snapshot cases also remain explicitly unverified. Earlier accepted M4 native Model C BIN/Lua execution, Stage-90 restoration, original Settings/Voice preservation and source negative CI keep their own evidence limits.
+
+**Stable authorization:** This explicit instruction supersedes the former “stable release not authorized / M7 on hold” status. Prepare `VERSION=0.5.8`, `PLUGIN_REVISION=1`, exact source PR and FreeBSD15 build, then publish and verify a full **non-prerelease** GitHub `v0.5.8`, matching `0.5.8_1.pkg`/SHA256SUMS and public `FreeBSD:15:amd64` GitHub Pages repository for OPNsense Web install/update. **M7 publication is not technically PASS until all these independent checks succeed.** A user Web-upgrade click is not inferred from deploy success.
+
+**Out of scope remains out:** no separately implemented console clean-reinstall mechanism, no forced managed-resource deletion, no repeated Strategy Lab jobs or new power-loss tests merely to requalify closed work. Normal update fail-closed/transactional protection and separate source-vs-owner-vs-release evidence remain unchanged.
+
+**Evidence:** [final acceptance and release authorization](verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md); [M0–M7 scoreboard](verification/EXTRA_RESOURCES_ACCEPTANCE.md); [stable release preparation](releases/v0.5.8.md).
+
+**Status:** Owner sign-off complete. Stable release publication expressly authorized and in progress.
