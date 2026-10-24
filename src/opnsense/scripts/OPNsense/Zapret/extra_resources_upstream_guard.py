@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 from extra_resources_preflight import PreflightError, sha256, validate_runtime_path, resource_path
+from upstream_checkout_origin import InspectError, inspect_checkout
 from extra_resources_reconcile import tracked_resources, installed_resources, previous_metadata
 from extra_resources_transaction import (
     TransactionError, _owned_metadata, _safe_subdir, _sync_dir, _write_atomic,
@@ -598,7 +599,7 @@ def preflight_exact(ref: str = "FETCH_HEAD") -> None:
     preflight_switch(ref)
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "bind-target", "verify-target", "inspect-target"}:
+    if len(argv) < 2 or argv[1] not in {"preflight", "preflight-exact", "preflight-switch", "prune-orphans", "verify-switch-complete", "verify-exact", "snapshot", "verify", "verify-snapshot", "restore", "snapshot-untracked", "verify-live-untracked", "restore-untracked", "snapshot-evidence", "verify-evidence", "bind-target", "verify-target", "inspect-target", "inspect-checkout"}:
         print("usage: extra_resources_upstream_guard.py {preflight [COMMIT]|preflight-exact [COMMIT]|verify-exact|snapshot|verify|verify-snapshot|restore|snapshot-evidence 0|1|verify-evidence 0|1}", file=sys.stderr)
         return 64
     try:
@@ -606,6 +607,13 @@ def main(argv: list[str]) -> int:
             if len(argv) != 4:
                 return 64
             bind_target(argv[2], argv[3])
+        elif argv[1] == "inspect-checkout":
+            if len(argv) != 2:
+                return 64
+            identity = verify_target_identity()
+            report = inspect_checkout(RUNTIME, GIT, identity["previous_commit"], identity["target_commit"])
+            print("checkout_origin=" + json.dumps(report, sort_keys=True, separators=(",", ":")))
+            return 0
         elif argv[1] in {"verify-target", "inspect-target"}:
             if len(argv) != 2:
                 return 64
@@ -657,7 +665,7 @@ def main(argv: list[str]) -> int:
             restore()
         print("PASS: managed additional resources are preserved")
         return 0
-    except (TransactionError, PreflightError, OSError, subprocess.TimeoutExpired) as exc:
+    except (TransactionError, PreflightError, InspectError, OSError, subprocess.TimeoutExpired) as exc:
         print(f"RESOURCE_UPSTREAM_GUARD_FAILED: {exc}", file=sys.stderr)
         return 70
 
