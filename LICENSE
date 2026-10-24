@@ -21,13 +21,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Third-party attribution (informational; MIT license terms above are unchanged)
-
-lexiforest/curl-impersonate — https://github.com/lexiforest/curl-impersonate
-Upstream license: MIT — https://github.com/lexiforest/curl-impersonate/blob/main/LICENSE
-Upstream copyright notice: Copyright (c) 2026 curl_cffi developers
-
-The upstream project and its authors retain their respective copyright and
-license notices. This attribution does not imply that lexiforest authored
-os-zapret2-restyle.
