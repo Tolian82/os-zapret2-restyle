@@ -1,5 +1,10 @@
 # os-zapret2-restyle
 
+> [!IMPORTANT]
+> This project and its documentation are provided for scientific, technical, and educational purposes only.
+> Using these materials for purposes other than research, review, or learning may violate applicable laws and regulations.
+> Users are responsible for ensuring that their use complies with applicable law. The authors do not endorse or accept responsibility for unlawful use or misuse of these materials.
+
 > Native OPNsense plugin for **bol-van/zapret2**: manage the runtime, build DPI-bypass profiles, and automatically search for strategies that actually work from your firewall.
 
 [![GitHub stars](https://img.shields.io/github/stars/Tolian82/os-zapret2-restyle?style=social)](https://github.com/Tolian82/os-zapret2-restyle)
