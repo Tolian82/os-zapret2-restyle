@@ -2512,3 +2512,16 @@ docs/DECISIONS.md
 
 Status:
 Active owner-approved theoretical concept; implementation not approved.
+
+
+## 2026-10-24 — No direct Strategy Lab persistent Apply button
+
+**Decision:** Do not add a Lab-side `Применить стратегию` or `Перенести в настройки` button, with or without a preview, to the current plugin scope. The owner explicitly declined the proposed UX change: «Значит мне показалось. Не будем такое делать.»
+
+**Reason:** The owner was recalling a possible earlier UI field; checked historical `diagnostics.volt` sources at `v0.5.0`, `v0.5.2`, and `v0.5.6_17` and current `_47` provide **Copy profile** and temporary circular validation, not direct persistent Strategy Apply. Existing user-controlled Copy profile → paste in Strategies/Settings → Apply is retained.
+
+**Consequences:** No GUI implementation, API action, automatic strategy rewrite, new milestone, backlog entry, package version bump or release change is authorized. Continue agreed M0–M7 Additional Resources acceptance work. Current source remains unchanged.
+
+**Evidence:** [Owner decision and exact saved Job shortlist provenance](verification/evidence/2026-10-24-v0.5.7_47-shortlist-provenance-owner-live.md).
+
+**Status:** Closed — do not implement.
