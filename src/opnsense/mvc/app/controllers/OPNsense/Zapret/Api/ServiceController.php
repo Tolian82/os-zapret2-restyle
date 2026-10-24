@@ -180,6 +180,48 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
     }
 
+    /**
+     * Cached Lua/BIN names only. The configd action performs no Git or
+     * directory scan; enumeration happens when resource sets change.
+     */
+    public function resourcesInventoryAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+        try {
+            $raw = (string)(new Backend())->configdRun(
+                'zapret extra_resources_inventory', false, 10
+            );
+            if (strlen($raw) > 1048576) {
+                throw new \RuntimeException('inventory cache response too large');
+            }
+            $data = json_decode(trim($raw), true);
+            if (!is_array($data) || ($data['status'] ?? '') !== 'ok' ||
+                !is_bool($data['installed'] ?? null)) {
+                throw new \RuntimeException('inventory cache unavailable');
+            }
+            foreach (['lua', 'bin'] as $kind) {
+                if (!isset($data[$kind]) || !is_array($data[$kind]) ||
+                    count($data[$kind]) > 4096) {
+                    throw new \RuntimeException('invalid inventory list');
+                }
+                $suffix = $kind === 'lua' ? 'lua' : 'bin';
+                foreach ($data[$kind] as $entry) {
+                    if (!is_array($entry) ||
+                        !in_array($entry['origin'] ?? '', ['upstream', 'other'], true) ||
+                        !is_string($entry['name'] ?? null) ||
+                        !preg_match('/^[A-Za-z0-9_.+\\-]+\\.' . $suffix . '$/D', $entry['name'])) {
+                        throw new \RuntimeException('invalid cached resource');
+                    }
+                }
+            }
+            return $data;
+        } catch (\Throwable $exception) {
+            return ['status' => 'unavailable'];
+        }
+    }
+
     public function resourcesInstallAction(): array
     {
         if (!$this->request->isPost()) {

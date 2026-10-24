@@ -11,8 +11,8 @@
 | Project | Current release |
 |---|---|
 | **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) · `os-zapret2-restyle-0.5.7_1.pkg` · published 22 Oct 2026; FreeBSD 15 Pages/pkg deployment PASS (owner Web install not verified) |
-| **Latest published testing package** | [v0.5.7_10](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) · ECH-disabled Chrome reachability; owner-installed verification pending; not a stable Web/pkg release |
-| **Current development candidate** | `v0.5.7_28` · source-only Additional Resources installer, manual RU/EN GUI button and dynamic Stage-60 BIN/Lua candidates; symlinked resources excluded from job inventory; fast manual installs have correlated terminal receipts; failed snapshot preparation is retryable; interrupted upstream upgrades now record a durable checkpoint inspectable without mutations. Attested pre-mutation snapshots can now be manually released via `recover-prepared` without changing runtime; native service status now preserves STOPPED/INCOMPLETE codes so unknown ownership blocks setup; backup-only managed Lua/BIN attestation now tolerates missing/changed live files from a potentially mutated checkout, while `recover-prepared` separately requires unchanged live resources; new snapshots now seal original compiled-binary SHA-256 inventory and installed-resource manifest identity before any runtime mutation; immediate automatic rollback refuses missing/corrupt proof before checkout. Manual `recover-mutating-stopped` now implements a guarded schema-2 mutating recovery under setup.lock→original native FD9 **only when the native service is fully stopped**; running/incomplete/dirty/foreign states refuse without auto-Stop. Installed OPNsense acceptance remains pending. Cold-IPFW old-package replacement still requires controlled owner recovery; ECH-off retained. No package or release published.
+| **Latest published testing package** | [v0.5.7_47](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_47) · owner-installed on OPNsense; native Additional Resources BIN/Lua in Strategy Lab and Stage-90 restore verified; not a stable Web/pkg release |
+| **Current development candidate** | `v0.5.7_48` · source-only until separately published/installed; adds fast cached Lua/BIN Full Help inventory under Install Additional Resources, upstream Git HEAD filenames green, other installed filenames blue, RU/EN messages and first-install explanation. Previous M0–M6 acceptance campaign closed by owner decision; stable `v0.5.8` release NOT authorized |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -130,6 +130,10 @@ Profiles are separated with the normal Zapret2 boundary:
 ```
 
 The backend expands managed targets while preserving the rest of the user-authored Zapret2 profile. Apply is transactional: invalid or unhealthy candidate configuration does not silently replace a working runtime. The **upper Apply** in the Zapret2 Service panel installs or changes the selected *upstream Zapret2 release*; the **lower Apply** saves and activates *Traffic Strategies*. They are separate operations and are serialized for safety.
+
+## Additional Resources — installed Lua/BIN help
+
+The **Install Additional Resources / Установить дополнительные ресурсы** button remains a manual, user-initiated action with native restart and state verification. From source candidate `v0.5.7_48`, enabling native **Full Help / Справка** on Strategies shows the installed Lua and BIN filenames in two columns below that button: **green** for files tracked in the installed upstream Zapret2 Git HEAD, **blue** for other installed files. The lists come from an atomically written JSON cache generated on resource/upstream/package changes, not a new Git scan on every help view. Before additional resources are installed, the help describes what the button installs. This is a source implementation claim; installed OPNsense GUI acceptance for `_48` is still pending. No automatic extra resource installation or stable release is authorized.
 
 ## Voice Transmission — shared native runtime
 

@@ -65,10 +65,23 @@
                 'Review the previous result before trying again',
             ready: isRussian ? 'Установлено' : 'Installed',
             lua: 'Lua', bin: 'BIN',
+            native: isRussian ? 'Из установленной версии Zapret2' : 'Included in installed Zapret2',
+            other: isRussian ? 'Остальные установленные ресурсы' : 'Other installed resources',
+            installHelp: isRussian
+                ? 'Дополнительные ресурсы пока не установлены. Нажмите «Установить дополнительные ресурсы», чтобы добавить новые .lua и .bin файлы.'
+                : 'Additional Resources have not been installed. Click “Install Additional Resources” to add extra .lua and .bin files.',
+            listUnavailable: isRussian ? 'Кэш списка ресурсов недоступен. Обновление списка выполняется после установки или смены версии Zapret2.'
+                : 'The resource list cache is unavailable. It is updated after installation or a Zapret2 version change.',
+            none: isRussian ? 'Нет установленных файлов' : 'No installed files',
             log: '/var/log/zapret2/extra-resources.log'
         };
         let extraPoll = null;
         let extraPollAttempts = 0;
+        let helpInventoryLoaded = false;
+        let helpInventoryRequest = false;
+        let helpInventoryPendingRefresh = false;
+        let resourceHelpWasVisible = false;
+        let helpInventoryLastInstalled = false;
         let extraStateKnown = false;
         let extraBusy = false;
         let extraInstallPending = false;
@@ -241,6 +254,8 @@
                     releaseOriginalVersion, releaseOriginalService, releaseObservedBusy);
                 if (outcome === 'success') {
                     finishReleaseOperation(false, '');
+                    helpInventoryLoaded = false;
+                    requestResourceHelpInventory(true);
                 } else if (outcome === 'failed') {
                     failureReported = true;
                     finishReleaseOperation(false, runtimeText.operationFailed);
@@ -357,6 +372,99 @@
             });
         }
 
+        function isResourceHelpEnabled() {
+            // Native OPNsense 26.7 full-help toggle for frm_GeneralSettings.
+            return $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on');
+        }
+
+        function renderResourceHelpInventory(data) {
+            const panel = $('#zapretExtraResourceHelp');
+            panel.empty();
+            if (!data || data.status !== 'ok') {
+                panel.append($('<p/>').text(
+                    !helpInventoryLastInstalled ? extrasText.installHelp : extrasText.listUnavailable
+                ));
+                return;
+            }
+            helpInventoryLastInstalled = !!data.installed;
+            if (!data.installed) {
+                panel.append($('<p/>').text(extrasText.installHelp));
+                return;
+            }
+            const legend = $('<div/>', {'class': 'zapret-resource-legend'});
+            $('<span/>', {'class': 'text-success'}).text(extrasText.native).appendTo(legend);
+            $('<span/>', {'class': 'text-info'}).text(extrasText.other).appendTo(legend);
+            panel.append(legend);
+            const columns = $('<div/>', {'class': 'zapret-resource-columns'});
+            [['lua', extrasText.lua], ['bin', extrasText.bin]].forEach(function(pair) {
+                const name = pair[0];
+                const items = Array.isArray(data[name]) ? data[name] : [];
+                const column = $('<div/>', {'class': 'zapret-resource-column'});
+                $('<strong/>').text(pair[1] + ' (' + items.length + ')').appendTo(column);
+                const list = $('<ul/>', {'class': 'list-unstyled zapret-resource-list'});
+                items.forEach(function(item) {
+                    if (!item || typeof item.name !== 'string' ||
+                        !/^[A-Za-z0-9_.+\-]+\.(lua|bin)$/.test(item.name)) return;
+                    $('<li/>').addClass(item.origin === 'upstream' ? 'text-success' : 'text-info')
+                        .text(item.name).appendTo(list);
+                });
+                if (!list.children().length) {
+                    $('<li/>', {'class': 'text-muted'}).text(extrasText.none).appendTo(list);
+                }
+                column.append(list);
+                columns.append(column);
+            });
+            panel.append(columns);
+        }
+
+        function requestResourceHelpInventory(force) {
+            if (!isResourceHelpEnabled()) return;
+            if (helpInventoryRequest) {
+                helpInventoryPendingRefresh = helpInventoryPendingRefresh || !!force;
+                return;
+            }
+            if (helpInventoryLoaded && !force) return;
+            helpInventoryRequest = true;
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/service/resourcesInventory',
+                dataType: 'json',
+                timeout: 10000
+            }).done(function(data) {
+                helpInventoryLoaded = !!data && data.status === 'ok';
+                if (isResourceHelpEnabled()) renderResourceHelpInventory(data);
+            }).fail(function() {
+                if (isResourceHelpEnabled()) renderResourceHelpInventory(null);
+            }).always(function() {
+                helpInventoryRequest = false;
+                if (helpInventoryPendingRefresh) {
+                    helpInventoryPendingRefresh = false;
+                    requestResourceHelpInventory(true);
+                }
+            });
+        }
+
+        function updateResourceHelpVisibility() {
+            const enabled = isResourceHelpEnabled();
+            const panel = $('#zapretExtraResourceHelp');
+            panel.toggle(enabled);
+            // Every new help opening reads the cheap CACHE again, not Git.
+            if (enabled && !resourceHelpWasVisible) {
+                panel.text(extrasText.loading);
+                requestResourceHelpInventory(true);
+            }
+            resourceHelpWasVisible = enabled;
+        }
+
+        // Observe the same icon controlled by OPNsense's full-help switch,
+        // including keyboard shortcuts; do not introduce a second help toggle.
+        const resourceHelpIcon = document.getElementById('show_all_help_frm_GeneralSettings');
+        if (resourceHelpIcon && window.MutationObserver) {
+            const observer = new MutationObserver(updateResourceHelpVisibility);
+            observer.observe(resourceHelpIcon, {attributes: true, attributeFilter: ['class']});
+        }
+        updateResourceHelpVisibility();
+
         function extrasLabel(data) {
             const phase = data && data.phase || 'unknown';
             if (phase === 'ready' && !(data && data.busy)) {
@@ -406,11 +514,14 @@
 
             extraStateKnown = true;
             extraBusy = !!data.busy;
+            if (data.phase === 'ready') helpInventoryLastInstalled = true;
             if (['restore_failed', 'recovery_required'].indexOf(data.phase) >= 0) {
                 extraNeedsReview = true;
             }
             $('#zapretExtraState').text(extrasLabel(data));
             if (extraInstallPending && extraOperationTerminal(data, extraExpectedOperation)) {
+                helpInventoryLoaded = false;
+                requestResourceHelpInventory(true);
                 extraInstallPending = false;
                 extraExpectedOperation = '';
                 if (data.phase !== 'ready') {
@@ -637,6 +748,15 @@
 </script>
 
 <style>
+    #zapretExtraResourceHelp { padding: 12px 4px 4px; }
+    .zapret-resource-legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 12px; }
+    .zapret-resource-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+    .zapret-resource-column { min-width: 0; }
+    .zapret-resource-list { max-height: 360px; overflow-y: auto; margin-top: 8px; }
+    .zapret-resource-list li { overflow-wrap: anywhere; line-height: 1.6; }
+    @media (max-width: 700px) {
+        .zapret-resource-columns { grid-template-columns: minmax(0, 1fr); }
+    }
     #zapretServiceLine {
         display: grid;
         grid-template-columns: max-content max-content 14ch 12ch 4ch max-content minmax(130px, 150px) max-content;
@@ -728,6 +848,7 @@
                             </button>
                             <span id="zapretExtraState" role="status" aria-live="polite"></span>
                         </div>
+                        <div id="zapretExtraResourceHelp" style="display:none;" aria-live="polite"></div>
                     </td>
                 </tr>
             </tbody>

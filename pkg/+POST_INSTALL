@@ -18,6 +18,8 @@ SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
 UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
+EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
 
 reload_configd_actions()
 {
@@ -158,6 +160,16 @@ if [ "${restore_running_state}" -eq 1 ]; then
     fi
 
     rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
+fi
+
+# Populate the cache also on an ordinary _47 -> _48 package replacement,
+# without forcing another manual resource download, Stop or Start.
+if [ -f "${EXTRA_INVENTORY_CACHE}" ] &&
+   [ -x "${EXTRA_PYTHON}" ] &&
+   [ -d /usr/local/etc/zapret2/.git ]; then
+    if ! "${EXTRA_PYTHON}" "${EXTRA_INVENTORY_CACHE}" refresh >/dev/null; then
+        echo "WARNING: Strategies resource inventory help is unavailable" >&2
+    fi
 fi
 
 cat <<'MESSAGE'

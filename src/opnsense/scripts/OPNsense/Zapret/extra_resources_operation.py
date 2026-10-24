@@ -21,6 +21,7 @@ from extra_resources_transaction import (
     TransactionError, install, recover, _safe_state, _json_write,
 )
 from extra_resources_reconcile import make_plan
+from extra_resources_inventory_cache import InventoryCacheError, refresh as refresh_inventory_cache
 
 SCRIPT = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -103,6 +104,15 @@ def _status(stage: str, **extra) -> None:
     })
 
 
+def _refresh_help_cache() -> None:
+    # Display-only derivative. Never turn a successfully restored native
+    # transaction into a failure because the optional help cache is unavailable.
+    try:
+        refresh_inventory_cache(RUNTIME, STATE)
+    except (InventoryCacheError, OSError, ValueError, RuntimeError) as exc:
+        print(f"WARNING: Strategies resource help cache unavailable: {exc}", file=sys.stderr)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2 or argv[1] not in {"install", "recover"}:
         print("usage: extra_resources_operation.py {install|recover}", file=sys.stderr)
@@ -118,6 +128,7 @@ def main(argv: list[str]) -> int:
         if mode == "recover":
             _status("recovering")
             status = recover(RUNTIME, STATE, lifecycle)
+            _refresh_help_cache()
             _status(status.lower())
             print(status)
             return 0
@@ -137,6 +148,7 @@ def main(argv: list[str]) -> int:
         _status("installing", source_commit=revision)
         result = install(payloads, revision, RUNTIME, STATE, lifecycle,
                          capabilities=catalog, reconcile=True)
+        _refresh_help_cache()
         _status("ready", **result, described_capabilities=capabilities_count)
         print(json.dumps(result, sort_keys=True))
         return 0
