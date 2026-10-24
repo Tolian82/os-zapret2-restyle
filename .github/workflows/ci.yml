@@ -51,6 +51,8 @@ jobs:
             base_sha="${head_sha}^"
           fi
 
+          # Fail fast on whitespace errors before expensive PR/package checks.
+          git diff --check "${base_sha}" "${head_sha}"
           changed=$(git diff --name-only "${base_sha}" "${head_sha}")
           printf '%s\n' "${changed}"
 
