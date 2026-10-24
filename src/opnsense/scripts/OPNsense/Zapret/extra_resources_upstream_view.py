@@ -77,4 +77,12 @@ def upstream_only_view(
             raise PreflightError("resource/config inventory changed during prospective staging")
         # The staged view is an inert input. No full native compile, Lua-export
         # proof or Voice/OFF-draft validation happens in this helper.
-        yield plan, view
+        # Re-attest AFTER the caller's compilation, too: any mutation while
+        # the native candidate is being built invalidates the result.
+        try:
+            yield plan, view
+        finally:
+            if installed_resources(view) != plan["upstream"]:
+                raise PreflightError("prospective upstream resources changed during compilation")
+            if make_remove_plan(root, managed, config, git_bin) != plan:
+                raise PreflightError("resource/config inventory changed during compilation")

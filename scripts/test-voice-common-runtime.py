@@ -29,7 +29,8 @@ ORDINARY = "--filter-tcp=443\n--filter-l7=tls\n--new\n--filter-udp=596-599\n<IPS
 
 
 def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None,
-          target_offset=0, stun_ports="*"):
+          target_offset=0, stun_ports="*", upstream_root=None, traffic_args=None,
+          extra_args=None):
     xml = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(xml, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
@@ -37,9 +38,9 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     voice = ET.SubElement(model, "voice")
     hosts = ET.SubElement(model, "hostlist")
     settings = {"ZAPRET_ENABLED": "1" if global_enabled else "0", "WAN_IF": "WAN",
-                "HOSTLIST_MODE": "all", "DIVERT_PORT": "989", "TRAFFIC_ARGS": ORDINARY,
+                "HOSTLIST_MODE": "all", "DIVERT_PORT": "989", "TRAFFIC_ARGS": ORDINARY if traffic_args is None else traffic_args,
                 "YOUTUBE_DOMAINS": "", "USER_DOMAINS": "", "EXCLUDE_DOMAINS": "example.com",
-                "EXTRA_ARGS": ""}
+                "EXTRA_ARGS": "" if extra_args is None else extra_args}
     for i, name in enumerate(SERVICES):
         entry = ET.SubElement(voice, name)
         ET.SubElement(entry, "enabled").text = "1" if name in enabled else "0"
@@ -53,11 +54,12 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     ET.ElementTree(xml).write(source, encoding="utf-8")
     config = tmp / "zapret.conf"
     config.write_text("\n".join(k + "=" + shlex.quote(v) for k, v in settings.items()) + "\n")
-    runtime = tmp / "upstream"
-    (runtime / "files/fake").mkdir(parents=True)
-    (runtime / "lua").mkdir()
-    for name in ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua"):
-        (runtime / "lua" / name).write_text("-- resource fixture\n")
+    runtime = upstream_root if upstream_root is not None else tmp / "upstream"
+    if upstream_root is None:
+        (runtime / "files/fake").mkdir(parents=True)
+        (runtime / "lua").mkdir()
+        for name in ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua"):
+            (runtime / "lua" / name).write_text("-- resource fixture\n")
     if engine is not None:
         binary = runtime / "binaries/my/dvtws2"
         binary.parent.mkdir(parents=True)

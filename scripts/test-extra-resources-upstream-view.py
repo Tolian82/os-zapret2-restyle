@@ -144,6 +144,21 @@ class Stage2ViewTests(unittest.TestCase):
             self.assertFalse(plan["authorized"])
             self.assertTrue((view / "lua/native.lua").is_file())
 
+    def test_saved_config_drift_during_native_candidate_is_refused(self):
+        with self.assertRaisesRegex(PreflightError, "changed during compilation"):
+            with self.view() as (_, view):
+                self.assertTrue((view / "lua/native.lua").is_file())
+                self.config.write_text("<opnsense><changed-while-compiling/></opnsense>\n")
+        self.assertEqual(list(self.work.iterdir()), [])
+
+    def test_staged_upstream_byte_drift_during_candidate_is_refused(self):
+        with self.assertRaisesRegex(PreflightError, "changed during compilation"):
+            with self.view() as (_, view):
+                (view / "lua/native.lua").unlink()
+                (view / "lua/native.lua").write_bytes(b"tampered staged copy")
+        self.assertEqual((self.root / "lua/native.lua").read_bytes(), LUA)
+        self.assertEqual(list(self.work.iterdir()), [])
+
     def test_untrusted_workspace_refused_without_production_change(self):
         with self.assertRaisesRegex(PreflightError, "unsafe prospective"):
             with upstream_only_view(self.root, self.state, self.config,
