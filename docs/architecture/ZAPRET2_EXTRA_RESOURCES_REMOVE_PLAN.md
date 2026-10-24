@@ -2,7 +2,7 @@
 
 **Project:** os-zapret2-restyle
 **Owner approval:** 24 October 2026
-**Status:** APPROVED PLAN; source implementation NOT started.
+**Status:** APPROVED PLAN; Stage 1 read-only planner implementation initiated as `v0.5.9_1`, qualification pending. Stages 2–13 unimplemented.
 **Normative requirements:** [Remove Additional Resources specification](ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md).
 **Existing architecture:** [Additional Resources implementation plan](ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) and [GUI/install contract](ZAPRET2_EXTRA_RESOURCES_GUI.md).
 
