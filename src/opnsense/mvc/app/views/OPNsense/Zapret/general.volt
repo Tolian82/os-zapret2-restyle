@@ -47,8 +47,8 @@
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error',
             applyError: isRussian ? 'Ошибка применения настроек' : 'Settings Apply failed',
             applyReview: isRussian
-                ? 'Результат применения неизвестен. Перезагрузите страницу и проверьте состояние службы и настроек перед повтором.'
-                : 'Apply result is uncertain. Reload the page and inspect the service and settings before retrying.'
+                ? 'Результат обновления upstream не подтверждён. Обновите страницу и проверьте версию и службу перед повтором. Подробности: /var/log/zapret2/setup.log'
+                : 'Upstream update result is unconfirmed. Reload and inspect the version and service before retrying. See /var/log/zapret2/setup.log.'
         };
         const extrasText = {
             install: isRussian ? 'Установить дополнительные ресурсы' : 'Install Additional Resources',
@@ -76,6 +76,14 @@
         let extraNeedsReview = false;
         let runtimePoll = null;
         let runtimeWasBusy = false;
+        let runtimeStatusInFlight = false;
+        let releaseNeedsReview = false;
+        let releaseExpectedVersion = '';
+        let releaseOriginalVersion = '';
+        let releaseOriginalService = '';
+        let releaseObservedBusy = false;
+        let releaseApplyStartedAt = 0;
+        const releaseApplyDeadlineMs = 10 * 60 * 1000;
         let currentServiceState = 'error';
         let currentRuntimeInstalled = false;
         let releaseApplyPending = false;
@@ -137,7 +145,7 @@
         function setRuntimeBusy(busy) {
             // Controls must stay locked for both operations, but each Apply
             // button owns only its own spinner.
-            const controlsBusy = !!busy || releaseApplyPending ||
+            const controlsBusy = !!busy || releaseApplyPending || releaseNeedsReview ||
                 strategiesApplyPending || strategiesApplyNeedsReview ||
                 extraBusy || extraInstallPending || extraNeedsReview;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
@@ -171,6 +179,49 @@
             setRuntimeBusy(runtimeWasBusy);
         }
 
+        // The runtime worker can finish between polls, or its status endpoint
+        // can transiently fail while native FD9 is held. Correlate the desired
+        // release with a real busy observation OR a changed committed version.
+        // An unchanged-version replay with no busy evidence remains uncertain.
+        function releaseTerminalOutcome(data, target, previous, service, observedBusy) {
+            if (!data || data.busy || !data.installed) return 'pending';
+            const progressed = observedBusy || (previous !== target && data.version === target);
+            if (!progressed) return 'pending';
+            if (data.setup === 'failed') return 'failed';
+            if (data.setup === 'ready' && data.version === target && data.service === service) {
+                return 'success';
+            }
+            return 'pending';
+        }
+
+        function stopRuntimePolling() {
+            if (runtimePoll !== null) {
+                window.clearInterval(runtimePoll);
+                runtimePoll = null;
+            }
+        }
+
+        function ensureRuntimePolling(busy) {
+            if ((releaseApplyPending || busy) && runtimePoll === null) {
+                runtimePoll = window.setInterval(refreshRuntime, 2000);
+            } else if (!releaseApplyPending && !busy) {
+                stopRuntimePolling();
+            }
+        }
+
+        function finishReleaseOperation(needsReview, failureMessage) {
+            releaseApplyPending = false;
+            releaseNeedsReview = releaseNeedsReview || !!needsReview;
+            releaseExpectedVersion = '';
+            releaseOriginalVersion = '';
+            releaseOriginalService = '';
+            releaseObservedBusy = false;
+            releaseApplyStartedAt = 0;
+            if (failureMessage) {
+                showRuntimeError(runtimeText.setupError, failureMessage);
+            }
+        }
+
         function renderRuntime(data) {
             const installed = !!(data && data.installed);
             const service = data && ['started', 'stopped', 'error'].indexOf(data.service) !== -1
@@ -179,12 +230,35 @@
             const busy = !!(data && data.busy);
             const badge = $('#zapretServiceStatus');
             const serviceButton = $('#zapretServiceControl');
+            const wasBusy = runtimeWasBusy;
+            let failureReported = false;
+
+            if (releaseApplyPending && (busy || (data && data.setup === 'installing'))) {
+                releaseObservedBusy = true;
+            }
+            if (releaseApplyPending) {
+                const outcome = releaseTerminalOutcome(data, releaseExpectedVersion,
+                    releaseOriginalVersion, releaseOriginalService, releaseObservedBusy);
+                if (outcome === 'success') {
+                    finishReleaseOperation(false, '');
+                } else if (outcome === 'failed') {
+                    failureReported = true;
+                    finishReleaseOperation(false, runtimeText.operationFailed);
+                }
+            }
 
             currentRuntimeInstalled = installed;
-            currentServiceState = installed ? service : 'error';
-            badge.removeClass('label-success label-default label-danger');
+            if (!busy) currentServiceState = installed ? service : 'error';
+            badge.removeClass('label-success label-default label-danger label-info');
 
-            if (!installed) {
+            if (busy) {
+                // The native lifecycle is intentionally STOPPED during an
+                // upstream build; do not publish its transient error as a
+                // terminal service failure or block on its FD9 status.
+                badge.addClass('label-info').text(runtimeText.applying);
+                $('#zapretRuntimeVersion').text(data.version || '—');
+                serviceButton.hide().prop('disabled', true);
+            } else if (!installed) {
                 badge.addClass('label-danger').text(runtimeText.error);
                 $('#zapretRuntimeVersion').text(runtimeText.notInstalled);
                 serviceButton.hide().prop('disabled', true);
@@ -202,43 +276,53 @@
                 serviceButton.hide().prop('disabled', true);
             }
 
-            if (releaseApplyPending && !busy && runtimeWasBusy) {
-                releaseApplyPending = false;
-            }
-            setRuntimeBusy(busy);
-
-            if (runtimeWasBusy && !busy && data && data.setup === 'failed') {
+            if (wasBusy && !busy && data && data.setup === 'failed' && !failureReported &&
+                !releaseApplyPending) {
                 showRuntimeError(runtimeText.setupError, runtimeText.operationFailed);
             }
             runtimeWasBusy = busy;
-
-            if (busy && runtimePoll === null) {
-                runtimePoll = window.setInterval(refreshRuntime, 2000);
-            } else if (!busy && runtimePoll !== null) {
-                window.clearInterval(runtimePoll);
-                runtimePoll = null;
-            }
+            setRuntimeBusy(busy);
+            ensureRuntimePolling(busy);
         }
 
         function renderRuntimeRequestFailure() {
+            if (releaseApplyPending || runtimeWasBusy) {
+                // Transient API failures are not evidence that native setup
+                // failed. Preserve the last valid view and continue polling.
+                ensureRuntimePolling(runtimeWasBusy);
+                setRuntimeBusy(runtimeWasBusy);
+                return;
+            }
             currentRuntimeInstalled = false;
             currentServiceState = 'error';
             $('#zapretServiceStatus')
-                .removeClass('label-success label-default label-danger')
+                .removeClass('label-success label-default label-danger label-info')
                 .addClass('label-danger')
                 .text(runtimeText.error);
             $('#zapretRuntimeVersion').text('—');
             $('#zapretServiceControl').hide().prop('disabled', true);
-            setRuntimeBusy(runtimeWasBusy);
+            setRuntimeBusy(false);
         }
 
         function refreshRuntime() {
+            if (releaseApplyPending && releaseApplyStartedAt &&
+                Date.now() - releaseApplyStartedAt >= releaseApplyDeadlineMs) {
+                finishReleaseOperation(true, runtimeText.applyReview);
+                ensureRuntimePolling(runtimeWasBusy);
+                setRuntimeBusy(runtimeWasBusy);
+            }
+            // Never stack multiple 30s status requests while setup.lock/FD9
+            // is held: one request in flight is sufficient.
+            if (runtimeStatusInFlight) return;
+            runtimeStatusInFlight = true;
             return $.ajax({
                 type: 'POST',
                 url: '/api/zapret/service/runtime',
                 dataType: 'json',
                 timeout: 30000
-            }).done(renderRuntime).fail(renderRuntimeRequestFailure);
+            }).done(renderRuntime).fail(renderRuntimeRequestFailure).always(function() {
+                runtimeStatusInFlight = false;
+            });
         }
 
         function refreshReleases(selectedVersion) {
@@ -406,7 +490,15 @@
                 return;
             }
 
+            if (!currentRuntimeInstalled ||
+                (currentServiceState !== 'started' && currentServiceState !== 'stopped') ||
+                releaseNeedsReview) return;
             releaseApplyPending = true;
+            releaseExpectedVersion = version;
+            releaseOriginalVersion = $('#zapretRuntimeVersion').text();
+            releaseOriginalService = currentServiceState;
+            releaseObservedBusy = false;
+            releaseApplyStartedAt = Date.now();
             setRuntimeBusy(true);
             $.ajax({
                 type: 'POST',
@@ -415,12 +507,17 @@
                 dataType: 'json',
                 timeout: 30000
             }).done(function(data) {
-                runtimeWasBusy = true;
+                // Start polling independently of whether the first status
+                // response actually catches busy=1.
+                ensureRuntimePolling(false);
                 refreshRuntime();
                 refreshReleases(data && data.version ? data.version : version);
             }).fail(function() {
-                releaseApplyPending = false;
-                setRuntimeBusy(false);
+                // A transport timeout may happen after dispatch. Never
+                // silently unlock a potentially live second transaction.
+                finishReleaseOperation(true, runtimeText.applyReview);
+                ensureRuntimePolling(false);
+                setRuntimeBusy(runtimeWasBusy);
                 refreshRuntime();
             });
         });

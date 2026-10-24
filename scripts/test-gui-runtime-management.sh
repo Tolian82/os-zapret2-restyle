@@ -81,6 +81,23 @@ STATUS_OUTPUT=$(runtime_status 0)
 printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'version=v1.0.3' ||
     fail "active release marker did not override transient Git HEAD"
 
+# During setup the daemon owns native FD9: passive runtime status must
+# report busy without recursively invoking the locked native status command.
+rm -f "${SERVICE_CALLS}"
+sleep 30 >/dev/null 2>&1 &
+setup_mock_pid=$!
+printf '%s\n' "${setup_mock_pid}" > "${RUN_DIR}/setup.pid"
+STATUS_OUTPUT=$(runtime_status 0)
+kill "${setup_mock_pid}" 2>/dev/null || true
+wait "${setup_mock_pid}" 2>/dev/null || true
+rm -f "${RUN_DIR}/setup.pid"
+printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'busy=1' ||
+    fail "running setup daemon not recognized as busy"
+printf '%s\n' "${STATUS_OUTPUT}" | grep -Fqx 'setup=installing' ||
+    fail "busy setup was not rendered as installing"
+[ ! -e "${SERVICE_CALLS}" ] ||
+    fail "passive busy status called native service under its held FD9"
+
 # One configd placeholder receives one selected version; setup_launcher already supplies install.
 grep -Fq '[setup_install]' "${ACTIONS}" || fail "dedicated selected-release action is missing"
 grep -Fq 'setup_launcher.sh install' "${ACTIONS}" || fail "selected-release action does not supply install mode"
@@ -157,6 +174,18 @@ grep -Fq 'max-content max-content 14ch 12ch 4ch' "${VIEW}" || fail "fixed runtim
 
 grep -Fq '[setup_releases]' "${ACTIONS}" || fail "release-list action is missing"
 grep -Fq '[setup_status]' "${ACTIONS}" || fail "runtime-status action is missing"
+
+grep -Fq 'ensureRuntimePolling(false);' "${VIEW}" ||
+    fail "successful runtime dispatch does not arm polling independently of busy pulse"
+grep -Fq 'releaseApplyDeadlineMs = 10 * 60 * 1000' "${VIEW}" ||
+    fail "upstream Apply polling has no bounded review deadline"
+grep -Fq 'runtimeStatusInFlight = true' "${VIEW}" ||
+    fail "upstream polling can stack concurrent blocked status requests"
+grep -Fq 'releaseTerminalOutcome(data, releaseExpectedVersion' "${VIEW}" ||
+    fail "upstream terminal state is not correlated with selected release"
+if command -v node >/dev/null 2>&1; then
+    node "${ROOT_DIR}/scripts/test-gui-upstream-progress.mjs"
+fi
 
 sh "${ROOT_DIR}/scripts/test-setup-runtime-transaction.sh"
 echo "PASS: GUI selected-release transaction and fallback contract"

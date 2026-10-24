@@ -83,11 +83,18 @@ show_status()
     _installed=0
     _service="error"
     _version=""
+    _busy=0
+    if setup_pid_running; then
+        _busy=1
+    fi
 
     if [ -x "${DVTWS_BIN}" ]; then
         _installed=1
 
-        if [ -x "${SERVICE_SCRIPT}" ]; then
+        # A setup worker owns the original lifecycle FD9. Querying native
+        # status here may wait behind that same lock for the entire build.
+        # Report busy promptly; the GUI renders a transient status instead.
+        if [ "${_busy}" -eq 0 ] && [ -x "${SERVICE_SCRIPT}" ]; then
             if "${SERVICE_SCRIPT}" status >/dev/null 2>&1; then
                 _service="started"
             else
@@ -111,9 +118,7 @@ show_status()
         esac
     fi
 
-    _busy=0
-    if setup_pid_running; then
-        _busy=1
+    if [ "${_busy}" -eq 1 ]; then
         _setup="installing"
     fi
 
