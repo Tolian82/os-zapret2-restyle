@@ -12,7 +12,7 @@
 |---|---|
 | **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) remains the latest *verified published* stable at release-preparation time; **owner-authorized `v0.5.8` / `0.5.8_1.pkg`** is being qualified for full GitHub + FreeBSD 15 Pages/pkg publication ([release plan](docs/releases/v0.5.8.md)) |
 | **Last owner-accepted testing package** | [v0.5.7_48](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_48) · Lua/BIN two-column cached Full Help **PASS (owner report)**; previous native additional-resource/Stage-90 evidence accepted separately ([sign-off](docs/verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md)) |
-| **Current release candidate** | `v0.5.8_1` (`VERSION=0.5.8`, `PLUGIN_REVISION=1`); full release explicitly authorized by owner and being built/validated; **not yet published until workflow and repository verification pass** |
+| **Current development candidate** | `v0.5.8_1` (`VERSION=0.5.8`, `PLUGIN_REVISION=1`); full release explicitly authorized by owner and being built/validated; **not yet published until workflow and repository verification pass** |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
