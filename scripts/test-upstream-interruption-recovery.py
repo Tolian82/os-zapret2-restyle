@@ -396,6 +396,110 @@ fi
         self.assertEqual(self.git_out("rev-parse", "HEAD"), self.new_sha)
         self.assertTrue((self.state / "runtime-rollback/target-identity.json").exists())
 
+    def inspect(self, point: str) -> tuple[subprocess.CompletedProcess[str], dict | None]:
+        result = subprocess.run(
+            [str(TRANSACTION), "inspect-recovery"],
+            env=self.environment(point), capture_output=True,
+            text=True, timeout=20,
+        )
+        report = None
+        for line in result.stdout.splitlines():
+            if line.startswith("checkout_origin={"):
+                report = json.loads(line.split("=", 1)[1])
+        return result, report
+
+    def test_origin_inspect_old_after_prune_is_read_only(self) -> None:
+        self.cut("prune")
+        before = self.git_out("status", "--porcelain", "--untracked-files=no")
+        result, report = self.inspect("prune")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIsNotNone(report)
+        self.assertEqual(report["head"], "old")
+        self.assertEqual(report["index"].get("old", 0) +
+                         report["index"].get("both", 0), report["tracked_paths"])
+        self.assertFalse(report["automatic_dirty_reset_authorized"])
+        self.assertFalse(report["untracked_files_inspected"])
+        self.assertEqual(self.git_out("status", "--porcelain", "--untracked-files=no"), before)
+        self.assertTrue((self.state / "runtime-rollback/checkpoint").exists())
+
+    def test_origin_inspect_target_after_checkout_is_read_only(self) -> None:
+        self.cut("checkout")
+        result, report = self.inspect("checkout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report["head"], "target")
+        self.assertEqual(report["worktree"].get("foreign", 0), 0)
+        self.assertFalse(report["automatic_dirty_reset_authorized"])
+        self.assertEqual(self.git_out("rev-parse", "HEAD"), self.new_sha)
+
+    def test_origin_inspect_distinguishes_foreign_worktree_and_stage(self) -> None:
+        self.cut("dirty")
+        before = (self.runtime / "README").read_bytes()
+        result, report = self.inspect("dirty")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        match = next(x for x in report["anomalies_sample"] if x["path"] == "README")
+        self.assertEqual(match["worktree"], "foreign")
+        self.assertEqual(match["index"], "both")
+        self.assertEqual((self.runtime / "README").read_bytes(), before)
+        self.git("add", "README")
+        result, report = self.inspect("dirty")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        match = next(x for x in report["anomalies_sample"] if x["path"] == "README")
+        self.assertEqual(match["worktree"], "foreign")
+        self.assertEqual(match["index"], "foreign")
+        self.recover("dirty", False)
+        self.assertEqual((self.runtime / "README").read_bytes(), before)
+
+    def test_origin_inspect_identifies_mixed_old_target_files(self) -> None:
+        self.cut("checkout")
+        # HEAD/index are at target, while a single tracked worktree file
+        # still contains exact old bytes as in a partially interrupted copy.
+        (self.runtime / "lua/native.lua").write_bytes(self.old_lua)
+        result, report = self.inspect("checkout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(report["head"], "target")
+        self.assertGreater(report["worktree"].get("old", 0), 0)
+        self.assertGreater(report["worktree"].get("target", 0), 0)
+        self.assertFalse(report["automatic_dirty_reset_authorized"])
+        self.recover("checkout", False)
+        self.assertEqual((self.runtime / "lua/native.lua").read_bytes(), self.old_lua)
+
+    def test_origin_inspect_flags_foreign_staged_addition(self) -> None:
+        self.cut("checkout")
+        (self.runtime / "foreign-staged.txt").write_text("external change")
+        self.git("add", "foreign-staged.txt")
+        result, report = self.inspect("checkout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        match = next(x for x in report["anomalies_sample"] if x["path"] == "foreign-staged.txt")
+        self.assertEqual(match["index"], "foreign")
+        self.assertEqual(match["worktree"], "foreign")
+        self.recover("checkout", False)
+        self.assertEqual((self.runtime / "foreign-staged.txt").read_text(), "external change")
+
+    def test_origin_inspect_refuses_to_follow_symlinks(self) -> None:
+        self.cut("checkout")
+        readme = self.runtime / "README"
+        readme.unlink()
+        readme.symlink_to(self.root / "outside-data")
+        (self.root / "outside-data").write_text("do not read this")
+        result, report = self.inspect("checkout")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        match = next(x for x in report["anomalies_sample"] if x["path"] == "README")
+        self.assertEqual(match["worktree"], "unsafe")
+        self.assertEqual((self.root / "outside-data").read_text(), "do not read this")
+        self.recover("checkout", False)
+
+    def test_origin_inspect_refuses_corrupted_target_identity(self) -> None:
+        self.cut("checkout")
+        target = self.state / "runtime-rollback/target-identity.json"
+        identity = json.loads(target.read_text())
+        identity["target_commit"] = "0" * 40
+        target.write_text(json.dumps(identity))
+        result, report = self.inspect("checkout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(report)
+        self.assertIn("target_identity=unverified", result.stdout)
+        self.assertTrue(target.exists())
+
     def test_tampered_saved_orphan_refuses_and_retains_evidence(self) -> None:
         self.cut("checkout")
         saved = self.state / "runtime-rollback/untracked-resources/files/fake/unowned.bin"

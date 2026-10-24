@@ -236,6 +236,14 @@ inspect_interrupted_recovery()
             printf 'target_identity=unverified\n'
             return 69
         }
+        if [ "${RECOVERY_PHASE}" = mutating ]; then
+            # Diagnostic only. A classified old/target match never authorizes
+            # reset --hard on a dirty checkout or overrides STOPPED-only recovery.
+            backup_evidence inspect-checkout || {
+                printf 'checkout_origin=unverified\n'
+                return 69
+            }
+        fi
     else
         printf 'target_identity=unavailable\n'
     fi
