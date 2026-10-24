@@ -251,7 +251,7 @@ fi
         self.assertEqual((self.runtime / "binaries/my/dvtws2").read_bytes(),
                          self.old_binary)
         self.assertEqual((self.state / "runtime.release").read_text(), "v1.0.4\n")
-        self.assertEqual(self.service_state.read_text(), 
+        self.assertEqual(self.service_state.read_text(),
                          "running\n" if originally_running else "stopped\n")
         self.assertFalse((self.state / "runtime-rollback").exists())
 

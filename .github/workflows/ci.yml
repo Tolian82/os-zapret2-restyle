@@ -51,6 +51,9 @@ jobs:
             base_sha="${head_sha}^"
           fi
 
+          # This must run BEFORE heavy PR jobs; the post-merge main integrity
+          # check is too late to catch trailing whitespace introduced in PRs.
+          git diff --check "${base_sha}" "${head_sha}"
           changed=$(git diff --name-only "${base_sha}" "${head_sha}")
           printf '%s\n' "${changed}"
 
