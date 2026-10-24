@@ -92,6 +92,7 @@ class UpstreamInterrupted(unittest.TestCase):
         (self.state / "runtime.release").write_text("v1.0.4\n")
         self.service_state = self.root / "service-state"
         self.service_state.write_text("running\n")
+        self.originally_running = True
         self.log = self.root / "native-events"
         self._create_mocks()
 
@@ -226,7 +227,11 @@ fi
         original_saved = self.state / "runtime-rollback/untracked-resources"
         for name, raw in self.resources.items():
             self.assertEqual((original_saved / name).read_bytes(), raw)
-        self.assertEqual(self.log.read_text().splitlines()[:2], ["FD9", "STOP"])
+        actual_events = self.log.read_text().splitlines()
+        # If the original service was already stopped, repeating Stop is
+        # neither required nor desirable; FD9 must still remain inherited.
+        self.assertEqual(actual_events[:2], ["FD9", "STOP"] if
+                         self.originally_running else ["FD9", "PRUNED"])
 
     def recover(self, point: str, expect_ok: bool) -> subprocess.CompletedProcess[str]:
         result = subprocess.run([str(TRANSACTION), "recover-mutating-stopped"],
@@ -270,6 +275,7 @@ fi
 
     def test_stopped_original_stays_stopped_after_prune_cut(self) -> None:
         self.service_state.write_text("stopped\n")
+        self.originally_running = False
         self.cut("prune")
         self.recover("prune", True)
         self.assert_original(originally_running=False)
