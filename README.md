@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Tolian82/os-zapret2-restyle?style=flat-square&label=release)](https://github.com/Tolian82/os-zapret2-restyle/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/Tolian82/os-zapret2-restyle/ci.yml?branch=main&style=flat-square&label=build)](https://github.com/Tolian82/os-zapret2-restyle/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/Tolian82/os-zapret2-restyle?style=flat-square&label=license)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-brightgreen?style=flat-square)](LICENSE)
 
 > [!IMPORTANT]
 > This project and its documentation are provided for scientific, technical, and educational purposes only.
