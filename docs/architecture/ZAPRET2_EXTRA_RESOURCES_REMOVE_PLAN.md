@@ -78,7 +78,7 @@ On OPNsense verify before/after exact paths and SHA inventory, native started pr
 
 After the owner appliance acceptance and **immediately before any future stable release that includes removal**, edit the repository-root README.md, retaining the section names:
 
-1. In **“Useful runtime paths”**, explicitly add /usr/local/etc/zapret2/lua/ (Lua) and /usr/local/etc/zapret2/files/fake/ (BIN), noting that the installed upstream files and optional additional files share these directories.
+1. In **“Useful runtime paths”**, explicitly add `/usr/local/etc/zapret2/lua/` (Lua) and `/usr/local/etc/zapret2/files/fake/` (BIN), noting that the installed upstream files and optional additional files share these directories.
 2. In **“Additional Resources — installed Lua/BIN help”**, rewrite the introduction to explain that os-zapret2-restyle offers **optional installation and use of an expanded, integrity-verified Lua/BIN pack** from [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Preserve the description of manual installation, native restart and the cache-backed help list, and accurately mention the new removal action only when its implementation and owner acceptance are verified.
 3. Qualify "verified" precisely: catalog integrity/provenance/integration are verified, **not** universal DPI-bypass success, feature interoperability or Voice-call success. Check user-facing English, exact path spelling and repository links.
 

@@ -113,8 +113,8 @@ Before publication of the **future release containing this Remove Additional Res
 
 In **“Useful runtime paths”**, list these two exact installed Zapret2 directories alongside the existing paths:
 
-- /usr/local/etc/zapret2/lua/ — installed Lua scripts;
-- /usr/local/etc/zapret2/files/fake/ — installed BIN packet payloads.
+- `/usr/local/etc/zapret2/lua/` — installed Lua scripts;
+- `/usr/local/etc/zapret2/files/fake/` — installed BIN packet payloads.
 
 Explain that these paths contain both current upstream resources and, when installed, supplementary resources; they are not extra-catalog-only directories.
 
