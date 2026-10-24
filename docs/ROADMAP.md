@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Current priority — owner-authorized stable v0.5.8 delivery
+## Текущий приоритет — owner-authorized stable v0.5.8 delivery
 
 The owner accepted the new cached Lua/BIN Full Help (H1) on published `v0.5.7_48`, signed off the [final acceptance report](verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md), explicitly closed M6, and **authorized full stable `v0.5.8` publication**. The exact release-preparation identity is `VERSION=0.5.8`, `PLUGIN_REVISION=1`. First verify release PR CI and FreeBSD15 `0.5.8_1.pkg`; then immutable tag/GitHub non-prerelease release and Pages package repository/Web setup.
 
