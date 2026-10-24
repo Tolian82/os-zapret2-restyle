@@ -10,14 +10,14 @@
 - Installer/extras end-to-end and dynamic extra-candidate execution on `_46`: **NOT RUN**.
 - Independent hypervisor console: **confirmed available** by owner.
 - Explicit clean reinstall of an incomplete/corrupted plugin: **NOT RUN / not yet implemented if required by test**.
-- Testing-package release for `_46`: **NOT PUBLISHED**. Stable `v0.5.8`: **NOT AUTHORIZED / NOT PUBLISHED**.
+- Testing-package release for `_46`: **PUBLISHED and verified** — [direct package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.5.7_46/os-zapret2-restyle-0.5.7_46.pkg), SHA-256 `62217e64e2fe84aff74d7ae0ebcc3f7d667ccb02c2805fd1e08f31feede0e97f`, [publication evidence](evidence/testing-publications/v0.5.7_46.md). Publisher workflow overall failed **only** during automatic PR creation (GitHub Actions permissions); the bounded publication record is merged via connector PR. Stable `v0.5.8`: **NOT AUTHORIZED / NOT PUBLISHED**.
 
 ## Milestone scoreboard
 
 | ID | Required deliverable / gate | Status | Evidence / blocking detail |
 |---|---|---|---|
-| M0 | Approved requirements, governing rules and finite acceptance checklist merged to main, docs CI and post-merge integrity pass | IN PROGRESS | This document and normative PR must be merged and verified |
-| M1 | One persistent immutable `v0.5.7_N` testing package, verified source/tag/assets/hash and FreeBSD15 qualification | NOT RUN | Source `_46` CI PASS is not package publication |
+| M0 | Approved requirements, governing rules and finite acceptance checklist merged to main, docs CI and post-merge integrity pass | PASS | [Requirements PR #548](https://github.com/Tolian82/os-zapret2-restyle/pull/548), [EOF correction PR #549](https://github.com/Tolian82/os-zapret2-restyle/pull/549), [main integrity #40082179231](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40082179231) |
+| M1 | One persistent immutable `v0.5.7_N` testing package, verified source/tag/assets/hash and FreeBSD15 qualification | PASS | [Published `v0.5.7_46`](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_46), [verification/evidence](evidence/testing-publications/v0.5.7_46.md); publisher PR-permission error repaired by this publication-record PR |
 | M2 | Read-only appliance baseline, backup/snapshot and console recovery | NOT RUN | Console access confirmed; exact baseline and snapshot unverified |
 | M3 | Owner-live manual exact-set extras installation, restart and GUI; ordinary update preserves plugin settings | NOT RUN | Historical orphan name is merely one example |
 | M4 | Owner-live native execution for one reviewed extra BIN and one reviewed Lua; dynamic new Jobs and correct bounded cleanup | NOT RUN | Offline graph tests cannot prove installed execution |
@@ -29,7 +29,7 @@
 
 | Test | Gate | Expected observable result | Status |
 |---|---|---|---|
-| GitHub package identity and checksum | M1 | Uploaded persistent `.pkg` matches tested immutable commit and FreeBSD15 build | NOT RUN |
+| GitHub package identity and checksum | M1 | Uploaded persistent `.pkg` matches tested immutable commit and FreeBSD15 build | PASS |
 | Source and runtime snapshots, hypervisor access | M2 | Known restore entry point and no destructive diagnostic | NOT RUN |
 | Orphan/colliding untracked Lua/BIN | M3 | Backed up, then replaced/removed to exact desired inventory; no ad hoc filename exceptions | NOT RUN |
 | Upstream/catalog identical and different-name collisions | M3/M5 | Identical content single upstream owner; divergent bytes safely block | NOT RUN |
@@ -49,4 +49,4 @@
 
 A test becomes **PASS** only with a recorded exact candidate, environment, executed procedure, observed result and evidence source. Allowed states: **NOT RUN**, **IN PROGRESS**, **PASS**, **FAIL**, **BLOCKED**. A blocking FAIL requires the smallest reproducible scoped repair, a new test candidate when packaged source changes, and re-execution of impacted tests. Do not silently waive a mandatory row or spin out speculative hardening. Move to the next milestone when the gate is satisfied; propose useful new work with evidence, but acquire owner approval before enlarging the mandatory scope.
 
-**Single next action:** finish M0 documentation PR/CI/main-integrity and update the scoreboard to PASS, then execute M1 testing-package qualification and persistent publication. No product changes are authorized merely by writing this board.
+**Single next action:** M2 owner-assisted read-only appliance baseline and recoverable snapshot, then use the verified `v0.5.7_46` package for M3–M6. Never infer installed PASS from package verification; publish stable `v0.5.8` only after separate authorization and release-package acceptance.
