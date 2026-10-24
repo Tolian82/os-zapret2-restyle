@@ -404,6 +404,9 @@ jobs:
       - name: Test extra-resources read-only preflight
         run: python3.13 scripts/test-extra-resources-preflight.py
 
+      - name: Test read-only prospective removal plan with real Git HEAD
+        run: python3.13 scripts/test-extra-resources-remove-plan.py
+
       - name: Test durable resource transaction and rollback
         run: python3.13 scripts/test-extra-resources-transaction.py
 

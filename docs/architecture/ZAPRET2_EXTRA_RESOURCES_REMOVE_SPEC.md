@@ -2,7 +2,7 @@
 
 **Project:** os-zapret2-restyle (OPNsense 26.7.x, FreeBSD 15)
 **Owner decision:** 24 October 2026
-**Status:** APPROVED SPECIFICATION; implementation, testing package, appliance acceptance and release NOT started.
+**Status:** APPROVED SPECIFICATION; source-only Stage 1 removal planner initiated 25 October 2026; no deletion, Strategies/Voice gate, package, appliance acceptance or release.
 **Related contracts:** [Additional Resources installation/GUI](ZAPRET2_EXTRA_RESOURCES_GUI.md), [new implementation plan](ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md).
 
 ## 1. Scope and invariants
