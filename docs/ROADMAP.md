@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Current owner-approved priority — complete and accept Additional Resources
+## Текущий приоритет — завершение и приёмка Additional Resources
 
 The approved final contract is [ZAPRET2_EXTRA_RESOURCES_GUI.md](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md). The original five functional stages retain authority; [the bounded M0–M7 plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) and [the single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) now govern execution. Source `v0.5.7_46` passed CI, but the last owner-installed testing package is `v0.5.7_30`; this is **not** a completed live acceptance.
 
