@@ -231,6 +231,14 @@ inspect_interrupted_recovery()
     fi
     printf 'phase=%s\nprevious_commit=%s\nprevious_release=%s\n' "${RECOVERY_PHASE}" "${PREVIOUS_COMMIT}" "${PREVIOUS_RELEASE}"
     printf 'service_was_running=%s\nprevious_binaries=%s\n' "${SERVICE_WAS_RUNNING}" "${PREVIOUS_BINARIES}"
+    if [ -e "${ROLLBACK_DIR}/target-identity.json" ] || [ -L "${ROLLBACK_DIR}/target-identity.json" ]; then
+        backup_evidence inspect-target || {
+            printf 'target_identity=unverified\n'
+            return 69
+        }
+    else
+        printf 'target_identity=unavailable\n'
+    fi
 }
 
 # A snapshot still marked "prepared" was fully persisted before *any*
@@ -337,11 +345,14 @@ recover_mutating_stopped()
     for _entry in "${ROLLBACK_DIR}"/* "${ROLLBACK_DIR}"/.[!.]* "${ROLLBACK_DIR}"/..?*; do
         [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
         case "${_entry##*/}" in
-            checkpoint|backup-attestation.json|binaries|extra-managed|untracked-resources) ;;
+            checkpoint|backup-attestation.json|target-identity.json|binaries|extra-managed|untracked-resources) ;;
             *) echo "ERROR: RECOVERY_REQUIRED: foreign upstream backup entry" >&2; return 69 ;;
         esac
         [ ! -L "${_entry}" ] || return 69
     done
+    if [ -e "${ROLLBACK_DIR}/target-identity.json" ] || [ -L "${ROLLBACK_DIR}/target-identity.json" ]; then
+        backup_evidence verify-target || return 69
+    fi
     [ ! -L "${ZAPRET_DIR}/binaries" ] &&
         [ ! -L "${ZAPRET_DIR}/binaries/my" ] || return 69
     [ -x "${GIT_BIN}" ] && [ -d "${ZAPRET_DIR}/.git" ] &&
@@ -595,6 +606,9 @@ rollback_runtime()
         return 1
     fi
 
+    if [ -e "${ROLLBACK_DIR}/target-identity.json" ] || [ -L "${ROLLBACK_DIR}/target-identity.json" ]; then
+        backup_evidence verify-target || return 1
+    fi
     if ! stop_for_upstream_mutation; then
         echo "ERROR: RESTORE_FAILED: cannot prove stopped native owner before rollback" >&2
         return 1
@@ -695,12 +709,10 @@ install_transaction()
         return 1
     fi
 
-    normalize_runtime_permissions || {
-        echo "ERROR: runtime permissions could not be normalized" >&2
-        rollback_runtime || true
-        return 1
-    }
-
+    # The selected target SHA is not sealed yet: do not chmod original
+    # Lua/BIN before the backend fetch/bind-target boundary. The successful
+    # install verifies and normalizes modes after the selected build, and
+    # rollback normalizes the restored old runtime only after the safety gate.
     if [ -n "${VERSION}" ]; then
         if ROLLBACK_DIR="${ROLLBACK_DIR}" "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
             _setup_result=0

@@ -246,12 +246,14 @@ class ExactReleaseSwitch(unittest.TestCase):
         self.git("add", "lua", "files", "README")
         self.git("commit", "-qm", "upstream v1")
         self.old = self.git_out("rev-parse", "HEAD")
+        self.git("tag", "v1.0.4")
         (self.runtime / "files/fake/legacy.bin").unlink()
         (self.runtime / "files/fake/next.bin").write_bytes(b"new native")
         self.native.write_bytes(b"function native_new() end\n")
         self.git("add", "-A")
         self.git("commit", "-qm", "upstream v2")
         self.new = self.git_out("rev-parse", "HEAD")
+        self.git("tag", "v1.0.3")
         self.git("checkout", "-q", "--detach", self.old)
         self.extra = self.runtime / "lua/managed.lua"
         self.extra.write_bytes(b"function managed() end\n")
@@ -263,7 +265,7 @@ class ExactReleaseSwitch(unittest.TestCase):
             "source_commit": "f" * 40,
         }))
         self.before = (guard.RUNTIME, guard.STATE, guard.ROLLBACK,
-                       guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION)
+                       guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION, guard.TARGET_IDENTITY)
         guard.RUNTIME = self.runtime
         guard.STATE = self.state
         guard.GIT = self.sp.run(["which", "git"], capture_output=True,
@@ -271,11 +273,12 @@ class ExactReleaseSwitch(unittest.TestCase):
         guard.ROLLBACK = self.base / "rollback/extra-managed"
         guard.BACKUP_ROOT = guard.ROLLBACK.parent
         guard.ATTESTATION = guard.BACKUP_ROOT / "backup-attestation.json"
+        guard.TARGET_IDENTITY = guard.BACKUP_ROOT / "target-identity.json"
         self.addCleanup(self.restore_globals)
 
     def restore_globals(self):
         (guard.RUNTIME, guard.STATE, guard.ROLLBACK,
-         guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION) = self.before
+         guard.GIT, guard.BACKUP_ROOT, guard.ATTESTATION, guard.TARGET_IDENTITY) = self.before
 
     def git(self, *args):
         self.sp.run(["git", "-C", str(self.runtime), *args], check=True,
@@ -418,6 +421,10 @@ class ExactReleaseSwitch(unittest.TestCase):
             + "\nprevious_release=v1.0.4\nservice_was_running=1\n"
             + "previous_binaries=0\nphase=mutating\n"
         )
+        guard.TARGET_IDENTITY.write_text(json.dumps({
+            "schema": 1, "previous_commit": self.old,
+            "target_release": "v1.0.3", "target_commit": self.new,
+        }))
 
     def test_orphan_is_reconciled_and_target_checkout_remains_exact(self):
         orphan = self.runtime / "files/fake/unowned.bin"
@@ -537,7 +544,7 @@ class ExactReleaseSwitch(unittest.TestCase):
         self._seal_switch_snapshot()
         checkpoint = guard.BACKUP_ROOT / "checkpoint"
         checkpoint.write_text(checkpoint.read_text().replace(self.old, "0" * 40))
-        with self.assertRaisesRegex(guard.TransactionError, "does not identify current old Git HEAD"):
+        with self.assertRaisesRegex(guard.TransactionError, "contradictory upstream target identity"):
             guard.prune_orphans(self.new)
         self.assertEqual(orphan.read_bytes(), b"unowned")
 
