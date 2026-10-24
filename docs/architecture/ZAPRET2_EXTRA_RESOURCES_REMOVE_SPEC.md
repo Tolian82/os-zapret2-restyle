@@ -107,7 +107,24 @@ On verified success, the managed extra set is **not installed**, even though sta
 - New Strategy Lab Jobs dynamically discover the **actual remaining upstream** resources and omit extras. Previously completed Job records are immutable; do not rewrite historical findings.
 - A fresh successful Install restores the normal green upstream / blue extra resource listing.
 
-## 7. Required verification and acceptance
+## 7. README.md documentation gate — immediately before a future stable release
+
+Before publication of the **future release containing this Remove Additional Resources feature**, update the repository-root [README.md](../../README.md). This is an explicit **penultimate delivery milestone immediately before the separately owner-authorized stable release**; it does **not** retroactively reopen or block the independently authorized v0.5.8 release.
+
+In **“Useful runtime paths”**, list these two exact installed Zapret2 directories alongside the existing paths:
+
+- `/usr/local/etc/zapret2/lua/` — installed Lua scripts;
+- `/usr/local/etc/zapret2/files/fake/` — installed BIN packet payloads.
+
+Explain that these paths contain both current upstream resources and, when installed, supplementary resources; they are not extra-catalog-only directories.
+
+In **“Additional Resources — installed Lua/BIN help”**, rework the introduction to clearly state that this plugin lets users **optionally install and use an expanded, integrity-verified Lua/BIN resource pack from the project's curated and verified repository** [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Clearly distinguish the upstream Zapret2-owned base files from the optional pack and link to its actual GitHub repository. Keep the existing factual explanation of the manual Install action, verified native restart/rollback, cached two-column Full Help inventory and its green/blue classification; explain the new Advanced-only Remove capability only after it is implemented and verified.
+
+Use precise English in README.md. "Verified" must mean verified **source/integrity/provenance and integration controls**, **not** that every Lua module or BIN payload has independently proved a successful DPI bypass, protocol compatibility or Voice-media connectivity. Do not market unsupported candidates as tested successful bypasses. Preserve existing user-facing context and other README sections.
+
+**Gate:** README path accuracy, repository link, manual-install/optional-use wording, existing help semantics, new feature availability claims and README/Markdown link tests all PASS on the exact release candidate. No future stable release of this feature is complete without this penultimate README review.
+
+## 8. Required verification and acceptance
 
 Source/offline tests must cover: dynamic HEAD selection, tracked-byte tamper, foreign/symlink paths, manually added files, exact deletion list, a saved ordinary profile referencing an extra BLOB or Lua export, active Voice dependency, OFF-draft dependency, legitimate incomplete OFF draft, valid upstream-only combined compile, unknown result, changed Config/resource generation, read-only preflight non-mutation, journal and rollback faults, disabled controls and native FD9 serialization, idempotent no-op, cache refresh/invalidation, RU/EN/Advanced/F5, new-Job dynamic inventory and repeat Install.
 
