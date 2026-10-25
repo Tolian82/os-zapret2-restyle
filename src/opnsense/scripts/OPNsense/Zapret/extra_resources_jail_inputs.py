@@ -36,6 +36,7 @@ from extra_resources_jail_libraries import (
 from extra_resources_jail_loader import (
     attest_static_loader_input, MAX_LOADER_BYTES,
 )
+from extra_resources_jail_path_gate import attest_staged_native_file_paths
 
 MAX_RESOURCES = 256
 MAX_TOTAL_RESOURCE_BYTES = 64 * 1024 * 1024
@@ -233,6 +234,8 @@ def staged_inert_jail_inputs(
             _save(root, "elf-interpreter/" + name, data)
             digests["elf-interpreter/" + name] = hashlib.sha256(data).hexdigest()
 
+        path_report = attest_staged_native_file_paths(managed_argv, digests)
+
         def check_library_sources():
             if library_source_root is None:
                 return
@@ -306,6 +309,10 @@ def staged_inert_jail_inputs(
             "managed_reference_sha256": managed_evidence["managed_witness_sha256"],
             "unmapped_path_tokens_after_managed": managed_evidence["unresolved_path_tokens"],
             "managed_relocation": managed_evidence["state"],
+            "native_path_state": path_report["state"],
+            "native_file_references": path_report["known_file_references"],
+            "native_unresolved_path_tokens": path_report["unresolved_path_tokens"],
+            "native_file_reference_witness_sha256": path_report["file_reference_witness_sha256"],
             "runnable": False,
             "dynamic_library_closure": "unknown",
             "static_needed_libraries": (
