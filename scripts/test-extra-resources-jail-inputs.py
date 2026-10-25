@@ -88,6 +88,9 @@ class InertJailSnapshotTests(unittest.TestCase):
             self.assertFalse((bundle / "native/original-dvtws.args").stat().st_mode & 0o111)
             self.assertFalse((bundle / "native/jailed-direct-resources.args").stat().st_mode & 0o111)
             self.assertFalse((bundle / "libexec/ld-elf.so.1").exists())
+            self.assertEqual(report["managed_target_files"], 0)
+            self.assertFalse(report["runnable"])
+            self.assertTrue((bundle / "native/jailed-managed-targets.args").exists())
             destination = bundle
         self.assertFalse(destination.exists())
         self.assertGreaterEqual(self.checked, 3)

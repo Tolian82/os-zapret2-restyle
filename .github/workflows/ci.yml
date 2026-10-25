@@ -274,6 +274,9 @@ jobs:
       - name: Test installed engine ELF Lua ABI no-exec read-only hints
         run: python3.13 scripts/test-extra-resources-engine-abi.py
 
+      - name: Test pinned native managed hostlist and IPSET jail inputs
+        run: python3.13 scripts/test-extra-resources-jail-managed.py
+
       - name: Test original native argv direct Lua/BIN jailed path mapping
         run: python3.13 scripts/test-extra-resources-jail-argv.py
 
