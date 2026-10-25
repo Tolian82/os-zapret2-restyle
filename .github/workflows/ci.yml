@@ -262,6 +262,9 @@ jobs:
       - name: Test production inert prospective native Strategies compiler shell
         run: python3.13 scripts/test-extra-resources-inert-compile.py
 
+      - name: Test original candidate-argv Lua and BIN file witnesses
+        run: python3.13 scripts/test-extra-resources-lua-inputs.py
+
       - name: Validate project identity and version
         shell: bash
         run: |

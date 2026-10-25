@@ -25,6 +25,7 @@ from backend.shared_apply_operation import native_lifecycle_gate
 from backend.voice_ipfw_adapter import require_lifecycle_lock
 from backend.voice_native_lifecycle_router import _locked_config, native_config_owner
 from extra_resources_saved_strategies import locked_saved_strategies_view
+from extra_resources_lua_inputs import attest_candidate_lua_files
 
 CONFIG = Path("/conf/config.xml")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -79,7 +80,20 @@ def compile_inert_saved_candidate(saved_template: Path, upstream: Path,
                 or info.st_size == 0 or info.st_size > 4 * 1024 * 1024):
             raise RuntimeError("native prospective Strategies output is missing or unsafe")
         hashes[name] = hashlib.sha256(item.read_bytes()).hexdigest()
+    # All direct Lua/BIN inputs from the NATIVE argv must be present and
+    # unchanged in the pinned post-removal view. This is not Lua execution.
+    lua_inputs = attest_candidate_lua_files(release / "dvtws.args", upstream)
+    if (lua_inputs["authorized"] is not False
+            or lua_inputs["compatibility"] != "unknown"
+            or lua_inputs["engine_lua_proof"] != "not-run"):
+        raise RuntimeError("invalid non-authorizing Lua reference witness")
     return {
+        "lua_reference_state": lua_inputs["state"],
+        "lua_reference_sha256": lua_inputs["resource_witness_sha256"],
+        "lua_desync_calls": lua_inputs["desync_calls"],
+        "lua_init_files": lua_inputs["lua_init_files"],
+        "blob_files": lua_inputs["blob_files"],
+        "inline_lua_initializers": lua_inputs["inline_lua_initializers"],
         "state": "native-common-candidate-compiled-input-only",
         "argv_sha256": hashes["dvtws.args"],
         "traffic_sha256": hashes["traffic.conf"],
@@ -139,7 +153,10 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
             native = compiler(template, prospective, saved_xml, saved_xml.parent)
             if (native.get("state") != "native-common-candidate-compiled-input-only"
                     or native.get("authorized") is not False
-                    or native.get("engine_lua_proof") != "not-run"):
+                    or native.get("engine_lua_proof") != "not-run"
+                    or native.get("lua_reference_state") != "native-lua-direct-files-attested"
+                    or not isinstance(native.get("lua_reference_sha256"), str)
+                    or len(native["lua_reference_sha256"]) != 64):
                 raise RuntimeError("invalid read-only native compiler attestation")
             if plan["compatibility"] != "unknown" or plan["authorized"] is not False:
                 raise RuntimeError("invalid prospective input-only state")
@@ -161,6 +178,8 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
                 "engine_lua_proof": "not-run",
                 "native_candidate": native["state"],
                 "candidate_argv_sha256": native["argv_sha256"],
+                "lua_file_reference_state": native["lua_reference_state"],
+                "lua_file_reference_sha256": native["lua_reference_sha256"],
             }
         lock_checker()
         _locked_config(config, fd, owner)
