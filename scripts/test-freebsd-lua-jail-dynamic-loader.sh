@@ -96,7 +96,10 @@ if jexec "$NAME" /probe "$TMP/host-only-secret" --exec-loader-test > "$TMP/no-lo
     echo "ERROR: missing PT_INTERP unexpectedly succeeded" >&2
     exit 1
 fi
-grep -Fq "JAILED_LOADER_EXEC_FAILED" "$TMP/no-loader.txt"
+# On FreeBSD 15 a missing PT_INTERP can abort the exec caller in-kernel
+# (Abort trap) instead of returning ENOENT to perror. Require failed exit,
+# the exact preceding static kernel boundary, and NO dynamic success marker.
+grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/no-loader.txt"
 if grep -Fq "JAIL_REAL_DYNAMIC_LOADER_SYNTHETIC_ELF_PASS" "$TMP/no-loader.txt"; then
     echo "ERROR: false-positive success without loader" >&2
     exit 1
