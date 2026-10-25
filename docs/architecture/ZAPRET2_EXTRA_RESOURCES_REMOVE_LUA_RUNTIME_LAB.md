@@ -26,3 +26,8 @@ THIS INTERPOSER IS NOT A SECURITY SANDBOX. It can be bypassed by direct syscalls
 FreeBSD 15 compiles the test-only shared library and a mock executable and checks that synthetic PF_DIVERT and legacy IPPROTO_DIVERT opens return AF_UNIX descriptors and that real network socket attempts and sendto are denied. This is NOT a jail, not actual Lua, not an engine test, and never a condition to delete files.
 
 Only owner-approved source development; no appliance mutation, testing package publication or stable release.
+## v0.5.9_13: kernel jail boundary experiment
+
+The FreeBSD 15 CI executes scripts/test-freebsd-lua-jail-boundary.sh. It compiles the static native helper scripts/fixtures/lua-jail-native-boundary.c and checks that it *fails* outside jail, then runs it inside a new disposable private-root prison with ip4=disable, ip6=disable, allow.raw_sockets=0, allow.socket_af=0, allow.mount=0 and allow.sysvipc=0. The helper checks security.jail.jailed=1, a real canary existing only outside that jail root, denies PF_DIVERT and IPv4/IPv6 raw sockets and loopback binding, and requires AF_UNIX datagram creation. The test then removes jail and verifies it no longer exists.
+
+These are kernel-enforced jail tests in a disposable CI VM, not on OPNsense; real dvtws2 and Lua are NOT executed, and no Lua sandbox validation is claimed. Future work must combine this kernel boundary with the separate mock shim without leaking host files or network. Do NOT run the shim alone on the appliance.
