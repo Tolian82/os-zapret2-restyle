@@ -2,7 +2,7 @@
 
 **Project:** os-zapret2-restyle
 **Owner approval:** 24 October 2026
-**Status:** APPROVED PLAN; Stage 1 qualified on GitHub source/FreeBSD15 CI and merged ([PR #577](https://github.com/Tolian82/os-zapret2-restyle/pull/577)); Stage 2 `v0.5.9_2` upstream-only temporary view/native Blob resolver qualified (PR #578); `v0.5.9_3` adds full common native Strategies pipeline fixture. Full saved Strategies compatibility gate and Stages 3–13 not completed.
+**Status:** APPROVED PLAN; Stage 1 qualified on GitHub source/FreeBSD15 CI and merged ([PR #577](https://github.com/Tolian82/os-zapret2-restyle/pull/577)); Stage 2 `v0.5.9_2` upstream-only temporary view/native Blob resolver qualified (PR #578); `v0.5.9_3` full common native Strategies pipeline fixture qualified (PR #579). `v0.5.9_4` adds a saved Config XML/native rendered template pair witness to the upstream-only view. Installed-engine Lua/function dependency and original-FD9 saved-pair/Voice gates remain pending. Full saved Strategies compatibility gate and Stages 3–13 not completed.
 **Normative requirements:** [Remove Additional Resources specification](ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md).
 **Existing architecture:** [Additional Resources implementation plan](ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) and [GUI/install contract](ZAPRET2_EXTRA_RESOURCES_GUI.md).
 

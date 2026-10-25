@@ -250,6 +250,9 @@ jobs:
       - name: Test full native Strategies candidate against upstream-only resources
         run: python3.13 scripts/test-extra-resources-native-strategies.py
 
+      - name: Test pinned saved XML and native rendered Strategies pair against future resources
+        run: python3.13 scripts/test-extra-resources-saved-config.py
+
       - name: Validate project identity and version
         shell: bash
         run: |

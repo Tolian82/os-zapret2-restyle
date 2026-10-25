@@ -19,7 +19,7 @@
 ## Level 2 — active development: safe removal of extra resources
 
 - [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — physically retain only installed upstream HEAD Lua/BIN, block on incompatible saved Strategies or Voice (including meaningful OFF drafts), protect native lifecycle/rollback, and provide Advanced-only bilingual Remove UI.
-- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — 13 bounded stages including the late README and separately authorized stable release; Stage 1 source/FreeBSD15 checks qualified, Stage 2 upstream-only view source/CI qualified (PR #578), native Strategies pipeline fixture `v0.5.9_3` in progress; no testing package or release authorized.
+- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — 13 bounded stages including the late README and separately authorized stable release; Stage 1 source/FreeBSD15 checks qualified, Stage 2 upstream-only view source/CI qualified (PR #578), native Strategies pipeline fixture `v0.5.9_3` CI qualified (PR #579), `v0.5.9_4` saved XML/native-rendered template pair attestation in progress; no testing package or release authorized.
 
 ## Level 2 — active M0–M7 completion and acceptance
 
