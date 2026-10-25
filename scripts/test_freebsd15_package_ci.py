@@ -87,4 +87,37 @@ for installed in (
 ):
     if not (ROOT / "src/opnsense/scripts/OPNsense/Zapret" / installed).is_file():
         fail(f"packaged source path is missing: {installed}")
+# CI-only FreeBSD jail programs must never quietly skip the only platform
+# that can compile and execute them. Parse the actual change-classifier regex,
+# not an independent approximation of its rules.
+workflow = text(".github/workflows/ci.yml")
+selector_match = re.search(
+    r"(?m)^          elif printf '%s\\n' \"\\\$\\\{changed\\\}\" \\| grep -Eq '([^']+)'; then$",
+    workflow,
+)
+if not selector_match:
+    fail("cannot locate actual FreeBSD/package change classifier")
+selector = selector_match.group(1)
+for path in (
+    ".github/workflows/ci.yml",
+    "src/opnsense/scripts/OPNsense/Zapret/extra_resources_jail_inputs.py",
+    "scripts/test-freebsd15-package-ci.sh",
+    "scripts/test-freebsd-lua-jail-upstream-engine.sh",
+    "scripts/test-freebsd-lua-jail-shim-combined.sh",
+    "scripts/test-freebsd-lua-no-network-shim.sh",
+    "scripts/fixtures/lua-jail-native-boundary.c",
+    "scripts/fixtures/lua-jail-stage-ci-elf.py",
+    "scripts/fixtures/lua-init-no-network-shim.c",
+):
+    if not re.search(selector, path):
+        fail(f"FreeBSD jail change bypasses FreeBSD CI: {path}")
+for path in (
+    "docs/START_HERE.md",
+    "README.md",
+    "scripts/test-extra-resources-jail-inputs.py",
+    "scripts/test-strategy-lab-python-foundation.sh",
+):
+    if re.search(selector, path):
+        fail(f"unrelated file unexpectedly triggers FreeBSD CI: {path}")
+
 print(f"PASS: FreeBSD 15 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")
