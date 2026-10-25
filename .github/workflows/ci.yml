@@ -271,6 +271,9 @@ jobs:
       - name: Test shared Lua declaration scanner for Strategy Lab and removal
         run: python3.13 scripts/test-shared-lua-declarations.py
 
+      - name: Test FreeBSD PT_INTERP and loader path confinement input checks
+        run: python3.13 scripts/test-extra-resources-jail-loader.py
+
       - name: Test exact static ELF DT_NEEDED graph in inert jail inputs
         run: python3.13 scripts/test-extra-resources-jail-libraries.py
 

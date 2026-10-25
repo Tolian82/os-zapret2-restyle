@@ -30,7 +30,12 @@ from extra_resources_lua_inputs import (
 from extra_resources_preflight import PreflightError
 from extra_resources_jail_argv import relocate_direct_native_argv
 from extra_resources_jail_managed import stage_native_managed_targets
-from extra_resources_jail_libraries import collect_static_needed_libraries
+from extra_resources_jail_libraries import (
+    collect_static_needed_libraries, MAX_LIBRARY_BYTES,
+)
+from extra_resources_jail_loader import (
+    attest_static_loader_input, MAX_LOADER_BYTES,
+)
 
 MAX_RESOURCES = 256
 MAX_TOTAL_RESOURCE_BYTES = 64 * 1024 * 1024
@@ -189,9 +194,14 @@ def staged_inert_jail_inputs(
     if library_source_root is None:
         library_evidence = None
         library_files: dict[str, bytes] = {}
+        loader_evidence = None
+        loader_files: dict[str, bytes] = {}
     else:
         library_evidence, library_files = collect_static_needed_libraries(
             initial_engine, Path(library_source_root), _read_pinned
+        )
+        loader_evidence, loader_files = attest_static_loader_input(
+            initial_engine, library_files, Path(library_source_root), _read_pinned
         )
     mapped_argv, relocation = relocate_direct_native_argv(initial_argv, view)
     managed_argv, managed_evidence, managed_files = stage_native_managed_targets(
@@ -219,6 +229,9 @@ def staged_inert_jail_inputs(
         for name, data in library_files.items():
             _save(root, "elf-needed/" + name, data)
             digests["elf-needed/" + name] = hashlib.sha256(data).hexdigest()
+        for name, data in loader_files.items():
+            _save(root, "elf-interpreter/" + name, data)
+            digests["elf-interpreter/" + name] = hashlib.sha256(data).hexdigest()
 
         def check_library_sources():
             if library_source_root is None:
@@ -230,6 +243,18 @@ def staged_inert_jail_inputs(
                 raise JailInputError("ELF library sources changed during staging")
 
         check_library_sources()
+
+        def check_loader_source():
+            if library_source_root is None:
+                return
+            current_report, current_files = attest_static_loader_input(
+                initial_engine, library_files,
+                Path(library_source_root), _read_pinned
+            )
+            if current_report != loader_evidence or current_files != loader_files:
+                raise JailInputError("ELF interpreter source changed during staging")
+
+        check_loader_source()
 
         def check_managed_source():
             # Exact generated native files must remain identical until
@@ -254,10 +279,14 @@ def staged_inert_jail_inputs(
             for name, digest in digests.items():
                 staged = root / name
                 if (staged.is_symlink() or staged.stat().st_mode & 0o111
-                        or hashlib.sha256(_read_pinned(staged, MAX_ENGINE_BYTES
-                            if name == "engine/dvtws2" else MAX_ARGS
-                            if name.startswith("native/")
-                            else MAX_RESOURCE)).hexdigest() != digest):
+                        or hashlib.sha256(_read_pinned(
+                            staged,
+                            MAX_ENGINE_BYTES if name == "engine/dvtws2" else
+                            MAX_ARGS if name.startswith("native/") else
+                            MAX_LIBRARY_BYTES if name.startswith("elf-needed/") else
+                            MAX_LOADER_BYTES if name.startswith("elf-interpreter/") else
+                            MAX_RESOURCE
+                        )).hexdigest() != digest):
                     raise JailInputError("staged jail input changed")
 
         attest_staged_files()
@@ -292,6 +321,14 @@ def staged_inert_jail_inputs(
                 if library_evidence is not None else "not-requested"
             ),
             "loader_path_resolution": "unproven",
+            "elf_interpreter": (
+                loader_evidence["elf_interpreter"]
+                if loader_evidence is not None else "not-requested"
+            ),
+            "elf_loader_witness_sha256": (
+                loader_evidence["elf_loader_witness_sha256"]
+                if loader_evidence is not None else None
+            ),
             "dlopen_dependencies": "unknown",
             "transitive_dependencies": "unknown",
             "engine_lua_proof": "not-run",
@@ -302,6 +339,7 @@ def staged_inert_jail_inputs(
         attest_staged_files()
         check_managed_source()
         check_library_sources()
+        check_loader_source()
         # Context-manager consumers cannot silently return success if the
         # original FD9/lifecycle or candidate inputs changed while in use.
         end_engine, end_argv, end_files, end_witness = pin_inputs()
