@@ -14,6 +14,8 @@ from pathlib import Path
 import tempfile
 from typing import Iterator
 
+from backend.voice_native_saved_pair_guard import require_saved_pair, SavedPairError
+
 from extra_resources_preflight import PreflightError, sha256, validate_runtime_path
 from extra_resources_reconcile import (
     MAX_FILE, _remove_file_attestation, installed_resources, make_remove_plan,
@@ -27,6 +29,7 @@ def upstream_only_view(
     config: Path,
     *,
     workspace_root: Path | None = None,
+    saved_template: Path | None = None,
     expected_witness: str | None = None,
     git_bin: str = "git",
 ) -> Iterator[tuple[dict, Path]]:
@@ -36,9 +39,30 @@ def upstream_only_view(
     separately verified copy of the installed Git HEAD bytes. Never place
     this view underneath the production runtime or other shared directories.
     The full inventory witness and saved Config are re-attested both sides
-    of the copy. The caller must separately attest them again before mutation.
+    of the copy. An optional *original OPNsense-rendered* saved-template
+    pair is checked by the existing authoritative XML/template pair guard
+    before AND after the compiler's use of the view. No standalone result
+    from this view can authorize removal.
     """
-    plan = make_remove_plan(root, managed, config, git_bin)
+    baseline = make_remove_plan(root, managed, config, git_bin)
+    plan = dict(baseline)
+    template_attestation = None
+    if saved_template is not None:
+        # The saved pair is obtained only from a native locked Config/render
+        # caller, NEVER supplied by the browser or constructed here.
+        saved_template = Path(saved_template)
+        template_attestation = _remove_file_attestation(saved_template, 4 * 1024 * 1024)
+        try:
+            require_saved_pair(config, saved_template)
+        except (SavedPairError, OSError, ValueError) as exc:
+            raise PreflightError("native saved XML/rendered Strategies pair rejected") from exc
+        if _remove_file_attestation(saved_template, 4 * 1024 * 1024) != template_attestation:
+            raise PreflightError("native saved Strategies template changed during attestation")
+        plan["saved_pair"] = {
+            "status": "verified-input-only",
+            "template_sha256": template_attestation[1]["sha256"],
+            "config_sha256": plan["witness"]["config_sha256"],
+        }
     if expected_witness is not None and (
         expected_witness != plan["witness"]["inventory_sha256"]
     ):
@@ -73,7 +97,7 @@ def upstream_only_view(
                 raise PreflightError(f"prospective upstream copy checksum mismatch: {name}")
         if installed_resources(view) != plan["upstream"]:
             raise PreflightError("prospective upstream view differs from installed Git HEAD")
-        if make_remove_plan(root, managed, config, git_bin) != plan:
+        if make_remove_plan(root, managed, config, git_bin) != baseline:
             raise PreflightError("resource/config inventory changed during prospective staging")
         # The staged view is an inert input. No full native compile, Lua-export
         # proof or Voice/OFF-draft validation happens in this helper.
@@ -84,5 +108,12 @@ def upstream_only_view(
         finally:
             if installed_resources(view) != plan["upstream"]:
                 raise PreflightError("prospective upstream resources changed during compilation")
-            if make_remove_plan(root, managed, config, git_bin) != plan:
+            if make_remove_plan(root, managed, config, git_bin) != baseline:
                 raise PreflightError("resource/config inventory changed during compilation")
+            if saved_template is not None:
+                if _remove_file_attestation(saved_template, 4 * 1024 * 1024) != template_attestation:
+                    raise PreflightError("native saved Strategies template changed during compilation")
+                try:
+                    require_saved_pair(config, saved_template)
+                except (SavedPairError, OSError, ValueError) as exc:
+                    raise PreflightError("native saved Strategies pair changed during compilation") from exc
