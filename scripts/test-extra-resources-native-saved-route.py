@@ -35,6 +35,12 @@ BLOCKED = {"state": "blocked", "reason": "shared-apply-pending", "safe_to_mutate
 
 
 class NativePreviewRouteTests(base.SavedNativeViewTests):
+    @staticmethod
+    def fake_compiler(*_args):
+        return {"state": "native-common-candidate-compiled-input-only",
+                "authorized": False, "engine_lua_proof": "not-run",
+                "argv_sha256": "a" * 64}
+
     def preview(self, *, checker=None, gate=None, **kwargs):
         # The native route itself acquires the only saved Config flock. The
         # inherited base fixture holds it when testing an import-only context.
@@ -47,6 +53,7 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
             owner_provider=lambda: self.owner,
             template_factory=base.NativeTemplate,
             config_factory=base.NativeConfig,
+            compiler=kwargs.pop("compiler", self.fake_compiler),
             **kwargs,
         )
 
@@ -55,6 +62,8 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         self.assertEqual(report["state"], "saved-native-input-attested")
         self.assertEqual(report["saved_pair"], "verified-input-only")
         self.assertEqual(report["engine_lua_proof"], "not-run")
+        self.assertEqual(report["native_candidate"], "native-common-candidate-compiled-input-only")
+        self.assertEqual(report["candidate_argv_sha256"], "a" * 64)
         self.assertEqual(report["compatibility"], "unknown")
         self.assertIs(report["authorized"], False)
         self.assertEqual((report["lua"], report["bin"], report["total"]), (0, 1, 1))
@@ -83,6 +92,15 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
             raise RuntimeError("native original FD9 not held")
         with self.assertRaisesRegex(RuntimeError, "FD9 not held"):
             self.preview(checker=deny)
+        self.assertEqual(list(self.work.iterdir()), [])
+
+    def test_native_compiler_cannot_override_unknown_or_authorization(self):
+        def malicious(*_args):
+            return {"state": "native-common-candidate-compiled-input-only",
+                    "authorized": True, "engine_lua_proof": "verified",
+                    "argv_sha256": "b" * 64}
+        with self.assertRaisesRegex(RuntimeError, "compiler attestation"):
+            self.preview(compiler=malicious)
         self.assertEqual(list(self.work.iterdir()), [])
 
     def test_narrow_cli_and_no_public_api_action(self):
