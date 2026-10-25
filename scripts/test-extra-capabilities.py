@@ -55,6 +55,31 @@ with tempfile.TemporaryDirectory() as tmp:
     data["capabilities"]["resources"].append({"target":"files/fake/no-descriptor.bin","kind":"blob"})
     state.write_text(json.dumps(data))
     assert assess()[-1]["status"] == "unsupported"
+    # The SAME bounded lexical scanner must now protect Strategy Lab and
+    # removal preflight. A comment/string/local declaration is NOT an export.
+    for syntax in (
+        b"-- function invented() end\n",
+        b"--[==[ function invented() end ]==]\n",
+        b'note = "function invented() end"\n',
+        b"long = [=[ function invented() end ]=]\n",
+        b"local function invented() end\n",
+    ):
+        script.write_bytes(syntax)
+        data["files"]["lua/invented.lua"] = digest(script)
+        state.write_text(json.dumps(data))
+        report = assess()
+        assert report[0]["status"] == "unsupported", (syntax, report[0])
+        assert "declared top-level Lua export" in report[0]["reason"]
+
+    script.write_bytes(b"function invented() end\n")
+    data["files"]["lua/invented.lua"] = digest(script)
+    state.write_text(json.dumps(data))
+    assert assess()[0]["status"] == "eligible"
+    # Unterminated long Lua comment must refuse both consumers.
+    script.write_bytes(b"--[=[ function invented() end")
+    data["files"]["lua/invented.lua"] = digest(script)
+    state.write_text(json.dumps(data))
+    assert assess()[0]["status"] == "unsupported"
     state.unlink()
     assert assess() == []
 print("PASS: dynamic managed Lua/BIN classification is bounded to verified job inventory")

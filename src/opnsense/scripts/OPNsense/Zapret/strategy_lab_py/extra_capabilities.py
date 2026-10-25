@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .resources import ResourceInventory
+from .lua_declarations import has_explicit_top_level_function
 
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 RESOURCE = re.compile(r"^(?:lua/[A-Za-z_][A-Za-z0-9_.-]*\.lua|files/fake/[A-Za-z_][A-Za-z0-9_.-]*\.bin)$")
@@ -95,9 +96,8 @@ def inspect_extra_capabilities(inventory: ResourceInventory, state_file: Path) -
                         len(content) >= 6 and content[0] == 0x16 and content[1] == 0x03 and content[5] == 0x01
                     ):
                         detail["reason"] = "declared TLS record signature missing"
-                    elif target.startswith("lua/") and not re.search(
-                        rb"(?m)^\s*function\s+" + re.escape(desc["export"].encode("ascii")) + rb"\s*\(",
-                        content,
+                    elif target.startswith("lua/") and not has_explicit_top_level_function(
+                        content, desc["export"],
                     ):
                         detail["reason"] = "declared top-level Lua export missing"
                     else:
