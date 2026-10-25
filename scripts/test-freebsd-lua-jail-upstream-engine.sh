@@ -38,6 +38,7 @@ cleanup()
 }
 trap cleanup EXIT HUP INT TERM
 mkdir -m 0700 "$TMP/root"
+mkdir -m 0755 "$TMP/root/dev"
 mkdir -m 0755 "$TMP/root/upstream" "$TMP/root/upstream/lua" \
     "$TMP/root/lib" "$TMP/root/libexec" "$TMP/root/usr" \
     "$TMP/root/usr/lib" "$TMP/root/usr/local" "$TMP/root/usr/local/lib"
@@ -98,6 +99,21 @@ jail -c "name=$NAME" "path=$TMP/root" persist \
     "allow.raw_sockets=0" "allow.socket_af=0" \
     "allow.mount=0" "allow.sysvipc=0" "exec.clean" >/dev/null
 ACTIVE=1
+# The genuine LuaJIT library requires a secure PRNG seed before it can
+# allocate its Lua state. FreeBSD getentropy() may be unavailable inside the
+# strict jail; LuaJIT then falls back to /dev/urandom. Supply ONLY a static,
+# fresh, world-readable root-owned CI-generated random byte file
+# inside the isolated jail. The real host /dev is NEVER mounted or exposed.
+# Regenerate before each process; never reuse its seed between trials.
+refresh_jailed_entropy()
+{
+    dd if=/dev/urandom of="$TMP/root/dev/urandom" bs=4096 count=1 2>/dev/null
+    chmod 0444 "$TMP/root/dev/urandom"
+    [ -s "$TMP/root/dev/urandom" ] || {
+        echo "FAIL: jailed CI entropy seed source is missing" >&2
+        exit 1
+    }
+}
 PHASE=kernel-confinement-evidence
 jexec "$NAME" /probe "$TMP/host-only-secret" > "$TMP/boundary.txt"
 grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/boundary.txt"
@@ -105,6 +121,7 @@ grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/boundary.txt"
 # Negative controls must fail for real Lua input reasons, not a missing
 # interpreter, broken dependencies, sandbox bypass or false success.
 PHASE=missing-upstream-Lua-negative
+refresh_jailed_entropy
 if timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
     --exec-ci-upstream-missing-lua > "$TMP/missing-lua.txt" 2>&1; then
     echo "FAIL: real engine accepted absent Lua initializer" >&2
@@ -117,6 +134,7 @@ if grep -Fq "LUA INIT DONE" "$TMP/missing-lua.txt"; then
 fi
 
 PHASE=missing-Lua-export-negative
+refresh_jailed_entropy
 if timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
     --exec-ci-upstream-missing-export > "$TMP/missing-export.txt" 2>&1; then
     echo "FAIL: real engine accepted a nonexistent Lua export" >&2
@@ -130,6 +148,7 @@ if grep -Fq "LUA INIT DONE" "$TMP/missing-export.txt"; then
 fi
 
 PHASE=genuine-upstream-Lua-init-export-positive
+refresh_jailed_entropy
 timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
     --exec-ci-upstream-positive > "$TMP/positive.txt" 2>&1
 grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/positive.txt"
