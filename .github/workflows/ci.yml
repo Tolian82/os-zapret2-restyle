@@ -253,6 +253,9 @@ jobs:
       - name: Test pinned saved XML and native rendered Strategies pair against future resources
         run: python3.13 scripts/test-extra-resources-saved-config.py
 
+      - name: Test locked saved Config plus original native detached renderer and upstream-only view
+        run: python3.13 scripts/test-extra-resources-native-locked-config.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
