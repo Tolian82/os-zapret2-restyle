@@ -159,9 +159,15 @@ class LoaderInputTests(unittest.TestCase):
             )
             staged = bundle
         self.assertFalse(staged.exists())
-        with self.assertRaisesRegex(JailInputError, "ELF interpreter source changed"):
+        # Structural rejection is earlier than source-digest comparison.
+        with self.assertRaisesRegex(PreflightError, "ELF loader metadata incompatible"):
             with staged_inert_jail_inputs(installed, argv, upstream, workspace, **opts):
                 self.interp.write_bytes(with_interp(self.library))
+        self.interp.write_bytes(self.library)
+        # A different but structurally valid loader must instead fail SHA.
+        with self.assertRaisesRegex(JailInputError, "ELF interpreter source changed"):
+            with staged_inert_jail_inputs(installed, argv, upstream, workspace, **opts):
+                self.interp.write_bytes(fixture.native_elf("libchanged.so.1"))
         self.assertEqual(list(workspace.iterdir()), [])
 
     def test_no_subprocess_or_loader_exec(self):
