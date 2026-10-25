@@ -133,6 +133,7 @@ PHASE=genuine-upstream-Lua-init-export-positive
 timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
     --exec-ci-upstream-positive > "$TMP/positive.txt" 2>&1
 grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/positive.txt"
+grep -Eq "Running as UID=[1-9][0-9]* GID=[1-9][0-9]*" "$TMP/positive.txt"
 grep -Fq "LUA INIT DONE" "$TMP/positive.txt"
 grep -Fq "no intercept quit" "$TMP/positive.txt"
 
