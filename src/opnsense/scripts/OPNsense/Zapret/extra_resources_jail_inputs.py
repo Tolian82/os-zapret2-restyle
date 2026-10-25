@@ -28,6 +28,7 @@ from extra_resources_lua_inputs import (
     MAX_ARGS, MAX_RESOURCE, attest_candidate_lua_files,
 )
 from extra_resources_preflight import PreflightError
+from extra_resources_jail_argv import relocate_direct_native_argv
 
 MAX_RESOURCES = 256
 MAX_TOTAL_RESOURCE_BYTES = 64 * 1024 * 1024
@@ -182,13 +183,16 @@ def staged_inert_jail_inputs(
         return engine_data, argv_data, files, direct["resource_witness_sha256"]
 
     initial_engine, initial_argv, initial_files, direct_witness = pin_inputs()
+    mapped_argv, relocation = relocate_direct_native_argv(initial_argv, view)
     with tempfile.TemporaryDirectory(prefix="zapret-inert-jail-inputs-",
                                      dir=workspace) as temporary:
         root = Path(temporary)
         _save(root, "engine/dvtws2", initial_engine)
         _save(root, "native/original-dvtws.args", initial_argv)
+        _save(root, "native/jailed-direct-resources.args", mapped_argv)
         digests = {"engine/dvtws2": expected_engine_sha256,
-                   "native/original-dvtws.args": expected_argv_sha256}
+                   "native/original-dvtws.args": expected_argv_sha256,
+                   "native/jailed-direct-resources.args": hashlib.sha256(mapped_argv).hexdigest()}
         for name, data in initial_files.items():
             _save(root, "upstream/" + name, data)
             digests["upstream/" + name] = hashlib.sha256(data).hexdigest()
@@ -207,7 +211,7 @@ def staged_inert_jail_inputs(
                 if (staged.is_symlink() or staged.stat().st_mode & 0o111
                         or hashlib.sha256(_read_pinned(staged, MAX_ENGINE_BYTES
                             if name == "engine/dvtws2" else MAX_ARGS
-                            if name == "native/original-dvtws.args"
+                            if name.startswith("native/")
                             else MAX_RESOURCE)).hexdigest() != digest):
                     raise JailInputError("staged jail input changed")
 
@@ -221,7 +225,10 @@ def staged_inert_jail_inputs(
             "engine_sha256": expected_engine_sha256,
             "argv_sha256": expected_argv_sha256,
             "direct_resource_witness_sha256": direct_witness,
-            "argv_relocation": "not-done",
+            "argv_relocation": relocation["state"],
+            "unmapped_path_tokens": relocation["unmapped_path_tokens"],
+            "native_profiles": relocation["native_profiles"],
+            "runnable": False,
             "dynamic_library_closure": "unknown",
             "transitive_dependencies": "unknown",
             "engine_lua_proof": "not-run",
