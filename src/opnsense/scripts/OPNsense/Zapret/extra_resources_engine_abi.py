@@ -177,8 +177,19 @@ def inspect_installed_engine_abi(path: Path) -> dict:
                 break
             data.extend(part)
         after = os.fstat(fd)
-        evidence = lambda s: (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
-        if len(data) != before.st_size or evidence(before) != evidence(after):
+        try:
+            pathname_after = path.lstat()
+        except OSError as exc:
+            raise EngineABIError("installed engine path changed during ABI read") from exc
+        # The open FD can remain unchanged when another inode replaces
+        # the installed filename. Bind its identity to BOTH pathname reads.
+        evidence = lambda s: (
+            s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns, s.st_ctime_ns,
+            s.st_mode, s.st_nlink, s.st_uid, s.st_gid,
+        )
+        if (len(data) != before.st_size or evidence(before) != evidence(pathname)
+                or evidence(before) != evidence(after)
+                or evidence(after) != evidence(pathname_after)):
             raise EngineABIError("installed engine changed during ABI read")
     finally:
         os.close(fd)
