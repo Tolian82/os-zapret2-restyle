@@ -88,7 +88,14 @@ def stage(root: Path, engine: Path, shim: Path, evidence: Path) -> None:
         if len(names) >= MAX_COUNT:
             raise ValueError("too many CI ELF dependencies")
         candidate, resolved, data = find_library(name)
-        _elf_interpreter(data, dependency=True)
+        # CI-only: genuine FreeBSD base/pkg system DSOs may use native
+        # DT_FILTER/RUNPATH directives that the deliberately stricter
+        # *installed-engine removal* attestor cannot model. We never
+        # authorize removal from this experiment. Parse recursive DT_NEEDED
+        # with the SAME structural ELF reader, pin exact bytes, then require
+        # the real ld-elf.so.1 to resolve them inside a kernel no-IP jail.
+        # No system library, Config or host directory is mounted into jail.
+        nested = _needed_libraries(data)
         relative = candidate.relative_to("/")
         write(root, str(relative), data)
         total += len(data)
@@ -97,7 +104,7 @@ def stage(root: Path, engine: Path, shim: Path, evidence: Path) -> None:
         names.add(name)
         entries.append({"source": str(candidate), "resolved": str(resolved),
                         "dest": str(relative), "sha256": sha(data)})
-        for child in _needed_libraries(data):
+        for child in nested:
             if child not in names and child not in current:
                 current.append(child)
     loader, loader_data = safe_source(Path(STANDARD_INTERPRETER))
