@@ -39,7 +39,9 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
     def fake_compiler(*_args):
         return {"state": "native-common-candidate-compiled-input-only",
                 "authorized": False, "engine_lua_proof": "not-run",
-                "argv_sha256": "a" * 64}
+                "argv_sha256": "a" * 64,
+                "lua_reference_state": "native-lua-direct-files-attested",
+                "lua_reference_sha256": "b" * 64}
 
     def preview(self, *, checker=None, gate=None, **kwargs):
         # The native route itself acquires the only saved Config flock. The
@@ -64,6 +66,8 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         self.assertEqual(report["engine_lua_proof"], "not-run")
         self.assertEqual(report["native_candidate"], "native-common-candidate-compiled-input-only")
         self.assertEqual(report["candidate_argv_sha256"], "a" * 64)
+        self.assertEqual(report["lua_file_reference_state"], "native-lua-direct-files-attested")
+        self.assertEqual(report["lua_file_reference_sha256"], "b" * 64)
         self.assertEqual(report["compatibility"], "unknown")
         self.assertIs(report["authorized"], False)
         self.assertEqual((report["lua"], report["bin"], report["total"]), (0, 1, 1))
