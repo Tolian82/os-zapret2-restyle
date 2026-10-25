@@ -198,6 +198,20 @@ def staged_inert_jail_inputs(
         if ((initial_engine, initial_argv, initial_files, direct_witness)
                 != (final_engine, final_argv, final_files, final_witness)):
             raise JailInputError("jail inputs changed during staging")
+        def attest_staged_files():
+            # Check actual bytes inside the candidate root, not merely the
+            # source SHA claims. A consumer changing the staged bundle must
+            # cause refusal, never an apparently verified hand-off.
+            for name, digest in digests.items():
+                staged = root / name
+                if (staged.is_symlink() or staged.stat().st_mode & 0o111
+                        or hashlib.sha256(_read_pinned(staged, MAX_ENGINE_BYTES
+                            if name == "engine/dvtws2" else MAX_ARGS
+                            if name == "native/original-dvtws.args"
+                            else MAX_RESOURCE)).hexdigest() != digest):
+                    raise JailInputError("staged jail input changed")
+
+        attest_staged_files()
         canonical = json.dumps(sorted(digests.items()),
                                separators=(",", ":"), ensure_ascii=True)
         report = {
@@ -215,6 +229,7 @@ def staged_inert_jail_inputs(
             "authorized": False,
         }
         yield report, root
+        attest_staged_files()
         # Context-manager consumers cannot silently return success if the
         # original FD9/lifecycle or candidate inputs changed while in use.
         end_engine, end_argv, end_files, end_witness = pin_inputs()
