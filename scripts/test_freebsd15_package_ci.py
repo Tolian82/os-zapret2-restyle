@@ -91,13 +91,14 @@ for installed in (
 # that can compile and execute them. Parse the actual change-classifier regex,
 # not an independent approximation of its rules.
 workflow = text(".github/workflows/ci.yml")
-selector_match = re.search(
-    r"(?m)^          elif printf '%s\\n' \"\\\$\\\{changed\\\}\" \\| grep -Eq '([^']+)'; then$",
-    workflow,
-)
-if not selector_match:
-    fail("cannot locate actual FreeBSD/package change classifier")
-selector = selector_match.group(1)
+classifier_lines = [
+    line for line in workflow.splitlines()
+    if "elif printf '%s" in line and '"${changed}"' in line
+    and "grep -Eq '" in line
+]
+if len(classifier_lines) != 1 or "'; then" not in classifier_lines[0]:
+    fail("cannot locate unique actual FreeBSD/package change classifier")
+selector = classifier_lines[0].split("grep -Eq '", 1)[1].split("'; then", 1)[0]
 for path in (
     ".github/workflows/ci.yml",
     "src/opnsense/scripts/OPNsense/Zapret/extra_resources_jail_inputs.py",
