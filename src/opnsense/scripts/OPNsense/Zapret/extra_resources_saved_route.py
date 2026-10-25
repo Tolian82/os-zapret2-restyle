@@ -27,6 +27,7 @@ from backend.voice_native_lifecycle_router import _locked_config, native_config_
 from extra_resources_saved_strategies import locked_saved_strategies_view
 from extra_resources_lua_inputs import attest_candidate_lua_files
 from extra_resources_lua_source_shape import inspect_lua_source_shape
+from extra_resources_engine_abi import inspect_installed_engine_abi
 
 CONFIG = Path("/conf/config.xml")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -44,6 +45,7 @@ def _clear_common_journal() -> dict:
 
 CANDIDATE_COMPILER = Path(__file__).with_name("extra_resources_inert_compile.sh")
 ACTIVE_REFERENCE = Path("/usr/local/etc/zapret2/runtime-v2")
+INSTALLED_ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
 
 
 def compile_inert_saved_candidate(saved_template: Path, upstream: Path,
@@ -95,7 +97,18 @@ def compile_inert_saved_candidate(saved_template: Path, upstream: Path,
             or shape["exports"] != "unknown"
             or shape["transitive_dependencies"] != "unknown"):
         raise RuntimeError("invalid non-authorizing Lua declaration diagnostic")
+    # Only inspect the exact installed engine ELF *bytes*, never invoke it.
+    # DT_NEEDED may omit statically loaded/dlopen Lua; this evidence is NOT
+    # runtime/export/transitive proof, irrespective of a recognized library.
+    engine_abi = inspect_installed_engine_abi(INSTALLED_ENGINE)
+    if (engine_abi["compatibility"] != "unknown"
+            or engine_abi["authorized"] is not False
+            or engine_abi["engine_lua_proof"] != "not-run"):
+        raise RuntimeError("invalid non-authorizing installed-engine ABI hint")
     return {
+        "engine_abi_state": engine_abi["state"],
+        "engine_abi": engine_abi["abi"],
+        "engine_sha256": engine_abi["engine_sha256"],
         "lua_reference_state": lua_inputs["state"],
         "lua_reference_sha256": lua_inputs["resource_witness_sha256"],
         "lua_source_shape_state": shape["state"],
@@ -171,7 +184,16 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
                     or len(native["lua_reference_sha256"]) != 64
                     or native.get("lua_source_shape_state") != "lua-export-source-shape-inspected"
                     or not isinstance(native.get("lua_source_shape_sha256"), str)
-                    or len(native["lua_source_shape_sha256"]) != 64):
+                    or len(native["lua_source_shape_sha256"]) != 64
+                    or native.get("engine_abi_state") not in
+                       ("engine-elf-abi-hint-only", "engine-not-installed")
+                    or native.get("engine_abi") not in
+                       ("unknown", "luajit-5.1", "lua-5.1", "lua-5.2",
+                        "lua-5.3", "lua-5.4", "lua-5.5",
+                        "lua-version-unidentified")
+                    or not (native.get("engine_sha256") is None or (
+                        isinstance(native.get("engine_sha256"), str)
+                        and len(native["engine_sha256"]) == 64))):
                 raise RuntimeError("invalid read-only native compiler attestation")
             if plan["compatibility"] != "unknown" or plan["authorized"] is not False:
                 raise RuntimeError("invalid prospective input-only state")
@@ -199,6 +221,9 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
                 "lua_source_shape_sha256": native["lua_source_shape_sha256"],
                 "unaccounted_lua_declarations": native["unaccounted_lua_declarations"],
                 "dynamic_lua_source": native["dynamic_lua_source"],
+                "engine_abi_state": native["engine_abi_state"],
+                "engine_abi": native["engine_abi"],
+                "engine_sha256": native["engine_sha256"],
             }
         lock_checker()
         _locked_config(config, fd, owner)

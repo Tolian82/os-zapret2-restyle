@@ -45,7 +45,10 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
                 "lua_source_shape_state": "lua-export-source-shape-inspected",
                 "lua_source_shape_sha256": "c" * 64,
                 "unaccounted_lua_declarations": 1,
-                "dynamic_lua_source": False}
+                "dynamic_lua_source": False,
+                "engine_abi_state": "engine-elf-abi-hint-only",
+                "engine_abi": "luajit-5.1",
+                "engine_sha256": "d" * 64}
 
     def preview(self, *, checker=None, gate=None, **kwargs):
         # The native route itself acquires the only saved Config flock. The
@@ -73,6 +76,9 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         self.assertEqual(report["lua_file_reference_state"], "native-lua-direct-files-attested")
         self.assertEqual(report["lua_file_reference_sha256"], "b" * 64)
         self.assertEqual(report["lua_source_shape_sha256"], "c" * 64)
+        self.assertEqual(report["engine_abi_state"], "engine-elf-abi-hint-only")
+        self.assertEqual(report["engine_abi"], "luajit-5.1")
+        self.assertEqual(report["engine_sha256"], "d" * 64)
         self.assertEqual(report["unaccounted_lua_declarations"], 1)
         self.assertEqual(report["dynamic_lua_source"], False)
         self.assertEqual(report["compatibility"], "unknown")
