@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret"))
 from extra_resources_jail_managed import stage_native_managed_targets
 from extra_resources_jail_inputs import _read_pinned, staged_inert_jail_inputs, JailInputError
+from extra_resources_jail_path_gate import attest_staged_native_file_paths
 from extra_resources_preflight import PreflightError
 
 import importlib.util
@@ -83,6 +84,66 @@ class NativeManagedTests(unittest.TestCase):
         with self.assertRaises(PreflightError):
             self.relocate("--hostlist=" + PREFIX + link.name)
 
+    def test_native_staged_path_closure_over_original_multi_profile_argv(self):
+        def digest(value):
+            return hashlib.sha256(value).hexdigest()
+        staged = {
+            "upstream/lua/zapret-lib.lua": digest(b"lua"),
+            "upstream/files/fake/stock.bin": digest(b"bin"),
+            "native-managed/hostlist-user.txt": digest(b"host"),
+            "native-managed/ipset-telegram.txt": digest(b"ipset"),
+            "native-managed/hostlist-exclude.txt": digest(b"excluded"),
+        }
+        argv = ("--lua-init=@/upstream/lua/zapret-lib.lua\n"
+                "--hostlist=/native-managed/hostlist-user.txt\n"
+                "--blob=stock:@/upstream/files/fake/stock.bin\n"
+                "--new\n"
+                "--ipset=/native-managed/ipset-telegram.txt\n"
+                "--hostlist-exclude=/native-managed/hostlist-exclude.txt\n").encode()
+        proof = attest_staged_native_file_paths(argv, staged)
+        self.assertEqual(proof["state"], "known-native-file-paths-staged-only")
+        self.assertEqual(proof["known_file_references"], 5)
+        self.assertEqual(proof["unique_staged_files"], 5)
+        self.assertEqual(proof["unresolved_path_tokens"], 0)
+        self.assertEqual(proof["engine_lua_proof"], "not-run")
+        self.assertFalse(proof["runnable"])
+        self.assertFalse(proof["authorized"])
+
+    def test_native_staged_path_gate_rejects_fake_missing_or_wrong_kind(self):
+        digest = hashlib.sha256(b"data").hexdigest()
+        staged = {"upstream/lua/zapret-lib.lua": digest}
+        safe = b"--lua-init=@/upstream/lua/zapret-lib.lua\n"
+        for bad in (
+            b"--blob=stock:@/upstream/files/fake/missing.bin\n",
+            b"--hostlist=/native-managed/hostlist-missing.txt\n",
+            b"--lua-init=@/upstream/lua/../secret.lua\n",
+            b"--blob=stock:@/upstream/files/fake/../secret.bin\n",
+            b"--hostlist=/native-managed/../secret.txt\n",
+            b"--lua-init=print(1)\n",
+            b"--blob=stock:@/host/stock.bin\n",
+        ):
+            with self.subTest(bad=bad), self.assertRaises(PreflightError):
+                attest_staged_native_file_paths(safe + bad, staged)
+        with self.assertRaisesRegex(PreflightError, "kind mismatch"):
+            attest_staged_native_file_paths(
+                safe + b"--hostlist=/native-managed/ipset-telegram.txt\n",
+                {**staged, "native-managed/ipset-telegram.txt": digest},
+            )
+
+    def test_native_unresolved_host_files_are_not_considered_closed(self):
+        digest = hashlib.sha256(b"lua").hexdigest()
+        proof = attest_staged_native_file_paths(
+            b"--lua-init=@/upstream/lua/zapret-lib.lua\n"
+            b"--hostlist=/usr/local/etc/zapret2/hostlist.txt\n"
+            b"--hostlist-auto=plain-name.txt\n"
+            b"--new\n",
+            {"upstream/lua/zapret-lib.lua": digest},
+        )
+        self.assertEqual(proof["state"], "unresolved-native-file-paths")
+        self.assertEqual(proof["unresolved_path_tokens"], 2)
+        self.assertFalse(proof["runnable"])
+        self.assertFalse(proof["authorized"])
+
     def test_integration_inert_jail_snapshot_and_source_race(self):
         view = self.base / "upstream"
         (view / "lua").mkdir(parents=True)
@@ -102,6 +163,8 @@ class NativeManagedTests(unittest.TestCase):
                     check_lifecycle=lambda: None)
         with staged_inert_jail_inputs(engine, argv, view, workspace, **args) as (proof, root):
             self.assertEqual(proof["managed_target_files"], 2)
+            self.assertEqual(proof["native_path_state"], "known-native-file-paths-staged-only")
+            self.assertEqual(proof["native_unresolved_path_tokens"], 0)
             self.assertIn("--hostlist=/native-managed/hostlist-user.txt",
                           (root / "native/jailed-managed-targets.args").read_text())
             self.assertEqual((root / "native-managed/ipset-telegram.txt").read_bytes(),
