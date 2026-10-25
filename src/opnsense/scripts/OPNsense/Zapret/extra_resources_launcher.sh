@@ -67,6 +67,19 @@ except Exception:
         fi
         printf 'busy=%s\n' "$_busy"
         ;;
+    preview-saved)
+        [ "$#" -eq 1 ] || exit 64
+        [ -x "$SERVICE_SCRIPT" ] && [ -x "$LOCKF_BIN" ] &&
+        [ -x "$PYTHON_BIN" ] || {
+            echo "ERROR: read-only resource preview tools missing" >&2
+            exit 69
+        }
+        # A synchronous, non-mutating operation. Existing setup.lock is
+        # always acquired BEFORE the original native FD9 service owner.
+        exec "$LOCKF_BIN" -s -t 3 "$LOCK_FILE" \
+            /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+            "$SERVICE_SCRIPT" extra-resources-preview-saved
+        ;;
     install|recover)
         if [ "$MODE" = install ]; then
             [ "$#" -eq 2 ] || exit 64
@@ -98,7 +111,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved}' >&2
         exit 64
         ;;
 esac

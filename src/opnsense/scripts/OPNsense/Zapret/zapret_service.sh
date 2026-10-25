@@ -401,6 +401,18 @@ native_voice_preview_draft_service()
     "${_voice_python}" "${_voice_route}" preview-draft "${_voice_mask}" "${_voice_sha}"
 }
 
+# Root-only native preview of saved ordinary Strategies. setup.lock is held
+# by the existing extra_resources_launcher.sh BEFORE this FD9 owner enters.
+# This only proves saved Config and future Git HEAD input provenance; it
+# never compiles engine Lua exports or authorizes removal.
+extra_resources_preview_saved_service()
+{
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+    [ -x /usr/local/bin/python3.13 ] || return 69
+    [ -r "${SCRIPT_DIR}/extra_resources_saved_route.py" ] || return 69
+    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_saved_route.py" preview-saved
+}
+
 # One actual runtime/Config Apply owner: the existing service process holds
 # FD9 for the ENTIRE operation; Python journal and PHP Config worker run as
 # children inheriting that ownership. No nested configd/lockf acquisition,
@@ -1625,6 +1637,9 @@ service_dispatch()
             shift
             shared_apply_record_service "$@"
             ;;
+        extra-resources-preview-saved)
+            extra_resources_preview_saved_service
+            ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
             ;;
@@ -1848,7 +1863,7 @@ service_with_lifecycle_lock()
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
                 ;;
-            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|upstream-recover-mutating|upstream-install)
+            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|extra-resources-preview-saved|upstream-recover-mutating|upstream-install)
                 # Under the inherited FD9, a committed native owner can be
                 # temporarily stopped/restored only by native common service
                 # actions. Pending or foreign owners remain fail-closed.
