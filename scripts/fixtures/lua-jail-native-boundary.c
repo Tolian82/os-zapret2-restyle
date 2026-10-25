@@ -44,7 +44,10 @@ int main(int argc, char **argv)
 {
     if ((argc != 2 && !(argc == 3 &&
         (strcmp(argv[2], "--exec-mock") == 0 ||
-         strcmp(argv[2], "--exec-loader-test") == 0))) ||
+         strcmp(argv[2], "--exec-loader-test") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-positive") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-missing-export") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0))) ||
         !argv[1] || !argv[1][0]) {
         fprintf(stderr, "HOST_CANARY_ARGUMENT_REQUIRED\n");
         return 10;
@@ -105,6 +108,36 @@ int main(int argc, char **argv)
             execve("/mock-engine", args, env);
             perror("JAILED_MOCK_EXEC_FAILED");
             return 18;
+        }
+        /*
+         * CI ONLY: exec genuine *CI-built upstream v1.0.6* FreeBSD dvtws2,
+         * never an appliance-installed binary. Identical static KERNEL
+         * boundary checked above BEFORE this dispatch and any LD_PRELOAD.
+         * The interposer is NOT security isolation; the jail is.
+         */
+        if (strncmp(argv[2], "--exec-ci-upstream-", 19) == 0) {
+            const int missing_export =
+                strcmp(argv[2], "--exec-ci-upstream-missing-export") == 0;
+            const int missing_lua =
+                strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0;
+            char *const args[] = {
+                "/ci-engine", "--intercept=0", "--debug=1",
+                "--filter-tcp=443",
+                missing_lua ? "--lua-init=@/upstream/lua/missing.lua"
+                            : "--lua-init=@/upstream/lua/zapret-lib.lua",
+                missing_export ? "--lua-desync=__ci_export_absent__"
+                               : "--lua-desync=pass",
+                "--new", "--filter-udp=443", "--lua-desync=pass",
+                NULL
+            };
+            char *const env[] = {
+                "PATH=/", "LD_PRELOAD=/no-net.so",
+                "LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib", NULL
+            };
+            fflush(stdout);
+            execve("/ci-engine", args, env);
+            perror("JAILED_UPSTREAM_CI_ENGINE_EXEC_FAILED");
+            return 20;
         }
         /* No shim or untrusted environment: actual FreeBSD ld-elf.so.1
          * starts only a CI-built synthetic marker inside the private jail.
