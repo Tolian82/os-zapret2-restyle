@@ -119,6 +119,15 @@ class InertJailSnapshotTests(unittest.TestCase):
                 staged_path = bundle
         self.assertFalse(staged_path.exists())
 
+    def test_staged_file_tamper_invalidates_even_when_sources_unchanged(self):
+        with self.assertRaisesRegex(JailInputError, "staged jail input changed"):
+            with self.stage() as (_, bundle):
+                path = bundle / "upstream/lua/zapret-lib.lua"
+                path.chmod(0o600)
+                path.write_text("function forged() end")
+                staged_path = bundle
+        self.assertFalse(staged_path.exists())
+
     def test_untrusted_workspace_permissions_or_symlink_fail(self):
         self.workspace.chmod(0o755)
         with self.assertRaises(JailInputError):
