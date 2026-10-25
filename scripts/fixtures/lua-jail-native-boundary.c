@@ -42,7 +42,9 @@ static int cannot_bind_ip(void)
 }
 int main(int argc, char **argv)
 {
-    if ((argc != 2 && !(argc == 3 && strcmp(argv[2], "--exec-mock") == 0)) ||
+    if ((argc != 2 && !(argc == 3 &&
+        (strcmp(argv[2], "--exec-mock") == 0 ||
+         strcmp(argv[2], "--exec-loader-test") == 0))) ||
         !argv[1] || !argv[1][0]) {
         fprintf(stderr, "HOST_CANARY_ARGUMENT_REQUIRED\n");
         return 10;
@@ -96,12 +98,25 @@ int main(int argc, char **argv)
          * synthetic dynamic mock with an explicit jail-relative library.
          * Neither the host's jexec nor this probe loads the interposer.
          */
-        char *const args[] = { "/mock-engine", NULL };
-        char *const env[] = { "LD_PRELOAD=/no-net.so", "PATH=/", NULL };
-        fflush(stdout);
-        execve("/mock-engine", args, env);
-        perror("JAILED_MOCK_EXEC_FAILED");
-        return 18;
+        if (strcmp(argv[2], "--exec-mock") == 0) {
+            char *const args[] = { "/mock-engine", NULL };
+            char *const env[] = { "LD_PRELOAD=/no-net.so", "PATH=/", NULL };
+            fflush(stdout);
+            execve("/mock-engine", args, env);
+            perror("JAILED_MOCK_EXEC_FAILED");
+            return 18;
+        }
+        /* No shim or untrusted environment: actual FreeBSD ld-elf.so.1
+         * starts only a CI-built synthetic marker inside the private jail.
+         * The KERNEL boundary above must pass before reaching execve. */
+        if (strcmp(argv[2], "--exec-loader-test") == 0) {
+            char *const args[] = { "/loader-marker", NULL };
+            char *const env[] = { "PATH=/", NULL };
+            fflush(stdout);
+            execve("/loader-marker", args, env);
+            perror("JAILED_LOADER_EXEC_FAILED");
+            return 19;
+        }
     }
     return 0;
 }

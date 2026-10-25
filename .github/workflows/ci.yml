@@ -654,6 +654,7 @@ jobs:
             sh scripts/test-freebsd-lua-no-network-shim.sh
             sh scripts/test-freebsd-lua-jail-boundary.sh
             sh scripts/test-freebsd-lua-jail-shim-combined.sh
+            sh scripts/test-freebsd-lua-jail-dynamic-loader.sh
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
             /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
