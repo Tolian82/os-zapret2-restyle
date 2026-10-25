@@ -71,7 +71,7 @@ class StaticNeededGraphTests(unittest.TestCase):
             self.witness()
 
     def test_malformed_elf_hostile_name_and_root_symlink_refused(self):
-        self.second.write_bytes(b"malformed")
+        self.second.write_bytes(b"malformed" + b"\x00" * 4096)
         with self.assertRaisesRegex(PreflightError, "ELF invalid"):
             self.witness()
         self.engine_data = fixture.native_elf("../evil.so")
@@ -116,7 +116,7 @@ class StaticNeededGraphTests(unittest.TestCase):
             self.assertEqual(file.stat().st_mode & 0o111, 0)
             temporary = bundle
         self.assertFalse(temporary.exists())
-        with self.assertRaisesRegex(JailInputError, "ELF library sources changed"):
+        with self.assertRaisesRegex(PreflightError, "missing or ambiguous"):
             with staged_inert_jail_inputs(engine, argv, upstream, workspace, **args):
                 self.second.write_bytes(fixture.native_elf("libother.so.3"))
         self.assertEqual(list(workspace.iterdir()), [])
