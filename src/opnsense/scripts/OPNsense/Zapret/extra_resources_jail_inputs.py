@@ -29,6 +29,7 @@ from extra_resources_lua_inputs import (
 )
 from extra_resources_preflight import PreflightError
 from extra_resources_jail_argv import relocate_direct_native_argv
+from extra_resources_jail_managed import stage_native_managed_targets
 
 MAX_RESOURCES = 256
 MAX_TOTAL_RESOURCE_BYTES = 64 * 1024 * 1024
@@ -184,19 +185,39 @@ def staged_inert_jail_inputs(
 
     initial_engine, initial_argv, initial_files, direct_witness = pin_inputs()
     mapped_argv, relocation = relocate_direct_native_argv(initial_argv, view)
+    managed_argv, managed_evidence, managed_files = stage_native_managed_targets(
+        mapped_argv, argv.parent / "managed", _read_pinned
+    )
     with tempfile.TemporaryDirectory(prefix="zapret-inert-jail-inputs-",
                                      dir=workspace) as temporary:
         root = Path(temporary)
         _save(root, "engine/dvtws2", initial_engine)
         _save(root, "native/original-dvtws.args", initial_argv)
         _save(root, "native/jailed-direct-resources.args", mapped_argv)
+        _save(root, "native/jailed-managed-targets.args", managed_argv)
         digests = {"engine/dvtws2": expected_engine_sha256,
                    "native/original-dvtws.args": expected_argv_sha256,
-                   "native/jailed-direct-resources.args": hashlib.sha256(mapped_argv).hexdigest()}
+                   "native/jailed-direct-resources.args": hashlib.sha256(mapped_argv).hexdigest(),
+                   "native/jailed-managed-targets.args": hashlib.sha256(managed_argv).hexdigest()}
         for name, data in initial_files.items():
             _save(root, "upstream/" + name, data)
             digests["upstream/" + name] = hashlib.sha256(data).hexdigest()
 
+        for name, data in managed_files.items():
+            _save(root, "native-managed/" + name, data)
+            digests["native-managed/" + name] = hashlib.sha256(data).hexdigest()
+
+        def check_managed_source():
+            # Exact generated native files must remain identical until
+            # the guarded snapshot context exits.
+            latest_args, latest_evidence, latest_files = stage_native_managed_targets(
+                mapped_argv, argv.parent / "managed", _read_pinned
+            )
+            if (latest_args != managed_argv or latest_files != managed_files
+                    or latest_evidence != managed_evidence):
+                raise JailInputError("native managed source changed during staging")
+
+        check_managed_source()
         # Invalidate the snapshot if ANY source input changes during copying.
         final_engine, final_argv, final_files, final_witness = pin_inputs()
         if ((initial_engine, initial_argv, initial_files, direct_witness)
@@ -228,6 +249,10 @@ def staged_inert_jail_inputs(
             "argv_relocation": relocation["state"],
             "unmapped_path_tokens": relocation["unmapped_path_tokens"],
             "native_profiles": relocation["native_profiles"],
+            "managed_target_files": managed_evidence["managed_files"],
+            "managed_reference_sha256": managed_evidence["managed_witness_sha256"],
+            "unmapped_path_tokens_after_managed": managed_evidence["unresolved_path_tokens"],
+            "managed_relocation": managed_evidence["state"],
             "runnable": False,
             "dynamic_library_closure": "unknown",
             "transitive_dependencies": "unknown",
@@ -237,6 +262,7 @@ def staged_inert_jail_inputs(
         }
         yield report, root
         attest_staged_files()
+        check_managed_source()
         # Context-manager consumers cannot silently return success if the
         # original FD9/lifecycle or candidate inputs changed while in use.
         end_engine, end_argv, end_files, end_witness = pin_inputs()
