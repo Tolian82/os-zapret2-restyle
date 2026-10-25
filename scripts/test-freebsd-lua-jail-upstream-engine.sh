@@ -88,6 +88,10 @@ if "$TMP/root/probe" "$TMP/host-only-secret" --exec-ci-upstream-positive \
 fi
 grep -Fq "NOT_A_JAIL" "$TMP/host.txt"
 
+# The REAL upstream engine drops root privileges before reading Lua.
+# Permit traversal inside the jail only; TMP (its HOST parent) stays 0700,
+# and the jail has no host mounts/Config/devices or network capabilities.
+chmod 0755 "$TMP/root"
 PHASE=create-disposable-kernel-jail
 jail -c "name=$NAME" "path=$TMP/root" persist \
     "ip4=disable" "ip6=disable" \
