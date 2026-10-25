@@ -9,9 +9,12 @@ It cannot Stop/Start, write Config/IPFW, remove resources or change metadata.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
+import stat
+import subprocess
 import sys
 import tempfile
 
@@ -36,11 +39,62 @@ def _clear_common_journal() -> dict:
     return gate
 
 
+
+CANDIDATE_COMPILER = Path(__file__).with_name("extra_resources_inert_compile.sh")
+ACTIVE_REFERENCE = Path("/usr/local/etc/zapret2/runtime-v2")
+
+
+def compile_inert_saved_candidate(saved_template: Path, upstream: Path,
+                                 saved_xml: Path, workspace: Path) -> dict:
+    """Use the EXACT native common orchestrator on private upstream-only files.
+
+    This produces a candidate artifact; it never starts the installed
+    engine or proves Lua-function dependencies. No alternative parser,
+    Config.save, engine launch, kernel write or live runtime promotion.
+    """
+    work = workspace / "native-strategies-build"
+    work.mkdir(mode=0o700)
+    release = work / "release"
+    try:
+        result = subprocess.run(
+            ["/bin/sh", str(CANDIDATE_COMPILER), str(saved_template),
+             str(upstream), str(saved_xml), str(ACTIVE_REFERENCE),
+             str(work), str(release)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=60, check=False,
+            # The parent holds and attests FD9. It does not delegate
+            # service authority to the inert compiler subprocess.
+            close_fds=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("native prospective Strategies compiler unavailable") from exc
+    if result.returncode:
+        # Do not expose strategy arguments or native Config in diagnostics.
+        raise RuntimeError("native prospective Strategies compilation rejected")
+    hashes = {}
+    for name in ("dvtws.args", "traffic-user.conf", "traffic.conf"):
+        item = release / name
+        info = item.lstat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or info.st_size == 0 or info.st_size > 4 * 1024 * 1024):
+            raise RuntimeError("native prospective Strategies output is missing or unsafe")
+        hashes[name] = hashlib.sha256(item.read_bytes()).hexdigest()
+    return {
+        "state": "native-common-candidate-compiled-input-only",
+        "argv_sha256": hashes["dvtws.args"],
+        "traffic_sha256": hashes["traffic.conf"],
+        "saved_traffic_sha256": hashes["traffic-user.conf"],
+        "engine_lua_proof": "not-run",
+        "authorized": False,
+    }
+
+
 def preview_saved_input(
     *, config: Path = CONFIG, runtime: Path = RUNTIME, manifest: Path = MANIFEST,
     workspace: Path, gate_checker=_clear_common_journal,
     lock_checker=require_lifecycle_lock,
-    owner_provider=native_config_owner, **view_kwargs,
+    owner_provider=native_config_owner, compiler=compile_inert_saved_candidate,
+    **view_kwargs,
 ) -> dict:
     """Run a wholly read-only native Config/HEAD witness under inherited FD9.
 
@@ -62,13 +116,14 @@ def preview_saved_input(
     return _attest_fd(
         fd, config=config, runtime=runtime, manifest=manifest,
         workspace=workspace, gate_checker=gate_checker,
-        lock_checker=lock_checker, owner=owner, **view_kwargs,
+        lock_checker=lock_checker, owner=owner, compiler=compiler,
+        **view_kwargs,
     )
 
 
 def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
                workspace: Path, gate_checker, lock_checker, owner,
-               **view_kwargs) -> dict:
+               compiler, **view_kwargs) -> dict:
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         _locked_config(config, fd, owner)
@@ -79,6 +134,13 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
         ) as (plan, prospective, saved_xml, template):
             if not saved_xml.is_file() or not template.is_file():
                 raise RuntimeError("native prospective Config/template absent")
+            # Compiles against hypothetical future Git HEAD files under the
+            # existing lifecycle/Config lock; never the current extra set.
+            native = compiler(template, prospective, saved_xml, saved_xml.parent)
+            if (native.get("state") != "native-common-candidate-compiled-input-only"
+                    or native.get("authorized") is not False
+                    or native.get("engine_lua_proof") != "not-run"):
+                raise RuntimeError("invalid read-only native compiler attestation")
             if plan["compatibility"] != "unknown" or plan["authorized"] is not False:
                 raise RuntimeError("invalid prospective input-only state")
             counts = plan["counts"]
@@ -97,6 +159,8 @@ def _attest_fd(fd: int, *, config: Path, runtime: Path, manifest: Path,
                 "inventory_sha256": plan["witness"]["inventory_sha256"],
                 "saved_pair": plan["saved_pair"]["status"],
                 "engine_lua_proof": "not-run",
+                "native_candidate": native["state"],
+                "candidate_argv_sha256": native["argv_sha256"],
             }
         lock_checker()
         _locked_config(config, fd, owner)

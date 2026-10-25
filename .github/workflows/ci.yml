@@ -259,6 +259,9 @@ jobs:
       - name: Test original setup lock and native FD9 saved Strategies read-only route
         run: python3.13 scripts/test-extra-resources-native-saved-route.py
 
+      - name: Test production inert prospective native Strategies compiler shell
+        run: python3.13 scripts/test-extra-resources-inert-compile.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
