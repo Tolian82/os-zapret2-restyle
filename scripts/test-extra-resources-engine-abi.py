@@ -10,6 +10,7 @@ import struct
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MOD = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
@@ -141,6 +142,47 @@ class EngineABIReadOnlyTests(unittest.TestCase):
             stream.truncate(64 * 1024 * 1024 + 1)
         with self.assertRaises(EngineABIError):
             self.inspect()
+
+    def test_installed_path_replaced_during_fd_read_fails_closed(self):
+        self.save(native_elf("libluajit-5.1.so.2"))
+        replacement = Path(self.tmp.name) / "replacement"
+        replacement.write_bytes(native_elf("liblua-5.4.so.0"))
+        replacement.chmod(0o755)
+        original_read = os.read
+        swapped = False
+
+        def replace_after_first_read(fd, size):
+            nonlocal swapped
+            chunk = original_read(fd, size)
+            if not swapped:
+                swapped = True
+                os.replace(replacement, self.engine)
+            return chunk
+
+        with mock.patch("extra_resources_engine_abi.os.read",
+                        side_effect=replace_after_first_read):
+            with self.assertRaisesRegex(EngineABIError, "changed during ABI read"):
+                self.inspect()
+        self.assertTrue(swapped)
+
+    def test_installed_path_unlinked_during_fd_read_fails_closed(self):
+        self.save(native_elf("libluajit-5.1.so.2"))
+        original_read = os.read
+        removed = False
+
+        def unlink_after_first_read(fd, size):
+            nonlocal removed
+            chunk = original_read(fd, size)
+            if not removed:
+                removed = True
+                self.engine.unlink()
+            return chunk
+
+        with mock.patch("extra_resources_engine_abi.os.read",
+                        side_effect=unlink_after_first_read):
+            with self.assertRaisesRegex(EngineABIError, "path changed during ABI read"):
+                self.inspect()
+        self.assertTrue(removed)
 
     def test_does_not_execute_binary_or_start_network_probe(self):
         source = (MOD / "extra_resources_engine_abi.py").read_text()
