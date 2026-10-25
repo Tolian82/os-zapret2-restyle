@@ -30,6 +30,7 @@ from extra_resources_lua_inputs import (
 from extra_resources_preflight import PreflightError
 from extra_resources_jail_argv import relocate_direct_native_argv
 from extra_resources_jail_managed import stage_native_managed_targets
+from extra_resources_jail_libraries import collect_static_needed_libraries
 
 MAX_RESOURCES = 256
 MAX_TOTAL_RESOURCE_BYTES = 64 * 1024 * 1024
@@ -136,6 +137,7 @@ def staged_inert_jail_inputs(
     expected_engine_sha256: str,
     expected_argv_sha256: str,
     check_lifecycle: Callable[[], object],
+    library_source_root: Path | None = None,
 ) -> Iterator[tuple[dict, Path]]:
     """Yield digest-pinned snapshot files and ALWAYS delete them at exit.
 
@@ -184,6 +186,13 @@ def staged_inert_jail_inputs(
         return engine_data, argv_data, files, direct["resource_witness_sha256"]
 
     initial_engine, initial_argv, initial_files, direct_witness = pin_inputs()
+    if library_source_root is None:
+        library_evidence = None
+        library_files: dict[str, bytes] = {}
+    else:
+        library_evidence, library_files = collect_static_needed_libraries(
+            initial_engine, Path(library_source_root), _read_pinned
+        )
     mapped_argv, relocation = relocate_direct_native_argv(initial_argv, view)
     managed_argv, managed_evidence, managed_files = stage_native_managed_targets(
         mapped_argv, argv.parent / "managed", _read_pinned
@@ -206,6 +215,21 @@ def staged_inert_jail_inputs(
         for name, data in managed_files.items():
             _save(root, "native-managed/" + name, data)
             digests["native-managed/" + name] = hashlib.sha256(data).hexdigest()
+
+        for name, data in library_files.items():
+            _save(root, "elf-needed/" + name, data)
+            digests["elf-needed/" + name] = hashlib.sha256(data).hexdigest()
+
+        def check_library_sources():
+            if library_source_root is None:
+                return
+            latest_report, latest_files = collect_static_needed_libraries(
+                initial_engine, Path(library_source_root), _read_pinned
+            )
+            if latest_report != library_evidence or latest_files != library_files:
+                raise JailInputError("ELF library sources changed during staging")
+
+        check_library_sources()
 
         def check_managed_source():
             # Exact generated native files must remain identical until
@@ -255,6 +279,20 @@ def staged_inert_jail_inputs(
             "managed_relocation": managed_evidence["state"],
             "runnable": False,
             "dynamic_library_closure": "unknown",
+            "static_needed_libraries": (
+                library_evidence["static_needed_libraries"]
+                if library_evidence is not None else None
+            ),
+            "static_needed_witness_sha256": (
+                library_evidence["static_needed_witness_sha256"]
+                if library_evidence is not None else None
+            ),
+            "library_static_state": (
+                library_evidence["state"]
+                if library_evidence is not None else "not-requested"
+            ),
+            "loader_path_resolution": "unproven",
+            "dlopen_dependencies": "unknown",
             "transitive_dependencies": "unknown",
             "engine_lua_proof": "not-run",
             "compatibility": "unknown",
@@ -263,6 +301,7 @@ def staged_inert_jail_inputs(
         yield report, root
         attest_staged_files()
         check_managed_source()
+        check_library_sources()
         # Context-manager consumers cannot silently return success if the
         # original FD9/lifecycle or candidate inputs changed while in use.
         end_engine, end_argv, end_files, end_witness = pin_inputs()

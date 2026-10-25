@@ -271,6 +271,9 @@ jobs:
       - name: Test shared Lua declaration scanner for Strategy Lab and removal
         run: python3.13 scripts/test-shared-lua-declarations.py
 
+      - name: Test exact static ELF DT_NEEDED graph in inert jail inputs
+        run: python3.13 scripts/test-extra-resources-jail-libraries.py
+
       - name: Test installed engine ELF Lua ABI no-exec read-only hints
         run: python3.13 scripts/test-extra-resources-engine-abi.py
 
