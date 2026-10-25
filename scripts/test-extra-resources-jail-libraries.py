@@ -75,7 +75,7 @@ class StaticNeededGraphTests(unittest.TestCase):
         with self.assertRaisesRegex(PreflightError, "ELF invalid"):
             self.witness()
         self.engine_data = fixture.native_elf("../evil.so")
-        with self.assertRaisesRegex(PreflightError, "unsafe DT_NEEDED"):
+        with self.assertRaisesRegex(PreflightError, "installed engine ELF graph invalid"):
             self.witness()
         alias = self.base / "alias"
         alias.symlink_to(self.libroot, target_is_directory=True)
