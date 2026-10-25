@@ -1,7 +1,7 @@
 /*
  * FreeBSD 15 native-kernel TEST-ONLY boundary proof. Compiled STATIC,
  * executed inside an ephemeral jail with a private empty root filesystem.
- * Never executes zapret2/dvtws2 or loads real Lua.
+ * Static kernel boundary proof runs BEFORE dispatching synthetic or genuine\n * CI-built upstream fixtures inside jail; NEVER on host or OPNsense appliance.
  */
 #if !defined(__FreeBSD__)
 #error "FreeBSD jail proof only"
@@ -47,7 +47,10 @@ int main(int argc, char **argv)
          strcmp(argv[2], "--exec-loader-test") == 0 ||
          strcmp(argv[2], "--exec-ci-upstream-positive") == 0 ||
          strcmp(argv[2], "--exec-ci-upstream-missing-export") == 0 ||
-         strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0))) ||
+         strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-staged-files") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-missing-blob") == 0 ||
+         strcmp(argv[2], "--exec-ci-upstream-missing-hostlist") == 0))) ||
         !argv[1] || !argv[1][0]) {
         fprintf(stderr, "HOST_CANARY_ARGUMENT_REQUIRED\n");
         return 10;
@@ -120,6 +123,41 @@ int main(int argc, char **argv)
                 strcmp(argv[2], "--exec-ci-upstream-missing-export") == 0;
             const int missing_lua =
                 strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0;
+            /*
+             * Representative compiler-shaped native file arguments. They
+             * are CI fixtures, NOT a saved owner FD9/Config candidate. Test
+             * that the genuine upstream engine opens staged BIN, HOSTLIST
+             * and IPSET behind the already-verified kernel boundary.
+             */
+            if (strcmp(argv[2], "--exec-ci-upstream-staged-files") == 0 ||
+                strcmp(argv[2], "--exec-ci-upstream-missing-blob") == 0 ||
+                strcmp(argv[2], "--exec-ci-upstream-missing-hostlist") == 0) {
+                const int absent_blob =
+                    strcmp(argv[2], "--exec-ci-upstream-missing-blob") == 0;
+                const int absent_host =
+                    strcmp(argv[2], "--exec-ci-upstream-missing-hostlist") == 0;
+                char *const native_files[] = {
+                    "/ci-engine", "--intercept=0", "--debug=1",
+                    "--lua-init=@/upstream/lua/zapret-lib.lua",
+                    "--filter-tcp=443",
+                    absent_host ? "--hostlist=/native-managed/missing-hostlist.txt"
+                                : "--hostlist=/native-managed/hostlist-ci.txt",
+                    absent_blob ? "--blob=ci:@/upstream/files/fake/missing.bin"
+                                : "--blob=ci:@/upstream/files/fake/quic_short_header.bin",
+                    "--lua-desync=pass",
+                    "--new", "--filter-udp=443",
+                    "--ipset=/native-managed/ipset-ci.txt",
+                    "--lua-desync=pass", NULL
+                };
+                char *const native_env[] = {
+                    "PATH=/", "LD_PRELOAD=/no-net.so",
+                    "LD_LIBRARY_PATH=/usr/local/lib:/usr/lib:/lib", NULL
+                };
+                fflush(stdout);
+                execve("/ci-engine", native_files, native_env);
+                perror("JAILED_STAGED_FILE_OPTIONS_EXEC_FAILED");
+                return 21;
+            }
             char *const args[] = {
                 "/ci-engine", "--intercept=0", "--debug=1",
                 "--filter-tcp=443",

@@ -23,7 +23,7 @@ cleanup()
     trap - EXIT HUP INT TERM
     if [ "$result" -ne 0 ]; then
         echo "FAIL: pinned CI upstream dvtws2 Lua jail trial phase=$PHASE exit=$result" >&2
-        for file in build.txt host.txt boundary.txt missing-lua.txt missing-export.txt positive.txt; do
+        for file in build.txt host.txt boundary.txt missing-lua.txt missing-export.txt missing-blob.txt missing-hostlist.txt staged-positive.txt positive.txt; do
             if [ -f "$TMP/$file" ]; then
                 echo "--- $file ---" >&2
                 tail -n 35 "$TMP/$file" >&2
@@ -40,6 +40,7 @@ trap cleanup EXIT HUP INT TERM
 mkdir -m 0700 "$TMP/root"
 mkdir -m 0755 "$TMP/root/dev"
 mkdir -m 0755 "$TMP/root/upstream" "$TMP/root/upstream/lua" \
+    "$TMP/root/upstream/files" "$TMP/root/upstream/files/fake" "$TMP/root/native-managed" \
     "$TMP/root/lib" "$TMP/root/libexec" "$TMP/root/usr" \
     "$TMP/root/usr/lib" "$TMP/root/usr/local" "$TMP/root/usr/local/lib"
 printf '%s\n' "HOST_ONLY" > "$TMP/host-only-secret"
@@ -75,6 +76,19 @@ cp "$TMP/upstream/lua/zapret-lib.lua" \
 chmod 0555 "$TMP/root/probe" "$TMP/root/no-net.so" "$TMP/root/ci-engine"
 chmod 0444 "$TMP/root/upstream/lua/zapret-lib.lua"
 cmp "$TMP/upstream/lua/zapret-lib.lua" "$TMP/root/upstream/lua/zapret-lib.lua"
+
+# Additional CI-only files follow the already pinned upstream Git HEAD and
+# the existing native managed-file naming convention. These are mock managed
+# outputs in a disposable jail, NOT the owner's real saved Config/FD9 files.
+cp "$TMP/upstream/files/fake/quic_short_header.bin" \
+    "$TMP/root/upstream/files/fake/quic_short_header.bin"
+printf '%s\n' 'example.test' > "$TMP/root/native-managed/hostlist-ci.txt"
+printf '%s\n' '192.0.2.0/24' > "$TMP/root/native-managed/ipset-ci.txt"
+chmod 0444 "$TMP/root/upstream/files/fake/quic_short_header.bin" \
+    "$TMP/root/native-managed/hostlist-ci.txt" \
+    "$TMP/root/native-managed/ipset-ci.txt"
+cmp "$TMP/upstream/files/fake/quic_short_header.bin" \
+    "$TMP/root/upstream/files/fake/quic_short_header.bin"
 
 PHASE=static-FreeBSD-ELF-dependency-stage
 /usr/local/bin/python3.13 "$REPO/scripts/fixtures/lua-jail-stage-ci-elf.py" \
@@ -156,6 +170,52 @@ grep -Eq "Running as UID=[1-9][0-9]* GID=[1-9][0-9]*" "$TMP/positive.txt"
 grep -Fq "LUA INIT DONE" "$TMP/positive.txt"
 grep -Fq "no intercept quit" "$TMP/positive.txt"
 
+
+# Distinguish actual native file parsing from a false-positive startup:
+# missing BIN and missing managed hostlist must each reject INSIDE jail,
+# while the exact upstream BIN and staged managed files must load and allow
+# both --new profiles to complete real Lua initialization.
+PHASE=missing-native-blob-negative
+refresh_jailed_entropy
+if timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
+    --exec-ci-upstream-missing-blob > "$TMP/missing-blob.txt" 2>&1; then
+    echo "FAIL: real engine accepted absent native BLOB" >&2
+    exit 1
+fi
+grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/missing-blob.txt"
+grep -Fq "/upstream/files/fake/missing.bin" "$TMP/missing-blob.txt"
+if grep -Fq "LUA INIT DONE" "$TMP/missing-blob.txt"; then
+    echo "FAIL: absent native BLOB received Lua completion" >&2
+    exit 1
+fi
+
+PHASE=missing-native-managed-hostlist-negative
+refresh_jailed_entropy
+if timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
+    --exec-ci-upstream-missing-hostlist > "$TMP/missing-hostlist.txt" 2>&1; then
+    echo "FAIL: real engine accepted absent managed HOSTLIST" >&2
+    exit 1
+fi
+grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/missing-hostlist.txt"
+grep -Fq "/native-managed/missing-hostlist.txt" "$TMP/missing-hostlist.txt"
+if grep -Fq "LUA INIT DONE" "$TMP/missing-hostlist.txt"; then
+    echo "FAIL: absent managed HOSTLIST received Lua completion" >&2
+    exit 1
+fi
+
+PHASE=native-staged-Lua-BIN-hostlist-ipset-positive
+refresh_jailed_entropy
+timeout 20 jexec "$NAME" /probe "$TMP/host-only-secret" \
+    --exec-ci-upstream-staged-files > "$TMP/staged-positive.txt" 2>&1
+grep -Fxq "JAIL_PRIVATE_ROOT_NO_IP_NO_RAW_SOCKET_PASS" "$TMP/staged-positive.txt"
+grep -Eq "Running as UID=[1-9][0-9]* GID=[1-9][0-9]*" "$TMP/staged-positive.txt"
+grep -Fq "LUA INIT DONE" "$TMP/staged-positive.txt"
+grep -Fq "no intercept quit" "$TMP/staged-positive.txt"
+cmp "$TMP/upstream/files/fake/quic_short_header.bin" \
+    "$TMP/root/upstream/files/fake/quic_short_header.bin"
+test "$(cat "$TMP/root/native-managed/hostlist-ci.txt")" = "example.test"
+test "$(cat "$TMP/root/native-managed/ipset-ci.txt")" = "192.0.2.0/24"
+
 PHASE=after-run-static-attestation
 cmp "$TMP/upstream/lua/zapret-lib.lua" "$TMP/root/upstream/lua/zapret-lib.lua"
 /usr/local/bin/python3.13 "$REPO/scripts/fixtures/lua-jail-stage-ci-elf.py" \
@@ -168,4 +228,4 @@ if jls -N 2>/dev/null | grep -Fq "$NAME"; then
     echo "FAIL: native CI engine test jail survived teardown" >&2
     exit 1
 fi
-echo "PASS: REAL pinned CI-built upstream v1.0.6 dvtws2 ran actual Lua init/export checks in private no-IP FreeBSD jail; negatives + teardown; NOT installed engine/removal proof"
+echo "PASS: REAL pinned CI-built upstream dvtws2 Lua + staged standard BIN/managed HOSTLIST/IPSET file options, negative controls, private no-IP FreeBSD jail and teardown; NOT installed FD9 engine/removal proof"

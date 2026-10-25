@@ -67,7 +67,7 @@ jobs:
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
-          elif printf '%s\n' "${changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
+          elif printf '%s\n' "${changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$|scripts/test-freebsd-lua-[^/]+\.sh$|scripts/fixtures/lua-(jail-[^/]+|init-no-network-shim)\.(c|py)$)'; then
             package=true
           fi
 
