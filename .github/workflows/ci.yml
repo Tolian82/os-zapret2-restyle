@@ -265,6 +265,9 @@ jobs:
       - name: Test original candidate-argv Lua and BIN file witnesses
         run: python3.13 scripts/test-extra-resources-lua-inputs.py
 
+      - name: Test Lua exported-function source shape with bounded lexical scanner
+        run: python3.13 scripts/test-extra-resources-lua-source-shape.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
