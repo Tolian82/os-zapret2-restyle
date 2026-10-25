@@ -274,6 +274,9 @@ jobs:
       - name: Test installed engine ELF Lua ABI no-exec read-only hints
         run: python3.13 scripts/test-extra-resources-engine-abi.py
 
+      - name: Test pinned non-executable jail input snapshots
+        run: python3.13 scripts/test-extra-resources-jail-inputs.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
