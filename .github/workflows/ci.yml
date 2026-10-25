@@ -256,6 +256,9 @@ jobs:
       - name: Test locked saved Config plus original native detached renderer and upstream-only view
         run: python3.13 scripts/test-extra-resources-native-locked-config.py
 
+      - name: Test original setup lock and native FD9 saved Strategies read-only route
+        run: python3.13 scripts/test-extra-resources-native-saved-route.py
+
       - name: Validate project identity and version
         shell: bash
         run: |
