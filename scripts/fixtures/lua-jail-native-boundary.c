@@ -121,7 +121,7 @@ int main(int argc, char **argv)
             const int missing_lua =
                 strcmp(argv[2], "--exec-ci-upstream-missing-lua") == 0;
             char *const args[] = {
-                "/ci-engine", "--intercept=0", "--debug=1",
+                "/ci-engine", "--intercept=0", "--uid=65534:65534", "--debug=1",
                 "--filter-tcp=443",
                 missing_lua ? "--lua-init=@/upstream/lua/missing.lua"
                             : "--lua-init=@/upstream/lua/zapret-lib.lua",
