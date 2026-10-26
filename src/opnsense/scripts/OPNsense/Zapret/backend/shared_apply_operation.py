@@ -193,6 +193,32 @@ class SharedApplyOperation:
             record["previous"] = previous
         return self._persist_record(record)
 
+    def revert_committed_remove(self, trial_id: str, old_id: str, attest) -> dict:
+        """Return to the EXACT saved predecessor after a committed Remove trial.
+
+        No new journal or Config writer. Only an unchanged native common
+        candidate (same saved Config hash, zero changed fields) may use this
+        transition. The FD9 shell must have restored the old sealed release,
+        native process, and scoped IPFW before supplying a positive attest.
+        """
+        before = self.read()
+        if before is None or before["phase"] != "committed":
+            raise SharedOperationError("no committed Remove trial to revert")
+        trial, old = before["detail"], before.get("previous")
+        if not isinstance(old, dict) or trial["id"] != trial_id or old["id"] != old_id:
+            raise SharedOperationError("Remove trial or predecessor identity mismatch")
+        if (trial["page"] != "strategies" or trial["changed_fields"] or
+                trial["base"] != old["candidate"] or
+                trial["candidate"] != old["candidate"]):
+            raise SharedOperationError("Remove trial altered saved Config")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("previous native owner is not attested")
+        if self.read() != before:
+            raise SharedOperationError("common Apply owner changed during Remove rollback")
+        restored = dict(before)
+        restored["phase"] = "restored"
+        return self._persist_record(restored)
+
     def _persist_record(self, record: dict) -> dict:
         """One fsynced atomic journal writer for shared Apply."""
         _validate_record(record)
@@ -352,6 +378,43 @@ class SharedApplyOperation:
         }
 
 
+def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
+                                state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict:
+    """Require the original durable resource witness and exact Apply journal.
+
+    Return only an unchanged Config common trial or the still-original old
+    owner. No PID/argument guessing and no interpretation of user strategy.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from extra_resources_transaction import (
+        _load_journal, _safe_state, _validate_native_owner,
+    )
+
+    _safe_state(state)
+    resource = _load_journal(state / "transaction")
+    if (resource.get("mode") != "remove" or not resource.get("previous") or
+            resource.get("incoming") != {}):
+
+        raise SharedOperationError("no pending Remove resource transaction")
+    owner = _validate_native_owner(resource.get("native_owner"))
+    record = SharedApplyOperation(root).read()
+    current = committed_owner(record) if record and record["phase"] in TERMINAL else None
+    if current and all(current[key] == owner[key] for key in ("id", "page", "candidate")):
+        return {"state": "old", "old": owner, "trial": None}
+    if record is None or record["phase"] != "committed" or "previous" not in record:
+        raise SharedOperationError("Remove common owner is incomplete")
+    old, trial = record["previous"], record["detail"]
+    if (any(old[key] != owner[key] for key in ("id", "page", "candidate")) or
+            trial["page"] != "strategies" or trial["changed_fields"] or
+            trial["base"] != old["candidate"] or
+            trial["candidate"] != old["candidate"]):
+        raise SharedOperationError("Remove common predecessor or unchanged Config mismatch")
+    if resource["phase"] not in ("restarting", "completed"):
+        raise SharedOperationError("resource transaction did not reach native trial")
+    return {"state": "trial", "old": owner, "trial": trial["id"]}
+
+
 def native_lifecycle_gate(action: str | None = None, *,
                           root: Path = DEFAULT_ROOT) -> dict:
     """Read-only FD9 policy from the ONE current shared Apply journal.
@@ -375,7 +438,9 @@ def native_lifecycle_gate(action: str | None = None, *,
         return {"state": "clear", "safe_to_mutate": True}
     phase = record["phase"]
     if action == "strategy-lab-native":
-        if phase == "committed" and committed_owner(record) is not None:
+        if phase in TERMINAL and committed_owner(record) is not None:
+            # RESTORED with a sealed predecessor is still a native common
+            # owner, not an invitation to run the legacy service.
             return {"state": "clear", "safe_to_mutate": True}
         return {"state": "blocked", "reason": "strategy-lab-requires-committed-native-owner",
                 "phase": phase, "safe_to_mutate": False}
@@ -400,6 +465,10 @@ def main(argv: list[str]) -> int:
         )
     )
     owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
+    remove_pair = len(argv) == 2 and argv[1] == "remove-rollback-pair"
+    remove_revert = len(argv) == 4 and argv[1] == "remove-revert-committed" and all(
+        OP_ID.fullmatch(value) for value in argv[2:]
+    )
     review = len(argv) == 2 and argv[1] == "review-legacy"
     finish_review = len(argv) == 3 and argv[1] == "finish-reviewed-legacy" and bool(OP_ID.fullmatch(argv[2]))
     recording = len(argv) == 8 and argv[1] == "record"
@@ -411,7 +480,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or owner_witness or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or owner_witness or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -424,6 +493,28 @@ def main(argv: list[str]) -> int:
             if not state["safe_to_mutate"]:
                 raise SharedOperationError("native common lifecycle gate blocked: " +
                                            state["reason"])
+        elif remove_pair:
+            if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
+                    os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):
+                raise SharedOperationError("missing native Remove recovery owner")
+            proof = native_remove_rollback_pair()
+            print("remove-rollback " + proof["state"] + " " + proof["old"]["id"] +
+                  " " + proof["old"]["page"] + " " + proof["old"]["candidate"] +
+                  " " + (proof["trial"] or "-"))
+        elif remove_revert:
+            if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
+                    os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):
+                raise SharedOperationError("missing native Remove recovery owner")
+            proof = native_remove_rollback_pair()
+            if proof["state"] != "trial" or proof["trial"] != argv[2] or proof["old"]["id"] != argv[3]:
+                raise SharedOperationError("unexpected native Remove rollback pair")
+            from shared_apply_seal import verify_seal, WORK
+            j = SharedApplyOperation(owner=0)
+            j.revert_committed_remove(argv[2], argv[3], lambda: bool(
+                verify_seal(WORK / argv[2], owner=0) and
+                verify_seal(WORK / argv[3], owner=0)
+            ))
+            print("remove-owner-restored")
         elif owner_witness:
             proof = native_committed_owner_witness()
             print("owner-witness " + proof["id"] + " " + proof["page"] +
