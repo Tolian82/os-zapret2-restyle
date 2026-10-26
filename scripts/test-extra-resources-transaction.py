@@ -59,6 +59,32 @@ class Lifecycle:
 
 
 class TestNativeRecoveryReceipt(unittest.TestCase):
+    def test_fresh_native_remove_trial_requires_full_success_receipt(self):
+        from extra_resources_operation import NativeLifecycle
+        from extra_resources_transaction import TransactionError as NativeTransactionError
+        lifecycle = NativeLifecycle.__new__(NativeLifecycle)
+        lifecycle.script = Path("/fake-native-service")
+        with patch("extra_resources_operation.subprocess.run",
+                   return_value=SimpleNamespace(returncode=0,
+                       stdout="native-remove-applied=" + "a"*32 + "\n",
+                       stderr="")) as runner:
+            lifecycle.start_trial_native_common_apply()
+            self.assertEqual(runner.call_args.args[0][1], "extra-resources-native-trial")
+            self.assertEqual(runner.call_args.kwargs["env"][
+                "EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL"], "1")
+            self.assertEqual(runner.call_args.kwargs["pass_fds"], (9,))
+        for status, stdout in (
+            (70, "native-remove-applied=" + "a"*32 + "\n"),
+            (0, "prepared-id=" + "a"*32 + "\n"),
+            (0, "native-remove-applied=" + "b"*31 + "\n"),
+            (0, ""),
+        ):
+            with patch("extra_resources_operation.subprocess.run",
+                       return_value=SimpleNamespace(returncode=status,
+                                                     stdout=stdout, stderr="")):
+                with self.assertRaisesRegex(NativeTransactionError, "not attested"):
+                    lifecycle.start_trial_native_common_apply()
+
     def test_exact_native_owner_restore_accepts_normal_common_boot_receipt(self):
         from extra_resources_operation import NativeLifecycle
         from extra_resources_transaction import TransactionError as NativeTransactionError
@@ -408,7 +434,7 @@ class TestExactReconciliation(unittest.TestCase):
                 plan["witness"]["inventory_sha256"], self.root,
                 self.state, self.lifecycle, config=config)
         self.assertTrue(self.lifecycle.running)
-        self.assertEqual(self.lifecycle.stops, 2)
+        self.assertEqual(self.lifecycle.stops, 1)
         self.assertEqual(self.lifecycle.starts, 1)
         self.assertEqual(self.lifecycle.native_restore_calls, 1)
         for name, data in previous.items():
@@ -430,6 +456,7 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertTrue((self.root / tx.QUARANTINE_NAME).is_dir())
         self.assertFalse((self.root / "lua/orphan.lua").exists())
         self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual(self.lifecycle.stops, 1)
         self.assertTrue((self.root / "lua/orphan.lua").is_file())
         self.assertTrue((self.root / "files/fake/user_dynamic.bin").is_file())
         self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())

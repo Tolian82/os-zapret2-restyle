@@ -294,8 +294,21 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             restore_native = getattr(lifecycle, "restore_previous_native_common_apply", None)
             if is_remove and not callable(restore_native):
                 raise TransactionError("native Remove rollback route is not available")
-            lifecycle.stop()
-            lifecycle.assert_stopped()
+            if is_remove:
+                # A failed native trial may already have atomically restored
+                # the PREVIOUS stopped release and terminal common journal.
+                # A blind Strategy Lab stop here would then fall through to
+                # the legacy Stop path over a restored native common owner.
+                # Only stop if a real running owner is still observed; mixed
+                # / nonterminal owners are refused by the native service.
+                try:
+                    lifecycle.assert_stopped()
+                except Exception:
+                    lifecycle.stop()
+                    lifecycle.assert_stopped()
+            else:
+                lifecycle.stop()
+                lifecycle.assert_stopped()
             _restore(root, work, previous, incoming)
             _rollback_metadata(state, work)
             if is_remove:

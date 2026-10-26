@@ -11,7 +11,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness,native_remove_rollback_pair
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness,native_remove_rollback_pair,native_remove_trial_context
 
 def detail(ident="1"*32):
     return {"id":ident,"page":"voice","base":"a"*64,
@@ -44,6 +44,43 @@ class TestJournal(unittest.TestCase):
             target.write_text(json.dumps(record))
             with self.assertRaisesRegex(SharedOperationError,"invalid common Apply record"):
                 j.read()
+
+    def test_native_trial_requires_existing_pinned_old_owner_and_restart_phase(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SharedApplyOperation(root/"shared-apply")
+            old = detail("a"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase, old)
+            state = root/"extra-resources"
+            (state/"transaction").mkdir(parents=True)
+            trial_journal = state/"transaction/journal.json"
+            transaction = {"schema":1,"mode":"remove","phase":"restarting",
+                "previous":{"lua/custom.lua":"e"*64},"incoming":{},
+                "source_commit":"f"*40,
+                "native_owner":{"id":old["id"],"page":old["page"],
+                                "candidate":old["candidate"]}}
+            trial_journal.write_text(json.dumps(transaction))
+            self.assertEqual(native_remove_trial_context(store.root,state),
+                             transaction["native_owner"])
+            for phase in ("stopping","publishing","completed"):
+                transaction["phase"] = phase
+                trial_journal.write_text(json.dumps(transaction))
+                with self.assertRaisesRegex(SharedOperationError,"no prepared"):
+                    native_remove_trial_context(store.root,state)
+            transaction["phase"] = "restarting"
+            transaction["native_owner"]["id"] = "f"*32
+            trial_journal.write_text(json.dumps(transaction))
+            with self.assertRaisesRegex(SharedOperationError,"previous common owner"):
+                native_remove_trial_context(store.root,state)
+            transaction["native_owner"]["id"] = old["id"]
+            trial_journal.write_text(json.dumps(transaction))
+            next_detail = {"id":"c"*32,"page":"strategies",
+                           "base":old["candidate"],"candidate":old["candidate"],
+                           "changed_fields":[]}
+            store.advance("prepared",next_detail)
+            with self.assertRaisesRegex(SharedOperationError,"previous common owner"):
+                native_remove_trial_context(store.root,state)
 
     def test_exact_committed_remove_rollback_reinstates_predecessor(self):
         with tempfile.TemporaryDirectory() as tmp:
