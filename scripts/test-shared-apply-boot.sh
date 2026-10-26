@@ -497,9 +497,21 @@ from pathlib import Path
 import sys
 p=Path(sys.argv[1])
 s=p.read_text()
-old='    [ -x /usr/local/bin/python3.13 ] || return 70\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70'
-assert old in s, "production root completion CLI boundary missing"
-s=s.replace(old,'    echo "finish-$_shared_cold_phase" >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
+presence='    [ -x /usr/local/bin/python3.13 ] || return 70'
+assert s.count(presence)==1, "production root CLI presence gate missing"
+s=s.replace(presence, '    : # fixed FreeBSD root interpreter mocked')
+prefix = '        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
+for suffix, phase in (
+    ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70',
+     'remove-saved'),
+    ('"finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70',
+     'active'),
+):
+    target=prefix+suffix
+    assert s.count(target)==1, "production root completion CLI boundary missing"
+    command=('        echo "finish-$_shared_cold_phase" >> "$LOG"; '
+             '[ "$TERMINAL_OK" = 0 ] || return 70')
+    s=s.replace(target, command)
 p.write_text(s)
 PY
 . "$ROOT/activated-cold.sh"

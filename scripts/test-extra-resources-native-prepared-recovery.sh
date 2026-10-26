@@ -77,7 +77,7 @@ shared_apply_recover_activating_pristine_service() {
 shared_apply_recover_activated_cold_service() {
     echo "recover-cold:$1" >> "$LOG"
     case "$1" in
-        "activating $NEW strategies $OLD voice"|"activated $NEW strategies $OLD voice")
+        "activating $NEW strategies $OLD voice"|"activated $NEW strategies $OLD voice"|"config-saved $NEW strategies $OLD voice")
             [ "$COLD_FAIL" = 0 ] ;;
         *) return 69 ;;
     esac
@@ -121,6 +121,16 @@ grep -Fqx "recover-cold:activated $NEW strategies $OLD voice" "$LOG" ||
 reset; TRIAL_STATE=activated; ACTIVE_VARIANT=old; export TRIAL_STATE; run 0
 grep -Fqx "recover-cold:activated $NEW strategies $OLD voice" "$LOG" ||
     fail "already-restored active release could not resume cold rollback"
+reset; TRIAL_STATE=config-saved; ACTIVE_VARIANT=new; export TRIAL_STATE; run 0
+grep -Fqx "recover-cold:config-saved $NEW strategies $OLD voice" "$LOG" ||
+    fail "saved Remove activated new instead of old cold rollback"
+reset; TRIAL_STATE=config-saved; ACTIVE_VARIANT=old; export TRIAL_STATE; run 0
+grep -Fqx "recover-cold:config-saved $NEW strategies $OLD voice" "$LOG" ||
+    fail "saved Remove cannot finish previous old tree"
+reset; TRIAL_STATE=config-saved; ACTIVE_VARIANT=new; COLD_FAIL=1; export TRIAL_STATE; run 70
+[ ! -s "$TMP/output" ] || fail "saved Remove claimed success after failed rollback"
+reset; TRIAL_STATE=config-saved; ACTIVE_VARIANT=new; WRONG_INSPECT=1; export TRIAL_STATE; run 70
+[ ! -s "$TMP/output" ] || fail "saved Remove accepted unknown previous owner"
 reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; COLD_FAIL=1; export TRIAL_STATE; run 70
 [ ! -s "$TMP/output" ] || fail "failed cold rollback claimed restored"
 reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; WRONG_INSPECT=1; export TRIAL_STATE; run 70
@@ -151,4 +161,4 @@ reset; TRIAL_STATE=other; export TRIAL_STATE
 run 0
 grep -Fqx 'native-remove-prepared=not-needed' "$TMP/output" || fail foreign
 [ ! -s "$LOG" ] || fail "other common phase modified"
-echo 'PASS: exact pre-save Remove cold rollback, existing native phases and committed previous-owner inspect receipt'
+echo 'PASS: original native Remove pre-save and config-saved cold rollback, exact old owner receipt'

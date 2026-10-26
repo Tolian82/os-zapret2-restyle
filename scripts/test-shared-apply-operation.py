@@ -93,6 +93,102 @@ class TestJournal(unittest.TestCase):
             store.finish_activated_restore(new["id"],old["id"],lambda:True)
             self.assertIsNone(native_remove_prepared_trial(store.root,state))
 
+    def test_remove_config_saved_can_restore_only_unchanged_old_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SharedApplyOperation(root/"shared-apply")
+            old = detail("a"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase,old)
+            state = root/"extra-resources"
+            (state/"transaction").mkdir(parents=True)
+            resource = {
+                "schema":1,"mode":"remove","phase":"restarting",
+                "previous":{"lua/custom.lua":"e"*64},"incoming":{},
+                "source_commit":"f"*40,
+                "native_owner":{"id":old["id"],"page":old["page"],
+                                "candidate":old["candidate"]},
+            }
+            path = state/"transaction/journal.json"
+            path.write_text(json.dumps(resource))
+            trial = {"id":"b"*32,"page":"strategies",
+                     "base":old["candidate"],"candidate":old["candidate"],
+                     "changed_fields":[]}
+            for phase in ("prepared","activating","activated","config-saved"):
+                store.advance(phase,trial)
+            self.assertEqual(native_remove_prepared_trial(store.root,state)["phase"],
+                             "config-saved")
+            self.assertTrue(native_lifecycle_gate(
+                "common-recover-saved",root=store.root)["safe_to_mutate"])
+            self.assertFalse(native_lifecycle_gate(
+                "common-recover-activated",root=store.root)["safe_to_mutate"])
+            # Generic journal writer remains forbidden to roll back a saved
+            # ordinary Apply; only the Remove-specific verified method works.
+            with self.assertRaisesRegex(SharedOperationError,"illegal"):
+                store.advance("restored",trial)
+            with self.assertRaisesRegex(SharedOperationError,"predecessor"):
+                store.finish_saved_remove_restore(trial["id"],"c"*32,lambda:True,state)
+            with self.assertRaisesRegex(SharedOperationError,"attested"):
+                store.finish_saved_remove_restore(trial["id"],old["id"],lambda:False,state)
+            self.assertEqual(store.read()["phase"],"config-saved")
+            for bad_phase in ("stopping","publishing","completed"):
+                resource["phase"]=bad_phase
+                path.write_text(json.dumps(resource))
+                with self.assertRaisesRegex(SharedOperationError,"no quarantined"):
+                    store.finish_saved_remove_restore(trial["id"],old["id"],lambda:True,state)
+            resource["phase"]="restarting"
+            resource["native_owner"]["id"]="c"*32
+            path.write_text(json.dumps(resource))
+            with self.assertRaisesRegex(SharedOperationError,"foreign"):
+                store.finish_saved_remove_restore(trial["id"],old["id"],lambda:True,state)
+            resource["native_owner"]["id"]=old["id"]
+            path.write_text(json.dumps(resource))
+            attests=[]
+            restored=store.finish_saved_remove_restore(
+                trial["id"],old["id"],lambda: (attests.append("old-live") or True),state)
+            self.assertEqual(["old-live"],attests)
+            self.assertEqual(restored["phase"],"restored")
+            self.assertEqual(old,committed_owner(restored))
+            with self.assertRaisesRegex(SharedOperationError,"config-saved"):
+                store.finish_saved_remove_restore(trial["id"],old["id"],lambda:True,state)
+            with self.assertRaisesRegex(SharedOperationError,"saved-only"):
+                store.finish_saved(trial["id"],lambda:True)
+
+    def test_remove_config_saved_refuses_modified_strategies_or_voice(self):
+        for changed in (["strategy.tcp"],[],):
+            with self.subTest(changed=changed):
+                with tempfile.TemporaryDirectory() as tmp:
+                    root=Path(tmp)
+                    j=SharedApplyOperation(root/"shared-apply")
+                    old=detail("a"*32)
+                    for phase in ("prepared","activating","activated","config-saved","committed"):
+                        j.advance(phase,old)
+                    state=root/"extra-resources"
+                    (state/"transaction").mkdir(parents=True)
+                    resource={"schema":1,"mode":"remove","phase":"restarting",
+                         "previous":{"lua/extra.lua":"e"*64},"incoming":{},
+                         "source_commit":"f"*40,
+                         "native_owner":{"id":old["id"],"page":old["page"],
+                                         "candidate":old["candidate"]}}
+                    (state/"transaction/journal.json").write_text(json.dumps(resource))
+                    new={"id":"b"*32,"page":"strategies",
+                         "base":old["candidate"],
+                         "candidate":("d"*64 if not changed else old["candidate"]),
+                         "changed_fields":changed}
+                    for phase in ("prepared","activating","activated","config-saved"):
+                        j.advance(phase,new)
+                    with self.assertRaisesRegex(SharedOperationError,"foreign or changed"):
+                        j.finish_saved_remove_restore(new["id"],old["id"],lambda:True,state)
+                    self.assertEqual(j.read()["phase"],"config-saved")
+
+    def test_remove_saved_finish_cli_refuses_non_fd9_authority(self):
+        result=subprocess.run(
+            [sys.executable,str(BACKEND/"shared_apply_operation.py"),
+             "finish-remove-saved","a"*32,"b"*32],
+            capture_output=True,text=True,check=False)
+        self.assertEqual(result.returncode,69)
+        self.assertNotIn("Traceback",result.stderr)
+
     def test_native_trial_requires_existing_pinned_old_owner_and_restart_phase(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
