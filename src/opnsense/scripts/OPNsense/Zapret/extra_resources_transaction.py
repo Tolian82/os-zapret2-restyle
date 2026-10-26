@@ -16,9 +16,10 @@ import shutil
 from extra_resources_preflight import (
     PreflightError, inspect_collisions, resource_path, sha256, validate_runtime_path,
 )
-from extra_resources_reconcile import make_plan
+from extra_resources_reconcile import make_plan, make_remove_plan, installed_resources
 
 SCHEMA = 1
+QUARANTINE_NAME = ".extra-resources-remove-quarantine"
 
 
 class TransactionError(RuntimeError):
@@ -107,6 +108,65 @@ def _write_phase(work: Path, phase: str, old: dict, new: dict, rev: str) -> None
         "schema": SCHEMA, "phase": phase, "previous": old,
         "incoming": new, "source_commit": rev,
     })
+
+
+def _write_remove_phase(work: Path, phase: str, previous: dict, head: str) -> None:
+    # Keep the same durable schema and existing recovery engine as Install.
+    _json_write(work / "journal.json", {
+        "schema": SCHEMA, "mode": "remove", "phase": phase,
+        "previous": previous, "incoming": {}, "source_commit": head,
+    })
+
+
+def _quarantine_path(root: Path) -> Path:
+    return root / QUARANTINE_NAME
+
+
+def _move_to_quarantine(root: Path, previous: dict) -> None:
+    """Rename attested extras out of the two active resource directories.
+
+    The quarantine is INSIDE the original runtime filesystem: no EXDEV
+    fallback, no second copy/move mechanism. The separate already-durable
+    transaction/backup remains the authority for crash recovery.
+    """
+    q = _quarantine_path(root)
+    if q.exists() or q.is_symlink():
+        raise TransactionError("RECOVERY_REQUIRED: resource quarantine already exists")
+    q.mkdir(mode=0o700)
+    _sync_dir(root)
+    for name, digest in sorted(previous.items()):
+        source = validate_runtime_path(root, name)
+        if not source.is_file() or source.is_symlink() or sha256(source.read_bytes()) != digest:
+            raise TransactionError("resource changed before quarantine: " + name)
+        dest = _safe_subdir(q, name)
+        if dest.exists() or dest.is_symlink():
+            raise TransactionError("unsafe quarantine destination: " + name)
+        os.replace(source, dest)
+        _sync_dir(source.parent)
+        _sync_dir(dest.parent)
+
+
+def _clear_quarantine(root: Path, previous: dict) -> None:
+    q = _quarantine_path(root)
+    if q.is_symlink():
+        raise TransactionError("RESTORE_FAILED: quarantine is a symlink")
+    if not q.exists():
+        return
+    if not q.is_dir():
+        raise TransactionError("RESTORE_FAILED: invalid quarantine directory")
+    expected = set(previous)
+    allowed_dirs = {"lua", "files", "files/fake"}
+    for item in q.rglob("*"):
+        rel = item.relative_to(q).as_posix()
+        if item.is_symlink():
+            raise TransactionError("RESTORE_FAILED: quarantine contains a symlink")
+        if item.is_dir():
+            if rel not in allowed_dirs:
+                raise TransactionError("RESTORE_FAILED: foreign quarantine directory")
+        elif rel not in expected or not item.is_file() or sha256(item.read_bytes()) != previous[rel]:
+            raise TransactionError("RESTORE_FAILED: foreign quarantine resource")
+    shutil.rmtree(q)
+    _sync_dir(root)
 
 
 def _verified_staging(work: Path, folder: str, name: str, digest: str) -> bytes:
@@ -200,6 +260,11 @@ def recover(root: Path, state: Path, lifecycle) -> str:
         return "NO_RECOVERY_NEEDED"
     journal = _load_journal(work)
     previous, incoming = journal["previous"], journal["incoming"]
+    is_remove = journal.get("mode") == "remove"
+    if journal.get("mode", "install") not in ("install", "remove"):
+        raise TransactionError("unknown recovery transaction mode")
+    if is_remove and incoming:
+        raise TransactionError("invalid remove recovery journal")
     try:
         if journal.get("phase") == "completed":
             raise TransactionError("completed journal requires post-commit audit")
@@ -213,6 +278,8 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             _rollback_metadata(state, work)
             lifecycle.start()
             lifecycle.assert_started()
+        if is_remove:
+            _clear_quarantine(root, previous)
         shutil.rmtree(work)
         _sync_dir(state)
         return "RESTORED"
@@ -308,3 +375,106 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
         except Exception as restore_error:
             raise TransactionError(f"RESTORE_FAILED after {exc}: {restore_error}") from restore_error
         raise TransactionError(f"INSTALL_FAILED_RESTORED: {exc}") from exc
+
+
+
+def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
+                             lifecycle, *, config: Path = Path("/conf/config.xml")) -> dict:
+    """Remove extras with the ORIGINAL saved Config and an injected native Apply.
+
+    This is INTERNAL and NOT connected to a GUI/configd operation. The native
+    lifecycle must explicitly provide start_trial_native_common_apply(), which
+    will be wired ONLY to the existing full shared GUI Apply build/activation
+    after the resources have been quarantined. Its absence rejects BEFORE
+    service Stop or any resource mutation: normal start()/cached reboot is
+    intentionally not an alternative.
+    """
+    if not isinstance(expected_witness, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_witness):
+        raise TransactionError("invalid confirmed removal witness")
+    if not callable(getattr(lifecycle, "start_trial_native_common_apply", None)):
+        raise TransactionError("native common Apply trial route is not available")
+    if state.is_symlink() or (state / "transaction").exists() or (state / "transaction").is_symlink():
+        raise TransactionError("RECOVERY_REQUIRED: unsafe or unfinished resource transaction")
+    if _quarantine_path(root).exists() or _quarantine_path(root).is_symlink():
+        raise TransactionError("RECOVERY_REQUIRED: existing resource quarantine")
+
+    # Uses the existing real Git HEAD/Config inventory, not catalog or
+    # manually copied target lists. Callers already hold setup.lock and FD9.
+    try:
+        plan = make_remove_plan(root, state / "installed.json", config)
+    except PreflightError as exc:
+        raise TransactionError(str(exc)) from exc
+    if plan["witness"]["inventory_sha256"] != expected_witness:
+        raise TransactionError("confirmed removal plan is stale")
+    previous = {record["path"]: record["sha256"] for record in plan["remove"]}
+    if not previous:
+        return {"status": "NO_EXTRA_RESOURCES", "lua": 0, "bin": 0,
+                "removed": 0, "restarted": False}
+
+    old_identity = lifecycle.assert_started()
+    _safe_state(state)
+    work = state / "transaction"
+    if work.exists() or work.is_symlink():
+        raise TransactionError("RECOVERY_REQUIRED: unfinished resource transaction")
+    work.mkdir(mode=0o700)
+    _sync_dir(state)
+    try:
+        (work / "backup").mkdir(mode=0o700)
+        installed_file = state / "installed.json"
+        if installed_file.exists():
+            metadata = _owned_metadata(installed_file)
+            _write_atomic(work / "previous-installed.json", installed_file.read_bytes())
+            if any(name in plan["upstream"] or
+                   name not in previous or previous[name] != digest
+                   for name, digest in metadata["files"].items()):
+                raise TransactionError("managed resource ownership changed")
+        for name, digest in previous.items():
+            path = validate_runtime_path(root, name)
+            body = path.read_bytes()
+            if sha256(body) != digest:
+                raise TransactionError("extra resource changed before snapshot")
+            _store_file(work / "backup", name, body)
+        _write_remove_phase(work, "prepared", previous, plan["upstream_head"])
+    except Exception:
+        shutil.rmtree(work)
+        _sync_dir(state)
+        raise
+    try:
+        # The binding is rechecked immediately before Stop while original
+        # FD9 remains held; a stale Confirm never authorizes any file move.
+        renewed = make_remove_plan(root, state / "installed.json", config)
+        if renewed["witness"]["inventory_sha256"] != expected_witness:
+            raise TransactionError("resource or saved Config changed during preparation")
+        _write_remove_phase(work, "stopping", previous, plan["upstream_head"])
+        lifecycle.stop()
+        lifecycle.assert_stopped()
+        _write_remove_phase(work, "publishing", previous, plan["upstream_head"])
+        _move_to_quarantine(root, previous)
+        # Check exact resource set before invoking the same real GUI compiler.
+        if installed_resources(root) != plan["upstream"]:
+            raise TransactionError("quarantine did not reach exact upstream resources")
+        _write_remove_phase(work, "restarting", previous, plan["upstream_head"])
+        lifecycle.start_trial_native_common_apply()
+        new_identity = lifecycle.assert_started()
+        if not new_identity or new_identity == old_identity:
+            raise TransactionError("native trial did not produce a replacement service owner")
+        if installed_resources(root) != plan["upstream"]:
+            raise TransactionError("resources changed during native trial")
+        # Only after the REAL common Apply/Start passed its existing health
+        # gate may managed-install metadata and the extra files be discarded.
+        if installed_file.exists():
+            installed_file.unlink()
+            _sync_dir(state)
+        _clear_quarantine(root, previous)
+        _write_remove_phase(work, "completed", previous, plan["upstream_head"])
+        shutil.rmtree(work)
+        _sync_dir(state)
+        return {"status": "REMOVED", "lua": plan["counts"]["lua"],
+                "bin": plan["counts"]["bin"], "removed": len(previous),
+                "restarted": True}
+    except Exception as exc:
+        try:
+            recover(root, state, lifecycle)
+        except Exception as restore_error:
+            raise TransactionError("RESTORE_FAILED after native trial: " + str(restore_error)) from restore_error
+        raise TransactionError("REMOVE_FAILED_RESTORED: " + str(exc)) from exc
