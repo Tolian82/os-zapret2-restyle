@@ -59,11 +59,24 @@ try:
  print("lua="+str(count("lua")))
  print("bin="+str(count("bin")))
  print("detail="+detail)
+ # The GUI inventory already has a validated, atomically refreshed cache.
+ # A recovery receipt ("restored") is an operation outcome, NOT evidence
+ # that Additional Resources are absent. No Git/filesystem enumeration here.
+ try:
+  import os
+  from pathlib import Path
+  sys.path.insert(0,os.path.dirname(os.path.realpath(sys.argv[2])))
+  from extra_resources_inventory_cache import read_cached
+  inventory=read_cached(Path(sys.argv[1]).parent)
+  print("installed="+("1" if inventory["installed"] else "0"))
+ except Exception:
+  print("installed=unknown")
 except Exception:
  print("phase=unknown")
-' "$STATUS" 2>/dev/null || printf 'phase=unknown\n'
+ print("installed=unknown")
+' "$STATUS" "$SERVICE_SCRIPT" 2>/dev/null || printf 'phase=unknown\ninstalled=unknown\n'
         else
-            printf 'phase=unknown\n'
+            printf 'phase=unknown\ninstalled=unknown\n'
         fi
         printf 'busy=%s\n' "$_busy"
         ;;

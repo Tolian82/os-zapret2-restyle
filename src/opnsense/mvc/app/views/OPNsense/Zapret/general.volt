@@ -72,6 +72,8 @@
             review: isRussian ? 'Требуется проверка результата перед повторной попыткой' :
                 'Review the previous result before trying again',
             ready: isRussian ? 'Установлено' : 'Installed',
+            restored: isRussian ? 'Дополнительные ресурсы восстановлены' : 'Additional Resources restored',
+            removing: isRussian ? 'Удаление дополнительных ресурсов…' : 'Removing Additional Resources…',
             lua: 'Lua', bin: 'BIN',
             native: isRussian ? 'Из установленной версии Zapret2' : 'Included in installed Zapret2',
             other: isRussian ? 'Остальные установленные ресурсы' : 'Other installed resources',
@@ -408,9 +410,8 @@
             const panel = $('#zapretExtraResourceHelp');
             panel.empty();
             if (!data || data.status !== 'ok') {
-                panel.append($('<p/>').text(
-                    !helpInventoryLastInstalled ? extrasText.installHelp : extrasText.listUnavailable
-                ));
+                // A missing/corrupt cache is UNKNOWN, never evidence of absence.
+                panel.append($('<p/>').text(extrasText.listUnavailable));
                 return;
             }
             helpInventoryLastInstalled = !!data.installed;
@@ -494,22 +495,45 @@
 
         function extrasLabel(data) {
             const phase = data && data.phase || 'unknown';
-            if (phase === 'ready' && !(data && data.busy)) {
-                const revision = /^[a-f0-9]{40}$/.test(data.revision || '') ?
-                    ' · ' + data.revision.slice(0, 12) : '';
-                return extrasText.ready + ': Lua ' + (data.lua || 0) +
-                    ', BIN ' + (data.bin || 0) + revision;
-            }
+            const installed = data && data.installed;
+            const detail = data && typeof data.detail === 'string' ? data.detail : '';
+
+            // Active transactions and unsafe recovery must never be
+            // represented as a completed installation or absence.
             switch (phase) {
                 case 'downloading': return extrasText.downloading;
                 case 'verifying': return extrasText.verifying;
                 case 'installing': return extrasText.installing;
                 case 'recovering': return extrasText.recovering;
-                case 'failed': return extrasText.failed + ' · ' + extrasText.log;
+                case 'removing': return extrasText.removing;
                 case 'restore_failed': return extrasText.restoreFailed + ' · ' + extrasText.log;
                 case 'recovery_required': return extrasText.review + ' · ' + extrasText.log;
-                default: return extrasText.notInstalled;
+                case 'failed':
+                    // R1 deliberate Remove failure AFTER verified native rollback.
+                    // Other installation failures retain their real error label.
+                    if (installed === true && /^REMOVE_FAILED_RESTORED:/.test(detail)) {
+                        return extrasText.restored;
+                    }
+                    return extrasText.failed + ' · ' + extrasText.log;
             }
+
+            // The same validated inventory cache drives full Help and this
+            // summary. An unknown cache is NOT "not installed".
+            if (installed !== true && installed !== false) return extrasText.unavailable;
+            if (phase === 'not_installed' && installed) {
+                return extrasText.review + ' · ' + extrasText.log;
+            }
+            if (!installed) return extrasText.notInstalled;
+            if (phase === 'restored') return extrasText.restored;
+            if (phase === 'ready') {
+                const revision = /^[a-f0-9]{40}$/.test(data.revision || '') ?
+                    ' · ' + data.revision.slice(0, 12) : '';
+                return extrasText.ready + ': Lua ' + (data.lua || 0) +
+                    ', BIN ' + (data.bin || 0) + revision;
+            }
+            if (phase === 'no_recovery_needed') return extrasText.ready;
+            // Unknown/foreign receipt: do not advertise Ready by inference.
+            return extrasText.unavailable;
         }
 
         function stopExtrasPolling() {
@@ -541,7 +565,15 @@
 
             extraStateKnown = true;
             extraBusy = !!data.busy;
-            if (data.phase === 'ready') helpInventoryLastInstalled = true;
+            if (typeof data.installed === 'boolean') {
+                if (helpInventoryLoaded && helpInventoryLastInstalled !== data.installed) {
+                    // A cache-backed install/removal boundary changed while
+                    // Help is open. Re-read the same cache, never scan Git.
+                    helpInventoryLoaded = false;
+                    requestResourceHelpInventory(true);
+                }
+                helpInventoryLastInstalled = data.installed;
+            }
             if (['restore_failed', 'recovery_required'].indexOf(data.phase) >= 0) {
                 extraNeedsReview = true;
             }

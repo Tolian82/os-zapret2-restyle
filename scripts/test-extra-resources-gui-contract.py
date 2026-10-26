@@ -157,6 +157,104 @@ assert.equal(extraOperationTerminal({operation:id,phase:'ready',busy:false},''),
             "phase=ready" in result.stdout and "busy=0" in result.stdout,
             "fast terminal receipt not transported")
 
+    # The existing cached inventory, NOT the historical operation phase,
+    # resolves the installed/absent state. Exercise the real shell status
+    # route with a fake state path; it must not inspect Git or start Zapret2.
+    env["SERVICE_SCRIPT"] = str(
+        ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+    )
+    cache = Path(tmp) / "inventory-cache.json"
+    for installed, expected in ((True, "1"), (False, "0")):
+        cache.write_text(json.dumps({
+            "schema": 1, "installed": installed,
+            "lua": [{"name": "added.lua", "origin": "other"}],
+            "bin": [{"name": "original.bin", "origin": "upstream"}],
+        }))
+        status.write_text(json.dumps({
+            "schema": 1, "phase": "restored", "operation": "", "lua": 0, "bin": 0,
+        }))
+        checked = subprocess.run(["sh", str(LAUNCHER), "status"],
+                                 text=True, capture_output=True, env=env)
+        require(checked.returncode == 0, checked.stderr)
+        require("phase=restored" in checked.stdout and
+                f"installed={expected}" in checked.stdout,
+                "post-recovery status failed to resolve cached installed flag")
+    cache.write_text("{}")
+    checked = subprocess.run(["sh", str(LAUNCHER), "status"],
+                             text=True, capture_output=True, env=env)
+    require("installed=unknown" in checked.stdout,
+            "missing/invalid cache was wrongly interpreted as uninstalled")
+
+    # Execute actual UI status switch, not a synthetic second predicate.
+    status_fun = re.search(
+        r"        function extrasLabel\\(data\\) \\{.*?^        \\}",
+        view, re.M | re.S,
+    )
+    require(status_fun is not None, "status renderer missing")
+    probe = Path(tmp) / "recovery-label.js"
+    probe.write_text("""
+const assert = require('node:assert/strict');
+const extrasText = {
+    ready: 'Установлено', restored: 'Дополнительные ресурсы восстановлены',
+    notInstalled: 'Дополнительные ресурсы не установлены',
+    downloading: 'Загрузка', verifying: 'Проверка',
+    installing: 'Установка', recovering: 'Восстановление',
+    failed: 'Ошибка установки', restoreFailed: 'Ошибка восстановления',
+    review: 'Требуется проверка', unavailable: 'Состояние недоступно',
+    log: '/var/log/zapret2/extra-resources.log'
+};
+""" + status_fun.group(0) + """
+assert.equal(extrasLabel({phase:'restored',installed:true}), extrasText.restored);
+assert.equal(extrasLabel({phase:'restored',installed:false}), extrasText.notInstalled);
+assert.equal(extrasLabel({phase:'restored',installed:null}), extrasText.unavailable);
+assert.equal(extrasLabel({phase:'ready',installed:false}), extrasText.notInstalled);
+assert.equal(extrasLabel({phase:'ready',installed:true,lua:19,bin:54}),
+    'Установлено: Lua 19, BIN 54');
+assert.equal(extrasLabel({phase:'not_installed',installed:false}), extrasText.notInstalled);
+assert.match(extrasLabel({phase:'not_installed',installed:true}), /Требуется проверка/);
+assert.equal(extrasLabel({phase:'failed',installed:true,
+    detail:'REMOVE_FAILED_RESTORED: OWNER_ACCEPTANCE_FORCED_ROLLBACK'}),
+    extrasText.restored);
+assert.match(extrasLabel({phase:'failed',installed:true,
+    detail:'resource name conflicts with upstream/user file'}), /Ошибка установки/);
+assert.match(extrasLabel({phase:'restore_failed',installed:true}), /Ошибка восстановления/);
+""")
+    checked = subprocess.run(["node", str(probe)], text=True, capture_output=True)
+    require(checked.returncode == 0, "real status renderer regression: " + checked.stderr)
+
+    # Help must show only install guidance when the same cache says absent;
+    # a missing cache is UNKNOWN, never an invitation based on stale state.
+    help_fun = re.search(
+        r"        function renderResourceHelpInventory\\(data\\) \\{.*?^        \\}",
+        view, re.M | re.S,
+    )
+    require(help_fun is not None, "full-help renderer missing")
+    help_probe = Path(tmp) / "recovery-help.js"
+    help_probe.write_text("""
+const assert = require('node:assert/strict');
+const extrasText = {installHelp:'Нажмите «Установить дополнительные ресурсы»',
+    listUnavailable:'Кэш списка ресурсов недоступен'};
+let helpInventoryLastInstalled = true;
+class Item {
+    constructor(){this.children=[];this.label='';}
+    empty(){this.children=[];return this;}
+    append(value){this.children.push(value);return this;}
+    text(value){this.label=value;return this;}
+}
+const panel=new Item();
+function $(what){return what==='#zapretExtraResourceHelp' ? panel : new Item();}
+""" + help_fun.group(0) + """
+renderResourceHelpInventory({status:'ok',installed:false,lua:[{name:'added.lua'}],bin:[]});
+assert.equal(panel.children.length,1);
+assert.equal(panel.children[0].label, extrasText.installHelp);
+assert.equal(helpInventoryLastInstalled,false);
+renderResourceHelpInventory({status:'unavailable'});
+assert.equal(panel.children.length,1);
+assert.equal(panel.children[0].label, extrasText.listUnavailable);
+""")
+    checked = subprocess.run(["node", str(help_probe)], text=True, capture_output=True)
+    require(checked.returncode == 0, "real full-help renderer regression: " + checked.stderr)
+
     result = subprocess.run(["sh", str(LAUNCHER), "install", "invalid"],
                             text=True, capture_output=True, env=env)
     require(result.returncode == 64, "invalid manual operation token accepted")

@@ -120,6 +120,7 @@ class ServiceController extends ApiMutableServiceControllerBase
         $state = [
             'busy' => false,
             'phase' => 'unknown',
+            'installed' => null,
             'operation' => '',
             'revision' => '',
             'lua' => 0,
@@ -132,6 +133,11 @@ class ServiceController extends ApiMutableServiceControllerBase
             }
             $value = $matches[2];
             switch ($matches[1]) {
+                case 'installed':
+                    if ($value === '1' || $value === '0') {
+                        $state['installed'] = $value === '1';
+                    }
+                    break;
                 case 'busy':
                     $state['busy'] = $value === '1';
                     break;
@@ -144,7 +150,8 @@ class ServiceController extends ApiMutableServiceControllerBase
                     if (in_array($value, [
                         'unknown', 'downloading', 'verifying', 'installing',
                         'ready', 'failed', 'restore_failed', 'recovery_required',
-                        'recovering', 'restored', 'no_recovery_needed'
+                        'recovering', 'restored', 'no_recovery_needed',
+                        'removing', 'not_installed'
                     ], true)) {
                         $state['phase'] = $value;
                     }
