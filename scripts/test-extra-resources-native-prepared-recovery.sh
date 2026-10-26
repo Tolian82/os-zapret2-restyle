@@ -32,8 +32,10 @@ CHILD_PIDFILE="$TMP/child"
 SUPERVISOR_MONITOR_PIDFILE="$TMP/monitor"
 EXTRA_RESOURCES_SETUP_LOCK_OWNER=1
 EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE=1
-mkdir -p "$TMP/active" "$TMP/old/release"
-shared_apply_workspace() { [ "$1" = "$OLD" ] && echo "$TMP/old"; }
+mkdir -p "$TMP/active" "$TMP/old/release" "$TMP/new/release"
+shared_apply_workspace() {
+    case "$1" in "$OLD") echo "$TMP/old" ;; "$NEW") echo "$TMP/new" ;; *) return 69 ;; esac
+}
 shared_apply_bundle_service() { echo "seal:$1:$2" >> "$LOG"; [ "$SEAL_FAIL" = 0 ]; }
 shared_apply_native_config() { echo config:$1 >> "$LOG"; echo '{}'; }
 shared_apply_json_field() {
@@ -44,7 +46,18 @@ shared_apply_json_field() {
         *) return 69 ;;
     esac
 }
-atomic_verify_tree() { echo tree >> "$LOG"; [ "$TREE_FAIL" = 0 ]; }
+atomic_verify_tree() {
+    echo "tree:$1:$2" >> "$LOG"
+    [ "$TREE_FAIL" = 0 ] || return 1
+    if [ "$2" = "$ACTIVE_DIR" ]; then
+        case "$1" in
+            "$TMP/old/release") [ "$ACTIVE_VARIANT" = old ] || return 1 ;;
+            "$TMP/new/release") [ "$ACTIVE_VARIANT" = new ] || return 1 ;;
+            *) return 1 ;;
+        esac
+    fi
+    return 0
+}
 launcher_is_running() { [ "$ENGINE" = 1 ]; }
 supervisor_is_running() { [ "$ENGINE" = 1 ]; }
 apply_runtime_attest_engine_inventory() { echo census >> "$LOG"; [ "$ENGINE" = 0 ]; }
@@ -61,10 +74,24 @@ shared_apply_recover_activating_pristine_service() {
     [ "$1" = "activating $NEW strategies $OLD voice" ] &&
     [ "$PRISTINE_FAIL" = 0 ]
 }
-shared_apply_inspect_service() { echo restored; }
+shared_apply_recover_activated_cold_service() {
+    echo "recover-cold:$1" >> "$LOG"
+    case "$1" in
+        "activating $NEW strategies $OLD voice"|"activated $NEW strategies $OLD voice")
+            [ "$COLD_FAIL" = 0 ] ;;
+        *) return 69 ;;
+    esac
+}
+shared_apply_inspect_service() {
+    if [ "$WRONG_INSPECT" = 1 ]; then
+        echo restored
+    else
+        echo "committed $OLD voice"
+    fi
+}
 reset() {
     : > "$LOG"
-    SEAL_FAIL=0; TREE_FAIL=0; DRIFT=0; ENGINE=0; IPFW_FAIL=0; PRISTINE_FAIL=0
+    SEAL_FAIL=0; TREE_FAIL=0; DRIFT=0; ENGINE=0; IPFW_FAIL=0; PRISTINE_FAIL=0; COLD_FAIL=0; WRONG_INSPECT=0; ACTIVE_VARIANT=old
     TRIAL_STATE=prepared; export TRIAL_STATE
 }
 run() {
@@ -83,6 +110,31 @@ grep -Fqx "recover-pristine:activating $NEW strategies $OLD voice" "$LOG" ||
     fail "activating bypassed original pristine recovery"
 reset; TRIAL_STATE=activating; PRISTINE_FAIL=1; export TRIAL_STATE; run 70
 [ ! -s "$TMP/output" ] || fail "failed pristine recovery falsely successful"
+! grep -Fq 'recover-cold:' "$LOG" || fail "pristine failed over to installed route"
+reset; TRIAL_STATE=activating; ACTIVE_VARIANT=new; export TRIAL_STATE; run 0
+grep -Fqx "recover-cold:activating $NEW strategies $OLD voice" "$LOG" ||
+    fail "installed activating did not delegate original common cold rollback"
+! grep -Fq 'recover-pristine:' "$LOG" || fail "installed activating used pristine handler"
+reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; export TRIAL_STATE; run 0
+grep -Fqx "recover-cold:activated $NEW strategies $OLD voice" "$LOG" ||
+    fail "activated did not delegate original common cold rollback"
+reset; TRIAL_STATE=activated; ACTIVE_VARIANT=old; export TRIAL_STATE; run 0
+grep -Fqx "recover-cold:activated $NEW strategies $OLD voice" "$LOG" ||
+    fail "already-restored active release could not resume cold rollback"
+reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; COLD_FAIL=1; export TRIAL_STATE; run 70
+[ ! -s "$TMP/output" ] || fail "failed cold rollback claimed restored"
+reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; WRONG_INSPECT=1; export TRIAL_STATE; run 70
+[ ! -s "$TMP/output" ] || fail "foreign inspect owner claimed restored"
+for failure in engine drift seal; do
+    reset; TRIAL_STATE=activated; ACTIVE_VARIANT=new; export TRIAL_STATE
+    case "$failure" in
+        engine) ENGINE=1 ;;
+        drift) DRIFT=1 ;;
+        seal) SEAL_FAIL=1 ;;
+    esac
+    run 69
+    ! grep -Fq 'recover-cold:' "$LOG" || fail "untrusted $failure reached cold recovery"
+done
 for failure in drift engine ipfw tree seal; do
     reset
     case "$failure" in
@@ -99,4 +151,4 @@ reset; TRIAL_STATE=other; export TRIAL_STATE
 run 0
 grep -Fqx 'native-remove-prepared=not-needed' "$TMP/output" || fail foreign
 [ ! -s "$LOG" ] || fail "other common phase modified"
-echo 'PASS: pre-mutation Remove power-cut qualified by sealed Config/engine/IPFW before common journal closure'
+echo 'PASS: exact pre-save Remove cold rollback, existing native phases and committed previous-owner inspect receipt'

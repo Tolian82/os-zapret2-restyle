@@ -380,12 +380,13 @@ class SharedApplyOperation:
 
 def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
                                  state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict | None:
-    """Identify ONLY a pre-mutation Remove crash at shared phase 'prepared'.
+    """Bind exact old owner for Remove's pre-save cold rollback phases.
 
-    The resource journal MUST already own the trial. Returning None for
-    terminal/other phases does not authorize their recovery or any Stop.
-    The FD9 shell separately proves the old sealed runtime, absent engine,
-    monitor and scoped IPFW before calling the original recover-prepared.
+    The existing resource journal MUST own the unchanged trial. This only
+    authorizes inspection of PREPARED/ACTIVATING/ACTIVATED; the original
+    root-FD9 service and common Apply recovery perform all native release,
+    process, IPFW and phase-specific verification before any mutation.
+    Returning None for other phases never authorizes generic Stop.
     """
     import sys as _sys
     _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -402,7 +403,7 @@ def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
     record = SharedApplyOperation(root).read()
     if record is None:
         raise SharedOperationError("native common journal absent during Remove")
-    if record["phase"] not in ("prepared", "activating"):
+    if record["phase"] not in ("prepared", "activating", "activated"):
         return None
     trial = record["detail"]
     previous = record.get("previous")
@@ -412,7 +413,7 @@ def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
             trial["id"] == owner["id"] or
             trial["base"] != owner["candidate"] or
             trial["candidate"] != owner["candidate"]):
-        raise SharedOperationError("foreign or changed native Remove pre-activation owner")
+        raise SharedOperationError("foreign or changed native Remove pre-save owner")
     return {"id": trial["id"], "phase": record["phase"], "old": owner}
 
 

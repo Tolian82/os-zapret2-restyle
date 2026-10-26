@@ -72,6 +72,10 @@ class TestJournal(unittest.TestCase):
             self.assertEqual(native_remove_prepared_trial(store.root,state),
                              {"id":new["id"],"phase":"activating",
                               "old":resource["native_owner"]})
+            store.advance("activated",new)
+            self.assertEqual(native_remove_prepared_trial(store.root,state),
+                             {"id":new["id"],"phase":"activated",
+                              "old":resource["native_owner"]})
             before = (store.root/"operation.json").read_bytes()
             for bad in ("stopping","publishing","completed"):
                 resource["phase"] = bad
@@ -86,7 +90,7 @@ class TestJournal(unittest.TestCase):
             resource["native_owner"]["id"]=old["id"]
             journal.write_text(json.dumps(resource))
             self.assertEqual((store.root/"operation.json").read_bytes(),before)
-            store.recover_activating_pristine(new["id"],old["id"],lambda:True)
+            store.finish_activated_restore(new["id"],old["id"],lambda:True)
             self.assertIsNone(native_remove_prepared_trial(store.root,state))
 
     def test_native_trial_requires_existing_pinned_old_owner_and_restart_phase(self):
