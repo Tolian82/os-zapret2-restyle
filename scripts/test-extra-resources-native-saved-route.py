@@ -134,15 +134,16 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         actions = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
         self.assertIn('extra-resources-preview-saved)', service)
         self.assertIn('extra_resources_preview_saved_service()', service)
-        self.assertIn('extra-resources-preview-saved|upstream-recover-mutating', service)
+        self.assertIn('extra-resources-preview-saved|extra-resources-remove-plan|upstream-recover-mutating', service)
         self.assertIn('EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0', service)
         self.assertIn('preview-saved)', launcher)
-        segment = launcher.split('    preview-saved)\n', 1)[1].split('    install|recover)', 1)[0]
+        segment = launcher.split('    preview-saved)\n', 1)[1].split('    plan)', 1)[0]
         self.assertIn('"$LOCKF_BIN" -s -t 3 "$LOCK_FILE"', segment)
         self.assertLess(segment.index('"$LOCKF_BIN" -s -t 3 "$LOCK_FILE"'),
                         segment.index('"$SERVICE_SCRIPT" extra-resources-preview-saved'))
         self.assertNotIn("extra_resources_preview_saved", actions)
-        self.assertNotIn("extra_resources_remove", actions)
+        self.assertNotIn("[extra_resources_remove]\n", actions)
+        self.assertIn("[extra_resources_remove_plan]", actions)
         self.assertNotIn("stop_service", segment)
         self.assertNotIn("restart", segment)
         for path in ("extra_resources_launcher.sh", "zapret_service.sh"):
