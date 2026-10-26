@@ -74,6 +74,34 @@ If interrupted after `committing`, the only safe action is **guarded forward com
 
 Expected forward receipt is `REMOVED` **only after** existing shared Apply attests the pinned NEW owner and the exact upstream-only files, possibly via its normal guarded cold boot. A foreign or unprovable new owner must produce `RESTORE_FAILED` with retained journal; it is NOT an old-owner rollback.
 
+## 4a. Test R4 — interrupt AFTER durable new-owner commit (irreversible)
+
+This route does NOT exist in installed _38. Run only with a separately
+built/published/installed _40-or-later testing package, explicit owner approval,
+complete system backup, independent native maintenance console, freshly reinstalled
+positive extra-file set, verified Started native service, Config digest and fresh
+64-hex Remove-plan witness. Never reuse the earlier R3 witness.
+
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_launcher.sh remove-test-commit-interrupt <fresh-64-hex-inventory_sha256>
+```
+
+Expected: same saved Strategies+Voice native Apply, attested NEW common owner,
+durable `committing` journal, physical unlink of one checked quarantine inode
+and fsync, followed by deliberate `KeyboardInterrupt` (nonzero). Original inode
+is irreversibly gone. Do NOT restart, roll back or clean up anything manually.
+From the independent root console use ONLY the native forward-recovery route:
+
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_launcher.sh recover-test
+```
+
+Expected: `REMOVED`/exit 0, only exact upstream Lua/BIN, unchanged Config SHA-256,
+the exact NEW attested common Apply owner, Started process/IPFW health,
+absent managed manifest/transaction/quarantine. Foreign or unverifiable owners
+must return `RESTORE_FAILED` with retained evidence. This is a controlled
+process interruption, NOT proof of actual hardware power-cut recovery.
+
 ## 5. Evidence board and stop rules
 
 | Case | Expected result | Source/CI | Installed result |
@@ -82,7 +110,7 @@ Expected forward receipt is `REMOVED` **only after** existing shared Apply attes
 | R1 forced after-quarantine failure | Old inodes/Config/IPFW/process owner restored | Offline regression | **OWNER-LIVE PASS** on `_37`: forced rollback, same inode/metadata/hash/Config/IPFW, service running, journal absent; [evidence](evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) |
 | R2 pre-commit interruption + separate recovery | Original old common owner restored; journal cleared | Offline regression | **OWNER-LIVE PASS** `_37`: interrupt 130, `remove/restarting`, `RESTORED`/0, six comparisons 0, Started, 73 extras intact, journal cleared; [evidence](evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) |
 | R3 native fresh common Apply success | New owner verified, only HEAD Lua/BIN, Config unchanged | Offline regression | NOT RUN |
-| R4 post-commit partial deletion + cold completion | Resume forward, never falsely rollback lost inodes | Offline regression | NOT RUN |
+| R4 post-commit partial deletion + cold completion | Resume forward, never falsely rollback lost inodes | Offline regression; _40 root-only scenario pending | NOT RUN on appliance |
 | GUI Advanced/RU/EN/Full Help and new Job | Remain gated pending real owner acceptance | Not claimed | NOT RUN |
 
 Record the exact **installed package**, upstream HEAD, plan witness, before/after Config digests, attested common-owner ID, process/IPFW snapshots, transaction phases, console command exit status and observed result for each test. Redact private details before any GitHub record. A test is PASS only after the owner's actual appliance observations, not after CI. **Do not enable the public Remove GUI/configd until installed verification and the owner's explicit acceptance.**

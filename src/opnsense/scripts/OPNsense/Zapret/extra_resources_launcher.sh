@@ -104,7 +104,7 @@ except Exception:
             /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
             "$SERVICE_SCRIPT" extra-resources-remove-plan
         ;;
-    remove-test|remove-test-fail|remove-test-interrupt|recover-test)
+    remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test)
         # Explicit owner-console acceptance. FOREGROUND, root only; never
         # exposed through configd or GUI. setup.lock -> native FD9.
         [ "$(/usr/bin/id -u)" -eq 0 ] && [ -x "$SERVICE_SCRIPT" ] &&
@@ -156,7 +156,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|remove-test|remove-test-fail|remove-test-interrupt|recover-test}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test}' >&2
         exit 64
         ;;
 esac

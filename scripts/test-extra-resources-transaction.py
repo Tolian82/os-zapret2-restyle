@@ -564,6 +564,30 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertTrue(self.lifecycle.running)
         self.assertFalse(journal.exists())
 
+    def test_remove_owner_commit_interrupt_after_real_inode_unlink(self):
+        """R4 uses a real first committed unlink, not patched cleanup."""
+        plan, config = self.removal_plan()
+        self.trial_route()
+        with self.assertRaisesRegex(KeyboardInterrupt, "AFTER_FIRST_COMMITTED_INODE"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root, self.state,
+                self.lifecycle, config=config,
+                acceptance_fault="interrupt-after-first-committed-inode")
+        journal = self.state / "transaction/journal.json"
+        receipt = json.loads(journal.read_text())
+        self.assertEqual(receipt["phase"], "committing")
+        self.assertEqual(receipt["new_native_owner"]["id"], "c"*32)
+        q = self.root / tx.QUARANTINE_NAME
+        self.assertFalse((q / "files/fake/user_dynamic.bin").exists())
+        self.assertTrue((q / "lua/orphan.lua").is_file())
+        self.assertFalse((self.state / "installed.json").exists())
+        self.assertTrue(self.lifecycle.running)
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "REMOVED")
+        self.assertEqual(self.lifecycle.current_common_owner["id"], "c"*32)
+        self.assertFalse(journal.exists())
+        self.assertFalse(q.exists())
+        self.assertEqual(getattr(self.lifecycle, "native_restore_calls", 0), 0)
+
     def committed_remove_cut(self):
         """Run real fixture through new-owner commit, crash during inode deletion."""
         plan, config = self.removal_plan()

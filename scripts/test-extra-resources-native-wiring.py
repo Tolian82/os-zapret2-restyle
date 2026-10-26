@@ -60,7 +60,7 @@ require("extra_resources_preflight.py preflight" in actions,
         "read-only preflight unexpectedly removed")
 require(all(f'"{m}"' in operation for m in
             ("remove-test", "remove-test-fail", "remove-test-interrupt",
-             "recover-test")), "owner-console Remove routes are missing")
+             "remove-test-commit-interrupt", "recover-test")), "owner-console Remove routes are missing")
 require('outcome["status"] in ("REMOVED", "NO_EXTRA_RESOURCES")' in operation,
         "empty native Remove must not report extras installed")
 require("EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE" in operation and
@@ -70,9 +70,12 @@ require('"$SERVICE_SCRIPT" "$MODE" "$_witness"' in launcher and
         'extra-resources-recover-test' in launcher and
         '"$LOCKF_BIN" -s -t 60 "$LOCK_FILE"' in launcher,
         "owner-console Remove does not preserve original setup.lock")
-require('remove-test|remove-test-fail|remove-test-interrupt' in service and
+require('remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt' in service and
         'EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE' in service,
         "native FD9 owner acceptance dispatch is absent")
+require("remove-test-commit-interrupt" in launcher and
+        "remove-test-commit-interrupt" in operation,
+        "R4 console mode not consistently routed")
 require("[extra_resources_remove]" not in actions and
         "[extra_resources_remove_test]" not in actions,
         "owner acceptance route must NOT expose destructive configd/GUI operation")
@@ -86,4 +89,7 @@ require('phase == "committing"' in transaction and
         'os.replace(work, retired)' in transaction,
         "native Remove must seal new owner before irreversible inode cleanup")
 
+require("interrupt-after-first-committed-inode" in transaction and
+        "OWNER_ACCEPTANCE_INTERRUPTED_AFTER_FIRST_COMMITTED_INODE" in transaction,
+        "R4 post-commit first-inode fault point absent")
 print("PASS: resource syntax and existing lifecycle/lock wiring")

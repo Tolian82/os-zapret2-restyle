@@ -396,7 +396,8 @@ def _attest_prepared_remove(root: Path, state: Path, work: Path,
 
 
 def _finish_committing_remove(root: Path, state: Path, work: Path,
-                              journal: dict, lifecycle) -> None:
+                              journal: dict, lifecycle, *,
+                              acceptance_fault: str | None = None) -> None:
     """Idempotent forward completion after a DURABLE healthy native trial.
 
     The source inodes are only discarded AFTER the authoritative shared Apply
@@ -452,6 +453,23 @@ def _finish_committing_remove(root: Path, state: Path, work: Path,
     if installed_file.exists():
         installed_file.unlink()
         _sync_dir(state)
+    if acceptance_fault == "interrupt-after-first-committed-inode":
+        # Owner-console R4 only: new native owner + durable journal proven.
+        # A missing original inode CANNOT be rolled back by copying bytes.
+        if q is None:
+            raise TransactionError("R4 quarantine missing after native commit")
+        first_name = next((name for name in sorted(previous)
+                           if (q / name).is_file()), None)
+        if first_name is None:
+            raise TransactionError("R4 requires an original quarantined inode")
+        first = q / first_name
+        if (first.is_symlink() or _remove_inode(first) != inodes[first_name] or
+                sha256(first.read_bytes()) != previous[first_name] or
+                _remove_inode(first) != inodes[first_name]):
+            raise TransactionError("R4 first original inode changed")
+        first.unlink()
+        _sync_dir(first.parent)
+        raise KeyboardInterrupt("OWNER_ACCEPTANCE_INTERRUPTED_AFTER_FIRST_COMMITTED_INODE")
     _clear_quarantine(root, previous)
     if installed_resources(root) != tracked_resources(root):
         raise TransactionError("post-commit upstream resources changed")
@@ -658,7 +676,8 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     original sealed common owner ID/page/saved Config digest inside this
     existing resource transaction journal (no second owner database).
     """
-    if acceptance_fault not in (None, "fail-after-quarantine", "interrupt-after-quarantine"):
+    if acceptance_fault not in (None, "fail-after-quarantine", "interrupt-after-quarantine",
+                                 "interrupt-after-first-committed-inode"):
         raise TransactionError("invalid owner-acceptance fault boundary")
     if not isinstance(expected_witness, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_witness):
         raise TransactionError("invalid confirmed removal witness")
@@ -766,7 +785,8 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
         _write_remove_phase(work, "committing", previous, plan["upstream_head"],
                             old_owner, inodes, new_owner=new_owner)
         committing = True
-        _finish_committing_remove(root, state, work, _load_journal(work), lifecycle)
+        _finish_committing_remove(root, state, work, _load_journal(work), lifecycle,
+                                  acceptance_fault=acceptance_fault)
         return {"status": "REMOVED", "lua": plan["counts"]["lua"],
                 "bin": plan["counts"]["bin"], "removed": len(previous),
                 "restarted": True}

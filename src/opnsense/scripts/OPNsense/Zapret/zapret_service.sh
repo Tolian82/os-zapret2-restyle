@@ -2199,7 +2199,7 @@ service_dispatch()
             STRATEGY_LAB_LIFECYCLE_OWNER=1 UPSTREAM_RECOVERY_LIFECYCLE_OWNER=1 \
                 "${SCRIPT_DIR}/setup_transaction.sh" recover-mutating-under-parent-lock
             ;;
-        remove-test|remove-test-fail|remove-test-interrupt|extra-resources-recover-test)
+        remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test)
             # Private root-console owner acceptance only; no configd key or
             # GUI Remove endpoint. launcher already owns setup.lock and this
             # original native service owns FD9 through the full transaction.
