@@ -1,7 +1,11 @@
 # Remove Additional Resources — native Lua runtime isolation lab
 
-**Status:** EXPERIMENTAL — NO RUNTIME PROOF / NO REMOVE AUTHORIZATION
-**Increment:** v0.5.9_12, test-only FreeBSD 15 socket interposer and mock
+**Status:** CANCELLED FOR REMOVE by binding owner decision 26 October 2026. ARCHIVED TECHNICAL EVIDENCE ONLY; no active Jail work and no future-Jail acceptance gate.
+**Increment:** historical v0.5.9_12–_22 experimental path; superseded by actual native Stop/quarantine/Apply/Start under existing locks.
+
+## Historical evidence only — NOT current requirements
+
+The owner explicitly removed Jail-based validation from the Remove Additional Resources implementation. All requirements in this archived log for an isolated engine trial are **non-normative historical context**. Implement the revised [specification](ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) and [plan](ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) instead. No Jail experiment or jailed installed-engine execution remains in scope. Do not interpret old “mandatory” gates below as active policy.
 
 ## Original upstream call sequence
 

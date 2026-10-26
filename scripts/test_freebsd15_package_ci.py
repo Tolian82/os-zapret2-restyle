@@ -87,38 +87,22 @@ for installed in (
 ):
     if not (ROOT / "src/opnsense/scripts/OPNsense/Zapret" / installed).is_file():
         fail(f"packaged source path is missing: {installed}")
-# CI-only FreeBSD jail programs must never quietly skip the only platform
-# that can compile and execute them. Parse the actual change-classifier regex,
-# not an independent approximation of its rules.
-workflow = text(".github/workflows/ci.yml")
-classifier_lines = [
-    line for line in workflow.splitlines()
-    if "elif printf '%s" in line and '"${changed}"' in line
-    and "grep -Eq '" in line
-]
-if len(classifier_lines) != 1 or "'; then" not in classifier_lines[0]:
-    fail("cannot locate unique actual FreeBSD/package change classifier")
-selector = classifier_lines[0].split("grep -Eq '", 1)[1].split("'; then", 1)[0]
-for path in (
-    ".github/workflows/ci.yml",
+# The cancelled Remove Jail prototype must not be revived in packaged source,
+# tests, or CI. Successful native GUI-path service startup replaces it.
+for obsolete in (
     "src/opnsense/scripts/OPNsense/Zapret/extra_resources_jail_inputs.py",
-    "scripts/test-freebsd15-package-ci.sh",
+    "src/opnsense/scripts/OPNsense/Zapret/extra_resources_jail_path_gate.py",
     "scripts/test-freebsd-lua-jail-upstream-engine.sh",
-    "scripts/test-freebsd-lua-jail-shim-combined.sh",
     "scripts/test-freebsd-lua-no-network-shim.sh",
-    "scripts/fixtures/lua-jail-native-boundary.c",
-    "scripts/fixtures/lua-jail-stage-ci-elf.py",
-    "scripts/fixtures/lua-init-no-network-shim.c",
-):
-    if not re.search(selector, path):
-        fail(f"FreeBSD jail change bypasses FreeBSD CI: {path}")
-for path in (
-    "docs/START_HERE.md",
-    "README.md",
     "scripts/test-extra-resources-jail-inputs.py",
-    "scripts/test-strategy-lab-python-foundation.sh",
 ):
-    if re.search(selector, path):
-        fail(f"unrelated file unexpectedly triggers FreeBSD CI: {path}")
-
+    if (ROOT / obsolete).exists():
+        fail(f"cancelled Remove jail prototype still present: {obsolete}")
+workflow = text(".github/workflows/ci.yml")
+if "scripts/test-freebsd-lua-jail" in workflow or "scripts/test-extra-resources-jail" in workflow:
+    fail("cancelled Jail trial remains wired to CI")
+require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md",
+        "real installed Zapret2 service")
+require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md",
+        "native GUI-path prechecks")
 print(f"PASS: FreeBSD 15 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")
