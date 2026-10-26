@@ -77,6 +77,34 @@ class NativeLifecycle:
             raise TransactionError("malformed previous native common owner witness")
         return {"id": match[1], "page": match[2], "candidate": match[3]}
 
+    def restore_previous_native_common_apply(self, owner: dict) -> None:
+        """Return to the exact pinned native owner, never a generic Start.
+
+        Only Remove recovery invokes this after restoring Lua/BIN bytes.
+        The original FD9 service reuses the existing Apply runtime actuator,
+        shared journal, sealed release and managed IPFW verification.
+        """
+        from extra_resources_transaction import _validate_native_owner
+        old = _validate_native_owner(owner)
+        environment = dict(os.environ)
+        environment["EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE"] = "1"
+        result = subprocess.run(
+            [str(self.script), "extra-resources-native-restore-previous",
+             old["id"], old["page"], old["candidate"]],
+            env=environment, pass_fds=(9,),
+            capture_output=True, text=True, timeout=180, check=False,
+        )
+        # The existing common boot prints its own receipt; so does the
+        # shared journal rewind. The LAST line is the native verified owner.
+        # Requiring a single line would falsely label a proven restoration
+        # RESTORE_FAILED after the actual engine and IPFW were restored.
+        lines = result.stdout.strip().splitlines()
+        if result.returncode != 0 or not lines or lines[-1] != (
+            "native-owner-restored=" + old["id"]
+        ):
+            raise TransactionError("RESTORE_FAILED: exact previous native common owner "
+                                   "was not attested after rollback")
+
     @staticmethod
     def _pid(path: Path) -> int:
         if path.is_symlink() or not path.is_file():

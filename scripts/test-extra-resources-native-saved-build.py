@@ -72,8 +72,24 @@ require("shared_apply_native_config save " not in owner_gate,
 require("extra-resources-native-previous-owner)" in service and
         "capture_previous_native_common_apply" in worker,
         "prior owner not connected to inherited-FD9 resource lifecycle")
+restore_section = section(service, "extra_resources_native_restore_previous_service()",
+                          "# Explicit operator-only closure of the FIRST failed Voice handoff.")
+for must in ("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE", "remove-rollback-pair",
+             "shared_apply_bundle_service verify", "shared_apply_native_config saved",
+             "atomic_verify_tree", "shared_apply_boot_service",
+             "apply_runtime_activate", "apply_runtime_attest_activated",
+             "apply_runtime_commit", "apply_runtime_probe",
+             "remove-revert-committed", "shared_apply_status_observe_service"):
+    require(must in restore_section, "rollback does not use native common runtime: " + must)
+for forbidden in ("shared_apply_native_config save ", "start_service",
+                  "orchestrator_build_release", "hostlist-exclude", "--ipset-exclude"):
+    require(forbidden not in restore_section, "rollback must not duplicate compiler or Config writer: " + forbidden)
+require("def restore_previous_native_common_apply" in worker and
+        "extra-resources-native-restore-previous" in worker and
+        "extra-resources-native-restore-previous)" in service,
+        "exact previous owner is not wired to existing FD9 service")
 require("def start_trial_native_common_apply" not in worker,
-        "builder mistakenly granted destructive Remove authorization")
+        "rollback boundary mistakenly granted destructive Remove authorization")
 for cmd in (["php", "-l", str(SRC / "shared_apply_request.php")],
             ["sh", "-n", str(SRC / "zapret_service.sh")],
             ["php", str(ROOT / "scripts/test-shared-apply-request.php")]):

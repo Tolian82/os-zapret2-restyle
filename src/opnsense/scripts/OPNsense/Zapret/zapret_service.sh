@@ -285,6 +285,11 @@ strategy_lab_internal_dispatch()
             preflight_shared_apply_journal || return 69
             stop_service
             ;;
+        extra-resources-native-restore-previous)
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
+            extra_resources_native_restore_previous_service "${2:-}" "${3:-}" "${4:-}"
+            ;;
         extra-resources-native-previous-owner)
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
             extra_resources_native_previous_owner_service
@@ -1382,6 +1387,96 @@ shared_apply_record_service()
 # Native committed owners need the existing read-only full-runtime/IPFW
 # witness, never legacy PID-plus-any-divert status.
 
+# Restore ONLY the previous saved common owner pinned in the existing
+# resource and shared Apply journals. Called after the original extra Lua/BIN
+# bytes are back; never recompile or invent any Strategies/Voice arguments.
+# The SAME native apply_runtime actuator performs a committed new->old
+# transition, while the original shared journal returns to its predecessor.
+extra_resources_native_restore_previous_service()
+{
+    [ "$#" -eq 3 ] || return 64
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
+    shared_apply_require_tools || return 69
+    _extra_restore_id="$1"
+    _extra_restore_page="$2"
+    _extra_restore_hash="$3"
+    case "$_extra_restore_id" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_extra_restore_id}" -eq 32 ] || return 64
+    case "$_extra_restore_page" in strategies|voice) ;; *) return 64 ;; esac
+    case "$_extra_restore_hash" in ""|*[!a-f0-9]*) return 64 ;; esac
+    [ "${#_extra_restore_hash}" -eq 64 ] || return 64
+    # This CLI checks exact old witness in the original fsynced resource
+    # journal and the existing committed/restored shared Apply predecessor.
+    _extra_pair=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/shared_apply_operation.py" remove-rollback-pair) || return 69
+    set -- $_extra_pair
+    [ "$#" -eq 6 ] && [ "$1" = remove-rollback ] || return 69
+    _extra_restore_state="$2"
+    [ "$3" = "$_extra_restore_id" ] &&
+    [ "$4" = "$_extra_restore_page" ] &&
+    [ "$5" = "$_extra_restore_hash" ] || return 69
+    _extra_trial_id="$6"
+    case "$_extra_restore_state:$_extra_trial_id" in
+        old:-) ;;
+        trial:*) case "$_extra_trial_id" in ""|-|*[!a-f0-9]*) return 69 ;; esac
+                 [ "${#_extra_trial_id}" -eq 32 ] || return 69 ;;
+        *) return 69 ;;
+    esac
+    shared_apply_bundle_service verify "$_extra_restore_id" || return 69
+    _extra_restore_saved=$(shared_apply_native_config saved \
+        "$_extra_restore_id" "$_extra_restore_page") || return 69
+    _extra_restore_ok=$(printf '%s\n' "$_extra_restore_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _extra_restore_mode=$(printf '%s\n' "$_extra_restore_saved" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _extra_restore_digest=$(printf '%s\n' "$_extra_restore_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_extra_restore_ok" = committed ] &&
+    [ "$_extra_restore_mode" = 1 ] &&
+    [ "$_extra_restore_digest" = "$_extra_restore_hash" ] || return 69
+    _extra_restore_work=$(shared_apply_workspace "$_extra_restore_id") || return 69
+    [ -d "$_extra_restore_work/release" ] &&
+    [ ! -L "$_extra_restore_work/release" ] || return 69
+    if [ "$_extra_restore_state" = old ]; then
+        # No committed trial took ownership. Only the exact previous sealed
+        # active tree may be brought back using the normal common boot path.
+        [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+        atomic_verify_tree "$_extra_restore_work/release" "$ACTIVE_DIR" || return 69
+        shared_apply_boot_service "committed $_extra_restore_id $_extra_restore_page" || return 70
+    else
+        # A completed trial may already have stopped. Verify its exact
+        # release BEFORE the existing actuator touches processes or IPFW.
+        shared_apply_bundle_service verify "$_extra_trial_id" || return 69
+        _extra_trial_work=$(shared_apply_workspace "$_extra_trial_id") || return 69
+        [ -d "$_extra_trial_work/release" ] &&
+        [ ! -L "$_extra_trial_work/release" ] &&
+        [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+        atomic_verify_tree "$_extra_trial_work/release" "$ACTIVE_DIR" || return 69
+        apply_runtime_activate "$_extra_restore_work/release" 1 || return 70
+        apply_runtime_attest_activated || return 70
+        shared_apply_bundle_service verify "$_extra_restore_id" || return 70
+        _extra_restore_again=$(shared_apply_native_config saved \
+            "$_extra_restore_id" "$_extra_restore_page") || return 70
+        _extra_restore_again_digest=$(printf '%s\n' "$_extra_restore_again" |
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 70
+        [ "$_extra_restore_again_digest" = "$_extra_restore_hash" ] || return 70
+        apply_runtime_commit || return 70
+        # This independent post-commit proof is required BEFORE the one
+        # journal is atomically reverted. No other config or owner writer.
+        atomic_verify_tree "$_extra_restore_work/release" "$ACTIVE_DIR" || return 70
+        apply_runtime_probe "$_extra_restore_work/release" 1 || return 70
+        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+            remove-revert-committed "$_extra_trial_id" "$_extra_restore_id" || return 70
+    fi
+    shared_apply_bundle_service verify "$_extra_restore_id" || return 70
+    atomic_verify_tree "$_extra_restore_work/release" "$ACTIVE_DIR" || return 70
+    apply_runtime_probe "$_extra_restore_work/release" 1 || return 70
+    _extra_restored_state=$(shared_apply_status_observe_service) || return 70
+    [ "$_extra_restored_state" = ready ] || return 70
+    printf 'native-owner-restored=%s\n' "$_extra_restore_id"
+}
+
 # Explicit operator-only closure of the FIRST failed Voice handoff.
 # No Config, IPFW or engine restart; only the missing monitor is reattached
 # and only after all old ownership has been attested under original root FD9.
@@ -1990,7 +2085,7 @@ case "${1:-}" in
         # owners as "incomplete" even when engine, supervisor and IPFW pass.
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
-    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-previous-owner)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-previous-owner|extra-resources-native-restore-previous)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular|strategy-lab-recover)

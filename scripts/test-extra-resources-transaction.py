@@ -8,6 +8,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
@@ -54,6 +56,34 @@ class Lifecycle:
             raise RuntimeError("start failure")
         self.running = True
         self.pid += 1
+
+
+class TestNativeRecoveryReceipt(unittest.TestCase):
+    def test_exact_native_owner_restore_accepts_normal_common_boot_receipt(self):
+        from extra_resources_operation import NativeLifecycle
+        from extra_resources_transaction import TransactionError as NativeTransactionError
+        lifecycle = NativeLifecycle.__new__(NativeLifecycle)
+        lifecycle.script = Path("/fake-native-service")
+        owner = {"id": "a"*32, "page": "voice", "candidate": "b"*64}
+        for prefix in ("native-common-boot=" + owner["id"] + "\n",
+                       "remove-owner-restored\n"):
+            output = prefix + "native-owner-restored=" + owner["id"] + "\n"
+            with patch("extra_resources_operation.subprocess.run",
+                       return_value=SimpleNamespace(returncode=0, stdout=output,
+                                                     stderr="")) as runner:
+                lifecycle.restore_previous_native_common_apply(owner)
+                self.assertEqual(runner.call_args.args[0][-3:],
+                                 [owner["id"], owner["page"], owner["candidate"]])
+                self.assertEqual(runner.call_args.kwargs["env"][
+                    "EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE"], "1")
+        for output, code in (("", 0), ("native-common-boot=" + owner["id"] + "\n", 0),
+                             ("native-owner-restored=" + "c"*32 + "\n", 0),
+                             ("native-owner-restored=" + owner["id"] + "\n", 70)):
+            with patch("extra_resources_operation.subprocess.run",
+                       return_value=SimpleNamespace(returncode=code, stdout=output,
+                                                     stderr="")):
+                with self.assertRaisesRegex(NativeTransactionError, "RESTORE_FAILED"):
+                    lifecycle.restore_previous_native_common_apply(owner)
 
 
 class TestResourceTransaction(unittest.TestCase):

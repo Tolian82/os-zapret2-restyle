@@ -11,7 +11,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness,native_remove_rollback_pair
 
 def detail(ident="1"*32):
     return {"id":ident,"page":"voice","base":"a"*64,
@@ -44,6 +44,81 @@ class TestJournal(unittest.TestCase):
             target.write_text(json.dumps(record))
             with self.assertRaisesRegex(SharedOperationError,"invalid common Apply record"):
                 j.read()
+
+    def test_exact_committed_remove_rollback_reinstates_predecessor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SharedApplyOperation(root/"shared-apply")
+            old = detail("a"*32)
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, old)
+            new = {"id": "c"*32, "page": "strategies",
+                   "base": old["candidate"], "candidate": old["candidate"],
+                   "changed_fields": []}
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, new)
+            txwork = root/"extra-resources"/"transaction"
+            txwork.mkdir(parents=True)
+            (txwork/"journal.json").write_text(json.dumps({
+                "schema": 1, "mode": "remove", "phase": "restarting",
+                "previous": {"lua/orphan.lua": "f"*64}, "incoming": {}, "source_commit": "d"*40,
+                "native_owner": {"id":old["id"], "page":old["page"],
+                                 "candidate":old["candidate"]},
+            }))
+            evidence = native_remove_rollback_pair(store.root, root/"extra-resources")
+            self.assertEqual(evidence["state"], "trial")
+            self.assertEqual(evidence["trial"], new["id"])
+            before = (store.root/"operation.json").read_bytes()
+            for new_id, old_id, attested in (
+                ("e"*32, old["id"], True),
+                (new["id"], "f"*32, True),
+                (new["id"], old["id"], False),
+            ):
+                with self.assertRaises(SharedOperationError):
+                    store.revert_committed_remove(new_id, old_id, lambda:attested)
+                self.assertEqual(before, (store.root/"operation.json").read_bytes())
+            store.revert_committed_remove(new["id"], old["id"], lambda:True)
+            self.assertEqual(store.read()["phase"], "restored")
+            self.assertEqual(committed_owner(store.read()), old)
+            self.assertTrue(native_lifecycle_gate("strategy-lab-native", root=store.root)["safe_to_mutate"])
+            self.assertEqual(native_remove_rollback_pair(
+                store.root, root/"extra-resources")["state"], "old")
+            with self.assertRaises(SharedOperationError):
+                store.revert_committed_remove(new["id"], old["id"], lambda:True)
+
+    def test_remove_rollback_refuses_foreign_owner_and_modified_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SharedApplyOperation(root/"shared-apply")
+            old = detail("a"*32)
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, old)
+            txwork = root/"extra-resources"/"transaction"
+            txwork.mkdir(parents=True)
+            item = {"schema":1, "mode":"remove", "phase":"restarting",
+                    "previous":{"lua/orphan.lua":"f"*64}, "incoming":{}, "source_commit":"d"*40,
+                    "native_owner":{"id":"e"*32,"page":old["page"],
+                                    "candidate":old["candidate"]}}
+            journal = txwork/"journal.json"
+            journal.write_text(json.dumps(item))
+            with self.assertRaises(SharedOperationError):
+                native_remove_rollback_pair(store.root, root/"extra-resources")
+            item["native_owner"]["id"] = old["id"]
+            journal.write_text(json.dumps(item))
+            self.assertEqual(native_remove_rollback_pair(
+                store.root, root/"extra-resources")["state"], "old")
+            trial = {"id":"c"*32, "page":"strategies", "base":old["candidate"],
+                     "candidate":"f"*64, "changed_fields":[]}
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase, trial)
+            with self.assertRaisesRegex(SharedOperationError, "unchanged Config mismatch"):
+                native_remove_rollback_pair(store.root, root/"extra-resources")
+            with self.assertRaises(SharedOperationError):
+                store.revert_committed_remove(trial["id"],old["id"],lambda:True)
+            item["mode"] = "install"
+            journal.write_text(json.dumps(item))
+            with self.assertRaisesRegex(SharedOperationError, "pending Remove"):
+                native_remove_rollback_pair(store.root, root/"extra-resources")
 
     def test_owner_witness_uses_only_terminal_journal(self):
         with tempfile.TemporaryDirectory() as folder:
