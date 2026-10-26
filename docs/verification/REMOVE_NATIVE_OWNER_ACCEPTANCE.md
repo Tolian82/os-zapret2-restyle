@@ -78,8 +78,8 @@ Expected forward receipt is `REMOVED` **only after** existing shared Apply attes
 
 | Case | Expected result | Source/CI | Installed result |
 | --- | --- | --- | --- |
-| R0 read-only plan and owner health | Trusted started original owner, exact HEAD plan; no pending journal | Source routes | NOT RUN |
-| R1 forced after-quarantine failure | Old inodes/Config/IPFW/process owner restored | Offline regression | NOT RUN |
+| R0 read-only plan and owner health | Trusted started original owner, exact HEAD plan; no pending journal | Source routes | **OWNER-LIVE PASS** on `_37` (observed baseline; no separately printed internal owner ID), [evidence](evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) |
+| R1 forced after-quarantine failure | Old inodes/Config/IPFW/process owner restored | Offline regression | **OWNER-LIVE PASS** on `_37`: forced rollback, same inode/metadata/hash/Config/IPFW, service running, journal absent; [evidence](evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) |
 | R2 pre-commit interruption + separate recovery | Original old common owner restored; journal cleared | Offline regression | NOT RUN |
 | R3 native fresh common Apply success | New owner verified, only HEAD Lua/BIN, Config unchanged | Offline regression | NOT RUN |
 | R4 post-commit partial deletion + cold completion | Resume forward, never falsely rollback lost inodes | Offline regression | NOT RUN |
