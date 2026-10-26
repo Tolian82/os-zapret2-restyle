@@ -20,8 +20,9 @@
 
 - [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — 26 October binding revision: actual native Strategies+Voice GUI checks, Stop→temporary quarantine→real common Apply/Start→success or rollback; Exclude Domains untouched and no Jail.
 - [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — 13 stages under the 26 October native-start acceptance criterion; Stage 1 Git HEAD inventory retained, Stage 2–5 now reuse existing GUI/native/transaction machinery; prior Jail CI experiments retired from active path, historical evidence in Git. No package/release.
-- [Owner-console native Remove acceptance protocol](verification/REMOVE_NATIVE_OWNER_ACCEPTANCE.md) — R0 baseline and R1 real forced rollback **owner-live PASS** on testing `_37`; R2 interrupted cold recovery, R3 success and R4 forward recovery remain untested.
+- [Owner-console native Remove acceptance protocol](verification/REMOVE_NATIVE_OWNER_ACCEPTANCE.md) — R0 baseline, R1 forced rollback and R2 interrupted cold recovery **owner-live PASS** on testing `_37`; R3 and R4 remain untested.
 - [Owner-live R0/R1 Remove evidence on v0.5.9_37](verification/evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) — exact installed package/HEAD, 73-resource witness, real Stop/quarantine error, preserved inode metadata and SHA-256, restored IPFW/Config/status.
+- [Owner-live R2 Remove interruption/recovery](verification/evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) — 130, `restarting`, guarded `RESTORED`, exact inode/Config/Git/IPFW parity; uncovered GUI status versus inventory inconsistency.
 
 ## Level 2 — active M0–M7 completion and acceptance
 

@@ -80,7 +80,7 @@ Expected forward receipt is `REMOVED` **only after** existing shared Apply attes
 | --- | --- | --- | --- |
 | R0 read-only plan and owner health | Trusted started original owner, exact HEAD plan; no pending journal | Source routes | **OWNER-LIVE PASS** on `_37` (observed baseline; no separately printed internal owner ID), [evidence](evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) |
 | R1 forced after-quarantine failure | Old inodes/Config/IPFW/process owner restored | Offline regression | **OWNER-LIVE PASS** on `_37`: forced rollback, same inode/metadata/hash/Config/IPFW, service running, journal absent; [evidence](evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) |
-| R2 pre-commit interruption + separate recovery | Original old common owner restored; journal cleared | Offline regression | NOT RUN |
+| R2 pre-commit interruption + separate recovery | Original old common owner restored; journal cleared | Offline regression | **OWNER-LIVE PASS** `_37`: interrupt 130, `remove/restarting`, `RESTORED`/0, six comparisons 0, Started, 73 extras intact, journal cleared; [evidence](evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) |
 | R3 native fresh common Apply success | New owner verified, only HEAD Lua/BIN, Config unchanged | Offline regression | NOT RUN |
 | R4 post-commit partial deletion + cold completion | Resume forward, never falsely rollback lost inodes | Offline regression | NOT RUN |
 | GUI Advanced/RU/EN/Full Help and new Job | Remain gated pending real owner acceptance | Not claimed | NOT RUN |
