@@ -162,14 +162,16 @@ class TestReadOnlyRemovalPlanner(unittest.TestCase):
                 raise AssertionError("plan attempted Stop")
         output = StringIO()
         state = self.managed.parent
-        with patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "1"}), \\
-             patch.object(resource_worker, "NativeLifecycle", NativeStarted), \\
-             patch.object(resource_worker, "RUNTIME", self.root), \\
-             patch.object(resource_worker, "STATE", state), \\
-             patch.object(resource_worker, "make_remove_plan",
-                          side_effect=lambda runtime, managed, _: make_remove_plan(
-                              runtime, managed, self.config)), \\
-             redirect_stdout(output):
+        with (
+            patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "1"}),
+            patch.object(resource_worker, "NativeLifecycle", NativeStarted),
+            patch.object(resource_worker, "RUNTIME", self.root),
+            patch.object(resource_worker, "STATE", state),
+            patch.object(resource_worker, "make_remove_plan",
+                         side_effect=lambda runtime, managed, _: make_remove_plan(
+                             runtime, managed, self.config)),
+            redirect_stdout(output),
+        ):
             result = resource_worker.main(["worker", "plan"])
         self.assertEqual(result, 0)
         result = json.loads(output.getvalue().split("=", 1)[1])
@@ -182,9 +184,11 @@ class TestReadOnlyRemovalPlanner(unittest.TestCase):
         self.assertFalse((state / "transaction").exists())
 
     def test_remove_plan_refuses_without_setup_lock_before_any_writes(self):
-        with patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "0"}), \\
-             patch.object(resource_worker, "NativeLifecycle",
-                          side_effect=AssertionError("must refuse before lifecycle")):
+        with (
+            patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "0"}),
+            patch.object(resource_worker, "NativeLifecycle",
+                         side_effect=AssertionError("must refuse before lifecycle")),
+        ):
             self.assertNotEqual(resource_worker.main(["worker", "plan"]), 0)
         self.assertFalse((self.managed.parent / "status.json").exists())
 
