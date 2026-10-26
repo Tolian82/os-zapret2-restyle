@@ -1,6 +1,6 @@
 # Remove Additional Resources — owner-installed native acceptance
 
-**Candidate source:** v0.5.9_37 (source until a separately authorized testing-package publication).
+**Installable testing candidate:** [v0.5.9_37](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.9_37), built for FreeBSD 15 amd64 from source `fdc67d667e18c36552986b3482049371401491a2`. Package SHA-256 `871f74a623254cc8ee4fb723b525d40a4fe8a65fd9bdb102b4047e6c4e250872`. Not a stable release.
 **Evidence state:** NOT RUN on the owner's OPNsense. Offline CI and a FreeBSD 15 package build are NOT live acceptance.
 **Authority:** [approved Remove spec](../architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) and [plan](../architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md).
 
