@@ -11,7 +11,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness
 
 def detail(ident="1"*32):
     return {"id":ident,"page":"voice","base":"a"*64,
@@ -44,6 +44,31 @@ class TestJournal(unittest.TestCase):
             target.write_text(json.dumps(record))
             with self.assertRaisesRegex(SharedOperationError,"invalid common Apply record"):
                 j.read()
+
+    def test_owner_witness_uses_only_terminal_journal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            j = SharedApplyOperation(Path(folder)/"shared-apply")
+            first = detail()
+            with self.assertRaises(SharedOperationError):
+                native_committed_owner_witness(j.root)
+            j.advance("prepared", first)
+            with self.assertRaises(SharedOperationError):
+                native_committed_owner_witness(j.root)
+            for phase in ("activating", "activated", "config-saved", "committed"):
+                j.advance(phase, first)
+            self.assertEqual(native_committed_owner_witness(j.root),
+                             {"id": first["id"], "page": first["page"],
+                              "candidate": first["candidate"]})
+            second = detail("2"*32)
+            j.advance("prepared", second)
+            with self.assertRaises(SharedOperationError):
+                native_committed_owner_witness(j.root)
+            j.advance("restored", second)
+            self.assertEqual(native_committed_owner_witness(j.root)["id"],
+                             first["id"])
+            (j.root/"operation.json").write_text("broken")
+            with self.assertRaises(SharedOperationError):
+                native_committed_owner_witness(j.root)
 
     def test_native_gate_uses_only_trusted_shared_apply_owner(self):
         with tempfile.TemporaryDirectory() as d:

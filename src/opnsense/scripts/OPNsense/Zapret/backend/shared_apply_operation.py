@@ -121,6 +121,21 @@ def committed_owner(record: dict | None) -> dict | None:
     return None
 
 
+def native_committed_owner_witness(root: Path = DEFAULT_ROOT) -> dict:
+    """Read exact common owner identity from the existing terminal journal.
+
+    FD9 is required for the production CLI; the native shell additionally
+    attests saved Config, sealed release, process census and managed IPFW.
+    """
+    record = SharedApplyOperation(root).read()
+    if record is None or record["phase"] not in TERMINAL:
+        raise SharedOperationError("no terminal common Apply owner")
+    owner = committed_owner(record)
+    if owner is None:
+        raise SharedOperationError("no committed common Apply predecessor")
+    return {key: owner[key] for key in ("id", "page", "candidate")}
+
+
 class SharedApplyOperation:
     def __init__(self, root: Path = DEFAULT_ROOT, *, owner: int | None = None):
         self.root = Path(root)
@@ -384,6 +399,7 @@ def main(argv: list[str]) -> int:
             "common-recover-reviewed-legacy", "strategy-lab-native",
         )
     )
+    owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
     review = len(argv) == 2 and argv[1] == "review-legacy"
     finish_review = len(argv) == 3 and argv[1] == "finish-reviewed-legacy" and bool(OP_ID.fullmatch(argv[2]))
     recording = len(argv) == 8 and argv[1] == "record"
@@ -395,7 +411,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or owner_witness or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -408,6 +424,10 @@ def main(argv: list[str]) -> int:
             if not state["safe_to_mutate"]:
                 raise SharedOperationError("native common lifecycle gate blocked: " +
                                            state["reason"])
+        elif owner_witness:
+            proof = native_committed_owner_witness()
+            print("owner-witness " + proof["id"] + " " + proof["page"] +
+                  " " + proof["candidate"])
         elif review:
             detail = SharedApplyOperation(owner=0).reviewed_legacy_detail()
             print("review-legacy " + detail["id"] + " " + detail["base"] +
