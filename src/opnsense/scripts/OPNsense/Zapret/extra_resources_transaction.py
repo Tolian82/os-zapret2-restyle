@@ -17,7 +17,8 @@ import stat
 from extra_resources_preflight import (
     PreflightError, inspect_collisions, resource_path, sha256, validate_runtime_path,
 )
-from extra_resources_reconcile import make_plan, make_remove_plan, installed_resources
+from extra_resources_reconcile import (make_plan, make_remove_plan, installed_resources,
+                                       tracked_resources, _remove_head)
 
 SCHEMA = 1
 QUARANTINE_NAME = ".extra-resources-remove-quarantine"
@@ -158,15 +159,24 @@ def _validate_remove_inodes(inodes: object, previous: dict) -> dict:
 
 
 def _write_remove_phase(work: Path, phase: str, previous: dict, head: str,
-                        native_owner: dict, inodes: dict) -> None:
-    # Same resource transaction journal, extended with the original inodes;
-    # no extra owner database or competing restore implementation.
-    _json_write(work / "journal.json", {
+                        native_owner: dict, inodes: dict,
+                        *, new_owner: dict | None = None) -> None:
+    # Single resource journal: verified old-owner rollback until COMMITTING;
+    # after COMMITTING, only forward completion of the proven new owner.
+    data = {
         "schema": SCHEMA, "mode": "remove", "phase": phase,
         "previous": previous, "incoming": {}, "source_commit": head,
         "native_owner": _validate_native_owner(native_owner),
         "original_inodes": _validate_remove_inodes(inodes, previous),
-    })
+    }
+    if phase == "committing":
+        new = _validate_native_owner(new_owner)
+        if new["id"] == data["native_owner"]["id"]:
+            raise TransactionError("Remove commit did not replace native common owner")
+        data["new_native_owner"] = new
+    elif new_owner is not None:
+        raise TransactionError("new owner may only be sealed at Remove commit")
+    _json_write(work / "journal.json", data)
 
 
 def _quarantine_path(root: Path) -> Path:
@@ -385,6 +395,84 @@ def _attest_prepared_remove(root: Path, state: Path, work: Path,
         raise TransactionError("PREPARED Remove unexpected installed metadata")
 
 
+def _finish_committing_remove(root: Path, state: Path, work: Path,
+                              journal: dict, lifecycle) -> None:
+    """Idempotent forward completion after a DURABLE healthy native trial.
+
+    The source inodes are only discarded AFTER the authoritative shared Apply
+    committed a new Started owner and this single resource journal sealed its
+    new owner. Even if a cold cut occurs mid-cleanup, old inode restoration is
+    never falsely attempted after original inodes may have been unlinked.
+    """
+    previous = journal["previous"]
+    inodes = _validate_remove_inodes(journal["original_inodes"], previous)
+    new_owner = _validate_native_owner(journal.get("new_native_owner"))
+    old_owner = _validate_native_owner(journal.get("native_owner"))
+    if new_owner["id"] == old_owner["id"]:
+        raise TransactionError("committed Remove retained original native owner")
+    retired = state / (".retired-remove-" + new_owner["id"])
+    if retired.exists() or retired.is_symlink():
+        raise TransactionError("retired Remove journal destination already exists")
+    if _remove_head(root, "git") != journal["source_commit"]:
+        raise TransactionError("upstream Git HEAD changed after Remove commit")
+    if installed_resources(root) != tracked_resources(root):
+        raise TransactionError("non-upstream or modified resources after Remove commit")
+    q = _inspect_quarantine(root, previous)
+    for name, digest in sorted(previous.items()):
+        _verified_staging(work, "backup", name, digest)
+        source = q / name if q is not None else None
+        if source is not None and (source.exists() or source.is_symlink()):
+            if (source.is_symlink() or _remove_inode(source) != inodes[name] or
+                    sha256(source.read_bytes()) != digest or
+                    _remove_inode(source) != inodes[name]):
+                raise TransactionError("committed Remove quarantine inode changed: " + name)
+    installed_file = state / "installed.json"
+    backup = work / "previous-installed.json"
+    if installed_file.is_symlink() or backup.is_symlink():
+        raise TransactionError("unsafe committed Remove metadata")
+    if installed_file.exists():
+        if not backup.is_file() or installed_file.read_bytes() != backup.read_bytes():
+            raise TransactionError("committed Remove managed metadata changed")
+    elif backup.exists() and not backup.is_file():
+        raise TransactionError("unsafe committed Remove metadata backup")
+
+    # A power cut can leave the already committed new common owner Stopped.
+    # Reboot exclusively via original shared Apply boot, after its own
+    # Stopped attestation; foreign/mixed process and IPFW remain fail-closed.
+    try:
+        lifecycle.assert_started()
+    except Exception:
+        lifecycle.assert_stopped()
+        lifecycle.start()
+        lifecycle.assert_started()
+    capture = getattr(lifecycle, "capture_previous_native_common_apply", None)
+    if not callable(capture) or _validate_native_owner(capture()) != new_owner:
+        raise TransactionError("committed Remove native owner is not attested")
+
+    if installed_file.exists():
+        installed_file.unlink()
+        _sync_dir(state)
+    _clear_quarantine(root, previous)
+    if installed_resources(root) != tracked_resources(root):
+        raise TransactionError("post-commit upstream resources changed")
+    lifecycle.assert_started()
+    if _validate_native_owner(capture()) != new_owner:
+        raise TransactionError("committed native owner drifted during finalization")
+
+    # Atomic detachment from the pending journal path is a durable terminal
+    # receipt. A crash while deleting retired backups cannot block Start or
+    # make an already committed removal look like an unproven rollback.
+    os.replace(work, retired)
+    _sync_dir(state)
+    try:
+        shutil.rmtree(retired)
+        _sync_dir(state)
+    except OSError:
+        # Private 0700 retired evidence can be inspected later. The new
+        # native owner is already verified; it must not be rolled back.
+        pass
+
+
 def recover(root: Path, state: Path, lifecycle) -> str:
     """Must be called under the SAME setup and lifecycle locks as install."""
     _safe_state(state)
@@ -400,6 +488,14 @@ def recover(root: Path, state: Path, lifecycle) -> str:
         raise TransactionError("invalid remove recovery journal")
     native_owner = _validate_native_owner(journal.get("native_owner")) if is_remove else None
     inodes = _validate_remove_inodes(journal.get("original_inodes"), previous) if is_remove else None
+    if is_remove and journal.get("phase") == "committing":
+        try:
+            _finish_committing_remove(root, state, work, journal, lifecycle)
+            return "REMOVED"
+        except Exception as exc:
+            raise TransactionError(f"RESTORE_FAILED: committed Remove finalization: {exc}") from exc
+    if is_remove and "new_native_owner" in journal:
+        raise TransactionError("foreign new owner in pre-commit Remove journal")
     try:
         if journal.get("phase") == "completed":
             raise TransactionError("completed journal requires post-commit audit")
@@ -549,7 +645,8 @@ def install(payloads: dict[str, bytes], revision: str, root: Path,
 
 
 def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
-                             lifecycle, *, config: Path = Path("/conf/config.xml")) -> dict:
+                             lifecycle, *, config: Path = Path("/conf/config.xml"),
+                             acceptance_fault: str | None = None) -> dict:
     """Remove extras with the ORIGINAL saved Config and an injected native Apply.
 
     This is INTERNAL and NOT connected to a GUI/configd operation. The native
@@ -561,6 +658,8 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     original sealed common owner ID/page/saved Config digest inside this
     existing resource transaction journal (no second owner database).
     """
+    if acceptance_fault not in (None, "fail-after-quarantine", "interrupt-after-quarantine"):
+        raise TransactionError("invalid owner-acceptance fault boundary")
     if not isinstance(expected_witness, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_witness):
         raise TransactionError("invalid confirmed removal witness")
     if state.is_symlink() or (state / "transaction").exists() or (state / "transaction").is_symlink():
@@ -625,6 +724,7 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
         shutil.rmtree(work)
         _sync_dir(state)
         raise
+    committing = False
     try:
         # The binding is rechecked immediately before Stop while original
         # FD9 remains held; a stale Confirm never authorizes any file move.
@@ -645,25 +745,36 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
         if installed_resources(root) != plan["upstream"]:
             raise TransactionError("quarantine did not reach exact upstream resources")
         _write_remove_phase(work, "restarting", previous, plan["upstream_head"], old_owner, inodes)
+        # Only the explicit root-console acceptance route can pass these
+        # controlled fault points. They still use the ORIGINAL Stop and
+        # inode-quarantine/recovery machinery (no synthetic runtime).
+        if acceptance_fault == "fail-after-quarantine":
+            raise TransactionError("OWNER_ACCEPTANCE_FORCED_ROLLBACK")
+        if acceptance_fault == "interrupt-after-quarantine":
+            raise KeyboardInterrupt("OWNER_ACCEPTANCE_INTERRUPTED_AFTER_QUARANTINE")
         lifecycle.start_trial_native_common_apply()
         new_identity = lifecycle.assert_started()
         if not new_identity or new_identity == old_identity:
             raise TransactionError("native trial did not produce a replacement service owner")
         if installed_resources(root) != plan["upstream"]:
             raise TransactionError("resources changed during native trial")
-        # Only after the REAL common Apply/Start passed its existing health
-        # gate may managed-install metadata and the extra files be discarded.
-        if installed_file.exists():
-            installed_file.unlink()
-            _sync_dir(state)
-        _clear_quarantine(root, previous)
-        _write_remove_phase(work, "completed", previous, plan["upstream_head"], old_owner, inodes)
-        shutil.rmtree(work)
-        _sync_dir(state)
+        # Commit exact new healthy common owner DURABLY before removing even
+        # one original inode. If cut occurs later, recovery finishes forward.
+        new_owner = _validate_native_owner(lifecycle.capture_previous_native_common_apply())
+        if new_owner["id"] == old_owner["id"]:
+            raise TransactionError("native Remove trial did not replace common owner")
+        _write_remove_phase(work, "committing", previous, plan["upstream_head"],
+                            old_owner, inodes, new_owner=new_owner)
+        committing = True
+        _finish_committing_remove(root, state, work, _load_journal(work), lifecycle)
         return {"status": "REMOVED", "lua": plan["counts"]["lua"],
                 "bin": plan["counts"]["bin"], "removed": len(previous),
                 "restarted": True}
     except Exception as exc:
+        if committing:
+            # The success commit is irrevocable. Old original inodes may
+            # already be deleted; never claim a previous-owner rollback.
+            raise TransactionError("REMOVE_COMMIT_PENDING: " + str(exc)) from exc
         try:
             recover(root, state, lifecycle)
         except Exception as restore_error:

@@ -334,7 +334,10 @@ class TestExactReconciliation(unittest.TestCase):
 
     def trial_route(self, *, fail=False, crash=False):
         old_owner = {"id": "a"*32, "page": "voice", "candidate": "b"*64}
-        self.lifecycle.capture_previous_native_common_apply = lambda: dict(old_owner)
+        new_owner = {"id": "c"*32, "page": "voice", "candidate": "b"*64}
+        self.lifecycle.current_common_owner = dict(old_owner)
+        self.lifecycle.capture_previous_native_common_apply = (
+            lambda: dict(self.lifecycle.current_common_owner))
         def actual_native_gui_compiler_and_start():
             # A new, future production adapter must use shared GUI Apply;
             # this fixture only models its required file-visibility boundary.
@@ -348,6 +351,7 @@ class TestExactReconciliation(unittest.TestCase):
             if fail:
                 raise RuntimeError("existing GUI Apply candidate failed")
             self.lifecycle.start()
+            self.lifecycle.current_common_owner = dict(new_owner)
         self.lifecycle.start_trial_native_common_apply = actual_native_gui_compiler_and_start
 
         def restore_original_native_common_owner(witness):
@@ -362,6 +366,7 @@ class TestExactReconciliation(unittest.TestCase):
             self.lifecycle.native_restore_calls = (
                 getattr(self.lifecycle, "native_restore_calls", 0) + 1
             )
+            self.lifecycle.current_common_owner = dict(old_owner)
             self.lifecycle.start()
         self.lifecycle.restore_previous_native_common_apply = restore_original_native_common_owner
 
@@ -525,6 +530,96 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertFalse((self.state / "transaction").exists())
         self.assertFalse((self.root / "lua/orphan.lua").exists())
         self.assertFalse((self.root / "files/fake/user_dynamic.bin").exists())
+
+    def test_remove_forced_live_failure_returns_old_native_owner(self):
+        self.set_distinct_resource_metadata()
+        plan, config = self.removal_plan()
+        self.trial_route()
+        original = {name: self.inode_metadata(self.root / name) for name
+                    in ("lua/orphan.lua", "files/fake/user_dynamic.bin")}
+        with self.assertRaisesRegex(tx.TransactionError, "REMOVE_FAILED_RESTORED"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root, self.state,
+                self.lifecycle, config=config,
+                acceptance_fault="fail-after-quarantine")
+        self.assertEqual(self.lifecycle.native_restore_calls, 1)
+        self.assertEqual(self.lifecycle.current_common_owner["id"], "a"*32)
+        for name, identity in original.items():
+            self.assertEqual(self.inode_metadata(self.root / name), identity)
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_remove_owner_interrupt_uses_same_cold_recovery(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        with self.assertRaisesRegex(KeyboardInterrupt, "INTERRUPTED"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root, self.state,
+                self.lifecycle, config=config,
+                acceptance_fault="interrupt-after-quarantine")
+        journal = self.state / "transaction/journal.json"
+        self.assertEqual(json.loads(journal.read_text())["phase"], "restarting")
+        self.assertFalse(self.lifecycle.running)
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual(self.lifecycle.current_common_owner["id"], "a"*32)
+        self.assertTrue(self.lifecycle.running)
+        self.assertFalse(journal.exists())
+
+    def committed_remove_cut(self):
+        """Run real fixture through new-owner commit, crash during inode deletion."""
+        plan, config = self.removal_plan()
+        self.trial_route()
+        def cut_mid_cleanup(root, previous):
+            q = root / tx.QUARANTINE_NAME
+            (q / "lua/orphan.lua").unlink()
+            raise KeyboardInterrupt("power cut after first inode unlinked")
+        with patch.object(tx, "_clear_quarantine", cut_mid_cleanup):
+            with self.assertRaises(KeyboardInterrupt):
+                tx.remove_with_native_trial(
+                    plan["witness"]["inventory_sha256"], self.root, self.state,
+                    self.lifecycle, config=config)
+        journal = self.state / "transaction/journal.json"
+        data = json.loads(journal.read_text())
+        self.assertEqual(data["phase"], "committing")
+        self.assertEqual(data["new_native_owner"]["id"], "c"*32)
+        self.assertFalse((self.root / "lua/orphan.lua").exists())
+        return journal
+
+    def test_remove_cold_commit_after_partial_deletion_finishes_forward(self):
+        journal = self.committed_remove_cut()
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "REMOVED")
+        self.assertEqual(self.lifecycle.current_common_owner["id"], "c"*32)
+        self.assertFalse(journal.exists())
+        self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
+        self.assertFalse((self.root / "files/fake/user_dynamic.bin").exists())
+
+    def test_remove_cold_commit_reboots_only_original_committed_new_owner(self):
+        journal = self.committed_remove_cut()
+        self.lifecycle.running = False
+        original_starts = self.lifecycle.starts
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "REMOVED")
+        self.assertEqual(self.lifecycle.starts, original_starts + 1)
+        self.assertTrue(self.lifecycle.running)
+        self.assertEqual(self.lifecycle.current_common_owner["id"], "c"*32)
+        self.assertFalse(journal.exists())
+
+    def test_remove_committing_refuses_foreign_owner_without_destroying_evidence(self):
+        journal = self.committed_remove_cut()
+        self.lifecycle.current_common_owner = {
+            "id": "d"*32, "page": "voice", "candidate": "b"*64}
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue(journal.exists())
+        self.assertTrue((self.root / tx.QUARANTINE_NAME /
+                         "files/fake/user_dynamic.bin").is_file())
+
+    def test_remove_rejects_illegal_acceptance_fault_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        with self.assertRaisesRegex(tx.TransactionError, "invalid owner-acceptance"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root, self.state,
+                self.lifecycle, config=config, acceptance_fault="skip-checks")
+        self.assertEqual(self.lifecycle.stops, 0)
 
     @staticmethod
     def inode_metadata(path):

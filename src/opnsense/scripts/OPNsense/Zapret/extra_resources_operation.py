@@ -18,7 +18,8 @@ from extra_resources_preflight import (
     verified_resources, inspect_collisions,
 )
 from extra_resources_transaction import (
-    TransactionError, install, recover, _safe_state, _json_write,
+    TransactionError, install, recover, remove_with_native_trial,
+    _safe_state, _json_write,
 )
 from extra_resources_reconcile import make_plan, make_remove_plan
 from extra_resources_inventory_cache import InventoryCacheError, refresh as refresh_inventory_cache
@@ -210,10 +211,18 @@ def _refresh_help_cache() -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in {"install", "recover", "plan"}:
-        print("usage: extra_resources_operation.py {install|recover|plan}", file=sys.stderr)
+    modes = {"install", "recover", "plan", "remove-test", "remove-test-fail",
+             "remove-test-interrupt", "recover-test"}
+    if (len(argv) < 2 or argv[1] not in modes or
+            (len(argv) != 3 if argv[1].startswith("remove-test") else len(argv) != 2)):
+        print("usage: extra_resources_operation.py {install|recover|plan|remove-test*|recover-test} [confirmed_sha256]", file=sys.stderr)
         return 64
     mode = argv[1]
+    owner_test = mode.startswith("remove-test") or mode == "recover-test"
+    if owner_test and (os.geteuid() != 0 or
+                       os.environ.get("EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE") != "1"):
+        print("owner-only Remove acceptance route is disabled", file=sys.stderr)
+        return 75
     if mode == "install" and re.fullmatch(
         r"[a-f0-9]{32}", os.environ.get("EXTRA_RESOURCES_OPERATION_ID", "")
     ) is None:
@@ -236,12 +245,32 @@ def main(argv: list[str]) -> int:
             print("extra-resources-remove-plan=" +
                   json.dumps(summary, sort_keys=True, separators=(",", ":")))
             return 0
-        if mode == "recover":
+        if mode in ("recover", "recover-test"):
             _status("recovering")
             status = recover(RUNTIME, STATE, lifecycle)
             _refresh_help_cache()
-            _status(status.lower())
+            _status("not_installed" if status == "REMOVED" else status.lower())
             print(status)
+            return 0
+        if mode.startswith("remove-test"):
+            witness = argv[2]
+            if not re.fullmatch(r"[0-9a-f]{64}", witness):
+                raise TransactionError("invalid confirmed Remove plan SHA-256")
+            fault = {
+                "remove-test": None,
+                "remove-test-fail": "fail-after-quarantine",
+                "remove-test-interrupt": "interrupt-after-quarantine",
+            }[mode]
+            # Root console only, no GUI/configd/public dispatch. The full
+            # live plan, unchanged Config and owner remain re-attested under
+            # the original inherited setup.lock -> FD9.
+            _status("removing")
+            outcome = remove_with_native_trial(
+                witness, RUNTIME, STATE, lifecycle, acceptance_fault=fault)
+            _refresh_help_cache()
+            _status("not_installed" if outcome["status"] == "REMOVED" else "ready",
+                    **outcome)
+            print(json.dumps(outcome, sort_keys=True))
             return 0
 
         # Reject Stopped/unknown service before network access or state changes.
@@ -265,8 +294,9 @@ def main(argv: list[str]) -> int:
         return 0
     except (TransactionError, PreflightError, OSError, ValueError,
             TimeoutError, subprocess.TimeoutExpired) as exc:
-        code = "RESTORE_FAILED" if "RESTORE_FAILED" in str(exc) else (
-            "RECOVERY_REQUIRED" if "RECOVERY_REQUIRED" in str(exc) else "FAILED")
+        code = "RESTORE_FAILED" if (
+            "RESTORE_FAILED" in str(exc) or "REMOVE_COMMIT_PENDING" in str(exc)
+        ) else ("RECOVERY_REQUIRED" if "RECOVERY_REQUIRED" in str(exc) else "FAILED")
         # A read-only plan, including its refusal path, must never write the
         # shared install/status receipt or poison a working installation.
         if mode != "plan":
