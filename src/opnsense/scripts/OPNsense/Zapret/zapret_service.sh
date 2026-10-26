@@ -294,6 +294,11 @@ strategy_lab_internal_dispatch()
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
             extra_resources_native_previous_owner_service
             ;;
+        extra-resources-native-trial)
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0}" = 1 ] || return 75
+            extra_resources_native_trial_service
+            ;;
         extra-resources-native-build-saved)
             # Original FD9 is INHERITED from the transaction worker. This
             # action stages a real saved Config common GUI release but does
@@ -1374,6 +1379,198 @@ extra_resources_native_build_saved_service()
     printf 'prepared-id=%s\n' "$_extra_saved_id"
 }
 
+# Restore the original sealed, STOPPED common runtime after a pre-commit
+# trial failure. Parent transaction must restore original Lua/BIN bytes and
+# restart the old owner only after this returns. Never report restoration
+# merely because apply_runtime_restore() returned success.
+extra_resources_native_trial_abort_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _extra_trial_failure="$1"
+    if [ "${APPLY_PHASE:-idle}" != idle ]; then
+        if ! apply_runtime_restore; then
+            common_error "RESTORE_FAILED: native trial runtime rollback: $_extra_trial_failure"
+            return 70
+        fi
+    fi
+    if ! {
+        shared_apply_bundle_service verify "$_extra_trial_old_id" &&
+        atomic_verify_tree "$_extra_trial_old_release" "$ACTIVE_DIR" &&
+        ! launcher_is_running "$CHILD_PIDFILE" &&
+        ! supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" &&
+        _apply_engine=0 &&
+        apply_runtime_attest_engine_inventory &&
+        firewall_shared_runtime verify "$_extra_trial_old_release" - &&
+        shared_apply_record_service restored "$_extra_trial_id" strategies \
+            "$_extra_trial_base" "$_extra_trial_candidate" -
+    }; then
+        shared_apply_record_service requires-review "$_extra_trial_id" strategies \
+            "$_extra_trial_base" "$_extra_trial_candidate" - || true
+        common_error "RESTORE_FAILED: native trial cannot prove original stopped owner"
+        return 70
+    fi
+    common_error "native trial rejected: $_extra_trial_failure; original stopped common owner restored"
+    return 69
+}
+
+# Actual Remove startup: run the SAME original saved Config candidate compiler,
+# native Apply journal, apply_runtime actuator and full process/IPFW probes.
+# The resource transaction has ALREADY stopped the old service and quarantined
+# extras under setup.lock -> original inherited FD9. A Config save is NEVER
+# necessary/allowed: both full snapshots and all changed fields are identical.
+extra_resources_native_trial_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0}" = 1 ] || return 75
+    preflight_shared_apply_journal common-apply || return 69
+    shared_apply_require_tools || return 69
+    _extra_trial_context=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/shared_apply_operation.py" remove-trial-context) || return 69
+    set -- $_extra_trial_context
+    [ "$#" -eq 4 ] && [ "$1" = remove-trial-owner ] || return 69
+    _extra_trial_old_id="$2"
+    _extra_trial_old_page="$3"
+    _extra_trial_old_digest="$4"
+    case "$_extra_trial_old_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_trial_old_id}" -eq 32 ] || return 69
+    case "$_extra_trial_old_page" in strategies|voice) ;; *) return 69 ;; esac
+    case "$_extra_trial_old_digest" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_trial_old_digest}" -eq 64 ] || return 69
+    [ "$_extra_trial_context" = "remove-trial-owner $_extra_trial_old_id $_extra_trial_old_page $_extra_trial_old_digest" ] || return 69
+    shared_apply_bundle_service verify "$_extra_trial_old_id" || return 69
+    _extra_trial_old_saved=$(shared_apply_native_config saved \
+        "$_extra_trial_old_id" "$_extra_trial_old_page") || return 69
+    _extra_trial_old_mode=$(printf '%s\n' "$_extra_trial_old_saved" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _extra_trial_old_result=$(printf '%s\n' "$_extra_trial_old_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _extra_trial_old_actual=$(printf '%s\n' "$_extra_trial_old_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_extra_trial_old_mode" = 1 ] &&
+    [ "$_extra_trial_old_result" = committed ] &&
+    [ "$_extra_trial_old_actual" = "$_extra_trial_old_digest" ] || return 69
+    _extra_trial_old_work=$(shared_apply_workspace "$_extra_trial_old_id") || return 69
+    _extra_trial_old_release="$_extra_trial_old_work/release"
+    [ -d "$_extra_trial_old_release" ] &&
+    [ ! -L "$_extra_trial_old_release" ] &&
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    atomic_verify_tree "$_extra_trial_old_release" "$ACTIVE_DIR" || return 69
+    # Parent Stop must have retired the original process and managed IPFW.
+    ! launcher_is_running "$CHILD_PIDFILE" &&
+    ! supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 69
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_extra_trial_old_release" - || return 69
+
+    _extra_trial_build=$(extra_resources_native_build_saved_service) || return 69
+    case "$_extra_trial_build" in prepared-id=*) ;; *) return 69 ;; esac
+    _extra_trial_id="${_extra_trial_build#prepared-id=}"
+    case "$_extra_trial_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_trial_id}" -eq 32 ] &&
+    [ "$_extra_trial_id" != "$_extra_trial_old_id" ] || return 69
+    _extra_trial_root=$(shared_apply_workspace "$_extra_trial_id") || return 69
+    [ -d "$_extra_trial_root/release" ] &&
+    [ ! -L "$_extra_trial_root/release" ] || return 69
+    shared_apply_bundle_service verify "$_extra_trial_id" || return 69
+    _extra_trial_preview=$(shared_apply_native_config preflight \
+        "$_extra_trial_id" strategies) || return 69
+    _extra_trial_base=$(printf '%s\n' "$_extra_trial_preview" |
+        shared_apply_json_field '.base | select(test("^[a-f0-9]{64}$"))') || return 69
+    _extra_trial_candidate=$(printf '%s\n' "$_extra_trial_preview" |
+        shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+    _extra_trial_changes=$(printf '%s\n' "$_extra_trial_preview" |
+        shared_apply_json_field '.changes | select(.==0)') || return 69
+    _extra_trial_fields=$(printf '%s\n' "$_extra_trial_preview" |
+        shared_apply_json_field '.fields | select(length==0) | length') || return 69
+    _extra_trial_mode=$(printf '%s\n' "$_extra_trial_preview" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    [ "$_extra_trial_base" = "$_extra_trial_old_digest" ] &&
+    [ "$_extra_trial_candidate" = "$_extra_trial_old_digest" ] &&
+    [ "$_extra_trial_changes" = 0 ] &&
+    [ "$_extra_trial_fields" = 0 ] &&
+    [ "$_extra_trial_mode" = 1 ] || return 69
+    apply_runtime_probe "$_extra_trial_root/release" 1 || return 69
+    # Only the original Apply's single durable journal can own new dvtws2.
+    shared_apply_record_service prepared "$_extra_trial_id" strategies \
+        "$_extra_trial_base" "$_extra_trial_candidate" - || return 69
+    if ! shared_apply_record_service activating "$_extra_trial_id" strategies \
+        "$_extra_trial_base" "$_extra_trial_candidate" -; then
+        shared_apply_record_service restored "$_extra_trial_id" strategies \
+            "$_extra_trial_base" "$_extra_trial_candidate" - || return 70
+        return 69
+    fi
+    if ! apply_runtime_activate "$_extra_trial_root/release" 1 "$_extra_trial_id"; then
+        extra_resources_native_trial_abort_service activation
+        return $?
+    fi
+    if ! shared_apply_record_service activated "$_extra_trial_id" strategies \
+        "$_extra_trial_base" "$_extra_trial_candidate" -; then
+        extra_resources_native_trial_abort_service journal-activated
+        return $?
+    fi
+    if ! {
+        shared_apply_bundle_service verify "$_extra_trial_id" &&
+        apply_runtime_attest_activated
+    }; then
+        extra_resources_native_trial_abort_service activated-witness
+        return $?
+    fi
+    _extra_trial_saved=$(shared_apply_native_config saved \
+        "$_extra_trial_id" strategies) || {
+        extra_resources_native_trial_abort_service saved-config-readback
+        return $?
+    }
+    _extra_trial_saved_result=$(printf '%s\n' "$_extra_trial_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || {
+        extra_resources_native_trial_abort_service saved-result
+        return $?
+    }
+    _extra_trial_saved_hash=$(printf '%s\n' "$_extra_trial_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || {
+        extra_resources_native_trial_abort_service saved-digest
+        return $?
+    }
+    _extra_trial_saved_mode=$(printf '%s\n' "$_extra_trial_saved" |
+        shared_apply_json_field '.enabled | select(.=="1")') || {
+        extra_resources_native_trial_abort_service saved-mode
+        return $?
+    }
+    if ! {
+        [ "$_extra_trial_saved_result" = committed ] &&
+        [ "$_extra_trial_saved_hash" = "$_extra_trial_old_digest" ] &&
+        [ "$_extra_trial_saved_mode" = 1 ] &&
+        apply_runtime_attest_activated
+    }; then
+        extra_resources_native_trial_abort_service native-config-drift
+        return $?
+    fi
+    # Config was already persisted and unchanged before the trial. This
+    # phase records that attested fact, NOT a second native Config::save.
+    shared_apply_record_service config-saved "$_extra_trial_id" strategies \
+        "$_extra_trial_base" "$_extra_trial_candidate" - || return 70
+    apply_runtime_commit || return 70
+    _extra_trial_final_engine=0
+    _extra_trial_final_monitor=0
+    launcher_is_running "$CHILD_PIDFILE" && _extra_trial_final_engine=1
+    supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" && _extra_trial_final_monitor=1
+    if ! {
+        shared_apply_bundle_service verify "$_extra_trial_id" &&
+        atomic_verify_tree "$_extra_trial_root/release" "$ACTIVE_DIR" &&
+        apply_runtime_probe "$_extra_trial_root/release" 1 &&
+        [ "$_extra_trial_final_engine" = 1 ] &&
+        [ "$_extra_trial_final_monitor" = 1 ]
+    }; then
+        common_error "RESTORE_FAILED: committed native trial state not attested"
+        return 70
+    fi
+    shared_apply_record_service committed "$_extra_trial_id" strategies \
+        "$_extra_trial_base" "$_extra_trial_candidate" - || return 70
+    _extra_trial_status=$(shared_apply_status_observe_service) || return 70
+    [ "$_extra_trial_status" = ready ] || return 70
+    printf 'native-remove-applied=%s\n' "$_extra_trial_id"
+}
+
 # Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
 shared_apply_record_service()
 {
@@ -1918,6 +2115,18 @@ preflight_shared_apply_journal()
 }
 
 # Fixed native journal locator (mockable only by isolated shell extraction).
+# A live unclosed resource transaction and an ordinary start/reconfigure
+# cannot share the engine/IPFW owner. This is only a FAIL-CLOSED observation,
+# not a new lock and not a substitute for setup.lock -> original FD9 recovery.
+extra_resources_block_pending_start_service()
+{
+    _extra_pending=/var/db/zapret2-restyle/extra-resources/transaction
+    if [ -e "$_extra_pending" ] || [ -L "$_extra_pending" ]; then
+        echo "ERROR: unresolved Additional Resources transaction blocks ordinary Start; recover it first" >&2
+        return 69
+    fi
+    return 0
+}
 shared_apply_has_record_service()
 {
     [ -e /var/db/zapret2/shared-apply ] ||
@@ -1942,6 +2151,7 @@ service_with_lifecycle_lock()
         # available, and no journal is created during normal operation.
         case "${1:-}" in
             start|reconfigure)
+                extra_resources_block_pending_start_service || return 69
                 # A committed common owner gets the common native boot path,
                 # never the old template/engine builder. Pending/foreign
                 # evidence still blocks start before any kernel mutation.
@@ -2014,6 +2224,9 @@ service_with_lifecycle_lock()
                 preflight_shared_apply_journal || return 69
                 ;;
             stop|restart)
+                if [ "${1:-}" = restart ]; then
+                    extra_resources_block_pending_start_service || return 69
+                fi
                 # A committed common owner has the same native stop/restart
                 # behavior whether it was applied now or restored at boot.
                 # A pending record never falls through to the legacy engine.
@@ -2085,7 +2298,7 @@ case "${1:-}" in
         # owners as "incomplete" even when engine, supervisor and IPFW pass.
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
-    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-previous-owner|extra-resources-native-restore-previous)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-trial|extra-resources-native-previous-owner|extra-resources-native-restore-previous)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular|strategy-lab-recover)

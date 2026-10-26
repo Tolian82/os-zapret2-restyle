@@ -235,11 +235,13 @@ jobs:
       - name: Check primary revision metadata before costly test matrix
         run: python3.13 scripts/test-current-handoff-identity.py
 
-      - name: Fast saved-Config compiler and native Remove owner/rollback contracts
+      - name: Fast real native Remove trial and original owner rollback contracts
         run: |
           python3.13 scripts/test-extra-resources-native-saved-build.py
           python3.13 scripts/test-extra-resources-transaction.py
           python3.13 scripts/test-shared-apply-operation.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          sh scripts/test-extra-resources-native-trial.sh
 
       - name: Check upstream recovery syntax and fault tests before costly matrix
         shell: bash

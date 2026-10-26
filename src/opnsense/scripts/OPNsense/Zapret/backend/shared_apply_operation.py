@@ -378,6 +378,33 @@ class SharedApplyOperation:
         }
 
 
+def native_remove_trial_context(root: Path = DEFAULT_ROOT,
+                                state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict:
+    """Attest exact old owner still committed before a fresh trial starts.
+
+    The resource journal is already in its durable restarting phase after
+    quarantine, and the sole shared journal still owns the saved previous
+    native common release. No new resource/XML interpreter or second WAL.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from extra_resources_transaction import (
+        _load_journal, _safe_state, _validate_native_owner,
+    )
+    _safe_state(state)
+    resource = _load_journal(state / "transaction")
+    if (resource.get("mode") != "remove" or
+            resource.get("phase") != "restarting" or
+            not resource.get("previous") or resource.get("incoming") != {}):
+        raise SharedOperationError("no prepared, quarantined native Remove trial")
+    old = _validate_native_owner(resource.get("native_owner"))
+    record = SharedApplyOperation(root).read()
+    current = committed_owner(record) if record and record["phase"] in TERMINAL else None
+    if current is None or any(current[k] != old[k] for k in ("id", "page", "candidate")):
+        raise SharedOperationError("saved previous common owner changed before trial")
+    return old
+
+
 def native_remove_rollback_pair(root: Path = DEFAULT_ROOT,
                                 state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict:
     """Require the original durable resource witness and exact Apply journal.
@@ -465,6 +492,7 @@ def main(argv: list[str]) -> int:
         )
     )
     owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
+    remove_trial_context = len(argv) == 2 and argv[1] == "remove-trial-context"
     remove_pair = len(argv) == 2 and argv[1] == "remove-rollback-pair"
     remove_revert = len(argv) == 4 and argv[1] == "remove-revert-committed" and all(
         OP_ID.fullmatch(value) for value in argv[2:]
@@ -480,7 +508,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or owner_witness or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or owner_witness or remove_trial_context or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -493,6 +521,13 @@ def main(argv: list[str]) -> int:
             if not state["safe_to_mutate"]:
                 raise SharedOperationError("native common lifecycle gate blocked: " +
                                            state["reason"])
+        elif remove_trial_context:
+            if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
+                    os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL") != "1"):
+                raise SharedOperationError("missing native Remove trial owner")
+            old = native_remove_trial_context()
+            print("remove-trial-owner " + old["id"] + " " + old["page"] +
+                  " " + old["candidate"])
         elif remove_pair:
             if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
                     os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):

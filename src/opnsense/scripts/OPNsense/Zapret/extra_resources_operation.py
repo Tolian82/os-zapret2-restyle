@@ -77,6 +77,29 @@ class NativeLifecycle:
             raise TransactionError("malformed previous native common owner witness")
         return {"id": match[1], "page": match[2], "candidate": match[3]}
 
+    def start_trial_native_common_apply(self) -> None:
+        """Start the REAL freshly compiled unchanged Strategies+Voice Apply.
+
+        The resource journal is already in 'restarting' after exact
+        quarantine. The native service rechecks it and the old common owner
+        under original inherited FD9 before any new engine/IPFW mutation.
+        """
+        environment = dict(os.environ)
+        environment["EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL"] = "1"
+        result = subprocess.run(
+            [str(self.script), "extra-resources-native-trial"],
+            env=environment, pass_fds=(9,),
+            capture_output=True, text=True, timeout=300, check=False,
+        )
+        lines = result.stdout.strip().splitlines()
+        if result.returncode != 0 or not lines or not re.fullmatch(
+            r"native-remove-applied=[a-f0-9]{32}", lines[-1]
+        ):
+            raise TransactionError(
+                "native common Remove trial not attested: " +
+                (result.stderr or result.stdout).strip()[:300]
+            )
+
     def restore_previous_native_common_apply(self, owner: dict) -> None:
         """Return to the exact pinned native owner, never a generic Start.
 

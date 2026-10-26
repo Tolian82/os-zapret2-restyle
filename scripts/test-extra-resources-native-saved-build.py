@@ -35,7 +35,7 @@ require("'saved-unchanged'" in request and
         "self::materialize($prepared)" in request,
         "original detached workspace writer is not reused")
 gate = section(service, "extra_resources_native_build_saved_service()",
-               "# Internal root-only Apply phases;")
+               "# Restore the original sealed, STOPPED common runtime")
 require('EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0' in gate and
         'EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0' in gate and
         'preflight_shared_apply_journal common-apply' in gate,
@@ -88,8 +88,27 @@ require("def restore_previous_native_common_apply" in worker and
         "extra-resources-native-restore-previous" in worker and
         "extra-resources-native-restore-previous)" in service,
         "exact previous owner is not wired to existing FD9 service")
-require("def start_trial_native_common_apply" not in worker,
-        "rollback boundary mistakenly granted destructive Remove authorization")
+trial_gate = section(service, "extra_resources_native_trial_service()",
+                     "# Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.")
+for must in ("remove-trial-context", "extra_resources_native_build_saved_service",
+             "shared_apply_native_config preflight", "apply_runtime_probe",
+             "shared_apply_record_service prepared",
+             "shared_apply_record_service activating",
+             "apply_runtime_activate", "apply_runtime_attest_activated",
+             "shared_apply_native_config saved",
+             "shared_apply_record_service config-saved",
+             "apply_runtime_commit", "shared_apply_record_service committed",
+             "shared_apply_status_observe_service"):
+    require(must in trial_gate, "native trial omits common Apply part: " + must)
+for forbidden in ("shared_apply_native_config save ", "start_service",
+                  "orchestrator_build_release ", "hostlist-exclude",
+                  "--ipset-exclude", "strategy-lab-start"):
+    require(forbidden not in trial_gate,
+            "native trial duplicated compiler, Config writer or legacy Start: " + forbidden)
+require('extra-resources-native-trial)' in service and
+        'extra_resources_block_pending_start_service || return 69' in service and
+        "def start_trial_native_common_apply" in worker,
+        "trial is not bound to existing inherited FD9 or ordinary startup gate")
 for cmd in (["php", "-l", str(SRC / "shared_apply_request.php")],
             ["sh", "-n", str(SRC / "zapret_service.sh")],
             ["php", str(ROOT / "scripts/test-shared-apply-request.php")]):

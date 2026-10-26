@@ -166,6 +166,7 @@ shared_apply_stop_service() {
 }
 preflight_shared_apply_journal() { echo "shared-guard" >> "$LOG"; }
 service_dispatch() { echo "legacy:$1" >> "$LOG"; }
+extra_resources_block_pending_start_service() { [ "${PENDING:-0}" = 0 ]; }
 
 check_route() {
     expected="$1"; shift
@@ -190,6 +191,14 @@ check_route 0 stop
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "stop dropped to legacy"
 check_route 0 restart
 [ "$(tr '\n' ' ' < "$LOG")" = "common-stop:committed $ID voice common:committed $ID voice " ] || fail "restart did not keep native owner"
+# Ordinary Start/Restart must not reactivate a trial/cached release while
+# the original resource transaction has not been fully reconciled.
+PENDING=1
+for action in start reconfigure restart; do
+    check_route 69 "$action"
+    [ ! -s "$LOG" ] || fail "pending resource transaction mutated native owner"
+done
+PENDING=0
 STOP_OK=1
 check_route 70 restart
 [ "$(cat "$LOG")" = "common-stop:committed $ID voice" ] || fail "failed stop started replacement"
