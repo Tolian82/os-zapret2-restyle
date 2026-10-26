@@ -285,6 +285,11 @@ strategy_lab_internal_dispatch()
             preflight_shared_apply_journal || return 69
             stop_service
             ;;
+        extra-resources-native-recover-prepared)
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
+            extra_resources_native_recover_prepared_service "${2:-}" "${3:-}" "${4:-}"
+            ;;
         extra-resources-native-restore-previous)
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
             [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
@@ -1584,6 +1589,69 @@ shared_apply_record_service()
 # Native committed owners need the existing read-only full-runtime/IPFW
 # witness, never legacy PID-plus-any-divert status.
 
+# Cold interruption at PREPARED: original Apply has durably recorded the
+# candidate but has NOT invoked apply_runtime_activate. Reuse the canonical
+# common recover-prepared under original FD9 only after proving the EXACT old
+# stopped runtime, old sealed Config, empty process inventory and managed IPFW.
+# A foreign/advanced phase never reaches the terminal journal write.
+extra_resources_native_recover_prepared_service()
+{
+    [ "$#" -eq 3 ] || return 64
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
+    _extra_prepared_old_id="$1"
+    _extra_prepared_old_page="$2"
+    _extra_prepared_old_hash="$3"
+    case "$_extra_prepared_old_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_prepared_old_id}" -eq 32 ] || return 69
+    case "$_extra_prepared_old_page" in strategies|voice) ;; *) return 69 ;; esac
+    case "$_extra_prepared_old_hash" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_prepared_old_hash}" -eq 64 ] || return 69
+    _extra_prepared_probe=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69
+    if [ "$_extra_prepared_probe" = "remove-prepared none" ]; then
+        printf '%s\n' native-remove-prepared=not-needed
+        return 0
+    fi
+    set -- $_extra_prepared_probe
+    [ "$#" -eq 5 ] && [ "$1" = remove-prepared ] || return 69
+    _extra_prepared_trial="$2"
+    [ "$3" = "$_extra_prepared_old_id" ] &&
+    [ "$4" = "$_extra_prepared_old_page" ] &&
+    [ "$5" = "$_extra_prepared_old_hash" ] || return 69
+    case "$_extra_prepared_trial" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_prepared_trial}" -eq 32 ] &&
+    [ "$_extra_prepared_trial" != "$_extra_prepared_old_id" ] || return 69
+    shared_apply_bundle_service verify "$_extra_prepared_trial" || return 69
+    shared_apply_bundle_service verify "$_extra_prepared_old_id" || return 69
+    _extra_prepared_saved=$(shared_apply_native_config saved \
+        "$_extra_prepared_old_id" "$_extra_prepared_old_page") || return 69
+    _extra_prepared_result=$(printf '%s\n' "$_extra_prepared_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _extra_prepared_hash=$(printf '%s\n' "$_extra_prepared_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+    _extra_prepared_mode=$(printf '%s\n' "$_extra_prepared_saved" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    [ "$_extra_prepared_result" = committed ] &&
+    [ "$_extra_prepared_hash" = "$_extra_prepared_old_hash" ] &&
+    [ "$_extra_prepared_mode" = 1 ] || return 69
+    _extra_prepared_work=$(shared_apply_workspace "$_extra_prepared_old_id") || return 69
+    [ -d "$_extra_prepared_work/release" ] &&
+    [ ! -L "$_extra_prepared_work/release" ] &&
+    [ -d "$ACTIVE_DIR" ] &&
+    [ ! -L "$ACTIVE_DIR" ] || return 69
+    atomic_verify_tree "$_extra_prepared_work/release" "$ACTIVE_DIR" || return 69
+    ! launcher_is_running "$CHILD_PIDFILE" &&
+    ! supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 69
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    firewall_shared_runtime verify "$_extra_prepared_work/release" - || return 69
+    shared_apply_recover_prepared_service "prepared $_extra_prepared_trial strategies" || return 70
+    _extra_prepared_status=$(shared_apply_inspect_service) || return 70
+    [ "$_extra_prepared_status" = restored ] || return 70
+    printf 'native-remove-prepared-restored=%s\n' "$_extra_prepared_old_id"
+}
+
 # Restore ONLY the previous saved common owner pinned in the existing
 # resource and shared Apply journals. Called after the original extra Lua/BIN
 # bytes are back; never recompile or invent any Strategies/Voice arguments.
@@ -2298,7 +2366,7 @@ case "${1:-}" in
         # owners as "incomplete" even when engine, supervisor and IPFW pass.
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
-    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-trial|extra-resources-native-previous-owner|extra-resources-native-restore-previous)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-trial|extra-resources-native-previous-owner|extra-resources-native-recover-prepared|extra-resources-native-restore-previous)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular|strategy-lab-recover)

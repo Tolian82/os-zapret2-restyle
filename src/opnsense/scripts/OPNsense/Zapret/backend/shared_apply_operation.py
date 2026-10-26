@@ -378,6 +378,44 @@ class SharedApplyOperation:
         }
 
 
+def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
+                                 state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict | None:
+    """Identify ONLY a pre-mutation Remove crash at shared phase 'prepared'.
+
+    The resource journal MUST already own the trial. Returning None for
+    terminal/other phases does not authorize their recovery or any Stop.
+    The FD9 shell separately proves the old sealed runtime, absent engine,
+    monitor and scoped IPFW before calling the original recover-prepared.
+    """
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from extra_resources_transaction import (
+        _load_journal, _safe_state, _validate_native_owner,
+    )
+    _safe_state(state)
+    resource = _load_journal(state / "transaction")
+    if (resource.get("mode") != "remove" or
+            resource.get("phase") != "restarting" or
+            not resource.get("previous") or resource.get("incoming") != {}):
+        raise SharedOperationError("no quarantined Remove recovery journal")
+    owner = _validate_native_owner(resource.get("native_owner"))
+    record = SharedApplyOperation(root).read()
+    if record is None:
+        raise SharedOperationError("native common journal absent during Remove")
+    if record["phase"] != "prepared":
+        return None
+    trial = record["detail"]
+    previous = record.get("previous")
+    if (not isinstance(previous, dict) or
+            any(previous[k] != owner[k] for k in ("id", "page", "candidate")) or
+            trial["page"] != "strategies" or trial["changed_fields"] or
+            trial["id"] == owner["id"] or
+            trial["base"] != owner["candidate"] or
+            trial["candidate"] != owner["candidate"]):
+        raise SharedOperationError("foreign or changed native Remove PREPARED owner")
+    return {"id": trial["id"], "old": owner}
+
+
 def native_remove_trial_context(root: Path = DEFAULT_ROOT,
                                 state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict:
     """Attest exact old owner still committed before a fresh trial starts.
@@ -492,6 +530,7 @@ def main(argv: list[str]) -> int:
         )
     )
     owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
+    remove_prepared_context = len(argv) == 2 and argv[1] == "remove-prepared-context"
     remove_trial_context = len(argv) == 2 and argv[1] == "remove-trial-context"
     remove_pair = len(argv) == 2 and argv[1] == "remove-rollback-pair"
     remove_revert = len(argv) == 4 and argv[1] == "remove-revert-committed" and all(
@@ -508,7 +547,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or owner_witness or remove_trial_context or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -521,6 +560,17 @@ def main(argv: list[str]) -> int:
             if not state["safe_to_mutate"]:
                 raise SharedOperationError("native common lifecycle gate blocked: " +
                                            state["reason"])
+        elif remove_prepared_context:
+            if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
+                    os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):
+                raise SharedOperationError("missing original Remove recovery owner")
+            proof = native_remove_prepared_trial()
+            if proof is None:
+                print("remove-prepared none")
+            else:
+                old = proof["old"]
+                print("remove-prepared " + proof["id"] + " " + old["id"] +
+                      " " + old["page"] + " " + old["candidate"])
         elif remove_trial_context:
             if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
                     os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL") != "1"):
