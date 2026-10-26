@@ -17,7 +17,7 @@ cat > "$TMP/fakepython" <<'MOCK'
 if [ "${TRIAL_STATE:-prepared}" = other ]; then
     echo 'remove-prepared none'
 else
-    printf 'remove-prepared %s %s voice %s\n' "$NEW" "$OLD" "$HASH"
+    printf 'remove-prepared %s %s %s voice %s\n' "${TRIAL_STATE:-prepared}" "$NEW" "$OLD" "$HASH"
 fi
 MOCK
 chmod 700 "$TMP/fakepython"
@@ -56,10 +56,15 @@ shared_apply_recover_prepared_service() {
     echo "recover:$1" >> "$LOG"
     [ "$1" = "prepared $NEW strategies" ]
 }
+shared_apply_recover_activating_pristine_service() {
+    echo "recover-pristine:$1" >> "$LOG"
+    [ "$1" = "activating $NEW strategies $OLD voice" ] &&
+    [ "$PRISTINE_FAIL" = 0 ]
+}
 shared_apply_inspect_service() { echo restored; }
 reset() {
     : > "$LOG"
-    SEAL_FAIL=0; TREE_FAIL=0; DRIFT=0; ENGINE=0; IPFW_FAIL=0
+    SEAL_FAIL=0; TREE_FAIL=0; DRIFT=0; ENGINE=0; IPFW_FAIL=0; PRISTINE_FAIL=0
     TRIAL_STATE=prepared; export TRIAL_STATE
 }
 run() {
@@ -73,6 +78,11 @@ run() {
 reset; run 0
 grep -Fqx "native-remove-prepared-restored=$OLD" "$TMP/output" || fail receipt
 grep -Fqx "recover:prepared $NEW strategies" "$LOG" || fail "canonical recovery not used"
+reset; TRIAL_STATE=activating; export TRIAL_STATE; run 0
+grep -Fqx "recover-pristine:activating $NEW strategies $OLD voice" "$LOG" ||
+    fail "activating bypassed original pristine recovery"
+reset; TRIAL_STATE=activating; PRISTINE_FAIL=1; export TRIAL_STATE; run 70
+[ ! -s "$TMP/output" ] || fail "failed pristine recovery falsely successful"
 for failure in drift engine ipfw tree seal; do
     reset
     case "$failure" in
