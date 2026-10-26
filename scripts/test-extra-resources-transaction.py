@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import stat
 from pathlib import Path
 import sys
 import tempfile
@@ -449,10 +451,28 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertFalse((self.root / "lua/orphan.lua").exists())
         self.assertFalse((self.root / "files/fake/user_dynamic.bin").exists())
 
+    @staticmethod
+    def inode_metadata(path):
+        observed = path.lstat()
+        return (observed.st_dev, observed.st_ino, observed.st_uid,
+                observed.st_gid, stat.S_IMODE(observed.st_mode),
+                observed.st_mtime_ns)
+
+    def set_distinct_resource_metadata(self):
+        for name, mode, timestamp in (
+            ("lua/orphan.lua", 0o640, 1680000000123456789),
+            ("files/fake/user_dynamic.bin", 0o600, 1690000000234567890),
+        ):
+            path = self.root / name
+            os.chmod(path, mode)
+            os.utime(path, ns=(timestamp, timestamp))
+
     def test_remove_native_gui_apply_failure_restores_every_byte(self):
+        self.set_distinct_resource_metadata()
         plan, config = self.removal_plan()
         self.trial_route(fail=True)
-        previous = {name: (self.root / name).read_bytes()
+        previous = {name: ((self.root / name).read_bytes(),
+                           self.inode_metadata(self.root / name))
                     for name in ("lua/orphan.lua", "files/fake/user_dynamic.bin")}
         with self.assertRaisesRegex(tx.TransactionError, "REMOVE_FAILED_RESTORED"):
             tx.remove_with_native_trial(
@@ -462,8 +482,9 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertEqual(self.lifecycle.stops, 1)
         self.assertEqual(self.lifecycle.starts, 1)
         self.assertEqual(self.lifecycle.native_restore_calls, 1)
-        for name, data in previous.items():
+        for name, (data, metadata) in previous.items():
             self.assertEqual((self.root / name).read_bytes(), data)
+            self.assertEqual(self.inode_metadata(self.root / name), metadata)
         self.assertFalse((self.state / "transaction").exists())
         self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
 
@@ -505,6 +526,65 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertFalse((self.root/"lua/orphan.lua").exists())
 
     def test_remove_hard_interrupt_retains_recoverable_journal(self):
+        self.set_distinct_resource_metadata()
+        plan, config = self.removal_plan()
+        self.trial_route(crash=True)
+        original = {name: self.inode_metadata(self.root / name)
+                    for name in ("lua/orphan.lua", "files/fake/user_dynamic.bin")}
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        journal = self.state / "transaction/journal.json"
+        self.assertTrue(journal.is_file())
+        state = json.loads(journal.read_text())
+        self.assertEqual(state["native_owner"], {
+            "id": "a"*32, "page": "voice", "candidate": "b"*64})
+        self.assertEqual(set(state["original_inodes"]), set(original))
+        self.assertTrue((self.root / tx.QUARANTINE_NAME).is_dir())
+        self.assertFalse((self.root / "lua/orphan.lua").exists())
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual(self.lifecycle.stops, 1)
+        self.assertTrue((self.root / "lua/orphan.lua").is_file())
+        self.assertTrue((self.root / "files/fake/user_dynamic.bin").is_file())
+        for name, metadata in original.items():
+            self.assertEqual(self.inode_metadata(self.root / name), metadata)
+        self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
+        self.assertTrue(self.lifecycle.running)
+
+    def test_remove_missing_quarantined_inode_refuses_fake_byte_rollback(self):
+        plan, config = self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        original = self.root / tx.QUARANTINE_NAME / "lua/orphan.lua"
+        original.unlink()  # backup bytes remain, but metadata/inode are lost
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue((self.state / "transaction/journal.json").exists())
+        self.assertTrue((self.state / "transaction/backup/lua/orphan.lua").is_file())
+        self.assertFalse(self.lifecycle.running)
+
+    def test_remove_replaced_identical_bytes_inode_fails_closed(self):
+        plan, config = self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        original = self.root / tx.QUARANTINE_NAME / "lua/orphan.lua"
+        body = original.read_bytes()
+        replacement = original.with_name("replacement.tmp")
+        replacement.write_bytes(body)
+        os.replace(replacement, original)  # same SHA256, guaranteed different inode
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue((self.state / "transaction/journal.json").exists())
+        self.assertFalse(self.lifecycle.running)
+
+    def test_remove_missing_original_inode_witness_refuses_before_stop(self):
         plan, config = self.removal_plan()
         self.trial_route(crash=True)
         with self.assertRaises(KeyboardInterrupt):
@@ -512,17 +592,14 @@ class TestExactReconciliation(unittest.TestCase):
                 plan["witness"]["inventory_sha256"], self.root,
                 self.state, self.lifecycle, config=config)
         journal = self.state / "transaction/journal.json"
-        self.assertTrue(journal.is_file())
-        self.assertEqual(json.loads(journal.read_text())["native_owner"], {
-            "id": "a"*32, "page": "voice", "candidate": "b"*64})
-        self.assertTrue((self.root / tx.QUARANTINE_NAME).is_dir())
-        self.assertFalse((self.root / "lua/orphan.lua").exists())
-        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
-        self.assertEqual(self.lifecycle.stops, 1)
-        self.assertTrue((self.root / "lua/orphan.lua").is_file())
-        self.assertTrue((self.root / "files/fake/user_dynamic.bin").is_file())
-        self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
-        self.assertTrue(self.lifecycle.running)
+        record = json.loads(journal.read_text())
+        record.pop("original_inodes")
+        journal.write_text(json.dumps(record))
+        stops = self.lifecycle.stops
+        with self.assertRaisesRegex(tx.TransactionError, "original Remove inode witnesses"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertEqual(self.lifecycle.stops, stops)
+        self.assertTrue(journal.exists())
 
     def test_interrupted_remove_refuses_unqualified_recovery_before_stop(self):
         plan, config = self.removal_plan()
