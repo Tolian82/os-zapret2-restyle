@@ -56,8 +56,6 @@ try:
  print("phase="+phase)
  print("operation="+operation)
  print("revision="+revision)
- print("lua="+str(count("lua")))
- print("bin="+str(count("bin")))
  print("detail="+detail)
  # The GUI inventory already has a validated, atomically refreshed cache.
  # A recovery receipt ("restored") is an operation outcome, NOT evidence
@@ -68,6 +66,10 @@ try:
   sys.path.insert(0,os.path.dirname(os.path.realpath(sys.argv[2])))
   from extra_resources_inventory_cache import read_cached
   inventory=read_cached(Path(sys.argv[1]).parent)
+  # Live counts are derived from the same validated inventory as installed,
+  # never from stale transaction receipt fields in status.json.
+  print("lua="+str(sum(item["origin"]=="other" for item in inventory["lua"])))
+  print("bin="+str(sum(item["origin"]=="other" for item in inventory["bin"])))
   print("installed="+("1" if inventory["installed"] else "0"))
  except Exception:
   print("installed=unknown")

@@ -176,14 +176,17 @@ assert.equal(extraOperationTerminal({operation:id,phase:'ready',busy:false},''),
         checked = subprocess.run(["sh", str(LAUNCHER), "status"],
                                  text=True, capture_output=True, env=env)
         require(checked.returncode == 0, checked.stderr)
+        require("lua=1" in checked.stdout and "bin=0" in checked.stdout,
+                "status counts must reflect current non-upstream cache entries")
         require("phase=restored" in checked.stdout and
                 f"installed={expected}" in checked.stdout,
                 "post-recovery status failed to resolve cached installed flag")
     cache.write_text("{}")
     checked = subprocess.run(["sh", str(LAUNCHER), "status"],
                              text=True, capture_output=True, env=env)
-    require("installed=unknown" in checked.stdout,
-            "missing/invalid cache was wrongly interpreted as uninstalled")
+    require("installed=unknown" in checked.stdout and
+            "lua=" not in checked.stdout and "bin=" not in checked.stdout,
+            "invalid cache must not reuse stale receipt counts")
 
     # Execute actual UI status switch, not a synthetic second predicate.
     status_fun = re.search(
