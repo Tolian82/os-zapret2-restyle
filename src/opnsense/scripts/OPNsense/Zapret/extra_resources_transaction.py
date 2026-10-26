@@ -295,17 +295,23 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             if is_remove and not callable(restore_native):
                 raise TransactionError("native Remove rollback route is not available")
             if is_remove:
-                # A failed native trial may already have atomically restored
-                # the PREVIOUS stopped release and terminal common journal.
-                # A blind Strategy Lab stop here would then fall through to
-                # the legacy Stop path over a restored native common owner.
-                # Only stop if a real running owner is still observed; mixed
-                # / nonterminal owners are refused by the native service.
-                try:
-                    lifecycle.assert_stopped()
-                except Exception:
-                    lifecycle.stop()
-                    lifecycle.assert_stopped()
+                # Power-cut after native common PREPARED but before ANY kernel
+                # mutation: existing normal status/Stop refuse the nonterminal
+                # common journal. Only the original FD9 read-only attestation
+                # may close that journal, after proving the OLD stopped
+                # release and empty engine/IPFW. Never skip Stop on a mere
+                # status==2 or a guessed/foreign trial.
+                complete_prepared = getattr(
+                    lifecycle, "recover_prepared_native_common_apply", None)
+                prepared_old_stopped = bool(complete_prepared(native_owner)) if (
+                    journal.get("phase") == "restarting" and
+                    callable(complete_prepared)) else False
+                if not prepared_old_stopped:
+                    try:
+                        lifecycle.assert_stopped()
+                    except Exception:
+                        lifecycle.stop()
+                        lifecycle.assert_stopped()
             else:
                 lifecycle.stop()
                 lifecycle.assert_stopped()

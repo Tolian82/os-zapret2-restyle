@@ -100,6 +100,34 @@ class NativeLifecycle:
                 (result.stderr or result.stdout).strip()[:300]
             )
 
+    def recover_prepared_native_common_apply(self, owner: dict) -> bool:
+        """Cold-complete ONLY a proven zero-mutation shared PREPARED trial.
+
+        The original FD9 shell checks the pinned resource+common journals,
+        original sealed Config and installed tree, no orphan processes and
+        empty managed IPFW BEFORE calling existing recover-prepared.
+        """
+        from extra_resources_transaction import _validate_native_owner
+        old = _validate_native_owner(owner)
+        environment = dict(os.environ)
+        environment["EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE"] = "1"
+        result = subprocess.run(
+            [str(self.script), "extra-resources-native-recover-prepared",
+             old["id"], old["page"], old["candidate"]],
+            env=environment, pass_fds=(9,), capture_output=True,
+            text=True, timeout=180, check=False,
+        )
+        if result.returncode != 0:
+            raise TransactionError("RESTORE_FAILED: prepared native trial not qualified")
+        last = result.stdout.strip().splitlines()
+        if not last:
+            raise TransactionError("RESTORE_FAILED: missing prepared recovery receipt")
+        if last[-1] == "native-remove-prepared=not-needed":
+            return False
+        if last[-1] == "native-remove-prepared-restored=" + old["id"]:
+            return True
+        raise TransactionError("RESTORE_FAILED: foreign prepared recovery receipt")
+
     def restore_previous_native_common_apply(self, owner: dict) -> None:
         """Return to the exact pinned native owner, never a generic Start.
 

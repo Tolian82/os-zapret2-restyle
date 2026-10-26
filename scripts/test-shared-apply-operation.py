@@ -11,7 +11,7 @@ import unittest
 
 BACKEND=Path(__file__).resolve().parents[1]/"src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0,str(BACKEND))
-from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness,native_remove_rollback_pair,native_remove_trial_context
+from shared_apply_operation import SharedApplyOperation,SharedOperationError,committed_owner,native_lifecycle_gate,native_committed_owner_witness,native_remove_rollback_pair,native_remove_trial_context,native_remove_prepared_trial
 
 def detail(ident="1"*32):
     return {"id":ident,"page":"voice","base":"a"*64,
@@ -44,6 +44,46 @@ class TestJournal(unittest.TestCase):
             target.write_text(json.dumps(record))
             with self.assertRaisesRegex(SharedOperationError,"invalid common Apply record"):
                 j.read()
+
+    def test_remove_prepared_cold_recovery_has_exact_old_journal_owner(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = SharedApplyOperation(root/"shared-apply")
+            old = detail("a"*32)
+            for phase in ("prepared","activating","activated","config-saved","committed"):
+                store.advance(phase, old)
+            state = root/"extra-resources"
+            (state/"transaction").mkdir(parents=True)
+            journal = state/"transaction/journal.json"
+            resource = {"schema":1,"mode":"remove","phase":"restarting",
+                        "previous":{"lua/extra.lua":"e"*64},"incoming":{},
+                        "source_commit":"f"*40,
+                        "native_owner":{"id":old["id"],"page":old["page"],
+                                        "candidate":old["candidate"]}}
+            journal.write_text(json.dumps(resource))
+            self.assertIsNone(native_remove_prepared_trial(store.root,state))
+            new = {"id":"b"*32,"page":"strategies",
+                   "base":old["candidate"],"candidate":old["candidate"],
+                   "changed_fields":[]}
+            store.advance("prepared",new)
+            self.assertEqual(native_remove_prepared_trial(store.root,state),
+                             {"id":new["id"],"old":resource["native_owner"]})
+            before = (store.root/"operation.json").read_bytes()
+            for bad in ("stopping","publishing","completed"):
+                resource["phase"] = bad
+                journal.write_text(json.dumps(resource))
+                with self.assertRaisesRegex(SharedOperationError,"no quarantined"):
+                    native_remove_prepared_trial(store.root,state)
+            resource["phase"]="restarting"
+            resource["native_owner"]["id"]="c"*32
+            journal.write_text(json.dumps(resource))
+            with self.assertRaisesRegex(SharedOperationError,"foreign or changed"):
+                native_remove_prepared_trial(store.root,state)
+            resource["native_owner"]["id"]=old["id"]
+            journal.write_text(json.dumps(resource))
+            self.assertEqual((store.root/"operation.json").read_bytes(),before)
+            store.recover_prepared(new["id"],lambda:True)
+            self.assertIsNone(native_remove_prepared_trial(store.root,state))
 
     def test_native_trial_requires_existing_pinned_old_owner_and_restart_phase(self):
         with tempfile.TemporaryDirectory() as tmp:

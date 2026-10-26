@@ -59,6 +59,31 @@ class Lifecycle:
 
 
 class TestNativeRecoveryReceipt(unittest.TestCase):
+    def test_cold_prepared_native_recovery_receipt_is_exact(self):
+        from extra_resources_operation import NativeLifecycle
+        from extra_resources_transaction import TransactionError as NativeTransactionError
+        lifecycle = NativeLifecycle.__new__(NativeLifecycle)
+        lifecycle.script = Path("/fake-native-service")
+        owner = {"id":"a"*32,"page":"voice","candidate":"b"*64}
+        for message,expected in (
+            ("native-remove-prepared=not-needed\n",False),
+            ("native-remove-prepared-restored="+"a"*32+"\n",True),
+        ):
+            with patch("extra_resources_operation.subprocess.run",
+                       return_value=SimpleNamespace(returncode=0,stdout=message,
+                                                     stderr="")) as runner:
+                self.assertIs(lifecycle.recover_prepared_native_common_apply(owner), expected)
+                self.assertEqual(runner.call_args.kwargs["pass_fds"], (9,))
+                self.assertEqual(runner.call_args.kwargs["env"][
+                    "EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE"],"1")
+        for returncode,stdout in ((70,""),(0,""),(0,"fake-success\n"),
+                                  (0,"native-remove-prepared-restored="+"c"*32+"\n")):
+            with patch("extra_resources_operation.subprocess.run",
+                       return_value=SimpleNamespace(returncode=returncode,
+                                                     stdout=stdout,stderr="")):
+                with self.assertRaisesRegex(NativeTransactionError,"RESTORE_FAILED"):
+                    lifecycle.recover_prepared_native_common_apply(owner)
+
     def test_fresh_native_remove_trial_requires_full_success_receipt(self):
         from extra_resources_operation import NativeLifecycle
         from extra_resources_transaction import TransactionError as NativeTransactionError
@@ -441,6 +466,43 @@ class TestExactReconciliation(unittest.TestCase):
             self.assertEqual((self.root / name).read_bytes(), data)
         self.assertFalse((self.state / "transaction").exists())
         self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
+
+    def test_remove_cold_prepared_recovery_skips_legacy_stop(self):
+        plan,config=self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"],self.root,
+                self.state,self.lifecycle,config=config)
+        self.assertFalse(self.lifecycle.running)
+        stops=self.lifecycle.stops
+        observed=[]
+        def prepared(owner):
+            observed.append(owner)
+            return True
+        self.lifecycle.recover_prepared_native_common_apply=prepared
+        self.assertEqual(tx.recover(self.root,self.state,self.lifecycle),"RESTORED")
+        self.assertEqual(self.lifecycle.stops,stops)
+        self.assertEqual(observed,[{"id":"a"*32,"page":"voice","candidate":"b"*64}])
+        self.assertTrue(self.lifecycle.running)
+        self.assertFalse((self.state/"transaction").exists())
+
+    def test_remove_cold_prepared_refusal_keeps_original_journal(self):
+        plan,config=self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"],self.root,
+                self.state,self.lifecycle,config=config)
+        before=self.lifecycle.stops
+        def refuse(owner):
+            raise tx.TransactionError("foreign prepared common journal")
+        self.lifecycle.recover_prepared_native_common_apply=refuse
+        with self.assertRaisesRegex(tx.TransactionError,"RESTORE_FAILED"):
+            tx.recover(self.root,self.state,self.lifecycle)
+        self.assertEqual(self.lifecycle.stops,before)
+        self.assertTrue((self.state/"transaction/journal.json").exists())
+        self.assertFalse((self.root/"lua/orphan.lua").exists())
 
     def test_remove_hard_interrupt_retains_recoverable_journal(self):
         plan, config = self.removal_plan()

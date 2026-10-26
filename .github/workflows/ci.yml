@@ -242,6 +242,7 @@ jobs:
           python3.13 scripts/test-shared-apply-operation.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           sh scripts/test-extra-resources-native-trial.sh
+          sh scripts/test-extra-resources-native-prepared-recovery.sh
 
       - name: Check upstream recovery syntax and fault tests before costly matrix
         shell: bash
