@@ -10,11 +10,15 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from contextlib import redirect_stdout
+from io import StringIO
+import os
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret"))
 from extra_resources_preflight import PreflightError
 from extra_resources_reconcile import make_remove_plan
+import extra_resources_operation as resource_worker
 
 NATIVE_LUA = b"function upstream() return true end\n"
 NATIVE_BIN = b"\x16\x03\x03\x00\x02\x01\x00"
@@ -138,6 +142,55 @@ class TestReadOnlyRemovalPlanner(unittest.TestCase):
                    side_effect=[head, "b" * 40]):
             with self.assertRaisesRegex(PreflightError, "inventory changed"):
                 self.plan()
+
+    def test_locked_service_remove_plan_reuses_original_git_planner_without_mutation(self):
+        # One native CLI plan path, no second compatibility test and no status
+        # write. The synthetic lifecycle below stands in only for installed FD9.
+        self.managed.write_text(json.dumps({
+            "schema": 1, "files": {"lua/addon.lua": self.digest(EXTRA_LUA)}
+        }))
+        originals = {str(p): p.read_bytes() for p in (
+            self.root / "lua/native.lua", self.root / "lua/addon.lua",
+            self.root / "files/fake/native.bin",
+            self.root / "files/fake/manual.bin", self.config, self.managed,
+        )}
+        real = self.plan()
+        class NativeStarted:
+            def assert_started(self):
+                return "42:43"
+            def stop(self):
+                raise AssertionError("plan attempted Stop")
+        output = StringIO()
+        state = self.managed.parent
+        with (
+            patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "1"}),
+            patch.object(resource_worker, "NativeLifecycle", NativeStarted),
+            patch.object(resource_worker, "RUNTIME", self.root),
+            patch.object(resource_worker, "STATE", state),
+            patch.object(resource_worker, "make_remove_plan",
+                         side_effect=lambda runtime, managed, _: make_remove_plan(
+                             runtime, managed, self.config)),
+            redirect_stdout(output),
+        ):
+            result = resource_worker.main(["worker", "plan"])
+        self.assertEqual(result, 0)
+        result = json.loads(output.getvalue().split("=", 1)[1])
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["status"], "dry_run_only")
+        self.assertEqual(result["inventory_sha256"], real["witness"]["inventory_sha256"])
+        self.assertEqual((result["lua"], result["bin"], result["total"]), (1, 1, 2))
+        self.assertEqual({name: Path(name).read_bytes() for name in originals}, originals)
+        self.assertFalse((state / "status.json").exists())
+        self.assertFalse((state / "transaction").exists())
+
+    def test_remove_plan_refuses_without_setup_lock_before_any_writes(self):
+        with (
+            patch.dict(os.environ, {"EXTRA_RESOURCES_SETUP_LOCK_OWNER": "0"}),
+            patch.object(resource_worker, "NativeLifecycle",
+                         side_effect=AssertionError("must refuse before lifecycle")),
+        ):
+            self.assertNotEqual(resource_worker.main(["worker", "plan"]), 0)
+        self.assertFalse((self.managed.parent / "status.json").exists())
 
     def test_invalid_directory_and_manual_non_regular_file_block(self):
         (self.root / "files/fake/manual.bin").unlink()

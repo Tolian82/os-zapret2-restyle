@@ -30,6 +30,24 @@ def require(test: bool, reason: str) -> None:
 for ident in ("zapretExtraInstall", "zapretExtraInstallText",
               "zapretExtraProgress", "zapretExtraState"):
     require(view.count(f'id="{ident}"') == 1, f"duplicate/missing GUI id: {ident}")
+for ident in ("zapretExtraRemove", "zapretExtraRemoveText", "zapretExtraRemoveProgress", "zapretExtraRemoveRow"):
+    require(view.count(f'id="{ident}"') == 1, f"duplicate/missing Remove UI: {ident}")
+require("Удалить дополнительные ресурсы" in view and "Remove Additional Resources" in view,
+        "native Advanced-only RU/EN Remove label missing")
+require("show_advanced_frm_GeneralSettings" in view and
+        "updateResourceAdvancedVisibility()" in view and
+        "isResourceAdvancedEnabled()" in view and
+        "observer.observe(resourceAdvancedIcon" in view,
+        "native Advanced ON/OFF is not tied to immediate Remove visibility")
+require("$('#zapretExtraRemove').css({" in view and
+        "$('#zapretExtraInstall').outerWidth()" in view and
+        "$('#zapretExtraInstall').outerHeight()" in view,
+        "Remove and Install button sizes are not linked")
+require("/api/zapret/service/resourcesRemovePlan" in view and
+        "data.ready !== false" in view and
+        "extrasText.removeNotReady" in view and
+        "url: '/api/zapret/service/resourcesRemove'," not in view,
+        "Remove GUI must show a read-only plan, NOT authorize real file deletion")
 require("Установить дополнительные ресурсы" in view and
         "Install Additional Resources" in view, "final agreed RU/EN labels absent")
 require("Сначала запустите Zapret2" in view and
@@ -54,6 +72,15 @@ require("extraOperationTerminal(data, extraExpectedOperation)" in view and
 require("$('#zapretExtraInstall').off('click').on('click'" in view,
         "manual click handler absent")
 require("function refreshExtrasStatus()" in view, "read-only status polling absent")
+require("resourcesRemovePlanAction(): array" in php and
+        "'zapret extra_resources_remove_plan'" in php and
+        "return ['status' => 'unavailable', 'ready' => false]" in php and
+        "'ready' => false" in php,
+        "Remove planning endpoint must be read-only and non-authorizing")
+require("[extra_resources_remove_plan]" in actions and
+        "extra_resources_launcher.sh plan" in actions and
+        "extra-resources-remove-plan" in launcher,
+        "read-only native Remove plan configd routing absent")
 require("resourcesStatusAction(): array" in php and
         "resourcesInstallAction(): array" in php, "controller endpoints missing")
 require("$runtime['service'] !== 'started'" in php and

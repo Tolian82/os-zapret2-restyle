@@ -80,6 +80,15 @@ except Exception:
             /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
             "$SERVICE_SCRIPT" extra-resources-preview-saved
         ;;
+    plan)
+        [ "$#" -eq 1 ] || exit 64
+        [ -x "$SERVICE_SCRIPT" ] && [ -x "$LOCKF_BIN" ] || exit 69
+        # Same setup.lock -> original FD9; no daemon, status write,
+        # Config mutation, resource removal or runtime compilation.
+        exec "$LOCKF_BIN" -s -t 10 "$LOCK_FILE" \
+            /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+            "$SERVICE_SCRIPT" extra-resources-remove-plan
+        ;;
     install|recover)
         if [ "$MODE" = install ]; then
             [ "$#" -eq 2 ] || exit 64
@@ -111,7 +120,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan}' >&2
         exit 64
         ;;
 esac
