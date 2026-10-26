@@ -402,7 +402,7 @@ def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
     record = SharedApplyOperation(root).read()
     if record is None:
         raise SharedOperationError("native common journal absent during Remove")
-    if record["phase"] != "prepared":
+    if record["phase"] not in ("prepared", "activating"):
         return None
     trial = record["detail"]
     previous = record.get("previous")
@@ -412,8 +412,8 @@ def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
             trial["id"] == owner["id"] or
             trial["base"] != owner["candidate"] or
             trial["candidate"] != owner["candidate"]):
-        raise SharedOperationError("foreign or changed native Remove PREPARED owner")
-    return {"id": trial["id"], "old": owner}
+        raise SharedOperationError("foreign or changed native Remove pre-activation owner")
+    return {"id": trial["id"], "phase": record["phase"], "old": owner}
 
 
 def native_remove_trial_context(root: Path = DEFAULT_ROOT,
@@ -569,7 +569,7 @@ def main(argv: list[str]) -> int:
                 print("remove-prepared none")
             else:
                 old = proof["old"]
-                print("remove-prepared " + proof["id"] + " " + old["id"] +
+                print("remove-prepared " + proof["phase"] + " " + proof["id"] + " " + old["id"] +
                       " " + old["page"] + " " + old["candidate"])
         elif remove_trial_context:
             if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or

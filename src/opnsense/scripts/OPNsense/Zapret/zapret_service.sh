@@ -1614,11 +1614,13 @@ extra_resources_native_recover_prepared_service()
         return 0
     fi
     set -- $_extra_prepared_probe
-    [ "$#" -eq 5 ] && [ "$1" = remove-prepared ] || return 69
-    _extra_prepared_trial="$2"
-    [ "$3" = "$_extra_prepared_old_id" ] &&
-    [ "$4" = "$_extra_prepared_old_page" ] &&
-    [ "$5" = "$_extra_prepared_old_hash" ] || return 69
+    [ "$#" -eq 6 ] && [ "$1" = remove-prepared ] || return 69
+    _extra_prepared_phase="$2"
+    _extra_prepared_trial="$3"
+    [ "$4" = "$_extra_prepared_old_id" ] &&
+    [ "$5" = "$_extra_prepared_old_page" ] &&
+    [ "$6" = "$_extra_prepared_old_hash" ] || return 69
+    case "$_extra_prepared_phase" in prepared|activating) ;; *) return 69 ;; esac
     case "$_extra_prepared_trial" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_extra_prepared_trial}" -eq 32 ] &&
     [ "$_extra_prepared_trial" != "$_extra_prepared_old_id" ] || return 69
@@ -1646,7 +1648,17 @@ extra_resources_native_recover_prepared_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
     firewall_shared_runtime verify "$_extra_prepared_work/release" - || return 69
-    shared_apply_recover_prepared_service "prepared $_extra_prepared_trial strategies" || return 70
+    case "$_extra_prepared_phase" in
+        prepared)
+            shared_apply_recover_prepared_service "prepared $_extra_prepared_trial strategies" || return 70
+            ;;
+        activating)
+            # Delegate stage/parked/backup proof to the EXISTING native
+            # pristine restoration, not a second implementation.
+            shared_apply_recover_activating_pristine_service \
+                "activating $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
+            ;;
+    esac
     _extra_prepared_status=$(shared_apply_inspect_service) || return 70
     [ "$_extra_prepared_status" = restored ] || return 70
     printf 'native-remove-prepared-restored=%s\n' "$_extra_prepared_old_id"
