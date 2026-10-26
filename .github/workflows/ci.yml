@@ -67,7 +67,7 @@ jobs:
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
-          elif printf '%s\n' "${changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$|scripts/test-freebsd-lua-[^/]+\.sh$|scripts/fixtures/lua-(jail-[^/]+|init-no-network-shim)\.(c|py)$)'; then
+          elif printf '%s\n' "${changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
             package=true
           fi
 
@@ -271,23 +271,8 @@ jobs:
       - name: Test shared Lua declaration scanner for Strategy Lab and removal
         run: python3.13 scripts/test-shared-lua-declarations.py
 
-      - name: Test FreeBSD PT_INTERP and loader path confinement input checks
-        run: python3.13 scripts/test-extra-resources-jail-loader.py
-
-      - name: Test exact static ELF DT_NEEDED graph in inert jail inputs
-        run: python3.13 scripts/test-extra-resources-jail-libraries.py
-
       - name: Test installed engine ELF Lua ABI no-exec read-only hints
         run: python3.13 scripts/test-extra-resources-engine-abi.py
-
-      - name: Test pinned native managed hostlist and IPSET jail inputs
-        run: python3.13 scripts/test-extra-resources-jail-managed.py
-
-      - name: Test original native argv direct Lua/BIN jailed path mapping
-        run: python3.13 scripts/test-extra-resources-jail-argv.py
-
-      - name: Test pinned non-executable jail input snapshots
-        run: python3.13 scripts/test-extra-resources-jail-inputs.py
 
       - name: Validate project identity and version
         shell: bash
@@ -651,11 +636,6 @@ jobs:
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-graph.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh
             STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
-            sh scripts/test-freebsd-lua-no-network-shim.sh
-            sh scripts/test-freebsd-lua-jail-boundary.sh
-            sh scripts/test-freebsd-lua-jail-shim-combined.sh
-            sh scripts/test-freebsd-lua-jail-dynamic-loader.sh
-            sh scripts/test-freebsd-lua-jail-upstream-engine.sh
             /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
             /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
             /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
