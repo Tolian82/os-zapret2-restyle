@@ -1620,7 +1620,7 @@ extra_resources_native_recover_prepared_service()
     [ "$4" = "$_extra_prepared_old_id" ] &&
     [ "$5" = "$_extra_prepared_old_page" ] &&
     [ "$6" = "$_extra_prepared_old_hash" ] || return 69
-    case "$_extra_prepared_phase" in prepared|activating) ;; *) return 69 ;; esac
+    case "$_extra_prepared_phase" in prepared|activating|activated) ;; *) return 69 ;; esac
     case "$_extra_prepared_trial" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_extra_prepared_trial}" -eq 32 ] &&
     [ "$_extra_prepared_trial" != "$_extra_prepared_old_id" ] || return 69
@@ -1642,25 +1642,54 @@ extra_resources_native_recover_prepared_service()
     [ ! -L "$_extra_prepared_work/release" ] &&
     [ -d "$ACTIVE_DIR" ] &&
     [ ! -L "$ACTIVE_DIR" ] || return 69
-    atomic_verify_tree "$_extra_prepared_work/release" "$ACTIVE_DIR" || return 69
+    # Only the original or the exact newly sealed release may own ACTIVE_DIR.
+    # The native common cold actuator independently repeats this witness,
+    # including IPFW/staged-table ownership, before any mutation.
+    _extra_prepared_active=old
+    if ! atomic_verify_tree "$_extra_prepared_work/release" "$ACTIVE_DIR"; then
+        [ "$_extra_prepared_phase" != prepared ] || return 69
+        _extra_prepared_new_work=$(shared_apply_workspace "$_extra_prepared_trial") || return 69
+        [ -d "$_extra_prepared_new_work/release" ] &&
+        [ ! -L "$_extra_prepared_new_work/release" ] || return 69
+        atomic_verify_tree "$_extra_prepared_new_work/release" "$ACTIVE_DIR" || return 69
+        _extra_prepared_active=new
+    fi
     ! launcher_is_running "$CHILD_PIDFILE" &&
     ! supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE" || return 69
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
-    firewall_shared_runtime verify "$_extra_prepared_work/release" - || return 69
+    if [ "$_extra_prepared_active" = old ]; then
+        firewall_shared_runtime verify "$_extra_prepared_work/release" - || return 69
+    fi
     case "$_extra_prepared_phase" in
         prepared)
             shared_apply_recover_prepared_service "prepared $_extra_prepared_trial strategies" || return 70
             ;;
         activating)
-            # Delegate stage/parked/backup proof to the EXISTING native
-            # pristine restoration, not a second implementation.
-            shared_apply_recover_activating_pristine_service \
-                "activating $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
+            if [ "$_extra_prepared_active" = old ]; then
+                # Exact pristine source/backup proof stays in the ORIGINAL
+                # native activating routine, not in Remove.
+                shared_apply_recover_activating_pristine_service \
+                    "activating $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
+            else
+                # Atomic replacement happened before the activating journal
+                # advanced. Reuse the ORIGINAL staged-IPFW/cold-tree rollback.
+                shared_apply_recover_activated_cold_service \
+                    "activating $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
+            fi
+            ;;
+        activated)
+            # Both newly installed and partially restored OLD tree are
+            # qualified by the ORIGINAL idempotent cold recovery.
+            shared_apply_recover_activated_cold_service \
+                "activated $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
             ;;
     esac
     _extra_prepared_status=$(shared_apply_inspect_service) || return 70
-    [ "$_extra_prepared_status" = restored ] || return 70
+    # Original shared-apply inspect exposes a terminal RESTORED predecessor
+    # as 'committed OLD_ID OLD_PAGE' so ordinary boot stays native. Checking
+    # the literal word 'restored' would falsely claim RESTORE_FAILED.
+    [ "$_extra_prepared_status" = "committed $_extra_prepared_old_id $_extra_prepared_old_page" ] || return 70
     printf 'native-remove-prepared-restored=%s\n' "$_extra_prepared_old_id"
 }
 
