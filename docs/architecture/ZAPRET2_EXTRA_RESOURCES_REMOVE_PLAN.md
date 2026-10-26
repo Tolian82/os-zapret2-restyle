@@ -8,6 +8,8 @@
 **Existing reuse:** [Additional Resources implementation plan](ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md), native Apply/Voice, installed transaction and rollback.
 **Explicitly deferred:** Exclude Domains/hostlist-exclude behavior remains untouched; future ipset-exclude GUI is a separate task. No testing package or release is authorized by this change.
 
+**Binding 26 October Config decision:** Native Strategies and Voice edits use `SharedConfigCommit::persist()` → OPNsense `serializeToConfig(false, true)` / `Config::save()` only for genuinely changed fields; Remove has zero changed Config fields and must never save again. Reuse the existing native candidate preparation, full saved Config snapshot checks, shared Apply journal and native runtime/IPFW rollback. For an interrupted Remove `config-saved`, prove old owner and original unchanged snapshot across both existing journals and verify the actual runtime/IPFW before returning to that owner; normal `shared_apply_recover_saved_service` is **not** a generic old-owner rollback. Keep ambiguous cases blocked, and keep the GUI read-only until installed acceptance. This approves a design, not a completed `config-saved` recovery. See [decision](../DECISIONS.md).
+
 ## Stage 1 — Read-only upstream-only removal planner
 
 Extend extra_resources_reconcile.py / extra_resources_preflight.py and reuse inventory-cache inputs. Under the relevant existing locks, attest current Git HEAD, tracked upstream Lua/BIN bytes, the exact installed file set and all non-upstream removal candidates. Reject symlinks, modified upstream files, unsafe dirs or inconsistent metadata. Produce a structured, digest-bound dry-run with filenames, counts and base configuration/inventory witnesses.
