@@ -46,7 +46,7 @@ require("$('#zapretExtraRemove').css({" in view and
 require("/api/zapret/service/resourcesRemovePlan" in view and
         "data.ready !== false" in view and
         "extrasText.removeNotReady" in view and
-        "/api/zapret/service/resourcesRemove" not in view,
+        "url: '/api/zapret/service/resourcesRemove'," not in view,
         "Remove GUI must show a read-only plan, NOT authorize real file deletion")
 require("Установить дополнительные ресурсы" in view and
         "Install Additional Resources" in view, "final agreed RU/EN labels absent")
