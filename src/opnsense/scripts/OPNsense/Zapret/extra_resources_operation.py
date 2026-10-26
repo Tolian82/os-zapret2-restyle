@@ -268,7 +268,8 @@ def main(argv: list[str]) -> int:
             outcome = remove_with_native_trial(
                 witness, RUNTIME, STATE, lifecycle, acceptance_fault=fault)
             _refresh_help_cache()
-            _status("not_installed" if outcome["status"] == "REMOVED" else "ready",
+            _status("not_installed" if outcome["status"] in ("REMOVED", "NO_EXTRA_RESOURCES")
+                    else "ready",
                     **outcome)
             print(json.dumps(outcome, sort_keys=True))
             return 0

@@ -61,6 +61,8 @@ require("extra_resources_preflight.py preflight" in actions,
 require(all(f'"{m}"' in operation for m in
             ("remove-test", "remove-test-fail", "remove-test-interrupt",
              "recover-test")), "owner-console Remove routes are missing")
+require('outcome["status"] in ("REMOVED", "NO_EXTRA_RESOURCES")' in operation,
+        "empty native Remove must not report extras installed")
 require("EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE" in operation and
         "os.geteuid() != 0" in operation,
         "owner-console Remove route is not root/explicitly gated")
