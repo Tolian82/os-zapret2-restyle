@@ -365,6 +365,80 @@ class TestExactReconciliation(unittest.TestCase):
             self.lifecycle.start()
         self.lifecycle.restore_previous_native_common_apply = restore_original_native_common_owner
 
+    def interrupted_pre_stop_trial(self):
+        """Simulate power loss after PREPARED durability, before any Stop."""
+        plan, config = self.removal_plan()
+        self.trial_route()
+        old_capture = self.lifecycle.capture_previous_native_common_apply
+        calls = 0
+        def crash_at_recheck():
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise KeyboardInterrupt("power loss before original Stop")
+            return old_capture()
+        self.lifecycle.capture_previous_native_common_apply = crash_at_recheck
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        self.assertEqual(self.lifecycle.stops, 0)
+        journal = self.state / "transaction/journal.json"
+        self.assertEqual(json.loads(journal.read_text())["phase"], "prepared")
+        return journal
+
+    def test_remove_prepared_cold_recovery_proves_unmodified_live_owner(self):
+        journal = self.interrupted_pre_stop_trial()
+        original = self.inode_metadata(self.root / "lua/orphan.lua")
+        self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
+        self.assertEqual(self.lifecycle.stops, 0)
+        self.assertEqual(self.lifecycle.starts, 0)
+        self.assertEqual(self.inode_metadata(self.root / "lua/orphan.lua"), original)
+        self.assertFalse(journal.exists())
+
+    def test_remove_prepared_cold_recovery_refuses_stopped_owner(self):
+        journal = self.interrupted_pre_stop_trial()
+        self.lifecycle.running = False
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue(journal.exists())
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_remove_prepared_cold_recovery_refuses_foreign_native_owner(self):
+        journal = self.interrupted_pre_stop_trial()
+        self.lifecycle.capture_previous_native_common_apply = lambda: {
+            "id": "c"*32, "page": "voice", "candidate": "b"*64}
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue(journal.exists())
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_remove_prepared_cold_recovery_refuses_same_byte_foreign_inode(self):
+        journal = self.interrupted_pre_stop_trial()
+        original = self.root / "lua/orphan.lua"
+        replacement = original.with_name("replacement.tmp")
+        replacement.write_bytes(original.read_bytes())
+        os.replace(replacement, original)
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue(journal.exists())
+        self.assertEqual(self.lifecycle.stops, 0)
+
+    def test_remove_prepared_cold_recovery_refuses_metadata_drift(self):
+        self.state.mkdir(parents=True, exist_ok=True)
+        installed = self.state / "installed.json"
+        installed.write_text(json.dumps({
+            "schema": 1, "files": {
+                "lua/orphan.lua": tx.sha256(b"orphaned bytes"),
+            }
+        }))
+        journal = self.interrupted_pre_stop_trial()
+        installed.write_text(json.dumps({"schema": 1, "files": {}}))
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertTrue(journal.exists())
+        self.assertEqual(self.lifecycle.stops, 0)
+
     def test_remove_requires_exact_native_gui_apply_before_any_stop(self):
         plan, config = self.removal_plan()
         with self.assertRaisesRegex(tx.TransactionError, "native common Apply trial route"):
@@ -409,12 +483,13 @@ class TestExactReconciliation(unittest.TestCase):
             return {"id": ("a" if calls == 1 else "c")*32,
                     "page": "voice", "candidate": "b"*64}
         self.lifecycle.capture_previous_native_common_apply = changed_owner
-        with self.assertRaisesRegex(tx.TransactionError, "owner changed before Stop"):
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
             tx.remove_with_native_trial(
                 plan["witness"]["inventory_sha256"], self.root,
                 self.state, self.lifecycle, config=config)
         self.assertEqual(self.lifecycle.stops, 0)
         self.assertTrue((self.root / "lua/orphan.lua").exists())
+        self.assertTrue((self.state / "transaction/journal.json").exists())
 
     def test_remove_invalid_previous_owner_fails_before_stop(self):
         plan, config = self.removal_plan()
