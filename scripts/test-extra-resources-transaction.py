@@ -265,6 +265,20 @@ class TestExactReconciliation(unittest.TestCase):
             self.lifecycle.start()
         self.lifecycle.start_trial_native_common_apply = actual_native_gui_compiler_and_start
 
+        def restore_original_native_common_owner():
+            # This is a mock of the future original-owner restoration route,
+            # not a production common Apply executor. Resource bytes must
+            # already be back before that route is allowed to restart.
+            self.assertEqual((self.root / "lua/orphan.lua").read_bytes(),
+                             b"orphaned bytes")
+            self.assertEqual((self.root / "files/fake/user_dynamic.bin").read_bytes(),
+                             b"unmanaged existing bytes")
+            self.lifecycle.native_restore_calls = (
+                getattr(self.lifecycle, "native_restore_calls", 0) + 1
+            )
+            self.lifecycle.start()
+        self.lifecycle.restore_previous_native_common_apply = restore_original_native_common_owner
+
     def test_remove_requires_exact_native_gui_apply_before_any_stop(self):
         plan, config = self.removal_plan()
         with self.assertRaisesRegex(tx.TransactionError, "native common Apply trial route"):
@@ -275,6 +289,18 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertTrue((self.root / "lua/orphan.lua").exists())
         self.assertFalse((self.state / "transaction").exists())
         self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
+
+    def test_remove_refuses_missing_original_owner_rollback_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        del self.lifecycle.restore_previous_native_common_apply
+        with self.assertRaisesRegex(tx.TransactionError, "native common Apply rollback route"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        self.assertEqual(self.lifecycle.stops, 0)
+        self.assertTrue((self.root / "lua/orphan.lua").exists())
+        self.assertFalse((self.state / "transaction").exists())
 
     def test_remove_native_trial_exact_upstream_success(self):
         plan, config = self.removal_plan()
@@ -311,6 +337,7 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertTrue(self.lifecycle.running)
         self.assertEqual(self.lifecycle.stops, 2)
         self.assertEqual(self.lifecycle.starts, 1)
+        self.assertEqual(self.lifecycle.native_restore_calls, 1)
         for name, data in previous.items():
             self.assertEqual((self.root / name).read_bytes(), data)
         self.assertFalse((self.state / "transaction").exists())
@@ -332,6 +359,23 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertFalse((self.root / tx.QUARANTINE_NAME).exists())
         self.assertTrue(self.lifecycle.running)
 
+    def test_interrupted_remove_refuses_unqualified_recovery_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        # Once native common Apply is possible, it is not safe to fall back
+        # to a general Start, even if extra files are recoverable.
+        del self.lifecycle.restore_previous_native_common_apply
+        stopped_before = self.lifecycle.stops
+        with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertEqual(self.lifecycle.stops, stopped_before)
+        self.assertTrue((self.state / "transaction/journal.json").is_file())
+        self.assertFalse((self.root / "lua/orphan.lua").exists())
+
     def test_remove_stale_confirm_refuses_without_mutation(self):
         plan, config = self.removal_plan()
         self.trial_route()
@@ -348,7 +392,7 @@ class TestExactReconciliation(unittest.TestCase):
         (self.root / "lua/orphan.lua").unlink()
         (self.root / "files/fake/user_dynamic.bin").unlink()
         plan, config = self.removal_plan()
-        self.trial_route()
+        # No-resource no-op needs no trial/rollback callback and no Stop.
         result = tx.remove_with_native_trial(
             plan["witness"]["inventory_sha256"], self.root,
             self.state, self.lifecycle, config=config)

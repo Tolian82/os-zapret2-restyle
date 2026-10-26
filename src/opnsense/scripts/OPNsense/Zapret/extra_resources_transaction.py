@@ -272,11 +272,21 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             # No runtime mutation has occurred. Backup copies were completed.
             pass
         else:
+            # A native Remove trial can replace the shared Apply owner. Blind
+            # start() may then boot the *new* sealed release, not the prior
+            # Config/runtime/Voice owner. Refuse before Stop when the original
+            # owner-specific recovery callback is unavailable.
+            restore_native = getattr(lifecycle, "restore_previous_native_common_apply", None)
+            if is_remove and not callable(restore_native):
+                raise TransactionError("native Remove rollback route is not available")
             lifecycle.stop()
             lifecycle.assert_stopped()
             _restore(root, work, previous, incoming)
             _rollback_metadata(state, work)
-            lifecycle.start()
+            if is_remove:
+                restore_native()
+            else:
+                lifecycle.start()
             lifecycle.assert_started()
         if is_remove:
             _clear_quarantine(root, previous)
@@ -383,16 +393,14 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     """Remove extras with the ORIGINAL saved Config and an injected native Apply.
 
     This is INTERNAL and NOT connected to a GUI/configd operation. The native
-    lifecycle must explicitly provide start_trial_native_common_apply(), which
-    will be wired ONLY to the existing full shared GUI Apply build/activation
-    after the resources have been quarantined. Its absence rejects BEFORE
-    service Stop or any resource mutation: normal start()/cached reboot is
-    intentionally not an alternative.
+    lifecycle must provide BOTH start_trial_native_common_apply() and
+    restore_previous_native_common_apply(). The first must use the existing
+    shared GUI Apply build/activation after quarantine; the second must
+    restore the prior common owner without guessing via start()/cached boot.
+    Both missing routes refuse BEFORE Stop or resource mutation.
     """
     if not isinstance(expected_witness, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_witness):
         raise TransactionError("invalid confirmed removal witness")
-    if not callable(getattr(lifecycle, "start_trial_native_common_apply", None)):
-        raise TransactionError("native common Apply trial route is not available")
     if state.is_symlink() or (state / "transaction").exists() or (state / "transaction").is_symlink():
         raise TransactionError("RECOVERY_REQUIRED: unsafe or unfinished resource transaction")
     if _quarantine_path(root).exists() or _quarantine_path(root).is_symlink():
@@ -410,6 +418,14 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     if not previous:
         return {"status": "NO_EXTRA_RESOURCES", "lua": 0, "bin": 0,
                 "removed": 0, "restarted": False}
+
+    # The pair is mandatory. A real trial must never pass its early safety
+    # gate with a native Apply start callback but no trustworthy path back to
+    # the previously sealed common owner after a later failure.
+    if not callable(getattr(lifecycle, "start_trial_native_common_apply", None)):
+        raise TransactionError("native common Apply trial route is not available")
+    if not callable(getattr(lifecycle, "restore_previous_native_common_apply", None)):
+        raise TransactionError("native common Apply rollback route is not available")
 
     old_identity = lifecycle.assert_started()
     _safe_state(state)
