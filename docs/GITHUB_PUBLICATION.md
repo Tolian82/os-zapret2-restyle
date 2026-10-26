@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-10-18
+**Updated:** 2026-10-26
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -17,7 +17,7 @@ Read this file completely before GitHub mutation.
 
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
-- validation and CI: `GH-016`–`GH-023`;
+- validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
 - testing package: `GH-034`–`GH-038`, `GH-060`–`GH-061`;
@@ -76,6 +76,8 @@ GH-021. **Only successful checks for the latest mergeable head authorize merge.*
 GH-022. **Never report a skipped or unrun job as PASS.** A legitimately path-skipped build is `SKIPPED`, not successful qualification, under `DEV-011`.
 
 GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI-infrastructure changes run required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
+
+GH-062. **Быстрые локальные проверки — обязательный входной контроль ДО открытия PR и запуска длинной CI-матрицы.** Перед публикацией ветки/открытием PR с изменённым кодом, тестами или конфигурацией разработчик **самостоятельно выполняет на точных подготовленных файлах** доступные быстрые проверки синтаксиса и форматирования, целевые unit/contract/regression-тесты для изменённого поведения и **запускает каждый новый или изменённый тест**, а не только проверяет его текст. Проверяются также относящиеся к изменению версия/ревизия, заголовок PR и элементарные ошибки тестовых фикстур, регулярных выражений, shell, PHP, Python и JavaScript. **Любой провал блокирует открытие PR и долгую CI:** сначала исправить ошибку локально в том же scope, повторить быстрый тест до успеха, и лишь затем запускать полную требуемую матрицу. При каждом последующем изменении head те же затронутые быстрые проверки повторяются **до отправки изменений**. Для docs-only и изменений правил выполняются локальные проверки ссылок, идентификаторов правил, реестров перекрёстных ссылок и целостности документации; это не требует запускать продуктовую матрицу, если она не относится к изменению. Если конкретный тест технически невозможно выполнить локально (например, требуется FreeBSD 15), явно зафиксировать причину и выполнить максимально узкую доступную отдельную проверку до длинной матрицы; **не объявлять невыполненную проверку успешной**. Перечень действительно выполненных команд и их результаты отражаются в PR. Длинная CI остаётся обязательной по сфере изменения, но не служит средством обнаружения простых ошибок, которые можно найти до PR.
 
 ## PR merge and post-merge verification
 
