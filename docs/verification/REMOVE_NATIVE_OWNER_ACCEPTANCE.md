@@ -74,6 +74,7 @@ If interrupted after `committing`, the only safe action is **guarded forward com
 
 Expected forward receipt is `REMOVED` **only after** existing shared Apply attests the pinned NEW owner and the exact upstream-only files, possibly via its normal guarded cold boot. A foreign or unprovable new owner must produce `RESTORE_FAILED` with retained journal; it is NOT an old-owner rollback.
 
+
 ## 4a. Test R4 — interrupt AFTER durable new-owner commit (irreversible)
 
 This route does NOT exist in installed _38. Run only with a separately
@@ -101,6 +102,20 @@ the exact NEW attested common Apply owner, Started process/IPFW health,
 absent managed manifest/transaction/quarantine. Foreign or unverifiable owners
 must return `RESTORE_FAILED` with retained evidence. This is a controlled
 process interruption, NOT proof of actual hardware power-cut recovery.
+
+## 4b. Independent native owner/IPFW audit after R4 (read-only, source candidate _42)
+
+This is a non-destructive final owner witness, **not** a reason to repeat R4. The new `audit-native` command is NOT present in installed `_41`; first the separate `_42` testing package must pass source/FreeBSD tests and be installed with owner evidence.
+
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_launcher.sh audit-native
+```
+
+Under the ORIGINAL setup.lock → FD9 this read-only root-only command invokes existing `extra_resources_native_previous_owner_service` (sealed shared Apply owner, unchanged saved Config, full active release tree, running engine/IPFW probe) and existing `strategy_lab_semantic_evidence` (live engine/supervisor, active args and Config digests, scoped managed IPFW and five Voice-table fingerprint). No Stop/Start, Config save, resource mutation or kernel IPFW change. A temporary scratch file used by the existing semantic IPFW hasher is cleaned up.
+
+Success outputs exactly a `native-owner=<owner-id>:<page>:<candidate-sha256>` line and a `native-health={...}` JSON line, where native health must report RUNNING, child and supervisor true, and 64-hex args/Config/firewall hashes. These are output shapes, NOT yet observed owner values. Pending resource transaction/quarantine, absent FD9, foreign/invalid owner, failed active tree or IPFW probe, nonrunning child/monitor, or missing IPFW fingerprint all fail closed. No new owner database or raw rules, addresses, hostlists or engine args are exposed.
+
+Record the actual owner ID and digest privately or in a redacted verification report. The old owner ID cannot be reconstructed from an already-retired transaction journal; do not invent that comparison. Source-level tests do not prove on-device owner/IPFW acceptance. Public GUI Remove remains disabled until live evidence and owner acceptance.
 
 ## 5. Evidence board and stop rules
 

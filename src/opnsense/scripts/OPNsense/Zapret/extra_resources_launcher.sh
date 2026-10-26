@@ -104,6 +104,17 @@ except Exception:
             /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
             "$SERVICE_SCRIPT" extra-resources-remove-plan
         ;;
+    audit-native)
+        # Root-console-only read-only attestation of the already committed
+        # native common Apply owner and scoped IPFW/process health. Never
+        # starts/stops the service or mutates installed Lua/BIN/Config/IPFW.
+        [ "$#" -eq 1 ] || exit 64
+        [ "$(/usr/bin/id -u)" -eq 0 ] && [ -x "$SERVICE_SCRIPT" ] &&
+        [ -x "$LOCKF_BIN" ] || exit 75
+        exec "$LOCKF_BIN" -s -t 10 "$LOCK_FILE" \
+            /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+            "$SERVICE_SCRIPT" extra-resources-native-audit
+        ;;
     remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test)
         # Explicit owner-console acceptance. FOREGROUND, root only; never
         # exposed through configd or GUI. setup.lock -> native FD9.
@@ -156,7 +167,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|audit-native|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test}' >&2
         exit 64
         ;;
 esac
