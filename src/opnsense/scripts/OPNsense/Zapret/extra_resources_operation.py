@@ -60,6 +60,23 @@ class NativeLifecycle:
             raise TransactionError(f"native {operation} was rejected: {result.stderr[:300]}")
         return result.returncode
 
+    def capture_previous_native_common_apply(self) -> dict:
+        """Return only the attested, saved native common owner under FD9."""
+        result = subprocess.run(
+            [str(self.script), "extra-resources-native-previous-owner"],
+            pass_fds=(9,), capture_output=True, text=True, timeout=180,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise TransactionError("previous native common owner is not attested")
+        match = re.fullmatch(
+            r"native-owner=([a-f0-9]{32}):(strategies|voice):([a-f0-9]{64})\n?",
+            result.stdout,
+        )
+        if match is None:
+            raise TransactionError("malformed previous native common owner witness")
+        return {"id": match[1], "page": match[2], "candidate": match[3]}
+
     @staticmethod
     def _pid(path: Path) -> int:
         if path.is_symlink() or not path.is_file():

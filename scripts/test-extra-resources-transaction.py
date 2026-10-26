@@ -250,6 +250,8 @@ class TestExactReconciliation(unittest.TestCase):
         return plan, config
 
     def trial_route(self, *, fail=False, crash=False):
+        old_owner = {"id": "a"*32, "page": "voice", "candidate": "b"*64}
+        self.lifecycle.capture_previous_native_common_apply = lambda: dict(old_owner)
         def actual_native_gui_compiler_and_start():
             # A new, future production adapter must use shared GUI Apply;
             # this fixture only models its required file-visibility boundary.
@@ -265,7 +267,8 @@ class TestExactReconciliation(unittest.TestCase):
             self.lifecycle.start()
         self.lifecycle.start_trial_native_common_apply = actual_native_gui_compiler_and_start
 
-        def restore_original_native_common_owner():
+        def restore_original_native_common_owner(witness):
+            self.assertEqual(witness, old_owner)
             # This is a mock of the future original-owner restoration route,
             # not a production common Apply executor. Resource bytes must
             # already be back before that route is allowed to restart.
@@ -300,6 +303,46 @@ class TestExactReconciliation(unittest.TestCase):
                 self.state, self.lifecycle, config=config)
         self.assertEqual(self.lifecycle.stops, 0)
         self.assertTrue((self.root / "lua/orphan.lua").exists())
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_remove_requires_previous_owner_witness_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        del self.lifecycle.capture_previous_native_common_apply
+        with self.assertRaisesRegex(tx.TransactionError, "previous-owner witness route"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        self.assertEqual(self.lifecycle.stops, 0)
+        self.assertFalse((self.state / "transaction").exists())
+
+    def test_remove_rejects_changed_previous_owner_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        calls = 0
+        def changed_owner():
+            nonlocal calls
+            calls += 1
+            return {"id": ("a" if calls == 1 else "c")*32,
+                    "page": "voice", "candidate": "b"*64}
+        self.lifecycle.capture_previous_native_common_apply = changed_owner
+        with self.assertRaisesRegex(tx.TransactionError, "owner changed before Stop"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        self.assertEqual(self.lifecycle.stops, 0)
+        self.assertTrue((self.root / "lua/orphan.lua").exists())
+
+    def test_remove_invalid_previous_owner_fails_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route()
+        self.lifecycle.capture_previous_native_common_apply = lambda: {
+            "id": "invalid", "page": "voice", "candidate": "b"*64}
+        with self.assertRaisesRegex(tx.TransactionError, "invalid previous native common owner"):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        self.assertEqual(self.lifecycle.stops, 0)
         self.assertFalse((self.state / "transaction").exists())
 
     def test_remove_native_trial_exact_upstream_success(self):
@@ -350,7 +393,10 @@ class TestExactReconciliation(unittest.TestCase):
             tx.remove_with_native_trial(
                 plan["witness"]["inventory_sha256"], self.root,
                 self.state, self.lifecycle, config=config)
-        self.assertTrue((self.state / "transaction/journal.json").is_file())
+        journal = self.state / "transaction/journal.json"
+        self.assertTrue(journal.is_file())
+        self.assertEqual(json.loads(journal.read_text())["native_owner"], {
+            "id": "a"*32, "page": "voice", "candidate": "b"*64})
         self.assertTrue((self.root / tx.QUARANTINE_NAME).is_dir())
         self.assertFalse((self.root / "lua/orphan.lua").exists())
         self.assertEqual(tx.recover(self.root, self.state, self.lifecycle), "RESTORED")
@@ -375,6 +421,23 @@ class TestExactReconciliation(unittest.TestCase):
         self.assertEqual(self.lifecycle.stops, stopped_before)
         self.assertTrue((self.state / "transaction/journal.json").is_file())
         self.assertFalse((self.root / "lua/orphan.lua").exists())
+
+    def test_remove_tampered_owner_blocks_recovery_before_stop(self):
+        plan, config = self.removal_plan()
+        self.trial_route(crash=True)
+        with self.assertRaises(KeyboardInterrupt):
+            tx.remove_with_native_trial(
+                plan["witness"]["inventory_sha256"], self.root,
+                self.state, self.lifecycle, config=config)
+        journal = self.state / "transaction/journal.json"
+        record = json.loads(journal.read_text())
+        record["native_owner"]["candidate"] = "invalid"
+        journal.write_text(json.dumps(record))
+        stopped = self.lifecycle.stops
+        with self.assertRaisesRegex(tx.TransactionError, "invalid previous native common owner"):
+            tx.recover(self.root, self.state, self.lifecycle)
+        self.assertEqual(stopped, self.lifecycle.stops)
+        self.assertTrue(journal.exists())
 
     def test_remove_stale_confirm_refuses_without_mutation(self):
         plan, config = self.removal_plan()

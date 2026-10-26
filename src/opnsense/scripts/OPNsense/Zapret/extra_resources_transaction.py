@@ -110,11 +110,25 @@ def _write_phase(work: Path, phase: str, old: dict, new: dict, rev: str) -> None
     })
 
 
-def _write_remove_phase(work: Path, phase: str, previous: dict, head: str) -> None:
+def _validate_native_owner(owner: object) -> dict:
+    if not isinstance(owner, dict) or set(owner) != {"id", "page", "candidate"}:
+        raise TransactionError("invalid previous native common owner witness")
+    if (not isinstance(owner["id"], str) or
+            not re.fullmatch(r"[a-f0-9]{32}", owner["id"]) or
+            owner["page"] not in ("strategies", "voice") or
+            not isinstance(owner["candidate"], str) or
+            not re.fullmatch(r"[a-f0-9]{64}", owner["candidate"])):
+        raise TransactionError("invalid previous native common owner identity")
+    return dict(owner)
+
+
+def _write_remove_phase(work: Path, phase: str, previous: dict, head: str,
+                        native_owner: dict) -> None:
     # Keep the same durable schema and existing recovery engine as Install.
     _json_write(work / "journal.json", {
         "schema": SCHEMA, "mode": "remove", "phase": phase,
         "previous": previous, "incoming": {}, "source_commit": head,
+        "native_owner": _validate_native_owner(native_owner),
     })
 
 
@@ -265,6 +279,7 @@ def recover(root: Path, state: Path, lifecycle) -> str:
         raise TransactionError("unknown recovery transaction mode")
     if is_remove and incoming:
         raise TransactionError("invalid remove recovery journal")
+    native_owner = _validate_native_owner(journal.get("native_owner")) if is_remove else None
     try:
         if journal.get("phase") == "completed":
             raise TransactionError("completed journal requires post-commit audit")
@@ -284,7 +299,7 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             _restore(root, work, previous, incoming)
             _rollback_metadata(state, work)
             if is_remove:
-                restore_native()
+                restore_native(native_owner)
             else:
                 lifecycle.start()
             lifecycle.assert_started()
@@ -397,7 +412,9 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     restore_previous_native_common_apply(). The first must use the existing
     shared GUI Apply build/activation after quarantine; the second must
     restore the prior common owner without guessing via start()/cached boot.
-    Both missing routes refuse BEFORE Stop or resource mutation.
+    Both missing routes refuse BEFORE Stop or resource mutation. Pin the
+    original sealed common owner ID/page/saved Config digest inside this
+    existing resource transaction journal (no second owner database).
     """
     if not isinstance(expected_witness, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_witness):
         raise TransactionError("invalid confirmed removal witness")
@@ -427,7 +444,10 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
     if not callable(getattr(lifecycle, "restore_previous_native_common_apply", None)):
         raise TransactionError("native common Apply rollback route is not available")
 
+    if not callable(getattr(lifecycle, "capture_previous_native_common_apply", None)):
+        raise TransactionError("native common Apply previous-owner witness route is not available")
     old_identity = lifecycle.assert_started()
+    old_owner = _validate_native_owner(lifecycle.capture_previous_native_common_apply())
     _safe_state(state)
     work = state / "transaction"
     if work.exists() or work.is_symlink():
@@ -450,7 +470,7 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
             if sha256(body) != digest:
                 raise TransactionError("extra resource changed before snapshot")
             _store_file(work / "backup", name, body)
-        _write_remove_phase(work, "prepared", previous, plan["upstream_head"])
+        _write_remove_phase(work, "prepared", previous, plan["upstream_head"], old_owner)
     except Exception:
         shutil.rmtree(work)
         _sync_dir(state)
@@ -461,15 +481,17 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
         renewed = make_remove_plan(root, state / "installed.json", config)
         if renewed["witness"]["inventory_sha256"] != expected_witness:
             raise TransactionError("resource or saved Config changed during preparation")
-        _write_remove_phase(work, "stopping", previous, plan["upstream_head"])
+        if _validate_native_owner(lifecycle.capture_previous_native_common_apply()) != old_owner:
+            raise TransactionError("previous native common owner changed before Stop")
+        _write_remove_phase(work, "stopping", previous, plan["upstream_head"], old_owner)
         lifecycle.stop()
         lifecycle.assert_stopped()
-        _write_remove_phase(work, "publishing", previous, plan["upstream_head"])
+        _write_remove_phase(work, "publishing", previous, plan["upstream_head"], old_owner)
         _move_to_quarantine(root, previous)
         # Check exact resource set before invoking the same real GUI compiler.
         if installed_resources(root) != plan["upstream"]:
             raise TransactionError("quarantine did not reach exact upstream resources")
-        _write_remove_phase(work, "restarting", previous, plan["upstream_head"])
+        _write_remove_phase(work, "restarting", previous, plan["upstream_head"], old_owner)
         lifecycle.start_trial_native_common_apply()
         new_identity = lifecycle.assert_started()
         if not new_identity or new_identity == old_identity:
@@ -482,7 +504,7 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
             installed_file.unlink()
             _sync_dir(state)
         _clear_quarantine(root, previous)
-        _write_remove_phase(work, "completed", previous, plan["upstream_head"])
+        _write_remove_phase(work, "completed", previous, plan["upstream_head"], old_owner)
         shutil.rmtree(work)
         _sync_dir(state)
         return {"status": "REMOVED", "lua": plan["counts"]["lua"],

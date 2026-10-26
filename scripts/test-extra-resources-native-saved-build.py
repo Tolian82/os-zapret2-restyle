@@ -53,6 +53,25 @@ require('extra-resources-native-build-saved)' in service and
         'strategy_lab_internal_dispatch "$@"' in service and
         'EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0' in service,
         "saved build is not restricted to original inherited FD9 path")
+owner_gate = section(service, "extra_resources_native_previous_owner_service()",
+                     "# Internal staging seam for Remove Additional Resources.")
+for expected in ("preflight_shared_apply_journal strategy-lab-native",
+                 'shared_apply_operation.py" owner-witness',
+                 "shared_apply_inspect_service",
+                 "shared_apply_bundle_service verify",
+                 "shared_apply_native_config saved",
+                 "atomic_verify_tree",
+                 "apply_runtime_probe",
+                 "shared_apply_status_observe_service"):
+    require(expected in owner_gate, "prior owner bypasses native proof: " + expected)
+for forbidden in ("apply_runtime_activate", "apply_runtime_commit",
+                  "start_service", "stop_service"):
+    require(forbidden not in owner_gate, "owner witness mutates runtime: " + forbidden)
+require("shared_apply_native_config save " not in owner_gate,
+        "owner witness must never save native Config")
+require("extra-resources-native-previous-owner)" in service and
+        "capture_previous_native_common_apply" in worker,
+        "prior owner not connected to inherited-FD9 resource lifecycle")
 require("def start_trial_native_common_apply" not in worker,
         "builder mistakenly granted destructive Remove authorization")
 for cmd in (["php", "-l", str(SRC / "shared_apply_request.php")],

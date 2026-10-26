@@ -285,6 +285,10 @@ strategy_lab_internal_dispatch()
             preflight_shared_apply_journal || return 69
             stop_service
             ;;
+        extra-resources-native-previous-owner)
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+            extra_resources_native_previous_owner_service
+            ;;
         extra-resources-native-build-saved)
             # Original FD9 is INHERITED from the transaction worker. This
             # action stages a real saved Config common GUI release but does
@@ -1287,6 +1291,52 @@ shared_apply_prepare_service()
         return 0
     }
 }
+# Original common owner is defined by the one shared Apply journal. Before
+# Remove Stop, independently attest saved Config, sealed release, exact active
+# tree, processes and managed IPFW. Observation only under the inherited FD9.
+extra_resources_native_previous_owner_service()
+{
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+    preflight_shared_apply_journal strategy-lab-native || return 69
+    _extra_owner_line=$(/usr/local/bin/python3.13 \
+        "${BACKEND_DIR}/shared_apply_operation.py" owner-witness) || return 69
+    set -- $_extra_owner_line
+    [ "$#" -eq 4 ] && [ "$1" = owner-witness ] || return 69
+    _extra_old_id="$2"
+    _extra_old_page="$3"
+    _extra_old_digest="$4"
+    case "$_extra_old_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_old_id}" -eq 32 ] || return 69
+    case "$_extra_old_page" in strategies|voice) ;; *) return 69 ;; esac
+    case "$_extra_old_digest" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_old_digest}" -eq 64 ] || return 69
+    [ "$_extra_owner_line" = "owner-witness $_extra_old_id $_extra_old_page $_extra_old_digest" ] || return 69
+    _extra_live_owner=$(shared_apply_inspect_service) || return 69
+    [ "$_extra_live_owner" = "committed $_extra_old_id $_extra_old_page" ] || return 69
+    shared_apply_bundle_service verify "$_extra_old_id" || return 69
+    _extra_old_saved=$(shared_apply_native_config saved \
+        "$_extra_old_id" "$_extra_old_page") || return 69
+    _extra_old_result=$(printf '%s\n' "$_extra_old_saved" | \
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _extra_old_mode=$(printf '%s\n' "$_extra_old_saved" | \
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _extra_old_snapshot=$(printf '%s\n' "$_extra_old_saved" | \
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_extra_old_result" = committed ] &&
+    [ "$_extra_old_mode" = 1 ] &&
+    [ "$_extra_old_snapshot" = "$_extra_old_digest" ] || return 69
+    _extra_old_work=$(shared_apply_workspace "$_extra_old_id") || return 69
+    [ -d "$_extra_old_work/release" ] &&
+    [ ! -L "$_extra_old_work/release" ] &&
+    [ -d "$ACTIVE_DIR" ] &&
+    [ ! -L "$ACTIVE_DIR" ] || return 69
+    atomic_verify_tree "$_extra_old_work/release" "$ACTIVE_DIR" || return 69
+    apply_runtime_probe "$_extra_old_work/release" 1 || return 69
+    _extra_old_status=$(shared_apply_status_observe_service) || return 69
+    [ "$_extra_old_status" = ready ] || return 69
+    printf 'native-owner=%s:%s:%s\n' "$_extra_old_id" "$_extra_old_page" "$_extra_old_digest"
+}
+
 # Internal staging seam for Remove Additional Resources. This uses the
 # SAME PHP native saved-Config planner and common GUI candidate compiler
 # as ordinary Strategies/Voice Apply. No alternate placeholder resolution,
@@ -1940,7 +1990,7 @@ case "${1:-}" in
         # owners as "incomplete" even when engine, supervisor and IPFW pass.
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
-    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved|extra-resources-native-previous-owner)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular|strategy-lab-recover)
