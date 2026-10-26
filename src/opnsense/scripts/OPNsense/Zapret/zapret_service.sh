@@ -610,7 +610,7 @@ shared_apply_recover_activating_pristine_service()
 shared_apply_recover_activated_cold_service()
 {
     [ "$#" -eq 1 ] || return 64
-    case "$1" in activated\ *|activating\ *) ;; *) return 69 ;; esac
+    case "$1" in activated\ *|activating\ *|config-saved\ *) ;; *) return 69 ;; esac
     _shared_cold_phase=$(printf "%s\n" "$1" | cut -d " " -f 1)
     _shared_cold_id=$(printf "%s\n" "$1" | cut -d " " -f 2)
     _shared_cold_page=$(printf "%s\n" "$1" | cut -d " " -f 3)
@@ -624,7 +624,22 @@ shared_apply_recover_activated_cold_service()
     case "$_shared_cold_page" in voice|strategies) ;; *) return 69 ;; esac
     case "$_shared_cold_old_page" in voice|strategies) ;; *) return 69 ;; esac
     [ "$_shared_cold_id" != "$_shared_cold_old" ] || return 69
-    preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+    # Config-saved is shared by normal persistent Apply and unchanged Remove.
+    # Only the ORIGINAL Remove resource journal may authorize an old-owner
+    # rollback here; ordinary saved recovery still commits the new owner.
+    if [ "$_shared_cold_phase" = config-saved ]; then
+        [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+        [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
+        _shared_cold_context=$(/usr/local/bin/python3.13 \
+            "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69
+        _shared_cold_old_snapshot=$(shared_apply_native_config saved \
+            "$_shared_cold_old" "$_shared_cold_old_page" |
+            shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+        [ "$_shared_cold_context" = "remove-prepared config-saved $_shared_cold_id $_shared_cold_old $_shared_cold_old_page $_shared_cold_old_snapshot" ] || return 69
+        preflight_shared_apply_journal common-recover-saved || return 69
+    else
+        preflight_shared_apply_journal "common-recover-$_shared_cold_phase" || return 69
+    fi
     shared_apply_bundle_service verify "$_shared_cold_id" || return 69
     shared_apply_bundle_service verify "$_shared_cold_old" || return 69
     _shared_cold_saved=$(shared_apply_native_config saved \
@@ -710,8 +725,13 @@ shared_apply_recover_activated_cold_service()
     apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 70
     [ -x /usr/local/bin/python3.13 ] || return 70
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
-        "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70
+    if [ "$_shared_cold_phase" = config-saved ]; then
+        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+            finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70
+    else
+        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+            "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70
+    fi
     printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
 }
 # Cold rescue of an operation-ID-scoped atomic rename gap. PID-only
@@ -1620,7 +1640,7 @@ extra_resources_native_recover_prepared_service()
     [ "$4" = "$_extra_prepared_old_id" ] &&
     [ "$5" = "$_extra_prepared_old_page" ] &&
     [ "$6" = "$_extra_prepared_old_hash" ] || return 69
-    case "$_extra_prepared_phase" in prepared|activating|activated) ;; *) return 69 ;; esac
+    case "$_extra_prepared_phase" in prepared|activating|activated|config-saved) ;; *) return 69 ;; esac
     case "$_extra_prepared_trial" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_extra_prepared_trial}" -eq 32 ] &&
     [ "$_extra_prepared_trial" != "$_extra_prepared_old_id" ] || return 69
@@ -1683,6 +1703,14 @@ extra_resources_native_recover_prepared_service()
             # qualified by the ORIGINAL idempotent cold recovery.
             shared_apply_recover_activated_cold_service \
                 "activated $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
+            ;;
+        config-saved)
+            # For Remove this marker means SAVED UNCHANGED Config was
+            # attested, not rewritten. The normal recover-saved would start
+            # the NEW release. Reuse existing cold kernel/tree rollback,
+            # with a dedicated old-owner journal completion after attestation.
+            shared_apply_recover_activated_cold_service \
+                "config-saved $_extra_prepared_trial strategies $_extra_prepared_old_id $_extra_prepared_old_page" || return 70
             ;;
     esac
     _extra_prepared_status=$(shared_apply_inspect_service) || return 70

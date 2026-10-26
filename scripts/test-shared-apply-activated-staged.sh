@@ -17,15 +17,28 @@ s = p.read_text()
 a = '    [ -x /usr/local/bin/python3.13 ] || return 70'
 assert s.count(a) == 1
 s = s.replace(a, '    : # mocked native interpreter')
-pattern = (r'(?m)^    /usr/local/bin/python3\.13 .* \\'
-           r'\n        "finish-\$_shared_cold_phase" "\$_shared_cold_id" "\$_shared_cold_old" \|\| return 70$')
-s, n = re.subn(pattern, '    finish_mock || return 70', s)
-assert n == 1, "native finish contract changed"
+old_context = ('        _shared_cold_context=$(/usr/local/bin/python3.13 \\\n'
+               '            "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69')
+assert s.count(old_context) == 1
+s = s.replace(old_context, '        _shared_cold_context=$(mock_context) || return 69')
+prefix = '        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
+for cli, replacement in (
+    ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old"',
+     'finish_mock remove-saved'),
+    ('"finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old"',
+     'finish_mock "$_shared_cold_phase"'),
+):
+    target = prefix + cli + ' || return 70'
+    assert s.count(target) == 1, ('native common terminal contract changed', cli)
+    s = s.replace(target, '        ' + replacement + ' || return 70')
 p.write_text(s)
 PY
 . "$ROOT/recover.sh"
 OLD_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 NEW_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+HASH=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+EXTRA_RESOURCES_SETUP_LOCK_OWNER=1
+EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE=1
 mkdir -p "$ROOT/old/release" "$ROOT/new/release"
 printf 'old\n' > "$ROOT/old/release/voice-plan.json"
 printf 'new\n' > "$ROOT/new/release/voice-plan.json"
@@ -40,7 +53,21 @@ shared_apply_workspace() {
 preflight_shared_apply_journal() { [ "$GUARD_OK" = 1 ]; }
 shared_apply_bundle_service() { [ "$SEAL_OK" = 1 ]; }
 shared_apply_native_config() { [ "$CONFIG_OK" = 1 ] || return 69; echo '{"result":"committed"}'; }
-shared_apply_json_field() { echo committed; }
+shared_apply_json_field() {
+    case "$1" in
+        *'.snapshot'*) if [ "$SAVED_DRIFT" = 1 ]; then echo dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd; else echo "$HASH"; fi ;;
+        *) echo committed ;;
+    esac
+}
+mock_context() {
+    echo context-witness >> "$LOG"
+    [ "$CONTEXT_OK" = 1 ] || return 69
+    if [ "$FOREIGN_CONTEXT" = 1 ]; then
+        echo "remove-prepared config-saved $NEW_ID ffffffffffffffffffffffffffffffff strategies $HASH"
+    else
+        echo "remove-prepared config-saved $NEW_ID $OLD_ID strategies $HASH"
+    fi
+}
 launcher_is_running() { [ "$ENGINE" = 1 ]; }
 supervisor_is_running() { [ "$MONITOR" = 1 ]; }
 apply_runtime_attest_engine_inventory() { [ "$_apply_engine" = 0 ] && [ "$CENSUS_OK" = 1 ]; }
@@ -80,13 +107,14 @@ firewall_shared_runtime() {
         *) return 1 ;;
     esac
 }
-finish_mock() { echo finished >> "$LOG"; [ "$FINISH_OK" = 1 ]; }
+finish_mock() { echo "finished:$1" >> "$LOG"; [ "$FINISH_OK" = 1 ]; }
 reset() {
     rm -rf "$ACTIVE_DIR" "$BACKUP_ROOT"
     cp -R "$ROOT/new/release" "$ACTIVE_DIR"
     STATE=staged GUARD_OK=1 SEAL_OK=1 CONFIG_OK=1
     ENGINE=0 MONITOR=0 CENSUS_OK=1
     ROLLBACK_OK=1 INSTALL_OK=1 COMMIT_OK=1 FINISH_OK=1
+    CONTEXT_OK=1 FOREIGN_CONTEXT=0 SAVED_DRIFT=0
     : > "$LOG"
 }
 check() {
@@ -183,4 +211,53 @@ reset; FINISH_OK=0
 check 70 "$ACTIVATING"
 [ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
     fail "activating terminal failure erased restored owner"
-echo 'PASS: activated and activating staged IPFW recovery and fail-closed states'
+# Remove's config-saved uses the SAME native atomic/IPFW restore; unlike
+# ordinary recover-saved it must NEVER call apply_runtime_activate.
+SAVED="config-saved $NEW_ID strategies $OLD_ID strategies"
+reset
+check 0 "$SAVED"
+[ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
+    fail "saved Remove did not restore old runtime/IPFW"
+grep -qx "recovered-config-saved-id=$NEW_ID" "$ROOT/result" ||
+    fail "saved Remove is missing final receipt"
+grep -qx 'finished:remove-saved' "$LOG" ||
+    fail "saved Remove used generic new-owner journal completion"
+grep -qx 'context-witness' "$LOG" ||
+    fail "saved Remove did not require exact resource journal witness"
+for state in old retiring empty; do
+    reset; STATE="$state"
+    check 0 "$SAVED"
+    [ "$STATE" = empty ] && atomic_verify_tree "$ROOT/old/release" "$ACTIVE_DIR" ||
+        fail "saved Remove $state failed to resume"
+done
+for problem in context foreign drift kernel engine commit finish; do
+    reset
+    case "$problem" in
+        context) CONTEXT_OK=0 ;;
+        foreign) FOREIGN_CONTEXT=1 ;;
+        drift) SAVED_DRIFT=1 ;;
+        kernel) STATE=foreign ;;
+        engine) ENGINE=1 ;;
+        commit) COMMIT_OK=0 ;;
+        finish) FINISH_OK=0 ;;
+    esac
+    case "$problem" in
+        commit|finish) check 70 "$SAVED" ;;
+        *) check 69 "$SAVED" ;;
+    esac
+    case "$problem" in
+        context|foreign|drift|kernel|engine)
+            if grep -Fqx 'ipfw:rollback' "$LOG" ||
+               grep -Fqx 'ipfw:install' "$LOG" ||
+               grep -Fqx 'ipfw:commit' "$LOG"; then
+                fail "$problem mutated kernel during unsafe saved Remove"
+            fi
+            ;;
+    esac
+done
+EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE=0
+reset
+check 75 "$SAVED"
+[ ! -s "$LOG" ] || fail "unowned saved Remove reached native actor"
+EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE=1
+echo 'PASS: original activated/activating cold recovery and saved Remove old-owner rollback'

@@ -324,6 +324,39 @@ class SharedApplyOperation:
             "activating", identity, previous_id, attest
         )
 
+    def finish_saved_remove_restore(self, identity: str, previous_id: str, attest,
+                                   state: Path = Path("/var/db/zapret2-restyle/extra-resources")) -> dict:
+        """Close only a fully attested unchanged-Config Remove cold rollback.
+
+        The ordinary Config-saved transition can ONLY commit the new owner.
+        This special transition is not in NEXT, so generic 'record restored'
+        cannot turn an ordinary post-save Apply into an old-owner rollback.
+        The original root FD9 must first prove the prior sealed runtime,
+        kernel and exact saved Config; no Config save or new journal occurs.
+        """
+        before = self.read()
+        if before is None or before["phase"] != "config-saved":
+            raise SharedOperationError("no config-saved Remove trial to restore")
+        proof = native_remove_prepared_trial(self.root, state)
+        if (proof is None or proof["phase"] != "config-saved" or
+                proof["id"] != identity or proof["old"]["id"] != previous_id):
+            raise SharedOperationError("foreign or changed saved Remove predecessor")
+        old = before.get("previous")
+        trial = before["detail"]
+        if (not isinstance(old, dict) or trial["id"] != identity or
+                old["id"] != previous_id or trial["page"] != "strategies" or
+                trial["changed_fields"] or trial["base"] != old["candidate"] or
+                trial["candidate"] != old["candidate"] or
+                any(old[k] != proof["old"][k] for k in ("id", "page", "candidate"))):
+            raise SharedOperationError("saved Remove altered Config or predecessor")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("saved Remove old runtime not attested")
+        if self.read() != before:
+            raise SharedOperationError("saved Remove journal changed during rollback")
+        restored = dict(before)
+        restored["phase"] = "restored"
+        return self._persist_record(restored)
+
     def finish_saved(self, identity: str, attest) -> dict:
         """Close Config-saved only after external FD9 Config/kernel attestation.
 
@@ -403,7 +436,7 @@ def native_remove_prepared_trial(root: Path = DEFAULT_ROOT,
     record = SharedApplyOperation(root).read()
     if record is None:
         raise SharedOperationError("native common journal absent during Remove")
-    if record["phase"] not in ("prepared", "activating", "activated"):
+    if record["phase"] not in ("prepared", "activating", "activated", "config-saved"):
         return None
     trial = record["detail"]
     previous = record.get("previous")
@@ -546,7 +579,7 @@ def main(argv: list[str]) -> int:
         OP_ID.fullmatch(value) for value in argv[2:]
     )
     cold_restore = len(argv) == 4 and argv[1] in (
-        "finish-activated", "finish-activating"
+        "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
     if not (inspection or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
@@ -660,11 +693,15 @@ def main(argv: list[str]) -> int:
         elif cold_restore:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
-            finish_cold = (
-                store.finish_activated_restore
-                if argv[1] == "finish-activated"
-                else store.finish_activating_installed_restore
-            )
+            if argv[1] == "finish-remove-saved":
+                if (os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1" or
+                        os.environ.get("EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE") != "1"):
+                    raise SharedOperationError("missing original saved Remove recovery owner")
+                finish_cold = store.finish_saved_remove_restore
+            elif argv[1] == "finish-activated":
+                finish_cold = store.finish_activated_restore
+            else:
+                finish_cold = store.finish_activating_installed_restore
             finish_cold(
                 argv[2], argv[3],
                 lambda: bool(verify_seal(WORK / argv[2], owner=0) and
