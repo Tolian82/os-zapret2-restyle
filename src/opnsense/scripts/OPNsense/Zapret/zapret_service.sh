@@ -285,6 +285,14 @@ strategy_lab_internal_dispatch()
             preflight_shared_apply_journal || return 69
             stop_service
             ;;
+        extra-resources-native-build-saved)
+            # Original FD9 is INHERITED from the transaction worker. This
+            # action stages a real saved Config common GUI release but does
+            # not start the engine, save Config or touch IPFW.
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0}" = 1 ] || return 75
+            extra_resources_native_build_saved_service
+            ;;
         strategy-lab-start)
             if shared_apply_has_record_service; then
                 _lab_owner=$(shared_apply_inspect_service) || return 69
@@ -1279,6 +1287,38 @@ shared_apply_prepare_service()
         return 0
     }
 }
+# Internal staging seam for Remove Additional Resources. This uses the
+# SAME PHP native saved-Config planner and common GUI candidate compiler
+# as ordinary Strategies/Voice Apply. No alternate placeholder resolution,
+# engine start, Config save, or private activation machinery.
+extra_resources_native_build_saved_service()
+{
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0}" = 1 ] || return 75
+    preflight_shared_apply_journal common-apply || return 69
+    [ -x /usr/local/bin/php ] || return 69
+    _extra_saved_report=$(/usr/local/bin/php \
+        "${SCRIPT_DIR}/shared_apply_request.php" saved-unchanged) || return 69
+    case "$_extra_saved_report" in
+        prepared-id=*) _extra_saved_id="${_extra_saved_report#prepared-id=}" ;;
+        *) return 69 ;;
+    esac
+    case "$_extra_saved_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_extra_saved_id}" -eq 32 ] || return 69
+    _extra_build_report=$(shared_apply_prepare_service "$_extra_saved_id") || return $?
+    _extra_build_last=$(printf '%s\n' "$_extra_build_report" | tail -n 1)
+    case "$_extra_build_last" in preflight-rejected=*) return 69 ;; esac
+    shared_apply_bundle_service verify "$_extra_saved_id" || return 69
+    _extra_saved_preflight=$(shared_apply_native_config preflight \
+        "$_extra_saved_id" strategies) || return 69
+    _extra_saved_fields=$(printf '%s\n' "$_extra_saved_preflight" | \
+        shared_apply_json_field '.changes | select(.==0)') || return 69
+    _extra_saved_mode=$(printf '%s\n' "$_extra_saved_preflight" | \
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    [ "$_extra_saved_fields" = 0 ] && [ "$_extra_saved_mode" = 1 ] || return 69
+    printf 'prepared-id=%s\n' "$_extra_saved_id"
+}
+
 # Internal root-only Apply phases; service_with_lifecycle_lock supplies FD9.
 shared_apply_record_service()
 {
@@ -1900,7 +1940,7 @@ case "${1:-}" in
         # owners as "incomplete" even when engine, supervisor and IPFW pass.
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         ;;
-    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start)
+    strategy-lab-status|strategy-lab-evidence|strategy-lab-stop|strategy-lab-start|extra-resources-native-build-saved)
         strategy_lab_internal_dispatch "$@"
         ;;
     strategy-lab|strategy-lab-circular|strategy-lab-recover)

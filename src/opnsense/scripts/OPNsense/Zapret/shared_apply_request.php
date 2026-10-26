@@ -81,6 +81,39 @@ final class SharedApplyRequest
         return ['plan' => $plan, 'xml' => $xml];
     }
 
+    /**
+     * Internal owner-only Remove candidate, from the SAME SAVED Config used
+     * by the ordinary GUI Strategies Apply. No field list, target map,
+     * placeholder replacement or alternative Voice parser is introduced.
+     *
+     * An empty Strategies change map preserves the complete original model,
+     * including all active/disabled Voice settings and future native fields.
+     * The normal scoped XML serializer must return the original XML bytes.
+     * A staged candidate is inert until the common Apply actually builds
+     * and activates its release under the original FD9.
+     */
+    public static function prepareSavedUnchanged(
+        array $current, string $activeXml, ?string &$phase = null
+    ): array {
+        $phase = 'candidate-plan';
+        $baseline = $current['hostlist']['telegramips'] ?? null;
+        if (!is_string($baseline)) {
+            throw new \InvalidArgumentException('Saved native Telegram IPSET is invalid');
+        }
+        $prepared = self::prepare([
+            'page' => 'strategies',
+            'fields' => [],
+            'sync' => ['telegramips_baseline' => $baseline],
+        ], $current, $activeXml, $phase);
+        if ($prepared['plan']['changed_fields'] !== [] ||
+            $prepared['plan']['candidate'] !== $current ||
+            $prepared['xml'] !== $activeXml ||
+            $prepared['plan']['dependencies'] !== VoiceSettingsSnapshot::digest($current)) {
+            throw new \RuntimeException('Unchanged native candidate deviated from saved Config');
+        }
+        return $prepared;
+    }
+
     private static function secureDir(string $path, bool $create): void
     {
         if ($create && !file_exists($path) && !is_link($path) && !mkdir($path, 0700)) {
@@ -221,9 +254,10 @@ final class SharedApplyRequest
 
     public static function main(array $argv): int
     {
-        if (!in_array($argv[1] ?? '', ['stage', 'telegram-envelope', 'telegram-saved'], true) ||
-            (($argv[1] ?? '') === 'telegram-saved' ? count($argv) !== 2 : count($argv) !== 3)) {
-            fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST | telegram-envelope enable|disable | telegram-saved\n");
+        if (!in_array($argv[1] ?? '', ['stage', 'telegram-envelope', 'telegram-saved', 'saved-unchanged'], true) ||
+            (in_array($argv[1] ?? '', ['telegram-saved', 'saved-unchanged'], true)
+                ? count($argv) !== 2 : count($argv) !== 3)) {
+            fwrite(STDERR, "usage: shared_apply_request.php stage ENCODED_REQUEST | telegram-envelope enable|disable | telegram-saved | saved-unchanged\n");
             return 64;
         }
         $phase = 'root-gate';
@@ -244,6 +278,17 @@ final class SharedApplyRequest
                     $response = self::telegramEnvelope($current, $argv[2]);
                 } elseif ($argv[1] === 'telegram-saved') {
                     $response = json_encode(self::telegramSaved($current), JSON_THROW_ON_ERROR);
+                } elseif ($argv[1] === 'saved-unchanged') {
+                    $phase = 'candidate-xml';
+                    $activeXml = file_get_contents('/conf/config.xml');
+                    if (!is_string($activeXml)) {
+                        throw new \RuntimeException('Could not read locked original native Config');
+                    }
+                    // One existing shared Apply candidate writer and verifier.
+                    $prepared = self::prepareSavedUnchanged($current, $activeXml, $phase);
+                    $phase = 'workspace';
+                    $id = self::materialize($prepared);
+                    $response = "prepared-id=$id";
                 } else {
                     $phase = 'decode';
                     $request = self::decode($argv[2]);
