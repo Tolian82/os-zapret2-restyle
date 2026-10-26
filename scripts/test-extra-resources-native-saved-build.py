@@ -64,9 +64,11 @@ for expected in ("preflight_shared_apply_journal strategy-lab-native",
                  "apply_runtime_probe",
                  "shared_apply_status_observe_service"):
     require(expected in owner_gate, "prior owner bypasses native proof: " + expected)
-for forbidden in ("shared_apply_native_config save", "apply_runtime_activate",
-                  "apply_runtime_commit", "start_service", "stop_service"):
+for forbidden in ("apply_runtime_activate", "apply_runtime_commit",
+                  "start_service", "stop_service"):
     require(forbidden not in owner_gate, "owner witness mutates runtime: " + forbidden)
+require("shared_apply_native_config save " not in owner_gate,
+        "owner witness must never save native Config")
 require("extra-resources-native-previous-owner)" in service and
         "capture_previous_native_common_apply" in worker,
         "prior owner not connected to inherited-FD9 resource lifecycle")
