@@ -212,7 +212,7 @@ def _refresh_help_cache() -> None:
 
 def main(argv: list[str]) -> int:
     modes = {"install", "recover", "plan", "remove-test", "remove-test-fail",
-             "remove-test-interrupt", "recover-test"}
+             "remove-test-interrupt", "remove-test-commit-interrupt", "recover-test"}
     if (len(argv) < 2 or argv[1] not in modes or
             (len(argv) != 3 if argv[1].startswith("remove-test") else len(argv) != 2)):
         print("usage: extra_resources_operation.py {install|recover|plan|remove-test*|recover-test} [confirmed_sha256]", file=sys.stderr)
@@ -260,6 +260,7 @@ def main(argv: list[str]) -> int:
                 "remove-test": None,
                 "remove-test-fail": "fail-after-quarantine",
                 "remove-test-interrupt": "interrupt-after-quarantine",
+                "remove-test-commit-interrupt": "interrupt-after-first-committed-inode",
             }[mode]
             # Root console only, no GUI/configd/public dispatch. The full
             # live plan, unchanged Config and owner remain re-attested under
