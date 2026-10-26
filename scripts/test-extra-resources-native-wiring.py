@@ -58,4 +58,32 @@ for name in ("extra_resources_install", "extra_resources_status", "extra_resourc
     require(f"[{name}]" in actions, "configd action absent: " + name)
 require("extra_resources_preflight.py preflight" in actions,
         "read-only preflight unexpectedly removed")
+require(all(f'"{m}"' in operation for m in
+            ("remove-test", "remove-test-fail", "remove-test-interrupt",
+             "recover-test")), "owner-console Remove routes are missing")
+require('outcome["status"] in ("REMOVED", "NO_EXTRA_RESOURCES")' in operation,
+        "empty native Remove must not report extras installed")
+require("EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE" in operation and
+        "os.geteuid() != 0" in operation,
+        "owner-console Remove route is not root/explicitly gated")
+require('"$SERVICE_SCRIPT" "$MODE" "$_witness"' in launcher and
+        'extra-resources-recover-test' in launcher and
+        '"$LOCKF_BIN" -s -t 60 "$LOCK_FILE"' in launcher,
+        "owner-console Remove does not preserve original setup.lock")
+require('remove-test|remove-test-fail|remove-test-interrupt' in service and
+        'EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE' in service,
+        "native FD9 owner acceptance dispatch is absent")
+require("[extra_resources_remove]" not in actions and
+        "[extra_resources_remove_test]" not in actions,
+        "owner acceptance route must NOT expose destructive configd/GUI operation")
+require('extra-resources-recover|extra-resources-recover-test)' in service and
+        'the worker verifies the exact linked journals' in service,
+        "recovery must remain reachable under FD9 while common Apply journal is pending")
+transaction = (src / "extra_resources_transaction.py").read_text()
+require('phase == "committing"' in transaction and
+        'new_native_owner' in transaction and
+        '_finish_committing_remove(' in transaction and
+        'os.replace(work, retired)' in transaction,
+        "native Remove must seal new owner before irreversible inode cleanup")
+
 print("PASS: resource syntax and existing lifecycle/lock wiring")

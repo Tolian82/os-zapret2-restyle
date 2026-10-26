@@ -134,7 +134,13 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         actions = (ROOT / "src/opnsense/service/conf/actions.d/actions_zapret.conf").read_text()
         self.assertIn('extra-resources-preview-saved)', service)
         self.assertIn('extra_resources_preview_saved_service()', service)
-        self.assertIn('extra-resources-preview-saved|extra-resources-remove-plan|upstream-recover-mutating', service)
+        # Owner-console recovery and acceptance routes now share this original
+        # FD9 dispatch, so adjacency to upstream recovery is not a contract.
+        # Preserve the read-only preview/plan lock and non-public API checks.
+        self.assertIn('extra-resources-preview-saved|extra-resources-remove-plan|', service)
+        self.assertIn('upstream-recover-mutating|upstream-install)', service)
+        self.assertNotIn('[extra_resources_remove]', actions)
+        self.assertIn('EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE', service)
         self.assertIn('EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0', service)
         self.assertIn('preview-saved)', launcher)
         segment = launcher.split('    preview-saved)\n', 1)[1].split('    plan)', 1)[0]

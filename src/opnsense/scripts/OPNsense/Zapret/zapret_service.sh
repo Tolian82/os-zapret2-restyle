@@ -2199,6 +2199,27 @@ service_dispatch()
             STRATEGY_LAB_LIFECYCLE_OWNER=1 UPSTREAM_RECOVERY_LIFECYCLE_OWNER=1 \
                 "${SCRIPT_DIR}/setup_transaction.sh" recover-mutating-under-parent-lock
             ;;
+        remove-test|remove-test-fail|remove-test-interrupt|extra-resources-recover-test)
+            # Private root-console owner acceptance only; no configd key or
+            # GUI Remove endpoint. launcher already owns setup.lock and this
+            # original native service owns FD9 through the full transaction.
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+            [ "${EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE:-0}" = 1 ] || return 75
+            [ -x /usr/local/bin/python3.13 ] &&
+            [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
+            STRATEGY_LAB_LIFECYCLE_OWNER=1
+            export STRATEGY_LAB_LIFECYCLE_OWNER
+            case "$1" in
+                extra-resources-recover-test)
+                    [ "$#" -eq 1 ] || return 64
+                    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" recover-test
+                    ;;
+                *)
+                    [ "$#" -eq 2 ] || return 64
+                    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" "$1" "$2"
+                    ;;
+            esac
+            ;;
         extra-resources-install|extra-resources-recover)
             # Launcher owns setup.lock before acquiring original FD9.
             # Native lifecycle callbacks never acquire a second lock.
@@ -2405,7 +2426,18 @@ service_with_lifecycle_lock()
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
                 ;;
-            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|extra-resources-preview-saved|extra-resources-remove-plan|upstream-recover-mutating|upstream-install)
+            extra-resources-recover|extra-resources-recover-test)
+                # An interrupted Remove can leave the existing shared Apply
+                # journal at PREPARED/ACTIVATING/ACTIVATED/CONFIG-SAVED. A
+                # generic preflight would refuse BEFORE its one authorized
+                # resource recovery worker could restore that exact owner.
+                # Only a caller holding setup.lock -> original FD9 may enter;
+                # the worker verifies the exact linked journals and runtime
+                # and refuses any unproven recovery. This does NOT relax
+                # normal Start/Apply or a new Install/Remove preflight.
+                [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+                ;;
+            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-preview-saved|extra-resources-remove-plan|remove-test|remove-test-fail|remove-test-interrupt|upstream-recover-mutating|upstream-install)
                 # Under the inherited FD9, a committed native owner can be
                 # temporarily stopped/restored only by native common service
                 # actions. Pending or foreign owners remain fail-closed.
@@ -2456,7 +2488,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove-plan|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove-plan|remove-test|remove-test-fail|remove-test-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
