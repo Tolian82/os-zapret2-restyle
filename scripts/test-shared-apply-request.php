@@ -40,6 +40,34 @@ foreach (['telegram','discord','x','sip','custom'] as $svc) {
 $active .= '</voice><hostlist><telegramips>91.108.0.0/16</telegramips></hostlist>' .
     '<strategylab><enablequic>1</enablequic></strategylab></Zapret>' .
     '</OPNsense></opnsense>';
+// Remove uses the exact saved no-change Strategies candidate, not a
+// duplicate option table. It preserves all native Voice state and future
+// saved fields while retaining original Config XML *byte for byte*.
+$present = Request::prepareSavedUnchanged($all, $active);
+must($present['xml'] === $active,
+    'saved trial candidate rewrote native Config or serialized model defaults');
+must($present['plan']['candidate'] === $all &&
+    $present['plan']['changed_fields'] === [] &&
+    $present['plan']['page'] === 'strategies' &&
+    $present['plan']['dependencies'] === Snapshot::digest($all),
+    'saved trial candidate did not reuse entire native model and snapshot');
+$future = $all;
+$future['hostlist']['futuretargetsv3'] = '198.51.100.1/32';
+$future['strategy']['futurefield'] = '--another-future-native-option';
+$future['voice']['telegram']['enabled'] = '1';
+$future['voice']['telegram']['args'] = '--filter-udp=3478';
+$futureCandidate = Request::prepareSavedUnchanged($future, $active);
+must($futureCandidate['xml'] === $active &&
+    $futureCandidate['plan']['candidate'] === $future &&
+    $futureCandidate['plan']['changed_fields'] === [],
+    'future HOSTLIST/Voice/Strategy fields were rewritten or dropped');
+$missingSaved = $all;
+unset($missingSaved['hostlist']['telegramips']);
+rejects(fn()=>Request::prepareSavedUnchanged($missingSaved, $active),
+        'missing saved Telegram sync value accepted without native model gate');
+rejects(fn()=>Request::prepareSavedUnchanged($all, ''),
+        'invalid original native Config accepted for saved trial');
+
 $raw = json_encode([
     'page'=>'strategies',
     'fields'=>['strategy'=>['trafficargs'=>'--filter-tcp=80']],

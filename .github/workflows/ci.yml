@@ -235,6 +235,9 @@ jobs:
       - name: Check primary revision metadata before costly test matrix
         run: python3.13 scripts/test-current-handoff-identity.py
 
+      - name: Fast native saved-Config common compiler test before long Strategy Lab
+        run: python3.13 scripts/test-extra-resources-native-saved-build.py
+
       - name: Check upstream recovery syntax and fault tests before costly matrix
         shell: bash
         run: |
