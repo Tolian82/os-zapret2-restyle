@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 
 from extra_resources_preflight import (
     PreflightError, inspect_collisions, resource_path, sha256, validate_runtime_path,
@@ -122,13 +123,49 @@ def _validate_native_owner(owner: object) -> dict:
     return dict(owner)
 
 
+def _remove_inode(path: Path) -> dict:
+    """Observe the original filesystem inode, not just its Lua/BIN bytes.
+
+    Quarantine and recovery MUST rename this very inode back. Rewriting a
+    backup with _write_atomic would silently lose ACLs, flags, ownership and
+    timestamps even if the SHA-256 digest still matched.
+    """
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise TransactionError("unsafe or multiply linked Remove resource")
+    return {
+        "dev": info.st_dev, "ino": info.st_ino,
+        "mode": stat.S_IMODE(info.st_mode),
+        "uid": info.st_uid, "gid": info.st_gid,
+        "size": info.st_size, "mtime_ns": info.st_mtime_ns,
+        "flags": getattr(info, "st_flags", 0),
+    }
+
+
+def _validate_remove_inodes(inodes: object, previous: dict) -> dict:
+    names = {"dev", "ino", "mode", "uid", "gid", "size", "mtime_ns", "flags"}
+    if not isinstance(inodes, dict) or set(inodes) != set(previous):
+        raise TransactionError("missing or mismatched original Remove inode witnesses")
+    for name, record in inodes.items():
+        if (not resource_path(name) or not isinstance(record, dict) or
+                set(record) != names or
+                any(type(value) is not int for value in record.values()) or
+                record["ino"] <= 0 or record["dev"] < 0 or
+                not 0 <= record["mode"] <= 0o7777 or
+                min(record["uid"], record["gid"], record["size"], record["flags"]) < 0):
+            raise TransactionError("invalid original Remove inode witness")
+    return inodes
+
+
 def _write_remove_phase(work: Path, phase: str, previous: dict, head: str,
-                        native_owner: dict) -> None:
-    # Keep the same durable schema and existing recovery engine as Install.
+                        native_owner: dict, inodes: dict) -> None:
+    # Same resource transaction journal, extended with the original inodes;
+    # no extra owner database or competing restore implementation.
     _json_write(work / "journal.json", {
         "schema": SCHEMA, "mode": "remove", "phase": phase,
         "previous": previous, "incoming": {}, "source_commit": head,
         "native_owner": _validate_native_owner(native_owner),
+        "original_inodes": _validate_remove_inodes(inodes, previous),
     })
 
 
@@ -136,7 +173,7 @@ def _quarantine_path(root: Path) -> Path:
     return root / QUARANTINE_NAME
 
 
-def _move_to_quarantine(root: Path, previous: dict) -> None:
+def _move_to_quarantine(root: Path, previous: dict, inodes: dict) -> None:
     """Rename attested extras out of the two active resource directories.
 
     The quarantine is INSIDE the original runtime filesystem: no EXDEV
@@ -150,7 +187,10 @@ def _move_to_quarantine(root: Path, previous: dict) -> None:
     _sync_dir(root)
     for name, digest in sorted(previous.items()):
         source = validate_runtime_path(root, name)
-        if not source.is_file() or source.is_symlink() or sha256(source.read_bytes()) != digest:
+        if (source.is_symlink() or not source.is_file() or
+                _remove_inode(source) != inodes[name] or
+                sha256(source.read_bytes()) != digest or
+                _remove_inode(source) != inodes[name]):
             raise TransactionError("resource changed before quarantine: " + name)
         dest = _safe_subdir(q, name)
         if dest.exists() or dest.is_symlink():
@@ -158,14 +198,16 @@ def _move_to_quarantine(root: Path, previous: dict) -> None:
         os.replace(source, dest)
         _sync_dir(source.parent)
         _sync_dir(dest.parent)
+        if _remove_inode(dest) != inodes[name]:
+            raise TransactionError("original Remove inode changed after quarantine: " + name)
 
 
-def _clear_quarantine(root: Path, previous: dict) -> None:
+def _inspect_quarantine(root: Path, previous: dict) -> Path | None:
     q = _quarantine_path(root)
     if q.is_symlink():
         raise TransactionError("RESTORE_FAILED: quarantine is a symlink")
     if not q.exists():
-        return
+        return None
     if not q.is_dir():
         raise TransactionError("RESTORE_FAILED: invalid quarantine directory")
     expected = set(previous)
@@ -179,8 +221,46 @@ def _clear_quarantine(root: Path, previous: dict) -> None:
                 raise TransactionError("RESTORE_FAILED: foreign quarantine directory")
         elif rel not in expected or not item.is_file() or sha256(item.read_bytes()) != previous[rel]:
             raise TransactionError("RESTORE_FAILED: foreign quarantine resource")
-    shutil.rmtree(q)
-    _sync_dir(root)
+    return q
+
+
+def _clear_quarantine(root: Path, previous: dict) -> None:
+    q = _inspect_quarantine(root, previous)
+    if q is not None:
+        shutil.rmtree(q)
+        _sync_dir(root)
+
+
+def _restore_remove(root: Path, work: Path, previous: dict, inodes: dict) -> None:
+    """Return ONLY the original hardlink-free inodes through atomic rename.
+
+    An absent source/foreign inode cannot be reconstructed faithfully from
+    byte backups (ACLs and flags are not recoverable): retain the journal and
+    report RESTORE_FAILED instead of pretending metadata was restored.
+    """
+    _validate_remove_inodes(inodes, previous)
+    q = _inspect_quarantine(root, previous)
+    moves = []
+    # Verify the ENTIRE set before the first rename; a partial failure still
+    # leaves the journal and permits an idempotent retry.
+    for name, digest in sorted(previous.items()):
+        _verified_staging(work, "backup", name, digest)
+        target = validate_runtime_path(root, name)
+        source = q / name if q is not None else None
+        if source is not None and (source.exists() or source.is_symlink()):
+            if (source.is_symlink() or target.exists() or target.is_symlink() or
+                    _remove_inode(source) != inodes[name] or
+                    sha256(source.read_bytes()) != digest):
+                raise TransactionError("RESTORE_FAILED: foreign or changed Remove inode: " + name)
+            moves.append((source, target))
+        elif (target.is_symlink() or not target.is_file() or
+              _remove_inode(target) != inodes[name] or
+              sha256(target.read_bytes()) != digest):
+            raise TransactionError("RESTORE_FAILED: original Remove inode missing: " + name)
+    for source, target in moves:
+        os.replace(source, target)
+        _sync_dir(source.parent)
+        _sync_dir(target.parent)
 
 
 def _verified_staging(work: Path, folder: str, name: str, digest: str) -> bytes:
@@ -280,6 +360,7 @@ def recover(root: Path, state: Path, lifecycle) -> str:
     if is_remove and incoming:
         raise TransactionError("invalid remove recovery journal")
     native_owner = _validate_native_owner(journal.get("native_owner")) if is_remove else None
+    inodes = _validate_remove_inodes(journal.get("original_inodes"), previous) if is_remove else None
     try:
         if journal.get("phase") == "completed":
             raise TransactionError("completed journal requires post-commit audit")
@@ -315,7 +396,10 @@ def recover(root: Path, state: Path, lifecycle) -> str:
             else:
                 lifecycle.stop()
                 lifecycle.assert_stopped()
-            _restore(root, work, previous, incoming)
+            if is_remove:
+                _restore_remove(root, work, previous, inodes)
+            else:
+                _restore(root, work, previous, incoming)
             _rollback_metadata(state, work)
             if is_remove:
                 restore_native(native_owner)
@@ -473,6 +557,7 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
         raise TransactionError("RECOVERY_REQUIRED: unfinished resource transaction")
     work.mkdir(mode=0o700)
     _sync_dir(state)
+    inodes = {}
     try:
         (work / "backup").mkdir(mode=0o700)
         installed_file = state / "installed.json"
@@ -488,8 +573,12 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
             body = path.read_bytes()
             if sha256(body) != digest:
                 raise TransactionError("extra resource changed before snapshot")
+            inode = _remove_inode(path)
+            if sha256(path.read_bytes()) != digest or _remove_inode(path) != inode:
+                raise TransactionError("original resource inode changed during snapshot")
+            inodes[name] = inode
             _store_file(work / "backup", name, body)
-        _write_remove_phase(work, "prepared", previous, plan["upstream_head"], old_owner)
+        _write_remove_phase(work, "prepared", previous, plan["upstream_head"], old_owner, inodes)
     except Exception:
         shutil.rmtree(work)
         _sync_dir(state)
@@ -502,15 +591,18 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
             raise TransactionError("resource or saved Config changed during preparation")
         if _validate_native_owner(lifecycle.capture_previous_native_common_apply()) != old_owner:
             raise TransactionError("previous native common owner changed before Stop")
-        _write_remove_phase(work, "stopping", previous, plan["upstream_head"], old_owner)
+        for name in previous:
+            if _remove_inode(validate_runtime_path(root, name)) != inodes[name]:
+                raise TransactionError("original resource inode changed before Stop")
+        _write_remove_phase(work, "stopping", previous, plan["upstream_head"], old_owner, inodes)
         lifecycle.stop()
         lifecycle.assert_stopped()
-        _write_remove_phase(work, "publishing", previous, plan["upstream_head"], old_owner)
-        _move_to_quarantine(root, previous)
+        _write_remove_phase(work, "publishing", previous, plan["upstream_head"], old_owner, inodes)
+        _move_to_quarantine(root, previous, inodes)
         # Check exact resource set before invoking the same real GUI compiler.
         if installed_resources(root) != plan["upstream"]:
             raise TransactionError("quarantine did not reach exact upstream resources")
-        _write_remove_phase(work, "restarting", previous, plan["upstream_head"], old_owner)
+        _write_remove_phase(work, "restarting", previous, plan["upstream_head"], old_owner, inodes)
         lifecycle.start_trial_native_common_apply()
         new_identity = lifecycle.assert_started()
         if not new_identity or new_identity == old_identity:
@@ -523,7 +615,7 @@ def remove_with_native_trial(expected_witness: str, root: Path, state: Path,
             installed_file.unlink()
             _sync_dir(state)
         _clear_quarantine(root, previous)
-        _write_remove_phase(work, "completed", previous, plan["upstream_head"], old_owner)
+        _write_remove_phase(work, "completed", previous, plan["upstream_head"], old_owner, inodes)
         shutil.rmtree(work)
         _sync_dir(state)
         return {"status": "REMOVED", "lua": plan["counts"]["lua"],
