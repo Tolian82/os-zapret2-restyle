@@ -92,4 +92,31 @@ require('phase == "committing"' in transaction and
 require("interrupt-after-first-committed-inode" in transaction and
         "OWNER_ACCEPTANCE_INTERRUPTED_AFTER_FIRST_COMMITTED_INODE" in transaction,
         "R4 post-commit first-inode fault point absent")
+
+# Regression: R4 must traverse the ACTUAL top-level owner FD9 lock wrapper,
+# not merely exist in service_dispatch() or the nested native dispatcher.
+top = service.rsplit('\ncase "${1:-}" in\n', 1)
+require(len(top) == 2, "could not locate original top-level service dispatch")
+outer_case = top[1]
+outer_branch = next(
+    (line.strip() for line in outer_case.splitlines()
+     if line.strip().startswith("start|stop|restart|reconfigure|")),
+    "",
+)
+require("remove-test-commit-interrupt" in outer_branch.rstrip(")").split("|"),
+        "R4 must acquire original service_with_lifecycle_lock FD9")
+require('service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"' in outer_case,
+        "top-level lifecycle FD9 owner call missing")
+wrapper = service.split("service_with_lifecycle_lock()\n", 1)
+require(len(wrapper) == 2, "original lifecycle lock wrapper not found")
+wrapper_case = wrapper[1].split('\ncase "${1:-}" in\n', 1)[0]
+preflight_branch = next(
+    (line.strip() for line in wrapper_case.splitlines()
+     if line.strip().startswith("strategy-lab|strategy-lab-circular|strategy-lab-recover|")),
+    "",
+)
+require("remove-test-commit-interrupt" in preflight_branch.rstrip(")").split("|"),
+        "R4 must pass native shared-Apply owner preflight under FD9")
+require("remove-test-commit-interrupt" not in outer_case.split('    *)\n', 1)[-1],
+        "R4 must not be explicitly sent to unlocked fallback")
 print("PASS: resource syntax and existing lifecycle/lock wiring")
