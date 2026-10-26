@@ -576,8 +576,9 @@ class TestExactReconciliation(unittest.TestCase):
                 self.state, self.lifecycle, config=config)
         original = self.root / tx.QUARANTINE_NAME / "lua/orphan.lua"
         body = original.read_bytes()
-        original.unlink()
-        original.write_bytes(body)  # same SHA256, different inode
+        replacement = original.with_name("replacement.tmp")
+        replacement.write_bytes(body)
+        os.replace(replacement, original)  # same SHA256, guaranteed different inode
         with self.assertRaisesRegex(tx.TransactionError, "RESTORE_FAILED"):
             tx.recover(self.root, self.state, self.lifecycle)
         self.assertTrue((self.state / "transaction/journal.json").exists())
