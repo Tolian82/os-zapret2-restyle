@@ -144,6 +144,67 @@ class NativeManagedTests(unittest.TestCase):
         self.assertFalse(proof["runnable"])
         self.assertFalse(proof["authorized"])
 
+    def test_relative_native_file_options_and_runtime_controls_are_unresolved(self):
+        digest = hashlib.sha256(b"lua").hexdigest()
+        staged = {"upstream/lua/zapret-lib.lua": digest}
+        base = b"--lua-init=@/upstream/lua/zapret-lib.lua\n"
+        for option in (
+            "--ipset-exclude=local.txt", "--hostlist-auto=auto.txt",
+            "--hostlist-auto-debug=audit.log", "--pidfile=pid.txt",
+            "--chdir=working", "--wf-save=filter.rules", "--ipset-auto=plain",
+        ):
+            with self.subTest(option=option):
+                proof = attest_staged_native_file_paths(
+                    base + (option + "\n").encode(), staged
+                )
+                self.assertEqual(proof["state"], "unresolved-native-file-paths")
+                self.assertEqual(proof["unresolved_path_tokens"], 1)
+                self.assertEqual(proof["known_file_references"], 1)
+                self.assertIs(proof["authorized"], False)
+        for option in ("--writable", "--daemon", "--uid=1000", "--user=nobody"):
+            with self.subTest(option=option):
+                proof = attest_staged_native_file_paths(
+                    base + (option + "\n").encode(), staged
+                )
+                self.assertEqual(proof["state"], "unreviewed-native-runtime-controls")
+                self.assertEqual(proof["unresolved_path_tokens"], 0)
+                self.assertEqual(proof["runtime_side_effect_option_tokens"], 1)
+                self.assertGreater(proof["unreviewed_native_option_tokens"], 0)
+                self.assertFalse(proof["runnable"])
+        for option in ("--future-flag=relative.txt", "--lua-desync=pass"):
+            with self.subTest(option=option):
+                proof = attest_staged_native_file_paths(
+                    base + (option + "\n").encode(), staged
+                )
+                self.assertEqual(proof["state"], "unreviewed-native-option-semantics")
+                self.assertGreater(proof["unreviewed_native_option_tokens"], 0)
+                self.assertFalse(proof["runnable"])
+
+    def test_inert_snapshot_exposes_process_side_effects(self):
+        view = self.base / "native-view"
+        (view / "lua").mkdir(parents=True)
+        (view / "files/fake").mkdir(parents=True)
+        (view / "lua/zapret-lib.lua").write_bytes(b"function pass() end\n")
+        engine = self.base / "native-engine"
+        engine.write_bytes(fixture.native_elf("libc.so.7", "libluajit-5.1.so.2"))
+        engine.chmod(0o755)
+        argv = self.base / "native.args"
+        argv.write_text("--lua-init=@" + str(view / "lua/zapret-lib.lua")
+                        + "\n--writable\n")
+        workspace = self.base / "native-private"
+        workspace.mkdir(mode=0o700)
+        with staged_inert_jail_inputs(
+            engine, argv, view, workspace,
+            expected_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),
+            expected_argv_sha256=hashlib.sha256(argv.read_bytes()).hexdigest(),
+            check_lifecycle=lambda: None,
+        ) as (proof, _):
+            self.assertEqual(proof["native_path_state"],
+                             "unreviewed-native-runtime-controls")
+            self.assertEqual(proof["native_runtime_side_effect_option_tokens"], 1)
+            self.assertFalse(proof["runnable"])
+            self.assertIs(proof["authorized"], False)
+
     def test_integration_inert_jail_snapshot_and_source_race(self):
         view = self.base / "upstream"
         (view / "lua").mkdir(parents=True)

@@ -312,6 +312,8 @@ def staged_inert_jail_inputs(
             "native_path_state": path_report["state"],
             "native_file_references": path_report["known_file_references"],
             "native_unresolved_path_tokens": path_report["unresolved_path_tokens"],
+            "native_unreviewed_option_tokens": path_report["unreviewed_native_option_tokens"],
+            "native_runtime_side_effect_option_tokens": path_report["runtime_side_effect_option_tokens"],
             "native_file_reference_witness_sha256": path_report["file_reference_witness_sha256"],
             "runnable": False,
             "dynamic_library_closure": "unknown",

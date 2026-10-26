@@ -20,7 +20,17 @@ RESOURCE = re.compile(r"[A-Za-z0-9_.-]{1,220}\.(?:lua|bin)\Z")
 MANAGED = re.compile(r"[a-z0-9][a-z0-9_.-]{0,127}\.txt\Z")
 BLOB = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
-UNMAPPED_FILE_OPTIONS = ("--hostlist-auto=", "--ipset-auto=")
+# Upstream v1.0.6 native file-bearing options not yet relocated. Their
+# relative values need no slash to access the host filesystem.
+UNMAPPED_FILE_OPTIONS = frozenset((
+    "--hostlist-auto", "--ipset-auto", "--hostlist-auto-debug",
+    "--ipset-exclude", "--pidfile", "--chdir", "--wf-save",
+))
+# Native flags with possible filesystem or process side effects.
+RUNTIME_SIDE_EFFECT_OPTIONS = frozenset((
+    "--hostlist-auto", "--hostlist-auto-debug", "--pidfile", "--chdir",
+    "--wf-save", "--daemon", "--writable", "--uid", "--user",
+))
 
 # These paths are the *existing* staged input layout, not host paths.
 DIRECT_LUA = "--lua-init=@/upstream/lua/"
@@ -60,6 +70,8 @@ def attest_staged_native_file_paths(
     referenced: dict[str, str] = {}
     unresolved = 0
     file_tokens = 0
+    unreviewed_options = 0
+    runtime_side_effects = 0
     for token in tokens:
         relative = None
         if token.startswith(DIRECT_LUA):
@@ -88,8 +100,13 @@ def attest_staged_native_file_paths(
         if relative is None and (token.startswith("--lua-init=") or
                                  token.startswith("--blob=")):
             raise PreflightError("native Lua/BIN argument bypassed staged mapping")
-        if relative is None and any(token.startswith(option) for option in (*MANAGED_OPTIONS, *UNMAPPED_FILE_OPTIONS)):
+        option_name = token.partition("=")[0]
+        if relative is None and (
+                option_name in UNMAPPED_FILE_OPTIONS
+                or any(token.startswith(option) for option in MANAGED_OPTIONS)):
             unresolved += 1
+            if option_name in RUNTIME_SIDE_EFFECT_OPTIONS:
+                runtime_side_effects += 1
             continue
         if relative is not None:
             expected = staged_sha256.get(relative)
@@ -99,21 +116,32 @@ def attest_staged_native_file_paths(
                 raise PreflightError("jailed file digest changed during argument scan")
             referenced[relative] = expected
             file_tokens += 1
-        elif "/" in token or "@" in token:
-            # Unknown/unmapped options are left as non-runnable evidence;
-            # NEVER normalize them or inspect their host filesystem paths.
-            unresolved += 1
+        elif token != "--new":
+            # Non-path spellings are NOT evidence of safe native semantics:
+            # --writable, --uid, new switches and Lua calls still need review.
+            unreviewed_options += 1
+            if option_name in RUNTIME_SIDE_EFFECT_OPTIONS:
+                runtime_side_effects += 1
+            if "/" in token or "@" in token:
+                # NEVER normalize or inspect unknown host paths.
+                unresolved += 1
 
     rows = sorted(referenced.items())
     witness = hashlib.sha256(
         json.dumps(rows, separators=(",", ":"), ensure_ascii=True).encode("ascii")
     ).hexdigest()
     return {
-        "state": "known-native-file-paths-staged-only" if unresolved == 0
-                 else "unresolved-native-file-paths",
+        "state": (
+            "unresolved-native-file-paths" if unresolved
+            else "unreviewed-native-runtime-controls" if runtime_side_effects
+            else "unreviewed-native-option-semantics" if unreviewed_options
+            else "known-native-file-paths-staged-only"
+        ),
         "known_file_references": file_tokens,
         "unique_staged_files": len(rows),
         "unresolved_path_tokens": unresolved,
+        "unreviewed_native_option_tokens": unreviewed_options,
+        "runtime_side_effect_option_tokens": runtime_side_effects,
         "file_reference_witness_sha256": witness,
         "engine_option_semantics": "unknown",
         "dynamic_library_closure": "unknown",
