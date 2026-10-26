@@ -39,7 +39,7 @@ try:
  phase=x.get("phase","unknown")
  phases={"downloading","verifying","installing","ready","failed",
          "restore_failed","recovery_required","recovering","restored",
-         "no_recovery_needed"}
+         "no_recovery_needed","removing","not_installed"}
  if phase not in phases: phase="unknown"
  operation=x.get("operation","")
  if not isinstance(operation,str) or not re.fullmatch(r"[a-f0-9]{32}",operation):
@@ -89,6 +89,27 @@ except Exception:
             /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
             "$SERVICE_SCRIPT" extra-resources-remove-plan
         ;;
+    remove-test|remove-test-fail|remove-test-interrupt|recover-test)
+        # Explicit owner-console acceptance. FOREGROUND, root only; never
+        # exposed through configd or GUI. setup.lock -> native FD9.
+        [ "$(/usr/bin/id -u)" -eq 0 ] && [ -x "$SERVICE_SCRIPT" ] &&
+        [ -x "$LOCKF_BIN" ] && [ -x "$PYTHON_BIN" ] || exit 75
+        if [ "$MODE" = recover-test ]; then
+            [ "$#" -eq 1 ] || exit 64
+            exec "$LOCKF_BIN" -s -t 60 "$LOCK_FILE" \
+                /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+                EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE=1 \
+                "$SERVICE_SCRIPT" extra-resources-recover-test
+        fi
+        [ "$#" -eq 2 ] || exit 64
+        _witness="$2"
+        case "$_witness" in ''|*[!a-f0-9]*) exit 64 ;; esac
+        [ "${#_witness}" -eq 64 ] || exit 64
+        exec "$LOCKF_BIN" -s -t 60 "$LOCK_FILE" \
+            /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+            EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE=1 \
+            "$SERVICE_SCRIPT" "$MODE" "$_witness"
+        ;;
     install|recover)
         if [ "$MODE" = install ]; then
             [ "$#" -eq 2 ] || exit 64
@@ -120,7 +141,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|remove-test|remove-test-fail|remove-test-interrupt|recover-test}' >&2
         exit 64
         ;;
 esac
