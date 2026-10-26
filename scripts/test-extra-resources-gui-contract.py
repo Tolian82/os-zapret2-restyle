@@ -187,7 +187,7 @@ assert.equal(extraOperationTerminal({operation:id,phase:'ready',busy:false},''),
 
     # Execute actual UI status switch, not a synthetic second predicate.
     status_fun = re.search(
-        r"        function extrasLabel\\(data\\) \\{.*?^        \\}",
+        r"        function extrasLabel\(data\) \{.*?^        \}",
         view, re.M | re.S,
     )
     require(status_fun is not None, "status renderer missing")
@@ -225,7 +225,7 @@ assert.match(extrasLabel({phase:'restore_failed',installed:true}), /Ошибка
     # Help must show only install guidance when the same cache says absent;
     # a missing cache is UNKNOWN, never an invitation based on stale state.
     help_fun = re.search(
-        r"        function renderResourceHelpInventory\\(data\\) \\{.*?^        \\}",
+        r"        function renderResourceHelpInventory\(data\) \{.*?^        \}",
         view, re.M | re.S,
     )
     require(help_fun is not None, "full-help renderer missing")
