@@ -20,7 +20,7 @@ from extra_resources_preflight import (
 from extra_resources_transaction import (
     TransactionError, install, recover, _safe_state, _json_write,
 )
-from extra_resources_reconcile import make_plan
+from extra_resources_reconcile import make_plan, make_remove_plan
 from extra_resources_inventory_cache import InventoryCacheError, refresh as refresh_inventory_cache
 
 SCRIPT = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
@@ -114,8 +114,8 @@ def _refresh_help_cache() -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2 or argv[1] not in {"install", "recover"}:
-        print("usage: extra_resources_operation.py {install|recover}", file=sys.stderr)
+    if len(argv) != 2 or argv[1] not in {"install", "recover", "plan"}:
+        print("usage: extra_resources_operation.py {install|recover|plan}", file=sys.stderr)
         return 64
     mode = argv[1]
     if mode == "install" and re.fullmatch(
@@ -124,7 +124,22 @@ def main(argv: list[str]) -> int:
         print("missing or invalid resource operation identity", file=sys.stderr)
         return 64
     try:
+        if os.environ.get("EXTRA_RESOURCES_SETUP_LOCK_OWNER") != "1":
+            raise TransactionError("missing original setup.lock owner")
         lifecycle = NativeLifecycle()
+        if mode == "plan":
+            # This is the original Git HEAD planner, not a second catalogue.
+            lifecycle.assert_started()
+            if (STATE / "transaction").exists() or (STATE / "transaction").is_symlink():
+                raise TransactionError("RECOVERY_REQUIRED: pending resource transaction")
+            plan = make_remove_plan(RUNTIME, STATE / "installed.json", Path("/conf/config.xml"))
+            summary = {"status": "dry_run_only", "ready": False,
+                       "lua": plan["counts"]["lua"], "bin": plan["counts"]["bin"],
+                       "total": plan["counts"]["total"],
+                       "inventory_sha256": plan["witness"]["inventory_sha256"]}
+            print("extra-resources-remove-plan=" +
+                  json.dumps(summary, sort_keys=True, separators=(",", ":")))
+            return 0
         if mode == "recover":
             _status("recovering")
             status = recover(RUNTIME, STATE, lifecycle)
@@ -156,10 +171,13 @@ def main(argv: list[str]) -> int:
             TimeoutError, subprocess.TimeoutExpired) as exc:
         code = "RESTORE_FAILED" if "RESTORE_FAILED" in str(exc) else (
             "RECOVERY_REQUIRED" if "RECOVERY_REQUIRED" in str(exc) else "FAILED")
-        try:
-            _status(code.lower(), detail=str(exc)[:450])
-        except Exception:
-            pass
+        # A read-only plan, including its refusal path, must never write the
+        # shared install/status receipt or poison a working installation.
+        if mode != "plan":
+            try:
+                _status(code.lower(), detail=str(exc)[:450])
+            except Exception:
+                pass
         print(f"EXTRA_RESOURCES_{code}: {exc}", file=sys.stderr)
         return 70 if code == "RESTORE_FAILED" else 1
 

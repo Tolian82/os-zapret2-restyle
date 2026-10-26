@@ -31,6 +31,15 @@ require('"$LOCKF_BIN" -s -t 60 "$LOCK_FILE"' in launcher,
 require(launcher.index('"$LOCKF_BIN" -s -t 60 "$LOCK_FILE"') <
         launcher.index('"$SERVICE_SCRIPT" "$_command"'),
         "setup lock must precede native FD9")
+require('extra-resources-remove-plan)' in service and
+        'extra-resources-remove-plan|' in service,
+        "read-only Remove planning does not inherit original FD9 lifecycle")
+require('exec "$LOCKF_BIN" -s -t 10 "$LOCK_FILE"' in launcher and
+        '"$SERVICE_SCRIPT" extra-resources-remove-plan' in launcher,
+        "read-only Remove plan bypasses original setup.lock")
+require('"plan"' in operation and 'make_remove_plan(RUNTIME,' in operation and
+        '"ready": False' in operation,
+        "read-only Remove planner lacks source and no-authority receipt")
 require('extra-resources-install|extra-resources-recover)' in service,
         "original FD9 service dispatch absent")
 require('STRATEGY_LAB_LIFECYCLE_OWNER=1' in service,
@@ -45,7 +54,7 @@ require('reconcile=True' in operation and 'make_plan(payloads' in operation,
 require('EXTRA_RESOURCES_PID_FILE' in setup and
         'pid_file_running "${EXTRA_RESOURCES_PID_FILE}"' in setup,
         "normal upstream launcher ignores active resource job")
-for name in ("extra_resources_install", "extra_resources_status", "extra_resources_recover"):
+for name in ("extra_resources_install", "extra_resources_status", "extra_resources_recover", "extra_resources_remove_plan"):
     require(f"[{name}]" in actions, "configd action absent: " + name)
 require("extra_resources_preflight.py preflight" in actions,
         "read-only preflight unexpectedly removed")

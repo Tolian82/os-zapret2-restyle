@@ -222,6 +222,60 @@ class ServiceController extends ApiMutableServiceControllerBase
         }
     }
 
+    /**
+     * Read-only, owner-locked exact upstream HEAD Remove plan. Never an
+     * authorization to mutate: the native common GUI Apply trial is not yet
+     * connected, and the server explicitly returns ready=false.
+     */
+    public function resourcesRemovePlanAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+        $backend = new Backend();
+        $runtime = $this->getRuntimeState($backend);
+        $extras = $this->getExtraResourceState($backend);
+        if (!$runtime['installed'] || $runtime['service'] !== 'started' ||
+            $runtime['busy'] || $extras['busy'] ||
+            in_array($extras['phase'], ['restore_failed', 'recovery_required'], true)) {
+            throw new UserException(
+                gettext('Start Zapret2 and finish any pending runtime operation or recovery first.'),
+                gettext('Additional Resources unavailable')
+            );
+        }
+        $raw = trim((string)$backend->configdRun(
+            'zapret extra_resources_remove_plan', false, 120
+        ));
+        $prefix = 'extra-resources-remove-plan=';
+        if (strlen($raw) > 4096 || !str_starts_with($raw, $prefix)) {
+            return ['status' => 'unavailable', 'ready' => false];
+        }
+        $plan = json_decode(substr($raw, strlen($prefix)), true);
+        if (!is_array($plan) || ($plan['status'] ?? '') !== 'dry_run_only' ||
+            ($plan['ready'] ?? null) !== false ||
+            !is_string($plan['inventory_sha256'] ?? null) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $plan['inventory_sha256'])) {
+            return ['status' => 'unavailable', 'ready' => false];
+        }
+        foreach (['lua', 'bin', 'total'] as $key) {
+            if (!isset($plan[$key]) || !is_int($plan[$key]) ||
+                $plan[$key] < 0 || $plan[$key] > 10000) {
+                return ['status' => 'unavailable', 'ready' => false];
+            }
+        }
+        if ($plan['lua'] + $plan['bin'] !== $plan['total']) {
+            return ['status' => 'unavailable', 'ready' => false];
+        }
+        return [
+            'status' => 'ok',
+            'ready' => false,
+            'lua' => $plan['lua'],
+            'bin' => $plan['bin'],
+            'total' => $plan['total'],
+            'inventory_sha256' => $plan['inventory_sha256'],
+        ];
+    }
+
     public function resourcesInstallAction(): array
     {
         if (!$this->request->isPost()) {

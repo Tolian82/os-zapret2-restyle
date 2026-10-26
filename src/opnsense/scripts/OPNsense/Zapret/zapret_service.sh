@@ -1640,6 +1640,13 @@ service_dispatch()
         extra-resources-preview-saved)
             extra_resources_preview_saved_service
             ;;
+        extra-resources-remove-plan)
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+            [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
+            STRATEGY_LAB_LIFECYCLE_OWNER=1
+            export STRATEGY_LAB_LIFECYCLE_OWNER
+            /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" plan
+            ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
             ;;
@@ -1863,7 +1870,7 @@ service_with_lifecycle_lock()
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
                 ;;
-            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|extra-resources-preview-saved|upstream-recover-mutating|upstream-install)
+            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-recover|extra-resources-preview-saved|extra-resources-remove-plan|upstream-recover-mutating|upstream-install)
                 # Under the inherited FD9, a committed native owner can be
                 # temporarily stopped/restored only by native common service
                 # actions. Pending or foreign owners remain fail-closed.
@@ -1914,7 +1921,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove-plan|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

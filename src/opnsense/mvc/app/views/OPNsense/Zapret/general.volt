@@ -52,6 +52,14 @@
         };
         const extrasText = {
             install: isRussian ? 'Установить дополнительные ресурсы' : 'Install Additional Resources',
+            remove: isRussian ? 'Удалить дополнительные ресурсы' : 'Remove Additional Resources',
+            removePlanTitle: isRussian ? 'План удаления дополнительных ресурсов' : 'Additional Resources removal plan',
+            removePlanInfo: isRussian ? 'Будут удалены дополнительные файлы: ' : 'Additional files selected for removal: ',
+            removeNotReady: isRussian ? 'Запуск проверочной службы ещё не подключён. Удаление недоступно, файлы и служба не изменены.' :
+                'The native trial service Apply is not yet connected. Removal is unavailable; no files or service state were changed.',
+            removeNoop: isRussian ? 'Дополнительных файлов для удаления нет.' : 'No additional resources require removal.',
+            removePlanError: isRussian ? 'Не удалось получить подтверждённый план удаления. Файлы не изменены.' :
+                'Could not obtain the verified removal plan. No files were changed.',
             firstStart: isRussian ? 'Сначала запустите Zapret2' : 'Start Zapret2 first',
             unavailable: isRussian ? 'Состояние ресурсов недоступно' : 'Resource status unavailable',
             notInstalled: isRussian ? 'Дополнительные ресурсы не установлены' : 'Additional Resources not installed',
@@ -85,6 +93,7 @@
         let extraStateKnown = false;
         let extraBusy = false;
         let extraInstallPending = false;
+        let extraRemovePending = false;
         let extraExpectedOperation = '';
         let extraNeedsReview = false;
         let runtimePoll = null;
@@ -160,7 +169,7 @@
             // button owns only its own spinner.
             const controlsBusy = !!busy || releaseApplyPending || releaseNeedsReview ||
                 strategiesApplyPending || strategiesApplyNeedsReview ||
-                extraBusy || extraInstallPending || extraNeedsReview;
+                extraBusy || extraInstallPending || extraNeedsReview || extraRemovePending;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
             }).length > 0;
@@ -182,6 +191,8 @@
                 ? extrasText.firstStart : (extraNeedsReview ? extrasText.review : extrasText.install));
             $('#zapretExtraProgress').toggleClass('fa fa-spinner fa-pulse',
                 extraBusy || extraInstallPending);
+            $('#zapretExtraRemove').prop('disabled', !extrasAllowed || extraRemovePending);
+            $('#zapretExtraRemoveProgress').toggleClass('fa fa-spinner fa-pulse', extraRemovePending);
         }
 
         function reconcileStrategiesApplyControls() {
@@ -371,6 +382,22 @@
                 setRuntimeBusy(runtimeWasBusy);
             });
         }
+
+        function isResourceAdvancedEnabled() {
+            return $('#show_advanced_frm_GeneralSettings').hasClass('fa-toggle-on');
+        }
+
+        function updateResourceAdvancedVisibility() {
+            $('#zapretExtraRemoveRow').toggle(isResourceAdvancedEnabled());
+        }
+
+        // This is the native OPNsense Advanced toggle, independent of Help.
+        const resourceAdvancedIcon = document.getElementById('show_advanced_frm_GeneralSettings');
+        if (resourceAdvancedIcon && window.MutationObserver) {
+            const observer = new MutationObserver(updateResourceAdvancedVisibility);
+            observer.observe(resourceAdvancedIcon, {attributes: true, attributeFilter: ['class']});
+        }
+        updateResourceAdvancedVisibility();
 
         function isResourceHelpEnabled() {
             // Native OPNsense 26.7 full-help toggle for frm_GeneralSettings.
@@ -634,6 +661,54 @@
         });
 
         $('#zapretExtraInstallText').text(extrasText.install);
+        $('#zapretExtraRemoveText').text(extrasText.remove);
+        // Match the existing Install button's rendered dimensions; no new
+        // bespoke CSS button size or alternative OPNsense styling.
+        $('#zapretExtraRemove').css({
+            width: $('#zapretExtraInstall').outerWidth() + 'px',
+            height: $('#zapretExtraInstall').outerHeight() + 'px'
+        });
+        updateResourceAdvancedVisibility();
+        $('#zapretExtraRemove').off('click').on('click', function(event) {
+            event.preventDefault();
+            if (!isResourceAdvancedEnabled() || !extraStateKnown ||
+                extraBusy || extraInstallPending || extraRemovePending || extraNeedsReview ||
+                runtimeWasBusy || releaseApplyPending || strategiesApplyPending ||
+                strategiesApplyNeedsReview || currentServiceState !== 'started') return;
+            extraRemovePending = true;
+            setRuntimeBusy(runtimeWasBusy);
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/service/resourcesRemovePlan',
+                dataType: 'json',
+                timeout: 130000
+            }).done(function(data) {
+                if (!data || data.status !== 'ok' ||
+                    !Number.isInteger(data.lua) || !Number.isInteger(data.bin) ||
+                    data.lua < 0 || data.bin < 0 || data.total !== data.lua + data.bin ||
+                    !/^[a-f0-9]{64}$/.test(data.inventory_sha256 || '') ||
+                    data.ready !== false) {
+                    showRuntimeError(extrasText.removePlanTitle, extrasText.removePlanError);
+                    return;
+                }
+                const summary = data.total === 0 ? extrasText.removeNoop :
+                    extrasText.removePlanInfo + 'Lua: ' + data.lua + ', BIN: ' + data.bin + '.';
+                BootstrapDialog.show({
+                    type: BootstrapDialog.TYPE_INFO,
+                    title: extrasText.removePlanTitle,
+                    message: $('<div/>').text(summary + '\n' + extrasText.removeNotReady),
+                    buttons: [{
+                        label: '{{ lang._("Close") }}',
+                        action: function(dialog) { dialog.close(); }
+                    }]
+                });
+            }).fail(function() {
+                showRuntimeError(extrasText.removePlanTitle, extrasText.removePlanError);
+            }).always(function() {
+                extraRemovePending = false;
+                setRuntimeBusy(runtimeWasBusy);
+            });
+        });
         $('#zapretExtraState').text(extrasText.notInstalled);
         $('#zapretExtraInstall').off('click').on('click', function(event) {
             event.preventDefault();
@@ -847,6 +922,12 @@
                                 <i id="zapretExtraProgress"></i>
                             </button>
                             <span id="zapretExtraState" role="status" aria-live="polite"></span>
+                        </div>
+                        <div id="zapretExtraRemoveRow" style="display:none; margin-top:8px;">
+                            <button class="btn btn-default text-info" id="zapretExtraRemove" type="button" disabled>
+                                <span id="zapretExtraRemoveText">Remove Additional Resources</span>
+                                <i id="zapretExtraRemoveProgress"></i>
+                            </button>
                         </div>
                         <div id="zapretExtraResourceHelp" style="display:none;" aria-live="polite"></div>
                     </td>
