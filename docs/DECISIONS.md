@@ -2565,3 +2565,21 @@ Active owner-approved theoretical concept; implementation not approved.
 **Evidence:** [final acceptance and release authorization](verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md); [M0–M7 scoreboard](verification/EXTRA_RESOURCES_ACCEPTANCE.md); [stable release preparation](releases/v0.5.8.md).
 
 **Status:** Owner sign-off complete. Stable release publication expressly authorized and in progress.
+
+## 2026-10-26 — Native OPNsense Config persistence for Strategies/Voice; no repeat save during Remove
+
+**Owner decision (verbatim):** «Отличные новости. Утверждаю такой подход. Зафиксируй.»
+
+**Decision:** Keep the existing **native OPNsense Config persistence** as the sole authoritative Strategies/Voice settings writer. Ordinary user-edited Strategies Apply and Voice Apply retain the existing `SharedConfigCommit::persist()` path: validate only explicitly changed OPNsense model leaves, `serializeToConfig(false, true)`, then native `OPNsense\Core\Config::save()` under the existing lock and fresh readback. Never introduce a plugin-specific configuration file, second XML serializer, independent Config writer or duplicated Strategies/Voice field parser.
+
+For **Remove Additional Resources**, keep the entire saved Strategies+Voice Config snapshot unchanged. Reuse `SharedApplyRequest::prepareSavedUnchanged()`, the existing common GUI candidate compiler and `SharedApplyConfigWorker::preflight()/saved()` digest/mode checks with `changed_fields=[]`. Do **not** call `SharedConfigCommit::persist()` or `Config::save()` just to remove Lua/BIN or restart an unchanged runtime; do not manufacture a new Config revision or overwrite user-owned fields. The existing Remove trial's shared Apply phase `config-saved` is a durable *verification of already-persisted unchanged settings*, **not** evidence of a new Config write.
+
+**Reason:** Settings already survive reboot because OPNsense saves the native model. The existing `SharedConfigCommit::persist()` explicitly short-circuits on zero changed fields (`result=unchanged, saved=false`). Re-saving unchanged settings adds revision/backup noise and power-cut/partial-save risk without fixing the independent process, release or IPFW ownership problem.
+
+**Consequences:** The next Remove `config-saved` cold-recovery increment must compare the entire unchanged saved Config digest, zero changed fields, exact prior common owner and the two existing durable journals, and delegate native process/release/IPFW recovery to already-existing common Apply mechanisms. **Never blindly invoke generic `shared_apply_recover_saved_service()` as an old-owner rollback:** its intended behavior can activate the *new* release. Only attestable previous-owner restoration may close the Remove transaction; any mixed/unknown state retains evidence and returns `RESTORE_FAILED`. Preserve Exclude Domains/`--hostlist-exclude`, existing Strategies+Voice semantics and all user settings. GUI Remove remains read-only pending source qualification and separate installed-appliance acceptance. This architectural decision **does not itself implement `config-saved` recovery**, authorize a package/release, or mark owner-live tests PASS.
+
+**Source evidence:** `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php` (`applyAction`), `src/opnsense/scripts/OPNsense/Zapret/apply_settings.php` (`SharedConfigCommit::persist`), `src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php` (`save`/`saved`), `src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php` (`prepareSavedUnchanged`), and `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` (normal vs Remove common Apply).
+
+**Affected documents:** [Remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md), [Remove implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md), [current handoff](START_HERE.md), [current state](PROJECT_STATE.md).
+
+**Status:** Active; approved implementation approach for the next `config-saved` recovery stage, not an installed implementation or acceptance result.
