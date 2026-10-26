@@ -346,6 +346,45 @@ def _load_journal(work: Path) -> dict:
     return data
 
 
+def _attest_prepared_remove(root: Path, state: Path, work: Path,
+                            previous: dict, inodes: dict, owner: dict,
+                            lifecycle) -> None:
+    """Prove a pre-Stop Remove really left the pinned original state intact.
+
+    PREPARED only means a durable snapshot exists. No Stop/quarantine was
+    authorized yet, so there is nothing to roll back. Do not erase that
+    evidence and claim RESTORED if another actor stopped the service, changed
+    the native common owner, or replaced a Lua/BIN inode after the snapshot.
+    Original setup.lock and FD9 are held by the caller throughout.
+    """
+    q = _quarantine_path(root)
+    if q.exists() or q.is_symlink():
+        raise TransactionError("PREPARED Remove has unexpected quarantine")
+    lifecycle.assert_started()
+    current_owner = getattr(lifecycle, "capture_previous_native_common_apply", None)
+    if not callable(current_owner) or _validate_native_owner(current_owner()) != owner:
+        raise TransactionError("PREPARED Remove previous native owner changed")
+    _validate_remove_inodes(inodes, previous)
+    for name, digest in sorted(previous.items()):
+        _verified_staging(work, "backup", name, digest)
+        current = validate_runtime_path(root, name)
+        if (current.is_symlink() or not current.is_file() or
+                _remove_inode(current) != inodes[name] or
+                sha256(current.read_bytes()) != digest or
+                _remove_inode(current) != inodes[name]):
+            raise TransactionError("PREPARED Remove resource changed: " + name)
+    original_metadata = work / "previous-installed.json"
+    current_metadata = state / "installed.json"
+    if original_metadata.is_symlink() or current_metadata.is_symlink():
+        raise TransactionError("PREPARED Remove metadata is unsafe")
+    if original_metadata.is_file():
+        if (not current_metadata.is_file() or
+                original_metadata.read_bytes() != current_metadata.read_bytes()):
+            raise TransactionError("PREPARED Remove installed metadata changed")
+    elif original_metadata.exists() or current_metadata.exists():
+        raise TransactionError("PREPARED Remove unexpected installed metadata")
+
+
 def recover(root: Path, state: Path, lifecycle) -> str:
     """Must be called under the SAME setup and lifecycle locks as install."""
     _safe_state(state)
@@ -365,8 +404,11 @@ def recover(root: Path, state: Path, lifecycle) -> str:
         if journal.get("phase") == "completed":
             raise TransactionError("completed journal requires post-commit audit")
         if journal.get("phase") == "prepared":
-            # No runtime mutation has occurred. Backup copies were completed.
-            pass
+            # No mutation was scheduled, but original runtime/resource state
+            # must still be attested before discarding the recovery evidence.
+            if is_remove:
+                _attest_prepared_remove(root, state, work, previous, inodes,
+                                        native_owner, lifecycle)
         else:
             # A native Remove trial can replace the shared Apply owner. Blind
             # start() may then boot the *new* sealed release, not the prior
