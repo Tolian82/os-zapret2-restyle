@@ -16,7 +16,13 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — active development: safe removal of extra resources
+## Level 2 — current v0.6.x full release
+
+- [v0.6.0 full release plan](releases/v0.6.0.md) — authorized second-component rollover and package/Pages gates.
+- [v0.6.x current ledger](history/current/v0.6.x.md) — current chronology.
+- [v0.5.x archived final-state snapshot](history/archive/v0.5.x.md) — prior state preserved.
+
+## Level 2 — historical v0.5.x Remove Additional Resources
 
 - [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — 26 October binding revision: actual native Strategies+Voice GUI checks, Stop→temporary quarantine→real common Apply/Start→success or rollback; Exclude Domains untouched and no Jail.
 - [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — owner closed Stage 11 with bounded evidence; Stage 12 README, then separately authorized Stage 13 stable release.
@@ -112,7 +118,7 @@
 - [Полное ТЗ «Передача голоса»](architecture/VOICE_TRANSMISSION_GUI.md) — пять сервисов, GUI и общий backend.
 - [Исторический план v0.5.3](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) и [история v0.5.3](releases/v0.5.3.md).
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [Zapret2 Service](architecture/ZAPRET2_SERVICE.md) — общие контракты.
-- [Рабочий ledger v0.5.x](history/current/v0.5.x.md) — история, а не текущий handoff.
+- [Previous v0.5.x ledger](history/current/v0.5.x.md) — historical chronology; [current v0.6.x ledger](history/current/v0.6.x.md).
 
 ## Specialist routes по задаче
 
@@ -130,6 +136,7 @@
 - [v0.2.x archive](history/archive/v0.2.x.md)
 - [v0.3.x archive](history/archive/v0.3.x.md)
 - [v0.4.x archive](history/archive/v0.4.x.md)
+- [v0.5.x archive](history/archive/v0.5.x.md)
 - [DECISIONS](DECISIONS.md) / [decisions/](decisions/), [AUDIT](AUDIT.md) / [audit/](audit/), [DEVLOG](DEVLOG.md) / [devlog/](devlog/).
 - [patches/](patches/), [verification/](verification/), [verification/evidence/](verification/evidence/), [releases/](releases/), [CHANGELOG](CHANGELOG.md).
 
