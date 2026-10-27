@@ -2,7 +2,7 @@
 
 State-line scope: **`v0.6.x`**. Current-work state-flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Текущий этап — **`v0.6.0_1`**, package candidate: `os-zapret2-restyle-0.6.0_1.pkg`; `VERSION=0.6.0`, `PLUGIN_REVISION=1`. Владелец прямо разрешил полноценный релиз v0.6.0 и переход документации v0.5.x → v0.6.x. **Публикация ещё не подтверждена**: сначала CI и squash merge `v0.6.0_1: Prepare release v0.6.0`, затем immutable tag, FreeBSD15 GitHub Release package/SHA256SUMS и Pages/pkg. [Release plan](releases/v0.6.0.md).
+Текущий этап — **`v0.6.0_1`**, package candidate: `os-zapret2-restyle-0.6.0_1.pkg`; `VERSION=0.6.0`, `PLUGIN_REVISION=1`. Владелец прямо разрешил полноценный релиз v0.6.0 и переход документации v0.5.x → v0.6.x. **Полный стабильный релиз опубликован:** [v0.6.0](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.0), точный [FreeBSD15 пакет](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.0/os-zapret2-restyle-0.6.0_1.pkg) SHA-256 `7bd6f9099efe09755bc1c2d4c9c228bcc51ae2a2a8478c949636c2527bb064a9`, immutable tag на релизном коммите `0d9c9490049f4c0cfae1201f1c3981649ae024a8`. Полный [workflow #40578282190](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40578282190) завершился успешно, включая pkg и GitHub Pages; независимая HTTP-проверка Pages и Web-установка на устройстве не выполнялись. [Факты публикации](verification/evidence/2026-10-27-v0.6.0-full-release-publication.md).
 
 ## Унаследованные проверенные функции
 
@@ -10,7 +10,7 @@ State-line scope: **`v0.6.x`**. Current-work state-flow: `START_HERE -> PROJECT_
 - Ручная установка Lua/BIN из [дополнительного каталога](https://github.com/Tolian82/zapret2-extra-resources) и Advanced-only Remove с точным локальным Git HEAD списком стандартных файлов, подтверждением количества, сохранением Config и проверкой реального Stop→quarantine→общего Apply/Start или отката.
 - На предыдущих точных пакетах наблюдались native ошибки/восстановления, GUI Install→Remove→upstream-only Job→repeat Install. На установленном `v0.5.9_47` подтверждены native RUNNING и неизменный Config/IPFW, справка после F5, Lua слева/BIN справа, штатные зелёные/дополнительные синие. [Формально принятое владельцем закрытие Stage 11 с ограничениями](verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md).
 - Особые live-случаи (F5 во время удаления, потеря ответа, ошибка записи кэша на устройстве, OFF draft, медиа Voice и установка собственно `v0.6.0_1`) не проверены и не называются PASS. Stage 12 README/CI был закрыт [PR #672](https://github.com/Tolian82/os-zapret2-restyle/pull/672).
-- Предыдущий полный stable [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8). Новая версия должна быть действительно опубликована, а не только размечена тегом.
+- Предыдущий стабильный релиз — [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8). Текущий стабильный — [v0.6.0](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.0); установка владельцем пакета `v0.6.0_1` отдельно ещё не проверена.
 
 ## Архитектура и навигация
 
