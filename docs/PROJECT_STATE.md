@@ -1,5 +1,7 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
+State-line scope: **`v0.6.x`**.
+
 Текущий этап — **`v0.6.0_1`**, package candidate: `os-zapret2-restyle-0.6.0_1.pkg`; `VERSION=0.6.0`, `PLUGIN_REVISION=1`. Владелец прямо разрешил полноценный релиз v0.6.0 и переход документации v0.5.x → v0.6.x. **Публикация ещё не подтверждена**: сначала CI и squash merge `v0.6.0_1: Prepare release v0.6.0`, затем immutable tag, FreeBSD15 GitHub Release package/SHA256SUMS и Pages/pkg. [Release plan](releases/v0.6.0.md).
 
 ## Унаследованные проверенные функции
