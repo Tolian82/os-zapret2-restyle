@@ -21,9 +21,9 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) remains the latest *verified published* stable at release-preparation time; **owner-authorized `v0.5.8` / `0.5.8_1.pkg`** is being qualified for full GitHub + FreeBSD 15 Pages/pkg publication ([release plan](docs/releases/v0.5.8.md)) |
-| **Last owner-accepted testing package** | [v0.5.7_48](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_48) · Lua/BIN two-column cached Full Help **PASS (owner report)**; previous native additional-resource/Stage-90 evidence accepted separately ([sign-off](docs/verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md)) |
-| **Current development candidate** | `v0.5.8_1` (`VERSION=0.5.8`, `PLUGIN_REVISION=1`); full release explicitly authorized by owner and being built/validated; **not yet published until workflow and repository verification pass** |
+| **Full Web/pkg release** | [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8), published 24 October 2026 with `os-zapret2-restyle-0.5.8_1.pkg` and `SHA256SUMS`. This stable release includes manual additional-resource installation and cached Lua/BIN Full Help, **not** the later Remove action. |
+| **Latest owner-accepted testing package** | [v0.5.9_47](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.9_47), installed and verified: Advanced-only Remove acceptance on earlier `_46`, unchanged service/Config/firewall after upgrading to `_47`, and two-column green/blue Full Help after F5 ([Stage 11 final acceptance](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)). |
+| **Current development candidate** | `v0.5.9_47` (`VERSION=0.5.9`, `PLUGIN_REVISION=47`); testing only. The separate stable release containing Remove has **not** been authorized or published. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -33,7 +33,7 @@
 
 **Verification limits:** the owner accepted Strategy Lab Stages 1–6 on installed testing `v0.5.6_17`, including two GUI Stop tests and a clean post-test runtime/IPFW inspection. Results prove the observed scenarios, not every possible DPI/ISP/QUIC bypass. The five Voice/STUN profiles are configurable, but **no successful Telegram media/call bypass has been confirmed on the owner's direct ISP route**; other services likewise have no validated voice presets. See [Strategy Lab evidence](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md) and [Voice research closure](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
 
-**Full-release verification boundary:** A successful source build does not itself establish a GitHub full release or reachable OPNsense repository. The planned `v0.5.8` must be verified against its **own** `0.5.8_1.pkg`, tag, SHA256SUMS and FreeBSD15 Pages pkg metadata. Owner-closed M6 cold reboot was **not performed**; the release does not imply a completed real cold-boot acceptance. Details: [v0.5.8 release notes](docs/releases/v0.5.8.md) and [owner sign-off](docs/verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md).
+**Full-release verification boundary:** The public stable `v0.5.8` GitHub Release contains `0.5.8_1.pkg` and its checksum file. Neither a public release nor a package build independently proves that the owner has clicked an OPNsense Web GUI upgrade; owner-closed M6 cold-boot testing for that historical release was not performed. The later **Advanced-only Remove Additional Resources** capability is qualified on the `v0.5.9_47` *testing* line and is **not part of stable `v0.5.8`**. Its future full Web/pkg release requires separate owner authorization and exact package/tag/Pages verification. [Owner-accepted Stage 11 boundaries](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md) · [v0.5.8 historical release record](docs/releases/v0.5.8.md).
 
 ## Architecture overview
 
@@ -146,7 +146,13 @@ The backend expands managed targets while preserving the rest of the user-author
 
 ## Additional Resources — installed Lua/BIN help
 
-The **Install Additional Resources / Установить дополнительные ресурсы** button remains a manual, user-initiated action with native restart and state verification. From source candidate `v0.5.7_48`, enabling native **Full Help / Справка** on Strategies shows the installed Lua and BIN filenames in two columns below that button: **green** for files tracked in the installed upstream Zapret2 Git HEAD, **blue** for other installed files. The lists come from an atomically written JSON cache generated on resource/upstream/package changes, not a new Git scan on every help view. Before additional resources are installed, the help describes what the button installs. This feature passed source and FreeBSD15 testing qualification and the owner explicitly accepted it on the published `v0.5.7_48` testing package. The owner accepted the final report and authorized the separate full `v0.5.8` release. Additional-resource installation remains **manual**, and there is no automatic Strategy Lab profile Apply.
+os-zapret2-restyle offers **optional installation and use of an expanded, integrity-verified Lua/BIN resource pack** from [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). **Install Additional Resources / Установить дополнительные ресурсы** on the Strategies page is a manual action: it checks the catalog and files, installs the optional resources, and uses the original native Zapret2 service restart and health verification. The pack is not installed automatically on page load, normal service start, plugin upgrade or upstream switch.
+
+In the `v0.5.9_47` **testing** plugin, **Remove Additional Resources / Удалить дополнительные ресурсы** appears directly below Install **only when Advanced mode is enabled**. After a fresh removal preview, it requires explicit confirmation of the exact resource count (`REMOVE N`). It removes all additional top-level Lua/BIN files **not tracked by the installed upstream Zapret2 Git HEAD**, including manually added files; it preserves the upstream-tracked files and saved Strategies/Voice settings. The native transaction checks current saved configuration, temporarily quarantines the additional files, then uses the existing combined Strategies+Voice Apply/Start path and verifies that Zapret2 is running correctly with standard files only. On a proven failure it restores the original files and previous working service; if restoration cannot be verified, it reports a recovery-required failure instead of claiming success. **Review the planned count and your own custom Lua/BIN files before confirming; removal is not an ordinary hide/disable operation.**
+
+With **Full Help / Справка** enabled, the installed files appear in two cached columns: `.lua` on the left and `.bin` on the right. **Green** identifies resources tracked in the installed upstream Git HEAD, and **blue** identifies other installed files (including optional extras). The GUI reads an atomically published local JSON cache; it does not scan GitHub or Git on each Help view. After removal the Help area shows the not-installed/install explanation, and a new Strategy Lab Job uses the currently installed resource set. The owner confirmed the columns, colors and Help persistence after F5 on installed testing `v0.5.9_47`.
+
+**Verification means catalog integrity, file provenance, guarded native integration, and the specific observed runtime/GUI tests.** It does **not** prove that every Lua script or BIN payload bypasses DPI, that all strategy/resource combinations interoperate, or that Telegram or other Voice calls succeed. The existing saved configuration is not automatically rewritten or Applied by installing extra resources. [Acceptance details and unrun-case limits](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md).
 
 ## Voice Transmission — shared native runtime
 
@@ -288,6 +294,8 @@ The Web GUI uses the same authoritative backend available to administrators:
 ## Useful runtime paths
 
 ```text
+/usr/local/etc/zapret2/lua/
+/usr/local/etc/zapret2/files/fake/
 /var/db/zapret2-restyle/runtime.release
 /var/db/zapret2-restyle/releases.cache
 /var/db/zapret2-restyle/setup.status
@@ -297,6 +305,8 @@ The Web GUI uses the same authoritative backend available to administrators:
 /var/log/zapret2/dvtws2.log
 /var/log/zapret2/supervisor.log
 ```
+
+The two Zapret2 resource directories above hold both installed upstream-tracked files and optional additional resources; the Lua/BIN Help and removal plan distinguish their provenance using the local upstream Git HEAD.
 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
@@ -317,7 +327,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-The stable **[v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7)** was published on 22 October 2026 from immutable source `5d53ae7120b0e1dfe612850c804dea0294e17178` with `os-zapret2-restyle-0.5.7_1.pkg`; [release workflow #39804529650](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/39804529650) reports PASS for FreeBSD 15 package creation, GitHub Release and GitHub Pages pkg repository deployment. The former stable [v0.5.6](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6) remains immutable. The newest confirmed owner-accepted Stage-6 installed scenarios were on [v0.5.6_17](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.6_17); this publication does **not** verify an OPNsense Web upgrade or current source-only `_22` code. See [release record](docs/releases/v0.5.7.md) and [release evidence](docs/verification/evidence/2026-10-22-v0.5.7-full-release-publication.md).
+The current published stable release is **[v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8)** (`0.5.8_1.pkg` with published checksum asset). The previously published [v0.5.7](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7) remains available. The installed, owner-accepted **[v0.5.9_47 testing package](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.9_47)** includes the subsequently developed Advanced-only removal feature; it is **not** the stable Web/pkg channel. [Approved Remove specification](docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md), [bounded installed acceptance](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md), and [current development handoff](docs/START_HERE.md) explain the remaining release authorization boundary.
 
 Useful entry points:
 

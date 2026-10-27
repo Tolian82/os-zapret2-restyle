@@ -2,7 +2,7 @@
 
 **Project:** os-zapret2-restyle
 **Owner approval:** 24 October 2026; **superseding binding decision:** 26 October 2026
-**Status:** APPROVED REVISED PLAN. Owner `_46` Stage 7–8 GUI Remove/Full Help/Strategy Lab/Repeat Install R6–R9 PASS; Stage 9 `_47` actual worker 8/8 failed-cache regressions and Project/Voice/FreeBSD15 CI PASS ([PR #667](https://github.com/Tolian82/os-zapret2-restyle/pull/667)); Stage 10 `_47` immutable testing package published. Stage 11 `_47`: R10 installed native/cache health, R11 Help F5 persistence and **R12 correct `.lua`/`.bin` columns with upstream-green/extra-blue filenames after F5 all owner-confirmed** ([R12](../verification/evidence/2026-10-27-v0.5.9_47-owner-help-colors-stage11-review-r12.md)). Remaining negative-path evidence was reviewed without asserting new live execution; owner Stage 11 **final acceptance decision still open**. Do not repeat destructive tests by default, and do not begin Stage 12 README or Stage 13 stable release before their gates.
+**Status:** APPROVED REVISED PLAN. Stage 7–8 installed `_46` GUI/Job/Help/Repeat Install core PASSED; Stage 9 `_47` source/CI cache fault protection and Stage 10 FreeBSD15 immutable testing package qualified. Stage 11 `_47` R10/R11/R12 observed native/cache/F5/columns/colors, and **owner expressly CLOSED Stage 11 with specified unrun-live limitations (R13)** ([owner record](../verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)). **Stage 12: README user-facing audit and truthful stable/testing release distinction prepared for docs CI. Stage 13: future full release requires separate explicit owner authorization; NOT AUTHORIZED.**
 
 **Stage 6 owner-live acceptance:** `_43` native initial inventory and `_44` negative API acceptance passed. Then `_44` owner-approved production API success removed exactly 19 extra Lua + 54 extra BIN with newly healthy native owner and `total=0` after-plan ([installed evidence](../verification/evidence/2026-10-27-v0.5.9_44-owner-positive-api-r4.md)). The success is NOT evidence of GUI-confirmed Remove or new Job/repeat Install.
 
@@ -137,7 +137,7 @@ After source implementation and CI qualification, publish an immutable FreeBSD 1
 
 On OPNsense verify exact before/after Git HEAD file sets and SHA inventory, prechecks as in saved Strategies and Voice GUI (including meaningful OFF draft preview), normal Stop→quarantine→same Apply/Start and existing Started/IPFW/Voice ownership verification; intentional failing strategy produces original-file/service restoration with a warning. Verify cache/Help not_installed, new-Job inventory and repeat Install. Record actual observed evidence separately from source tests. Destructive fault injection is not required live without additional safety authorization.
 
-**Gate:** Owner expressly confirms the completed installed behavior. Any future stable release remains a distinct decision.
+**Gate: CLOSED BY OWNER on 27 October 2026 with explicit limitations recorded in [R13](../verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md). This is acceptance of bounded existing evidence, not a claim that unrun live negatives passed. Any future stable release remains a distinct decision.
 
 ## Stage 12 — README.md audit and user-facing update (penultimate, before release)
 
