@@ -25,6 +25,7 @@
 - [Owner-live R2 Remove interruption/recovery](verification/evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) — 130, `restarting`, guarded `RESTORED`, exact inode/Config/Git/IPFW parity; uncovered GUI status versus inventory inconsistency.
 - [Installed `_44` production Remove negative API evidence](verification/evidence/2026-10-27-v0.5.9_44-owner-negative-api-r3.md) — three HTTP 200 structured rejections, 73 extra Lua/BIN intact, service running, saved Config unchanged; positive Remove still gated.
 - [Installed `_44` positive production Remove acceptance](verification/evidence/2026-10-27-v0.5.9_44-owner-positive-api-r4.md) — owner-approved real removal of 73 files, correlated worker completion, zero-extra plan, new native owner healthy, saved Config and scoped IPFW unchanged.
+- [Owner `_45` GUI dual-spinner defect](verification/evidence/2026-10-27-v0.5.9_45-gui-remove-spinners-r5.md) — GUI Install/Remove reported successful; Install spinner incorrectly spins during Remove; `_46` candidate fixes UI only.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
