@@ -205,8 +205,10 @@
             $('#zapretExtraInstall').prop('disabled', !extrasAllowed);
             $('#zapretExtraInstall').attr('title', currentServiceState === 'stopped'
                 ? extrasText.firstStart : (extraNeedsReview ? extrasText.review : extrasText.install));
+            // Native backend busy is shared by Install and Remove. Both buttons
+            // stay locked, but a Remove worker owns only the Remove spinner.
             $('#zapretExtraProgress').toggleClass('fa fa-spinner fa-pulse',
-                extraBusy || extraInstallPending);
+                extraInstallPending || (extraBusy && !extraRemovePending));
             $('#zapretExtraRemove').prop('disabled', !extrasAllowed || extraRemovePending);
             $('#zapretExtraRemoveProgress').toggleClass('fa fa-spinner fa-pulse', extraRemovePending);
         }
