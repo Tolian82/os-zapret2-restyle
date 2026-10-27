@@ -28,6 +28,7 @@
 - [Owner `_45` GUI dual-spinner defect](verification/evidence/2026-10-27-v0.5.9_45-gui-remove-spinners-r5.md) — GUI Install/Remove reported successful; Install spinner incorrectly spins during Remove; `_46` candidate fixes UI only.
 - [Published `_46` testing package evidence](verification/evidence/testing-publications/v0.5.9_46.md) — verified FreeBSD 15 asset, source/tag, SHA-256 and publisher workflow, no stable repo promotion.
 - [Installed `_46` owner GUI Install→Remove R6](verification/evidence/2026-10-27-v0.5.9_46-owner-gui-remove-r6.md) — new operation/native owner, 0 resources, RUNNING, unchanged Config/firewall; Stage 8 separately pending.
+- [Owner `_46` Stage 8 cache/Full Help and Job inventories R7](verification/evidence/2026-10-27-v0.5.9_46-stage8-inventories-r7.md) — 6/46 current upstream-only, 25/100 historical preserved snapshots, service running; repeat Install pending.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
