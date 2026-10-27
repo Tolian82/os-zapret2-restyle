@@ -55,8 +55,21 @@
             remove: isRussian ? 'Удалить дополнительные ресурсы' : 'Remove Additional Resources',
             removePlanTitle: isRussian ? 'План удаления дополнительных ресурсов' : 'Additional Resources removal plan',
             removePlanInfo: isRussian ? 'Будут удалены дополнительные файлы: ' : 'Additional files selected for removal: ',
-            removeNotReady: isRussian ? 'Запуск проверочной службы ещё не подключён. Удаление недоступно, файлы и служба не изменены.' :
-                'The native trial service Apply is not yet connected. Removal is unavailable; no files or service state were changed.',
+            removeWarning: isRussian
+                ? 'Будут безвозвратно удалены только дополнительные Lua/BIN. Zapret2 будет остановлен и запущен с сохранёнными Strategies+Voice. Для подтверждения введите: '
+                : 'Only additional Lua/BIN will be permanently deleted. Zapret2 will restart using saved Strategies+Voice. Type to confirm: ',
+            removeConfirm: isRussian ? 'Подтвердить удаление' : 'Confirm removal',
+            removeCancel: isRussian ? 'Отмена' : 'Cancel',
+            removeRejected: isRussian ? 'Удаление отклонено. Проверьте состояние и повторно откройте актуальный план.' :
+                'Removal rejected. Check the state and open a new plan before another request.',
+            removeUncertain: isRussian ? 'Результат удаления не подтверждён. Не повторяйте запрос; проверьте состояние операции.' :
+                'Removal outcome is unconfirmed. Do not repeat the request; inspect the operation state.',
+            removeFailed: isRussian ? 'Удаление не завершено. Проверьте восстановление и журнал.' :
+                'Removal failed. Review recovery state and the log.',
+            removeRestored: isRussian
+                ? 'Удаление не завершено. Исходные дополнительные ресурсы и состояние службы восстановлены.'
+                : 'Removal failed. The original Additional Resources and service state were restored.',
+            removeCompleted: isRussian ? 'Дополнительные ресурсы удалены' : 'Additional Resources removed',
             removeNoop: isRussian ? 'Дополнительных файлов для удаления нет.' : 'No additional resources require removal.',
             removePlanError: isRussian ? 'Не удалось получить подтверждённый план удаления. Файлы не изменены.' :
                 'Could not obtain the verified removal plan. No files were changed.',
@@ -96,6 +109,7 @@
         let extraBusy = false;
         let extraInstallPending = false;
         let extraRemovePending = false;
+        let extraRemoveOperation = '';
         let extraExpectedOperation = '';
         let extraNeedsReview = false;
         let runtimePoll = null;
@@ -552,6 +566,24 @@
                     'recovery_required'].indexOf(data.phase) !== -1;
         }
 
+        // Never interpret a different job's receipt as successful Remove.
+        function extraRemoveTerminal(data, operation) {
+            return /^[a-f0-9]{32}$/.test(operation || '') && !!data &&
+                data.operation === operation && data.busy === false &&
+                ['not_installed', 'ready', 'failed', 'restore_failed',
+                    'recovery_required'].indexOf(data.phase) !== -1;
+        }
+
+        // Read-only dry_run_only plans intentionally have ready=false: only
+        // the authenticated POST + server-side current plan can authorize mutation.
+        function validExtraRemovePlan(data) {
+            return !!data && data.status === 'ok' && data.ready === false &&
+                Number.isInteger(data.lua) && data.lua >= 0 &&
+                Number.isInteger(data.bin) && data.bin >= 0 &&
+                Number.isInteger(data.total) && data.total === data.lua + data.bin &&
+                /^[a-f0-9]{64}$/.test(data.inventory_sha256 || '');
+        }
+
         function renderExtras(data) {
             if (!data || data.status !== 'ok') {
                 extraStateKnown = false;
@@ -565,6 +597,19 @@
 
             extraStateKnown = true;
             extraBusy = !!data.busy;
+            // F5 during a confirmed native Remove: reattach only to the
+            // persisted correlated worker, never issue a second mutation.
+            if (!extraRemovePending && !extraInstallPending && data.phase === 'removing' &&
+                data.busy === true && /^[a-f0-9]{32}$/.test(data.operation || '')) {
+                extraRemovePending = true;
+                extraRemoveOperation = data.operation;
+            }
+            if ((data.phase === 'removing' && !data.busy && !extraRemovePending) ||
+                (data.phase === 'not_installed' && data.installed === true)) {
+                // Inconsistent or interrupted receipt: disable mutating controls
+                // until explicit review instead of treating an idle PID as success.
+                extraNeedsReview = true;
+            }
             if (typeof data.installed === 'boolean') {
                 if (helpInventoryLoaded && helpInventoryLastInstalled !== data.installed) {
                     // A cache-backed install/removal boundary changed while
@@ -588,7 +633,33 @@
                 }
                 refreshRuntime();
             }
-            if (extraInstallPending || extraBusy) {
+            if (extraRemovePending && extraRemoveTerminal(data, extraRemoveOperation)) {
+                const success = data.phase === 'not_installed' &&
+                    data.installed === false && data.lua === 0 && data.bin === 0;
+                extraRemovePending = false;
+                extraRemoveOperation = '';
+                if (success) {
+                    helpInventoryLoaded = false;
+                    requestResourceHelpInventory(true);
+                    $('#zapretExtraState').text(extrasText.removeCompleted);
+                } else {
+                    extraNeedsReview = true;
+                    // REMOVE_FAILED_RESTORED is emitted only AFTER the
+                    // original native owner and resource inodes were restored.
+                    const restored = data.phase === 'failed' && data.installed === true &&
+                        typeof data.detail === 'string' &&
+                        /^REMOVE_FAILED_RESTORED:/.test(data.detail);
+                    $('#zapretExtraState').text(restored ? extrasText.removeRestored :
+                        (data.phase === 'restore_failed' ? extrasText.restoreFailed :
+                            extrasText.removeFailed) + ' · ' + extrasText.log);
+                }
+                refreshRuntime();
+            }
+            if (extraNeedsReview && !extraRemovePending &&
+                ['ready', 'not_installed'].indexOf(data.phase) >= 0) {
+                $('#zapretExtraState').text(extrasText.review + ' · ' + extrasText.log);
+            }
+            if (extraInstallPending || extraRemovePending || extraBusy) {
                 if (extraPoll === null) {
                     extraPollAttempts = 0;
                     extraPoll = window.setInterval(refreshExtrasStatus, 2000);
@@ -603,6 +674,8 @@
             if (++extraPollAttempts > 300) {
                 extraNeedsReview = true;
                 extraInstallPending = false;
+                extraRemovePending = false;
+                extraRemoveOperation = '';
                 extraBusy = false;
                 stopExtrasPolling();
                 $('#zapretExtraState').text(extrasText.review + ' · ' + extrasText.log);
@@ -616,6 +689,13 @@
                 timeout: 15000
             }).done(renderExtras).fail(function() {
                 extraStateKnown = false;
+                if (extraRemovePending && extraRemoveOperation) {
+                    // A temporary status transport failure must not lead to
+                    // a second destructive request or an invented success.
+                    $('#zapretExtraState').text(extrasText.removeUncertain);
+                    setRuntimeBusy(runtimeWasBusy);
+                    return;
+                }
                 extraNeedsReview = true;
                 extraBusy = false;
                 stopExtrasPolling();
@@ -708,36 +788,120 @@
                 runtimeWasBusy || releaseApplyPending || strategiesApplyPending ||
                 strategiesApplyNeedsReview || currentServiceState !== 'started') return;
             extraRemovePending = true;
+            extraRemoveOperation = '';
             setRuntimeBusy(runtimeWasBusy);
             $.ajax({
                 type: 'POST',
                 url: '/api/zapret/service/resourcesRemovePlan',
                 dataType: 'json',
                 timeout: 130000
-            }).done(function(data) {
-                if (!data || data.status !== 'ok' ||
-                    !Number.isInteger(data.lua) || !Number.isInteger(data.bin) ||
-                    data.lua < 0 || data.bin < 0 || data.total !== data.lua + data.bin ||
-                    !/^[a-f0-9]{64}$/.test(data.inventory_sha256 || '') ||
-                    data.ready !== false) {
+            }).done(function(plan) {
+                if (!validExtraRemovePlan(plan)) {
+                    extraRemovePending = false;
                     showRuntimeError(extrasText.removePlanTitle, extrasText.removePlanError);
                     return;
                 }
-                const summary = data.total === 0 ? extrasText.removeNoop :
-                    extrasText.removePlanInfo + 'Lua: ' + data.lua + ', BIN: ' + data.bin + '.';
+                if (plan.total === 0) {
+                    extraRemovePending = false;
+                    BootstrapDialog.show({
+                        type: BootstrapDialog.TYPE_INFO,
+                        title: extrasText.removePlanTitle,
+                        message: $('<div/>').text(extrasText.removeNoop),
+                        buttons: [{
+                            label: '{{ lang._("Close") }}',
+                            action: function(dialog) { dialog.close(); }
+                        }]
+                    });
+                    return;
+                }
+                const phrase = 'REMOVE ' + plan.total;
+                const message = $('<div/>');
+                $('<p/>').text(extrasText.removePlanInfo +
+                    'Lua: ' + plan.lua + ', BIN: ' + plan.bin + '.').appendTo(message);
+                $('<p/>').text(extrasText.removeWarning + phrase).appendTo(message);
+                const confirmation = $('<input/>', {
+                    type: 'text', 'class': 'form-control',
+                    autocomplete: 'off', spellcheck: 'false',
+                    'aria-label': phrase
+                }).appendTo(message);
+                let submitted = false;
                 BootstrapDialog.show({
-                    type: BootstrapDialog.TYPE_INFO,
+                    type: BootstrapDialog.TYPE_WARNING,
                     title: extrasText.removePlanTitle,
-                    message: $('<div/>').text(summary + '\n' + extrasText.removeNotReady),
+                    message: message,
+                    closable: true,
+                    onshown: function(dialog) {
+                        const approve = dialog.getButton('zapretConfirmRemove');
+                        approve.prop('disabled', true);
+                        confirmation.on('input', function() {
+                            approve.prop('disabled', confirmation.val() !== phrase);
+                        }).trigger('focus');
+                    },
+                    onhide: function() {
+                        if (!submitted) {
+                            extraRemovePending = false;
+                            setRuntimeBusy(runtimeWasBusy);
+                        }
+                    },
                     buttons: [{
-                        label: '{{ lang._("Close") }}',
+                        label: extrasText.removeCancel,
                         action: function(dialog) { dialog.close(); }
+                    }, {
+                        id: 'zapretConfirmRemove',
+                        label: extrasText.removeConfirm,
+                        cssClass: 'btn-danger',
+                        action: function(dialog) {
+                            if (submitted || confirmation.val() !== phrase ||
+                                !isResourceAdvancedEnabled() || extraNeedsReview) return;
+                            submitted = true;
+                            dialog.close();
+                            // Exactly one authenticated POST. Any lost reply
+                            // is ambiguous; never auto-resubmit the mutation.
+                            $.ajax({
+                                type: 'POST',
+                                url: '/api/zapret/service/resourcesRemove',
+                                data: {
+                                    inventory_sha256: plan.inventory_sha256,
+                                    confirmation: phrase
+                                },
+                                dataType: 'json',
+                                timeout: 35000
+                            }).done(function(receipt) {
+                                if (receipt && ['ok', 'uncertain'].indexOf(receipt.status) >= 0 &&
+                                    /^[a-f0-9]{32}$/.test(receipt.operation || '') &&
+                                    (receipt.status !== 'ok' || receipt.started === true)) {
+                                    extraRemoveOperation = receipt.operation;
+                                    $('#zapretExtraState').text(extrasText.removing);
+                                    refreshExtrasStatus();
+                                    return;
+                                }
+                                extraRemovePending = false;
+                                if (receipt && receipt.status === 'rejected' &&
+                                    receipt.started === false) {
+                                    showRuntimeError(extrasText.removePlanTitle, extrasText.removeRejected);
+                                } else if (receipt && receipt.status === 'unavailable' &&
+                                    receipt.started === false) {
+                                    showRuntimeError(extrasText.removePlanTitle, extrasText.removePlanError);
+                                } else {
+                                    extraNeedsReview = true;
+                                    $('#zapretExtraState').text(extrasText.removeUncertain);
+                                }
+                                refreshExtrasStatus();
+                            }).fail(function() {
+                                // No operation ID: we cannot prove it did not start.
+                                extraRemovePending = false;
+                                extraNeedsReview = true;
+                                $('#zapretExtraState').text(extrasText.removeUncertain);
+                                refreshRuntime();
+                                setRuntimeBusy(runtimeWasBusy);
+                            });
+                        }
                     }]
                 });
             }).fail(function() {
+                extraRemovePending = false;
                 showRuntimeError(extrasText.removePlanTitle, extrasText.removePlanError);
             }).always(function() {
-                extraRemovePending = false;
                 setRuntimeBusy(runtimeWasBusy);
             });
         });

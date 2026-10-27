@@ -179,7 +179,15 @@ require('public function resourcesRemoveAction(): array' in controller and
         "'zapret extra_resources_remove'" in controller and
         "'status' => 'uncertain'" in controller,
         "API Remove lacks POST, exact fresh plan, explicit count confirmation, or honest async receipt")
-require("url: '/api/zapret/service/resourcesRemove'," not in
-        (root / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text(),
-        "Stage 6 backend must NOT activate user-facing Remove GUI prematurely")
+view = (root / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
+# Stage 7 supersedes the earlier backend-only gate. GUI may invoke ONLY the
+# previously accepted exact-plan production API after deliberate typed consent.
+require(view.count("url: '/api/zapret/service/resourcesRemove',") == 1 and
+        "url: '/api/zapret/service/resourcesRemovePlan'," in view and
+        "const phrase = 'REMOVE ' + plan.total" in view and
+        "inventory_sha256: plan.inventory_sha256" in view and
+        "confirmation: phrase" in view and
+        "extraRemoveTerminal(data, extraRemoveOperation)" in view and
+        "extraNeedsReview = true" in view,
+        "Stage 7 Remove GUI bypasses the exact-plan native API or correlated status")
 print("PASS: resource syntax and existing lifecycle/lock wiring")
