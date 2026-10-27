@@ -19,7 +19,7 @@
 ## Level 2 — active development: safe removal of extra resources
 
 - [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — 26 October binding revision: actual native Strategies+Voice GUI checks, Stop→temporary quarantine→real common Apply/Start→success or rollback; Exclude Domains untouched and no Jail.
-- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — Stage 7 installed `_46` GUI core PASS; Stage 8 cache/Full Help/Strategy Lab pending.
+- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — owner closed Stage 11 with bounded evidence; Stage 12 README, then separately authorized Stage 13 stable release.
 - [Owner-console native Remove acceptance protocol](verification/REMOVE_NATIVE_OWNER_ACCEPTANCE.md) — historical R0–R4 and `_44` API removal evidence; concrete Stage 7 `_45` RU/EN/Advanced/F5/no-op/real Remove acceptance checklist (owner tests pending).
 - [Owner-live R0/R1 Remove evidence on v0.5.9_37](verification/evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) — exact installed package/HEAD, 73-resource witness, real Stop/quarantine error, preserved inode metadata and SHA-256, restored IPFW/Config/status.
 - [Owner-live R2 Remove interruption/recovery](verification/evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) — 130, `restarting`, guarded `RESTORED`, exact inode/Config/Git/IPFW parity; uncovered GUI status versus inventory inconsistency.
@@ -37,6 +37,7 @@
 - [Installed `_47` owner read-only baseline R10](verification/evidence/2026-10-27-v0.5.9_47-owner-installed-read-only-r10.md) — 19/54 resources and cache 25/100, native RUNNING with previous owner and 4 identical Config/firewall fingerprints; no post-upgrade resource transaction.
 - [Owner `_47` Strategies Full Help F5 persistence R11](verification/evidence/2026-10-27-v0.5.9_47-owner-full-help-f5-r11.md) — Help remains after browser refresh on installed `_47`; color/columns and live mutation fault are separate proof gates.
 - [Owner `_47` Full Help color/column R12 and Stage 11 evidence review](verification/evidence/2026-10-27-v0.5.9_47-owner-help-colors-stage11-review-r12.md) — after F5, left Lua/right BIN and green upstream/blue extra confirmed; unrun negative live scenarios identified without new mutation.
+- [Owner final Stage 11 acceptance R13](verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md) — explicit closure with named unrun-live limitations; authorizes README Stage 12 but not stable release.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
