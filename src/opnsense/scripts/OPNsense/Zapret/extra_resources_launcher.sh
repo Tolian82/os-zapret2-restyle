@@ -136,9 +136,19 @@ except Exception:
             EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE=1 \
             "$SERVICE_SCRIPT" "$MODE" "$_witness"
         ;;
-    install|recover)
-        if [ "$MODE" = install ]; then
-            [ "$#" -eq 2 ] || exit 64
+    install|recover|remove)
+        if [ "$MODE" = install ] || [ "$MODE" = remove ]; then
+            if [ "$MODE" = remove ]; then
+                # Exact plan + deliberate confirmation, both rechecked by
+                # production worker after setup.lock -> original FD9.
+                [ "$#" -eq 4 ] || exit 64
+                _confirmed_witness="$3"
+                case "$_confirmed_witness" in ''|*[!a-f0-9]*) exit 64 ;; esac
+                [ "${#_confirmed_witness}" -eq 64 ] || exit 64
+                [ "$4" = REMOVE_ADDITIONAL_RESOURCES ] || exit 75
+            else
+                [ "$#" -eq 2 ] || exit 64
+            fi
             _operation_id="$2"
             case "$_operation_id" in ''|*[!a-f0-9]*) exit 64 ;; esac
             [ "${#_operation_id}" -eq 32 ] || exit 64
@@ -157,6 +167,15 @@ except Exception:
         rm -f "$PID_FILE"
         if [ "$MODE" = install ]; then
             _command=extra-resources-install
+        elif [ "$MODE" = remove ]; then
+            # A second Remove must not queue behind a live Remove. A failed
+            # nonblocking setup lock cannot rewrite the first job's receipt.
+            exec "$DAEMON_BIN" -f -o "$LOG_FILE" -p "$PID_FILE" \
+                "$LOCKF_BIN" -s -t 0 "$LOCK_FILE" \
+                /usr/bin/env EXTRA_RESOURCES_SETUP_LOCK_OWNER=1 \
+                "EXTRA_RESOURCES_OPERATION_ID=${_operation_id}" \
+                EXTRA_RESOURCES_REMOVE_CONFIRMED=1 \
+                "$SERVICE_SCRIPT" extra-resources-remove "$_confirmed_witness"
         else
             _command=extra-resources-recover
         fi
@@ -167,7 +186,7 @@ except Exception:
             "$SERVICE_SCRIPT" "$_command"
         ;;
     *)
-        echo 'usage: extra_resources_launcher.sh {install|recover|status|preview-saved|plan|audit-native|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test}' >&2
+        echo 'usage: extra_resources_launcher.sh {install|recover|remove|status|preview-saved|plan|audit-native|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|recover-test}' >&2
         exit 64
         ;;
 esac

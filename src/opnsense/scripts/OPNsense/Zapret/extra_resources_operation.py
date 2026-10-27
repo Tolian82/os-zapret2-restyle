@@ -211,11 +211,11 @@ def _refresh_help_cache() -> None:
 
 
 def main(argv: list[str]) -> int:
-    modes = {"install", "recover", "plan", "remove-test", "remove-test-fail",
+    modes = {"install", "recover", "plan", "remove", "remove-test", "remove-test-fail",
              "remove-test-interrupt", "remove-test-commit-interrupt", "recover-test"}
     if (len(argv) < 2 or argv[1] not in modes or
-            (len(argv) != 3 if argv[1].startswith("remove-test") else len(argv) != 2)):
-        print("usage: extra_resources_operation.py {install|recover|plan|remove-test*|recover-test} [confirmed_sha256]", file=sys.stderr)
+            (len(argv) != 3 if (argv[1].startswith("remove-test") or argv[1] == "remove") else len(argv) != 2)):
+        print("usage: extra_resources_operation.py {install|recover|plan|remove|remove-test*|recover-test} [confirmed_sha256]", file=sys.stderr)
         return 64
     mode = argv[1]
     owner_test = mode.startswith("remove-test") or mode == "recover-test"
@@ -223,7 +223,13 @@ def main(argv: list[str]) -> int:
                        os.environ.get("EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE") != "1"):
         print("owner-only Remove acceptance route is disabled", file=sys.stderr)
         return 75
-    if mode == "install" and re.fullmatch(
+    if mode == "remove" and (
+        os.geteuid() != 0 or
+        os.environ.get("EXTRA_RESOURCES_REMOVE_CONFIRMED") != "1"
+    ):
+        print("unconfirmed native Remove route is disabled", file=sys.stderr)
+        return 75
+    if mode in ("install", "remove") and re.fullmatch(
         r"[a-f0-9]{32}", os.environ.get("EXTRA_RESOURCES_OPERATION_ID", "")
     ) is None:
         print("missing or invalid resource operation identity", file=sys.stderr)
@@ -252,19 +258,21 @@ def main(argv: list[str]) -> int:
             _status("not_installed" if status == "REMOVED" else status.lower())
             print(status)
             return 0
-        if mode.startswith("remove-test"):
+        if mode.startswith("remove-test") or mode == "remove":
             witness = argv[2]
             if not re.fullmatch(r"[0-9a-f]{64}", witness):
                 raise TransactionError("invalid confirmed Remove plan SHA-256")
             fault = {
+                "remove": None,
                 "remove-test": None,
                 "remove-test-fail": "fail-after-quarantine",
                 "remove-test-interrupt": "interrupt-after-quarantine",
                 "remove-test-commit-interrupt": "interrupt-after-first-committed-inode",
             }[mode]
-            # Root console only, no GUI/configd/public dispatch. The full
-            # live plan, unchanged Config and owner remain re-attested under
-            # the original inherited setup.lock -> FD9.
+            # Production Remove requires confirmed witness + correlated
+            # operation ID. Fault routes remain root-console-only. Native
+            # Stop/Apply/rollback and exact Config/revision/owner revalidation
+            # are shared, under original setup.lock -> inherited FD9.
             _status("removing")
             outcome = remove_with_native_trial(
                 witness, RUNTIME, STATE, lifecycle, acceptance_fault=fault)

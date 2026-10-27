@@ -139,7 +139,12 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         # Preserve the read-only preview/plan lock and non-public API checks.
         self.assertIn('extra-resources-preview-saved|extra-resources-remove-plan|', service)
         self.assertIn('upstream-recover-mutating|upstream-install)', service)
-        self.assertNotIn('[extra_resources_remove]', actions)
+        self.assertIn('[extra_resources_remove]', actions)
+        production = actions.split('[extra_resources_remove]', 1)[1].split('[', 1)[0]
+        self.assertIn('parameters:%s %s %s', production)
+        self.assertIn('extra_resources_launcher.sh remove', production)
+        self.assertNotIn('[extra_resources_remove_test]', actions)
+        self.assertNotIn('[extra_resources_recover_test]', actions)
         self.assertIn('EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE', service)
         self.assertIn('EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0', service)
         self.assertIn('preview-saved)', launcher)
@@ -148,7 +153,7 @@ class NativePreviewRouteTests(base.SavedNativeViewTests):
         self.assertLess(segment.index('"$LOCKF_BIN" -s -t 3 "$LOCK_FILE"'),
                         segment.index('"$SERVICE_SCRIPT" extra-resources-preview-saved'))
         self.assertNotIn("extra_resources_preview_saved", actions)
-        self.assertNotIn("[extra_resources_remove]\n", actions)
+        self.assertNotIn("[extra_resources_remove_fault]", actions)
         self.assertIn("[extra_resources_remove_plan]", actions)
         self.assertNotIn("stop_service", segment)
         self.assertNotIn("restart", segment)
