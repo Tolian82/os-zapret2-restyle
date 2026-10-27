@@ -22,7 +22,10 @@ from extra_resources_transaction import (
     _safe_state, _json_write,
 )
 from extra_resources_reconcile import make_plan, make_remove_plan
-from extra_resources_inventory_cache import InventoryCacheError, refresh as refresh_inventory_cache
+from extra_resources_inventory_cache import (
+    InventoryCacheError, invalidate as invalidate_inventory_cache,
+    refresh as refresh_inventory_cache,
+)
 
 SCRIPT = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -201,6 +204,12 @@ def _status(stage: str, **extra) -> None:
     })
 
 
+def _invalidate_help_cache() -> None:
+    # Revoke any last-good cache before original Stop/Install/Remove/Recover.
+    # On failed republish, existing read_cached/API/GUI fail closed.
+    invalidate_inventory_cache(STATE)
+
+
 def _refresh_help_cache() -> None:
     # Display-only derivative. Never turn a successfully restored native
     # transaction into a failure because the optional help cache is unavailable.
@@ -253,6 +262,7 @@ def main(argv: list[str]) -> int:
             return 0
         if mode in ("recover", "recover-test"):
             _status("recovering")
+            _invalidate_help_cache()
             status = recover(RUNTIME, STATE, lifecycle)
             _refresh_help_cache()
             _status("not_installed" if status == "REMOVED" else status.lower())
@@ -274,6 +284,7 @@ def main(argv: list[str]) -> int:
             # Stop/Apply/rollback and exact Config/revision/owner revalidation
             # are shared, under original setup.lock -> inherited FD9.
             _status("removing")
+            _invalidate_help_cache()
             outcome = remove_with_native_trial(
                 witness, RUNTIME, STATE, lifecycle, acceptance_fault=fault)
             _refresh_help_cache()
@@ -296,14 +307,15 @@ def main(argv: list[str]) -> int:
         make_plan(payloads, RUNTIME, STATE / "installed.json")
         catalog = json.loads(files["inventory/capabilities.json"].decode("utf-8"))
         _status("installing", source_commit=revision)
+        _invalidate_help_cache()
         result = install(payloads, revision, RUNTIME, STATE, lifecycle,
                          capabilities=catalog, reconcile=True)
         _refresh_help_cache()
         _status("ready", **result, described_capabilities=capabilities_count)
         print(json.dumps(result, sort_keys=True))
         return 0
-    except (TransactionError, PreflightError, OSError, ValueError,
-            TimeoutError, subprocess.TimeoutExpired) as exc:
+    except (TransactionError, PreflightError, InventoryCacheError, OSError,
+            ValueError, TimeoutError, subprocess.TimeoutExpired) as exc:
         code = "RESTORE_FAILED" if (
             "RESTORE_FAILED" in str(exc) or "REMOVE_COMMIT_PENDING" in str(exc)
         ) else ("RECOVERY_REQUIRED" if "RECOVERY_REQUIRED" in str(exc) else "FAILED")

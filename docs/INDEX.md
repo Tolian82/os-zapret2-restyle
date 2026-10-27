@@ -32,6 +32,7 @@
 - [Owner `_46` Stage 8 repeat Install R8](verification/evidence/2026-10-27-v0.5.9_46-stage8-repeat-install-r8.md) — optional 19 Lua/54 BIN restored, cached 25/100 provenance correct, native owner/Config/IPFW unchanged; visual Full Help colors pending.
 - [Owner `_46` Stage 8 restored Full Help R9](verification/evidence/2026-10-27-v0.5.9_46-stage8-restored-full-help-r9.md) — owner confirms green upstream and blue optional filenames in Lua/BIN columns; core Stage 8 happy path accepted.
 - [Stage 9 v0.5.9_46 source/fault-path audit](verification/evidence/2026-10-27-v0.5.9_46-stage9-fault-path-audit.md) — existing regression matrix documented; stale Help cache after successful mutation and failed refresh identified for bounded fail-closed repair.
+- [Stage 9 `_47` fail-closed Help cache source](verification/evidence/2026-10-27-v0.5.9_47-cache-invalidation-source.md) — pre-actor cache retirement; native workflow unchanged; source CI and owner acceptance are separate.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance

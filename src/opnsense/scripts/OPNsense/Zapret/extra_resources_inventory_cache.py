@@ -74,6 +74,22 @@ def publish(data: dict, state: Path) -> None:
             staging.unlink()
 
 
+def invalidate(state: Path) -> None:
+    """Durably retire old Help cache before actual resource-set mutation."""
+    if state.is_symlink() or not state.is_dir():
+        raise InventoryCacheError("unsafe extra-resource state directory")
+    cache = state / CACHE_NAME
+    if cache.is_symlink() or (cache.exists() and not cache.is_file()):
+        raise InventoryCacheError("unsafe inventory cache destination")
+    if cache.is_file():
+        cache.unlink()
+        directory_fd = os.open(state, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+
+
 def read_cached(state: Path) -> dict:
     """No filesystem inventory or git access here: bounded cache read only."""
     path = state / CACHE_NAME
