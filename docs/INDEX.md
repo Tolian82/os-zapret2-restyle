@@ -19,12 +19,13 @@
 ## Level 2 — active development: safe removal of extra resources
 
 - [Approved remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) — 26 October binding revision: actual native Strategies+Voice GUI checks, Stop→temporary quarantine→real common Apply/Start→success or rollback; Exclude Domains untouched and no Jail.
-- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — 13 stages; `_44` live positive production Remove PASS, `_45` Advanced GUI merged with Project/Voice/FreeBSD15 CI PASS; testing asset/GUI owner acceptance and Stage 8 pending.
+- [Approved staged remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) — 13 stages; `_44` owner-live production API Remove PASS, `_45` Advanced GUI CI qualified and testing prerelease published; GUI owner acceptance / Stage 8 pending.
 - [Owner-console native Remove acceptance protocol](verification/REMOVE_NATIVE_OWNER_ACCEPTANCE.md) — historical R0–R4 and `_44` API removal evidence; concrete Stage 7 `_45` RU/EN/Advanced/F5/no-op/real Remove acceptance checklist (owner tests pending).
 - [Owner-live R0/R1 Remove evidence on v0.5.9_37](verification/evidence/2026-10-26-v0.5.9_37-remove-r0-r1-owner-live.md) — exact installed package/HEAD, 73-resource witness, real Stop/quarantine error, preserved inode metadata and SHA-256, restored IPFW/Config/status.
 - [Owner-live R2 Remove interruption/recovery](verification/evidence/2026-10-26-v0.5.9_37-remove-r2-owner-live.md) — 130, `restarting`, guarded `RESTORED`, exact inode/Config/Git/IPFW parity; uncovered GUI status versus inventory inconsistency.
 - [Installed `_44` production Remove negative API evidence](verification/evidence/2026-10-27-v0.5.9_44-owner-negative-api-r3.md) — three HTTP 200 structured rejections, 73 extra Lua/BIN intact, service running, saved Config unchanged; positive Remove still gated.
 - [Installed `_44` positive production Remove acceptance](verification/evidence/2026-10-27-v0.5.9_44-owner-positive-api-r4.md) — owner-approved real removal of 73 files, correlated worker completion, zero-extra plan, new native owner healthy, saved Config and scoped IPFW unchanged.
+- [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
 
