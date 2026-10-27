@@ -44,10 +44,29 @@ require("$('#zapretExtraRemove').css({" in view and
         "$('#zapretExtraInstall').outerHeight()" in view,
         "Remove and Install button sizes are not linked")
 require("/api/zapret/service/resourcesRemovePlan" in view and
-        "data.ready !== false" in view and
-        "extrasText.removeNotReady" in view and
-        "url: '/api/zapret/service/resourcesRemove'," not in view,
-        "Remove GUI must show a read-only plan, NOT authorize real file deletion")
+        "validExtraRemovePlan(plan)" in view and
+        "data.ready === false" in view and
+        "url: '/api/zapret/service/resourcesRemove'," in view and
+        "confirmation: phrase" in view and
+        "inventory_sha256: plan.inventory_sha256" in view,
+        "Remove GUI must authorize ONLY through the existing witness-bound production API")
+require("const phrase = 'REMOVE ' + plan.total" in view and
+        "confirmation.val() !== phrase" in view and
+        "onhide: function()" in view and
+        "submitted = true" in view and
+        "extraRemoveOperation = receipt.operation" in view and
+        "receipt.status === 'rejected'" in view and
+        "receipt.status === 'unavailable'" in view and
+        "extraNeedsReview = true" in view and
+        "extrasText.removeRestored" in view and
+        "REMOVE_FAILED_RESTORED:" in view,
+        "Remove GUI missing typed count confirmation / restored-failure / correlated no-retry handling")
+require("extraRemoveTerminal(data, extraRemoveOperation)" in view and
+        "data.phase === 'not_installed'" in view and
+        "data.installed === false && data.lua === 0 && data.bin === 0" in view and
+        "data.phase === 'removing'" in view and
+        "requestResourceHelpInventory(true)" in view,
+        "Remove GUI cannot reattach on F5 or attest complete removal")
 require("Установить дополнительные ресурсы" in view and
         "Install Additional Resources" in view, "final agreed RU/EN labels absent")
 require("Сначала запустите Zapret2" in view and
@@ -141,6 +160,42 @@ assert.equal(extraOperationTerminal({operation:id,phase:'ready',busy:false},''),
     )
     result = subprocess.run(["node", str(predicate)], text=True, capture_output=True)
     require(result.returncode == 0, "GUI receipt predicate failure: " + result.stderr)
+
+    # Execute the actual GUI helper functions, not a shadow implementation.
+    remove_plan = re.search(
+        r"        function validExtraRemovePlan\(data\) \{.*?^        \}",
+        view, re.M | re.S,
+    )
+    remove_terminal = re.search(
+        r"        function extraRemoveTerminal\(data, operation\) \{.*?^        \}",
+        view, re.M | re.S,
+    )
+    require(remove_plan is not None and remove_terminal is not None,
+            "Remove plan/operation helper definitions missing")
+    remove_probe = Path(tmp) / "remove-confirmation.js"
+    remove_probe.write_text("""
+const assert = require('node:assert/strict');
+""" + remove_plan.group(0) + "\n" + remove_terminal.group(0) + """
+const digest = 'a'.repeat(64), op='b'.repeat(32);
+const valid = {status:'ok',ready:false,lua:19,bin:54,total:73,inventory_sha256:digest};
+assert.equal(validExtraRemovePlan(valid),true);
+assert.equal(validExtraRemovePlan({...valid,ready:true}),false);
+assert.equal(validExtraRemovePlan({...valid,total:72}),false);
+assert.equal(validExtraRemovePlan({...valid,inventory_sha256:'f'}),false);
+assert.equal(validExtraRemovePlan({...valid,lua:-1}),false);
+assert.equal(validExtraRemovePlan({...valid,bin:'54'}),false);
+assert.equal(validExtraRemovePlan({...valid,status:'unavailable'}),false);
+assert.equal(validExtraRemovePlan({...valid,total:0,lua:0,bin:0}),true);
+for (const phase of ['not_installed','ready','failed','restore_failed','recovery_required']) {
+    assert.equal(extraRemoveTerminal({operation:op,phase,busy:false},op),true);
+    assert.equal(extraRemoveTerminal({operation:'c'.repeat(32),phase,busy:false},op),false);
+    assert.equal(extraRemoveTerminal({operation:op,phase,busy:true},op),false);
+}
+assert.equal(extraRemoveTerminal({operation:op,phase:'removing',busy:false},op),false);
+assert.equal(extraRemoveTerminal({operation:op,phase:'not_installed',busy:false},''),false);
+""")
+    result = subprocess.run(["node", str(remove_probe)], text=True, capture_output=True)
+    require(result.returncode == 0, "Remove plan/correlation regression: " + result.stderr)
 
     # Exercise the shell status transport using an actual terminal receipt.
     status = Path(tmp) / "status.json"
