@@ -1,14 +1,10 @@
 # os-zapret2-restyle — краткий master plan
 
-## Завершённая поставка — stable v0.5.8 (24 October 2026)
+## Текущий приоритет — полный релиз v0.6.0
 
-Following owner acceptance of the Additional Resources GUI and catalog feature, public [stable v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8) was published as a non-prerelease GitHub release with FreeBSD15 `os-zapret2-restyle-0.5.8_1.pkg` and `SHA256SUMS`. Historical M6 cold boot and selected negative live cases were owner-closed **without execution**, not marked successful. Real owner Web-GUI upgrade is not inferred from public release artifacts.
+Владелец разрешил переход линии `v0.5.x → v0.6.x` и полный релиз `v0.6.0`. Сброс `PLUGIN_REVISION` до `_1`, новая текущая документация и [архив v0.5.x](history/archive/v0.5.x.md) обязательны. Далее — exact-head CI, FreeBSD15 пакет, единый squash merge `v0.6.0_1: Prepare release v0.6.0`, неизменяемый тег, полный GitHub Release с checksum и проверенный Pages/pkg Web-репозиторий. [Release plan](releases/v0.6.0.md).
 
-## Текущий приоритет — Remove Additional Resources: Stage 12 README → Stage 13 only by separate approval
-
-The owner expressly closed Stage 11 on installed testing `v0.5.9_47` after R10/R11/R12, accepting earlier GUI Remove/Job/reinstall, native API negatives and guarded rollback evidence from their observed versions; unrun live failure cases remain explicitly unverified ([owner final record](verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)). This does not change the original **Stop → temporary quarantine → same saved Strategies+Voice Apply/Start → attested recovery** architecture or reopen cancelled Jail and clean-repair work. [Approved specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) · [staged plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md).
-
-Stage 12 updates public README to accurately document the optional verified Lua/BIN pack, native install and Advanced-only removal, actual directories, cached Help, and stable vs testing availability. Verify exact-head docs CI. **Stage 13 stable Web/pkg release has not been authorized and requires a new explicit owner instruction**; there is no automatic package/version/promotion for documentation-only acceptance.
+Stage 11 Remove принят владельцем с сохранёнными непроверенными случаями; Stage 12 README прошёл CI и объединён в PR #672. Архитектура Stop/quarantine/common saved Config Apply/Start и восстановление не меняются; отменённые Jail и clean repair не возвращаются. До выпуска последним проверенным стабильным остаётся [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8).
 
 ## Предыдущий приоритет — Additional Resources implementation
 

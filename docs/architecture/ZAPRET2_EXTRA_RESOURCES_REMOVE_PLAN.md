@@ -2,7 +2,7 @@
 
 **Project:** os-zapret2-restyle
 **Owner approval:** 24 October 2026; **superseding binding decision:** 26 October 2026
-**Status:** APPROVED REVISED PLAN. Stage 7–8 installed `_46` GUI/Job/Help/Repeat Install core PASSED; Stage 9 `_47` source/CI cache fault protection and Stage 10 FreeBSD15 immutable testing package qualified. Stage 11 `_47` R10/R11/R12 observed native/cache/F5/columns/colors, and **owner expressly CLOSED Stage 11 with specified unrun-live limitations (R13)** ([owner record](../verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)). **Stage 12: README user-facing audit and truthful stable/testing release distinction prepared for docs CI. Stage 13: future full release requires separate explicit owner authorization; NOT AUTHORIZED.**
+**Status:** APPROVED REVISED PLAN. Stage 11 closed by owner with limitations ([R13](../verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)); Stage 12 README/CI completed ([PR #672](https://github.com/Tolian82/os-zapret2-restyle/pull/672)). Owner explicitly authorized **Stage 13 full stable v0.6.0**, including second-component documentation rollover, on 27 October 2026. Publication awaits exact CI, release merge, tag, pkg/checksum and Pages Web repository verification ([v0.6.0](../releases/v0.6.0.md)).
 
 **Stage 6 owner-live acceptance:** `_43` native initial inventory and `_44` negative API acceptance passed. Then `_44` owner-approved production API success removed exactly 19 extra Lua + 54 extra BIN with newly healthy native owner and `total=0` after-plan ([installed evidence](../verification/evidence/2026-10-27-v0.5.9_44-owner-positive-api-r4.md)). The success is NOT evidence of GUI-confirmed Remove or new Job/repeat Install.
 
