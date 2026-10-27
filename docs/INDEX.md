@@ -36,6 +36,7 @@
 - [Verified published `_47` testing package](verification/evidence/testing-publications/v0.5.9_47.md) — exact merged source/tag, FreeBSD 15 asset checksum and temporary publisher record; owner-installed read-only R10 PASS; separate GUI/live fault gate pending.
 - [Installed `_47` owner read-only baseline R10](verification/evidence/2026-10-27-v0.5.9_47-owner-installed-read-only-r10.md) — 19/54 resources and cache 25/100, native RUNNING with previous owner and 4 identical Config/firewall fingerprints; no post-upgrade resource transaction.
 - [Owner `_47` Strategies Full Help F5 persistence R11](verification/evidence/2026-10-27-v0.5.9_47-owner-full-help-f5-r11.md) — Help remains after browser refresh on installed `_47`; color/columns and live mutation fault are separate proof gates.
+- [Owner `_47` Full Help color/column R12 and Stage 11 evidence review](verification/evidence/2026-10-27-v0.5.9_47-owner-help-colors-stage11-review-r12.md) — after F5, left Lua/right BIN and green upstream/blue extra confirmed; unrun negative live scenarios identified without new mutation.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
