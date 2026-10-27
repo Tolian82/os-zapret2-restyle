@@ -136,6 +136,56 @@ with tempfile.TemporaryDirectory() as tmp:
                             text=True, capture_output=True)
     require(result.returncode == 0, "JavaScript parse failure: " + result.stderr)
 
+    # Run the actual setRuntimeBusy function with a minimal DOM mock.
+    busy_renderer = re.search(
+        r"        function setRuntimeBusy\(busy\) \{.*?^        \}",
+        view, re.M | re.S,
+    )
+    require(busy_renderer is not None, "runtime busy renderer not found")
+    spinner_probe = Path(tmp) / "extra-resources-spinners.js"
+    spinner_probe.write_text("""
+const assert = require('node:assert/strict');
+const dom = Object.create(null);
+function $(name) {
+    if (name === '#zapretReleaseSelect option')
+        return {filter: () => ({length: 1})};
+    return {
+        prop(k, v) {dom[name+':'+k]=v;return this;},
+        attr() {return this;}, text() {return this;},
+        toggleClass(cls, v) {dom[name+':spinner']=v;return this;}
+    };
+}
+let extraBusy=false, extraInstallPending=false, extraRemovePending=false,
+    extraNeedsReview=false, currentRuntimeInstalled=true,
+    currentServiceState='started', extraStateKnown=true,
+    releaseApplyPending=false, releaseNeedsReview=false,
+    strategiesApplyPending=false, strategiesApplyNeedsReview=false;
+const runtimeText={applying:'',apply:''};
+const extrasText={firstStart:'',review:'',install:''};
+""" + busy_renderer.group(0) + """
+function check(install, remove, busy, installingSpinner, removingSpinner) {
+    extraInstallPending=install;extraRemovePending=remove;extraBusy=busy;
+    setRuntimeBusy(false);
+    assert.equal(dom['#zapretExtraProgress:spinner'], installingSpinner);
+    assert.equal(dom['#zapretExtraRemoveProgress:spinner'], removingSpinner);
+    const locked=install || remove || busy;
+    for (const id of ['#zapretExtraInstall','#zapretExtraRemove',
+                      '#zapretServiceControl','#reconfigureAct'])
+        assert.equal(dom[id+':disabled'],locked);
+}
+check(false,false,false,false,false); // idle
+check(true,false,false,true,false); // install queued
+check(true,false,true,true,false);  // install active
+check(false,true,false,false,true); // remove queued
+check(false,true,true,false,true);  // remove active
+check(false,true,true,false,true);  // F5 reattached during remove
+check(false,false,true,true,false); // existing generic busy fallback
+""")
+    checked = subprocess.run(["node", str(spinner_probe)],
+                             text=True, capture_output=True)
+    require(checked.returncode == 0,
+            "Install/Remove spinner ownership failure: " + checked.stderr)
+
     # Verify the real JS terminal predicate even when polling misses busy=1.
     helper = re.search(
         r"        function extraOperationTerminal\(data, operation\) \{.*?^        \}",
