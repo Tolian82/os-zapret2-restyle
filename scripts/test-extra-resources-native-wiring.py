@@ -76,9 +76,13 @@ require('remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-i
 require("remove-test-commit-interrupt" in launcher and
         "remove-test-commit-interrupt" in operation,
         "R4 console mode not consistently routed")
-require("[extra_resources_remove]" not in actions and
-        "[extra_resources_remove_test]" not in actions,
-        "owner acceptance route must NOT expose destructive configd/GUI operation")
+require("[extra_resources_remove]" in actions and
+        "parameters:%s %s %s" in actions.split("[extra_resources_remove]", 1)[1].split("[", 1)[0],
+        "production Remove configd action must receive ID, witness and confirmation")
+require("[extra_resources_remove_test]" not in actions and
+        "[extra_resources_recover_test]" not in actions,
+        "destructive owner fault-injection routes cannot be available in configd")
+
 require('extra-resources-recover|extra-resources-recover-test)' in service and
         'the worker verifies the exact linked journals' in service,
         "recovery must remain reachable under FD9 while common Apply journal is pending")
@@ -151,4 +155,31 @@ require(all(k in audit_body for k in (
 require("audit-native" not in actions and
         "extra-resources-native-audit" not in actions,
         "private owner audit must not create a configd/GUI action")
+
+# Production Remove must use the one existing daemon/lock/native transaction,
+# while owner fault-injection modes remain isolated from GUI/configd.
+require('install|recover|remove)' in launcher and
+        '"$SERVICE_SCRIPT" extra-resources-remove "$_confirmed_witness"' in launcher and
+        'EXTRA_RESOURCES_REMOVE_CONFIRMED=1' in launcher and
+        '"$LOCKF_BIN" -s -t 0 "$LOCK_FILE"' in launcher,
+        "production Remove launcher has no nonqueueing original setup.lock")
+require('        extra-resources-remove)' in service and
+        'extra-resources-remove|' in service,
+        "production Remove not dispatched through original native FD9")
+require('"remove": None' in operation and
+        'EXTRA_RESOURCES_REMOVE_CONFIRMED' in operation and
+        'mode in ("install", "remove")' in operation and
+        'remove_with_native_trial(' in operation,
+        "production Remove bypasses explicit native authorization or accepted fault-free path")
+controller = (root / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/ServiceController.php").read_text()
+require('public function resourcesRemoveAction(): array' in controller and
+        "if (!$this->request->isPost())" in controller and
+        "$confirmation !== 'REMOVE ' . (string)$plan['total']" in controller and
+        "($plan['inventory_sha256'] ?? '') !== $witness" in controller and
+        "'zapret extra_resources_remove'" in controller and
+        "'status' => 'uncertain'" in controller,
+        "API Remove lacks POST, exact fresh plan, explicit count confirmation, or honest async receipt")
+require("url: '/api/zapret/service/resourcesRemove'," not in
+        (root / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text(),
+        "Stage 6 backend must NOT activate user-facing Remove GUI prematurely")
 print("PASS: resource syntax and existing lifecycle/lock wiring")

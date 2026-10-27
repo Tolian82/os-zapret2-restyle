@@ -449,6 +449,9 @@ jobs:
       - name: Test durable resource transaction and rollback
         run: python3.13 scripts/test-extra-resources-transaction.py
 
+      - name: Test native Additional Resources Remove API confirmation and status
+        run: php scripts/test-extra-resources-remove-api.php
+
       - name: Check extra-resources native lifecycle and launcher wiring
         run: python3.13 scripts/test-extra-resources-native-wiring.py
 

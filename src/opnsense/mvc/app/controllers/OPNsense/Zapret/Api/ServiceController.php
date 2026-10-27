@@ -283,6 +283,73 @@ class ServiceController extends ApiMutableServiceControllerBase
         ];
     }
 
+
+    /**
+     * Authenticated POST only. The 64-hex plan digest binds the exact HEAD,
+     * Lua/BIN inodes and full persisted Config generation. The confirmation
+     * additionally names the positive number of files being deleted.
+     * This is NOT the GUI handler; Stage 7 must add its own modal and polling.
+     */
+    public function resourcesRemoveAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['status' => 'failed'];
+        }
+
+        $witness = trim((string)$this->request->getPost('inventory_sha256'));
+        $confirmation = trim((string)$this->request->getPost('confirmation'));
+        if (!preg_match('/^[a-f0-9]{64}$/D', $witness) ||
+            strlen($confirmation) > 40) {
+            throw new UserException(
+                gettext('Invalid Additional Resources removal confirmation.'),
+                gettext('Additional Resources unavailable')
+            );
+        }
+
+        $backend = new Backend();
+        $runtime = $this->getRuntimeState($backend);
+        $extras = $this->getExtraResourceState($backend);
+        if (!$runtime['installed'] || $runtime['service'] !== 'started' ||
+            $runtime['busy'] || $extras['busy'] ||
+            in_array($extras['phase'], ['restore_failed', 'recovery_required'], true)) {
+            throw new UserException(
+                gettext('Start Zapret2 and finish any pending runtime operation or recovery first.'),
+                gettext('Additional Resources unavailable')
+            );
+        }
+
+        // Never trust client counts. Recheck an authoritative *current* plan,
+        // and again inside the root native worker after setup.lock -> FD9.
+        $plan = $this->resourcesRemovePlanAction();
+        if (($plan['status'] ?? '') !== 'ok' ||
+            ($plan['total'] ?? 0) < 1 ||
+            ($plan['inventory_sha256'] ?? '') !== $witness ||
+            $confirmation !== 'REMOVE ' . (string)$plan['total']) {
+            throw new UserException(
+                gettext('The removal plan changed. Review and confirm it again.'),
+                gettext('Additional Resources unavailable')
+            );
+        }
+
+        $operation = bin2hex(random_bytes(16));
+        try {
+            $response = trim((string)$backend->configdpRun(
+                'zapret extra_resources_remove',
+                [$operation, $witness, 'REMOVE_ADDITIONAL_RESOURCES'], false, 30
+            ));
+        } catch (\Throwable $e) {
+            return ['status' => 'uncertain', 'started' => false,
+                    'operation' => $operation];
+        }
+        if ($response !== 'OK') {
+            // A timeout or lost acknowledgement is not proof that the
+            // daemon failed to start. Never blind-retry a destructive job.
+            return ['status' => 'uncertain', 'started' => false,
+                    'operation' => $operation];
+        }
+        return ['status' => 'ok', 'started' => true, 'operation' => $operation];
+    }
+
     public function resourcesInstallAction(): array
     {
         if (!$this->request->isPost()) {

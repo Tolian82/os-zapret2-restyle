@@ -93,6 +93,12 @@ Reuse existing `extra_resources_transaction.py`, `extra_resources_operation.py`,
 
 ## Stage 6 — Configd, service controller and API
 
+**v0.5.9_43 source implementation (not yet merged, packaged or owner-tested):** `ServiceController::resourcesRemoveAction` requires authenticated POST, Started/busy/recovery preflight, a current read-only Git HEAD/Config/inode `inventory_sha256` and explicit text `REMOVE <positive current total>`. A separate random operation ID binds the asynchronous receipt to status. `extra_resources_remove` is the only configd mutation route (ID + 64hex witness + server literal confirmation). The original launcher rejects missing/invalid fields and a second busy operation, executes under nonqueueing setup.lock → original FD9, and reuses the existing fault-free `remove_with_native_trial` path. It recomputes the signed-by-content plan and seals old/new native owners under lock; stale / altered saved Config or files stop before mutation. `recover-test` fault injection remains root-console-only; no duplicate runtime, Config save, IPFW implementation, or GUI Remove click. `ready=false` in the existing GUI plan response is intentional until Stage 7.
+
+**Pending gates:** run affected local quick tests, full Project/Voice/FreeBSD15 CI, package owner installation and auth/status safety testing, followed by GUI integration under Stage 7. A missing AJAX acknowledgement is `uncertain`, not a false terminal success or permission to blind-retry.
+
+
+
 Wire remove through extra_resources_launcher.sh, zapret_service.sh, actions_zapret.conf and ServiceController.php. Enforce authenticated POST, Started precondition, mutually exclusive operation locking, server-side preflight, confirmation token/generation binding, correlated operation ID and truthful asynchronous status. Reject nested locks and concurrent release/Apply/Voice/Lab/install operations.
 
 **Gate:** Every backend entry follows the same authoritative lifecycle; direct API invocation cannot bypass validation; request timeout/uncertain completion cannot trigger blind retries.
