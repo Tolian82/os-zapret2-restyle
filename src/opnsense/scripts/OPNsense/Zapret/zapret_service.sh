@@ -1372,6 +1372,45 @@ extra_resources_native_previous_owner_service()
     printf 'native-owner=%s:%s:%s\n' "$_extra_old_id" "$_extra_old_page" "$_extra_old_digest"
 }
 
+
+# Read-only owner acceptance after Remove: reuse the EXISTING native
+# shared-Apply witness and the Strategy Lab semantic process/IPFW census.
+# The caller already owns setup.lock -> original FD9. No second owner, no
+# Config writer, no extra runtime, no direct IPFW mutation.
+extra_resources_native_audit_service()
+{
+    [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
+    [ "${STRATEGY_LAB_LIFECYCLE_OWNER:-0}" = 1 ] &&
+    [ "$(/usr/bin/id -u)" -eq 0 ] || return 75
+    strategy_lab_lock_owner_valid || return 75
+    [ -x /usr/local/bin/jq ] || return 69
+    # An interrupted Remove or orphaned quarantine is NEVER a healthy audit.
+    _extra_audit_tx=/var/db/zapret2-restyle/extra-resources/transaction
+    _extra_audit_q=/usr/local/etc/zapret2/.extra-resources-remove-quarantine
+    if [ -e "$_extra_audit_tx" ] || [ -L "$_extra_audit_tx" ] ||
+       [ -e "$_extra_audit_q" ] || [ -L "$_extra_audit_q" ]; then
+        echo "ERROR: pending Additional Resources transaction/quarantine" >&2
+        return 69
+    fi
+    _extra_audit_owner=$(extra_resources_native_previous_owner_service) || return 69
+    case "$_extra_audit_owner" in native-owner=*) ;; *) return 69 ;; esac
+    _extra_audit_evidence=$(strategy_lab_semantic_evidence) || return 69
+    # Only hashes/booleans, no hostlists, process arguments, IP addresses or
+    # raw rules. A missing or empty managed-IPFW fingerprint fails closed.
+    _extra_audit_verified=$(printf '%s\n' "$_extra_audit_evidence" |
+        /usr/local/bin/jq -er '
+            .schema == 1 and
+            .source == "zapret_service" and .state == "RUNNING" and
+            .child_running == true and .supervisor_running == true and
+            (.runtime_args_hash | type == "string" and test("^[a-f0-9]{64}$")) and
+            (.effective_config_hash | type == "string" and test("^[a-f0-9]{64}$")) and
+            (.normal_firewall_hash | type == "string" and test("^[a-f0-9]{64}$"))
+        ') || return 69
+    [ "$_extra_audit_verified" = true ] || return 69
+    printf '%s\n' "$_extra_audit_owner"
+    printf 'native-health=%s\n' "$_extra_audit_evidence"
+}
+
 # Internal staging seam for Remove Additional Resources. This uses the
 # SAME PHP native saved-Config planner and common GUI candidate compiler
 # as ordinary Strategies/Voice Apply. No alternate placeholder resolution,
@@ -2159,6 +2198,13 @@ service_dispatch()
         extra-resources-preview-saved)
             extra_resources_preview_saved_service
             ;;
+        extra-resources-native-audit)
+            # Read-only, original FD9 and setup.lock, no configd/GUI action.
+            [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
+            STRATEGY_LAB_LIFECYCLE_OWNER=1
+            export STRATEGY_LAB_LIFECYCLE_OWNER
+            extra_resources_native_audit_service
+            ;;
         extra-resources-remove-plan)
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
             [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
@@ -2437,7 +2483,7 @@ service_with_lifecycle_lock()
                 # normal Start/Apply or a new Install/Remove preflight.
                 [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
                 ;;
-            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-preview-saved|extra-resources-remove-plan|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|upstream-recover-mutating|upstream-install)
+            strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-install|extra-resources-preview-saved|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|upstream-recover-mutating|upstream-install)
                 # Under the inherited FD9, a committed native owner can be
                 # temporarily stopped/restored only by native common service
                 # actions. Pending or foreign owners remain fail-closed.
@@ -2488,7 +2534,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove-plan|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

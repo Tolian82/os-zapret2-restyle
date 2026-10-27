@@ -119,4 +119,36 @@ require("remove-test-commit-interrupt" in preflight_branch.rstrip(")").split("|"
         "R4 must pass native shared-Apply owner preflight under FD9")
 require("remove-test-commit-interrupt" not in outer_case.split('    *)\n', 1)[-1],
         "R4 must not be explicitly sent to unlocked fallback")
+
+# Owner R4 read-only audit must traverse original setup.lock -> FD9, reuse the
+# existing native owner and semantic IPFW witnesses, and stay OFF configd/GUI.
+require('    audit-native)' in launcher and
+        '"$SERVICE_SCRIPT" extra-resources-native-audit' in launcher and
+        '"$LOCKF_BIN" -s -t 10 "$LOCK_FILE"' in launcher,
+        "native owner audit launcher is not serialized under setup.lock")
+require('extra-resources-native-audit)' in service and
+        'extra_resources_native_audit_service()' in service and
+        'extra_resources_native_previous_owner_service' in service and
+        'strategy_lab_semantic_evidence' in service,
+        "native owner audit does not reuse existing common-owner and semantic evidence")
+outer_audit = next(
+    (line.strip() for line in outer_case.splitlines()
+     if line.strip().startswith("start|stop|restart|reconfigure|")), "",
+)
+require("extra-resources-native-audit" in outer_audit.rstrip(")").split("|"),
+        "native audit must acquire original lifecycle FD9 at top-level dispatch")
+require("extra-resources-native-audit" in preflight_branch.rstrip(")").split("|"),
+        "native audit omitted original shared-Apply owner preflight")
+auditor = service.split("extra_resources_native_audit_service()\n", 1)
+require(len(auditor) == 2, "native audit function missing")
+audit_body = auditor[1].split("\n}\n", 1)[0]
+require(all(k in audit_body for k in (
+    "strategy_lab_lock_owner_valid", "extra_resources_native_previous_owner_service",
+    "strategy_lab_semantic_evidence", "normal_firewall_hash",
+    "child_running", "supervisor_running", "return 69",
+    "transaction", ".extra-resources-remove-quarantine",
+)), "native audit does not fail closed on owner, IPFW, or pending transaction")
+require("audit-native" not in actions and
+        "extra-resources-native-audit" not in actions,
+        "private owner audit must not create a configd/GUI action")
 print("PASS: resource syntax and existing lifecycle/lock wiring")
