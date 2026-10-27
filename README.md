@@ -21,9 +21,9 @@
 
 | Project | Current release |
 |---|---|
-| **Last verified full Web/pkg release** | [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8), FreeBSD15 `0.5.8_1.pkg` with `SHA256SUMS`; does not include the later Remove action. |
+| **Latest full Web/pkg release** | [v0.6.0](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.0), FreeBSD15 `0.6.0_1.pkg` with `SHA256SUMS`; release and Pages/pkg publication workflow completed successfully. |
 | **Last owner-accepted testing package** | [v0.5.9_47](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.9_47) with owner-accepted Remove/Install/Job and F5 Lua/BIN Help evidence on exact tested builds ([boundaries](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md)). |
-| **Current development candidate** | `v0.6.0_1` (`VERSION=0.6.0`, `PLUGIN_REVISION=1`) — owner-authorized **full release v0.6.0 preparation**, not yet verified as published ([release plan](docs/releases/v0.6.0.md)). |
+| **Current package identity** | `v0.6.0_1` (`VERSION=0.6.0`, `PLUGIN_REVISION=1`) — [published stable package](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.0/os-zapret2-restyle-0.6.0_1.pkg); owner Web installation/upgrade not yet observed. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

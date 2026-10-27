@@ -1,10 +1,8 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — полный релиз v0.6.0
+## Завершённый полный релиз v0.6.0
 
-Владелец разрешил переход линии `v0.5.x → v0.6.x` и полный релиз `v0.6.0`. Сброс `PLUGIN_REVISION` до `_1`, новая текущая документация и [архив v0.5.x](history/archive/v0.5.x.md) обязательны. Далее — exact-head CI, FreeBSD15 пакет, единый squash merge `v0.6.0_1: Prepare release v0.6.0`, неизменяемый тег, полный GitHub Release с checksum и проверенный Pages/pkg Web-репозиторий. [Release plan](releases/v0.6.0.md).
-
-Stage 11 Remove принят владельцем с сохранёнными непроверенными случаями; Stage 12 README прошёл CI и объединён в PR #672. Архитектура Stop/quarantine/common saved Config Apply/Start и восстановление не меняются; отменённые Jail и clean repair не возвращаются. До выпуска последним проверенным стабильным остаётся [v0.5.8](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.8).
+Владелец разрешил переход `v0.5.x → v0.6.x`, полный релиз `v0.6.0`, документальный архив предыдущей линии и сброс ревизии до `_1`. Семантический тег, non-prerelease GitHub Release, `0.6.0_1.pkg`, `SHA256SUMS` и сборка/публикация FreeBSD15 Pages/pkg завершились успешно ([доказательства](verification/evidence/2026-10-27-v0.6.0-full-release-publication.md)). Stage 11 закрыт владельцем с границами исполнения, Stage 12 README завершён. Независимый внешний HTTP-запрос к Pages и реальная Web-установка OPNsense не были подтверждены. Дальнейшая работа — только по новой задаче либо фактическому замечанию при установке, без автоматического повышения версии.
 
 ## Предыдущий приоритет — Additional Resources implementation
 
