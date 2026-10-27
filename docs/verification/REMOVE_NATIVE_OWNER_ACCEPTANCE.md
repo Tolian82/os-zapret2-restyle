@@ -4,6 +4,8 @@
 
 **Stage 7 source gate (current):** `v0.5.9_45` Advanced-only bilingual Remove GUI is merged at `af47a6c62a8387e17e1ca918b1c9919df9551e5f` ([PR #656](https://github.com/Tolian82/os-zapret2-restyle/pull/656)); Project/Voice/FreeBSD15 source CI and post-merge CI PASS ([candidate](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40473563670), [main](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40475623866)). The `_45` testing package is **not** published/owner-installed; this is source qualification only. Do not infer GUI acceptance from previous direct API acceptance.
 
+**Owner browser-control observation (version not restated):** RU/EN, Advanced, Help and F5 **OWNER-REPORTED PASS** on 27 October 2026 ([scope-limited owner report](evidence/2026-10-27-owner-gui-controls-ru-en-advanced-help-f5.md)). This does **not** prove installed `_45`, a destructive Remove click, cache correctness, or any native transaction. Stage 7 `_45` full GUI acceptance remains pending.
+
 ### Stage 7 owner-installed GUI acceptance — pending
 
 Before any GUI destructive test: verify the installed `_45` package matches the published asset, record saved `/conf/config.xml` SHA-256 and `audit-native`, ensure no pending transaction/quarantine, confirm a full VM snapshot and independent console; obtain separate owner approval for actual GUI removal. Retain the original Stage 6 proven API route; never submit a second Remove merely because browser reply is missing.
