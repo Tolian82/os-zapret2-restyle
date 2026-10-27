@@ -35,6 +35,7 @@
 - [Stage 9 `_47` fail-closed Help cache source](verification/evidence/2026-10-27-v0.5.9_47-cache-invalidation-source.md) — pre-actor cache retirement; native workflow unchanged; source CI and owner acceptance are separate.
 - [Verified published `_47` testing package](verification/evidence/testing-publications/v0.5.9_47.md) — exact merged source/tag, FreeBSD 15 asset checksum and temporary publisher record; owner-installed read-only R10 PASS; separate GUI/live fault gate pending.
 - [Installed `_47` owner read-only baseline R10](verification/evidence/2026-10-27-v0.5.9_47-owner-installed-read-only-r10.md) — 19/54 resources and cache 25/100, native RUNNING with previous owner and 4 identical Config/firewall fingerprints; no post-upgrade resource transaction.
+- [Owner `_47` Strategies Full Help F5 persistence R11](verification/evidence/2026-10-27-v0.5.9_47-owner-full-help-f5-r11.md) — Help remains after browser refresh on installed `_47`; color/columns and live mutation fault are separate proof gates.
 - [Published `_45` testing-package evidence](verification/evidence/testing-publications/v0.5.9_45.md) — immutable exact source/tag, FreeBSD 15 amd64 `.pkg`, SHA-256 and GitHub publisher; stable repo not promoted.
 
 ## Level 2 — active M0–M7 completion and acceptance
