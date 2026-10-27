@@ -16,8 +16,10 @@ namespace OPNsense\Core {
         public static int $total = 73;
         public static string $ack = 'OK';
         public static bool $throwAck = false;
+        public static bool $throwPreflight = false;
         public static array $calls = [];
         public function configdRun($key, ...$ignored): string {
+            if (self::$throwPreflight) throw new \RuntimeException('simulated read-only preflight error');
             if ($key === 'zapret setup_status') {
                 return "installed=1\nservice=" . self::$service .
                     "\nsetup=ready\nbusy=" . (self::$busy ? '1' : '0');
@@ -60,32 +62,45 @@ namespace {
         $controller->request = new FakePost($fields, $post);
         return $controller->resourcesRemoveAction();
     }
-    function denied($fields, string $message): void {
+    function denied($fields, string $message, string $status, string $reason): void {
         $before = count(Backend::$calls);
-        try {
-            $response = attempt($fields);
-            insist(false, $message . ' unexpectedly returned ' . json_encode($response));
-        } catch (UserException $e) {
-            insist(count(Backend::$calls) === $before, $message . ' invoked configd');
-        }
+        $result = attempt($fields);
+        insist(($result['status'] ?? null) === $status &&
+            ($result['reason'] ?? null) === $reason &&
+            ($result['started'] ?? null) === false &&
+            !isset($result['operation']),
+            $message . ' incorrect rejection receipt: ' . json_encode($result));
+        insist(count(Backend::$calls) === $before, $message . ' invoked configd');
     }
     $correct = ['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'REMOVE 73'];
     insist(attempt($correct, false)['status'] === 'failed', 'GET accepted');
-    denied([], 'missing witness');
-    denied(['inventory_sha256' => str_repeat('b', 64), 'confirmation' => 'REMOVE 73'], 'stale witness');
-    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'REMOVE 72'], 'wrong count');
+    denied([], 'missing witness', 'rejected', 'invalid_confirmation');
+    denied(['inventory_sha256' => [str_repeat('a', 64)], 'confirmation' => 'REMOVE 73'],
+        'array witness', 'rejected', 'invalid_confirmation');
+    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => ['REMOVE 73']],
+        'array confirmation', 'rejected', 'invalid_confirmation');
+    denied(['inventory_sha256' => str_repeat('b', 64), 'confirmation' => 'REMOVE 73'],
+        'stale witness', 'rejected', 'plan_changed');
+    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'REMOVE 72'],
+        'wrong count', 'rejected', 'plan_changed');
+    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'CANCEL 73'],
+        'wrong phrase', 'rejected', 'plan_changed');
     Backend::$total = 0;
-    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'REMOVE 0'], 'zero extras');
+    denied(['inventory_sha256' => str_repeat('a', 64), 'confirmation' => 'REMOVE 0'],
+        'zero extras', 'rejected', 'nothing_to_remove');
     Backend::$total = 73;
     Backend::$service = 'stopped';
-    denied($correct, 'stopped service');
+    denied($correct, 'stopped service', 'rejected', 'not_ready');
     Backend::$service = 'started';
     Backend::$busy = true;
-    denied($correct, 'setup busy');
+    denied($correct, 'setup busy', 'rejected', 'not_ready');
     Backend::$busy = false;
     Backend::$extrasPhase = 'recovery_required';
-    denied($correct, 'pending recovery');
+    denied($correct, 'pending recovery', 'rejected', 'not_ready');
     Backend::$extrasPhase = 'ready';
+    Backend::$throwPreflight = true;
+    denied($correct, 'unavailable read-only preflight', 'unavailable', 'preflight_unavailable');
+    Backend::$throwPreflight = false;
     $ok = attempt($correct);
     insist($ok['status'] === 'ok' && $ok['started'] === true &&
         preg_match('/^[0-9a-f]{32}$/D', $ok['operation']), 'operation receipt');
@@ -101,5 +116,5 @@ namespace {
     insist($uncertain['status'] === 'uncertain' &&
         preg_match('/^[a-f0-9]{32}$/D', $uncertain['operation']),
         'transport timeout lost operation correlation');
-    echo "PASS: production Remove API confirmation, current witness, Started/busy, uncertain receipt\n";
+    echo "PASS: production Remove API structured safe rejection, current plan, Start/busy and uncertain receipt\n";
 }

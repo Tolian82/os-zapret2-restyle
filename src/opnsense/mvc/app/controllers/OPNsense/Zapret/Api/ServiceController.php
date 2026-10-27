@@ -296,39 +296,49 @@ class ServiceController extends ApiMutableServiceControllerBase
             return ['status' => 'failed'];
         }
 
-        $witness = trim((string)$this->request->getPost('inventory_sha256'));
-        $confirmation = trim((string)$this->request->getPost('confirmation'));
-        if (!preg_match('/^[a-f0-9]{64}$/D', $witness) ||
-            strlen($confirmation) > 40) {
-            throw new UserException(
-                gettext('Invalid Additional Resources removal confirmation.'),
-                gettext('Additional Resources unavailable')
-            );
+        // A declined destructive request is not an internal server failure.
+        // Return a predictable JSON receipt rather than throwing UserException
+        // (the OPNsense API exception renderer gives those HTTP 500).
+        $witness = $this->request->getPost('inventory_sha256');
+        $confirmation = $this->request->getPost('confirmation');
+        if (!is_string($witness) || !preg_match('/^[a-f0-9]{64}$/D', $witness) ||
+            !is_string($confirmation) || strlen($confirmation) > 40) {
+            return ['status' => 'rejected', 'started' => false,
+                    'reason' => 'invalid_confirmation'];
         }
 
         $backend = new Backend();
-        $runtime = $this->getRuntimeState($backend);
-        $extras = $this->getExtraResourceState($backend);
-        if (!$runtime['installed'] || $runtime['service'] !== 'started' ||
-            $runtime['busy'] || $extras['busy'] ||
-            in_array($extras['phase'], ['restore_failed', 'recovery_required'], true)) {
-            throw new UserException(
-                gettext('Start Zapret2 and finish any pending runtime operation or recovery first.'),
-                gettext('Additional Resources unavailable')
-            );
+        try {
+            $runtime = $this->getRuntimeState($backend);
+            $extras = $this->getExtraResourceState($backend);
+            if (!$runtime['installed'] || $runtime['service'] !== 'started' ||
+                $runtime['busy'] || $extras['busy'] ||
+                in_array($extras['phase'], ['restore_failed', 'recovery_required'], true)) {
+                return ['status' => 'rejected', 'started' => false,
+                        'reason' => 'not_ready'];
+            }
+
+            // This must remain the existing native Git HEAD/Config/inode plan.
+            // The worker repeats the same exact digest under setup.lock -> FD9.
+            $plan = $this->resourcesRemovePlanAction();
+        } catch (\Throwable $e) {
+            // No configd mutation has been requested: fail closed.
+            return ['status' => 'unavailable', 'started' => false,
+                    'reason' => 'preflight_unavailable'];
         }
 
-        // Never trust client counts. Recheck an authoritative *current* plan,
-        // and again inside the root native worker after setup.lock -> FD9.
-        $plan = $this->resourcesRemovePlanAction();
-        if (($plan['status'] ?? '') !== 'ok' ||
-            ($plan['total'] ?? 0) < 1 ||
-            ($plan['inventory_sha256'] ?? '') !== $witness ||
+        if (($plan['status'] ?? '') !== 'ok') {
+            return ['status' => 'unavailable', 'started' => false,
+                    'reason' => 'preflight_unavailable'];
+        }
+        if (($plan['total'] ?? 0) < 1) {
+            return ['status' => 'rejected', 'started' => false,
+                    'reason' => 'nothing_to_remove'];
+        }
+        if (($plan['inventory_sha256'] ?? '') !== $witness ||
             $confirmation !== 'REMOVE ' . (string)$plan['total']) {
-            throw new UserException(
-                gettext('The removal plan changed. Review and confirm it again.'),
-                gettext('Additional Resources unavailable')
-            );
+            return ['status' => 'rejected', 'started' => false,
+                    'reason' => 'plan_changed'];
         }
 
         $operation = bin2hex(random_bytes(16));
@@ -342,8 +352,9 @@ class ServiceController extends ApiMutableServiceControllerBase
                     'operation' => $operation];
         }
         if ($response !== 'OK') {
-            // A timeout or lost acknowledgement is not proof that the
-            // daemon failed to start. Never blind-retry a destructive job.
+            // A timeout or lost acknowledgement does not prove a job did not
+            // start. Never retry this destructive request without reconciling
+            // the correlated operation status.
             return ['status' => 'uncertain', 'started' => false,
                     'operation' => $operation];
         }
