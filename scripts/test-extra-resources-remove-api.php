@@ -2,7 +2,11 @@
 /** Isolated authenticated Remove API contract (no OPNsense services run). */
 namespace OPNsense\Base {
     class ApiMutableServiceControllerBase { public $request; }
-    class UserException extends \RuntimeException {}
+    class UserException extends \RuntimeException {
+        public function __construct($message, $title = '') {
+            parent::__construct($message);
+        }
+    }
 }
 namespace OPNsense\Core {
     class Backend {
