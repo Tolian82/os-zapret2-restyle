@@ -639,7 +639,15 @@ jobs:
           run: |
             test "$(freebsd-version -u | cut -d. -f1)" = "15"
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py
-            ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py
+            native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
+              printf '%s\n' "$native_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$native_probe_output"
+            printf '%s\n' "$native_probe_output" | grep -Fqx 'STAGE5_NATIVE_TABLE=PASS: FreeBSD15 live kernel add/list/swap/restore/cleanup' || {
+              echo 'Native FreeBSD 15 IPFW smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
 
   package:
     name: Build FreeBSD 15 package
