@@ -4,7 +4,6 @@
 #
 # Public API:
 #   targets_normalize_hostlist INPUT_FILE OUTPUT_FILE LABEL
-#   targets_normalize_ipset INPUT_FILE OUTPUT_FILE LABEL
 #   targets_prepare_managed BUILD_ROOT YOUTUBE_TEXT TELEGRAM_TEXT USER_TEXT
 #                           [DISCORD_TEXT X_TEXT SIP_TEXT CUSTOM_TEXT]
 #   targets_index_all WORKDIR PROFILE_COUNT
@@ -134,25 +133,6 @@ targets_ipset_compiler()
         return 1
     }
     printf '%s\n' "${compiler_dir}/ipset_policy.py"
-}
-
-# The compatibility wrapper invokes the SAME semantic parser.
-targets_normalize_ipset()
-{
-    local input_file="$1" output_file="$2" label="$3"
-    local python_bin compiler
-    [ -f "${input_file}" ] || {
-        common_error "${label} input does not exist: ${input_file}"
-        return 1
-    }
-    python_bin=$(targets_python_bin) || return 1
-    compiler=$(targets_ipset_compiler) || return 1
-    "${python_bin}" "${compiler}" single \
-        "${input_file}" "${output_file}.tmp" "${label}" || {
-            rm -f "${output_file}.tmp"
-            return 1
-        }
-    mv -f "${output_file}.tmp" "${output_file}" || return 1
 }
 
 targets_prepare_managed()

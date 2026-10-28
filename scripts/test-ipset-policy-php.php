@@ -19,6 +19,11 @@ $lists = [
     'custom' => '',
     'exclude' => "192.0.2.0/25\n192.0.2.128/25\n::",
 ];
+// FreeBSD identifies its PHP OS family as BSD, not FreeBSD.
+$bridgeSource = file_get_contents(__DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/IPSetPolicyBridge.php');
+must(str_contains($bridgeSource, "PHP_OS_FAMILY === 'BSD'") &&
+     !str_contains($bridgeSource, "PHP_OS_FAMILY === 'FreeBSD'"),
+     'FreeBSD Python interpreter selection regressed');
 $first = IPSetPolicyBridge::inspect($lists);
 $second = IPSetPolicyBridge::inspect($lists);
 must($first === $second, 'inspection is not deterministic');
@@ -48,6 +53,6 @@ must(IPSetPolicyBridge::allFromHostlist([
 ]) === [
     'telegram' => "::\n", 'discord' => '', 'x' => '', 'sip' => '',
     'custom' => '', 'exclude' => '2001:db8::/32'
-], 'legacy missing optional fields must map to empty');
+], 'current hostlist parser input contract');
 
 echo "PASS: one native IPSET parser from PHP, IPv6, collapse, overlap, six-list /0 guards\n";

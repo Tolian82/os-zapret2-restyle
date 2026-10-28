@@ -50,7 +50,7 @@ namespace {
     Config::$model = [
         'general' => ['waninterface' => 'WAN', 'enabled' => '1'],
         'strategy' => [], 'voice' => ['waninterface' => 'WAN'] + $voice,
-        'hostlist' => $hostlist,
+        'hostlist' => $hostlist + ['excludeipset' => ''],
     ];
     $digest = VoiceSettingsSnapshot::digest(Config::$model);
     $services = [];
@@ -90,40 +90,24 @@ namespace {
     $ok = $inspect($native);
     verify($ok['state'] === 'ready' && count($ok['profiles']) === 5,
         'committed five-service snapshot was not exposed');
-    // Owner-installed v0.6.1_7: the old sealed common owner is fully
-    // running/verified. Only the newly introduced empty Exclude IPSet key
-    // changes the current OPNsense model digest; this is NOT an interruption.
-    $legacy = $native;
-    Config::$model['hostlist']['excludeipset'] = '';
-    $legacyReady = $inspect($legacy);
-    verify($legacyReady['state'] === 'ready' &&
-        $legacyReady['profiles']['telegram']['runtime'] === 'active' &&
-        $legacyReady['profiles']['telegram']['ipset_entries'] === 2,
-        'old sealed empty Exclude IPSet owner was mislabeled interrupted');
-
-    $legacyStopped = $legacy;
-    $legacyStopped['state'] = 'stopped';
-    $legacyStopped['runtime']['state'] = 'stopped';
-    $legacyStopped['runtime']['engine_verified'] = false;
-    $legacyStopped['runtime']['supervisor_verified'] = false;
-    $legacyStopped['runtime']['services']['telegram']['runtime_state'] = 'engine-not-confirmed';
-    verify($inspect($legacyStopped)['state'] === 'stopped',
-        'old sealed empty Exclude IPSet stopped owner must remain inspectable');
-
+    // Current model digest must match the sealed common owner exactly.
     Config::$model['hostlist']['excludeipset'] = '2001:db8::/32';
-    $changedExclude = $inspect($legacy);
+    $changedExclude = $inspect($native);
     verify($changedExclude['state'] === 'interrupted' &&
         $changedExclude['condition'] === 'common-config-mismatch',
-        'nonempty new Exclude IPSet must remain a true Config mismatch');
-
+        'changed Exclude IPSet bypassed strict digest');
     Config::$model['hostlist']['excludeipset'] = '';
     Config::$model['hostlist']['telegramips'] = '91.108.13.11';
-    $changedOriginal = $inspect($legacy);
+    $changedOriginal = $inspect($native);
     verify($changedOriginal['state'] === 'interrupted' &&
         $changedOriginal['condition'] === 'common-config-mismatch',
-        'changed old Telegram IPSET must not pass legacy compatibility');
+        'changed Telegram IPSET bypassed strict digest');
     Config::$model['hostlist']['telegramips'] = '91.108.13.10';
+    $currentModel = Config::$model;
     unset(Config::$model['hostlist']['excludeipset']);
+    verify($inspect($native)['state'] === 'interrupted',
+        'previous-schema Config must not match current sealed owner');
+    Config::$model = $currentModel;
 
     verify($ok['profiles']['telegram'] === [
         'saved_enabled'=>true, 'runtime'=>'active',

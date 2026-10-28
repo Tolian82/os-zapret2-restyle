@@ -20,7 +20,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative published `v0.6.1_8` corrective testing package after owner-confirmed `_7` native RUNNING/ready but false Voice GUI status; CI passed, owner-installed `_8` GUI check pending; Stage 5 installed IPFW gate OPEN; the published stable `v0.6.0_1` package is unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — current `v0.6.1_9` preflight/forward-only source candidate (CI and publication pending), following owner-installed `_8` voice transmission/GUI help positive evidence and observed no-op PHP preflight errors; Stage 5 installed IPv6/IPFW exclusion gate OPEN; stable `v0.6.0_1` unchanged.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — published `_8` GUI correction, owner-installed `_7` boot recovery, historical `_6` / `_5` prereleases; no stable-release authority.
 

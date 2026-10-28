@@ -117,7 +117,7 @@ def main() -> None:
           "STUN-профиль, dvtws2 и IPFW подтверждены; звонок не проверен" in view and
           "STUN profile, dvtws2 and IPFW verified; call untested" in view and
           "refreshVoiceHealthSettled().always(function ()" in view and
-          "VoiceSettingsSnapshot::matchesCommittedDigest($current, $committedDigest)" in status_php and
+          "hash_equals($committedDigest, VoiceSettingsSnapshot::digest($current))" in status_php and
           "'saved_enabled' => $enabled" in status_php and
           "voiceEffectiveWan: 'WAN'" in view and
           "voiceUdpPorts: 'UDP'" in view and

@@ -512,14 +512,11 @@ class VoiceController extends ApiControllerBase
                 try {
                     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
                     $committedDigest = $payload['config_digest'] ?? null;
-                    // The underlying native-common inspector already
-                    // attested the sealed owner, release and IPFW. The
-                    // GUI must apply the same narrow old-empty-Exclude
-                    // compatibility as the FD9 saved-Config boot worker:
-                    // never mislabel a healthy, unchanged previous owner
-                    // as interrupted solely because the model grew a key.
+                    // The one current Config schema must exactly match the
+                    // sealed native-common owner. No previous-schema bypass.
                     $configMatches = is_string($committedDigest) &&
-                        VoiceSettingsSnapshot::matchesCommittedDigest($current, $committedDigest);
+                        preg_match('/^[a-f0-9]{64}$/D', $committedDigest) === 1 &&
+                        hash_equals($committedDigest, VoiceSettingsSnapshot::digest($current));
                 } finally {
                     $config->unlock();
                 }
