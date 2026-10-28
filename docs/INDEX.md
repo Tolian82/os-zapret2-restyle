@@ -19,8 +19,8 @@
 ## Level 2 — FIRST PRIORITY: global Exclude IPSet and IPv4/IPv6 dual-stack
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
-- [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–3 source/CI qualified; Stage 4 next. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_4` unqualified Stage 4 development candidate; Stage 4 source/CI open; the published stable `v0.6.0_1` package is unchanged.
+- [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–4 source/CI qualified; Stage 5 native FreeBSD15 IPFW next. Voice/P2P redesign remains deferred.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_4` source/CI-qualified unpublished candidate; Stage 5 IPFW next; the published stable `v0.6.0_1` package is unchanged.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — exact source-only candidate, implementation limits and no release authority.
 

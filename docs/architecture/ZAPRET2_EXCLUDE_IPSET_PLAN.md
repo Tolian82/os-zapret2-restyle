@@ -2,7 +2,7 @@
 
 **Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
 **Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 `v0.6.1_2` source/CI gate is CLOSED**; [PR #683](https://github.com/Tolian82/os-zapret2-restyle/pull/683) passed the [Project/Voice/FreeBSD 15 checks](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40653479292), was merged as [21f564d](https://github.com/Tolian82/os-zapret2-restyle/commit/21f564d64d70480dfd66c4c6229cdca53878c6ef) and passed post-merge main CI. **Stage 3 `v0.6.1_3` source/CI gate is CLOSED** ([PR #685](https://github.com/Tolian82/os-zapret2-restyle/pull/685), [Project/Voice/FreeBSD 15 CI attempt 2 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40657793778), [merged main 2b5f102](https://github.com/Tolian82/os-zapret2-restyle/commit/2b5f1029bf53b74b9526b62aecf243eb456c246d), [post-merge main CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40659404426)). **Stage 4 is next**. Stages 4–8 are not yet implemented. Stage 0 was documentation publication.
-**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current unqualified Stage 4 source candidate: `VERSION=0.6.1`, `PLUGIN_REVISION=4`. Only Stages 1–3 have qualified source gates.
+**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current source/CI-qualified but unpublished Stage 4 candidate: `VERSION=0.6.1`, `PLUGIN_REVISION=4`. Stages 1–4 have qualified source gates.
 **Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Later packaged-source patches increment `PLUGIN_REVISION`; any stable full release still requires separate explicit owner approval.
 
 ## 0. Execution rules and scope
@@ -160,6 +160,8 @@
 | CHANGE | `scripts/test-voice-common-runtime.py` | Test real shared Voice+ordinary profiles, final order, hashes and exclusions. |
 | CHANGE | `scripts/test-voice-firewall-transaction.py` | Test capture-plan compatibility with firewall transaction and injected failures. |
 | NEW | `scripts/test-voice-dualstack-ipset-boundaries.py` | Add specific five-Service boundary tests: IPv4/IPv6 accepted, all `/0` and complementary `/1` rejected; existing IPSET-only `--filter-udp=*`, no P2P rule and no Exclude Domains in Voice. |
+
+**Stage 4 source gate CLOSED (28 October 2026):** [Stage 4 PR #687](https://github.com/Tolian82/os-zapret2-restyle/pull/687), [Project/Voice/FreeBSD15 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40663744195), [merged main 467886e](https://github.com/Tolian82/os-zapret2-restyle/commit/467886e843f7ebd2b46dbc4e9cc2abf4bf342688), [post-merge main CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40665278981). Existing five Voice STUN IPSETs compile through the one six-list semantic compiler and strict manifest; same-family scope/collision, saved XML, shared native argv and fault-injection tests passed. **Do not assert installed FreeBSD15 IPv6 IPFW/table/divert or real packet success**: Stage 5 is the next mandatory gate.
 
 **Exit gate 4:** Existing Voice `--filter-l3=ipv4,ipv6` matches final IPSET/argv/IPFW candidate; same-family conflicts detected and all user `/0` bypass forms rejected before mutation. No P2P changes.
 
