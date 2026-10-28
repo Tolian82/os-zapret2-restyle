@@ -106,6 +106,7 @@ $legacyCurrent = $legacyPlan['candidate'];
 $legacyCurrent['hostlist']['excludeipset'] = '';
 $legacyProof = Worker::saved($legacyPlan, $legacyCurrent);
 must($legacyProof['result'] === 'committed' &&
+     $legacyProof['legacy_empty_excludeipset'] === '1' &&
      $legacyProof['snapshot'] ===
          \OPNsense\Zapret\Api\VoiceSettingsSnapshot::digest($legacyCurrent),
      'empty new Exclude IPSet must allow exact old sealed owner on boot');
@@ -126,8 +127,9 @@ $legacyIpDrift['hostlist']['telegramips'] = '91.108.13.10';
 denies(fn()=>Worker::saved($legacyPlan, $legacyIpDrift));
 $modernPlan = $legacyPlan;
 $modernPlan['candidate']['hostlist']['excludeipset'] = '';
-must(Worker::saved($modernPlan, $legacyCurrent)['result'] === 'committed',
-     'modern exact candidate must remain valid');
+must(Worker::saved($modernPlan, $legacyCurrent)['result'] === 'committed' &&
+     Worker::saved($modernPlan, $legacyCurrent)['legacy_empty_excludeipset'] === '0',
+     'modern exact candidate must not inherit old-layout privilege');
 $modernNonempty = $legacyCurrent;
 $modernNonempty['hostlist']['excludeipset'] = '2001:db8::/32';
 $modernPlan['candidate'] = $modernNonempty;

@@ -120,6 +120,7 @@ final class SharedApplyConfigWorker
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
         $actual = VoiceSettingsSnapshot::digest($current);
+        $legacyEmptyExcludeIPSet = false;
         if (!hash_equals($expected, $actual)) {
             // v0.6.1 first introduced the optional Exclude IPSet model field.
             // An older, intact common Apply seal has no such field. Permit
@@ -142,12 +143,17 @@ final class SharedApplyConfigWorker
             if (!hash_equals($expected, VoiceSettingsSnapshot::digest($oldShape))) {
                 throw new \RuntimeException('Saved native Config differs from shared owner');
             }
+            // Emit a bounded witness only after the FULL older Config hash
+            // passes. The common FD9 boot worker—not normal Apply—may use
+            // it to validate the previous sealed runtime layout unchanged.
+            $legacyEmptyExcludeIPSet = true;
         }
         $enabled = (string)($current['general']['enabled'] ?? '0');
         if (!in_array($enabled, ['0','1'], true)) {
             throw new \RuntimeException('Invalid saved native runtime mode');
         }
-        return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
+        return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled,
+                'legacy_empty_excludeipset'=>$legacyEmptyExcludeIPSet ? '1' : '0'];
     }
 
     /** The saved Config cannot be labelled pre-save if output encoding fails. */

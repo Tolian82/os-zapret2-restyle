@@ -975,6 +975,13 @@ shared_apply_boot_service()
         shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
     _shared_boot_check=$(printf "%s\n" "$_shared_boot_saved" |
         shared_apply_json_field '.result | select(.=="committed")') || return 69
+    # Never infer pre-Exclude-IPSet ownership from a missing file. The root
+    # Config worker supplies this witness only after the original sealed
+    # candidate and EVERY old tracked field match, with the new field empty.
+    # Overwrite any inherited environment hint; this FD9 lifecycle alone
+    # authorizes the narrow immutable-runtime layout exception.
+    SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET=$(printf "%s\n" "$_shared_boot_saved" |
+        shared_apply_json_field '.legacy_empty_excludeipset | select(.=="0" or .=="1")') || return 69
     _shared_boot_dir=$(shared_apply_workspace "$_shared_boot_id") || return 69
     [ -d "$_shared_boot_dir/release" ] &&
     [ ! -L "$_shared_boot_dir/release" ] || return 69

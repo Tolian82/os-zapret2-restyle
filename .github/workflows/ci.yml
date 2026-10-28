@@ -204,6 +204,8 @@ jobs:
         run: sh scripts/test-shared-apply-stop.sh
       - name: "Common committed native reboot: Config/runtime/IPFW startup"
         run: sh scripts/test-shared-apply-boot.sh
+      - name: Legacy sealed empty Exclude IPSet boot validator without relaxation of new Apply
+        run: sh scripts/test-legacy-empty-exclude-ipset-boot.sh
       - name: Shared runtime candidate bundle content seal and crash refusal
         run: python3.13 scripts/test-shared-apply-seal.py
       - name: Single native Voice and Strategies Apply through existing configd action
