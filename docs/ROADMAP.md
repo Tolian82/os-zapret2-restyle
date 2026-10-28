@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Current first priority — global Exclude IPSet and full IPv4/IPv6 dual-stack (approved 28 October 2026)
+## Текущий приоритет — global Exclude IPSet and full IPv4/IPv6 dual-stack (approved 28 October 2026)
 
 The owner's current implementation priority is [the approved specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) and [the staged per-file execution plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md): one Python IPSET compiler with universal user-list `/0` ban, one global `Exclude IPSet` for all Strategies/Voice profiles, unchanged domain-only Exclude Domains, dual-stack native Voice/IPFW and real IPv6 Strategy Lab. **Stage 0** records the documents and handoff; **Stage 1** (compiler + manifest + tests) is the single next execution task. All Voice/P2P page redesign ideas remain deferred in [DECISIONS.md](DECISIONS.md). No new runtime implementation, version bump or release is implied by this documentation milestone.
 
