@@ -14,7 +14,6 @@ from __future__ import annotations
 import errno
 import fcntl
 import hashlib
-import ipaddress
 import json
 import os
 from pathlib import Path
@@ -24,6 +23,8 @@ import stat
 import subprocess
 import sys
 from typing import Callable, Sequence
+
+from ipset_policy import IPSetError, parse_ipset
 
 from voice_firewall_transaction import (
     SERVICES, TABLE_PREFIX, VoiceFirewallError,
@@ -95,19 +96,23 @@ def checked_rule_number(number: int, first: int, last: int) -> int:
     return number
 
 
-def checked_ipv4(value: str) -> str:
-    if not isinstance(value, str):
-        raise IPFWAdapterError("IPFW address must be a string")
+def checked_table_ip(value: str, *, readback: bool = False) -> str:
+    """One canonical semantic address policy for both native IPFW families.
+
+    FreeBSD prints /32 and /128 host keys and may use another IPv6 textual
+    spelling. Normalize only on readback, *never* relax generated inputs.
+    Input /0, zone indexes, host bits and IPv4-mapped IPv6 remain forbidden.
+    """
+    if not isinstance(value, str) or not value or len(value) > 128:
+        raise IPFWAdapterError("invalid Voice IPv4/IPv6 table key")
     try:
-        net = ipaddress.IPv4Network(
-            value if "/" in value else value + "/32", strict=True
-        )
-    except ValueError as error:
-        raise IPFWAdapterError("invalid Voice IPv4/CIDR") from error
-    canon = str(net) if "/" in value else str(net.network_address)
-    if value != canon:
-        raise IPFWAdapterError("noncanonical Voice IPv4/CIDR")
-    return canon
+        normalized, _ = parse_ipset(value.encode("utf-8"), "Voice IPFW table key")
+    except (IPSetError, UnicodeError) as error:
+        raise IPFWAdapterError("invalid Voice IPv4/IPv6 table key") from error
+    canonical = normalized.rstrip("\n")
+    if not canonical or "\n" in canonical or (not readback and canonical != value):
+        raise IPFWAdapterError("noncanonical Voice IPv4/IPv6 table key")
+    return canonical
 
 
 def checked_rule_argv(argv: Sequence[str]) -> list[str]:
@@ -127,7 +132,7 @@ def checked_rule_argv(argv: Sequence[str]) -> list[str]:
             raise IPFWAdapterError("ordinary rule requires a port selector")
     elif argv[6] not in (f"table({TABLE_PREFIX}{service})" for service in SERVICES) or \
          argv[2] != "udp":
-        raise IPFWAdapterError("destination scope outside Voice IPv4 tables")
+        raise IPFWAdapterError("destination scope outside Voice owned address tables")
     if len(argv) == 15:
         selector = argv[7]
         if not NUMERIC_PORTS.fullmatch(selector):
@@ -244,7 +249,7 @@ class FreeBSDIPFWAdapter:
         if info is None:
             return None
         # Different installed table kinds (flow, iface, number) must not be
-        # adopted as Voice IPv4 destination tables.
+        # adopted as Voice mixed-family destination tables.
         if not re.search(r"(?im)\btype\s*:\s*addr\b", info):
             raise IPFWAdapterError("existing IPFW table is not address type")
         output = self._run("table", name, "list")
@@ -256,12 +261,11 @@ class FreeBSDIPFWAdapter:
             if not match:
                 raise IPFWAdapterError("unexpected IPFW table listing format")
             raw_address = match.group(1)
-            # FreeBSD often prints single-host keys as A.B.C.D/32 even
-            # if the plugin's normalized managed file stores A.B.C.D.
-            address = (raw_address[:-3] if raw_address.endswith("/32") else raw_address)
-            address = checked_ipv4(address)
+            # A native /32 or /128 host key is equivalent to a canonical
+            # managed host. Never permit truncation, /0 or a foreign family.
+            address = checked_table_ip(raw_address, readback=True)
             if address in values:
-                raise IPFWAdapterError("duplicate IPv4 in IPFW table")
+                raise IPFWAdapterError("duplicate IPv4/IPv6 in IPFW table")
             values.append(address)
             if len(values) > MAX_TABLE_ENTRIES:
                 raise IPFWAdapterError("IPFW table exceeds configured bounds")
@@ -276,7 +280,7 @@ class FreeBSDIPFWAdapter:
 
     def add_table_entry(self, name: str, address: str) -> None:
         self._run("-q", "table", checked_table_name(name), "add",
-                  checked_ipv4(address), modifying=True)
+                  checked_table_ip(address), modifying=True)
 
     def swap_tables(self, active: str, stage: str) -> None:
         if not (active.startswith(TABLE_PREFIX) and stage == active + "_stage" and
