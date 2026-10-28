@@ -139,11 +139,16 @@
         // Preserve OPNsense native label/help markup and F5 rendering. Only
         // localize this one new field; never rewrite a textarea's contents.
         function localizeExcludeIPSet() {
-            if (!isRussian) return;
             const field = document.getElementById('zapret.hostlist.excludeipset') ||
                           document.getElementById('zapret_hostlist_excludeipset');
             if (!field) return;
             const row = $(field).closest('tr');
+            // Same layout as Exclude Domains: retain the explanation under
+            // the textarea, but never duplicate it in OPNsense's third
+            // (right-hand) help column, even after F5/full-help toggle.
+            // Scoped to one field and both RU/EN; no other native help moves.
+            row.addClass('zapret-exclude-ipset-inline-help-only');
+            if (!isRussian) return;
             const caption = row.find('label').first();
             caption.contents().filter(function() {
                 return this.nodeType === 3 && this.textContent.indexOf('Exclude IPSet') !== -1;
@@ -1045,6 +1050,12 @@
 </script>
 
 <style>
+    /* The native help toggle must not create a duplicate third-column help
+       for Exclude IPSet. The inline .help-block under its textarea remains
+       visible, matching Exclude Domains in RU and EN. */
+    #frm_GeneralSettings tr.zapret-exclude-ipset-inline-help-only > td:nth-child(3) {
+        visibility: hidden !important;
+    }
     #zapretExtraResourceHelp { padding: 12px 4px 4px; }
     .zapret-resource-legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 12px; }
     .zapret-resource-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }

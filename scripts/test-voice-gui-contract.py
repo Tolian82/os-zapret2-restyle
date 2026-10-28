@@ -28,6 +28,14 @@ def main() -> None:
     controller = CONTROLLER.read_text(encoding="utf-8")
     view = VIEW.read_text(encoding="utf-8")
     strategies_view = STRATEGIES_VIEW.read_text(encoding="utf-8")
+    # Only the right native help column is hidden for Exclude IPSet.
+    # Keep field/textarea, OPNsense help source and below-textarea help.
+    check("row.addClass('zapret-exclude-ipset-inline-help-only')" in strategies_view and
+          "#frm_GeneralSettings tr.zapret-exclude-ipset-inline-help-only > td:nth-child(3)" in strategies_view and
+          "visibility: hidden !important;" in strategies_view and
+          "if (!isRussian) return;" in strategies_view and
+          "row.find('.help-block').first()" in strategies_view,
+          "Exclude IPSet RU/EN inline-only help layout regressed")
     fields = [f.findtext("id") for f in form.findall("./field") if f.findtext("id")]
     required = []
     for name in SERVICES:
@@ -109,7 +117,7 @@ def main() -> None:
           "STUN-профиль, dvtws2 и IPFW подтверждены; звонок не проверен" in view and
           "STUN profile, dvtws2 and IPFW verified; call untested" in view and
           "refreshVoiceHealthSettled().always(function ()" in view and
-          "hash_equals($committedDigest, $savedDigest)" in status_php and
+          "VoiceSettingsSnapshot::matchesCommittedDigest($current, $committedDigest)" in status_php and
           "'saved_enabled' => $enabled" in status_php and
           "voiceEffectiveWan: 'WAN'" in view and
           "voiceUdpPorts: 'UDP'" in view and

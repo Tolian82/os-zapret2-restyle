@@ -248,8 +248,10 @@ final class VoiceCandidateValidator
         $fields['exclude'] = '';
         $normalized = [];
         $overlaps = [];
+        $targetsParsed = false;
         try {
             $preview = IPSetPolicyBridge::inspect($fields);
+            $targetsParsed = true;
             foreach ($names as $name) {
                 $normalized[$name] = $preview['lists'][$name]['normalized'];
             }
@@ -277,7 +279,10 @@ final class VoiceCandidateValidator
         }
 
         foreach (array_keys($enabled) as $name) {
-            if (($normalized[$name] ?? '') === '') {
+            // If the ONE native parser refused input (or was unavailable),
+            // report that actual error; never invent "no destination IPs"
+            // while the operator's non-empty list remains visible.
+            if ($targetsParsed && ($normalized[$name] ?? '') === '') {
                 self::error($errors, 'zapret.hostlist.' . $name . 'ips',
                     'Enabled Voice service requires destination IPs');
             }
