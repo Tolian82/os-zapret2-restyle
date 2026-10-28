@@ -24,6 +24,8 @@
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — exact source-only candidate, implementation limits and no release authority.
 
+- [Stage 5 installed OPNsense read-only evidence procedure](verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md) — exact `0.6.1_5` prerequisite, existing native Voice observer, two safe snapshots, counter uncertainty and unclosed installed acceptance.
+
 ## Level 2 — current v0.6.x full release
 
 - [v0.6.0 full release plan](releases/v0.6.0.md) — authorized second-component rollover and package/Pages gates.

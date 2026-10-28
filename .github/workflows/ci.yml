@@ -116,6 +116,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: Stage 5 installed OPNsense read-only evidence bridge
+        run: |
+          python3.13 -m py_compile scripts/stage5-installed-evidence.py scripts/test-stage5-installed-evidence.py
+          python3.13 scripts/test-stage5-installed-evidence.py
       - name: Validate Voice shell and Python syntax
         run: |
           sh -n scripts/test-voice-shared-ipsets.sh
