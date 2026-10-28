@@ -20,9 +20,9 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — current `v0.6.1_9` preflight/forward-only source candidate (CI and publication pending), following owner-installed `_8` voice transmission/GUI help positive evidence and observed no-op PHP preflight errors; Stage 5 installed IPv6/IPFW exclusion gate OPEN; stable `v0.6.0_1` unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published testing-only `v0.6.1_9` PHP bridge/forward-only correction ([PR #704](https://github.com/Tolian82/os-zapret2-restyle/pull/704), Project/Voice/FreeBSD15 source CI PASS, post-merge CI PASS), owner-installed `_9` verification still OPEN; prior `_8` showed Voice call and GUI help positive evidence but no-op PHP preflight errors; Stage 5 installed IPv6/IPFW exclusion gate OPEN; stable `v0.6.0_1` unchanged.
 
-- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — published `_8` GUI correction, owner-installed `_7` boot recovery, historical `_6` / `_5` prereleases; no stable-release authority.
+- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — published `_9` testing correction and verifiable source/CI/package publication; previous `_8` owner-installed voice evidence; no stable-release authority.
 
 - [Published `v0.6.1_8` GUI correction testing package evidence](verification/evidence/testing-publications/v0.6.1_8.md) — exact source/tag, SHA-256, FreeBSD15 package and no stable repo promotion; owner GUI acceptance pending.
 - [Published `v0.6.1_7` correction testing package evidence](verification/evidence/testing-publications/v0.6.1_7.md) — exact tag/source, FreeBSD15 asset, SHA-256 and no stable repo promotion; owner-installed service startup still OPEN.
