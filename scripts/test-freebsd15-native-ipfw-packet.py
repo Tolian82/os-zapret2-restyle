@@ -69,7 +69,7 @@ def run() -> int:
         return 0
     from voice_ipfw_adapter import FreeBSDIPFWAdapter
     from voice_firewall_transaction import table_contents_equal
-    version = native("/sbin/freebsd-version", "-u")
+    version = native("freebsd-version", "-u")
     if version.returncode != 0 or not version.stdout.startswith("15.1"):
         raise RuntimeError("packet test requires FreeBSD 15.1 kernel")
     ensure_guest_kernel_ready()
