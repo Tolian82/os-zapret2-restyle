@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
 
 
 def module(name):
@@ -67,6 +68,21 @@ class NativeModelBridgeTests(unittest.TestCase):
             self.assertEqual(1, len(capture["voice"]))
             self.assertEqual(19001, capture["ordinary_rule_base"])
             self.assertEqual("table(zapret2_voice_telegram)", capture["voice"][0]["argv"][6])
+
+    def test_saved_xml_ipv6_survives_export_and_disabled_draft_is_ignored(self):
+        root = fixture()
+        settings = root.find("./OPNsense/Zapret/hostlist")
+        settings.find("telegramips").text = "91.108.0.0/16\n2001:db8:abcd::1"
+        settings.find("discordips").text = "::/0"
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "config.xml"
+            ET.ElementTree(root).write(source, encoding="utf-8")
+            state = exporter.read_voice_model(source)
+            self.assertEqual("91.108.0.0/16\n2001:db8:abcd::1", state["services"]["telegram"]["ips"])
+            result, plan = compiler.compile_candidate(state, MANAGED)
+            self.assertIn("--filter-l3=ipv4,ipv6", result)
+            self.assertEqual(["91.108.0.0/16", "2001:db8:abcd::1"], plan["profiles"][0]["targets"])
+            self.assertEqual(1, len(planner.compile_capture_plan(plan, 19000, 19010, 989)["voice"]))
 
     def test_absent_voice_section_is_all_off_and_preserves_strategies(self):
         root = fixture()

@@ -149,6 +149,19 @@ class RealTargetsBridgeTests(unittest.TestCase):
                 manifest["lists"]["exclude"]["sha256"],
                 __import__("hashlib").sha256((managed / "ipset-exclude.txt").read_bytes()).hexdigest(),
             )
+            # Stage 4 must consume the *same* real prepared mixed-family
+            # six-list candidate, not an independently normalized IPv4 copy.
+            saved = root / "config.xml"
+            xml_source(saved, sources)
+            bundle = stage.compile_bundle(saved, managed, Path("/usr/local/etc/zapret2/runtime-v2"),
+                                          "vtnet1", 19000, 19010, 989)
+            self.assertEqual(5, bundle["voice.conf"].count("--filter-l3=ipv4,ipv6"))
+            staged_plan = json.loads(bundle["capture-plan.json"])
+            self.assertEqual(["91.108.0.0/16", "2001:db8:abcd::1"],
+                             staged_plan["voice"][0]["destinations"])
+            self.assertEqual(5, len(staged_plan["voice"]))
+            self.assertEqual(__import__("hashlib").sha256((root / "ipset-manifest.json").read_bytes()).hexdigest(),
+                             json.loads(bundle["metadata.json"])["ipset_manifest_sha256"])
             # Failed reuse cannot overwrite an already prepared candidate.
             original = (managed / "ipset-telegram.txt").read_bytes()
             sources["custom"] = "::/1\n8000::/1"

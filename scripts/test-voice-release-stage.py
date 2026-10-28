@@ -21,6 +21,7 @@ spec = importlib.util.spec_from_file_location("voice_release_stage", BACKEND / "
 assert spec and spec.loader
 stage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(stage)
+from ipset_policy import LISTS, LABELS, parse_ipset
 
 ACTIVE_ROOT = Path("/usr/local/etc/zapret2/runtime-v2")
 STUN = "\n".join((
@@ -54,7 +55,15 @@ def write_fixture(tmp: Path, root: ET.Element | None = None):
     ET.ElementTree(root if root is not None else fixture()).write(source, encoding="utf-8")
     managed = tmp / "managed"
     managed.mkdir()
-    (managed / "ipset-telegram.txt").write_text("91.108.0.0/16\n91.108.13.10\n", encoding="utf-8")
+    saved = root if root is not None else fixture()
+    hosts = saved.find("./OPNsense/Zapret/hostlist")
+    evidence = {}
+    for name in LISTS:
+        value = (hosts.findtext(name + "ips") if hosts is not None and name != "exclude" else "") or ""
+        normalized, proof = parse_ipset(value.encode("utf-8"), LABELS[name], collapse=name == "exclude")
+        (managed / ("ipset-" + name + ".txt")).write_text(normalized, encoding="utf-8")
+        evidence[name] = proof
+    (tmp / "ipset-manifest.json").write_text(json.dumps({"schema_version": 1, "lists": evidence}))
     return source, managed
 
 
@@ -76,13 +85,13 @@ class VoiceReleaseStageTests(unittest.TestCase):
             self.assertEqual("staged-only", meta["mode"])
             self.assertEqual(1, meta["profile_count"])
             self.assertEqual(64, len(meta["ipset_sha256"]["telegram"]))
+            self.assertEqual(64, len(meta["ipset_manifest_sha256"]))
             self.assertNotIn("SECRET_DO_NOT_LEAK", json.dumps(bundle))
 
     def test_all_disabled_keeps_no_voice_capture(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
             source, managed = write_fixture(tmp, fixture(False))
-            (managed / "ipset-telegram.txt").unlink()
             result = stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989)
             self.assertEqual("", result["voice.conf"])
             self.assertEqual([], json.loads(result["capture-plan.json"])["voice"])
@@ -99,7 +108,7 @@ class VoiceReleaseStageTests(unittest.TestCase):
             ]:
                 with self.subTest(text=text):
                     target.write_text(text)
-                    with self.assertRaisesRegex(stage.VoiceStageError, "does not match saved Voice targets"):
+                    with self.assertRaisesRegex(stage.VoiceStageError, "does not match saved Voice targets|IPSET/manifest mismatch"):
                         stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1", 19000, 19010, 989)
             target.unlink()
             with self.assertRaisesRegex(stage.VoiceStageError, "IPSET is missing"):
@@ -243,7 +252,7 @@ class VoiceReleaseStageTests(unittest.TestCase):
             with patch.object(stage, "compile_capture_plan",
                               side_effect=edit_ipset_after_first_read):
                 with self.assertRaisesRegex(stage.VoiceStageError,
-                                            "does not match saved Voice targets"):
+                                            "does not match saved Voice targets|IPSET/manifest mismatch"):
                     stage.compile_bundle(source, managed, ACTIVE_ROOT, "vtnet1",
                                          19000, 19010, 989)
             (managed / "ipset-telegram.txt").write_text(

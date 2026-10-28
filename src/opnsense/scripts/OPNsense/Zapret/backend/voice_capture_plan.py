@@ -13,6 +13,8 @@ from pathlib import Path
 import re
 import sys
 
+from ipset_policy import IPSetError, parse_ipset
+
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 TABLE_PREFIX = "zapret2_voice_"
 WAN_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,63}$")
@@ -83,24 +85,21 @@ def compile_capture_plan(candidate: dict, rule_base: int, rule_max: int,
         targets = profile.get("targets")
         if not isinstance(targets, list) or not 1 <= len(targets) <= MAX_TARGETS:
             fail(f"{name}: empty or oversized destination set")
-        normalized: list[str] = []
-        networks: list[ipaddress.IPv4Network] = []
-        for idx, target in enumerate(targets, 1):
-            if not isinstance(target, str):
-                fail(f"{name} target {idx}: expected IPv4/CIDR")
-            try:
-                network = ipaddress.IPv4Network(
-                    target if "/" in target else f"{target}/32", strict=True
-                )
-            except ValueError as exc:
-                fail(f"{name} target {idx}: {exc}")
-            canonical = str(network) if "/" in target else str(network.network_address)
-            if canonical != target:
-                fail(f"{name} target {idx}: noncanonical IPSET entry")
-            normalized.append(target)
-            networks.append(network)
-        if len(set(normalized)) != len(normalized):
-            fail(f"{name}: duplicate IPSET entry")
+        # The prepared compiler remains authoritative for both families,
+        # canonical host/CIDR, deduplication and forbidden full-family union.
+        if any(not isinstance(target, str) for target in targets):
+            fail(f"{name}: destination list must contain only IP/CIDR strings")
+        try:
+            canonical, proof = parse_ipset(
+                ("".join(target + "\n" for target in targets)).encode("utf-8"),
+                f"{name} destinations",
+            )
+        except IPSetError as exc:
+            raise CapturePlanError(str(exc)) from exc
+        if canonical.splitlines() != targets:
+            fail(f"{name}: duplicate or noncanonical IPSET entry")
+        networks = [ipaddress.ip_network(net, strict=True)
+                    for family in ("ipv4", "ipv6") for net in proof["union"][family]]
         if profile.get("target_count") != len(targets):
             fail(f"{name}: inconsistent target count")
         intervals = profile.get("ports")
@@ -115,7 +114,8 @@ def compile_capture_plan(candidate: dict, rule_base: int, rule_max: int,
             checked_ports.append((lo, hi))
         for other in rows:
             if any(a <= d and c <= b for a, b in checked_ports for c, d in other["_ports"]):
-                if any(left.overlaps(right) for left in networks for right in other["_networks"]):
+                if any(left.version == right.version and left.overlaps(right)
+                       for left in networks for right in other["_networks"]):
                     fail(f"{name}: overlapping UDP capture with {other['service']}")
         table = TABLE_PREFIX + name
         port_expression = None if checked_ports == [(1, 65535)] else ",".join(

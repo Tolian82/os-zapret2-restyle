@@ -10,6 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
 
 def load(name):
     spec = importlib.util.spec_from_file_location(name, BACKEND / (name + ".py"))
@@ -104,7 +105,7 @@ class IpFwCapturePlanTests(unittest.TestCase):
             ("ports", [[True,1234]]),
             ("targets", []),
             ("targets", ["203.0.113.42/24"]),
-            ("targets", ["2001:db8::1"]),
+            ("targets", ["2001:db8::1/32"]),
             ("target_count", 2),
             ("profile_sha256", "evil"),
         ]:

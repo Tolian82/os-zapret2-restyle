@@ -22,6 +22,7 @@ from voice_profile_compiler import (
 )
 from voice_capture_plan import CapturePlanError, compile_capture_plan
 from voice_traffic_merge import VoiceMergeError, merge_profiles
+from ipset_policy import LISTS, LABELS, IPSetError, parse_ipset
 
 
 class VoiceStageError(ValueError):
@@ -42,29 +43,69 @@ def file_sha256(path: Path) -> str:
 
 
 def require_managed_match(state: dict, managed_source: Path) -> dict[str, str]:
-    hashes: dict[str, str] = {}
-    for service in SERVICES:
-        if not state["services"][service]["enabled"]:
-            continue
-        expected, _ = normalize_targets(state["services"][service]["ips"], service)
-        if not expected:
-            raise VoiceStageError(f"{service}: enabled Voice IPSET is empty")
-        filename = managed_source / f"ipset-{service}.txt"
-        if filename.is_symlink() or not filename.is_file():
-            raise VoiceStageError(f"{service}: managed IPSET is missing or unsafe")
-        if filename.stat().st_size > 1_048_576:
-            raise VoiceStageError(f"{service}: managed IPSET is oversized")
-        # Exact equality preserves order, deduplication and strict CIDR
-        # normalisation. No automatic fallback to 'any' or stale targets.
-        raw = filename.read_text(encoding="utf-8")
-        actual = raw.splitlines()
-        if actual != expected or raw != "".join(f"{line}\n" for line in expected):
-            raise VoiceStageError(
-                f"{service}: managed IPSET does not match saved Voice targets"
-            )
-        hashes[service] = hashlib.sha256(raw.encode("utf-8")).hexdigest()
-    return hashes
+    """Re-attest the ONE prepared Stage 1 manifest and all six actual IPSETs.
 
+    Saved enabled Voice values are compared byte-for-byte to the canonical
+    staged lists. Disabled drafts remain editable and are never activated.
+    No second resolver, live Config writer or mutable Voice-side registry.
+    """
+    if managed_source.is_symlink() or not managed_source.is_dir():
+        raise VoiceStageError("unsafe managed Voice candidate directory")
+    manifest_path = managed_source.parent / "ipset-manifest.json"
+    if (manifest_path.is_symlink() or not manifest_path.is_file()
+            or manifest_path.stat().st_size > 65536):
+        raise VoiceStageError("prepared six-list IPSET manifest is missing or unsafe")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (ValueError, UnicodeError) as exc:
+        raise VoiceStageError("invalid prepared six-list IPSET manifest") from exc
+    if (not isinstance(manifest, dict) or manifest.get("schema_version") != 1
+            or not isinstance(manifest.get("lists"), dict)
+            or set(manifest["lists"]) != set(LISTS)):
+        raise VoiceStageError("prepared six-list IPSET manifest schema differs")
+    hashes: dict[str, str] = {}
+    for name in LISTS:
+        filename = managed_source / f"ipset-{name}.txt"
+        if filename.is_symlink() or not filename.is_file():
+            raise VoiceStageError(f"{name}: managed IPSET is missing or unsafe")
+        raw = filename.read_bytes()
+        if len(raw) > 262144:
+            raise VoiceStageError(f"{name}: managed IPSET is oversized")
+        try:
+            canonical, proof = parse_ipset(
+                raw, LABELS[name], collapse=name == "exclude")
+        except IPSetError as exc:
+            raise VoiceStageError(str(exc)) from exc
+        # The exclusion output is *collapsed*. Its original manifest
+        # family_counts represent pre-collapse source networks, while the
+        # staged file records the smaller equivalent union. Do not compare
+        # pre-collapse counts against a reparse of collapsed bytes.
+        witness = manifest["lists"][name]
+        if not isinstance(witness, dict) or raw != canonical.encode("utf-8") or (
+            witness.get("sha256") != proof["sha256"]
+            or witness.get("union") != proof["union"]
+            or witness.get("entry_count") != proof["entry_count"]
+            or witness.get("full_family") is not False
+        ):
+            raise VoiceStageError(f"{name}: managed IPSET/manifest mismatch")
+        if name != "exclude" and witness != proof:
+            raise VoiceStageError(f"{name}: managed IPSET/manifest mismatch")
+        if name == "exclude":
+            counts = witness.get("family_counts")
+            if not isinstance(counts, dict) or set(counts) != {"ipv4", "ipv6"} or any(
+                type(counts[family]) is not int
+                or not proof["family_counts"][family] <= counts[family] <= 4096
+                for family in ("ipv4", "ipv6")
+            ):
+                raise VoiceStageError("exclude: invalid pre-collapse IPSET counts")
+        if name in SERVICES and state["services"][name]["enabled"]:
+            expected, _ = normalize_targets(state["services"][name]["ips"], name)
+            if not expected:
+                raise VoiceStageError(f"{name}: enabled Voice IPSET is empty")
+            if expected != canonical.splitlines():
+                raise VoiceStageError(f"{name}: managed IPSET does not match saved Voice targets")
+            hashes[name] = proof["sha256"]
+    return hashes
 
 def compile_bundle(config: Path, managed_source: Path, active_root: Path,
                    physical_wan: str, first_rule: int, last_rule: int,
@@ -78,8 +119,10 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
     state = read_voice_model(config)
     if expected_logical_wan is not None and state["strategy_wan"] != expected_logical_wan:
         raise VoiceStageError("rendered Strategies WAN does not match candidate XML")
-    profile, candidate = compile_candidate(state, active_root / "managed")
     hashes = require_managed_match(state, managed_source)
+    prepared = {name: (managed_source / f"ipset-{name}.txt").read_text(encoding="utf-8").splitlines()
+                for name in hashes}
+    profile, candidate = compile_candidate(state, active_root / "managed", prepared)
     # Source settings contain a logical OPNsense name, e.g. WAN. IPFW needs
     # the resolved kernel interface, e.g. vtnet1, which is supplied by the
     # orchestrator after config_resolve_interface.
@@ -100,6 +143,7 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         "resolved_wan": physical_wan,
         "profile_count": len(capture["voice"]),
         "ipset_sha256": hashes,
+        "ipset_manifest_sha256": file_sha256(managed_source.parent / "ipset-manifest.json"),
     }
     artifacts = {
         "voice.conf": profile,
@@ -138,6 +182,8 @@ def compile_bundle(config: Path, managed_source: Path, active_root: Path,
         raise VoiceStageError("saved Voice configuration changed during candidate staging")
     if require_managed_match(state, managed_source) != hashes:
         raise VoiceStageError("managed IPSET changed during Voice candidate staging")
+    if file_sha256(managed_source.parent / "ipset-manifest.json") != metadata["ipset_manifest_sha256"]:
+        raise VoiceStageError("prepared IPSET manifest changed during Voice staging")
     if ordinary_source is not None and file_sha256(ordinary_source) != ordinary_sha:
         raise VoiceStageError("ordinary Strategy changed during Voice candidate staging")
     if ordinary_source is not None:

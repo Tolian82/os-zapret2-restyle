@@ -8,6 +8,7 @@ that production orchestrator invokes before runtime activation.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,6 +18,8 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+sys.path.insert(0, str(BACKEND))
+from ipset_policy import LISTS, LABELS, parse_ipset
 ORCH = BACKEND / "orchestrator.sh"
 ACTIVE = "/usr/local/etc/zapret2/runtime-v2"
 STUN = "--filter-udp=*\n--filter-l7=stun\n--payload=stun\n--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2"
@@ -38,9 +41,13 @@ def prepare(tmp: Path, on: bool) -> tuple[Path, Path, Path]:
     ET.ElementTree(root).write(xml, encoding="utf-8")
     managed = tmp / "managed"
     managed.mkdir()
-    (managed / "ipset-telegram.txt").write_text(
-        "91.108.13.10\n91.108.0.0/16\n", encoding="utf-8"
-    )
+    evidence = {}
+    for name in LISTS:
+        raw = "91.108.13.10\n91.108.0.0/16" if name == "telegram" else ""
+        normalized, proof = parse_ipset(raw.encode("utf-8"), LABELS[name], collapse=name == "exclude")
+        (managed / f"ipset-{name}.txt").write_text(normalized, encoding="utf-8")
+        evidence[name] = proof
+    (tmp / "ipset-manifest.json").write_text(json.dumps({"schema_version": 1, "lists": evidence}))
     ordinary = tmp / "traffic-user.conf"
     ordinary.write_text("--filter-tcp=443\n--filter-l7=tls\n", encoding="utf-8")
     return xml, managed, ordinary

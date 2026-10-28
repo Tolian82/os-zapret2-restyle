@@ -5,12 +5,14 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
 COMPILER = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py"
 spec = importlib.util.spec_from_file_location("voice_compiler", COMPILER)
 assert spec is not None and spec.loader is not None
@@ -78,7 +80,7 @@ class VoiceCandidateTests(unittest.TestCase):
     def test_old_stun_template_compiles_without_parallel_engine(self):
         result, plan = self.compile(enable(payload()))
         self.assertIn("--name=voice-telegram\n", result)
-        self.assertIn("--filter-l3=ipv4\n", result)
+        self.assertIn("--filter-l3=ipv4,ipv6\n", result)
         self.assertIn("--ipset=/some/managed/ipset-telegram.txt", result)
         self.assertIn(BASE_ARGS, result)
         self.assertEqual(1, len(plan["profiles"]))
@@ -189,7 +191,7 @@ class VoiceCandidateTests(unittest.TestCase):
                     self.compile(enable(payload(),args=BASE_ARGS+"\n--out-range="+rng))
 
     def test_required_fields_and_empty_ipset(self):
-        for value in ["", "garbage", "91.108.13.10/24", "2001:db8::1", "1.2.3.4\n1.2.3.5/24"]:
+        for value in ["", "garbage", "91.108.13.10/24", "::/0", "1.2.3.4\n1.2.3.5/24"]:
             with self.subTest(value=value):
                 with self.assertRaises(voice.VoiceConfigurationError):
                     self.compile(enable(payload(), ips=value))
