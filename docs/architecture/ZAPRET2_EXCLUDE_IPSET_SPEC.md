@@ -5,6 +5,7 @@
 **Status:** Owner-directed **current first-priority development specification**; implementation, installed-system qualification, and any new package are **not yet complete**.
 **Baseline:** published stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; immutable released artifacts are not modified.
 **Execution plan:** [ZAPRET2_EXCLUDE_IPSET_PLAN.md](ZAPRET2_EXCLUDE_IPSET_PLAN.md).
+**Forward-only development boundary (29 October 2026):** The OPNsense appliance is a test stand; current-format IPv4/IPv6 inputs are supported, but older sealed runtime layouts, migration-only compatibility exceptions and dormant fallback implementations are not. Remove such executable branches rather than retaining them alongside the new single-parser, single-owner architecture. Keep same-transaction cleanup and integrity on failed Apply; see [DEV-050](../PROJECT_PRINCIPLES.md).
 **Owner's final clarification (28 October 2026):** `0.0.0.0/0` and `::/0`, including equivalent full-family unions, are forbidden in **every user-controlled IP list**, both inclusion and exclusion, including Voice.
 
 ## 1. Objective and boundaries
@@ -49,7 +50,7 @@ Keep `Exclude Domains` strictly domain-based: no implicit DNS A/AAAA lookup, no 
 ## 3. Input, canonicalization and full-family rejection
 
 1. One address or CIDR per line; allow CRLF and blank lines. Reject hostname, URL, IPv6 zone index (`%iface`), malformed address, range syntax, wrong prefix, and CIDR with nonzero host bits, reporting field name, source line and reason. **Never trim `:` from the ends of IPv6 values**, including `::`.
-2. Any legacy harmless punctuation tolerance for old IPv4 fields may be retained **only after a regression test** proves it is needed and cannot corrupt IPv6. Do not replace the existing saved Config format merely for normalization.
+2. Parse valid IPv4 and IPv6 with the **current** Python grammar only. Do not keep malformed legacy punctuation accepted solely for old-version compatibility or add a second parser. Use the existing OPNsense Config owner for current-format persistence.
 3. Canonicalize IPv6 with Python `ipaddress` compressed lowercase form. Treat `/32` IPv4 and `/128` IPv6 as equivalent to corresponding hosts for de-duplication; never coerce a family.
 4. For `Exclude IPSet`, apply `ipaddress.collapse_addresses()` **separately per family**: deduplicate, remove contained prefixes and combine adjacent CIDRs only if the resulting union is identical. Order deterministically by family/network/prefix; enforce no `/0` **both before and after** collapse.
 5. For **each include list**, normalize/deduplicate its output but also use a separate copy-only collapsed view for the effective full-family test. A two-`/1` union fails even when the actual output is not collapsed. Do not merge different services or conceal genuine Voice overlap.
@@ -77,7 +78,7 @@ Both `0.0.0.0/1` plus `128.0.0.0/1`, and `::/1` plus `8000::/1`, are **invalid**
 
 - Implement one bounded reusable Python module `backend/ipset_policy.py`; one **batch** operation consumes the candidate's six user lists: Telegram, Discord, X, SIP, Custom and global Exclude. Retain current published managed file paths (`ipset-telegram.txt`, `ipset-discord.txt`, `ipset-x.txt`, `ipset-sip.txt`, `ipset-custom.txt`) and add `ipset-exclude.txt`.
 - Emit an immutable candidate `ipset-manifest.json` with a versioned schema, normalized SHA-256 hashes, per-family networks, cardinalities and any bounded interval evidence necessary to compare Voice destination scopes. This is an **output witness**, not a second mutable cache or alternate Config owner.
-- All downstream compiler, capture-plan, validation and IPFW consumers reuse the single **prepared** semantic result. Verify file content, identity/hash, and the **actual installed** table/rule state at their trust boundaries; do not blindly trust an external JSON file. `targets_normalize_ipset()` may remain as a compatibility wrapper, but not a second parser with different semantics.
+- All downstream compiler, capture-plan, validation and IPFW consumers reuse the single **prepared** semantic result. Verify file content, identity/hash, and the **actual installed** table/rule state at their trust boundaries; do not blindly trust an external JSON file. `targets_normalize_ipset()` may exist only if a demonstrated current call path requires this delegation; otherwise delete the obsolete wrapper. No separate address grammar is permitted.
 - The native template `zapret.conf` exposes the new saved `EXCLUDE_IPSET` value. Native root staging, model XML, detached-save evidence and final engine arguments must refer to the **same** candidate and digest. Preserve atomic `SharedConfigCommit` semantics, saved-draft behavior, race protection and native Apply rollback.
 
 ## 5. Strategies GUI and persistence
@@ -144,7 +145,7 @@ The only live Apply is existing `shared_apply_prepare_service()` → `orchestrat
 
 | ID | Observable acceptance |
 |---|---|
-| A01 | Old IPv4-only Config/Strategies/Voice survives Apply, F5, Start/Stop, reboot; prior DPI functionality is not lost. |
+| A01 | Valid IPv4-only Strategies/Voice input in the **current Config schema** survives Apply, F5, Start/Stop and reboot; no pre-Exclude-IPSet sealed-runtime compatibility or previous-schema migration is required. |
 | A02 | `Exclude IPSet` is directly below `Exclude Domains` in both GUI modes, with correct RU/EN help; empty field is behavior-compatible. |
 | A03 | Mixed IPv4/IPv6 input is compiled once; deterministic files and bounded manifest hashes agree. |
 | A04 | Exclude duplicates/contained/adjacent networks are collapsed without adding or removing any address. |
