@@ -545,6 +545,23 @@ validator_validate_runtime_modes()
         "${_validator_modes_managed}/hostlist-user.txt" \
         "${_validator_modes_managed}/hostlist-exclude.txt"
     do
+        # An immutable pre-Exclude-IPSet common release legitimately has
+        # eight managed files, not nine. Only the native FD9 boot worker may
+        # set this compatibility witness after the original sealed Config
+        # has been matched in full. Never write into the sealed old release.
+        # New-format Apply and any actual --ipset-exclude argument must still
+        # provide the ninth file and the six-list staging manifest.
+        if [ "${_validator_modes_file}" = "${_validator_modes_managed}/ipset-exclude.txt" ] &&
+           [ "${SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET:-0}" = 1 ] &&
+           [ ! -e "${_validator_modes_file}" ] &&
+           [ ! -L "${_validator_modes_file}" ] &&
+           [ ! -e "${_validator_modes_root}/ipset-manifest.json" ] &&
+           [ ! -L "${_validator_modes_root}/ipset-manifest.json" ] &&
+           [ -f "${_validator_modes_root}/dvtws.args" ] &&
+           [ ! -L "${_validator_modes_root}/dvtws.args" ] &&
+           ! grep -Fq -- '--ipset-exclude' "${_validator_modes_root}/dvtws.args"; then
+            continue
+        fi
         [ -f "${_validator_modes_file}" ] || {
             validator_fail "required managed runtime file is missing: ${_validator_modes_file}"
             return 1

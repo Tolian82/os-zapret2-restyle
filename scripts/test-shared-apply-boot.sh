@@ -16,8 +16,8 @@ LOG="$ROOT/steps.log"
 common_error() { echo "ERROR: $*" >&2; }
 preflight_shared_apply_journal() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
-shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
-shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;; *) return 1 ;; esac; }
+shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'","legacy_empty_excludeipset":"'"$BOOT_LEGACY"'"}'; }
+shared_apply_json_field() { case "$1" in *".enabled"*) echo "$BOOT_ENABLED" ;; *".result"*) echo committed ;; *".legacy_empty_excludeipset"*) echo "$BOOT_LEGACY" ;; *) return 1 ;; esac; }
 shared_apply_workspace() { echo "$ROOT/work"; }
 apply_runtime_activate() {
   echo activate >> "$LOG"
@@ -45,7 +45,7 @@ apply_runtime_probe() {
 }
 reset() {
   GUARD=0; SEAL=0; CONFIG=0; ACTIVE=0; COMMIT=0
-  ENGINE=0; MONITOR=0; TREE_OK=1; PROBE_OK=1; BOOT_ENABLED=1
+  ENGINE=0; MONITOR=0; TREE_OK=1; PROBE_OK=1; BOOT_ENABLED=1; BOOT_LEGACY=0
   POST_TREE_DRIFT=0; POST_PROBE_DRIFT=0
   POST_ENGINE_LOST=0; POST_MONITOR_LOST=0
   : > "$LOG"
@@ -63,6 +63,13 @@ expect() {
 reset
 expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
+[ "$SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET" = 0 ] || fail "modern boot received legacy witness"
+reset; BOOT_LEGACY=1
+expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 '
+[ "$SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET" = 1 ] || fail "old sealed owner lost legacy witness"
+reset; SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET=1
+expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 '
+[ "$SHARED_BOOT_LEGACY_EMPTY_EXCLUDE_IPSET" = 0 ] || fail "inherited boot hint survived modern witness"
 # Global OFF still commits the saved common profile release without a
 # daemon and must prove the new IPFW scope empty after commit.
 reset; BOOT_ENABLED=0
