@@ -188,6 +188,8 @@
 
 **Native FreeBSD 15.1 VM packet evidence (28 October 2026):** [PR #693](https://github.com/Tolian82/os-zapret2-restyle/pull/693) ran the existing production `FreeBSDIPFWAdapter` on a disposable FreeBSD 15.1 VM. [Exact-head CI #40685416258](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40685416258) logged both `STAGE5_NATIVE_TABLE=PASS` and `STAGE5_NATIVE_IPV6_PACKET=PASS`. A destination-IPSET-scoped rule on `lo0` diverted an actual IPv6 UDP packet carrying a synthetic STUN-format request, reinjected it, and delivered the identical payload; UDP outside ports 596–599 bypassed divert. Scoped rule/table cleanup succeeded. This is **VM kernel/loopback evidence with a test socket**, not the installed OPNsense WAN, real `dvtws2`, native Apply/FD9, live service rollback or Telegram call. The Stage 5 installed acceptance gate remains **OPEN**.
 
+**Installed read-only evidence preparation (unqualified source):** [owner procedure](../verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md), `scripts/stage5-installed-evidence.py` and `scripts/test-stage5-installed-evidence.py` reuse the existing committed Voice inspector, compare two runtime/IPFW counter observations, reject stale/different ownership and **never infer IPv6 PASS from shared IPFW counters**. Exact installed package `0.6.1_5` is required but not published; Stage 5 installed gate remains OPEN.
+
 **Exit gate 5:** **Installed** FreeBSD 15 shows mixed table add/list/swap, destination-scoped IPv6 Voice STUN capture, correct reinjection, no foreign-rule change and exact rollback; CI alone is insufficient.
 
 ## Stage 6. Strategy Lab IPv6 end-to-end
