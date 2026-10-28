@@ -74,35 +74,6 @@ final class VoiceSettingsSnapshot
         return hash('sha256', $json);
     }
 
-    /**
-     * Read-only committed-owner inspection of the pre-v0.6.1 Config shape.
-     * The native inspector must independently attest the sealed common
-     * owner, release and IPFW. Never use this as a write/Apply baseline.
-     *
-     * Exactly one newly introduced, strictly empty optional field may be
-     * omitted for comparison against the older committed digest. Every
-     * previous tracked setting must retain the same canonical SHA-256.
-     */
-    public static function matchesCommittedDigest(array $model, string $sealedDigest): bool
-    {
-        if (!preg_match('/^[a-f0-9]{64}$/D', $sealedDigest)) {
-            return false;
-        }
-        if (hash_equals($sealedDigest, self::digest($model))) {
-            return true;
-        }
-        $hostlist = $model['hostlist'] ?? null;
-        if (!is_array($hostlist) ||
-            !array_key_exists('excludeipset', $hostlist) ||
-            $hostlist['excludeipset'] !== ''
-        ) {
-            return false;
-        }
-        $oldShape = $model;
-        unset($oldShape['hostlist']['excludeipset']);
-        return hash_equals($sealedDigest, self::digest($oldShape));
-    }
-
     public static function requireFresh(array $model, $token): void
     {
         if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) {

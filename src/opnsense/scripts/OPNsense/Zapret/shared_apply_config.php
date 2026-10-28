@@ -120,40 +120,14 @@ final class SharedApplyConfigWorker
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
         $actual = VoiceSettingsSnapshot::digest($current);
-        $legacyEmptyExcludeIPSet = false;
         if (!hash_equals($expected, $actual)) {
-            // v0.6.1 first introduced the optional Exclude IPSet model field.
-            // An older, intact common Apply seal has no such field. Permit
-            // only an EXACTLY empty new field at cold boot; every old field
-            // must still hash identically to the original sealed candidate.
-            // No Config save, journal rewrite, or change to Apply concurrency
-            // fingerprints. A new-format candidate never gets this exception.
-            $oldHostlist = $plan['candidate']['hostlist'] ?? null;
-            $newHostlist = $current['hostlist'] ?? null;
-            if (!is_array($oldHostlist) ||
-                array_key_exists('excludeipset', $oldHostlist) ||
-                !is_array($newHostlist) ||
-                !array_key_exists('excludeipset', $newHostlist) ||
-                $newHostlist['excludeipset'] !== ''
-            ) {
-                throw new \RuntimeException('Saved native Config differs from shared owner');
-            }
-            $oldShape = $current;
-            unset($oldShape['hostlist']['excludeipset']);
-            if (!hash_equals($expected, VoiceSettingsSnapshot::digest($oldShape))) {
-                throw new \RuntimeException('Saved native Config differs from shared owner');
-            }
-            // Emit a bounded witness only after the FULL older Config hash
-            // passes. The common FD9 boot worker—not normal Apply—may use
-            // it to validate the previous sealed runtime layout unchanged.
-            $legacyEmptyExcludeIPSet = true;
+            throw new \RuntimeException('Saved native Config differs from shared owner');
         }
         $enabled = (string)($current['general']['enabled'] ?? '0');
         if (!in_array($enabled, ['0','1'], true)) {
             throw new \RuntimeException('Invalid saved native runtime mode');
         }
-        return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled,
-                'legacy_empty_excludeipset'=>$legacyEmptyExcludeIPSet ? '1' : '0'];
+        return ['result'=>'committed','snapshot'=>$actual,'enabled'=>$enabled];
     }
 
     /** The saved Config cannot be labelled pre-save if output encoding fails. */

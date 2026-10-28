@@ -28,7 +28,7 @@ final class IPSetPolicyBridge
             }
         }
         $encoded = json_encode($lists, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $binary = $python ?? (PHP_OS_FAMILY === 'FreeBSD'
+        $binary = $python ?? (PHP_OS_FAMILY === 'BSD'
             ? '/usr/local/bin/python3.13' : '/usr/bin/python3');
         $installed = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py';
         $source = dirname(__DIR__, 6) . '/scripts/OPNsense/Zapret/backend/ipset_policy.py';

@@ -25,7 +25,7 @@ $state=[
     'general'=>['enabled'=>'1','waninterface'=>'WAN','divertport'=>'989'],
     'strategy'=>['trafficargs'=>'--filter-tcp=443','extraargs'=>''],
     'hostlist'=>['mode'=>'list','telegramips'=>'91.108.0.0/16',
-                 'youtubedomains'=>'','userdomains'=>'','excludedomains'=>''],
+                 'youtubedomains'=>'','userdomains'=>'','excludedomains'=>'','excludeipset'=>''],
     'voice'=>['waninterface'=>'WAN'],
     'strategylab'=>['enablequic'=>'1'],
 ];
@@ -97,46 +97,22 @@ $drifted=$savedCandidate;
 $drifted['hostlist']['telegramips']='91.108.13.10';
 denies(fn()=>Worker::saved($plan,$drifted));
 
-// Owner-observed v0.6.0_1 -> v0.6.1_5 post-install failure:
-// exactly one NEW optional hostlist.excludeipset model key changes the
-// snapshot, while the old sealed common Strategies owner is unchanged.
-$legacyPlan = $plan;
-unset($legacyPlan['candidate']['hostlist']['excludeipset']);
-$legacyCurrent = $legacyPlan['candidate'];
-$legacyCurrent['hostlist']['excludeipset'] = '';
-$legacyProof = Worker::saved($legacyPlan, $legacyCurrent);
-must($legacyProof['result'] === 'committed' &&
-     $legacyProof['legacy_empty_excludeipset'] === '1' &&
-     $legacyProof['snapshot'] ===
-         \OPNsense\Zapret\Api\VoiceSettingsSnapshot::digest($legacyCurrent),
-     'empty new Exclude IPSet must allow exact old sealed owner on boot');
-$legacyNonempty = $legacyCurrent;
-$legacyNonempty['hostlist']['excludeipset'] = '2001:db8::/32';
-denies(fn()=>Worker::saved($legacyPlan, $legacyNonempty));
-$legacyWhitespace = $legacyCurrent;
-$legacyWhitespace['hostlist']['excludeipset'] = ' ';
-denies(fn()=>Worker::saved($legacyPlan, $legacyWhitespace));
-$legacyNull = $legacyCurrent;
-$legacyNull['hostlist']['excludeipset'] = null;
-denies(fn()=>Worker::saved($legacyPlan, $legacyNull));
-$legacyOtherDrift = $legacyCurrent;
-$legacyOtherDrift['voice']['telegram']['enabled'] = '1';
-denies(fn()=>Worker::saved($legacyPlan, $legacyOtherDrift));
-$legacyIpDrift = $legacyCurrent;
-$legacyIpDrift['hostlist']['telegramips'] = '91.108.13.10';
-denies(fn()=>Worker::saved($legacyPlan, $legacyIpDrift));
-$modernPlan = $legacyPlan;
-$modernPlan['candidate']['hostlist']['excludeipset'] = '';
-must(Worker::saved($modernPlan, $legacyCurrent)['result'] === 'committed' &&
-     Worker::saved($modernPlan, $legacyCurrent)['legacy_empty_excludeipset'] === '0',
-     'modern exact candidate must not inherit old-layout privilege');
-$modernNonempty = $legacyCurrent;
-$modernNonempty['hostlist']['excludeipset'] = '2001:db8::/32';
-$modernPlan['candidate'] = $modernNonempty;
-must(Worker::saved($modernPlan, $modernNonempty)['result'] === 'committed',
-     'new committed Exclude IPSet must verify without exception');
-denies(fn()=>Worker::saved($modernPlan, $legacyCurrent));
-
+// Current-format candidate and live Config require the same sealed digest.
+$previousShape = $plan;
+unset($previousShape['candidate']['hostlist']['excludeipset']);
+denies(fn()=>Worker::saved($previousShape, $savedCandidate));
+$missingCurrentField = $savedCandidate;
+unset($missingCurrentField['hostlist']['excludeipset']);
+denies(fn()=>Worker::saved($plan, $missingCurrentField));
+$nonemptyExclude = $savedCandidate;
+$nonemptyExclude['hostlist']['excludeipset'] = '2001:db8::/32';
+$nonemptyPlan = $plan;
+$nonemptyPlan['candidate'] = $nonemptyExclude;
+must(Worker::saved($nonemptyPlan, $nonemptyExclude)['result'] === 'committed',
+     'current nonempty exclusion requires exact committed digest');
+denies(fn()=>Worker::saved($nonemptyPlan, $savedCandidate));
+must(!array_key_exists('legacy_empty_excludeipset', $savedRow),
+     'previous-schema boot exception leaked into current receipt');
 
 must($stored['dependencies']===$plan['dependencies'],'stored plan lost dependency');
 $unrelated=$state;
