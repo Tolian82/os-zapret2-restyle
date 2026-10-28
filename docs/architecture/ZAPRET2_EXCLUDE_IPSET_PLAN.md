@@ -178,16 +178,19 @@
 
 ## Stage 6. Strategy Lab IPv6 end-to-end
 
-**Outcome:** Use the existing Lab engine and its true baseline/candidate/replay model for pinned IPv6 endpoints.
+**Outcome:** Use the existing Lab engine for pinned IPv6 endpoints, plus the owner-approved IPv6 checkbox under Mode, dual-family target gating and 150/200 / 270/350-second job budgets.
 
 | Scope | File | Planned change or check |
 |---|---|---|
-| CHANGE | `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php` | Accept IPv6 literal targets and optional Host/SNI, keeping domain/IPv4 request contracts. |
-| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/target.sh` | Normalize literal and resolved IPv6 endpoints (A/AAAA) and bind a verified fixed remote address without losing original hostname identity. |
+| CHANGE | `src/opnsense/mvc/app/views/OPNsense/Zapret/diagnostics.volt` | Add the RU/EN `IPv6` checkbox directly beneath Mode, label left/indicator aligned under dropdown as approved; default OFF, submit selection, keep Run/Stop and standard/extended layout, show per-family results and correct 150/200/270/350 guidance. |
+| CHANGE | `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php` | Accept IPv6 literal targets and optional Host/SNI; validate the independent IPv6 checkbox and pass the selection through existing job-start contract. Reject an IPv6 literal while unchecked and never infer AAAA opt-in merely from DNS. |
+| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/target.sh` | Normalize IPv4/IPv6 literal and domain A/AAAA endpoints, filter eligible target families by saved job checkbox, bind fixed remote addresses, and do not fabricate an alternative-family endpoint. |
 | CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/request.sh` | Route IPv6 requests through existing Python request helper, without alternative test client. |
 | CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py` | Support IPv6 DNS, Chrome/curl endpoint pinning and bracketed URLs; retain ECH-off, proxy bypass and timing evidence. |
 | CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py` | Prove actual remote IPv6/family matches target, TLS certificate and applicable QUIC semantics; report unsupported cases honestly. |
-| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh` | Carry target address family through existing stages 00–90, preserving true PASS and restoration requirements. |
+| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/worker_flow.sh` | Carry immutable IPv6 option, actual eligible families and single job deadline through stages 00–90; ensure IPv4 and IPv6 trials have bounded, non-starved eligibility without disturbing Stop/restore. |
+| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py` | Reconcile the existing authoritative overall deadline and saved job budget with 150/200/270/350 seconds, without a separate timer, family reset or incorrect Stage-80 deadline. |
+| CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py` | Reconcile eligible-work scheduling and existing IPv6/endpoint additions with the fixed owner-approved total-job ceilings; avoid double-counting a previous IPv6 increment and never sacrifice cleanup. |
 | CHANGE | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/firewall.sh` | Extend bounded Lab IPFW capture to IPv6, isolated from the running service's rules. |
 | REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/probe.sh` | Audit IPv6 evidence and saved job logs; adjust only when existing protocol schema requires it. |
 | REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/candidate.sh` | Check IPv6 candidate pinned --ipset-ip expression and preserve existing candidate generators. |
@@ -196,15 +199,19 @@
 | REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/extended_runtime.sh` | Preserve Stage 70/85/90, replay and cleanup, adding family-aware evidence where necessary. |
 | REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_model_b_adapter.sh` | Check Model B adapter/state and adaptive candidate compatibility with IPv6 targets. |
 | REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py` | Preserve dynamic extra Lua/BIN inventory independent of IP family. |
-| REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/result.sh` | Check result serialization/display of IPv6 and preserve existing saved-job format. |
-| NEW | `scripts/test-strategy-lab-ipv6.py` | Add IPv6 integration matrix: literal/AAAA, Host/SNI, Chrome pin/proxy, applicable QUIC, replay, faults and restoration. |
+| REVIEW | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab/result.sh` | Check job result retains requested IPv6 checkbox, actually tested families, explicit unavailable cases, assigned time budget and true final deadline, without reinterpreting saved jobs. |
+| NEW | `scripts/test-strategy-lab-ipv6.py` | Add IPv6 integration matrix: unchecked A-only, checked A+AAAA, A-only/AAAA-only domains, IPv4/IPv6 literals, missing IPv6 route, Host/SNI, Chrome pin/proxy, QUIC when supported, replay, faults and restoration. |
+| CHANGE | `scripts/test-strategy-lab-time-budget.sh` | Verify actual 150/200 Standard and 270/350 Extended overall deadlines, no bonus for checkbox-only/single-family jobs, and no duplicate per-family timer. |
+| CHANGE | `scripts/test-strategy-lab-adaptive-budget.sh` | Verify current eligible-work budget is reconciled to owner-approved mixed-family ceilings, no double IPv6 bonus and preserved stage-80/overall deadline containment. |
+| CHANGE | `scripts/test-strategy-lab-gui-status-reconciliation.sh` | Verify RU/EN Mode/IPv6 two-row alignment, default OFF, Run/Stop unaffected, saved job family scope and per-family result/status visibility. |
+| CHANGE | `scripts/test-strategy-lab-job-contract.sh` | Verify checkbox payload/API normalization, immutable job selection, IPv6 literal gating and persisted planned/actual families. |
 | CHANGE | `scripts/test-strategy-lab-target-contract.sh` | Extend target contract tests to both families and untouched domains. |
 | CHANGE | `scripts/test-strategy-lab-ip-targets.sh` | Test fixed IPv6 endpoint identity and no accidental IPv4 fallback. |
 | REVIEW | `scripts/test-strategy-lab-python-probes.sh` | Check Python probes' IPv6 baseline, TLS certificate and remote-IP proof. |
 | REVIEW | `scripts/test-strategy-lab-interception-evidence.sh` | Check IPv6 IPFW source-port interception attribution. |
 | REVIEW | `scripts/test-strategy-lab-extended-tcp.sh` | Check IPv6 Stage60/85/90 TCP replay and cleanup. |
 
-**Exit gate 6:** Installed Lab IPv6 baseline, candidate, replay, endpoint-family proof and restoration pass in applicable scenarios; IPv4-only path reports IPv6 unavailable without failing IPv4.
+**Exit gate 6:** Installed RU/EN Lab matches approved Mode/IPv6 layout and defaults, selected domain A/AAAA test matrix and literal target rules, saves actual job family selection, proves exact remote address/baseline/candidate/replay/restoration, and enforces 150/200/270/350-second job ceilings without adaptive double count. IPv4-only scenarios remain usable and report missing IPv6 as unavailable, not an IPv4 failure.
 
 ## Stage 7. Integrated regression of shared Apply and Extra Resources
 
@@ -223,7 +230,7 @@
 | BOUNDARY | `src/opnsense/scripts/OPNsense/Zapret/backend/blobs.sh` | Verify extra Lua/BIN loading works unchanged under the new profile argument filtering. |
 | BOUNDARY | `docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md` | Preserve historical Remove transaction boundaries and reuse common future compiler. |
 
-**Mandatory integrated scenarios:** old IPv4-only config; mixed IPv4/IPv6; explicit/effective `/0` refusal in all lists; Voice STUN without P2P scope; domain exclusion only in ordinary applicable Strategies; IP exclusion in every profile; `--new`/template/import/Extra; target modes `all/list/auto`; IPv4-only WAN; mixed IPFW/rollback; Install/Remove; and IPv6 Lab. Do not claim successful media/calls or broad P2P traffic handling.
+**Mandatory integrated scenarios:** Standard/Extended Laboratory IPv6-checkbox OFF/ON and 150/200/270/350-second budgets; old IPv4-only config; mixed IPv4/IPv6; explicit/effective `/0` refusal in all lists; Voice STUN without P2P scope; domain exclusion only in ordinary applicable Strategies; IP exclusion in every profile; `--new`/template/import/Extra; target modes `all/list/auto`; IPv4-only WAN; mixed IPFW/rollback; Install/Remove; and IPv6 Lab. Do not claim successful media/calls or broad P2P traffic handling.
 
 **Exit gate 7:** Full shared Config/Voice/Strategies/Extra Resources paths preserve identity, exclusion semantics, rollback and original Lua/BIN, no extra owner/parser/service.
 
@@ -283,4 +290,4 @@ Check stage table rows against the current pinned Git tree before implementation
 
 ## 11. Completion definition
 
-Close only after recorded evidence for [acceptance A01–A24](ZAPRET2_EXCLUDE_IPSET_SPEC.md#10-acceptance-criteria), including actual installed OPNsense dual-stack managed targets and Voice, all-profile IP exclusion, domain-only hostlist isolation, universal user `/0` refusal, unchanged IPSET-scoped STUN, Lab IPv6, rollback/boot, old IPv4 compatibility and native Extra Resources lifecycle. A failed/unrun check is never PASS; an explicitly accepted residual limitation must remain visible. Deferred Voice/P2P/UDP-port/IPv6-toggle work is a separate future project.
+Close only after recorded evidence for [acceptance A01–A26](ZAPRET2_EXCLUDE_IPSET_SPEC.md#10-acceptance-criteria), including actual installed OPNsense dual-stack managed targets and Voice, all-profile IP exclusion, domain-only hostlist isolation, universal user `/0` refusal, unchanged IPSET-scoped STUN, Lab IPv6, rollback/boot, old IPv4 compatibility and native Extra Resources lifecycle. A failed/unrun check is never PASS; an explicitly accepted residual limitation must remain visible. Deferred Voice/P2P/UDP-port/IPv6-toggle work is a separate future project.

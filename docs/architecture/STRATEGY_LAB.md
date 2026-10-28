@@ -446,6 +446,16 @@ The runtime does not:
 PASS/FAIL is handshake capability evidence only. It neither enables nor vetoes the
 explicitly selected Extended QUIC candidate branch and does not prove HTTP3 GET.
 
+## APPROVED FUTURE LABORATORY IPV6 SELECTOR — NOT YET IMPLEMENTED (28 OCTOBER 2026)
+
+The binding UI/behavior authority is [the current dual-stack specification](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (DS-25/DS-26, A25/A26); implementation belongs to [Stage 6](ZAPRET2_EXCLUDE_IPSET_PLAN.md) of its plan. This section is a **future target**, not an assertion that published v0.6.0_1 already exposes the control.
+
+In Strategy Lab's existing Mode column, draw the approved two-row composition: top row `Режим:` / `Mode:` at left with the existing Standard/Extended selector at right; directly below it `IPv6` at left and a **single unchecked-by-default checkbox** at right aligned with the left edge of the selector. The screenshot shows a round visual indicator; behavior must still be checkbox-like, not an exclusive radio mode. Do not move Run/Stop or add a parallel Laboratory. Use RU/EN labels and persist checkbox choice in the immutable job record.
+
+OFF **disables IPv6 strategy tests even for domains with AAAA**. ON schedules eligible A and AAAA independently for dual-family domains, using pinned exact endpoints. Domains with A only always test IPv4; domains with AAAA only require ON and a usable IPv6 path. Literal IPv4 always tests that exact IPv4; literal IPv6 requires ON and tests that exact IPv6 only. Do not invent an alternate family, silently fall back between families, or treat missing/unroutable AAAA as a failed IPv4 candidate. Keep baseline, QUIC where supported, Host/SNI, ECH-off, saved result identity, adaptive Model-C and restoration semantics.
+
+Job-wide time budgets are **150 s** for Standard single-family, **200 s** for Standard dual-family, **270 s** for Extended single-family and **350 s** for Extended dual-family. Both-family eligibility (not the checkbox alone) triggers the added 50/80 seconds. This is one overall job deadline, never full time per family. The [existing adaptive workload budget](STRATEGY_LAB_ADAPTIVE_BUDGET.md) must be reconciled with these final owner-approved totals during Stage 6 so no extra IPv6 allowance is silently added beyond them.
+
 ## IPV6 POLICY
 
 AAAA records alone do not prove IPv6 availability.
