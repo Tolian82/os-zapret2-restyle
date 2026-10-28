@@ -69,6 +69,16 @@ foreach (["91.108.13.10/24","2001:db8::1/64","1.2.3.4/33","127.0.0.1;echo foo","
 }
 invalid(active(data(),'telegram',''),'zapret.hostlist.telegramips','empty IPSET forbidden for enabled service');
 
+ // A populated but INVALID list must report the parser's actual failure,
+ // not invent a second "destination IPs required" error after parsing fails.
+ $badAddress = active(data(), 'telegram', '91.108.13.10');
+ $badAddress['hostlist']['discordips'] = 'not-an-ip';
+ $errors = VoiceCandidateValidator::check($badAddress);
+ check(!in_array('Enabled Voice service requires destination IPs', $errors, true),
+     'failed six-list parser invented missing Telegram destinations');
+ check(count($errors) > 0, 'bad second list was silently accepted');
+
+
  // Separate invalid fields must be reported together: the earlier IPSET
  // error must not stop parsing later STUN arguments of that same profile.
 $both = active(data(), 'telegram', 'not-an-ip',

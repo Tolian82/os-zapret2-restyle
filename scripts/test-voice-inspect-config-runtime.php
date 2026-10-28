@@ -90,6 +90,41 @@ namespace {
     $ok = $inspect($native);
     verify($ok['state'] === 'ready' && count($ok['profiles']) === 5,
         'committed five-service snapshot was not exposed');
+    // Owner-installed v0.6.1_7: the old sealed common owner is fully
+    // running/verified. Only the newly introduced empty Exclude IPSet key
+    // changes the current OPNsense model digest; this is NOT an interruption.
+    $legacy = $native;
+    Config::$model['hostlist']['excludeipset'] = '';
+    $legacyReady = $inspect($legacy);
+    verify($legacyReady['state'] === 'ready' &&
+        $legacyReady['profiles']['telegram']['runtime'] === 'active' &&
+        $legacyReady['profiles']['telegram']['ipset_entries'] === 2,
+        'old sealed empty Exclude IPSet owner was mislabeled interrupted');
+
+    $legacyStopped = $legacy;
+    $legacyStopped['state'] = 'stopped';
+    $legacyStopped['runtime']['state'] = 'stopped';
+    $legacyStopped['runtime']['engine_verified'] = false;
+    $legacyStopped['runtime']['supervisor_verified'] = false;
+    $legacyStopped['runtime']['services']['telegram']['runtime_state'] = 'engine-not-confirmed';
+    verify($inspect($legacyStopped)['state'] === 'stopped',
+        'old sealed empty Exclude IPSet stopped owner must remain inspectable');
+
+    Config::$model['hostlist']['excludeipset'] = '2001:db8::/32';
+    $changedExclude = $inspect($legacy);
+    verify($changedExclude['state'] === 'interrupted' &&
+        $changedExclude['condition'] === 'common-config-mismatch',
+        'nonempty new Exclude IPSet must remain a true Config mismatch');
+
+    Config::$model['hostlist']['excludeipset'] = '';
+    Config::$model['hostlist']['telegramips'] = '91.108.13.11';
+    $changedOriginal = $inspect($legacy);
+    verify($changedOriginal['state'] === 'interrupted' &&
+        $changedOriginal['condition'] === 'common-config-mismatch',
+        'changed old Telegram IPSET must not pass legacy compatibility');
+    Config::$model['hostlist']['telegramips'] = '91.108.13.10';
+    unset(Config::$model['hostlist']['excludeipset']);
+
     verify($ok['profiles']['telegram'] === [
         'saved_enabled'=>true, 'runtime'=>'active',
         'media_verified'=>false, 'call_verified'=>false,
