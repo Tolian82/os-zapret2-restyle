@@ -25,7 +25,7 @@ INSTALLED_INSPECTOR = (
 INSTALLED_PYTHON = "/usr/local/bin/python3.13"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 MAX_SNAPSHOT = 262144
-REQUIRED_INSTALLED_VERSION = "0.6.1_5"
+REQUIRED_INSTALLED_VERSION = "0.6.1_6"
 
 
 class EvidenceError(ValueError):
@@ -49,7 +49,7 @@ def _parse_snapshot(raw: bytes, label: str) -> dict:
     ):
         raise EvidenceError(f"{label}: untrusted owner Config witness")
     if report.get("installed_plugin_version") != REQUIRED_INSTALLED_VERSION:
-        raise EvidenceError(f"{label}: Stage 5 candidate 0.6.1_5 is not installed")
+        raise EvidenceError(f"{label}: Stage 5 candidate 0.6.1_6 is not installed")
     runtime = report.get("runtime")
     if not isinstance(runtime, dict) or runtime.get("state") != "running" or (
         runtime.get("engine_verified") is not True or
