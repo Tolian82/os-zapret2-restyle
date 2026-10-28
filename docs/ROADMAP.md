@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — global Exclude IPSet and full IPv4/IPv6 dual-stack (approved 28 October 2026)
 
-The owner's current implementation priority is [the approved specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) and [the staged per-file execution plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md): one Python IPSET compiler with universal user-list `/0` ban, one global `Exclude IPSet` for all Strategies/Voice profiles, unchanged domain-only Exclude Domains, dual-stack native Voice/IPFW and real IPv6 Strategy Lab. **Stage 0** records the documents and handoff; **Stage 1** (compiler + manifest + tests) is the single next execution task. All Voice/P2P page redesign ideas remain deferred in [DECISIONS.md](DECISIONS.md). No new runtime implementation, version bump or release is implied by this documentation milestone.
+The owner's current implementation priority is [the approved specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) and [the staged per-file execution plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md): one Python IPSET compiler with universal user-list `/0` ban, one global `Exclude IPSet` for all Strategies/Voice profiles, unchanged domain-only Exclude Domains, dual-stack native Voice/IPFW and real IPv6 Strategy Lab. **Stage 0** recorded the documents and handoff; **Stage 1** now has the `v0.6.1_1` compiler/manifest source candidate and focused local checks, with full CI/FreeBSD qualification still pending. Stage 2 is next after the Stage 1 gate. Voice/P2P page redesign remains deferred in [DECISIONS.md](DECISIONS.md). No stable release is authorized.
 
 ## Previously completed priority — published v0.6.0 and installation follow-up
 
@@ -71,7 +71,7 @@ The owner has accepted the bounded Stages 1–6 completion and authorized a subs
 - Cancellation/internal-failure containment; circular start/stop/TTL и stale-session recovery при конкретном основании.
 - Diagnostics persistence/reload; retention/cleanup; reboot/residue regression.
 - Runtime/service reliability и package/runtime visibility; дальнейшие точечные RU/EN исправления.
-- IPv6 Laboratory target support — отдельная архитектурная задача.
+- IPv6 Laboratory target support belongs to the current approved dual-stack plan (Stage 6), rather than a separate future project.
 - **Дополнительные Lua/BLOB ресурсы — owner-approved 22.10.2026; catalog descriptor/validator Stage 1 merged and checked, plugin-side Stages 2–5 pending.** Отдельная ручная кнопка «Установить дополнительные ресурсы» / “Install Additional Resources” под статусом на странице «Стратегия»; источник [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources). Установка транзакционная, **по явному нажатию при запущенной службе** с обязательным **Stop→Start и health-check Zapret2** перед успехом; при `Stopped` сначала требуется штатный Start. Без перезаписи штатных/пользовательских файлов и без загрузки автоматически при смене upstream-релиза. Динамический `ResourceInventory` + **генерация совместимых кандидатов из фактически установленных Lua/BIN без hardcode имён файлов и без переписывания кода при обновлении набора**, адресный `--lua-init`, конечный бюджет, прежние стратегии не меняются. [Утверждённое ТЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) и [принятый пятиэтапный рабочий план](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md). **Кнопка и интеграция реализованы в исходниках до `v0.5.7_22`; приёмка на установленной OPNsense и актуальная публикация этого функционала ещё не проведены.**
 
 Эти направления не превращаются в обязательные блокеры текущей HTTP-модернизации или прежних релизов без конкретного затронутого сценария.
@@ -80,4 +80,4 @@ The owner has accepted the bounded Stages 1–6 completion and authorized a subs
 
 Candidate parallel width выше трёх, endpoint parallelism, cross-batch keep-warm, BLOB/Lua/discovery optimization и Model-C timeout/deadline audit открываются только при новом конкретном дефекте/потребности, материальном изменении архитектуры либо выборе владельца. Завершённые измерения сохранены в истории.
 
-Текущая граница — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.5.x.md). Roadmap не накапливает ревизионные отчёты.
+Текущая граница — [START_HERE](START_HERE.md), факты — [PROJECT_STATE](PROJECT_STATE.md), хронология — [ledger](history/current/v0.6.x.md). Roadmap не накапливает ревизионные отчёты.

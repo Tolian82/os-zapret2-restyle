@@ -121,6 +121,10 @@ jobs:
           sh -n scripts/test-voice-shared-ipsets.sh
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py
           python3.13 -m py_compile scripts/test-voice-profile-compiler.py
+      - name: Stage 1 dual-stack IPSET compiler and full-family guards
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py
+          python3.13 scripts/test-ipset-policy.py
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
 
@@ -655,6 +659,7 @@ jobs:
             /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
             /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-router.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
+            /usr/local/bin/python3.13 scripts/test-ipset-policy.py
             /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
             sh scripts/build-pkg.sh
             sh scripts/test-private-curl-native-ech.sh

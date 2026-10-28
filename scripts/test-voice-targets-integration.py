@@ -39,14 +39,14 @@ DATA = {
 }
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 
-def run_real_targets(folder: Path, addresses: dict[str, str]) -> subprocess.CompletedProcess:
+def run_real_targets(folder: Path, addresses: dict[str, str], exclude: str = "") -> subprocess.CompletedProcess:
     cmd = [
         "/bin/sh", "-c",
         '. "$1"; . "$2"; shift 2; targets_prepare_managed "$@"',
         "voice-targets-interop",
         str(BACKEND / "common.sh"), str(BACKEND / "targets.sh"),
         str(folder), "youtube.com", addresses["telegram"], "example.org",
-        addresses["discord"], addresses["x"], addresses["sip"], addresses["custom"],
+        addresses["discord"], addresses["x"], addresses["sip"], addresses["custom"], exclude,
     ]
     # FreeBSD packages /usr/local/bin/python3.13 but may not install the
     # unversioned python3 executable. Feed the tested interpreter to the
@@ -57,6 +57,7 @@ def run_real_targets(folder: Path, addresses: dict[str, str]) -> subprocess.Comp
         interpreter = Path(tmp) / "python3"
         interpreter.symlink_to(Path(sys.executable).resolve())
         env = os.environ.copy()
+        env["BACKEND_DIR"] = str(BACKEND)
         env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
         return subprocess.run(cmd, capture_output=True, text=True,
                               check=False, env=env)
@@ -118,6 +119,43 @@ class RealTargetsBridgeTests(unittest.TestCase):
                 self.assertIn(f"table(zapret2_voice_{name})",
                               str(next(r for r in plan["voice"] if r["service"]==name)["argv"]))
             self.assertNotIn("telegram-voice-poc", bundle["voice.conf"])
+
+    def test_mixed_family_and_exclude_compiled_in_one_real_targets_batch(self):
+        # Stage 1 verifies the actual Targets entrypoint, not yet the Voice
+        # IPv6 runtime (which is deliberately handled by later stages).
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            managed = root / "managed"
+            sources = {name: DATA[name][0] for name in SERVICES}
+            sources["telegram"] = "91.108.0.0/16\n2001:db8:abcd::1\n"
+            result = run_real_targets(
+                managed, sources,
+                "192.0.2.0/25\n192.0.2.128/25\n2001:db8::/32\n",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                ["91.108.0.0/16", "2001:db8:abcd::1"],
+                (managed / "ipset-telegram.txt").read_text().splitlines(),
+            )
+            self.assertEqual(
+                ["192.0.2.0/24", "2001:db8::/32"],
+                (managed / "ipset-exclude.txt").read_text().splitlines(),
+            )
+            manifest = json.loads((root / "ipset-manifest.json").read_text())
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(6, len(manifest["lists"]))
+            self.assertEqual(1, manifest["lists"]["telegram"]["family_counts"]["ipv6"])
+            self.assertEqual(
+                manifest["lists"]["exclude"]["sha256"],
+                __import__("hashlib").sha256((managed / "ipset-exclude.txt").read_bytes()).hexdigest(),
+            )
+            # Failed reuse cannot overwrite an already prepared candidate.
+            original = (managed / "ipset-telegram.txt").read_bytes()
+            sources["custom"] = "::/1\n8000::/1"
+            result = run_real_targets(managed, sources)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("combined IPv6", result.stderr)
+            self.assertEqual(original, (managed / "ipset-telegram.txt").read_bytes())
 
     def test_host_bits_in_shared_targets_fail_instead_of_entering_voice_candidate(self):
         with tempfile.TemporaryDirectory() as d:

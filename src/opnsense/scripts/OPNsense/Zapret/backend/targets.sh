@@ -103,93 +103,56 @@ targets_normalize_hostlist()
     }
 }
 
-targets_normalize_ipset()
+targets_python_bin()
 {
-    local input_file="$1"
-    local output_file="$2"
-    local label="$3"
-    local python_bin
-
-    [ -f "${input_file}" ] || {
-        common_error "${label} input does not exist: ${input_file}"
-        return 1
-    }
-
-    # Production OPNsense declares python313, which does not guarantee an
-    # unversioned /usr/local/bin/python3 alias. Use the same pinned native
-    # interpreter as the Voice release builder on an installed appliance.
-    python_bin=/usr/local/bin/python3.13
+    # The installed OPNsense package pins Python 3.13. Source-only tests
+    # may use a test interpreter, but not the installed appliance.
+    local python_bin=/usr/local/bin/python3.13
     if [ ! -x "${python_bin}" ]; then
         case "${BACKEND_DIR:-}" in
             /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
-                common_error "pinned Python 3.13 is required for managed IPv4/CIDR targets"
+                common_error "pinned Python 3.13 is required for managed IPv4/IPv6 targets"
                 return 1
                 ;;
             *)
-                # Only an uninstalled repository test runner may use its
-                # own Python. Do not silently change appliance semantics.
                 python_bin=$(command -v python3.13 2>/dev/null) ||
                     python_bin=$(command -v python3 2>/dev/null) || {
-                        common_error "Python 3.13 or test Python is required for IPv4/CIDR targets"
+                        common_error "Python is required for IPSET compilation"
                         return 1
                     }
                 ;;
         esac
     fi
+    printf '%s\n' "${python_bin}"
+}
 
-    "${python_bin}" - "${input_file}" "${output_file}.tmp" "${label}" <<'PY'
-import ipaddress
-import pathlib
-import sys
-
-source = pathlib.Path(sys.argv[1])
-destination = pathlib.Path(sys.argv[2])
-label = sys.argv[3]
-seen: set[str] = set()
-normalized: list[str] = []
-errors: list[str] = []
-
-for line_no, raw in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
-    value = raw.strip().strip(",;:")
-    if not value:
-        continue
-    try:
-        if "/" in value:
-            parsed = ipaddress.IPv4Network(value, strict=True)
-        else:
-            parsed = ipaddress.IPv4Address(value)
-    except ValueError as exc:
-        errors.append(f"ERROR: {label}, line {line_no}: invalid IPv4 address or CIDR '{raw}': {exc}")
-        continue
-
-    # Native IPFW represents A.B.C.D and A.B.C.D/32 as the same address.
-    # Deduplicate by effective host key so generated IPSET and Voice
-    # release compiler agree on every edit/reapply.
-    canonical = (str(parsed.network_address)
-                 if isinstance(parsed, ipaddress.IPv4Network) and parsed.prefixlen == 32
-                 else str(parsed))
-    if canonical not in seen:
-        seen.add(canonical)
-        normalized.append(canonical)
-
-if errors:
-    print("\n".join(errors), file=sys.stderr)
-    raise SystemExit(1)
-
-destination.write_text("".join(f"{item}\n" for item in normalized), encoding="utf-8")
-PY
-    status=$?
-
-    if [ "${status}" -ne 0 ]; then
-        rm -f "${output_file}.tmp"
-        return "${status}"
-    fi
-
-    mv -f "${output_file}.tmp" "${output_file}" || {
-        rm -f "${output_file}.tmp"
-        common_error "could not install normalized ${label}: ${output_file}"
+targets_ipset_compiler()
+{
+    local compiler_dir="${BACKEND_DIR:-${BACKEND:-}}"
+    [ -n "${compiler_dir}" ] && [ -f "${compiler_dir}/ipset_policy.py" ] || {
+        common_error "managed IPSET compiler is missing from BACKEND_DIR"
         return 1
     }
+    printf '%s\n' "${compiler_dir}/ipset_policy.py"
+}
+
+# The compatibility wrapper invokes the SAME semantic parser.
+targets_normalize_ipset()
+{
+    local input_file="$1" output_file="$2" label="$3"
+    local python_bin compiler
+    [ -f "${input_file}" ] || {
+        common_error "${label} input does not exist: ${input_file}"
+        return 1
+    }
+    python_bin=$(targets_python_bin) || return 1
+    compiler=$(targets_ipset_compiler) || return 1
+    "${python_bin}" "${compiler}" single \
+        "${input_file}" "${output_file}.tmp" "${label}" || {
+            rm -f "${output_file}.tmp"
+            return 1
+        }
+    mv -f "${output_file}.tmp" "${output_file}" || return 1
 }
 
 targets_prepare_managed()
@@ -202,7 +165,8 @@ targets_prepare_managed()
     local x_text="${6-}"
     local sip_text="${7-}"
     local custom_text="${8-}"
-    local input_root
+    local exclude_text="${9-}"
+    local input_root python_bin compiler manifest_root target_name target_text
 
     [ -n "${build_root}" ] || {
         common_error "targets_prepare_managed requires a build root"
@@ -216,44 +180,46 @@ targets_prepare_managed()
     }
 
     printf '%s\n' "${youtube_text}" > "${input_root}/youtube.txt" || return 1
-    printf '%s\n' "${telegram_text}" > "${input_root}/telegram.txt" || return 1
     printf '%s\n' "${user_text}" > "${input_root}/user.txt" || return 1
+    for target_name in telegram discord x sip custom exclude; do
+        case "${target_name}" in
+            telegram) target_text="${telegram_text}" ;;
+            discord) target_text="${discord_text}" ;;
+            x) target_text="${x_text}" ;;
+            sip) target_text="${sip_text}" ;;
+            custom) target_text="${custom_text}" ;;
+            exclude) target_text="${exclude_text}" ;;
+        esac
+        printf '%s\n' "${target_text}" > "${input_root}/${target_name}.txt" || return 1
+    done
 
+    # Domain-only HOSTLIST validation precedes any IPSET publication.
     targets_normalize_hostlist \
-        "${input_root}/youtube.txt" "${build_root}/hostlist-youtube.txt" "YouTube Domains" || return 1
-    targets_normalize_ipset \
-        "${input_root}/telegram.txt" "${build_root}/ipset-telegram.txt" "Telegram IPs" || return 1
+        "${input_root}/youtube.txt" "${input_root}/hostlist-youtube.out" \
+        "YouTube Domains" || return 1
     targets_normalize_hostlist \
-        "${input_root}/user.txt" "${build_root}/hostlist-user.txt" "User Domains" || return 1
-    printf '%s\n' "${discord_text}" > "${input_root}/discord.txt" || return 1
-    targets_normalize_ipset \
-        "${input_root}/discord.txt" "${build_root}/ipset-discord.txt" "DISCORD IPs" || return 1
-    printf '%s\n' "${x_text}" > "${input_root}/x.txt" || return 1
-    targets_normalize_ipset \
-        "${input_root}/x.txt" "${build_root}/ipset-x.txt" "X IPs" || return 1
-    printf '%s\n' "${sip_text}" > "${input_root}/sip.txt" || return 1
-    targets_normalize_ipset \
-        "${input_root}/sip.txt" "${build_root}/ipset-sip.txt" "SIP IPs" || return 1
-    printf '%s\n' "${custom_text}" > "${input_root}/custom.txt" || return 1
-    targets_normalize_ipset \
-        "${input_root}/custom.txt" "${build_root}/ipset-custom.txt" "CUSTOM IPs" || return 1
+        "${input_root}/user.txt" "${input_root}/hostlist-user.out" \
+        "User Domains" || return 1
 
-    chmod 0755 "${build_root}" || {
-        common_error "could not set managed Target directory permissions"
-        return 1
-    }
+    python_bin=$(targets_python_bin) || return 1
+    compiler=$(targets_ipset_compiler) || return 1
+    manifest_root=$(dirname -- "${build_root}") || return 1
+    "${python_bin}" "${compiler}" batch \
+        "${input_root}" "${build_root}" "${manifest_root}/ipset-manifest.json" || return 1
 
+    mv -f "${input_root}/hostlist-youtube.out" "${build_root}/hostlist-youtube.txt" || return 1
+    mv -f "${input_root}/hostlist-user.out" "${build_root}/hostlist-user.txt" || return 1
+
+    chmod 0755 "${build_root}" || return 1
     chmod 0644 \
         "${build_root}/hostlist-youtube.txt" \
-        "${build_root}/ipset-telegram.txt" \
         "${build_root}/hostlist-user.txt" \
+        "${build_root}/ipset-telegram.txt" \
         "${build_root}/ipset-discord.txt" \
         "${build_root}/ipset-x.txt" \
         "${build_root}/ipset-sip.txt" \
-        "${build_root}/ipset-custom.txt" || {
-            common_error "could not set managed Target file permissions"
-            return 1
-        }
+        "${build_root}/ipset-custom.txt" \
+        "${build_root}/ipset-exclude.txt" || return 1
 
     rm -rf "${input_root}"
 }
