@@ -176,8 +176,8 @@ def run() -> int:
         for number, argv in state["rules"].items():
             permitted_rules.setdefault(number, set()).add(tuple(argv))
         for name, values in state["tables"].items():
-            permitted_tables.setdefault(name, []).extend(([values], [[]]))
-            permitted_tables.setdefault(name + "_stage", []).extend(([values], [[]]))
+            permitted_tables.setdefault(name, []).extend((values, []))
+            permitted_tables.setdefault(name + "_stage", []).extend((values, []))
 
     try:
         apply_transaction(adapter, previous, first)
