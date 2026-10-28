@@ -1,7 +1,7 @@
 # Project development rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-10-17
+**Updated:** 2026-10-29
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
 
@@ -120,6 +120,8 @@ DEV-047. **Progress is measured by accepted functionality.** A user-facing featu
 DEV-048. **Safety is proportional to demonstrated risk.** Preserve all established fail-closed, transactional, ownership, and restoration guarantees. New safety machinery must address an approved requirement or a concrete reproducible defect; prefer the simplest sound solution. An unknown or externally modified state must not be destructively guessed or automatically reset. Defer unproven enhancements rather than blocking already qualified user-facing acceptance indefinitely.
 
 DEV-049. **Model initiative improves the approved plan, but does not silently extend it.** The model shall identify and propose demonstrably useful changes to decisions, requirements, design, or priorities, explaining evidence, expected benefit, cost, and risk. New, unapproved research directions are outside the mandatory current delivery scope; an initiative becomes a required workstream only after owner agreement. The model continues to execute already approved work without unnecessary reapproval.
+
+DEV-050. **Forward-only experimental development uses exactly one current product architecture.** This OPNsense installation is a test stand, not a legacy-upgrade compatibility target. When the owner approves a replacement for a parser, schema, strategy, service, lifecycle, engine or other behavior, implement that replacement directly, and in the same logical scope remove superseded production paths, old-version fallbacks, migration-only exceptions, dormant alternative implementations, compatibility wrappers with no active contract, their obsolete tests and their active documentation assertions. Never keep prior behavior executable just in case, and never add a legacy bridge solely to make upgrading an experimental installation transparent. Current-format IPv4 and IPv6 inputs remain valid according to the current approved grammar; an older sealed runtime or configuration format is not supported merely because it once existed. A required deliberate fresh current-format setup or Apply is preferable to another legacy code path; expose its consequence clearly. A future product-level reversal is a new explicit GitHub change using repository history, not a hidden in-program rollback branch. Preserve testing, accurate errors, one native owner and the current transaction's atomicity, cleanup, fail-closed boundaries and repair of an interrupted operation: restoring the immediately preceding state **within that same operation** to avoid incomplete Config/IPFW/process state is not reverting to an obsolete product implementation. Do not impose production-style backward-migration acceptance gates or speculative rollback scaffolding on this experimental stand.
 
 ## Cross-reference registry
 
