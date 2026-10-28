@@ -20,10 +20,11 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_5` source/CI-qualified unpublished candidate; Stage 5 installed IPFW gate OPEN; the published stable `v0.6.0_1` package is unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_5` source/CI-qualified **published testing prerelease**; installed acceptance still open; Stage 5 installed IPFW gate OPEN; the published stable `v0.6.0_1` package is unchanged.
 
-- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — exact source-only candidate, implementation limits and no release authority.
+- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — exact candidate and testing prerelease, implementation limits and no stable-release authority.
 
+- [Published `v0.6.1_5` testing package evidence](verification/evidence/testing-publications/v0.6.1_5.md) — source/tag, asset URL, SHA-256, FreeBSD15 manifest and no stable repo promotion.
 - [Stage 5 installed OPNsense read-only evidence procedure](verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md) — exact `0.6.1_5` prerequisite, existing native Voice observer, two safe snapshots, counter uncertainty and unclosed installed acceptance.
 
 ## Level 2 — current v0.6.x full release
