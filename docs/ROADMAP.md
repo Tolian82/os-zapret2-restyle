@@ -4,6 +4,10 @@
 
 Владелец разрешил переход `v0.5.x → v0.6.x`, полный релиз `v0.6.0`, документальный архив предыдущей линии и сброс ревизии до `_1`. Семантический тег, non-prerelease GitHub Release, `0.6.0_1.pkg`, `SHA256SUMS` и сборка/публикация FreeBSD15 Pages/pkg завершились успешно ([доказательства](verification/evidence/2026-10-27-v0.6.0-full-release-publication.md)). Stage 11 закрыт владельцем с границами исполнения, Stage 12 README завершён. Независимый внешний HTTP-запрос к Pages и реальная Web-установка OPNsense не были подтверждены. Дальнейшая работа — только по новой задаче либо фактическому замечанию при установке, без автоматического повышения версии.
 
+## Новый запрос владельца — прямые звонки Telegram (28.10.2026)
+
+Открыта **ограниченная исследовательская оценка** прямых Telegram one-to-one вызовов, отдельно от закрытой 20.10.2026 отрицательной UDP-кампании. Нового подтверждённого `MEDIA_PASS` или `CALL_PASS` нет. Стратегии STUN, UDP non-STUN/media и TCP MTProto нельзя смешивать; `--filter-udp=*` в Voice ограничен Telegram IPSET и не охватывает произвольный адрес второго участника P2P. Предпочтение — наблюдать реальные конечные точки/IPv4/IPv6 и ответы, затем проводить узкие испытания только при отличимой от IP-блокировки DPI-гипотезе. Уникальный сторонний `telegram.lua` выявлен по Git blob SHA-1, но его исходный репозиторий не объявляет лицензии и код не считается проверенным или разрешённым к распространению. [Решение и порядок оценки](DECISIONS.md). Изменений продукта, версии и новой задачи по переписыванию Voice пока нет.
+
 ## Предыдущий приоритет — Additional Resources implementation
 
 Stage-4 source update v0.5.7_18 adds bounded dynamic TLS BIN/Lua nodes to the existing Stage-60 graph using reviewed installed descriptors and job inventory; native on-appliance execution/health evidence and package lifecycle repairs remain open. No release is authorized by this step.
