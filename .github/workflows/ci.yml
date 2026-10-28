@@ -637,7 +637,7 @@ jobs:
           usesh: true
           prepare: pkg install -y python313
           run: |
-            test "$(freebsd-version -u | cut -d. -f1,2)" = "15.1"
+            freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
