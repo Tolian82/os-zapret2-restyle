@@ -14,7 +14,11 @@ State-line scope: **`v0.6.x`**. Current-work state-flow: `START_HERE -> PROJECT_
 
 ## Архитектура и навигация
 
-[Remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) · [Remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) · [Voice](architecture/VOICE_TRANSMISSION_GUI.md) · [Strategy Lab](architecture/STRATEGY_LAB.md) · [current v0.6.x ledger](history/current/v0.6.x.md) · [v0.5.x frozen ledger](history/current/v0.5.x.md). Exclude Domains не изменяются; `--ipset-exclude`, Jail и отменённый clean repair не возвращаются.
+[Remove specification](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) · [Remove plan](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md) · [Voice](architecture/VOICE_TRANSMISSION_GUI.md) · [Strategy Lab](architecture/STRATEGY_LAB.md) · [current v0.6.x ledger](history/current/v0.6.x.md) · [v0.5.x frozen ledger](history/current/v0.5.x.md). Historical Remove did not modify Exclude Domains or `--ipset-exclude`; this was **scope-specific**, not a veto of the subsequently approved independent Exclude IPSet/dual-stack task. Jail and the cancelled clean-repair feature remain out of scope.
+
+## Current first-priority approved development (28 October 2026)
+
+[Global Exclude IPSet and IPv4/IPv6 specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) is the **current product target**; its [nine-stage, 153-row per-file plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) is the execution authority. Stage 0 records documentation and priority; **Stage 1 (single Python batch IPSET compiler + manifest) is next**. Source currently remains IPv4-oriented in several Voice/target validation paths, and no Exclude IPSet field/runtime behavior, IPv6 firewall evidence or new package is yet implemented or owner-tested. The approved contract bans explicit/effective `/0` in every user-controlled include/exclude IP list (including Voice), applies IP exclusion to every Strategies/Voice profile, and keeps Exclude Domains domain-only without DNS conversion or Voice/STUN injection. New Voice/P2P UDP-port fields, checkbox, any-destination capture and media behavior are **deferred** in [DECISIONS](DECISIONS.md). Preserve one OPNsense Config and the shared `zapret` runtime/IPFW lifecycle; source tests, CI/package results and installed FreeBSD15 proof remain separate gates. The current immutable published package identity is still `0.6.0_1`.
 
 ## Архивы завершённых линий
 
