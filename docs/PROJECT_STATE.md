@@ -51,4 +51,3 @@ State-line scope: **`v0.6.x`**. Current-work state-flow: `START_HERE -> PROJECT_
 
 
 **Owner-installed `0.6.1_6` evidence (28 октября 2026):** `pkg add -f` установил пакет, но POST-INSTALL `zapret start` вернул 70. `status` stopped; `voice_live_inspect.py` native-common/stopped, 0 правил и 0 таблиц. Старый sealed Strategies owner `bd79b51c96b0c5aa66f0d3247b17b329` повторно прошёл native Config (`CONFIG_RC=0`, enabled 1). Read-only inventory подтвердил отсутствие только нового `managed/ipset-exclude.txt`, остальные 8 managed файлов сохранены. Новый валидатор требует 9 файлов без совместимости старого комплекта. `_7` source candidate вводит строго ограниченное исключение при сохранённом full Config digest, прежнем seal, отсутствии нового manifest/аргумента и пустом Exclude IPSet; не перезаписывает `shared-work` или Config. CI, пакет и owner-live startup пока OPEN.
-
