@@ -1,8 +1,8 @@
 # Dual-stack IPv4/IPv6 and Exclude IPSet — staged, per-file development plan
 
 **Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
-**Status:** Owner-approved **first-priority current execution plan**. Stage 1 has a `v0.6.1_1` source candidate and local unit/harness evidence; the full CI/package gate is still open. Stages 2–8 are not yet implemented. Stage 0 was documentation publication.
-**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current unqualified development source candidate: `VERSION=0.6.1`, `PLUGIN_REVISION=1`.
+**Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 is next**; stages 2–8 are not yet implemented. Stage 0 was documentation publication.
+**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current source/CI-qualified but unpublished development identity: `VERSION=0.6.1`, `PLUGIN_REVISION=1`.
 **Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Later packaged-source patches increment `PLUGIN_REVISION`; any stable full release still requires separate explicit owner approval.
 
 ## 0. Execution rules and scope
@@ -59,9 +59,9 @@
 
 **Generated runtime artifacts (not tracked source):** `<candidate-release>/managed/ipset-telegram.txt`, `ipset-discord.txt`, `ipset-x.txt`, `ipset-sip.txt`, `ipset-custom.txt`, new `ipset-exclude.txt`, plus `<candidate-release>/ipset-manifest.json`. The manifest is an immutable candidate witness, not a Config owner or mutable second cache.
 
-**Stage 1 verification status:** A local Python run passed eight focused cases, including all six lists' `/0` and complementary `/1` rejection, deterministic manifest and no overwrite on invalid batch. A local reconstructed Targets-shell harness passed syntax and six-list output/hash checks; it is **not a replacement for executing the entire repository entrypoint**. CI, FreeBSD package qualification and native acceptance remain pending.
+**Stage 1 source gate CLOSED (28 October 2026):** [PR #681](https://github.com/Tolian82/os-zapret2-restyle/pull/681) merged as [merged main 02fa191](https://github.com/Tolian82/os-zapret2-restyle/commit/02fa191436da2d22100ba20c0ac236d8ff531a72). [successful source/FreeBSD CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40648449795) passed the project, Voice, real shared Targets and FreeBSD 15 package-build checks, including all six lists' `/0` and complementary `/1` cases; [post-merge main CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40649565509) also passed. Earlier eight local Python tests and reconstructed shell checks remain distinct narrower evidence. Installed OPNsense IPv6 or active exclusion is **not** claimed here.
 
-**Exit gate 1:** Pure compiler tests pass, including `/0` and two-`/1` rejection for **each** user inclusion/exclusion list; old IPv4 outputs remain usable; exactly one semantic compilation per native candidate. Close this gate only after required actual-entrypoint checks.
+**Exit gate 1: SOURCE/CI PASS.** One real Targets batch per candidate, original IPv4 compatibility, deterministic mixed-family manifest and explicit/effective `/0` refusal passed on the exact head. Installed OPNsense evidence is a separate later-stage gate.
 
 ## Stage 2. OPNsense model, GUI, native Config and persisted inputs
 
