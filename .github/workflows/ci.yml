@@ -178,6 +178,10 @@ jobs:
         run: python3.13 scripts/test-voice-common-runtime.py
       - name: Voice owned IPFW transaction and rollback simulation
         run: python3.13 scripts/test-voice-firewall-transaction.py
+      - name: Stage 5 native dual-stack IPFW ownership and rollback
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_transaction.py
+          python3.13 scripts/test-dualstack-ipfw.py
       - name: FreeBSD IPFW adapter exact argv and parsing contract
         run: python3.13 scripts/test-voice-ipfw-adapter.py
       - name: Voice native saved-ON staging guard

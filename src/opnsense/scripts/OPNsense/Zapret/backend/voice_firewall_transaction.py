@@ -9,7 +9,6 @@ touches the kernel. Unit tests inject an in-memory IPFW simulator.
 from __future__ import annotations
 
 from copy import deepcopy
-import ipaddress
 import re
 
 from ipset_policy import IPSetError, parse_ipset
@@ -31,8 +30,20 @@ def table_contents_equal(observed, expected) -> bool:
         return False
     if any(not isinstance(x, str) for x in observed + expected):
         return False
-    if len(observed) != len(expected) or len(set(observed)) != len(observed):
-        return False
+    # Both sides are already expected to be in the Stage 1 canonical IPSET
+    # spelling. Recheck the full-family, host, duplicate and family contracts
+    # here so an injected native adapter cannot silently accept a foreign key.
+    for entries in (observed, expected):
+        if len(entries) > 4096 or len(set(entries)) != len(entries):
+            return False
+        try:
+            normalized, _ = parse_ipset(
+                ("".join(item + "\n" for item in entries)).encode("utf-8"),
+                "Voice transaction table")
+        except (IPSetError, UnicodeError):
+            return False
+        if normalized.splitlines() != entries:
+            return False
     return set(observed) == set(expected)
 
 

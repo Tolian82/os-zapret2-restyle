@@ -138,4 +138,20 @@ reconfigure_orchestrator_line=$(awk '
 [ "${reconfigure_prepare_line}" -lt "${reconfigure_orchestrator_line}" ] ||
     fail "reconfigure launches dvtws2 before firewall prerequisites"
 
+# Stage 5 keeps all table operations behind the same original shared FD9
+# owner. Never introduce a second IPv6 service, an address-any Voice rule,
+# or an unguarded direct IPFW edit in Apply.
+NATIVE_ADAPTER="${BACKEND}/voice_ipfw_adapter.py"
+TRANSACTION="${BACKEND}/voice_firewall_transaction.py"
+grep -Fq 'require_lifecycle_lock()' "${NATIVE_ADAPTER}" ||
+    fail "native shared IPFW adapter lost original FD9 lifecycle guard"
+grep -Fq 'checked_table_ip(address)' "${NATIVE_ADAPTER}" ||
+    fail "mixed-family table additions bypass the shared semantic guard"
+grep -Fq 'checked_table_ip(raw_address, readback=True)' "${NATIVE_ADAPTER}" ||
+    fail "native IPv4/IPv6 table listing lacks normalization"
+grep -Fq 'adapter.swap_tables(table, table + "_stage")' "${TRANSACTION}" ||
+    fail "existing IPFW transactional rollback/swap was displaced"
+grep -Fq 'adapter.get_table(table + "_stage")' "${TRANSACTION}" ||
+    fail "retained precommit table witness was displaced"
+
 echo "Config activation contract tests passed."

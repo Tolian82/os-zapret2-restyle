@@ -118,16 +118,28 @@ class IPFWAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(IPFWAdapterError, "duplicate"):
             adapter.list_rules(19000,19010)
 
-    def test_table_parser_rejects_malformed_ipv6_duplicate_or_spurious_output(self):
+    def test_table_parser_accepts_mixed_family_and_native_host_keys(self):
+        fake = SimulateFreeBSD()
+        adapter = FreeBSDIPFWAdapter(19000, 19010, runner=fake)
+        fake.table_output = ("91.108.13.10/32 0\\n2001:DB8::1/128 0\\n"
+                             "2001:db8:abcd::/48 0\\n::/128 0\\n").replace("\\n", "\n")
+        self.assertEqual(["91.108.13.10", "2001:db8::1", "2001:db8:abcd::/48", "::"],
+                         adapter.get_table("zapret2_voice_telegram"))
+
+    def test_table_parser_rejects_malformed_duplicates_and_foreign_keys(self):
         fake = SimulateFreeBSD()
         adapter = FreeBSDIPFWAdapter(19000,19010,runner=fake)
-        for value in ("2001:db8::1 0\n", "91.108.4.7/22 0\n",
-                      "91.108.13.10\n91.108.13.10\n", "??? a:b\n"):
-            fake.table_output = value
+        for value in ("91.108.4.7/22 0\\n",
+                      "91.108.13.10\\n91.108.13.10/32\\n",
+                      "2001:db8::1/128 0\\n2001:0DB8::1 0\\n",
+                      "2001:db8::1/32 0\\n",
+                      "0.0.0.0/0 0\\n", "::/0 0\\n",
+                      "fe80::1%vtnet1 0\\n", "::ffff:192.0.2.10 0\\n", "??? a:b\\n"):
+            fake.table_output = value.replace("\\n", "\n")
             with self.subTest(value=value):
                 with self.assertRaises(IPFWAdapterError):
                     adapter.get_table("zapret2_voice_telegram")
-        fake.table_output = "9.9.9.9 0\n"
+        fake.table_output = "9.9.9.9 0\\n".replace("\\n", "\n")
         self.assertEqual(["9.9.9.9"],adapter.get_table("zapret2_voice_telegram"))
 
     def test_read_only_is_default_and_validate_before_touching_kernel(self):
@@ -175,6 +187,22 @@ class IPFWAdapterTests(unittest.TestCase):
             with self.assertRaises(IPFWAdapterError):
                 invoke()
         self.assertEqual(operations,len(fake.operations))
+
+    def test_mixed_family_mutations_keep_exact_owned_table_and_no_default_any(self):
+        fake = SimulateFreeBSD()
+        adapter = FreeBSDIPFWAdapter(19000, 19010, allow_mutations=True, runner=fake)
+        for address in ("91.108.13.10", "2001:db8:abcd::/48", "::"):
+            adapter.add_table_entry("zapret2_voice_telegram_stage", address)
+        self.assertEqual([
+            ("/sbin/ipfw","-q","table","zapret2_voice_telegram_stage","add", address)
+            for address in ("91.108.13.10", "2001:db8:abcd::/48", "::")
+        ],fake.operations)
+        for bad in ("0.0.0.0/0", "::/0", "2001:db8::1/32",
+                    "2001:DB8::1", "::ffff:192.0.2.1", "2001:db8::1/128",
+                    "2001:db8::1%vtnet1"):
+            with self.subTest(bad=bad), self.assertRaises(IPFWAdapterError):
+                adapter.add_table_entry("zapret2_voice_telegram_stage", bad)
+        self.assertEqual(3,len(fake.operations), "invalid native keys changed IPFW")
 
     def test_actual_cli_verify_legacy_branch_is_read_only(self):
         """Regression: _14 helper-only tests missed undefined legacy in main."""
