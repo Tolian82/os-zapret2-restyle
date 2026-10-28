@@ -217,6 +217,14 @@ class SettingsController extends ApiMutableModelControllerBase
                 }
                 // Domain lists stay domain-only and never enter Python IPSETs.
                 foreach (self::TARGET_FIELDS as $field => $label) {
+                    // Normalize only genuine user edits. An unchanged, large
+                    // saved list may have a trailing newline or formatting
+                    // that normalization would otherwise turn into a NEW
+                    // megabyte-scale transport field. Preserve its bytes and
+                    // keep the bounded configd envelope for the actual edit.
+                    if (!in_array('hostlist.' . $field, $plan['changed_fields'], true)) {
+                        continue;
+                    }
                     $raw = (string)($plan['candidate']['hostlist'][$field] ?? '');
                     if ($field === 'telegramips' || $field === 'excludeipset') {
                         $name = $field === 'excludeipset' ? 'exclude' : 'telegram';
