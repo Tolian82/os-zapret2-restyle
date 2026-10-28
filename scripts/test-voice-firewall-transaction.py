@@ -246,6 +246,17 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"neither TCP nor UDP"):
             transaction.prepare_desired({**profile,"voice":[],"ordinary_rule_base":19000},"","")
 
+    def test_mixed_family_voice_tables_use_original_transaction_and_rollback(self):
+        old = fixture(("telegram", "91.108.0.0/16"))
+        new = fixture(("telegram", "91.108.0.0/16\n2001:db8:1::/48"))
+        self.assertEqual(["91.108.0.0/16", "2001:db8:1::/48"],
+                         new["tables"]["zapret2_voice_telegram"])
+        adapter = FakeIPFW(old["rules"], old["tables"], failure="add_table_entry")
+        with self.assertRaises((OSError, transaction.VoiceFirewallError)):
+            transaction.apply_transaction(adapter, old, new)
+        self.assertEqual(old["tables"], adapter.tables)
+        self.assertEqual(old["rules"], adapter.rules)
+
     def test_postcommit_cleanup_enables_repeat_reconfigure_and_disable(self):
         initial = fixture()
         first = fixture(("telegram", "91.108.0.0/16"))

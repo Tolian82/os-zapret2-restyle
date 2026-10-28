@@ -12,6 +12,7 @@ import ipaddress
 import sys
 
 from voice_profile_compiler import parse_ports
+from ipset_policy import IPSetError, parse_ipset
 
 
 class VoiceMergeError(ValueError):
@@ -24,24 +25,20 @@ def profile_scope(tokens: list[str], ipsets: dict[str, list[str]]) -> tuple[list
     Paths refer to the candidate's lists, never the currently installed lists.
     Unknown selectors fail closed instead of reading arbitrary paths.
     """
-    ports = []
-    networks = []
+    ports: list[tuple[int, int]] = []
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
     has_ipset = False
-    # Ordinary Strategies may carry IPv6-only STUN. It cannot intercept
-    # IPv4 Voice packets, but conflicting/ambiguous native L3 selectors
-    # must NEVER be allowed to mask a later IPv4 selector.
     l3_selectors = [token.partition("=")[2] for token in tokens
                     if token.startswith("--filter-l3=")]
     if len(l3_selectors) > 1:
         raise VoiceMergeError("competing profile priority: duplicate STUN L3 selector")
+    families = {"ipv4", "ipv6"}
     if l3_selectors:
-        families = l3_selectors[0].split(",")
-        if not families or any(family not in ("ipv4", "ipv6") for family in families) or (
-            len(set(families)) != len(families)
-        ):
+        parsed = l3_selectors[0].split(",")
+        if (not parsed or any(item not in families for item in parsed)
+                or len(set(parsed)) != len(parsed)):
             raise VoiceMergeError("competing profile priority: invalid STUN L3 selector")
-        if "ipv4" not in families:
-            return [], []
+        families = set(parsed)
     for token in tokens:
         if token.startswith("--filter-udp="):
             try:
@@ -54,17 +51,23 @@ def profile_scope(tokens: list[str], ipsets: dict[str, list[str]]) -> tuple[list
             entries = value.split(",") if token.startswith("--ipset-ip=") else ipsets.get(value)
             if entries is None:
                 raise VoiceMergeError("competing profile priority: cannot verify ordinary STUN IPSET")
-            for entry in entries:
-                try:
-                    networks.append(ipaddress.IPv4Network(entry, strict=False))
-                except ValueError as exc:
-                    raise VoiceMergeError("competing profile priority: invalid STUN destination") from exc
+            try:
+                _, proof = parse_ipset(("\n".join(entries)).encode("utf-8"),
+                                       "ordinary STUN destination")
+            except (IPSetError, TypeError) as exc:
+                raise VoiceMergeError("competing profile priority: invalid STUN destination") from exc
+            for family in families:
+                for item in proof["union"][family]:
+                    networks.append(ipaddress.ip_network(item, strict=True))
     if not ports:
         if any(t.startswith("--filter-tcp=") for t in tokens):
             return [], []
         ports = [(1, 65535)]
     if not has_ipset:
-        networks = [ipaddress.IPv4Network("0.0.0.0/0")]
+        # Analytic any-destination scope for priority checks ONLY; never a
+        # user-managed /0 nor a generated Voice IPFW table destination.
+        networks = ([ipaddress.IPv4Network("0.0.0.0/0")] if "ipv4" in families else []) + (
+            [ipaddress.IPv6Network("::/0")] if "ipv6" in families else [])
     return ports, networks
 
 
@@ -87,7 +90,8 @@ def check_stun_scopes(voice: str, ordinary: str, ipsets: dict[str, list[str]]) -
         ports, networks = profile_scope(tokens, ipsets)
         for vp, vn in voice_scopes:
             if any(a <= d and c <= b for a, b in ports for c, d in vp) and any(
-                    left.overlaps(right) for left in networks for right in vn):
+                    left.version == right.version and left.overlaps(right)
+                    for left in networks for right in vn):
                 raise VoiceMergeError("competing profile priority: ordinary STUN overlaps Voice IP/UDP scope")
 
 

@@ -30,7 +30,7 @@ ORDINARY = "--filter-tcp=443\n--filter-l7=tls\n--new\n--filter-udp=596-599\n<IPS
 
 def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None,
           target_offset=0, stun_ports="*", upstream_root=None, traffic_args=None,
-          extra_args=None, exclude_ips=''):
+          extra_args=None, exclude_ips='', ipv6_services=()):
     xml = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(xml, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
@@ -48,6 +48,8 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
         ET.SubElement(entry, "args").text = ("--new" if bad_args and name in enabled else
                                                 STUN.replace("--filter-udp=*", "--filter-udp=" + stun_ports))
         ipset = f"198.51.100.{i + 1 + target_offset}"
+        if name in ipv6_services:
+            ipset += f"\n2001:db8:{i+1}::/48"
         ET.SubElement(hosts, name + "ips").text = ipset
         settings[name.upper() + "_IPS"] = ipset
         settings["VOICE_" + name.upper() + "_REQUESTED"] = "1" if name in enabled else "0"
@@ -100,6 +102,25 @@ orchestrator_build_release "$2" "$3" "$4" "$5" "$6" "$5/stages" shared-candidate
 
 
 class CommonRuntimeTests(unittest.TestCase):
+    def test_shared_native_ipv4_ipv6_voice_capture_and_manifest_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, release = build(Path(directory), ("telegram", "discord"),
+                                    ipv6_services=("telegram", "discord"),
+                                    exclude_ips="2001:db8:ffff::/48")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            argv = (release / "dvtws.args").read_text()
+            self.assertEqual(2, argv.count("--filter-l3=ipv4,ipv6"))
+            captured = shared_release_manifest(release)
+            for idx, name in enumerate(("telegram", "discord")):
+                targets = captured["tables"]["zapret2_voice_" + name]
+                self.assertEqual([f"198.51.100.{idx+1}", f"2001:db8:{idx+1}::/48"], targets)
+                self.assertIn("table(zapret2_voice_" + name + ")",
+                              " ".join(captured["rules"][19000+idx]))
+            plan = json.loads((release / "voice-plan.json").read_text())
+            self.assertEqual(hashlib.sha256((release / "ipset-manifest.json").read_bytes()).hexdigest(),
+                             plan["source"]["ipset_manifest_sha256"])
+            self.assertIn("--ipset-exclude=" + ACTIVE + "/managed/ipset-exclude.txt", argv)
+
     def test_global_exclusion_applies_to_voice_and_every_ordinary_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             result, release = build(Path(directory), ("telegram", "discord"),

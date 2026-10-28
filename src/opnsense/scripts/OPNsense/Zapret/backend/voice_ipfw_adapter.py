@@ -405,7 +405,8 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
         if not profile or profile[0] != "--name=voice-" + service or (
             "--filter-l7=stun" not in profile
             or "--payload=stun" not in profile
-            or "--filter-l3=ipv4" not in profile
+            or ("--filter-l3=ipv4,ipv6" if source.get("ipset_manifest_sha256")
+                else "--filter-l3=ipv4") not in profile
             or "--ipset=" + str(row.get("ipset_path", "")) not in profile
         ) or hashlib.sha256("\n".join(profile).encode("ascii")).hexdigest() != (
             row["profile_sha256"]
@@ -536,6 +537,15 @@ def shared_release_manifest(release: Path) -> dict:
     source = plan.get("source")
     if not isinstance(source, dict):
         raise IPFWAdapterError("missing shared Voice staging evidence")
+    # New Stage 4 releases seal the exact prepared six-list manifest. An
+    # older Stage 3 release has no seal; its unchanged IPv4 capture witness
+    # remains valid during the staged upgrade/rollback transition.
+    if source.get("ipset_manifest_sha256") is not None:
+        manifest_digest = source["ipset_manifest_sha256"]
+        if (not isinstance(manifest_digest, str) or
+                not re.fullmatch(r"[a-f0-9]{64}", manifest_digest) or
+                hashlib.sha256(read("ipset-manifest.json")).hexdigest() != manifest_digest):
+            raise IPFWAdapterError("prepared Voice IPSET manifest changed after staging")
     hashes = source.get("ipset_sha256", {})
     ordinary_hashes = source.get("ordinary_scope_ipset_sha256")
     if not isinstance(ordinary_hashes, dict) or any(

@@ -12,6 +12,8 @@ from copy import deepcopy
 import ipaddress
 import re
 
+from ipset_policy import IPSetError, parse_ipset
+
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 TABLE_PREFIX = "zapret2_voice_"
 PORTS = re.compile(r"^[0-9,-]+$")
@@ -107,20 +109,15 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
             raise VoiceFirewallError("empty or invalid Voice destination table")
         if len(destinations) != record.get("destination_count"):
             raise VoiceFirewallError("Voice target count mismatch")
-        canonical = []
-        for destination in destinations:
-            try:
-                network = ipaddress.IPv4Network(
-                    destination if "/" in destination else destination + "/32", strict=True
-                )
-            except ValueError as error:
-                raise VoiceFirewallError("invalid Voice IPv4 destination") from error
-            normal = str(network) if "/" in destination else str(network.network_address)
-            if destination != normal:
-                raise VoiceFirewallError("noncanonical Voice IPv4 destination")
-            canonical.append(destination)
-        if len(set(canonical)) != len(canonical):
-            raise VoiceFirewallError("duplicate Voice IPv4 destination")
+        try:
+            canonical_text, proof = parse_ipset(
+                ("\n".join(destinations) + "\n").encode("utf-8"),
+                f"{name} Voice destination table")
+        except (IPSetError, AttributeError) as error:
+            raise VoiceFirewallError("invalid Voice IPv4/IPv6 destination") from error
+        canonical = canonical_text.splitlines()
+        if canonical != destinations or len(set(canonical)) != len(canonical):
+            raise VoiceFirewallError("noncanonical or duplicate Voice IPv4/IPv6 destination")
         if table in tables:
             raise VoiceFirewallError("duplicate Voice service")
         tables[table] = canonical

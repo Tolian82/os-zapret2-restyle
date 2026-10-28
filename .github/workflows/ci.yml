@@ -140,6 +140,10 @@ jobs:
         run: python3.13 scripts/test-voice-profile-compiler.py
       - name: Voice destination-scoped IPFW capture planning
         run: python3.13 scripts/test-voice-capture-plan.py
+      - name: Stage 4 existing Voice dual-stack boundary contracts
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
+          python3.13 scripts/test-voice-dualstack-ipset-boundaries.py
       - name: Persisted Voice model to candidate and capture plan
         run: python3.13 scripts/test-voice-model-export.py
       - name: Voice inactive staging with managed IPSET and resolved WAN

@@ -17,6 +17,8 @@ import re
 import sys
 import tempfile
 
+from ipset_policy import IPSetError, parse_ipset
+
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 MAX_INPUT_BYTES = 1024 * 1024
 MAX_ARGS_BYTES = 16384
@@ -97,34 +99,22 @@ def fail(field: str, message: str) -> None:
     raise VoiceConfigurationError(f"{field}: {message}")
 
 
-def normalize_targets(value: str, service: str) -> tuple[list[str], list[ipaddress.IPv4Network]]:
+def normalize_targets(value: str, service: str) -> tuple[list[str], list[ipaddress.IPv4Network | ipaddress.IPv6Network]]:
+    """Use the Stage 1 semantic compiler, including full-family union guards.
+
+    Its per-family union is a read-only overlap proof; no second Voice IP
+    normalization or legacy colon trimming is permitted.
+    """
     if not isinstance(value, str):
         fail(f"{service}.ips", "expected a text list")
-    result: list[str] = []
-    networks: list[ipaddress.IPv4Network] = []
-    seen: set[str] = set()
-    for number, raw in enumerate(value.splitlines(), 1):
-        text = raw.strip().strip(",;:")
-        if not text:
-            continue
-        try:
-            if "/" in text:
-                parsed = ipaddress.IPv4Network(text, strict=True)
-                canonical = str(parsed.network_address) if parsed.prefixlen == 32 else str(parsed)
-            else:
-                address = ipaddress.IPv4Address(text)
-                parsed = ipaddress.IPv4Network(f"{address}/32")
-                canonical = str(address)
-        except ValueError as exc:
-            fail(f"{service}.ips line {number}", f"invalid IPv4/CIDR '{text}': {exc}")
-        if canonical not in seen:
-            seen.add(canonical)
-            result.append(canonical)
-            networks.append(parsed)
-        if len(result) > MAX_TARGETS:
-            fail(f"{service}.ips", f"too many IPv4/CIDR entries (max {MAX_TARGETS})")
-    return result, networks
-
+    try:
+        normalized, proof = parse_ipset(value.encode("utf-8"), f"{service}.ips")
+    except IPSetError as exc:
+        raise VoiceConfigurationError(str(exc)) from exc
+    targets = normalized.splitlines()
+    networks = [ipaddress.ip_network(net, strict=True)
+                for family in ("ipv4", "ipv6") for net in proof["union"][family]]
+    return targets, networks
 
 def parse_ports(spec: str, field: str) -> list[tuple[int, int]]:
     if spec == "*":
@@ -194,7 +184,8 @@ def _intersects(a: list[tuple[int, int]], b: list[tuple[int, int]]) -> bool:
     return any(x1 <= y2 and y1 <= x2 for x1, x2 in a for y1, y2 in b)
 
 
-def compile_candidate(data: dict, managed_root: Path) -> tuple[str, dict]:
+def compile_candidate(data: dict, managed_root: Path,
+                      prepared_targets: dict[str, list[str]] | None = None) -> tuple[str, dict]:
     if not isinstance(data, dict):
         fail("voice", "configuration must be an object")
     unknown = set(data) - {"strategy_wan", "voice_wan", "services"}
@@ -236,17 +227,20 @@ def compile_candidate(data: dict, managed_root: Path) -> tuple[str, dict]:
             continue
         args, ports = validate_arguments(entry["args"], name)
         targets, networks = normalize_targets(entry["ips"], name)
+        if prepared_targets is not None and prepared_targets.get(name) != targets:
+            fail(f"voice.{name}.ips", "prepared managed IPSET differs from saved Voice configuration")
         if not targets:
-            fail(f"voice.{name}.ips", "enabled service requires at least one IPv4/CIDR destination")
+            fail(f"voice.{name}.ips", "enabled service requires at least one IPv4/IPv6 destination")
         for other in plan:
             if _intersects(ports, other["_ranges"]) and any(
-                n.overlaps(m) for n in networks for m in other["_networks"]
+                n.version == m.version and n.overlaps(m)
+                for n in networks for m in other["_networks"]
             ):
                 fail(f"voice.{name}", f"overlapping UDP port and destination scope with {other['service']}")
         managed_path = managed_root / f"ipset-{name}.txt"
         profile = [
             f"--name=voice-{name}",
-            "--filter-l3=ipv4",
+            "--filter-l3=ipv4,ipv6",
             f"--ipset={managed_path}",
             *args,
         ]

@@ -161,9 +161,10 @@ class GeneratorInteropTests(unittest.TestCase):
             )
             release = root / "release"
             release.mkdir()
+            (release / "ipset-manifest.json").write_bytes((root / "ipset-manifest.json").read_bytes())
             managed_release = release / "managed"
             managed_release.mkdir()
-            for name in ("telegram", "discord"):
+            for name in ("telegram", "discord", "x", "sip", "custom", "exclude"):
                 src = managed / f"ipset-{name}.txt"
                 (managed_release / src.name).write_bytes(src.read_bytes())
             stage.stage_common_runtime(release, ACTIVE_ROOT, bundle)
