@@ -1,10 +1,10 @@
 # Dual-stack IPv4/IPv6 and global Exclude IPSet — implementation specification
 
-**Project:** `os-zapret2-restyle`  
-**Specification ID:** `DS-EXCLUDE-2026-10-28`  
-**Status:** Owner-directed **current first-priority development specification**; implementation, installed-system qualification, and any new package are **not yet complete**.  
-**Baseline:** published stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; immutable released artifacts are not modified.  
-**Execution plan:** [ZAPRET2_EXCLUDE_IPSET_PLAN.md](ZAPRET2_EXCLUDE_IPSET_PLAN.md).  
+**Project:** `os-zapret2-restyle`
+**Specification ID:** `DS-EXCLUDE-2026-10-28`
+**Status:** Owner-directed **current first-priority development specification**; implementation, installed-system qualification, and any new package are **not yet complete**.
+**Baseline:** published stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; immutable released artifacts are not modified.
+**Execution plan:** [ZAPRET2_EXCLUDE_IPSET_PLAN.md](ZAPRET2_EXCLUDE_IPSET_PLAN.md).
 **Owner's final clarification (28 October 2026):** `0.0.0.0/0` and `::/0`, including equivalent full-family unions, are forbidden in **every user-controlled IP list**, both inclusion and exclusion, including Voice.
 
 ## 1. Objective and boundaries
@@ -81,7 +81,7 @@ Both `0.0.0.0/1` plus `128.0.0.0/1`, and `::/1` plus `8000::/1`, are **invalid**
 ## 5. Strategies GUI and persistence
 
 - Add a multiline `Exclude IPSet` field immediately after `Exclude Domains` in the OPNsense Strategies form/model. Make it visible in normal and Advanced modes; default is empty and preserves existing behavior.
-- RU help: "IPv4/IPv6-адреса и CIDR-сети, исключённые из DPI-обработки для всех стратегий и голосовых профилей. Одна запись в строке. `0.0.0.0/0` и `::/0` (включая полное покрытие несколькими сетями) запрещены."  
+- RU help: "IPv4/IPv6-адреса и CIDR-сети, исключённые из DPI-обработки для всех стратегий и голосовых профилей. Одна запись в строке. `0.0.0.0/0` и `::/0` (включая полное покрытие несколькими сетями) запрещены."
   EN help: "IPv4/IPv6 addresses and CIDR networks excluded from DPI processing in all Strategies and Voice profiles. One entry per line. `0.0.0.0/0` and `::/0` (including an equivalent union) are forbidden."
 - Preserve `Exclude Domains` directly above it. Do not resolve or reinterpret domain exclusions as IP addresses. The new input belongs to the Strategies settings scope and must not be silently overwritten by a stale Voice form. Continue using one OPNsense model, Config writer, common Apply and standard errors.
 - Update the existing five Voice IPSET help strings to explain dual-stack and `/0` rejection. **Do not** add, move, or reinterpret Voice controls or its existing UDP-port parameters in this phase.

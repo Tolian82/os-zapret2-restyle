@@ -2673,4 +2673,3 @@ For **Remove Additional Resources**, keep the entire saved Strategies+Voice Conf
 **Boundary:** This decision authorizes current task prioritization and documentation; it does **not** claim source implementation, a new package, a working IPv6 IPFW capture, media/call success, a P2P feature or a new stable release. Proceed with Stage 1 of the plan after Stage 0 documentation delivery; record source/CI/owner-installed results separately. Earlier Voice P2P idea entries remain **historical/deferred**, not competing current product instructions.
 
 **Status:** Active owner-approved implementation target; Stage 0 documentation only until code and verification actually follow.
-

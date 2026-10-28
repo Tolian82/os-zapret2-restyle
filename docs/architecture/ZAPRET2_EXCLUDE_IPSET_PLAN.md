@@ -1,8 +1,8 @@
 # Dual-stack IPv4/IPv6 and Exclude IPSet — staged, per-file development plan
 
-**Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).  
-**Status:** Owner-approved **first-priority current execution plan**, with stages 1–8 not yet implemented. Stage 0 is documentation publication, not feature delivery.  
-**Published baseline:** stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; no source or package change is implied by publishing this plan.  
+**Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
+**Status:** Owner-approved **first-priority current execution plan**, with stages 1–8 not yet implemented. Stage 0 is documentation publication, not feature delivery.
+**Published baseline:** stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; no source or package change is implied by publishing this plan.
 **Release/version policy:** Recommend `v0.6.1_1` **only upon the first actual owner-authorized new development stage** under `DEV-034`, not now; successive packaged changes increment `PLUGIN_REVISION` only. Stable full release requires separate explicit owner approval.
 
 ## 0. Execution rules and scope
