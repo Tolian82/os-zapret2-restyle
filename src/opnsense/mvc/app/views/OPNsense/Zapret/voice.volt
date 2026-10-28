@@ -34,7 +34,7 @@ $(document).ready(function () {
         voicePackets: 'Пакеты', voiceBytes: 'Байты',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
         argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
-        ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4-адрес или CIDR в строке. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
+        ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4/IPv6-адрес или CIDR в строке. /0 и полный охват семейства запрещены. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
                 infoTitle: 'About Voice Profiles',
         infoText: 'Voice always inherits the WAN selected on the Strategies page; change it there. Five UDP/STUN profiles share the existing Zapret2 engine and the native Strategies/Voice Apply transaction. Apply saves settings and switches runtime/IPFW with verified rollback on failure. Save inactive draft only stores disabled profiles without restarting the service. Voice profiles activate only through shared Apply, not a separate Voice service. Non-STUN remains in Strategies.',
@@ -65,7 +65,7 @@ $(document).ready(function () {
         voicePackets: 'Packets', voiceBytes: 'Bytes',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
         argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
-        ipHelp: 'Shared IPSET, available in Strategies. One IPv4 address or CIDR per line. Empty sets must not be enabled or implicitly match any destination.'
+        ipHelp: 'Shared IPSET, available in Strategies. One IPv4/IPv6 address or CIDR per line. /0 and full-family unions are forbidden. Empty sets must not be enabled or implicitly match any destination.'
     };
     // Validation messages arrive as a fixed, trusted server-side English
     // allowlist. Translate their meaning without replacing native form/help DOM

@@ -25,6 +25,7 @@ def make_pair(directory: Path) -> tuple[Path, Path]:
     hostlist = ET.SubElement(zapret, "hostlist")
     ET.SubElement(hostlist, "mode").text = "ipset"
     ET.SubElement(hostlist, "telegramips").text = "91.108.13.10\n91.108.0.0/16"
+    ET.SubElement(hostlist, "excludeipset").text = "192.0.2.0/24\n2001:db8::/32"
     voice = ET.SubElement(zapret, "voice")
     telegram = ET.SubElement(voice, "telegram")
     ET.SubElement(telegram, "enabled").text = "1"
@@ -81,6 +82,15 @@ class SavedPairTests(unittest.TestCase):
             with self.assertRaises(SavedPairError):
                 require_saved_pair(self.xml, self.conf)
             self.conf.write_text(original)
+
+    def test_exclude_ipset_xml_and_rendered_source_must_agree(self):
+        original = self.conf.read_text()
+        self.assertIn("EXCLUDE_IPSET=$(cat", original)
+        self.conf.write_text(original.replace("2001:db8::/32", "2001:db9::/32"))
+        with self.assertRaisesRegex(SavedPairError, "EXCLUDE_IPSET"):
+            require_saved_pair(self.xml, self.conf)
+        self.conf.write_text(original)
+        require_saved_pair(self.xml, self.conf)
 
     def test_reject_foreign_extra_shell_assignments(self):
         original = self.conf.read_text()

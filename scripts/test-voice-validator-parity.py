@@ -71,8 +71,15 @@ class ParserParity(unittest.TestCase):
         # associative field errors are encoded as JSON objects.
         self.assertTrue(errors == [] or isinstance(errors,dict),
                         f"{label}: invalid PHP validation response: {errors!r}")
-        self.assertEqual(not bool(errors),python_accepts(data),
-                         f"{label}: Python/PHP validator divergence: {errors}")
+        # Stage 2 GUI uses the shared dual-stack Targets grammar, while the
+        # native Voice profile compiler is migrated at Stage 4. Distinguish
+        # input acceptance from the separate IPv4-only runtime gate.
+        if label == 'IPv6 input (Stage 2 only)':
+            self.assertFalse(errors, errors)
+            self.assertFalse(python_accepts(data))
+        else:
+            self.assertEqual(not bool(errors), python_accepts(data),
+                             f"{label}: Python/PHP validator divergence: {errors}")
 
     def test_allowed_and_rejected_cases_in_both_parsers(self):
         cases=[
@@ -83,7 +90,7 @@ class ParserParity(unittest.TestCase):
             ('Telegram badsum',enabled(form(),args=ARGS+FAKE+':badsum')),
             ('Telegram out-range',enabled(form(),args=ARGS+'--out-range=n1-n10\n'+FAKE)),
             ('invalid CIDR',enabled(form(),ips='91.108.13.10/24')),
-            ('invalid IPv6',enabled(form(),ips='2001:db8::1')),
+            ('IPv6 input (Stage 2 only)',enabled(form(),ips='2001:db8::1')),
             ('missing IPSET',enabled(form(),ips='')),
             ('repeated -l7',enabled(form(),args=ARGS+'--filter-l7=stun\n')),
             ('repeated out-range',enabled(form(),args=ARGS+'--out-range=n1-n10\n--out-range=n11-n20\n')),

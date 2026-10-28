@@ -17,7 +17,7 @@ final class StrategySettingsPayload
         'strategy' => ['trafficargs', 'extraargs'],
         'hostlist' => [
             'mode', 'youtubedomains', 'telegramips',
-            'userdomains', 'excludedomains',
+            'userdomains', 'excludedomains', 'excludeipset',
         ],
     ];
 

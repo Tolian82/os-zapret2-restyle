@@ -136,11 +136,35 @@
         });
         $('#frm_GeneralSettings').append(telegramBaseline);
 
+        // Preserve OPNsense native label/help markup and F5 rendering. Only
+        // localize this one new field; never rewrite a textarea's contents.
+        function localizeExcludeIPSet() {
+            if (!isRussian) return;
+            const field = document.getElementById('zapret.hostlist.excludeipset') ||
+                          document.getElementById('zapret_hostlist_excludeipset');
+            if (!field) return;
+            const row = $(field).closest('tr');
+            const caption = row.find('label').first();
+            caption.contents().filter(function() {
+                return this.nodeType === 3 && this.textContent.indexOf('Exclude IPSet') !== -1;
+            }).each(function() {
+                this.textContent = this.textContent.replace('Exclude IPSet', 'Исключить IPSet');
+            });
+            const help = 'Глобальное исключение IP-адресов назначения из обхода DPI после подключения нативной политики. ' +
+                'По одному IPv4/IPv6-адресу или CIDR-сети в строке. Пересекающиеся и соседние сети объединяются. ' +
+                'Недопустимы имена доменов, индексы зон IPv6, 0.0.0.0/0, ::/0 и эквивалентный полный охват сети. ' +
+                'Пустое поле сохраняет прежнее поведение. Домены указываются отдельно в «Исключить домены».';
+            row.find('div[data-for^="help_for_"] small').html(help);
+            const visible = row.find('.help-block').first();
+            if (visible.length) visible.html(help);
+        }
+
         function reloadSettings() {
             return mapDataToFormUI(data_get_map).done(function() {
                 const currentField = document.getElementById('zapret.hostlist.telegramips');
                 telegramBaseline.val(currentField ? currentField.value : '');
                 formatTokenizersUI();
+                localizeExcludeIPSet();
                 $('.selectpicker').selectpicker('refresh');
             });
         }

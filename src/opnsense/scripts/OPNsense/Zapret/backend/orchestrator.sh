@@ -321,6 +321,7 @@ orchestrator_build_release()
         "${TELEGRAM_IPS}" \
         "${USER_DOMAINS}" \
         "${DISCORD_IPS:-}" "${X_IPS:-}" "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
+        "${EXCLUDE_IPSET:-}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 3 \

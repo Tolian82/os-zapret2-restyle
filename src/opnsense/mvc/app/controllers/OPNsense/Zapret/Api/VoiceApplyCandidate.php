@@ -20,34 +20,11 @@ final class VoiceApplyCandidate
 {
     private const SERVICES = ['telegram', 'discord', 'x', 'sip', 'custom'];
 
-    private static function normalizeActiveIpSet(string $raw): string
-    {
-        $seen = [];
-        $result = [];
-        foreach (preg_split('/\r\n|\n|\r/', $raw) as $source) {
-            $entry = trim(trim($source), ',;:');
-            if ($entry === '') {
-                continue;
-            }
-            // The validator already proved strict IPv4/CIDR syntax.
-            // Canonicalize explicit /32 to its host form so the saved
-            // model, common managed target and IPFW table all deduplicate
-            // the same physical destination.
-            if (str_ends_with($entry, '/32')) {
-                $entry = substr($entry, 0, -3);
-            }
-            if (!isset($seen[$entry])) {
-                $seen[$entry] = true;
-                $result[] = $entry;
-            }
-        }
-        return implode("\n", $result);
-    }
-
     public static function prepare(array $previous, array $submitted, $snapshot): array
     {
         VoiceSettingsSnapshot::requireFresh($previous, $snapshot);
-        $errors = VoiceCandidateValidator::check($submitted);
+        $checked = VoiceCandidateValidator::checkWithTargets($submitted);
+        $errors = $checked['errors'];
         if ($errors !== []) {
             return [
                 'result' => 'failed',
@@ -89,7 +66,8 @@ final class VoiceApplyCandidate
                 continue;
             }
             $name = $service . 'ips';
-            $normalized = self::normalizeActiveIpSet($next['hostlist'][$name]);
+            // Reuse the one read-only native Python batch preview; no PHP IP parser.
+            $normalized = $checked['normalized'][$service];
             $next['hostlist'][$name] = $normalized;
             $enabled[] = $service;
             $targetCounts[$service] = count(explode("\n", $normalized));

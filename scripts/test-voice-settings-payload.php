@@ -31,6 +31,7 @@ $current = [
     'strategylab' => ['enablequic' => '1'],
     'hostlist' => [
         'mode' => 'auto',
+        'excludeipset' => '2001:db8::/32',
         'telegramips' => '91.108.0.0/16',
         'discordips' => '',
         'xips' => '',
@@ -79,6 +80,7 @@ assertEq('0', $current['voice']['telegram']['enabled'], 'saved source changed du
 failPayload($current, ['general' => ['enabled' => '0']], 'global service');
 failPayload($current, ['strategy' => ['trafficargs' => 'evil']], 'ordinary Strategy');
 failPayload($current, ['hostlist' => ['mode' => 'all']], 'Target Mode');
+failPayload($current, ['hostlist' => ['excludeipset' => '::/1']], 'Strategies-owned Exclude IPSet');
 failPayload($current, ['hostlist' => ['userdomains' => 'evil']], 'unrelated domains');
 failPayload($current, ['voice' => ['custom' => ['secret' => 'evil']]], 'new service field');
 failPayload($current, ['voice' => ['discord' => ['enabled' => 'yes']]], 'invalid switch');

@@ -28,7 +28,7 @@ final class VoiceCandidateXml
                 'strategy' => ['trafficargs', 'extraargs'],
                 'hostlist' => [
                     'mode', 'youtubedomains', 'telegramips',
-                    'userdomains', 'excludedomains',
+                    'userdomains', 'excludedomains', 'excludeipset',
                 ],
             ];
             $allowed = [];
@@ -79,6 +79,11 @@ final class VoiceCandidateXml
         $source = $model;
         foreach ($path as $key) {
             if (!is_array($source) || !array_key_exists($key, $source)) {
+                // A pre-v0.6.1 Config has no new Exclude IPSet leaf. Empty
+                // is the only backward-compatible implicit value.
+                if ($path === ['hostlist', 'excludeipset']) {
+                    return '';
+                }
                 throw new \InvalidArgumentException('Shared model candidate is incomplete');
             }
             $source = $source[$key];

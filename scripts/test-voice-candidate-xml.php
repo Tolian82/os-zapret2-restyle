@@ -385,4 +385,35 @@ must(VoiceCandidateXml::render(
     $liveXml, $legacyOptions, $legacy['candidate'], $legacy['changed_fields']
 ) === $liveXml, 'legacy dropdown should not rewrite Config');
 
+// A previous native Config lacking <excludeipset> must accept an isolated
+// Strategies update with IPv4+IPv6, preserve the entire Voice subtree, and
+// forbid a Voice update from writing that Strategies-owned field.
+$beforeExclude = records();
+$excludePlan = SettingsApply::prepareStrategies(
+    $beforeExclude,
+    ['hostlist' => ['excludeipset' => "192.0.2.0/24\n2001:db8::/32"]],
+    $beforeExclude['hostlist']['telegramips']
+);
+must(($excludePlan['result'] ?? '') === 'prepared' &&
+     $excludePlan['changed_fields'] === ['hostlist.excludeipset'],
+     'Exclude IPSet is not a single Strategies-owned field');
+$excludeXml = SettingsApply::renderCandidateXml(
+    $liveXml, $beforeExclude, $excludePlan, 'strategies'
+);
+$excludeDoc = new \DOMDocument();
+must($excludeDoc->loadXML($excludeXml), 'Exclude mixed-family XML malformed');
+$excludeXPath = new \DOMXPath($excludeDoc);
+must($excludeXPath->evaluate('string(/opnsense/OPNsense/Zapret/hostlist/excludeipset)') ===
+     "192.0.2.0/24\n2001:db8::/32", 'Exclude IPSet lost in native detached XML');
+must($excludeXPath->query('/opnsense/OPNsense/Zapret/voice')->item(0)->C14N() ===
+     $docOld->query('/opnsense/OPNsense/Zapret/voice')->item(0)->C14N(),
+     'native Voice subtree unexpectedly changed');
+$voiceForeign = $beforeExclude;
+$voiceForeign['hostlist']['excludeipset'] = '::/1';
+refuses(static function () use ($liveXml, $beforeExclude, $voiceForeign) {
+    VoiceCandidateXml::render(
+        $liveXml, $beforeExclude, $voiceForeign, ['hostlist.excludeipset']
+    );
+}, 'Voice was able to change Strategies-owned Exclude IPSet');
+
 echo "PASS: shared detached native XML for Strategies/Voice, ownership, no-op and foreign-node preservation\n";

@@ -9,6 +9,8 @@
  */
 namespace OPNsense\Zapret\Api;
 
+require_once __DIR__ . '/IPSetPolicyBridge.php';
+
 final class VoiceCandidateValidator
 {
     private const SERVICES = ['telegram', 'discord', 'x', 'sip', 'custom'];
@@ -20,49 +22,6 @@ final class VoiceCandidateValidator
         if (!isset($errors[$key])) {
             $errors[$key] = $message;
         }
-    }
-
-    private static function normalizeTargets(string $raw, string $name, array &$errors): array
-    {
-        $field = 'zapret.hostlist.' . $name . 'ips';
-        if (strlen($raw) > 1048576) {
-            self::error($errors, $field, 'IPv4/CIDR list is too large');
-            return [];
-        }
-        $items = [];
-        $nets = [];
-        foreach (preg_split('/\r\n|\n|\r/', $raw) as $index => $line) {
-            $input = trim(trim($line), ',;:');
-            if ($input === '') {
-                continue;
-            }
-            $parts = explode('/', $input, 2);
-            if (filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false ||
-                (count($parts) === 2 && !preg_match('/^(?:[0-9]|[12][0-9]|3[0-2])$/D', $parts[1]))
-            ) {
-                self::error($errors, $field, sprintf('Invalid IPv4/CIDR at line %d', $index + 1));
-                return [];
-            }
-            $prefix = count($parts) === 2 ? (int)$parts[1] : 32;
-            $unsigned = (int)sprintf('%u', ip2long($parts[0]));
-            $mask = $prefix === 0 ? 0 : ((0xffffffff << (32 - $prefix)) & 0xffffffff);
-            if (($unsigned & $mask) !== $unsigned) {
-                self::error($errors, $field, sprintf('CIDR contains host bits at line %d', $index + 1));
-                return [];
-            }
-            // A host and its explicit /32 are one IPFW table key.
-            // Match the common Targets generator and native Voice compiler.
-            $canonical = $prefix === 32 ? long2ip($unsigned) : long2ip($unsigned) . '/' . $prefix;
-            if (!isset($items[$canonical])) {
-                $items[$canonical] = true;
-                $nets[] = [$unsigned, $prefix];
-            }
-            if (count($items) > self::MAX_TARGETS) {
-                self::error($errors, $field, 'Too many destination addresses');
-                return [];
-            }
-        }
-        return $nets;
     }
 
     private static function parsePorts(string $value, string $field, array &$errors): array
@@ -232,38 +191,34 @@ final class VoiceCandidateValidator
         return false;
     }
 
-    private static function targetsOverlap(array $a, array $b): bool
-    {
-        foreach ($a as [$ipA, $prefixA]) {
-            foreach ($b as [$ipB, $prefixB]) {
-                $prefix = min($prefixA, $prefixB);
-                $mask = $prefix === 0 ? 0 : ((0xffffffff << (32 - $prefix)) & 0xffffffff);
-                if (($ipA & $mask) === ($ipB & $mask)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    public static function check(array $request): array
+    /**
+     * Preview all six user IP lists through the one native Python parser.
+     * Keep STUN option checks in PHP; address meaning and overlap are owned
+     * solely by ipset_policy.py. No mutation is authorized by this preview.
+     */
+    public static function checkWithTargets(array $request): array
     {
         $errors = [];
+        $empty = ['errors' => [], 'normalized' => []];
         if (array_diff(array_keys($request), ['voice', 'hostlist'])) {
-            return ['zapret.voice.waninterface' => 'Unexpected Voice form fields'];
+            return ['errors' => ['zapret.voice.waninterface' => 'Unexpected Voice form fields'],
+                    'normalized' => []];
         }
         $voice = $request['voice'] ?? null;
         $hostlist = $request['hostlist'] ?? null;
         if (!is_array($voice) || !is_array($hostlist)) {
-            return ['zapret.voice.waninterface' => 'Voice settings and IPSET fields are required'];
+            return ['errors' => ['zapret.voice.waninterface' => 'Voice settings and IPSET fields are required'],
+                    'normalized' => []];
         }
         $names = self::SERVICES;
-        $enabled = [];
         if (array_diff(array_keys($voice), $names) ||
             array_diff(array_keys($hostlist), array_map(static fn($n) => $n . 'ips', $names))
         ) {
             self::error($errors, 'zapret.voice.waninterface', 'Unexpected Voice form fields');
         }
+        $fields = [];
+        $enabled = [];
+        $ports = [];
         foreach ($names as $name) {
             $record = $voice[$name] ?? null;
             $raw = $hostlist[$name . 'ips'] ?? null;
@@ -274,31 +229,76 @@ final class VoiceCandidateValidator
                 !in_array($record['enabled'], ['0', '1'], true) ||
                 !isset($record['args']) || !is_string($record['args'])) {
                 self::error($errors, $prefix . '.enabled', 'Service checkbox and parameters are required');
+                $fields[$name] = is_string($raw) ? $raw : '';
                 continue;
             }
             if (!is_string($raw)) {
                 self::error($errors, 'zapret.hostlist.' . $name . 'ips', 'IPSET must be a text list');
+                $fields[$name] = '';
                 continue;
             }
-            if ($record['enabled'] !== '1') {
-                // Disabled services preserve their raw drafts, including
-                // incomplete arguments; their IPSETs are still editable.
-                continue;
+            // All supplied IPSETs are checked for universal /0, even for
+            // disabled services. Disabled STUN argument drafts stay editable.
+            $fields[$name] = $raw;
+            if ($record['enabled'] === '1') {
+                $enabled[$name] = true;
+                $ports[$name] = self::parseArgs($record['args'], $name, $errors);
             }
-            $nets = self::normalizeTargets($raw, $name, $errors);
-            $ports = self::parseArgs($record['args'], $name, $errors);
-            if (!$nets) {
-                self::error($errors, 'zapret.hostlist.' . $name . 'ips', 'Enabled Voice service requires destination IPs');
+        }
+        $fields['exclude'] = '';
+        $normalized = [];
+        $overlaps = [];
+        try {
+            $preview = IPSetPolicyBridge::inspect($fields);
+            foreach ($names as $name) {
+                $normalized[$name] = $preview['lists'][$name]['normalized'];
             }
-            foreach ($enabled as $other => $candidate) {
-                if (self::intersects($ports, $candidate['ports']) &&
-                    self::targetsOverlap($nets, $candidate['nets'])) {
-                    self::error($errors, $prefix . '.enabled',
-                        sprintf('UDP ports and destinations overlap with %s', $other));
+            $overlaps = $preview['overlaps'];
+        } catch (\InvalidArgumentException $error) {
+            $labels = ['Telegram IPs' => 'telegramips',
+                       'DISCORD IPs' => 'discordips',
+                       'X IPs' => 'xips',
+                       'SIP IPs' => 'sipips',
+                       'CUSTOM IPs' => 'customips'];
+            $found = false;
+            foreach ($labels as $label => $field) {
+                if (str_contains($error->getMessage(), $label)) {
+                    self::error($errors, 'zapret.hostlist.' . $field, $error->getMessage());
+                    $found = true;
+                    break;
                 }
             }
-            $enabled[$name] = ['nets' => $nets, 'ports' => $ports];
+            if (!$found) {
+                self::error($errors, 'zapret.voice.waninterface', $error->getMessage());
+            }
+        } catch (\Throwable $error) {
+            // Native interpreter or preflight failure must be fail-closed.
+            self::error($errors, 'zapret.voice.waninterface', 'Native IPSET preflight unavailable');
         }
-        return $errors;
+
+        foreach (array_keys($enabled) as $name) {
+            if (($normalized[$name] ?? '') === '') {
+                self::error($errors, 'zapret.hostlist.' . $name . 'ips',
+                    'Enabled Voice service requires destination IPs');
+            }
+        }
+        foreach ($overlaps as $pair) {
+            if (!is_array($pair) || count($pair) !== 2) {
+                self::error($errors, 'zapret.voice.waninterface', 'Invalid native overlap evidence');
+                continue;
+            }
+            [$left, $right] = $pair;
+            if (isset($enabled[$left], $enabled[$right]) &&
+                self::intersects($ports[$left], $ports[$right])) {
+                self::error($errors, 'zapret.voice.' . $right . '.enabled',
+                    sprintf('UDP ports and destinations overlap with %s', $left));
+            }
+        }
+        return ['errors' => $errors, 'normalized' => $normalized];
+    }
+
+    public static function check(array $request): array
+    {
+        return self::checkWithTargets($request)['errors'];
     }
 }

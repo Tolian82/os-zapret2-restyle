@@ -83,8 +83,8 @@
         <label>Telegram IPs</label>
         <type>textbox</type>
         <help><![CDATA[
-            IPv4 source for <code>&lt;IPSET:telegram&gt;</code>.
-            One IPv4 address or CIDR network per line.
+            IPv4/IPv6 source for <code>&lt;IPSET:telegram&gt;</code> (shared with Voice).
+            One IPv4/IPv6 address or CIDR network per line. No hostnames, /0 or effective full-family coverage.
         ]]></help>
     </field>
     <field>
@@ -102,5 +102,16 @@
         <type>textbox</type>
         <help><![CDATA[Domains to <b>exclude</b> from DPI bypass (one per line). Traffic to these domains will pass through unmodified.<br/>
             Use this if zapret2 breaks connectivity to specific sites (e.g. government portals, banking sites).]]></help>
+    </field>
+    <field>
+        <id>zapret.hostlist.excludeipset</id>
+        <label>Exclude IPSet</label>
+        <type>textbox</type>
+        <help><![CDATA[
+            Globally exclude these destination addresses from DPI bypass when native profile exclusions are enabled.
+            One IPv4/IPv6 address or CIDR per line; adjacent or overlapping networks are combined.
+            No hostnames, zone indices, <code>0.0.0.0/0</code>, <code>::/0</code> or equivalent full-family coverage.
+            Leave empty for unchanged behavior; domain names belong in Exclude Domains.
+        ]]></help>
     </field>
 </form>

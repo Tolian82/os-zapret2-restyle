@@ -47,6 +47,30 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(entry=entry), self.assertRaises(mod.IPSetError):
                 mod.parse_ipset(entry.encode(), "Sample")
 
+    def test_readonly_inspect_uses_same_semantics_and_family_overlap(self):
+        raw = {name: "" for name in mod.LISTS}
+        raw["telegram"] = "91.108.0.0/16\n2001:db8:0:1::/64\n"
+        raw["discord"] = "91.108.13.10\n2001:db8:2::/48\n"
+        raw["exclude"] = "192.0.2.0/25\n192.0.2.128/25\n::\n"
+        report = mod.inspect(raw)
+        self.assertEqual(report["lists"]["exclude"]["normalized"], "192.0.2.0/24\n::")
+        self.assertEqual(report["lists"]["telegram"]["family_counts"]["ipv6"], 1)
+        self.assertIn(["telegram", "discord"], report["overlaps"])
+        self.assertNotIn(["telegram", "exclude"], report["overlaps"])
+        import json
+        outcome = subprocess.run(
+            [sys.executable, str(MODULE), "inspect"], input=json.dumps(raw),
+            capture_output=True, text=True, check=False
+        )
+        self.assertEqual(outcome.returncode, 0, outcome.stderr)
+        self.assertEqual(json.loads(outcome.stdout), report)
+        self.assertEqual(list(json.loads(outcome.stdout)["lists"]), list(mod.LISTS))
+        for name in mod.LISTS:
+            broken = dict(raw)
+            broken[name] = "::/1\n8000::/1"
+            with self.subTest(name=name), self.assertRaises(mod.IPSetError):
+                mod.inspect(broken)
+
     def test_limits(self):
         with self.assertRaises(mod.IPSetError):
             mod.parse_ipset(b"1" * (mod.MAX_BYTES + 1), "large")
