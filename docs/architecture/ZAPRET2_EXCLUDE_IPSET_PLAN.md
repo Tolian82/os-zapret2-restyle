@@ -1,8 +1,8 @@
 # Dual-stack IPv4/IPv6 and Exclude IPSet — staged, per-file development plan
 
 **Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
-**Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 is in progress at development candidate `v0.6.1_2`**; its current source changes are not yet CI/installed qualified. Stages 3–8 are not yet implemented. Stage 0 was documentation publication.
-**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current Stage-2 source candidate (unqualified/unpublished): `VERSION=0.6.1`, `PLUGIN_REVISION=2`.
+**Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 `v0.6.1_2` source/CI gate is CLOSED**; [PR #683](https://github.com/Tolian82/os-zapret2-restyle/pull/683) passed the [Project/Voice/FreeBSD 15 checks](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40653479292), was merged as [21f564d](https://github.com/Tolian82/os-zapret2-restyle/commit/21f564d64d70480dfd66c4c6229cdca53878c6ef) and passed post-merge main CI. **Stage 3 is next**. Stages 3–8 are not yet implemented. Stage 0 was documentation publication.
+**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current source/CI-qualified but unpublished candidate: `VERSION=0.6.1`, `PLUGIN_REVISION=2`.
 **Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Later packaged-source patches increment `PLUGIN_REVISION`; any stable full release still requires separate explicit owner approval.
 
 ## 0. Execution rules and scope
@@ -109,6 +109,8 @@
 | CHANGE | `scripts/test-voice-api-concurrency.php` | Exercise cross-tab Strategies/Voice races when Exclude and shared IPSET change. |
 | CHANGE | `scripts/test-shared-apply-render.py` | Test existing native template rendering and new EXCLUDE_IPSET block. |
 | REVIEW | `scripts/test-voice-gui-contract.py` | Check Voice GUI original structure, bilingual IPv6 help, F5 and `/0` rejection; no P2P controls. |
+
+**Stage 2 source gate CLOSED (28 October 2026):** Model, Strategies-owned GUI Exclude IPSet, unchanged Voice GUI structure, F5 localization, detached XML/native renderer, saved Config witness, shared Python IP grammar, cross-page optimistic concurrency and applicable candidate tests passed CI at the exact PR head. Original common Apply and single writer are preserved. Live installed GUI/IPv6 Voice and working `--ipset-exclude` profile behavior are **not** proven by Stage 2; attach exclusions at Stage 3.
 
 **Exit gate 2:** GUI/Config and native candidate validation preserve original writer and no-op semantics, proper cross-page ownership, IPv6 text, localized errors and disabled Voice drafts.
 
