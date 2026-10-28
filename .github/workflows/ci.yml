@@ -623,22 +623,22 @@ jobs:
           fi
 
   native-ipfw-table:
-    name: Isolated FreeBSD 15 native IPFW IPv4/IPv6 table smoke
+    name: Isolated FreeBSD 15.1 native IPFW tables and IPv6 UDP divert
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.package == 'true' }}
     runs-on: ubuntu-latest
     needs: changes
 
     steps:
       - uses: actions/checkout@v6
-      - name: Probe native IPFW without touching production rules or traffic
+      - name: Probe native IPFW tables and loopback IPv6 packets in disposable VM
         uses: vmactions/freebsd-vm@v1
         with:
-          release: "15.0"
+          release: "15.1"
           usesh: true
           prepare: pkg install -y python313
           run: |
-            test "$(freebsd-version -u | cut -d. -f1)" = "15"
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py
+            test "$(freebsd-version -u | cut -d. -f1,2)" = "15.1"
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -646,6 +646,15 @@ jobs:
             printf '%s\n' "$native_probe_output"
             printf '%s\n' "$native_probe_output" | grep -Fqx 'STAGE5_NATIVE_TABLE=PASS: FreeBSD15 live kernel add/list/swap/restore/cleanup' || {
               echo 'Native FreeBSD 15 IPFW smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            packet_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_IPV6_PACKET_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-packet.py 2>&1)" || {
+              printf '%s\n' "$packet_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$packet_probe_output"
+            printf '%s\n' "$packet_probe_output" | grep -Fqx 'STAGE5_NATIVE_IPV6_PACKET=PASS: FreeBSD15.1 lo0 IPv6 UDP divert/reinject and STUN port scope' || {
+              echo 'Native FreeBSD 15.1 IPv6 packet smoke must PASS; SKIP is not acceptance' >&2
               exit 1
             }
 
