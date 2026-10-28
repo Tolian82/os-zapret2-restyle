@@ -30,7 +30,7 @@ ORDINARY = "--filter-tcp=443\n--filter-l7=tls\n--new\n--filter-udp=596-599\n<IPS
 
 def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engine=None,
           target_offset=0, stun_ports="*", upstream_root=None, traffic_args=None,
-          extra_args=None):
+          extra_args=None, exclude_ips=''):
     xml = ET.Element("opnsense")
     model = ET.SubElement(ET.SubElement(xml, "OPNsense"), "Zapret")
     general = ET.SubElement(model, "general")
@@ -40,6 +40,7 @@ def build(tmp, enabled, *, bad_args=False, wan="WAN", global_enabled=True, engin
     settings = {"ZAPRET_ENABLED": "1" if global_enabled else "0", "WAN_IF": "WAN",
                 "HOSTLIST_MODE": "all", "DIVERT_PORT": "989", "TRAFFIC_ARGS": ORDINARY if traffic_args is None else traffic_args,
                 "YOUTUBE_DOMAINS": "", "USER_DOMAINS": "", "EXCLUDE_DOMAINS": "example.com",
+                "EXCLUDE_IPSET": exclude_ips,
                 "EXTRA_ARGS": "" if extra_args is None else extra_args}
     for i, name in enumerate(SERVICES):
         entry = ET.SubElement(voice, name)
@@ -99,6 +100,28 @@ orchestrator_build_release "$2" "$3" "$4" "$5" "$6" "$5/stages" shared-candidate
 
 
 class CommonRuntimeTests(unittest.TestCase):
+    def test_global_exclusion_applies_to_voice_and_every_ordinary_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result, release = build(Path(directory), ("telegram", "discord"),
+                                    exclude_ips="198.51.100.0/24\n2001:db8::/32")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            argv = (release / "dvtws.args").read_text()
+            names = profile_tokens(argv)
+            expected = "--ipset-exclude=" + ACTIVE + "/managed/ipset-exclude.txt"
+            self.assertTrue(len(names) >= 4, argv)
+            for profile in names:
+                self.assertEqual(profile.count(expected), 1, profile)
+                if any(item.startswith("--name=voice-") for item in profile):
+                    self.assertFalse(any(item.startswith("--hostlist-exclude=")
+                                         for item in profile), profile)
+            self.assertIn(expected, argv)
+            self.assertEqual((release / "managed/ipset-exclude.txt").read_text(),
+                             "198.51.100.0/24\n2001:db8::/32\n")
+            self.assertTrue((release / "ipset-manifest.json").is_file())
+            # Hostless ordinary UDP cannot inherit a domain-dependent filter.
+            udp = next(row for row in names if "--filter-udp=596-599" in row)
+            self.assertFalse(any(item.startswith("--hostlist-exclude=") for item in udp))
+
     def test_shared_firewall_full_cycle_and_precommit_runtime_failure_rollback(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -167,7 +190,17 @@ class CommonRuntimeTests(unittest.TestCase):
                 self.assertEqual(len(enabled), len(plan["capture"]["voice"]))
                 self.assertEqual(1, args.count("--port=989\n"))
                 self.assertEqual(len(enabled) + 1, traffic.count("\n--new\n"))
-                self.assertTrue(args.endswith("--hostlist-exclude=" + ACTIVE + "/managed/hostlist-exclude.txt\n"))
+                # Domain excludes are ordinary domain-aware only: never
+                # silently append them to last hostless UDP/Voice profile.
+                arg_profiles = profile_tokens(args)
+                domain_option = "--hostlist-exclude=" + ACTIVE + "/managed/hostlist-exclude.txt"
+                self.assertTrue(any(domain_option in row and "--filter-l7=tls" in row
+                                    for row in arg_profiles))
+                self.assertTrue(all(domain_option not in row for row in arg_profiles
+                                    if any(v.startswith("--name=voice-") for v in row)))
+                self.assertTrue(all(domain_option not in row for row in arg_profiles
+                                    if "--filter-udp=596-599" in row))
+                self.assertTrue((release / "dvtws.args.global-policy.json").is_file())
                 # Voice wildcard STUN must NOT broaden ordinary UDP IPFW.
                 # Each Voice service instead gets a destination-table rule.
                 self.assertEqual("596-599", (release / "udp-ports.txt").read_text().strip())
@@ -195,7 +228,7 @@ class CommonRuntimeTests(unittest.TestCase):
         # A changed Voice profile may still be syntactically valid, but
         # installing its previously sealed IPFW owner would capture the wrong
         # flow. No kernel operation is allowed in any mismatch case.
-        for change in ("traffic", "args", "plan", "identity"):
+        for change in ("traffic", "args", "plan", "identity", "policy-witness", "exclude-option"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
                 result, release = build(Path(directory), ("telegram",))
                 self.assertEqual(0, result.returncode, result.stderr)
@@ -217,13 +250,23 @@ class CommonRuntimeTests(unittest.TestCase):
                     plan = json.loads(path.read_text())
                     plan["profiles"][0]["profile_sha256"] = "0" * 64
                     path.write_text(json.dumps(plan))
+                elif change == "policy-witness":
+                    path = release / "dvtws.args.global-policy.json"
+                    proof = json.loads(path.read_text())
+                    proof["argv_sha256"] = "0" * 64
+                    path.write_text(json.dumps(proof))
+                elif change == "exclude-option":
+                    path = release / "dvtws.args"
+                    path.write_text(path.read_text().replace(
+                        "--hostlist-exclude=" + ACTIVE + "/managed/hostlist-exclude.txt",
+                        "--hostlist-exclude=/tampered/untrusted/path", 1))
                 elif change == "identity":
                     path = release / "traffic.conf"
                     path.write_text(path.read_text().replace(
                         "--name=voice-telegram", "--name=voice-discord", 1
                     ))
                 with self.assertRaisesRegex(IPFWAdapterError,
-                                            "common engine|Voice kernel capture"):
+                                            "common engine|Voice kernel capture|IPSET"):
                     shared_release_manifest(release)
 
     def test_common_voice_kernel_capture_matches_real_engine_udp_and_ipsets(self):
@@ -292,7 +335,7 @@ class CommonRuntimeTests(unittest.TestCase):
                 if drift not in ("engine-socket", "duplicate-socket"):
                     plan_path.write_text(json.dumps(plan))
                 with self.assertRaisesRegex(
-                    IPFWAdapterError, "divert socket|capture WAN/divert"
+                    IPFWAdapterError, "divert socket|capture WAN/divert|global exclusion witness"
                 ):
                     shared_release_manifest(release)
 

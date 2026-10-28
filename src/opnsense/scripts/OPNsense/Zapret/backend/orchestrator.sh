@@ -505,6 +505,26 @@ orchestrator_build_release()
                 "argument generation failed"
             return 1
         }
+    # Mandatory global IP exclusions are profile-scoped native options.
+    # Apply after Extra and Voice composition, before any dry-run or sealing.
+    : > "${_orchestrator_build_error}"
+    generator_apply_final_exclusions apply \
+        "${_orchestrator_build_args}" \
+        "${_orchestrator_build_exclude_source}" \
+        "${_orchestrator_build_exclude_reference}" \
+        "${_orchestrator_build_managed_source}/ipset-exclude.txt" \
+        "${_orchestrator_build_managed_reference}/ipset-exclude.txt" \
+        "${_orchestrator_build_active_dir}" \
+        "${_orchestrator_build_release}" \
+        "${_orchestrator_build_zapret_dir}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "mandatory per-profile IPSet exclusion failed"
+            return 1
+        }
     # Only explicit native-detached evidence needs a private argv/IPFW
     # handoff; shared-candidate uses its one ordinary release generator.
     if [ "${_orchestrator_build_variant}" = "native-detached" ]; then
@@ -527,6 +547,26 @@ orchestrator_build_release()
                     "${_orchestrator_build_total}" generator \
                     "${_orchestrator_build_error}" \
                     "native Voice engine argument generation failed"
+                return 1
+            }
+        # Mandatory global IP exclusions are profile-scoped native options.
+        # Apply after Extra and Voice composition, before any dry-run or sealing.
+        : > "${_orchestrator_build_error}"
+        generator_apply_final_exclusions apply \
+            "${_orchestrator_build_native_args}" \
+            "${_orchestrator_build_exclude_source}" \
+            "${_orchestrator_build_exclude_reference}" \
+            "${_orchestrator_build_managed_source}/ipset-exclude.txt" \
+            "${_orchestrator_build_managed_reference}/ipset-exclude.txt" \
+            "${_orchestrator_build_active_dir}" \
+            "${_orchestrator_build_release}" \
+            "${_orchestrator_build_zapret_dir}" \
+            2>"${_orchestrator_build_error}" || {
+                orchestrator_fail_from_log \
+                    "${_orchestrator_build_stage_file}" 6 \
+                    "${_orchestrator_build_total}" generator \
+                    "${_orchestrator_build_error}" \
+                    "mandatory per-profile IPSet exclusion failed"
                 return 1
             }
         # Bind the generated one-engine argv to destination-scoped IPFW rules.
@@ -572,6 +612,26 @@ orchestrator_build_release()
                 "${_orchestrator_build_total}" validator \
                 "${_orchestrator_build_error}" \
                 "staged release validation failed"
+            return 1
+        }
+    # Mandatory global IP exclusions are profile-scoped native options.
+    # Apply after Extra and Voice composition, before any dry-run or sealing.
+    : > "${_orchestrator_build_error}"
+    generator_apply_final_exclusions audit \
+        "${_orchestrator_build_args}" \
+        "${_orchestrator_build_exclude_source}" \
+        "${_orchestrator_build_exclude_reference}" \
+        "${_orchestrator_build_managed_source}/ipset-exclude.txt" \
+        "${_orchestrator_build_managed_reference}/ipset-exclude.txt" \
+        "${_orchestrator_build_active_dir}" \
+        "${_orchestrator_build_release}" \
+        "${_orchestrator_build_zapret_dir}" \
+        2>"${_orchestrator_build_error}" || {
+            orchestrator_fail_from_log \
+                "${_orchestrator_build_stage_file}" 6 \
+                "${_orchestrator_build_total}" generator \
+                "${_orchestrator_build_error}" \
+                "staged per-profile IPSet attestation failed"
             return 1
         }
     # Offline candidate production is also useful before engine installation.
