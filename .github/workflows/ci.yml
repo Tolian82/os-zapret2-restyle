@@ -638,7 +638,7 @@ jobs:
           prepare: pkg install -y python313
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -655,6 +655,15 @@ jobs:
             printf '%s\n' "$packet_probe_output"
             printf '%s\n' "$packet_probe_output" | grep -Fqx 'STAGE5_NATIVE_IPV6_PACKET=PASS: FreeBSD15.1 lo0 IPv6 UDP divert/reinject and STUN port scope' || {
               echo 'Native FreeBSD 15.1 IPv6 packet smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            transaction_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_TRANSACTION_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-transaction.py 2>&1)" || {
+              printf '%s\n' "$transaction_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$transaction_probe_output"
+            printf '%s\n' "$transaction_probe_output" | grep -Fqx 'STAGE5_NATIVE_TRANSACTION=PASS: FreeBSD15.1 real dual-stack install/fault/rollback/commit/retire/cleanup' || {
+              echo 'Native FreeBSD 15.1 IPFW rollback smoke must PASS; SKIP is not acceptance' >&2
               exit 1
             }
 
