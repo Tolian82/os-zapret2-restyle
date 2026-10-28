@@ -35,7 +35,7 @@ def snapshot(packets=12, bytes_=1100):
     return {
         "state": "ready", "source": "native-common",
         "config_digest": "a" * 64,
-        "installed_plugin_version": "0.6.1_5",
+        "installed_plugin_version": "0.6.1_6",
         "rule_count": 3, "table_count": 1,
         "runtime": {
             "state": "running", "engine_verified": True,

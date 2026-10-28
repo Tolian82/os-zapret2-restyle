@@ -97,6 +97,45 @@ $drifted=$savedCandidate;
 $drifted['hostlist']['telegramips']='91.108.13.10';
 denies(fn()=>Worker::saved($plan,$drifted));
 
+// Owner-observed v0.6.0_1 -> v0.6.1_5 post-install failure:
+// exactly one NEW optional hostlist.excludeipset model key changes the
+// snapshot, while the old sealed common Strategies owner is unchanged.
+$legacyPlan = $plan;
+unset($legacyPlan['candidate']['hostlist']['excludeipset']);
+$legacyCurrent = $legacyPlan['candidate'];
+$legacyCurrent['hostlist']['excludeipset'] = '';
+$legacyProof = Worker::saved($legacyPlan, $legacyCurrent);
+must($legacyProof['result'] === 'committed' &&
+     $legacyProof['snapshot'] ===
+         \OPNsense\Zapret\Api\VoiceSettingsSnapshot::digest($legacyCurrent),
+     'empty new Exclude IPSet must allow exact old sealed owner on boot');
+$legacyNonempty = $legacyCurrent;
+$legacyNonempty['hostlist']['excludeipset'] = '2001:db8::/32';
+denies(fn()=>Worker::saved($legacyPlan, $legacyNonempty));
+$legacyWhitespace = $legacyCurrent;
+$legacyWhitespace['hostlist']['excludeipset'] = ' ';
+denies(fn()=>Worker::saved($legacyPlan, $legacyWhitespace));
+$legacyNull = $legacyCurrent;
+$legacyNull['hostlist']['excludeipset'] = null;
+denies(fn()=>Worker::saved($legacyPlan, $legacyNull));
+$legacyOtherDrift = $legacyCurrent;
+$legacyOtherDrift['voice']['telegram']['enabled'] = '1';
+denies(fn()=>Worker::saved($legacyPlan, $legacyOtherDrift));
+$legacyIpDrift = $legacyCurrent;
+$legacyIpDrift['hostlist']['telegramips'] = '91.108.13.10';
+denies(fn()=>Worker::saved($legacyPlan, $legacyIpDrift));
+$modernPlan = $legacyPlan;
+$modernPlan['candidate']['hostlist']['excludeipset'] = '';
+must(Worker::saved($modernPlan, $legacyCurrent)['result'] === 'committed',
+     'modern exact candidate must remain valid');
+$modernNonempty = $legacyCurrent;
+$modernNonempty['hostlist']['excludeipset'] = '2001:db8::/32';
+$modernPlan['candidate'] = $modernNonempty;
+must(Worker::saved($modernPlan, $modernNonempty)['result'] === 'committed',
+     'new committed Exclude IPSet must verify without exception');
+denies(fn()=>Worker::saved($modernPlan, $legacyCurrent));
+
+
 must($stored['dependencies']===$plan['dependencies'],'stored plan lost dependency');
 $unrelated=$state;
 $unrelated['strategylab']['enablequic']='0';
