@@ -43,6 +43,8 @@ Keep `Exclude Domains` strictly domain-based: no implicit DNS A/AAAA lookup, no 
 | DS-22 | Close all supported user-supplied IP inputs: Strategies and Voice fields, managed Targets, IPSET placeholders, and native `--ipset-ip` or referenced `--ipset` data where accepted by the plugin. Reject unverifiable external files or full-coverage bypass attempts before Apply. |
 | DS-23 | Voice migration changes only the **existing** shared IPSET and `enabled`/`args` fields and their IPv4/IPv6 handling. No per-service port field, new IPv6 checkbox, destination-any P2P rule/profile, media behavior or layout redesign. |
 | DS-24 | An enabled Voice service with an empty/absent IPSET remains invalid; OFF drafts remain editable without implicit activation. Do not synthesize `/0`, a two-`/1` equivalent, `to any` or a second Voice path. |
+| DS-25 | Add a single **Strategy Lab** `IPv6` checkbox directly beneath its existing `Mode:` / `Режим:` selector, visually matching the owner's approved screenshot: a second aligned row, the `IPv6` label in the left label position and the checkbox indicator beneath the selector's left edge. Default unchecked; keep Standard/Extended selection, Run/Stop placement and RU/EN localization unchanged. OFF permits **IPv4 tests only**; ON permits **IPv4 and IPv6 tests** wherever the target actually provides an eligible family. The checkbox is unrelated to the deferred **Voice-page** IPv6 idea. |
+| DS-26 | Strategy Lab keeps one authoritative finite per-job time envelope: Standard **150 s IPv4-only / 200 s when IPv4+IPv6 are both eligible and scheduled**, Extended **270 s IPv4-only / 350 s when both families are eligible and scheduled**. This is a **+50 s / +80 s total-job increment**, not two full sequential job budgets; a checked box alone does not extend a single-family job. Persist requested IPv6 selection, actual eligible families, and final deadline with the job; reconcile existing adaptive workload admission/stage timeouts to these approved overall limits without duplicate time-budget owners or loss of restoration guarantees. |
 
 ## 3. Input, canonicalization and full-family rejection
 
@@ -109,6 +111,31 @@ Both `0.0.0.0/1` plus `128.0.0.0/1`, and `::/1` plus `8000::/1`, are **invalid**
 - Update existing Lab target, request, probe, firewall, worker, candidate and results paths rather than inventing a parallel IPv6 tester. Verify the same bounded IPFW Lab owner/counters/source-port attribution and Stage 40/60/70/85/90 cleanup/restoration.
 - Enable IPv6 QUIC and generic UDP evidence only where the production probes truly support them. Missing IPv6 routes, unsupported browser cases or a target without a valid TLS identity return honest `UNAVAILABLE`/`SKIPPED`/technical errors; they do not become fake candidate success.
 
+### Owner-approved Strategy Lab IPv6 control and time policy (28 October 2026)
+
+**Current implementation target only; not present in published v0.6.0_1.** The Laboratory's Mode column becomes two vertically aligned rows, as in the owner's screenshot: `Режим:` / `Mode:` and the existing Standard/Extended dropdown on the first row; `IPv6` at the left and its **single independent checkbox** to the right, aligned beneath the dropdown's left edge, on the second. Use a checkbox control (even if the approved visual indicator is round), not an exclusive radio-group mode. Do not move Run/Stop or introduce a second Laboratory. Default OFF on a fresh page/job. Disable editing the checkbox while the job is running. Record the effective selection in each immutable job result, so reopening results cannot reinterpret family coverage.
+
+**The user setting always controls domain A/AAAA eligibility:**
+
+| Input target | IPv6 OFF | IPv6 ON |
+|---|---|---|
+| Domain with A + AAAA | IPv4 A only; AAAA never tested | Independently test eligible IPv4 A and IPv6 AAAA, with pinned exact remote address per test |
+| Domain with A only | IPv4 only | IPv4 only; IPv6 not available for this target |
+| Domain with AAAA only | No IPv4 endpoint available; do not call this an IPv4 strategy failure | IPv6 only, if connectivity is usable |
+| IPv4 literal | This IPv4 only | This IPv4 only; no invented IPv6 counterpart |
+| IPv6 literal | Validate/reject with an RU/EN message to enable IPv6 | This IPv6 only; no IPv4 fallback |
+
+An AAAA record never overrides the unchecked box. Conversely, an enabled checkbox does not invent an AAAA record or an IPv6 WAN route. Distinguish missing family, unusable local IPv6 route/control, technical error and actual target-strategy failure. IPv6 capability checks may still be performed internally for diagnostics but must not turn into IPv6 strategy trials when unchecked. Existing target identity, SNI, ECH-off, fixed-IP proof and exact restoration apply to both eligible families.
+
+**Total job budgets:**
+
+| Mode | One eligible family (including IPv4 only) | Both IPv4 and IPv6 eligible |
+|---|---:|---:|
+| Standard | 150 seconds | **200 seconds** |
+| Extended | 270 seconds | **350 seconds** |
+
+The **extra 50/80 seconds apply only when both families are actually eligible and scheduled** for the same domain job, not whenever IPv6 is checked. A sole IPv6 literal/AAAA without IPv4 receives the one-family budget. The timer is a **single job-wide budget**, not a fresh 150/270 seconds per family. Preserve the current Model-C and adaptive workload/absolute-deadline ownership: reconcile the existing effective-budget policy so it cannot silently add another IPv6 bonus above these approved overall caps, starve the IPv6 branch, or extend the cleanup/restoration boundary. Calculate and persist family eligibility, selected time budget, and deadline at the real existing job boundary; document current adaptive-policy behavior and test the reconciled result at Stage 6 before claiming conformity.
+
 ## 9. Native lifecycle and security
 
 The only live Apply is existing `shared_apply_prepare_service()` → `orchestrator_build_release(..., shared-candidate)` → native validator → managed activation/health → native Config commit. Keep existing safeguards for global OFF/stopped service, FD9/setup locking, FreeBSD cold-IPFW initialization and previous-owner restoration. `RESTORE_FAILED` is a blocker. Installation and removal of Additional Resources must use the same real saved Config and common compiler, never a duplicate field parser or second recovery mechanism. Do not mutate immutable published `v0.6.0` assets. A new development stage/package follows `DEV-027`–`DEV-040`; stable publication still requires an explicit owner instruction.
@@ -141,6 +168,8 @@ The only live Apply is existing `shared_apply_prepare_service()` → `orchestrat
 | A22 | Empty enabled Voice destinations are rejected on Apply and native saved-draft preview; existing args/ports remain unchanged without IPFW mutation. |
 | A23 | Voice GUI layout remains unchanged: only existing IPSET dual-stack/help/errors update, without P2P UDP inputs or shared IPv6 checkbox. |
 | A24 | No destination-any Voice P2P profile, P2P IPFW rule or broad-UDP load test is introduced; existing destination-IPSET STUN, single engine and rollback remain intact. |
+| A25 | In real RU/EN Strategy Lab GUI, the `IPv6` checkbox sits directly under `Режим:` / `Mode:` with label left and indicator aligned beneath the dropdown; defaults OFF, both Standard and Extended remain accessible, Run/Stop unchanged, job selection is saved, and F5/result reopening reflects the original job scope. |
+| A26 | Real Laboratory runs obey domain A/AAAA OFF/ON gating, literal IPv4/IPv6 rules, absence/unavailability reporting and exact remote-IP proof. Verify selected job-wide totals **150/200 seconds Standard** and **270/350 seconds Extended**, with +50/+80 only for eligible dual-family work, no per-family reset, no adaptive-budget double count or lost cleanup/restoration. |
 
 ## 11. Evidence and authority
 
