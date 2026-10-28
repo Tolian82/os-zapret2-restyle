@@ -31,7 +31,7 @@ if '--dry-run' not in args or os.environ.get('FAKE_ENGINE_FAIL') == '1':
 checked = []
 for token in args:
     name, sep, value = token.partition('=')
-    if not sep or name not in ('--ipset', '--hostlist', '--hostlist-exclude'):
+    if not sep or name not in ('--ipset', '--ipset-exclude', '--hostlist', '--hostlist-exclude'):
         continue
     p = Path(value)
     for parent in [p.parent, *p.parents]:
@@ -40,7 +40,7 @@ for token in args:
     if not p.is_file() or not (p.stat().st_mode & stat.S_IROTH):
         sys.exit(52)
     checked.append([name, p.read_text(), value])
-if len(checked) != 2:
+if len(checked) != 3:
     sys.exit(53)
 Path(os.environ['FAKE_ENGINE_RECORD']).write_text(json.dumps(checked))
 """, encoding="utf-8")
@@ -62,12 +62,14 @@ class PrivateRuntimeValidation(unittest.TestCase):
         managed.chmod(0o755)
         (managed / "hostlist-exclude.txt").write_text("example.org\n")
         (managed / "ipset-telegram.txt").write_text("91.108.0.0/16\n")
+        (managed / "ipset-exclude.txt").write_text("192.0.2.0/24\n2001:db8::/32\n")
         for file in managed.iterdir():
             file.chmod(0o644)
         self.args = self.work / "dvtws.args"
         self.args.write_text(
             "--hostlist-exclude=" + REF + "/managed/hostlist-exclude.txt\n"
             "--ipset=" + REF + "/managed/ipset-telegram.txt\n"
+            "--ipset-exclude=" + REF + "/managed/ipset-exclude.txt\n"
         )
         self.engine = self.root / "fake-dvtws2"
         fake_binary(self.engine)
@@ -101,7 +103,8 @@ validator_validate_engine_mapped "$2" "$3" "$4" "$5" "$6"
         self.assertEqual(0, result.returncode, result.stderr)
         proof = json.loads(self.record.read_text())
         self.assertEqual(
-            ["example.org\n", "91.108.0.0/16\n"], [item[1] for item in proof]
+            ["example.org\n", "91.108.0.0/16\n", "192.0.2.0/24\n2001:db8::/32\n"],
+            [item[1] for item in proof]
         )
         self.assertTrue(all("/tmp/" + PREFIX in item[2] for item in proof))
         self.assertEqual(0o700, self.work.stat().st_mode & 0o777)

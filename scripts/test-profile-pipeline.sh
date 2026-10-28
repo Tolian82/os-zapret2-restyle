@@ -60,4 +60,21 @@ if profile_pipeline_registry "${TEST_ROOT}" invalid "${registry}" >/dev/null 2>&
     fail "registry accepted an invalid count"
 fi
 
+named_strategy='--filter-tcp=443
+--filter-l7=tls
+--new=named-udp
+--filter-udp=443
+--filter-l7=quic'
+named_root="${TEST_ROOT}/named-profiles"
+mkdir -p "${named_root}"
+named_count=$(profile_pipeline_parse "${named_root}" 0 "${named_strategy}")
+assert_equal 2 "${named_count}" "named native --new count"
+grep -qx -- '--name=named-udp' "${named_root}/profile-2.conf" ||
+    fail "native named --new did not preserve the new profile name"
+if grep -q -- '--name=named-udp' "${named_root}/profile-1.conf"; then
+    fail "native named --new escaped into previous profile"
+fi
+named_count=$(profile_pipeline_normalize "${named_root}" "${named_count}")
+assert_equal 2 "${named_count}" "named profiles after target normalization"
+
 echo "Profile pipeline tests passed."

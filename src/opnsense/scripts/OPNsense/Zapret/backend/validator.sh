@@ -281,6 +281,13 @@ validator_validate_argument_references()
                         "${_validator_refs_managed}" \
                         "${_validator_refs_runtime}" 1 || return 1
                     ;;
+                --ipset-exclude=*)
+                    validator_validate_reference \
+                        "${_validator_refs_token#--ipset-exclude=}" \
+                        "global Exclude IPSet" \
+                        "${_validator_refs_managed}" \
+                        "${_validator_refs_runtime}" 1 || return 1
+                    ;;
                 --hostlist-exclude=*)
                     validator_validate_reference \
                         "${_validator_refs_token#--hostlist-exclude=}" \
@@ -431,6 +438,14 @@ validator_validate_argument_references_mapped()
                         "${_validator_mapped_reference_root}" \
                         "${_validator_mapped_source_root}" 1 || return 1
                     ;;
+                --ipset-exclude=*)
+                    validator_validate_mapped_reference \
+                        "${_validator_mapped_token#--ipset-exclude=}" \
+                        "global Exclude IPSet" \
+                        "${_validator_mapped_static_root}" \
+                        "${_validator_mapped_reference_root}" \
+                        "${_validator_mapped_source_root}" 1 || return 1
+                    ;;
                 --hostlist-exclude=*)
                     validator_validate_mapped_reference \
                         "${_validator_mapped_token#--hostlist-exclude=}" \
@@ -526,6 +541,7 @@ validator_validate_runtime_modes()
         "${_validator_modes_managed}/ipset-x.txt" \
         "${_validator_modes_managed}/ipset-sip.txt" \
         "${_validator_modes_managed}/ipset-custom.txt" \
+        "${_validator_modes_managed}/ipset-exclude.txt" \
         "${_validator_modes_managed}/hostlist-user.txt" \
         "${_validator_modes_managed}/hostlist-exclude.txt"
     do
@@ -613,7 +629,7 @@ try:
         mapped = []
         for token in tokens:
             option, sep, value = token.partition("=")
-            if sep and option in ("--ipset", "--hostlist", "--hostlist-exclude"):
+            if sep and option in ("--ipset", "--ipset-exclude", "--hostlist", "--hostlist-exclude"):
                 token = option + "=" + remap(value)
             elif sep and option == "--lua-init" and value.startswith("@"):
                 token = option + "=@" + remap(value[1:])

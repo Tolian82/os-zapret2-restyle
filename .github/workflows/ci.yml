@@ -125,6 +125,10 @@ jobs:
         run: |
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py
           python3.13 scripts/test-ipset-policy.py
+      - name: Stage 3 global exclusions across final native profiles
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py
+          python3.13 scripts/test-global-exclusions.py
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
 

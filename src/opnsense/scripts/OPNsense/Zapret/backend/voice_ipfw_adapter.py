@@ -325,7 +325,52 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
     ):
         raise IPFWAdapterError("common engine/IPFW traffic changed after STUN staging")
     argv = read("dvtws.args").decode("utf-8")
-    if not traffic.strip() or not argv.strip() or traffic not in argv:
+    if not traffic.strip() or not argv.strip():
+        raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
+    policy_witness = release / "dvtws.args.global-policy.json"
+    if policy_witness.exists() or policy_witness.is_symlink():
+        # Stage 3: final argv no longer contains the unmodified traffic.conf
+        # bytes: native exclusions occur at the END of EACH profile. Pin the
+        # exact post-assembly candidate with a release-local digest, re-audit
+        # global policy and retain the earlier Voice profile/order/capture
+        # witness. Older releases have no marker and keep their original check.
+        try:
+            proof = json.loads(read("dvtws.args.global-policy.json"))
+            if not isinstance(proof, dict) or set(proof) != {
+                "schema", "argv_sha256", "profiles"
+            } or proof["schema"] != 1 or proof["argv_sha256"] != (
+                hashlib.sha256(argv.encode("utf-8")).hexdigest()
+            ):
+                raise IPFWAdapterError("common engine global exclusion witness changed")
+            from global_exclusions import audit, segments
+            if proof["profiles"] != len(segments(argv)):
+                raise IPFWAdapterError("common engine global exclusion profile count changed")
+            reference = "/usr/local/etc/zapret2/runtime-v2/managed"
+            audit(
+                argv,
+                release / "managed/hostlist-exclude.txt",
+                reference + "/hostlist-exclude.txt",
+                release / "managed/ipset-exclude.txt",
+                reference + "/ipset-exclude.txt",
+                Path("/usr/local/etc/zapret2/runtime-v2"),
+                release,
+                Path("/usr/local/etc/zapret2"),
+            )
+            expected_rows = profile_tokens(traffic)
+            effective_rows = profile_tokens(argv)
+            if len(effective_rows) < len(expected_rows):
+                raise IPFWAdapterError("common engine lost merged runtime profiles")
+            for index, expected in enumerate(expected_rows):
+                actual = effective_rows[index]
+                offsets = [offset for offset in range(len(actual) - len(expected) + 1)
+                           if actual[offset:offset + len(expected)] == expected]
+                if not offsets or (index > 0 and offsets[0] != 0):
+                    raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
+        except (ValueError, OSError, UnicodeError) as error:
+            if isinstance(error, IPFWAdapterError):
+                raise
+            raise IPFWAdapterError("common engine global IPSET exclusion witness invalid") from error
+    elif traffic not in argv:
         raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
     # ipfw's divert port is a SOCKET target, distinct from the UDP service
     # selectors checked below. The single native engine must listen on the

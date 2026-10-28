@@ -207,3 +207,25 @@ generator_build_args_mapped()
             }
     fi
 }
+
+# Stage 3 final-profile pass. Keep the original generator and candidate owner:
+# enforce policy on the already assembled argv after Voice and Extra Arguments.
+generator_apply_final_exclusions()
+{
+    _generator_policy_action="$1"
+    shift
+    _generator_policy_python="/usr/local/bin/python3.13"
+    if [ ! -x "${_generator_policy_python}" ]; then
+        _generator_policy_python=$(command -v python3.13 2>/dev/null) ||
+            _generator_policy_python=$(command -v python3 2>/dev/null) || {
+                common_error "Python 3 runtime for native profile policy is unavailable"
+                return 1
+            }
+    fi
+    [ -r "${BACKEND_DIR}/global_exclusions.py" ] || {
+        common_error "native global Exclude IPSet profile policy is missing"
+        return 1
+    }
+    "${_generator_policy_python}" "${BACKEND_DIR}/global_exclusions.py" \
+        "${_generator_policy_action}" "$@"
+}

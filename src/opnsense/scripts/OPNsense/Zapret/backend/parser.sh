@@ -55,13 +55,18 @@ parser_parse()
         sub(/^[[:space:]]+/, "", separator)
         sub(/[[:space:]]+$/, "", separator)
 
-        if (separator == "--new") {
+        if (separator == "--new" || separator ~ /^--new=[A-Za-z0-9_.-]+$/) {
             if (!content)
                 fail("empty strategy profile before --new at line " NR)
             close(output)
             profile++
             output = dir "/profile-" profile ".conf"
             content = 0
+            if (separator != "--new") {
+                # Keep the native new-profile name without an extra native
+                # boundary after the count-carrying parser splits profiles.
+                print "--name=" substr(separator, 7) >> output
+            }
             next
         }
 
