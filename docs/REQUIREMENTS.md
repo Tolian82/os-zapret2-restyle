@@ -1,7 +1,7 @@
 # os-zapret2-restyle — Requirements
 
 Project: **os-zapret2-restyle**
-Version line: **0.5.x**
+Current version line: **0.6.x**. The older requirements below retain historical approved milestones and code-state assertions at their recorded dates; the current owner-approved next target is explicitly identified below.
 
 ## Project identity
 
@@ -16,6 +16,18 @@ The zapret2 engine remains an external runtime component managed by this plugin.
 ## General development rules
 
 General project-development principles are canonical only in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) (`DEV-*`). This file defines product-specific requirements and does not duplicate that general rule book.
+
+## Current first-priority requirements — IPv4/IPv6 and global Exclude IPSet (2026-10-28)
+
+**Owner-approved target, NOT implemented or installed:** [Technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) (DS-01–DS-24; acceptance A01–A24) and [staged implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md). Both documents have precedence for this **new** work over older IPv4-only *future* language elsewhere in this historical requirements file; they do **not** retroactively change descriptions of currently installed IPv4-only behavior.
+
+- Introduce one `Exclude IPSet` field directly below `Exclude Domains` in normal/Advanced Strategies, with mixed IPv4/IPv6 and RU/EN help; enforce destination IP exclusion across all executable Strategies and Voice profiles, including profile boundaries, templates, imports and Extra Arguments.
+- Keep `Exclude Domains` domain-only, with no DNS-to-A/AAAA resolution or injection into Voice/STUN. Keep YouTube/User Domains HOSTLIST and one existing OPNsense Config/common Apply/`zapret` owner.
+- Migrate all managed Targets and existing five Voice IPSETs to dual-stack through one Python batch compilation and immutable manifest; stage IPv4/IPv6 Voice IPFW tables and qualify Strategy Lab IPv6 through existing runtime/probes.
+- Forbid `0.0.0.0/0`, `::/0` and equivalent full-family union (including complementary `/1`) in **every** user-managed include and exclude IP list, including all five Voice services. Never synthesize global capture from a blank list.
+- New Voice `UDP ports` fields, shared IPv6 checkbox, port-only destination-any P2P capture, media protocol strategies and empty-IPSET P2P enablement are **not part of this task**; preserve their discussion in [DECISIONS.md](DECISIONS.md). Real installed FreeBSD15 evidence is required before claiming the feature complete.
+
+**Immediate execution order:** Stage 1 compiler/manifest, then existing model/GUI and native profile generator, Voice/IPFW, Lab, integration regression and separately qualified package/owner-live acceptance. Docs-only publication keeps `VERSION=0.6.0` and `PLUGIN_REVISION=1`.
 
 ## Additional Zapret2 Lua/BLOB resources — owner-approved GUI (2026-10-22)
 

@@ -16,6 +16,12 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
+## Level 2 — FIRST PRIORITY: global Exclude IPSet and IPv4/IPv6 dual-stack
+
+- [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
+- [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 153 file assignments covering 125 unique paths, entry/exit gates, Stage 1 next. Voice/P2P redesign remains deferred.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative next action, unchanged `v0.6.0_1` package and pending evidence.
+
 ## Level 2 — current v0.6.x full release
 
 - [v0.6.0 full release plan](releases/v0.6.0.md) — authorized second-component rollover and package/Pages gates.

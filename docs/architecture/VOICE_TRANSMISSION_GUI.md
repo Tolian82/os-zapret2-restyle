@@ -1,5 +1,7 @@
 # «Передача голоса» — ТЗ страницы и общий backend
 
+> **Current priority cross-reference (28 October 2026):** The [new owner-approved dual-stack/Exclude IPSet specification](ZAPRET2_EXCLUDE_IPSET_SPEC.md) and [its staged plan](ZAPRET2_EXCLUDE_IPSET_PLAN.md) supersede the IPv4-only **future target** in this historical Voice specification. The existing published implementation and page layout remain unchanged until the new task's source stages are delivered. All user-managed Voice IPSETs will forbid explicit/effective `0.0.0.0/0` and `::/0`; new UDP-port fields, the Voice IPv6 checkbox, destination-any P2P profiles/rules and non-STUN media expansions are **deferred**. The one shared Voice/Strategies Config/Apply/IPFW runtime is retained. This note is an implementation target, not a live acceptance claim.
+
 **Текущий этап: `v0.5.3`, исправление отказа GUI в опубликованном `v0.5.2_194`.** Frontend, компоновка, поля и функциональная приёмка разделов 1–11 сохранены. Общая backend архитектура утверждена в [разделе 12](#12-общий-backend-со-стратегиями-утверждено-13102026); подробные изменения и контроль — в [плане v0.5.3](VOICE_TRANSMISSION_COMPLETION_PLAN.md).
 
 Ревизионные отчёты/private история вынесены в [полный исторический снимок](../history/stages/v0.5.1/VOICE_TRANSMISSION_GUI.md). Они не являются дополнительными текущими requirements или очередью реализации. Реализация в feature-коде не равна подтверждённой owner-live приёмке.
