@@ -1,8 +1,8 @@
 # Dual-stack IPv4/IPv6 and Exclude IPSet — staged, per-file development plan
 
 **Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
-**Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 is next**; stages 2–8 are not yet implemented. Stage 0 was documentation publication.
-**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current source/CI-qualified but unpublished development identity: `VERSION=0.6.1`, `PLUGIN_REVISION=1`.
+**Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 is in progress at development candidate `v0.6.1_2`**; its current source changes are not yet CI/installed qualified. Stages 3–8 are not yet implemented. Stage 0 was documentation publication.
+**Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current Stage-2 source candidate (unqualified/unpublished): `VERSION=0.6.1`, `PLUGIN_REVISION=2`.
 **Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Later packaged-source patches increment `PLUGIN_REVISION`; any stable full release still requires separate explicit owner approval.
 
 ## 0. Execution rules and scope

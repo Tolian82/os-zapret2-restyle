@@ -8,6 +8,7 @@ config_load()
         return 1
     fi
     . "${_config_path}"
+    EXCLUDE_IPSET="${EXCLUDE_IPSET:-}"
 }
 
 # An ordinary Strategies-only start cannot apply saved native Voice profiles

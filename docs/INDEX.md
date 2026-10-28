@@ -20,7 +20,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stage 1 source/CI closed and Stage 2 next. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_1` source/CI-qualified state and Stage 2 handoff; the published stable `v0.6.0_1` package is unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_2` development candidate (Stage 2 source in progress); the published stable `v0.6.0_1` package is unchanged.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — exact source-only candidate, implementation limits and no release authority.
 

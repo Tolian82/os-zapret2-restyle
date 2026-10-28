@@ -14,6 +14,7 @@ use OPNsense\Core\Config;
 
 require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
+require_once __DIR__ . '/IPSetPolicyBridge.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -25,6 +26,7 @@ class SettingsController extends ApiMutableModelControllerBase
         'telegramips' => 'Telegram IPs',
         'userdomains' => 'User Domains',
         'excludedomains' => 'Exclude Domains',
+        'excludeipset' => 'Exclude IPSet',
     ];
 
     private function validationFailure(string $field, string $message): array
@@ -146,60 +148,6 @@ class SettingsController extends ApiMutableModelControllerBase
         return [implode("\n", $normalized), $changed, $duplicates];
     }
 
-    private function normalizeIpList(string $text, string $label): array
-    {
-        $normalized = [];
-        $seen = [];
-        $changed = 0;
-        $duplicates = 0;
-
-        foreach (preg_split('/\R/u', $text) as $index => $raw) {
-            $lineNo = $index + 1;
-            $value = trim(trim($raw), ',;:');
-            if ($value === '') {
-                continue;
-            }
-            $canonical = $value;
-
-            if (strpos($value, '/') !== false) {
-                [$address, $prefixText] = array_pad(explode('/', $value, 2), 2, null);
-                if (
-                    filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false ||
-                    $prefixText === null || !preg_match('/^(?:[0-9]|[12][0-9]|3[0-2])$/', $prefixText)
-                ) {
-                    throw new \InvalidArgumentException(
-                        sprintf("%s, line %d: invalid IPv4 address or CIDR '%s'", $label, $lineNo, $raw)
-                    );
-                }
-                $prefix = (int)$prefixText;
-                $ip = (int)sprintf('%u', ip2long($address));
-                $mask = $prefix === 0 ? 0 : ((0xFFFFFFFF << (32 - $prefix)) & 0xFFFFFFFF);
-                if (($ip & $mask) !== $ip) {
-                    throw new \InvalidArgumentException(
-                        sprintf("%s, line %d: CIDR contains host bits ('%s')", $label, $lineNo, $raw)
-                    );
-                }
-                $canonical = long2ip($ip) . '/' . $prefix;
-            } elseif (filter_var($value, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
-                throw new \InvalidArgumentException(
-                    sprintf("%s, line %d: invalid IPv4 address or CIDR '%s'", $label, $lineNo, $raw)
-                );
-            }
-
-            if ($canonical !== trim($raw)) {
-                $changed++;
-            }
-            if (isset($seen[$canonical])) {
-                $duplicates++;
-                continue;
-            }
-            $seen[$canonical] = true;
-            $normalized[] = $canonical;
-        }
-
-        return [implode("\n", $normalized), $changed, $duplicates];
-    }
-
     private function backendFailureMessage(string $fallback): string
     {
         $stageFile = '/var/run/zapret2-execution.status';
@@ -250,12 +198,31 @@ class SettingsController extends ApiMutableModelControllerBase
                     $current, $post, $sync['telegramips_baseline']
                 );
                 $preflightStage = 'normalization';
-                // Normalize exactly the same editable target lists as the
-                // previous Strategies Apply, but only in a detached payload.
+                // Native Python is the only IP/CIDR grammar. This read-only
+                // preflight inspects all six user lists once and does not
+                // write any Config, target file, engine or firewall state.
+                try {
+                    $ipset = IPSetPolicyBridge::inspect(
+                        IPSetPolicyBridge::allFromHostlist($plan['candidate']['hostlist'] ?? [])
+                    );
+                } catch (\InvalidArgumentException $error) {
+                    foreach (['Telegram IPs' => 'telegramips', 'DISCORD IPs' => 'discordips',
+                        'X IPs' => 'xips', 'SIP IPs' => 'sipips', 'CUSTOM IPs' => 'customips',
+                        'Exclude IPSet' => 'excludeipset'] as $label => $field) {
+                        if (str_contains($error->getMessage(), $label)) {
+                            return $this->validationFailure($field, $error->getMessage());
+                        }
+                    }
+                    return $this->validationFailure('excludeipset', $error->getMessage());
+                }
+                // Domain lists stay domain-only and never enter Python IPSETs.
                 foreach (self::TARGET_FIELDS as $field => $label) {
                     $raw = (string)($plan['candidate']['hostlist'][$field] ?? '');
-                    if ($field === 'telegramips') {
-                        [$value, $changed, $duplicates] = $this->normalizeIpList($raw, $label);
+                    if ($field === 'telegramips' || $field === 'excludeipset') {
+                        $name = $field === 'excludeipset' ? 'exclude' : 'telegram';
+                        $value = $ipset['lists'][$name]['normalized'];
+                        $changed = ($value !== rtrim(str_replace(["\r\n", "\r"], "\n", $raw), "\n")) ? 1 : 0;
+                        $duplicates = 0;
                     } else {
                         [$value, $changed, $duplicates] = $this->normalizeDomainList($raw, $label);
                     }

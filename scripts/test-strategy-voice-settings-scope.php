@@ -43,20 +43,22 @@ $current = [
         'mode' => 'auto', 'telegramips' => '91.108.0.0/16',
         'discordips' => '203.0.113.0/24', 'xips' => '192.0.2.0/24',
         'sipips' => '', 'customips' => '198.51.100.0/24',
-        'excludedomains' => 'nalog.ru',
+        'excludedomains' => 'nalog.ru', 'excludeipset' => '',
     ],
 ];
 
 $post = [
     'general' => ['enabled' => '0', 'waninterface' => 'WAN'],
     'strategy' => ['trafficargs' => '--filter-udp=596-599'],
-    'hostlist' => ['mode' => 'list', 'telegramips' => '91.108.13.10'],
+    'hostlist' => ['mode' => 'list', 'telegramips' => '91.108.13.10',
+        'excludeipset' => "192.0.2.0/24\n2001:db8::/32"],
 ];
 $expected = $current;
 $expected['general']['enabled'] = '0';
 $expected['strategy']['trafficargs'] = '--filter-udp=596-599';
 $expected['hostlist']['mode'] = 'list';
 $expected['hostlist']['telegramips'] = '91.108.13.10';
+$expected['hostlist']['excludeipset'] = "192.0.2.0/24\n2001:db8::/32";
 
 assertSameDeep($expected, StrategySettingsPayload::overlay($current, $post),
     'Strategies overlay must update submitted values and retain Voice/legacy/unrelated lists');

@@ -132,6 +132,40 @@ def single(source: Path, target: Path, label: str) -> None:
     target.write_text(content, encoding="utf-8")
 
 
+def inspect(payload: object) -> dict:
+    """Read-only semantic preview for GUI preflight, not an Apply authority.
+
+    Uses the SAME parse_ipset invoked by the native batch. No file paths,
+    Config, IPFW, proxy, network calls or auxiliary address parser.
+    """
+    if not isinstance(payload, dict) or set(payload) != set(LISTS):
+        raise IPSetError("expected exactly six named IPSET strings")
+    result: dict[str, dict] = {}
+    networks: dict[str, dict[int, list]] = {}
+    for name in LISTS:
+        raw = payload[name]
+        if not isinstance(raw, str):
+            raise IPSetError(f"{LABELS[name]} must be a text list")
+        output, proof = parse_ipset(raw.encode("utf-8"), LABELS[name],
+                                  collapse=name == "exclude")
+        result[name] = {"normalized": output.rstrip("\n"), **proof}
+        networks[name] = {
+            family: [ipaddress.ip_network(value) for value in proof["union"][f"ipv{family}"]]
+            for family in (4, 6)
+        }
+    overlapping = []
+    for index, left in enumerate(LISTS[:-1]):
+        for right in LISTS[index + 1:-1]:
+            if any(
+                first.overlaps(second)
+                for family in (4, 6)
+                for first in networks[left][family]
+                for second in networks[right][family]
+            ):
+                overlapping.append([left, right])
+    return {"schema_version": SCHEMA_VERSION, "lists": result, "overlaps": overlapping}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -141,9 +175,19 @@ def main(argv: list[str] | None = None) -> int:
     many = sub.add_parser("batch", help="compile exactly six lists and a manifest")
     for positional in ("input_root", "managed_root", "manifest"):
         many.add_argument(positional)
+    sub.add_parser("inspect", help="read-only six-list JSON stdin preflight")
     args = parser.parse_args(argv)
     try:
-        if args.command == "single":
+        if args.command == "inspect":
+            raw = sys.stdin.buffer.read(6 * MAX_BYTES + 16384 + 1)
+            if len(raw) > 6 * MAX_BYTES + 16384:
+                raise IPSetError("bounded inspect request exceeded")
+            try:
+                payload = json.loads(raw)
+            except (ValueError, UnicodeError) as exc:
+                raise IPSetError("invalid IPSET inspection request") from exc
+            print(json.dumps(inspect(payload), separators=(",", ":")))
+        elif args.command == "single":
             single(Path(args.source), Path(args.target), args.label)
         else:
             batch(Path(args.input_root), Path(args.managed_root), Path(args.manifest))

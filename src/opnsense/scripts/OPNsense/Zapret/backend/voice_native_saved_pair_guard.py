@@ -32,6 +32,7 @@ BLOCKS = (
     ("CUSTOM_IPS", "hostlist/customips"),
     ("USER_DOMAINS", "hostlist/userdomains"),
     ("EXCLUDE_DOMAINS", "hostlist/excludedomains"),
+    ("EXCLUDE_IPSET", "hostlist/excludeipset"),
 )
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 MAX_XML = 4 * 1024 * 1024

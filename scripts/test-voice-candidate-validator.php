@@ -47,6 +47,8 @@ check(VoiceCandidateValidator::check($empty) === [], 'All OFF with empty paramet
 $empty['voice']['discord']['args'] = "incomplete\n--new";
 check(VoiceCandidateValidator::check($empty) === [], 'Disabled draft remains editable/untested');
 
+check(VoiceCandidateValidator::check(active(data(), 'telegram', "2001:db8::1\n::")) === [],
+    'IPv6 destinations are accepted in read-only GUI preflight');
 $telegram = active(data(), 'telegram', "91.108.0.0/16\n91.108.13.10\n91.108.13.10");
 check(VoiceCandidateValidator::check($telegram) === [], 'Telegram fake-free native STUN candidate');
 
@@ -62,8 +64,8 @@ $conflict['voice']['discord']['args'] =
     "--filter-udp=40000\n--filter-l7=stun\n--payload=stun";
 check(VoiceCandidateValidator::check($conflict) === [], 'Disjoint UDP ports allow overlapping IPs');
 
-foreach (["91.108.13.10/24","2001:db8::1","1.2.3.4/33","127.0.0.1;echo foo"] as $ip) {
-    invalid(active(data(),'telegram',$ip),'zapret.hostlist.telegramips','reject invalid IPv4/CIDR');
+foreach (["91.108.13.10/24","2001:db8::1/64","1.2.3.4/33","127.0.0.1;echo foo","::/0","0.0.0.0/1\n128.0.0.0/1"] as $ip) {
+    invalid(active(data(),'telegram',$ip),'zapret.hostlist.telegramips','reject invalid IPv4/IPv6/CIDR');
 }
 invalid(active(data(),'telegram',''),'zapret.hostlist.telegramips','empty IPSET forbidden for enabled service');
 

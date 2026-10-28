@@ -9,7 +9,7 @@
         <text><![CDATA[
             This page configures outgoing STUN / UDP interception through the existing Zapret2 engine. Voice always uses the WAN selected on the Strategies page; change it there.
             Use Apply to validate, save and activate enabled or disabled Voice profiles with the shared runtime/IPFW transaction. Save inactive draft only stores all-OFF Voice settings without a service restart; Validate checks syntax without saving. All enabled Voice profiles use shared Apply; there is no separate Voice service or migration action.
-            Each enabled profile requires a nonempty IPv4/CIDR destination IPSET and native dvtws2 parameters.
+            Each enabled profile requires a nonempty IPv4/IPv6 CIDR destination IPSET and native dvtws2 parameters.
             Non-STUN strategies remain on the Strategy page. A profile being enabled does not prove a working voice call.
         ]]></text>
     </field>
@@ -24,7 +24,7 @@
         <label>Telegram Parameters</label>
         <type>textbox</type>
         <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.discord.enabled</id>
@@ -37,7 +37,7 @@
         <label>Discord Parameters</label>
         <type>textbox</type>
         <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.x.enabled</id>
@@ -50,7 +50,7 @@
         <label>X (Twitter) Parameters</label>
         <type>textbox</type>
         <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.sip.enabled</id>
@@ -63,7 +63,7 @@
         <label>SIP (VoIP) Parameters</label>
         <type>textbox</type>
         <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.custom.enabled</id>
@@ -76,7 +76,7 @@
         <label>Custom Parameters</label>
         <type>textbox</type>
         <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, IPv4 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
     </field>
     <field>
         <type>header</type>
@@ -86,35 +86,35 @@
         <id>zapret.hostlist.telegramips</id>
         <label>IPSET Telegram</label>
         <type>textbox</type>
-        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
-            These targets are also available to ordinary Strategies as <code>&lt;IPSET:telegram&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+        <help><![CDATA[Shared IPv4/IPv6 address or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:telegram&gt;</code>. No hostnames, /0, effective full-family unions or implicit <code>to any</code>.]]></help>
     </field>
     <field>
         <id>zapret.hostlist.discordips</id>
         <label>IPSET Discord</label>
         <type>textbox</type>
-        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
-            These targets are also available to ordinary Strategies as <code>&lt;IPSET:discord&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+        <help><![CDATA[Shared IPv4/IPv6 address or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:discord&gt;</code>. No hostnames, /0, effective full-family unions or implicit <code>to any</code>.]]></help>
     </field>
     <field>
         <id>zapret.hostlist.xips</id>
         <label>IPSET X (Twitter)</label>
         <type>textbox</type>
-        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
-            These targets are also available to ordinary Strategies as <code>&lt;IPSET:x&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+        <help><![CDATA[Shared IPv4/IPv6 address or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:x&gt;</code>. No hostnames, /0, effective full-family unions or implicit <code>to any</code>.]]></help>
     </field>
     <field>
         <id>zapret.hostlist.sipips</id>
         <label>IPSET SIP (VoIP)</label>
         <type>textbox</type>
-        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
-            These targets are also available to ordinary Strategies as <code>&lt;IPSET:sip&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+        <help><![CDATA[Shared IPv4/IPv6 address or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:sip&gt;</code>. No hostnames, /0, effective full-family unions or implicit <code>to any</code>.]]></help>
     </field>
     <field>
         <id>zapret.hostlist.customips</id>
         <label>IPSET Custom</label>
         <type>textbox</type>
-        <help><![CDATA[Shared IPv4 or CIDR targets, one per line. Required when the corresponding service is enabled.
-            These targets are also available to ordinary Strategies as <code>&lt;IPSET:custom&gt;</code>. No IPv6, hostnames or implicit <code>to any</code>.]]></help>
+        <help><![CDATA[Shared IPv4/IPv6 address or CIDR targets, one per line. Required when the corresponding service is enabled.
+            These targets are also available to ordinary Strategies as <code>&lt;IPSET:custom&gt;</code>. No hostnames, /0, effective full-family unions or implicit <code>to any</code>.]]></help>
     </field>
 </form>
