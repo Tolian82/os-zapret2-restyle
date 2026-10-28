@@ -20,10 +20,11 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative `v0.6.1_7` source correction for `_6` owner-installed POST-INSTALL Error 70; CI/package still pending; installed acceptance still open; Stage 5 installed IPFW gate OPEN; the published stable `v0.6.0_1` package is unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — authoritative published `v0.6.1_7` corrective testing package after owner-installed `_6` POST-INSTALL Error 70; Project/Voice/FreeBSD15 CI passed; installed acceptance still open; Stage 5 installed IPFW gate OPEN; the published stable `v0.6.0_1` package is unchanged.
 
-- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — `_7` correction candidate (unpublished), previous `_6` and `_5` testing prereleases; no stable-release authority.
+- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — published `_7` correction and historical `_6` / `_5` testing prereleases; no stable-release authority.
 
+- [Published `v0.6.1_7` correction testing package evidence](verification/evidence/testing-publications/v0.6.1_7.md) — exact tag/source, FreeBSD15 asset, SHA-256 and no stable repo promotion; owner-installed service startup still OPEN.
 - [Published `v0.6.1_6` corrective testing package evidence](verification/evidence/testing-publications/v0.6.1_6.md) — SHA-256, immutable source, FreeBSD15 asset and no stable repo promotion; `_6` owner-installed service startup pending.
 - [Published `v0.6.1_5` testing package evidence](verification/evidence/testing-publications/v0.6.1_5.md) — source/tag, asset URL, SHA-256, FreeBSD15 manifest and no stable repo promotion.
 - [Stage 5 installed OPNsense read-only evidence procedure](verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md) — exact future `0.6.1_7` prerequisite, existing native Voice observer, two safe snapshots, counter uncertainty and unclosed installed acceptance.
