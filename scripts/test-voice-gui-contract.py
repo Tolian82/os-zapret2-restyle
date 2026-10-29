@@ -246,6 +246,44 @@ def main() -> None:
           "Предварительная проверка настроек не пройдена" in strategies_script.group(1) and
           "localizeStrategiesApplyError(data.message)" in strategies_script.group(1),
           "Strategies Apply must restore RU locale on safe rejection")
+        # Execute the actual RU/EN browser helper: a static phrase
+        # assertion alone would not have caught the untranslated dialog.
+        normalization_helper = re.search(
+            r"        function localizeStrategiesNormalizationSummary\(lines\) \{.*?^        \}",
+            strategies_script.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(normalization_helper is not None and
+              "title: isRussian ? 'Настройки нормализованы'" in strategies_script.group(1) and
+              "localizeStrategiesNormalizationSummary(data.normalization)" in strategies_script.group(1),
+              "Strategies normalization notice RU translation or wiring missing")
+        localization_js = (
+            "let isRussian=true;\n" + normalization_helper.group(0) + "\n"
+            "const cases=[\n"
+            "['Exclude IPSet: normalized 1, removed duplicates 0', 'Исключить IPSet: нормализовано 1, удалено повторов 0'],\n"
+            "['Telegram IPs: normalized 0, removed duplicates 2', 'IPSET Telegram: нормализовано 0, удалено повторов 2'],\n"
+            "['YouTube Domains: normalized 2, removed duplicates 3', 'Домены YouTube: нормализовано 2, удалено повторов 3'],\n"
+            "['User Domains: normalized 3, removed duplicates 0', 'Пользовательские домены: нормализовано 3, удалено повторов 0'],\n"
+            "['Exclude Domains: normalized 1, removed duplicates 1', 'Исключить домены: нормализовано 1, удалено повторов 1']\n"
+            "];\n"
+            "for(const [source, expected] of cases){\n"
+            "  if(localizeStrategiesNormalizationSummary([source])[0]!==expected)\n"
+            "    throw Error('RU normalization mismatch: '+source);\n"
+            "}\n"
+            "const unknown='Future Label: normalized 1, removed duplicates 0';\n"
+            "if(localizeStrategiesNormalizationSummary([unknown])[0]!==unknown)\n"
+            "  throw Error('Unrecognized API summary modified');\n"
+            "isRussian=false;\n"
+            "for(const [source] of cases){\n"
+            "  if(localizeStrategiesNormalizationSummary([source])[0]!==source)\n"
+            "    throw Error('English normalization summary modified');\n"
+            "}\n"
+        )
+        localization_run = subprocess.run(
+            ["node", "-"], input=localization_js, text=True,
+            capture_output=True, check=False,
+        )
+        check(localization_run.returncode == 0,
+              "Strategies RU/EN normalization dialog: " + localization_run.stderr)
         check("strategiesApplyPending" in strategies_script.group(1) and
               "strategiesApplyNeedsReview" in strategies_script.group(1) and
               "data.requires_review === true" in strategies_script.group(1) and
