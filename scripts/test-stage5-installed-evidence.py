@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import redirect_stdout
+import io
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -125,6 +128,35 @@ class InstalledEvidenceTests(unittest.TestCase):
             alias.symlink_to(regular)
             with self.assertRaises(evidence.EvidenceError):
                 evidence._read_snapshot(str(alias), "symlink")
+
+    def test_collect_uses_actual_python311_or_313_without_new_interpreter(self):
+        # Owner's diagnostic host has python3.11, not python3.13.
+        # Before the fix, collect() required the absent hard-coded 3.13 path.
+        for executable in ("/usr/local/bin/python3.11", "/usr/local/bin/python3.13"):
+            with self.subTest(executable=executable):
+                responses = (
+                    subprocess.CompletedProcess([], 0, b"0.6.1_12\n", b""),
+                    subprocess.CompletedProcess([], 0, json.dumps(snapshot()).encode(), b""),
+                )
+                with patch.object(evidence.platform, "system", return_value="FreeBSD"), \
+                     patch.object(evidence.os, "geteuid", return_value=0), \
+                     patch.object(evidence.sys, "executable", executable), \
+                     patch.object(evidence.Path, "is_file", return_value=True), \
+                     patch.object(evidence.subprocess, "run", side_effect=responses) as commands, \
+                     redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(0, evidence.collect())
+                self.assertEqual([executable, evidence.INSTALLED_INSPECTOR],
+                                 commands.call_args_list[1].args[0])
+                self.assertEqual("ready", json.loads(output.getvalue())["state"])
+
+    def test_collect_refuses_missing_running_interpreter_without_inspection(self):
+        with patch.object(evidence.platform, "system", return_value="FreeBSD"), \
+             patch.object(evidence.os, "geteuid", return_value=0), \
+             patch.object(evidence.Path, "is_file", return_value=False), \
+             patch.object(evidence.subprocess, "run") as commands:
+            with self.assertRaisesRegex(evidence.EvidenceError, "Python or Voice"):
+                evidence.collect()
+            commands.assert_not_called()
 
     def test_collect_does_not_run_commands_on_non_freebsd(self):
         with patch.object(evidence.platform, "system", return_value="Linux"), \
