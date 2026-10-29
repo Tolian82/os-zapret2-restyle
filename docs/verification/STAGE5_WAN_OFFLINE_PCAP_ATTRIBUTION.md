@@ -40,6 +40,8 @@ Example `flow.json` **for the synthetic IPv4 test fixture only**, not an attesta
 
 To test IPv6, use an IPv6 remote and the *same-family* IPv6 source. The supplied interface name and domain are **declarations** (not verified provenance). Normal run outputs `OFFLINE_CAPTURE_ATTRIBUTION_ONLY`, not `PASS`. On errors the script stops with nonzero exit and `WAN_PCAP_ATTRIBUTION=UNVERIFIED`; it does not reinterpret a parser error as missing DPI bypass.
 
+The planned [WAN acquisition argument generator](STAGE5_WAN_ACQUISITION_PLAN.md) can produce the precise two-phase manifest consumed here, but **does not capture packets or prove their provenance**. The independent owner-live controller and GUI approval remain separate open gates.
+
 ## Verification and what comes next
 
 The included [focused no-network matrix](../../scripts/test-stage5-wan-pcap-attribution.py) uses synthetic IPv4/IPv6 Ethernet/TCP PCAPs; it covers VLAN, little/big endian, strict five-tuples, reverse/unrelated packet rejection, differing payload observations, changing initial TCP sequence number, duplicate retransmit/conflict handling, wrong family/schema, unsafe files, malformed PCAP/record truncation, IPv4 fragments and IPv6 extension refusal. **Local Python syntax and 13 focused tests executed successfully before PR, and [PR #722 exact-head Project/Voice/FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40908965260) passed; no real WAN packets were observed.**
