@@ -97,16 +97,11 @@ def actual_tcp_once(controller, analyzer, family: int, directory: Path) -> None:
                     peer.sendall(b'local-response')
                     if client.recv(128) != b'local-response':
                         raise RuntimeError('native loopback reply not delivered')
-            # FreeBSD BPF can defer packet delivery even with tcpdump -U.
-            # Allow a bounded window to observe native file growth, instead of
-            # treating a 250 ms snapshot as a reliable flush deadline.
-            flush_deadline = time.monotonic() + 3
-            while time.monotonic() < flush_deadline:
-                if path.is_file() and path.stat().st_size > 24:
-                    break
-                if proc.poll() is not None:
-                    raise RuntimeError('native tcpdump exited while awaiting packet flush')
-                time.sleep(.1)
+            # Exercise the actual owner-controller wait, not a duplicate test
+            # loop: -U does not guarantee immediate FreeBSD kernel BPF delivery.
+            if not controller.wait_for_packet_flush(
+                    proc, path, deadline=time.monotonic() + 3):
+                raise RuntimeError('native BPF record was not flushed within bound')
         finally:
             controller.terminate(proc)
             if proc.poll() is None:
