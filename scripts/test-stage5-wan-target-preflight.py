@@ -81,6 +81,32 @@ class WANPreflightTests(unittest.TestCase):
         ips = ['142.251.127.' + str(i) for i in range(1, 9)] + ['2001:4860:4860::8888']
         self.assertIn('ipv6', [x['family'] for x in select(ips)['candidates']])
 
+    def test_profile_l3_restricts_candidate_family(self):
+        flag = m.EXPECTED_EXCLUDE_TOKEN
+        def seg(_):
+            return [[flag, '--filter-tcp=443', '--filter-l7=tls', '--filter-l3=ipv4']]
+        rows = m.profile_summary('ignored', (seg, lambda _: ({}, ['profile']),
+                                             lambda x, _: x, lambda x: x))
+        self.assertEqual(('ipv4',), rows[0]['families'])
+        eligible = dict(rows[0], ordinary=True,
+                        hostlists=(str(m.MANAGED / 'hostlist-user.txt'),))
+        r = m.classify({'installed_plugin_version': '0.6.1_12', 'state': 'ready'},
+                       [eligible], lists(), [], {},
+                       resolver=lambda _: [ip('2001:4860:4860::8888')],
+                       route_lookup=lambda _: {'status': 'ROUTE_PRESENT', 'interface': 'vtnet1'},
+                       domains=('yt3.ggpht.com',))
+        self.assertEqual('NO_ELIGIBLE_CONTROL_FOUND', r['selection'])
+
+    def test_configured_voice_wan_mismatch_is_rejected(self):
+        snapshot = {'installed_plugin_version': '0.6.1_12', 'state': 'ready',
+                    'runtime': {'services': {
+                        'telegram': {'configured': True, 'wan': 'vtnet1'}}}}
+        r = m.classify(snapshot, profiles(), lists(), [], {},
+                       resolver=lambda _: [ip('142.251.127.198')],
+                       route_lookup=lambda _: {'status': 'ROUTE_PRESENT', 'interface': 'vtnet2'},
+                       domains=('yt3.ggpht.com',))
+        self.assertEqual('NO_ELIGIBLE_CONTROL_FOUND', r['selection'])
+
     def test_voice_overlap_forbids_candidate(self):
         voice = {'telegram': [ipaddress.ip_network('142.251.0.0/16')]}
         self.assertEqual('NO_ELIGIBLE_CONTROL_FOUND',
