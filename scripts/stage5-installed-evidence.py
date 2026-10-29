@@ -22,7 +22,6 @@ import sys
 INSTALLED_INSPECTOR = (
     "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py"
 )
-INSTALLED_PYTHON = "/usr/local/bin/python3.13"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 MAX_SNAPSHOT = 262144
 REQUIRED_INSTALLED_VERSION = "0.6.1_12"
@@ -154,7 +153,7 @@ def collect() -> int:
     """Run only the already-installed, read-only native status inspector."""
     if platform.system() != "FreeBSD" or os.geteuid() != 0:
         raise EvidenceError("collect requires installed FreeBSD/OPNsense root")
-    if not Path(INSTALLED_PYTHON).is_file() or not Path(INSTALLED_INSPECTOR).is_file():
+    if not Path(sys.executable).is_file() or not Path(INSTALLED_INSPECTOR).is_file():
         raise EvidenceError("installed Python or Voice native inspector unavailable")
     pkg = subprocess.run(
         ["/usr/sbin/pkg", "query", "%v", "os-zapret2-restyle"],
@@ -163,7 +162,7 @@ def collect() -> int:
     if pkg.returncode != 0 or pkg.stdout.decode("ascii", "replace").strip() != REQUIRED_INSTALLED_VERSION:
         raise EvidenceError("required 0.6.1_12 testing package is not installed")
     result = subprocess.run(
-        [INSTALLED_PYTHON, INSTALLED_INSPECTOR],
+        [sys.executable, INSTALLED_INSPECTOR],
         capture_output=True, check=False, timeout=30,
     )
     if result.returncode != 0:
