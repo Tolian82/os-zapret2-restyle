@@ -35,7 +35,7 @@ def snapshot(packets=12, bytes_=1100):
     return {
         "state": "ready", "source": "native-common",
         "config_digest": "a" * 64,
-        "installed_plugin_version": "0.6.1_6",
+        "installed_plugin_version": "0.6.1_12",
         "rule_count": 3, "table_count": 1,
         "runtime": {
             "state": "running", "engine_verified": True,
@@ -74,7 +74,7 @@ class InstalledEvidenceTests(unittest.TestCase):
             ("config_digest", "b" * 64),
             ("rule_count", 4),
             ("table_count", 2),
-            ("installed_plugin_version", "0.6.0_1"),
+            ("installed_plugin_version", "0.6.1_6"),
         ]:
             with self.subTest(key=key):
                 after = snapshot()
