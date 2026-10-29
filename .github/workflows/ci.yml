@@ -247,6 +247,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Parse production-rendered Zapret shell before costly validation
+        run: |
+          python3.13 -m pip install --disable-pip-version-check 'Jinja2==3.1.6'
+          python3.13 -m py_compile scripts/test-native-template-heredoc.py
+          python3.13 scripts/test-native-template-heredoc.py
+
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils php-cli
 
