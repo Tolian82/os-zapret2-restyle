@@ -28,7 +28,7 @@
 - [Published `v0.6.1_7` correction testing package evidence](verification/evidence/testing-publications/v0.6.1_7.md) — exact tag/source, FreeBSD15 asset, SHA-256 and no stable repo promotion; owner-installed service startup still OPEN.
 - [Published `v0.6.1_6` corrective testing package evidence](verification/evidence/testing-publications/v0.6.1_6.md) — SHA-256, immutable source, FreeBSD15 asset and no stable repo promotion; `_6` owner-installed service startup pending.
 - [Published `v0.6.1_5` testing package evidence](verification/evidence/testing-publications/v0.6.1_5.md) — source/tag, asset URL, SHA-256, FreeBSD15 manifest and no stable repo promotion.
-- [Stage 5 installed OPNsense read-only evidence procedure](verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md) — the exact `0.6.1_7` installed native baseline and version-pinned evidence tool (not an `_8` GUI acceptance test), existing native Voice observer, two safe snapshots, counter uncertainty and unclosed installed acceptance.
+- [Stage 5 installed OPNsense read-only evidence procedure](verification/STAGE5_INSTALLED_OPNSENSE_READONLY.md) — current owner-installed `0.6.1_12` one-shot read-only IPv6 eligibility preflight, existing native Voice inspector and historic two-snapshot counter comparison. Neither can close actual WAN packet or Voice acceptance.
 
 ## Level 2 — current v0.6.x full release
 
