@@ -1,6 +1,6 @@
 # Stage 5 — offline WAN TCP PCAP attribution, without live changes
 
-**Status (29 October 2026): source + isolated fixture tests, installed OPNsense execution OPEN.** This is a read-only evidence-processing building block, not a live packet collector or automatic Exclude IPSet A/B implementation. Stable `v0.6.0`, published `v0.6.1_12` and existing service/Config/IPFW remain unchanged.
+**Status (29 October 2026): source/CI-qualified in [PR #722 Project/Voice/FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40908965260); installed OPNsense execution and on-WAN packet proof OPEN.** This is a read-only evidence-processing building block, not a live packet collector or automatic Exclude IPSet A/B implementation. Stable `v0.6.0`, published `v0.6.1_12` and existing service/Config/IPFW remain unchanged.
 
 ## User-visible scenario and proof scope
 
@@ -42,6 +42,6 @@ To test IPv6, use an IPv6 remote and the *same-family* IPv6 source. The supplied
 
 ## Verification and what comes next
 
-The included [focused no-network matrix](../../scripts/test-stage5-wan-pcap-attribution.py) uses synthetic IPv4/IPv6 Ethernet/TCP PCAPs; it covers VLAN, little/big endian, strict five-tuples, reverse/unrelated packet rejection, differing payload observations, changing initial TCP sequence number, duplicate retransmit/conflict handling, wrong family/schema, unsafe files, malformed PCAP/record truncation, IPv4 fragments and IPv6 extension refusal. **Local Python syntax and 13 focused tests executed successfully before PR; GitHub CI evidence must be recorded separately.**
+The included [focused no-network matrix](../../scripts/test-stage5-wan-pcap-attribution.py) uses synthetic IPv4/IPv6 Ethernet/TCP PCAPs; it covers VLAN, little/big endian, strict five-tuples, reverse/unrelated packet rejection, differing payload observations, changing initial TCP sequence number, duplicate retransmit/conflict handling, wrong family/schema, unsafe files, malformed PCAP/record truncation, IPv4 fragments and IPv6 extension refusal. **Local Python syntax and 13 focused tests executed successfully before PR, and [PR #722 exact-head Project/Voice/FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40908965260) passed; no real WAN packets were observed.**
 
 Next steps are to confirm a safe real packet-acquisition plan (bounded duration, known interface, controlled source IP/port, preservation of raw PCAP **locally only**), source attribution to an actually active strategy and a defensible baseline-Lua modification witness. Only **then**, after explicit owner permission and a proven restoration path, run one consolidated A/B GUI Apply trial under the [existing installed WAN protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md). If such proof cannot be obtained, Stage 5 installed and A07/A08 remain OPEN.
