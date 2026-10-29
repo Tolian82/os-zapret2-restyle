@@ -18,6 +18,7 @@ jobs:
     outputs:
       package: ${{ steps.paths.outputs.package }}
       docs_only: ${{ steps.paths.outputs.docs_only }}
+      native_wan_process: ${{ steps.paths.outputs.native_wan_process }}
 
     steps:
       - uses: actions/checkout@v6
@@ -71,6 +72,11 @@ jobs:
             package=true
           fi
 
+          native_wan_process=false
+          if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py)$'; then
+            native_wan_process=true
+          fi
+          echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
           echo "docs_only=${docs_only}" >> "${GITHUB_OUTPUT}"
           echo "package=${package}" >> "${GITHUB_OUTPUT}"
 
@@ -655,7 +661,7 @@ jobs:
 
   native-ipfw-table:
     name: Isolated FreeBSD 15.1 native IPFW tables and IPv6 UDP divert
-    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.package == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.native_wan_process == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
 
@@ -669,6 +675,16 @@ jobs:
           prepare: pkg install -y python313 git luajit pkgconf
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-process-continuity.py
+            process_witness_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_PROCESS_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-process-continuity.py 2>&1)" || {
+              printf '%s\n' "$process_witness_output"
+              exit 1
+            }
+            printf '%s\n' "$process_witness_output"
+            printf '%s\n' "$process_witness_output" | grep -Fqx 'NATIVE_WAN_PROCESS_CONTINUITY=PASS: FreeBSD15.1 native PID/start-time, restart, refusal and cleanup' || {
+              echo 'Native FreeBSD 15.1 process witness must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-baseline-lifecycle.py scripts/stage5-wan-baseline-capture.py scripts/stage5-wan-pcap-attribution.py
             baseline_capture_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_BASELINE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-baseline-lifecycle.py 2>&1)" || {
               printf '%s\n' "$baseline_capture_output"

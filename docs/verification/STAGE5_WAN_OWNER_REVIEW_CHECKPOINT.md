@@ -12,9 +12,9 @@ Obtain at most **one** later, explicitly owner-approved baseline-only HTTPS requ
 
 | Field | Review requirement |
 | --- | --- |
-| Native process continuity | The same engine and supervisor PID plus process start timestamp must be attested around initial owner inspection and after the baseline; Config digest and rule-count equality alone do not establish an unchanged process instance |
+| Native process continuity | The same engine and supervisor PID plus process start timestamp must be attested around initial owner inspection and after the baseline; Config digest and rule-count equality alone do not establish an unchanged process instance. The [isolated native process test](../../scripts/test-freebsd15-native-wan-process-continuity.py) must pass before any owner-side test |
 | Appliance/package | Installed OPNsense, root, exact testing package `os-zapret2-restyle-0.6.1_12`; healthy common owner, supervisor and owned IPFW attested by the existing production inspector |
-| Tools | The exact reviewed GitHub `main` source at `3dd108412ba1a984e8b52456f05cb0ef15aa373d`, not moving `main`: `stage5-wan-acquisition-plan.py`, `stage5-wan-baseline-capture.py`, `stage5-installed-evidence.py` and `stage5-wan-pcap-attribution.py` staged adjacently; source/pinning verified before use |
+| Tools | The exact reviewed GitHub `main` source at `ed2fcd4b7d287363a2e3100e26fb53c8299eb8c8`, not moving `main`: `stage5-wan-acquisition-plan.py`, `stage5-wan-baseline-capture.py`, `stage5-installed-evidence.py` and `stage5-wan-pcap-attribution.py` staged adjacently; source/pinning verified before use |
 | Candidate | One freshly checked domain and pinned public remote address outside active global Exclude and all Voice IPSETs, demonstrably eligible for one current ordinary TLS/443 HOSTLIST profile |
 | Flow | One concrete WAN interface, a presently assigned same-family source address, and one reviewable unused local TCP source port; no hardcoded historical WAN source assumption |
 | Network | The remote route resolves to the declared WAN; `tcpdump -L` offers Ethernet `EN10MB` there; IPv6 is eligible only with a real same-family source and route |
