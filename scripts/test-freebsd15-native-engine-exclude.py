@@ -205,6 +205,11 @@ def real_native(engine: Path) -> None:
         raise RuntimeError("pinned upstream native dvtws2 binary missing")
     with tempfile.TemporaryDirectory(prefix="native-exclude-wire-") as tmp:
         root = Path(tmp)
+        # dvtws2 intentionally drops privileges to UID/GID 2147483647
+        # before loading Lua and native IPSET references. TemporaryDirectory
+        # defaults to 0700; allow traversal but never grant write access.
+        # This ephemeral tree exists ONLY inside the isolated guarded VM.
+        root.chmod(0o755)
         (root / "upstream").mkdir()
         for excluded in (False, True):
             run_phase(adapter, engine, root, excluded)
