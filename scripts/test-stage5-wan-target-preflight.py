@@ -198,6 +198,15 @@ class WANPreflightTests(unittest.TestCase):
         self.assertEqual('/usr/local/bin/python3.13', args[0][0])
         self.assertNotIn('curl', str(args))
 
+    def test_dns_resolver_retains_aaaa_among_many_A_records(self):
+        addresses = ['142.251.127.' + str(i) for i in range(1, 20)] + [
+            '2001:4860:4860::8888']
+        response = subprocess.CompletedProcess([], 0, json.dumps(addresses), '')
+        with patch.object(m.subprocess, 'run', return_value=response):
+            result = m.resolve('yt3.ggpht.com')
+        self.assertIn('2001:4860:4860::8888', [str(a) for a in result])
+        self.assertLessEqual(len(result), m.MAX_DNS_ADDRESSES)
+
     def test_route_ipv6_and_ipv4_get_are_readonly(self):
         complete = subprocess.CompletedProcess([], 0, 'route to: x\n interface: vtnet1\n', '')
         with patch.object(m.subprocess, 'run', return_value=complete) as command:
