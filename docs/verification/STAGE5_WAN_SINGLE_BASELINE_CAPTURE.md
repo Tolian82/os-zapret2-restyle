@@ -1,6 +1,6 @@
 # Stage 5 — consent-gated, single-phase WAN baseline capture
 
-**29 October 2026 · source/CI candidate, NOT executed on owner OPNsense.** The existing installed `0.6.1_12` package, Config, WAN routes, IPFW and the stable `v0.6.0` release are unchanged. This is one increment toward the [installed A/B WAN evidence protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md), **not** an A07/A08/IPv6/Voice acceptance claim.
+**29 October 2026 · source/CI-qualified in [PR #724 Project/Voice/FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40930492703), but not native-executed or owner-live.** The existing installed `0.6.1_12` package, Config, WAN routes, IPFW and the stable `v0.6.0` release are unchanged. This is one increment toward the [installed A/B WAN evidence protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md), **not** an A07/A08/IPv6/Voice acceptance claim.
 
 ## User scenario and intentionally narrow scope
 
@@ -20,7 +20,7 @@ Even a successful baseline returns `BASELINE_CAPTURE_OBSERVED_ONLY`, `exclude_ef
 
 ## Verification and remaining gates
 
-[`scripts/test-stage5-wan-baseline-capture.py`](../../scripts/test-stage5-wan-baseline-capture.py) uses fake process instances and synthetic source/route/PCAP evidence. It tests both IP families, strict plan identity, symlink/hardlink refusal, opt-in guards, read-only preflight, readiness, bounded process ordering, cleanup on unsuccessful curl, and refusal on changed Config/owner. **No real capture is executed by tests; exact GitHub CI evidence is recorded only after it runs.**
+[`scripts/test-stage5-wan-baseline-capture.py`](../../scripts/test-stage5-wan-baseline-capture.py) uses fake process instances and synthetic source/route/PCAP evidence. It tests both IP families, strict plan identity, symlink/hardlink refusal, opt-in guards, read-only preflight, readiness, bounded process ordering, cleanup on unsuccessful curl, and refusal on changed Config/owner. **The 14 fake-process tests passed in [PR #724 exact-head CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40930492703); no live tcpdump/curl capture was executed by those tests.**
 
 The controller has **not** been launched on an actual OPNsense appliance. Exact readiness syntax and FreeBSD `tcpdump -L`/capture behavior need isolated FreeBSD execution or owner-safe read-only verification before live acceptance; mocks and Python syntax cannot validate this platform boundary. A single baseline capture would still need independent proof that real dvtws/Lua altered it; only after that and separate owner approval could the excluded A/B and GUI restoration be contemplated. Stage 5 installed A07/A08, native IPv6/Voice media/FD9 acceptance stay **OPEN**.
 
