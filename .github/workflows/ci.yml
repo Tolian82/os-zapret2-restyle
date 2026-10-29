@@ -669,6 +669,16 @@ jobs:
           prepare: pkg install -y python313 git luajit pkgconf
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-baseline-lifecycle.py scripts/stage5-wan-baseline-capture.py scripts/stage5-wan-pcap-attribution.py
+            baseline_capture_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_BASELINE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-baseline-lifecycle.py 2>&1)" || {
+              printf '%s\n' "$baseline_capture_output"
+              exit 1
+            }
+            printf '%s\n' "$baseline_capture_output"
+            printf '%s\n' "$baseline_capture_output" | grep -Fqx 'NATIVE_WAN_BASELINE_LIFECYCLE=PASS: FreeBSD15.1 real lo0 IPv4/IPv6 tcpdump readiness, bounded termination, unsupported-DLT refusal and cleanup' || {
+              echo 'Native FreeBSD 15.1 tcpdump lifecycle must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
