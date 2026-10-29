@@ -22,6 +22,10 @@ The owner can attach only `/tmp/stage5-one-shot.json` if an installed check is *
 
 If the command fails, do not interpret the missing or partial output as a failed IPv6 service: read the exact `STAGE5_ONESHOT=UNVERIFIED` reason and review offline. No blind restart/Apply, IPFW flush, package reinstall or generated live testing may follow automatically.
 
+## Next controlled WAN experiment: design only
+
+The approved next design is the [same-pinned-endpoint WAN Exclude A/B protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md). It is **not yet** an executable instruction or permission to change the installed GUI Exclude IPSet. The current one-shot remains read-only: it only determines IPv6 Voice route eligibility. A future full packet experiment must first be tested offline, reviewed, and explicitly authorized for the owner's test stand.
+
 ## Remaining installed acceptance
 
 Actual IPv4/IPv6 native destination handling (including global Exclude IPSet), live WAN IPFW divert/reinjection, one committed Config and FD9 rollback, and meaningful Voice/STUN/media must be established independently via a **single reviewed, rollback-safe owner scenario**. Do not experiment by deleting/replacing active managed files, changing `ipfw` on the appliance, altering shared service rules, or forcing failures on WAN.
