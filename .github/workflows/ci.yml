@@ -133,6 +133,10 @@ jobs:
         run: |
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py
           python3.13 scripts/test-global-exclusions.py
+      - name: Isolated real-engine Exclude IPSet generator rehearsal
+        run: |
+          python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py
+          python3.13 scripts/test-freebsd15-native-engine-exclude.py --static
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
 
@@ -645,10 +649,10 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          prepare: pkg install -y python313
+          prepare: pkg install -y python313 git luajit pkgconf
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -674,6 +678,25 @@ jobs:
             printf '%s\n' "$transaction_probe_output"
             printf '%s\n' "$transaction_probe_output" | grep -Fqx 'STAGE5_NATIVE_TRANSACTION=PASS: FreeBSD15.1 real dual-stack install/fault/rollback/commit/retire/cleanup' || {
               echo 'Native FreeBSD 15.1 IPFW rollback smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+
+            # Test the same two loopback destinations with identical UDP
+            # payloads using the real pinned upstream native dvtws2. No WAN,
+            # installed OPNsense filesystem or production service involved.
+            native_engine_source="$(mktemp -d)"
+            trap 'rm -rf "$native_engine_source"' EXIT
+            git clone --quiet --branch v1.0.6 --depth 1 https://github.com/bol-van/zapret2.git "$native_engine_source"
+            test "$(git -C "$native_engine_source" rev-parse HEAD)" = "221d7dff24bfec0cd5ac0a5070b8acef2008af3d"
+            make -C "$native_engine_source/nfq2"
+            test -x "$native_engine_source/nfq2/dvtws2"
+            native_exclude_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-engine-exclude.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_exclude_output"
+              exit 1
+            }
+            printf '%s\n' "$native_exclude_output"
+            printf '%s\n' "$native_exclude_output" | grep -Fqx 'NATIVE_ENGINE_EXCLUDE_WIRE=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile same-destination DROP vs exact pass' || {
+              echo 'Native FreeBSD 15.1 real-engine IPv4/IPv6 Exclude packet A/B must PASS' >&2
               exit 1
             }
 
