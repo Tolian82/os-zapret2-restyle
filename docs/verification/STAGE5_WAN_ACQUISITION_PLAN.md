@@ -1,6 +1,6 @@
 # Stage 5 — bounded WAN capture acquisition plan (no execution)
 
-**State:** candidate source/CI-only design. **No owner-live test, service modification, IPFW rule, Config write, WAN capture or TLS probe has been performed.** Stable release `v0.6.0` and published/owner-installed `os-zapret2-restyle-0.6.1_12` remain unchanged.
+**State (29 October 2026): source/CI-qualified via [PR #723 Project/Voice/FreeBSD15/package checks](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40920798059); owner-live execution and WAN acceptance OPEN.** **No owner-live test, service modification, IPFW rule, Config write, WAN capture or TLS probe has been performed.** Stable release `v0.6.0` and published/owner-installed `os-zapret2-restyle-0.6.1_12` remain unchanged.
 
 ## Why this increment exists
 
@@ -33,6 +33,6 @@ The consent-gated live controller must reliably start and *observe readiness of*
 
 ## Executed verification and open gates
 
-[`scripts/test-stage5-wan-acquisition-plan.py`](../../scripts/test-stage5-wan-acquisition-plan.py) contains 13 **locally executed** offline regressions including IPv4/IPv6, bracketed IPv6 pinned resolution, same flow filters and manifest, bounded capture/probe, strict domain/interface/port/address input rejection, no network imports/automatic execution, and permanent `OPEN`/false evidence flags. Python syntax and focused unit checks passed locally before PR. The source is additionally registered in GitHub CI; **do not claim its exact-head CI passed before it actually completes**.
+[`scripts/test-stage5-wan-acquisition-plan.py`](../../scripts/test-stage5-wan-acquisition-plan.py) contains 13 **locally executed** offline regressions including IPv4/IPv6, bracketed IPv6 pinned resolution, same flow filters and manifest, bounded capture/probe, strict domain/interface/port/address input rejection, no network imports/automatic execution, and permanent `OPEN`/false evidence flags. Python syntax and focused unit checks passed locally before PR. The source is registered in GitHub CI, and [PR #723 Project/Voice/native FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40920798059) PASS on this source candidate, including all 13 focused acquisition-plan tests. No real WAN packets were observed.
 
 Still **OPEN**: confirmed live WAN source/port ownership, bounded real capture lifecycle and provenance, baseline active Lua modification, Exclude suppression of that same modification, successful normal GUI Apply/restoration, IPv6 WAN reinjection, real Telegram Voice calls/media, Stage 6 Strategy Lab IPv6 checkbox, EN/F5 installed UI acceptance. No new package or version is needed for this plan-only tool.
