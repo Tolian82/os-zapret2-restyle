@@ -121,6 +121,10 @@ jobs:
           python3.13 -m py_compile scripts/stage5-installed-evidence.py scripts/test-stage5-installed-evidence.py scripts/stage5-installed-one-shot.py scripts/test-stage5-installed-one-shot.py
           python3.13 scripts/test-stage5-installed-evidence.py
           python3.13 scripts/test-stage5-installed-one-shot.py
+      - name: Stage 5 read-only WAN target selector and evidence boundary
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-target-preflight.py scripts/test-stage5-wan-target-preflight.py
+          python3.13 scripts/test-stage5-wan-target-preflight.py
       - name: Validate Voice shell and Python syntax
         run: |
           sh -n scripts/test-voice-shared-ipsets.sh
