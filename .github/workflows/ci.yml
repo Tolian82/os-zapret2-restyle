@@ -133,6 +133,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage5-wan-acquisition-plan.py scripts/test-stage5-wan-acquisition-plan.py
           python3.13 scripts/test-stage5-wan-acquisition-plan.py
+      - name: Stage 5 consent-gated baseline WAN capture lifecycle
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-baseline-capture.py scripts/test-stage5-wan-baseline-capture.py
+          python3.13 scripts/test-stage5-wan-baseline-capture.py
       - name: Validate Voice shell and Python syntax
         run: |
           sh -n scripts/test-voice-shared-ipsets.sh
