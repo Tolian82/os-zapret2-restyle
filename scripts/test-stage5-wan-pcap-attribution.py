@@ -93,6 +93,14 @@ class ReadOnlyFlowTests(unittest.TestCase):
         self.assertFalse(r['exclude_effect_proven'])
         self.assertFalse(r['tls_sni_proven'])
 
+    def test_different_initial_sequence_numbers_do_not_change_content_fingerprint(self):
+        d, f = self.good()
+        g = packet(d['baseline']['source_ip'], d['remote_ip'], 54111, 443,
+                   seq=983311, payload=b'hello')
+        r = m.compare(d, pcap(f), pcap(g))
+        self.assertEqual('SAME_OBSERVED_TCP_PAYLOAD_FINGERPRINT', r['payload_comparison'])
+        self.assertFalse(r['dpi_modification_proven'])
+
     def test_unmatched_flow_inconclusive(self):
         d, f = self.good()
         other = packet(d['baseline']['source_ip'], d['remote_ip'], 54112, 443)
