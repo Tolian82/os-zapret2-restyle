@@ -154,7 +154,7 @@ def run_phase(adapter: object, engine: Path, root: Path, excluded: bool) -> None
                     check_transport(family, host, port)
             adapter.add_rule(RULE, ARGV)
             installed = True
-            if adapter.list_rules(RULE, RULE + 1) != {RULE: ARGV}:
+            if adapter.list_rules(19000, 19010) != {RULE: ARGV}:
                 raise RuntimeError("divert rule differs from proposed exact loopback owner")
             for family, host in ((socket.AF_INET, "127.0.0.1"),
                                  (socket.AF_INET6, "::1")):
