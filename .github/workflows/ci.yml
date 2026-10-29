@@ -143,6 +143,17 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage5-wan-baseline-capture.py scripts/test-stage5-wan-baseline-capture.py
           python3.13 scripts/test-stage5-wan-baseline-capture.py
+      - name: Python 3.11 Stage 5 installed diagnostic compatibility
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Execute read-only Stage 5 diagnostic contracts under Python 3.11
+        run: |
+          python3.11 -m py_compile scripts/stage5-installed-evidence.py scripts/stage5-wan-target-preflight.py scripts/stage5-wan-acquisition-plan.py scripts/stage5-wan-baseline-capture.py scripts/stage5-wan-pcap-attribution.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py
+          python3.11 scripts/test-stage5-installed-evidence.py
+          python3.11 scripts/test-stage5-wan-target-preflight.py
+          python3.11 scripts/test-stage5-wan-acquisition-plan.py
+          python3.11 scripts/test-stage5-wan-baseline-capture.py
       - name: Validate Voice shell and Python syntax
         run: |
           sh -n scripts/test-voice-shared-ipsets.sh
