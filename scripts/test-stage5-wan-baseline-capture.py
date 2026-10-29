@@ -221,6 +221,44 @@ class CaptureTests(unittest.TestCase):
         bridge.compare.assert_called_once()
         self.assertFalse(paths[0].parent.exists())
 
+    def test_delayed_bpf_delivery_is_waited_for_but_never_extends_deadline(self):
+        # Reproduces the owner-live regression: curl exits before FreeBSD BPF
+        # delivers the first packet; old code stopped tcpdump immediately.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "baseline.pcap")
+            path.write_bytes(sample_pcap()[:24])
+            clock = [0.0]
+            def tick(seconds):
+                clock[0] += seconds
+                if clock[0] >= .3:
+                    path.write_bytes(sample_pcap())
+            live = types.SimpleNamespace(poll=lambda: None)
+            self.assertTrue(m.wait_for_packet_flush(
+                live, path, deadline=1.0, now=lambda: clock[0], pause=tick))
+            self.assertGreaterEqual(clock[0], .3)
+            self.assertLessEqual(clock[0], 1.0)
+
+            path.write_bytes(sample_pcap()[:24])
+            clock[0] = 0.0
+            self.assertFalse(m.wait_for_packet_flush(
+                live, path, deadline=.2, now=lambda: clock[0], pause=tick))
+            self.assertLessEqual(clock[0], .2)
+
+    def test_missing_header_only_and_invalid_capture_reasons_are_distinct(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp, "baseline.pcap")
+            with self.assertRaisesRegex(m.CaptureError, "no PCAP file"):
+                m.read_ethernet_capture(path)
+            raw = sample_pcap()
+            path.write_bytes(raw[:24])
+            with self.assertRaisesRegex(m.CaptureError, "header only: zero packet records"):
+                m.read_ethernet_capture(path)
+            path.write_bytes(b"broken")
+            with self.assertRaisesRegex(m.CaptureError, "incomplete or oversized PCAP"):
+                m.read_ethernet_capture(path)
+            path.write_bytes(raw)
+            self.assertEqual(raw, m.read_ethernet_capture(path))
+
     def test_tcpdump_readiness_marker_is_required(self):
         read_fd,write_fd=os.pipe()
         try:

@@ -39,6 +39,7 @@ MAX_CAPTURE_BYTES = 8 * 1024 * 1024
 READY_TIMEOUT = 4.0
 MAX_TOTAL_SECONDS = 18.0
 MAX_CURL_SECONDS = 12.0
+PACKET_FLUSH_SECONDS = 3.0  # FreeBSD BPF may deliver packets after curl exits
 PCAP_MAGIC = (b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4",
               b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d")
 
@@ -219,6 +220,42 @@ def tcpdump_ready(proc, *, deadline: float) -> None:
     raise CaptureError("tcpdump did not confirm active capture before deadline")
 
 
+def wait_for_packet_flush(proc, capture: Path, *, deadline: float,
+                          now=time.monotonic, pause=time.sleep) -> bool:
+    """Give FreeBSD BPF a bounded opportunity to deliver already-sent packets.
+
+    tcpdump -U flushes libpcap output, not necessarily pending kernel BPF data.
+    The same bounded wait was already required by the isolated FreeBSD test.
+    Never extend the controller's 18-second hard deadline.
+    """
+    stop = min(deadline, now() + PACKET_FLUSH_SECONDS)
+    while now() < stop:
+        if capture.is_file() and capture.stat().st_size > 24:
+            return True
+        if proc.poll() is not None:
+            return False
+        pause(min(.1, max(0.0, stop - now())))
+    return capture.is_file() and capture.stat().st_size > 24
+
+
+def read_ethernet_capture(capture: Path) -> bytes:
+    """Preserve a specific diagnostic reason without exporting packet contents."""
+    try:
+        data = capture.read_bytes()
+    except FileNotFoundError as exc:
+        raise CaptureError("tcpdump created no PCAP file on the selected interface") from exc
+    if len(data) == 24 and data[:4] in PCAP_MAGIC:
+        raise CaptureError("PCAP header only: zero packet records for the pinned WAN five-tuple")
+    if not 24 < len(data) <= MAX_CAPTURE_BYTES:
+        raise CaptureError("incomplete or oversized PCAP: bytes=" + str(len(data)))
+    if data[:4] not in PCAP_MAGIC:
+        raise CaptureError("capture is not classic PCAP")
+    if struct.unpack_from("<I" if data[:4] in (PCAP_MAGIC[0], PCAP_MAGIC[2]) else ">I",
+                          data, 20)[0] != 1:
+        raise CaptureError("capture is not Ethernet DLT_EN10MB")
+    return data
+
+
 def execute_one(plan: dict, *, popen=subprocess.Popen, now=time.monotonic,
                 readiness=tcpdump_ready, owner_inspection=inspect,
                 network_preflight=preflight, process_identity=process_witness,
@@ -262,14 +299,12 @@ def execute_one(plan: dict, *, popen=subprocess.Popen, now=time.monotonic,
         ended = True
         if curl.returncode != 0:
             raise CaptureError("controlled HTTPS request did not complete successfully")
+        # The isolated FreeBSD smoke already proves -U alone is not a BPF flush.
+        # Wait for a record only within the original total deadline, then stop.
+        wait_for_packet_flush(tcpdump, capture, deadline=deadline, now=now)
         terminate(tcpdump)
         tcpdump = None
-        data = capture.read_bytes()
-        if not 24 < len(data) <= MAX_CAPTURE_BYTES or data[:4] not in PCAP_MAGIC:
-            raise CaptureError("no complete classic capture generated")
-        if struct.unpack_from("<I" if data[:4] in (PCAP_MAGIC[0], PCAP_MAGIC[2]) else ">I",
-                              data, 20)[0] != 1:
-            raise CaptureError("capture is not Ethernet DLT_EN10MB")
+        data = read_ethernet_capture(capture)
         observed = analyzer.summarize(data, plan["analysis_manifest"], "baseline")
         if not observed["capture_correlated"]:
             raise CaptureError("capture did not contain unambiguous controlled outbound TCP payload")
