@@ -117,6 +117,37 @@ def inspect(bridge) -> dict:
         raise CaptureError("native owner snapshot is not verified") from exc
 
 
+
+# These are the *same two* native pidfiles attested by voice_live_inspect.py.
+# A matching Config digest alone does not prove a continuous engine instance.
+NATIVE_PID_FILES = (
+    Path("/var/run/dvtws2.pid"),
+    Path("/var/run/zapret2-supervisor-monitor.pid"),
+)
+
+
+def process_witness(*, pid_files=NATIVE_PID_FILES) -> tuple:
+    """Read-only PID plus process start-time witness; never expose it in JSON."""
+    result = []
+    for path in pid_files:
+        try:
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or not 1 <= info.st_size <= 24:
+                raise CaptureError("untrusted native process pidfile: " + path.name)
+            raw = path.read_text("ascii").strip()
+        except (OSError, UnicodeError) as exc:
+            raise CaptureError("unreadable native process pidfile: " + path.name) from exc
+        if not re.fullmatch(r"[1-9][0-9]{0,9}", raw) or int(raw) <= 1:
+            raise CaptureError("invalid native process pid: " + path.name)
+        started = checked(["/bin/ps", "-p", raw, "-o", "lstart="], timeout=4).strip()
+        if "\n" in started or not 8 <= len(started) <= 96:
+            raise CaptureError("invalid native process start witness: " + path.name)
+        result.append((path.name, int(raw), started))
+    if len(result) != 2 or result[0][1] == result[1][1]:
+        raise CaptureError("untrusted native engine/supervisor process identity")
+    return tuple(result)
+
+
 def preflight(plan: dict) -> None:
     manifest = plan["analysis_manifest"]
     wan = manifest["wan_interface"]
@@ -190,13 +221,17 @@ def tcpdump_ready(proc, *, deadline: float) -> None:
 
 def execute_one(plan: dict, *, popen=subprocess.Popen, now=time.monotonic,
                 readiness=tcpdump_ready, owner_inspection=inspect,
-                network_preflight=preflight, bridge=None, analyzer=None) -> dict:
+                network_preflight=preflight, process_identity=process_witness,
+                bridge=None, analyzer=None) -> dict:
     """One baseline capture only; dependency injection enables offline fake tests."""
     if bridge is None:
         bridge = module("stage5_bridge_companion", BRIDGE_SCRIPT)
     if analyzer is None:
         analyzer = module("stage5_pcap_companion", OFFLINE_SCRIPT)
+    process_before = process_identity()
     before = owner_inspection(bridge)
+    if process_identity() != process_before:
+        raise CaptureError("native engine/supervisor changed during initial inspection")
     network_preflight(plan)
     first = plan["phases"]["baseline"]
     root = Path(tempfile.mkdtemp(prefix="zapret2-wan-one-", dir="/tmp"))
@@ -240,6 +275,8 @@ def execute_one(plan: dict, *, popen=subprocess.Popen, now=time.monotonic,
             raise CaptureError("capture did not contain unambiguous controlled outbound TCP payload")
         after = owner_inspection(bridge)
         bridge.compare(before, after)
+        if process_identity() != process_before:
+            raise CaptureError("native engine/supervisor restarted during baseline capture")
         keep = True
         return {
             "status": "BASELINE_CAPTURE_OBSERVED_ONLY",
