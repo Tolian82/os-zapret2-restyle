@@ -1,6 +1,6 @@
 # Stage 5 — one-shot read-only WAN target-selection preflight (v0.6.1_12)
 
-**Status (29 October 2026): source candidate; CI and installed-owner acceptance separately tracked.** This is an intermediary for the [same-destination A/B WAN evidence protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md), not A07/A08/IPv6 acceptance. The previously installed `os-zapret2-restyle-0.6.1_12` package and stable v0.6.0 do not change.
+**Status (29 October 2026): CI-qualified under [PR #721 Project/Voice/FreeBSD15/package CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40902179064); owner-installed execution and WAN packet proof NOT observed.** This is an intermediary for the [same-destination A/B WAN evidence protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md), not A07/A08/IPv6 acceptance. The previously installed `os-zapret2-restyle-0.6.1_12` package and stable v0.6.0 do not change.
 
 ## What this actually establishes
 
