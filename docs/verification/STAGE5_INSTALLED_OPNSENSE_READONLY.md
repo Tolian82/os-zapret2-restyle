@@ -1,63 +1,29 @@
-# Stage 5 — установленная OPNsense: безопасный сбор фактов
+# Stage 5 — read-only installed OPNsense evidence and IPv6 WAN eligibility
 
-**Статус: installed acceptance OPEN.** Точный следующий кандидат: `v0.6.1_7` (`VERSION=0.6.1`, `PLUGIN_REVISION=7`, публикация выполнена, запуск на OPNsense владельца ещё не подтверждён). Предыдущий тестовый `v0.6.1_5` опубликован, но на OPNsense владельца **FAILED POST-INSTALL (69)** при загрузке старого native common Config. `_6` был установлен владельцем, но POST-INSTALL вернул Error 70 при восстановлении старого sealed runtime. Для следующей проверки использовать только [отдельный `_7` пакет](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.1_7/os-zapret2-restyle-0.6.1_7.pkg) (SHA-256 `0bb234363e7b3a518ca997c0249ec73b3973b49ab64ca418bd62c49190514a50`); успешное восстановление службы ещё не подтверждено. Последний стабильный `v0.6.0_1` **не может** подтвердить новую Stage 5.
+**Current candidate:** published and owner-installed `v0.6.1_12` (FreeBSD 15, testing-only); stable `v0.6.0` remains unchanged. **Installed Stage 5 acceptance OPEN.** The previous `_5`–`_7` package/boot failure and recovery instructions in this runbook are historical; current status belongs to [START_HERE](../START_HERE.md) and [PROJECT_STATE](../PROJECT_STATE.md).
 
-## Что уже реализовано и чего этот инструмент не делает
+## Two separate evidence levels
 
-В установленном плагине уже существует один штатный независимый `voice_live_inspect.py`: он проверяет сохранённый committed common-owner, настоящий процесс `dvtws2`, supervisor, sealed runtime, правила IPFW, таблицы и счётчики IPFW. Не нужен новый параллельный владелец конфигурации, правил или статуса.
+The existing production `voice_live_inspect.py` is the authoritative read-only attestation for common Config owner, live supervisor/engine, owned IPFW rules/tables, and Voice services. [`scripts/stage5-installed-evidence.py`](../../scripts/stage5-installed-evidence.py) remains the thin exact-`0.6.1_12` bridge with `collect` and `compare`; both always keep Stage 5 acceptance OPEN. It never writes to Config, IPFW, FD9 or service lifecycle.
 
-`scripts/stage5-installed-evidence.py` — только тонкий **read-only** мост к существующему инспектору. Действие `collect` проверяет реальную установленную версию через `pkg query`, вызывает штатный инспектор и отдаёт его JSON. Действие `compare` сравнивает два JSON-снимка: ту же идентичность Config, те же owned rules/tables, те же Voice-сервисы и изменения счётчиков. Оно отвергает чужую/нестабильную конфигурацию и не выдаёт PASS для отсутствующих счётчиков.
+New [`scripts/stage5-installed-one-shot.py`](../../scripts/stage5-installed-one-shot.py) calls that **same** bridge once and inspects *only* the already-managed IPSET files for configured Voice services. For every configured Voice service it counts IPv4 and IPv6 networks; when a globally routable IPv6 target is present, it invokes read-only `route -6 -n get` to check whether the kernel would select the service's attested WAN interface. It does not send a packet, change a route, open a divert socket, touch Config or start/stop a service. Any invalid snapshot, unexpected managed IPSET, symlink, wrong package version or non-ready owner is a refusal, not PASS.
 
-**Запрещённые действия отсутствуют**: нет `ipfw add/delete/flush`, `Apply`, `service start/stop`, `Config::save()`, открытия сокета divert или изменения FD9. Снимки хранятся только в выбранных оператором временных файлах. Даже увеличение счётчиков **не различает IPv4 и IPv6** и не доказывает STUN response, Telegram call либо результат обработки `dvtws2`.
+The one-shot JSON reports `READ_ONLY_PREFLIGHT`, `stage5_installed_acceptance: OPEN`, `ipv6_packet_proven: false` and `exclude_packet_proven: false` **unconditionally**. A matching WAN route proves only *eligibility for a future test*, never observed IPv6 transmission, STUN response, actual DPI exclusion, Voice media, native Apply or FD9 rollback. If no configured globally routable IPv6 Voice target exists, it reports `NO_GLOBAL_IPV6_TARGET` and performs no route lookup.
 
-## Запуск только после фактической установки исправленного кандидата `0.6.1_7`
+## One owner action when the finished plan is ready for a live preflight
 
-Последовательно выполнить в **root `csh`** на контрольной OPNsense. Важное условие — [тестовая версия `0.6.1_7`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.1_7/os-zapret2-restyle-0.6.1_7.pkg) опубликована отдельно от ошибочных `_5`/`_6`; использовать только проверенный файл из этого prerelease, с резервной копией конфигурации и сверкой SHA-256. После установки сначала подтвердить штатный запуск службы, без ручного вмешательства в IPFW. Если её нет — тест остановить, а не тестировать стабильный `v0.6.0`.
+Execute only on the owner's disposable OPNsense test stand with the installed `0.6.1_12` package and a normally running service. The code is checked in at `main` after its own PR has merged. The following is **one shell command**, compatible with the OPNsense root `csh` prompt. It downloads two **read-only scripts** to `/tmp` and writes one JSON report, without Apply or IPFW changes:
 
-1. Проверить точную идентичность установленного пакета:
+```sh
+/bin/sh -c '/usr/bin/fetch -q -o /tmp/stage5-installed-evidence.py https://raw.githubusercontent.com/Tolian82/os-zapret2-restyle/main/scripts/stage5-installed-evidence.py && /usr/bin/fetch -q -o /tmp/stage5-installed-one-shot.py https://raw.githubusercontent.com/Tolian82/os-zapret2-restyle/main/scripts/stage5-installed-one-shot.py && /usr/local/bin/python3.13 /tmp/stage5-installed-one-shot.py > /tmp/stage5-one-shot.json'
+```
 
-   ```sh
-   pkg query '%v' os-zapret2-restyle
-   ```
+The owner can attach only `/tmp/stage5-one-shot.json` if an installed check is **explicitly** needed. The report does not contain raw IP addresses, raw packet bytes, full IPSET lists, raw saved Config or long engine logs. Avoid repeatedly asking for a separate series of terminal commands.
 
-   Продолжать **только если результат `0.6.1_7`**.
+If the command fails, do not interpret the missing or partial output as a failed IPv6 service: read the exact `STAGE5_ONESHOT=UNVERIFIED` reason and review offline. No blind restart/Apply, IPFW flush, package reinstall or generated live testing may follow automatically.
 
-2. Проверить штатное состояние существующей службы:
+## Remaining installed acceptance
 
-   ```sh
-   /usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh status
-   ```
+Actual IPv4/IPv6 native destination handling (including global Exclude IPSet), live WAN IPFW divert/reinjection, one committed Config and FD9 rollback, and meaningful Voice/STUN/media must be established independently via a **single reviewed, rollback-safe owner scenario**. Do not experiment by deleting/replacing active managed files, changing `ipfw` on the appliance, altering shared service rules, or forcing failures on WAN.
 
-3. Получить утилиту **из того же GitHub main после объединения её PR**. Код сначала можно просмотреть на GitHub; загрузка пишет только временный файл, не настройки OPNsense:
-
-   ```sh
-   /usr/bin/fetch -o /tmp/zapret-stage5-evidence.py https://raw.githubusercontent.com/Tolian82/os-zapret2-restyle/main/scripts/stage5-installed-evidence.py
-   ```
-
-4. Снять исходное состояние, не касаясь правил или Config:
-
-   ```sh
-   /usr/local/bin/python3.13 /tmp/zapret-stage5-evidence.py collect > /tmp/zapret-stage5-before.json
-   ```
-
-5. На контролируемом реальном устройстве выполнить IPv6 Voice/STUN-сеанс с назначением **в уже настроенном Voice IPSET** и соответствующим UDP-диапазоном. Не изменять IPFW ради этого теста; одновременно фиксировать реальное семейство назначения и результат сеанса независимо от счётчиков IPFW. При отсутствии IPv6 WAN или релевантного IPv6 назначения отметить тест `UNAVAILABLE`, не имитировать IPv6 через IPv4.
-
-6. Снять состояние после трафика:
-
-   ```sh
-   /usr/local/bin/python3.13 /tmp/zapret-stage5-evidence.py collect > /tmp/zapret-stage5-after.json
-   ```
-
-7. Получить отчёт по неизменности owner/счётчиков:
-
-   ```sh
-   /usr/local/bin/python3.13 /tmp/zapret-stage5-evidence.py compare /tmp/zapret-stage5-before.json /tmp/zapret-stage5-after.json
-   ```
-
-Результат всегда обозначен `READ_ONLY_OBSERVATION`, `stage5_installed_acceptance=OPEN`, `ipv6_packet_proven=false`. `COUNTERS_INCREASED_FAMILY_UNKNOWN` говорит только о росте общих счётчиков Voice. `NO_COUNTER_INCREASE_OBSERVED` или недоступные счётчики — **не** доказательство неисправности IPv6.
-
-## Финальные пункты Stage 5, которые этот скрипт намеренно не закрывает
-
-Нужны отдельно зафиксированные на установленной `0.6.1_7` OPNsense: реальный IPv6 WAN и пакет назначения IPSET с STUN-обработкой `dvtws2` и корректной reinjection, подтверждение работы IPv4-only WAN, единый сохранённый Config / FD9 Apply, контролируемая ошибка активации с *точным* восстановлением предыдущих Config/PID/release/IPFW без воздействия на чужие правила. Непосредственную имитацию отказа `ipfw` выполнять только в изолированной VM; **не провоцировать сбои firewall на рабочем шлюзе**.
-
-Успешный настоящий FreeBSD 15.1 VM `TABLE`/`IPV6_PACKET`/`TRANSACTION` из [PR #694](https://github.com/Tolian82/os-zapret2-restyle/pull/694) — дополнительное доказательство ядра, но не замена установленной приёмки. Stage 6 IPv6 Laboratory не объявлен готовым.
+Already qualified **separately in an isolated disposable FreeBSD 15.1 VM**: mixed IPv4/IPv6 IPFW tables, IPv6 UDP divert/reinject, transactions/rollback ([PR #694](https://github.com/Tolian82/os-zapret2-restyle/pull/694)), and real upstream `dvtws2 v1.0.6` matching IPv4/IPv6 same-destination Exclude IPSet across three profiles ([PR #718](https://github.com/Tolian82/os-zapret2-restyle/pull/718); [evidence](evidence/2026-10-29-v0.6.1_12-native-engine-exclude-loopback.md)). These do **not** close installed WAN or five Voice profiles. Strategy Lab IPv6 checkbox (Stage 6) is not yet implemented.
