@@ -145,7 +145,7 @@ def profile_summary(text: str, parser) -> list[dict]:
 
 def resolve(domain: str) -> list[ipaddress._BaseAddress]:
     """DNS traffic only; no HTTP, TLS or target packets; hard wall-clock limit."""
-    p = subprocess.run(['/usr/local/bin/python3.13', '-c', DNS_CHILD, domain],
+    p = subprocess.run([sys.executable, '-c', DNS_CHILD, domain],
                        capture_output=True, text=True, timeout=8, check=False)
     if p.returncode != 0 or len(p.stdout) > 16384:
         return []
