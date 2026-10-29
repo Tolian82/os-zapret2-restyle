@@ -1,6 +1,6 @@
 # Stage 5 — read-only installed OPNsense evidence and IPv6 WAN eligibility
 
-**Current candidate:** published and owner-installed `v0.6.1_12` (FreeBSD 15, testing-only); stable `v0.6.0` remains unchanged. **Installed Stage 5 acceptance OPEN.** The previous `_5`–`_7` package/boot failure and recovery instructions in this runbook are historical; current status belongs to [START_HERE](../START_HERE.md) and [PROJECT_STATE](../PROJECT_STATE.md).
+**Current candidate:** published and owner-installed `v0.6.1_12` (FreeBSD 15, testing-only); stable `v0.6.0` remains unchanged. **Installed Stage 5 acceptance OPEN.** The one-shot helper was source/CI-qualified in [PR #719](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40891815771); an actual owner-installed one-shot result is not yet available. The previous `_5`–`_7` package/boot failure and recovery instructions in this runbook are historical; current status belongs to [START_HERE](../START_HERE.md) and [PROJECT_STATE](../PROJECT_STATE.md).
 
 ## Two separate evidence levels
 
