@@ -155,7 +155,10 @@ def resolve(domain: str) -> list[ipaddress._BaseAddress]:
             return []
         ips = sorted(set(ipaddress.ip_address(x) for x in values),
                      key=lambda x: (x.version, int(x)))
-        return [ip for ip in ips if ip.is_global][:MAX_DNS_ADDRESSES]
+        public = [ip for ip in ips if ip.is_global]
+        # Cap each family separately; many A records must not hide a usable AAAA.
+        return [ip for ip in public if ip.version == 4][:MAX_DNS_ADDRESSES // 2] + [
+            ip for ip in public if ip.version == 6][:MAX_DNS_ADDRESSES // 2]
     except (ValueError, TypeError):
         return []
 
