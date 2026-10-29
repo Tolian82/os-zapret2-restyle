@@ -170,7 +170,7 @@ class CaptureTests(unittest.TestCase):
             "payload_packets":1,"source_port":54111})
         with patch.object(m,"terminate",side_effect=lambda *args,**kw:None), \
              patch.object(m,"inspect") as native:
-            result=m.execute_one(plan,popen=popen,readiness=lambda *_a,**_kw:None,
+            result=m.execute_one(plan,popen=popen,process_identity=lambda: ("stable",),readiness=lambda *_a,**_kw:None,
                                  owner_inspection=lambda _:{"config_digest":"a"*64},
                                  network_preflight=lambda _:None,bridge=bridge,analyzer=analyzer)
             native.assert_not_called()
@@ -196,7 +196,7 @@ class CaptureTests(unittest.TestCase):
             return proc
         with patch.object(m,"terminate",side_effect=lambda *args,**kw:None):
             with self.assertRaises(m.CaptureError):
-                m.execute_one(plan,popen=popen,readiness=lambda *_a,**_kw:None,
+                m.execute_one(plan,popen=popen,process_identity=lambda: ("stable",),readiness=lambda *_a,**_kw:None,
                               owner_inspection=lambda _:{"config_digest":"a"*64},
                               network_preflight=lambda _:None,bridge=types.SimpleNamespace(),
                               analyzer=types.SimpleNamespace())
@@ -215,7 +215,7 @@ class CaptureTests(unittest.TestCase):
              "payload_packets":1,"source_port":54111})
         with patch.object(m,"terminate",side_effect=lambda *args,**kw:None):
             with self.assertRaises(m.CaptureError):
-                m.execute_one(candidate(),popen=popen,
+                m.execute_one(candidate(),popen=popen,process_identity=lambda: ("stable",),
                               readiness=lambda *_a,**_kw:None,owner_inspection=lambda _:{"config_digest":"a"*64},
                               network_preflight=lambda _:None,bridge=bridge,analyzer=analyzer)
         bridge.compare.assert_called_once()
@@ -229,6 +229,78 @@ class CaptureTests(unittest.TestCase):
                 fake=types.SimpleNamespace(stderr=p,poll=lambda:None)
                 m.tcpdump_ready(fake,deadline=m.time.monotonic()+1)
         finally:os.close(write_fd)
+
+
+    def test_native_pid_and_start_witness_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = Path(tmp, "dvtws2.pid")
+            monitor = Path(tmp, "zapret2-supervisor-monitor.pid")
+            engine.write_text("4242\\n")
+            monitor.write_text("4343\\n")
+            with patch.object(m, "checked", return_value="Thu Oct 29 20:00:00 2026\\n") as check:
+                witness = m.process_witness(pid_files=(engine, monitor))
+                self.assertEqual((4242, 4343), (witness[0][1], witness[1][1]))
+                self.assertEqual(2, check.call_count)
+                self.assertEqual(["/bin/ps", "-p", "4242", "-o", "lstart="],
+                                 check.call_args_list[0][0][0])
+            for value in ("", "x", "0", "-1", "4242\\n4343", "99999999999"):
+                engine.write_text(value)
+                with self.subTest(pid=value), self.assertRaises(m.CaptureError):
+                    m.process_witness(pid_files=(engine, monitor))
+            engine.write_text("4242")
+            link = Path(tmp, "symlink.pid")
+            link.symlink_to(engine)
+            with self.assertRaises(m.CaptureError):
+                m.process_witness(pid_files=(link, monitor))
+            link.unlink()
+            os.link(engine, link)
+            with self.assertRaises(m.CaptureError):
+                m.process_witness(pid_files=(engine, monitor))
+            link.unlink()
+            monitor.write_text("4242")
+            with patch.object(m, "checked", return_value="Thu Oct 29 20:00:00 2026"):
+                with self.assertRaises(m.CaptureError):
+                    m.process_witness(pid_files=(engine, monitor))
+            monitor.write_text("4343")
+            with patch.object(m, "checked", return_value=""):
+                with self.assertRaises(m.CaptureError):
+                    m.process_witness(pid_files=(engine, monitor))
+
+    def test_restart_during_native_inspection_prevents_any_probe(self):
+        witnessed = iter(("old-process", "new-process"))
+        with patch.object(m, "execute_one") as never:
+            def owner(_):
+                return {"config_digest": "a"*64}
+            with self.assertRaisesRegex(m.CaptureError, "changed during initial"):
+                m.execute_one(candidate(), popen=never, bridge=types.SimpleNamespace(),
+                              owner_inspection=owner,
+                              process_identity=lambda: next(witnessed),
+                              network_preflight=lambda _: None,
+                              analyzer=types.SimpleNamespace())
+            never.assert_not_called()
+
+    def test_restart_after_capture_refuses_result_and_removes_pcap(self):
+        paths = []
+        def popen(argv, **kwargs):
+            capture = argv[0] == "/usr/sbin/tcpdump"
+            if capture:
+                path = Path(argv[argv.index("-w") + 1])
+                paths.append(path)
+                path.write_bytes(sample_pcap())
+            return FakeProcess(capture)
+        bridge = types.SimpleNamespace(compare=Mock())
+        analyzer = types.SimpleNamespace(summarize=lambda *_: {
+            "capture_correlated": True, "family": "ipv4",
+            "outgoing_packets": 1, "payload_packets": 1, "source_port": 54111})
+        seen = iter(("old-instance", "old-instance", "new-instance"))
+        with patch.object(m, "terminate", side_effect=lambda *_a, **_k: None):
+            with self.assertRaisesRegex(m.CaptureError, "restarted during baseline"):
+                m.execute_one(candidate(), popen=popen, readiness=lambda *_a, **_k: None,
+                              process_identity=lambda: next(seen),
+                              owner_inspection=lambda _: {"config_digest": "a"*64},
+                              network_preflight=lambda _: None, bridge=bridge, analyzer=analyzer)
+        bridge.compare.assert_called_once()
+        self.assertFalse(paths[0].parent.exists())
 
     def test_nothing_auto_applies_exclude(self):
         s=(HERE/"stage5-wan-baseline-capture.py").read_text()
