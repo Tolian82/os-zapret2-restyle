@@ -213,7 +213,9 @@ def summarize(raw: bytes, manifest: dict, phase: str) -> dict:
     canonical = sorted(seen.items())
     digest = hashlib.sha256()
     for seq, data in canonical:
-        digest.update(struct.pack('!II', seq, len(data)))
+        # TCP initial sequence numbers differ between successive connections.
+        # Hash observed payload bytes in sequence order, not absolute ISNs.
+        digest.update(struct.pack('!I', len(data)))
         digest.update(data)
     flags = {'syn': sum(bool(f & 0x02) for _, f, _ in outward),
              'rst': sum(bool(f & 0x04) for _, f, _ in outward),
