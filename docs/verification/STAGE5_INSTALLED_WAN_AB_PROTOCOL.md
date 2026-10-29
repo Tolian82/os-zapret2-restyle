@@ -57,7 +57,7 @@ On unexpected state change or uncertain rollback, immediately stop the experimen
 
 ## 6. Next engineering work, no owner action yet
 
-- Produce and test a small **read-only** target-selection/flow-attribution collector whose output identifies an eligible and safe A07 destination before any GUI change. Reuse the existing one-shot and native inspect rather than new ownership logic.
+- The [bounded read-only A07 target-selector](STAGE5_WAN_TARGET_READONLY.md) and 19 focused tests passed [PR #721 Project/Voice/FreeBSD15 CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40902179064). It only nominates candidates: actual five-tuple attribution, baseline Lua modification, excluded WAN packet evidence and owner-live acceptance all remain OPEN.
 - Qualify exact packet comparison semantics on a disposable FreeBSD 15.1 WAN-like path/CI fixture before asking for installed packet evidence; the existing loopback `dvtws2` test is the lower proof level.
 - Draft/validate one bounded owner-run command and small sanitized report format. Explicitly gate all GUI Apply work on owner approval. Do not publish a new package solely for the evidence tool.
 - Stage 6 Strategy Lab IPv6 checkbox and 150/200 / 270/350-second budgets remain a separate workstream; **not** accidentally implemented or declared accepted here.
