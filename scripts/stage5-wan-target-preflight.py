@@ -132,8 +132,12 @@ def profile_summary(text: str, parser) -> list[dict]:
         restricted = any(x.startswith(('--ipset=', '--ipset-ip=', '--filter-l3=ipv6', '--name=voice-')) for x in effective)
         tls = '443' in tcp and any('tls' in t for t in l7)
         refs = tuple(x for x in host_refs if x in (str(MANAGED / y) for y in HOSTLISTS))
+        family_flags = [x.partition('=')[2].split(',') for x in effective
+                        if x.startswith('--filter-l3=')]
+        families = ('ipv4', 'ipv6') if not family_flags else tuple(
+            f for f in ('ipv4', 'ipv6') if all(f in flags for flags in family_flags))
         executable.append({'index': num, 'tls_443': tls, 'ordinary': not restricted,
-                           'hostlists': refs})
+                           'hostlists': refs, 'families': families})
     if not executable:
         raise PreflightError('no final executable profiles')
     return executable
@@ -209,9 +213,9 @@ def classify(snapshot: dict, profiles: list[dict], hostlists: dict[str, str],
         if not re.fullmatch(r'[a-z0-9-]+(?:\.[a-z0-9-]+)+', domain):
             raise PreflightError('invalid bounded domain candidate')
         hits = [str(MANAGED / name) for name, content in hostlists.items() if hostlist_hits(content, domain)]
-        profile_ids = [p['index'] for p in profiles if p['ordinary'] and p['tls_443']
-                       and any(h in p['hostlists'] for h in hits)]
-        if not profile_ids:
+        relevant = [p for p in profiles if p['ordinary'] and p['tls_443']
+                    and any(h in p['hostlists'] for h in hits)]
+        if not relevant:
             continue
         resolved = resolver(domain)
         # Retain both eligible families when DNS supplies many A/AAAA records.
@@ -224,8 +228,13 @@ def classify(snapshot: dict, profiles: list[dict], hostlists: dict[str, str],
                 continue
             if matches(ip, excludes) or any(matches(ip, nets) for nets in voice.values()):
                 continue
+            ids = [p['index'] for p in relevant if f'ipv{ip.version}' in p.get('families', ('ipv4', 'ipv6'))]
+            if not ids:
+                continue
             fib = route_lookup(ip)
             if fib.get('status') != 'ROUTE_PRESENT':
+                continue
+            if configured_wans and fib.get('interface') not in configured_wans:
                 continue
             result['candidates'].append({
                 'domain': domain, 'remote_ip': str(ip), 'family': f'ipv{ip.version}',
@@ -233,7 +242,7 @@ def classify(snapshot: dict, profiles: list[dict], hostlists: dict[str, str],
                 'tls_sni': domain, 'host_identity': domain,
                 'wan_interface': fib['interface'],
                 'configured_voice_wan_match': (fib['interface'] in configured_wans if configured_wans else None),
-                'potential_profile_indexes': profile_ids,
+                'potential_profile_indexes': ids,
                 'voice_ipset_overlap': False, 'exclude_ipset_overlap': False,
                 'source_ip': None, 'source_port': None,
                 'flow_five_tuple_proven': False, 'strategy_modification_proven': False,
