@@ -195,7 +195,12 @@ class WANPreflightTests(unittest.TestCase):
         self.assertEqual(2, len(got))
         args, kw = command.call_args
         self.assertEqual(8, kw['timeout'])
-        self.assertEqual('/usr/local/bin/python3.13', args[0][0])
+        self.assertEqual(m.sys.executable, args[0][0])
+        with patch.object(m.sys, 'executable', '/usr/local/bin/python3.11'), \
+             patch.object(m.subprocess, 'run', return_value=complete) as second:
+            m.resolve('yt3.ggpht.com')
+        self.assertEqual('/usr/local/bin/python3.11',
+                         second.call_args.args[0][0])
         self.assertNotIn('curl', str(args))
 
     def test_dns_resolver_retains_aaaa_among_many_A_records(self):
