@@ -197,6 +197,27 @@
             return translations[message] ||
                 'Предварительная проверка настроек не пройдена. Изменения не применены.';
         }
+        // Keep the API summary contract stable; translate only recognized
+        // field labels and normalization counters for the Russian UI.
+        function localizeStrategiesNormalizationSummary(lines) {
+            if (!isRussian) return lines;
+            const labels = {
+                'YouTube Domains': 'Домены YouTube',
+                'Telegram IPs': 'IPSET Telegram',
+                'User Domains': 'Пользовательские домены',
+                'Exclude Domains': 'Исключить домены',
+                'Exclude IPSet': 'Исключить IPSet'
+            };
+            return lines.map(function(line) {
+                const match = /^(.+): normalized ([0-9]+), removed duplicates ([0-9]+)$/.exec(line);
+                if (!match || !Object.prototype.hasOwnProperty.call(labels, match[1])) {
+                    return line;
+                }
+                return labels[match[1]] + ': нормализовано ' + match[2] +
+                    ', удалено повторов ' + match[3];
+            });
+        }
+
         function showRuntimeError(title, message) {
             BootstrapDialog.show({
                 type: BootstrapDialog.TYPE_DANGER,
@@ -1013,8 +1034,8 @@
                         if (data.normalized && Array.isArray(data.normalization)) {
                             BootstrapDialog.show({
                                 type: BootstrapDialog.TYPE_INFO,
-                                title: '{{ lang._("Settings normalized") }}',
-                                message: $('<div/>').text(data.normalization.join('\n'))
+                                title: isRussian ? 'Настройки нормализованы' : '{{ lang._("Settings normalized") }}',
+                                message: $('<div/>').text(localizeStrategiesNormalizationSummary(data.normalization).join('\n'))
                                     .css('white-space', 'pre-line'),
                                 buttons: [{
                                     label: '{{ lang._("Close") }}',
