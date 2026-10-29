@@ -235,15 +235,15 @@ class CaptureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             engine = Path(tmp, "dvtws2.pid")
             monitor = Path(tmp, "zapret2-supervisor-monitor.pid")
-            engine.write_text("4242\\n")
-            monitor.write_text("4343\\n")
-            with patch.object(m, "checked", return_value="Thu Oct 29 20:00:00 2026\\n") as check:
+            engine.write_text("4242\n")
+            monitor.write_text("4343\n")
+            with patch.object(m, "checked", return_value="Thu Oct 29 20:00:00 2026\n") as check:
                 witness = m.process_witness(pid_files=(engine, monitor))
                 self.assertEqual((4242, 4343), (witness[0][1], witness[1][1]))
                 self.assertEqual(2, check.call_count)
                 self.assertEqual(["/bin/ps", "-p", "4242", "-o", "lstart="],
                                  check.call_args_list[0][0][0])
-            for value in ("", "x", "0", "-1", "4242\\n4343", "99999999999"):
+            for value in ("", "x", "0", "-1", "4242\n4343", "99999999999"):
                 engine.write_text(value)
                 with self.subTest(pid=value), self.assertRaises(m.CaptureError):
                     m.process_witness(pid_files=(engine, monitor))
@@ -268,16 +268,16 @@ class CaptureTests(unittest.TestCase):
 
     def test_restart_during_native_inspection_prevents_any_probe(self):
         witnessed = iter(("old-process", "new-process"))
-        with patch.object(m, "execute_one") as never:
-            def owner(_):
-                return {"config_digest": "a"*64}
-            with self.assertRaisesRegex(m.CaptureError, "changed during initial"):
-                m.execute_one(candidate(), popen=never, bridge=types.SimpleNamespace(),
-                              owner_inspection=owner,
-                              process_identity=lambda: next(witnessed),
-                              network_preflight=lambda _: None,
-                              analyzer=types.SimpleNamespace())
-            never.assert_not_called()
+        never = Mock()
+        def owner(_):
+            return {"config_digest": "a"*64}
+        with self.assertRaisesRegex(m.CaptureError, "changed during initial"):
+            m.execute_one(candidate(), popen=never, bridge=types.SimpleNamespace(),
+                          owner_inspection=owner,
+                          process_identity=lambda: next(witnessed),
+                          network_preflight=lambda _: None,
+                          analyzer=types.SimpleNamespace())
+        never.assert_not_called()
 
     def test_restart_after_capture_refuses_result_and_removes_pcap(self):
         paths = []
