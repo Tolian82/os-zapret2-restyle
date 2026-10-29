@@ -97,14 +97,27 @@ def actual_tcp_once(controller, analyzer, family: int, directory: Path) -> None:
                     peer.sendall(b'local-response')
                     if client.recv(128) != b'local-response':
                         raise RuntimeError('native loopback reply not delivered')
-            time.sleep(.25)
+            # FreeBSD BPF can defer packet delivery even with tcpdump -U.
+            # Allow a bounded window to observe native file growth, instead of
+            # treating a 250 ms snapshot as a reliable flush deadline.
+            flush_deadline = time.monotonic() + 3
+            while time.monotonic() < flush_deadline:
+                if path.is_file() and path.stat().st_size > 24:
+                    break
+                if proc.poll() is not None:
+                    raise RuntimeError('native tcpdump exited while awaiting packet flush')
+                time.sleep(.1)
         finally:
             controller.terminate(proc)
             if proc.poll() is None:
                 raise RuntimeError('native tcpdump remained after cleanup')
+            tcpdump_tail = proc.stderr.read(4096).decode('utf-8', 'replace') if proc.stderr else ''
+            if proc.stderr:
+                proc.stderr.close()
     raw = path.read_bytes()
     if len(raw) <= 24 or len(raw) > 8 * 1024 * 1024:
-        raise RuntimeError('no bounded native packet capture for ' + name)
+        raise RuntimeError('no bounded native packet capture for %s: bytes=%d; tcpdump=%r' %
+                           (name, len(raw), tcpdump_tail[-650:]))
     if raw[:4] not in controller.PCAP_MAGIC:
         raise RuntimeError('unknown native pcap format')
     endian = '<' if raw[:4] in (controller.PCAP_MAGIC[0], controller.PCAP_MAGIC[2]) else '>'
