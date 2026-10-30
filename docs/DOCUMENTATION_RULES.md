@@ -151,7 +151,7 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-016` | `GH-006` |
 | `DOC-026` | `DEV-029`, `DEV-030`, `DEV-031` |
 | `DOC-028` | `DEV-036`, `DEV-037` |
-| `DOC-037` | `GH-053`, `GH-060`–`GH-061` |
+| `DOC-037` | `DEV-032`–`DEV-033`, `GH-053`, `GH-060`–`GH-061` |
 | `DOC-038` | `DEV-039`, `GH-039`–`GH-046` |
 | `DOC-047` | `GH-053`, `GH-054`, `GH-060`–`GH-061` |
 | `DOC-049` | `GH-004`, `GH-026` |

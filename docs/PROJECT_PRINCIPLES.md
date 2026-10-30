@@ -137,7 +137,7 @@ DEV-052. **Version-independent external dependencies and platform-portable desig
 |---|---|
 | `DEV-001` | `CHAT-007`, `CHAT-009`, `CHAT-026` |
 | `DEV-017` | `GH-011` |
-| `DEV-033` | `GH-015` |
+| `DEV-033` | `GH-014`–`GH-016`, `GH-049` |
 | `DEV-036` | `GH-047`, `GH-051` |
 | `DEV-037` | `DOC-028`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-041` |
@@ -165,8 +165,8 @@ DEV-052. **Version-independent external dependencies and platform-portable desig
 | `DEV-029` | `DOC-026`, `GH-005`, `GH-014` |
 | `DEV-030` | `DOC-026`, `GH-005`, `GH-014` |
 | `DEV-031` | `DOC-026`, `GH-005`, `GH-014` |
-| `DEV-032` | `GH-005`, `GH-014` |
-| `DEV-033` | `GH-005`, `GH-014`, `GH-015` |
+| `DEV-032` | `DOC-037`, `GH-005`, `GH-014`, `GH-035`, `GH-061` |
+| `DEV-033` | `DOC-037`, `GH-005`, `GH-014`–`GH-016`, `GH-049`, `GH-061` |
 | `DEV-034` | `GH-005`, `GH-048` |
 | `DEV-035` | `GH-005`, `GH-048` |
 | `DEV-036` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |

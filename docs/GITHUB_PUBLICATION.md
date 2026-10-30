@@ -177,8 +177,9 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-005` | `DEV-027`–`DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
 | `GH-011` | `DEV-017` |
-| `GH-014` | `DEV-027`–`DEV-033` |
+| `GH-014` | `DEV-027`–`DEV-035` |
 | `GH-015` | `DEV-033` |
+| `GH-035` | `DEV-032` |
 | `GH-017` | `DEV-012` |
 | `GH-019` | `DEV-013` |
 | `GH-020` | `DEV-014` |
@@ -198,7 +199,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-058` | `DOC-042`–`DOC-045` |
 | `GH-059` | `DOC-053` |
 | `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-061` | `DOC-037` |
+| `GH-061` | `DOC-037`, `DEV-032`–`DEV-033` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -210,7 +211,10 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-006` | `DOC-016` |
 | `GH-010`–`GH-014` | `CHAT-010` |
 | `GH-011` | additionally `DEV-017` |
+| `GH-014` | `DEV-033` |
 | `GH-015` | `DEV-033`, `CHAT-010` |
+| `GH-016` | `DEV-033` |
+| `GH-049` | `DEV-033` |
 | `GH-016`–`GH-023` | `CHAT-010` |
 | `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
 | `GH-026` | additionally `DOC-049` |
