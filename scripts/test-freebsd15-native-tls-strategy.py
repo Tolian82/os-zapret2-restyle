@@ -246,6 +246,9 @@ def compiled(root: Path, upstream: Path, phase: str) -> list[str]:
 def send_hello(family: int, host: str, port: int, hello: bytes) -> int:
     result, errors, sender = [], [], []
     with socket.socket(family, socket.SOCK_STREAM) as server:
+        # Sequential A/N/B connections can leave the listening port in
+        # TIME_WAIT after shutdown; do not fail for a prior closed test flow.
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         if family == socket.AF_INET6:
             server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         server.bind((host, port))
