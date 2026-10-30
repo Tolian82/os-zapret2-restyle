@@ -17,6 +17,20 @@ The following are **not** established from two caller-supplied captures: actual 
 - The manifest is strict; no unexpected keys, no loopback/private remote target, invalid source-family mismatch, invalid TCP source port or arbitrary extra arguments. The normal candidate is TLS TCP/443; *no TLS payload parser/verification* is performed.
 - TCP payload comparisons are **observations** only. Segmentation, retransmission, TLS ClientHello differences, different source ports or packet-capture offload may make otherwise comparable experiments have different fingerprints. Hash equality also cannot prove absence of DPI action.
 
+## One-phase offline inspection of the owner-observed baseline (30 October 2026)
+
+The real OPNsense 26.7.7 / FreeBSD 15.1 testing package `0.6.1_12` produced one previously authorized **`BASELINE_CAPTURE_OBSERVED_ONLY`** for `yt3.ggpht.com -> 142.251.127.198:443`, `192.168.80.251:54111`, declared `vtnet1`; 14,941-byte PCAP, 18 observed outbound TCP packets, 6 outbound payload packets, stable native owner. PCAP remains in `/tmp/zapret2-wan-one-4uv588kt/baseline.pcap`; its original, already-validated plan is `/tmp/zapret2-stage5-retry.otJS8S/plan.json`. These filenames are **this specific owner event**, not portable defaults.
+
+The new `scripts/stage5-wan-baseline-offline-review.py` accepts the **existing** `--plan` and `--baseline` only and uses the **existing** exact-plan validator and strict read-only Ethernet PCAP parser from adjacent trusted tools. It does not need an excluded-phase capture. It emits a single sanitized `BASELINE_OFFLINE_REVIEW_ONLY` JSON report: exact five-tuple observed, outbound/reverse packet totals, TCP payload segment counts, same-sequence duplicate/conflict counts and a SHA-256 capture identifier. `CORRELATED_TCP_PAYLOAD_OBSERVED_ONLY` means only that the selected TCP flow contained outbound payload; conflicting data at one TCP sequence yields `AMBIGUOUS_SAME_SEQUENCE_TCP_PAYLOAD`, **not** DPI modification proof. All results retain `wan_origin_proven=false`, `tls_sni_proven=false`, `engine_strategy_modification_proven=false`, `exclude_effect_proven=false`, `installed_a07=installed_a08=OPEN`.
+
+This helper performs **no live request, DNS, packet capture, service/native-owner read, IPFW, Config, GUI Apply or Exclude modification**. It checks bounded regular files, refuses symbolic/hard links, validates the original plan using the original generator and does not print packet bytes. Existing signed approval for one HTTPS request has been consumed; **do not generate another live capture without new owner authorization**. A read-only local offline review of the retained PCAP does not require a further traffic authorization.
+
+A portable source-checkout example (offline files must already exist):
+
+```sh
+python3 scripts/stage5-wan-baseline-offline-review.py --plan existing-plan.json --baseline existing-baseline.pcap
+```
+
 ## Offline invocation (not an OPNsense capture command)
 
 The source is in the repository. A controlled, already-authorized offline workstation can run it against **existing** files:

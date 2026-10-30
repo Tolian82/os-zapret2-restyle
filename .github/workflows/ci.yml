@@ -135,6 +135,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage5-wan-pcap-attribution.py scripts/test-stage5-wan-pcap-attribution.py
           python3.13 scripts/test-stage5-wan-pcap-attribution.py
+      - name: Stage 5 offline review of one already-retained baseline PCAP
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-baseline-offline-review.py scripts/test-stage5-wan-baseline-offline-review.py
+          python3.13 scripts/test-stage5-wan-baseline-offline-review.py
       - name: Stage 5 non-executing WAN acquisition plan, both IP families
         run: |
           python3.13 -m py_compile scripts/stage5-wan-acquisition-plan.py scripts/test-stage5-wan-acquisition-plan.py
@@ -154,6 +158,8 @@ jobs:
           python3.11 scripts/test-stage5-wan-target-preflight.py
           python3.11 scripts/test-stage5-wan-acquisition-plan.py
           python3.11 scripts/test-stage5-wan-baseline-capture.py
+          python3.11 -m py_compile scripts/stage5-wan-baseline-offline-review.py scripts/test-stage5-wan-baseline-offline-review.py
+          python3.11 scripts/test-stage5-wan-baseline-offline-review.py
       - name: Validate Voice shell and Python syntax
         run: |
           sh -n scripts/test-voice-shared-ipsets.sh
