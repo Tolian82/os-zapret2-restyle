@@ -19,14 +19,11 @@ from . import orchestrator as base_orchestrator
 from . import state as state_persistence
 from . import telemetry
 
-POLICY = "eligible-work-v1"
-REFERENCE_ENDPOINTS = 2
-EXTRA_ENDPOINT_STANDARD_SECONDS = 30
-EXTRA_ENDPOINT_EXTENDED_SECONDS = 15
-IPV6_BASELINE_SECONDS_PER_ENDPOINT = 5
-OPTIONAL_CANDIDATE_TIMEOUT_SECONDS = 5
-QUIC_CANDIDATE_COUNT = 4
-UDP_CANDIDATE_COUNT = 3
+POLICY = "eligible-families-v2"
+# Owner's fixed overall job budgets. The additional family budget is paid
+# only when Stage 40 actually observed an A + AAAA target under opt-in.
+DUAL_STANDARD_EXTRA = 50
+DUAL_EXTENDED_EXTRA = 30
 PLAN_FILE = "adaptive-budget.json"
 
 
@@ -78,37 +75,58 @@ def _base_seconds(budget: base_orchestrator.Budget) -> dict[str, int]:
 
 
 def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
+    """Use Stage-40 target family evidence, never route availability alone."""
     endpoints = status.get("endpoints")
     network = status.get("network")
-    if not isinstance(endpoints, list) or not all(
+    baseline = status.get("baseline")
+    if not isinstance(endpoints, list) or not endpoints or not all(
         isinstance(item, str) and item for item in endpoints
     ):
         raise base_orchestrator.OrchestrationError(
-            "Strategy Lab adaptive budget requires resolved endpoints"
-        )
-    if not endpoints:
-        raise base_orchestrator.OrchestrationError(
-            "Strategy Lab adaptive budget requires at least one endpoint"
+            "Strategy Lab budget requires resolved endpoints"
         )
     if not isinstance(network, dict) or network.get("ipv4") != "available":
         raise base_orchestrator.OrchestrationError(
-            "Strategy Lab adaptive budget requires the completed IPv4 network precheck"
+            "Strategy Lab budget requires the completed IPv4 network precheck"
         )
-    udp = status.get("udp_request")
-    udp_configured = (
-        mode == "extended"
-        and isinstance(udp, dict)
-        and udp.get("configured") is True
+    # Some existing adapters publish a valid Stage-40 PASS without recording
+    # per-family evidence. That can NEVER justify extra IPv6 time, but must not
+    # turn an otherwise valid IPv4 job into an internal ERROR.
+    has_baseline = isinstance(baseline, dict) and isinstance(baseline.get("endpoints"), list)
+    ipv6_requested = status.get("ipv6_enabled") is True
+    ipv4_target = status.get("target_type") == "ip"
+    domain = status.get("target_type") == "domain"
+    family_endpoints = baseline["endpoints"] if has_baseline else []
+    def has_family(family: str) -> bool:
+        return any(
+            isinstance(item, dict)
+            and isinstance(item.get(family), dict)
+            and item[family].get("status") in {"PASS", "FAIL"}
+            for item in family_endpoints
+        )
+
+    ipv4_eligible = ipv4_target or (domain and has_family("ipv4"))
+    ipv6_eligible = (
+        domain and has_baseline and ipv6_requested
+        and network.get("ipv6") == "available" and has_family("ipv6")
     )
+    # No bonus for IPv6 merely present on the network, checked-only, or
+    # a single IPv4 literal. An AAAA-less domain must remain single-family.
+    dual_family = bool(ipv4_eligible and ipv6_eligible)
+    udp = status.get("udp_request")
     return {
         "mode": mode,
         "endpoint_count": len(endpoints),
-        "ipv4": True,
-        "ipv6": network.get("ipv6") == "available",
-        "tls13": True,
-        "extended_tcp": mode == "extended",
+        "ipv4": bool(ipv4_eligible),
+        "ipv6": bool(ipv6_eligible),
+        "dual_family": dual_family,
+        "ipv6_requested": ipv6_requested,
+        "family_evidence_available": bool(has_baseline),
         "quic_ipv4": mode == "extended" and network.get("quic_ipv4") == "available",
-        "generic_udp": udp_configured,
+        "generic_udp": (
+            mode == "extended" and isinstance(udp, dict)
+            and udp.get("configured") is True
+        ),
     }
 
 
@@ -116,62 +134,33 @@ def calculate_plan(
     budget: base_orchestrator.Budget,
     status: dict[str, Any],
 ) -> dict[str, Any]:
-    """Return one deterministic finite plan from the measured eligible work matrix."""
+    """One bounded job-wide deadline, never additive protocol/endpoint bonuses."""
     base = _base_seconds(budget)
     matrix = _work_matrix(status, budget.mode)
-    endpoint_count = int(matrix["endpoint_count"])
-    extra_endpoints = max(0, endpoint_count - REFERENCE_ENDPOINTS)
-
-    endpoint_standard = extra_endpoints * EXTRA_ENDPOINT_STANDARD_SECONDS
-    endpoint_extended = (
-        extra_endpoints * EXTRA_ENDPOINT_EXTENDED_SECONDS
-        if budget.mode == "extended"
-        else 0
+    dual = matrix["dual_family"]
+    # Keep the lower custom budgets used by bounded tests; release defaults
+    # remain exactly 150/270 and 200/350 with the existing 150/120 pair.
+    standard = min(base["standard"], 150) + (DUAL_STANDARD_EXTRA if dual else 0)
+    extended = min(base["extended"], 120) + (
+        DUAL_EXTENDED_EXTRA if dual and budget.mode == "extended" else 0
     )
-    ipv6 = (
-        endpoint_count * IPV6_BASELINE_SECONDS_PER_ENDPOINT
-        if matrix["ipv6"]
-        else 0
-    )
-    quic = (
-        QUIC_CANDIDATE_COUNT * OPTIONAL_CANDIDATE_TIMEOUT_SECONDS
-        if matrix["quic_ipv4"]
-        else 0
-    )
-    generic_udp = (
-        UDP_CANDIDATE_COUNT * OPTIONAL_CANDIDATE_TIMEOUT_SECONDS
-        if matrix["generic_udp"]
-        else 0
-    )
-
-    standard_add = endpoint_standard + ipv6
-    extended_add = endpoint_extended + quic + generic_udp
-    standard = base["standard"] + standard_add
-    extended = base["extended"] + extended_add
     search = standard + extended if budget.mode == "extended" else standard
-    stage80 = base["stage80"] + extended_add
-
+    stage80 = min(base["stage80"] + (
+        DUAL_EXTENDED_EXTRA if dual and budget.mode == "extended" else 0
+    ), extended)
     return {
-        "schema": 1,
+        "schema": 2,
         "policy": POLICY,
-        "reference_endpoints": REFERENCE_ENDPOINTS,
         "work_matrix": matrix,
         "weights_seconds": {
-            "extra_endpoint_standard": EXTRA_ENDPOINT_STANDARD_SECONDS,
-            "extra_endpoint_extended": EXTRA_ENDPOINT_EXTENDED_SECONDS,
-            "ipv6_baseline_per_endpoint": IPV6_BASELINE_SECONDS_PER_ENDPOINT,
-            "optional_candidate_timeout": OPTIONAL_CANDIDATE_TIMEOUT_SECONDS,
-            "quic_candidate_count": QUIC_CANDIDATE_COUNT,
-            "udp_candidate_count": UDP_CANDIDATE_COUNT,
+            "dual_family_standard": DUAL_STANDARD_EXTRA,
+            "dual_family_extended": DUAL_EXTENDED_EXTRA,
         },
         "additions_seconds": {
-            "extra_endpoints_standard": endpoint_standard,
-            "extra_endpoints_extended": endpoint_extended,
-            "ipv6": ipv6,
-            "quic": quic,
-            "generic_udp": generic_udp,
-            "standard_total": standard_add,
-            "extended_total": extended_add,
+            "standard_total": DUAL_STANDARD_EXTRA if dual else 0,
+            "extended_total": (
+                DUAL_EXTENDED_EXTRA if dual and budget.mode == "extended" else 0
+            ),
         },
         "base_seconds": base,
         "effective_seconds": {
@@ -189,7 +178,7 @@ def adapt(
     job_dir: Path,
     state_path: Path,
 ) -> dict[str, Any]:
-    """Apply the Stage-30 plan without moving the original job start epoch."""
+    """Apply the Stage-40 family-qualified plan without restarting the job clock."""
     status = _load_status(state_path)
     plan = calculate_plan(budget, status)
     effective = plan["effective_seconds"]
@@ -209,7 +198,7 @@ def adapt(
         job_dir,
         "budget_adaptation",
         0,
-        stage="30",
+        stage="40",
         outcome="pass",
         details=plan,
     )
@@ -217,11 +206,11 @@ def adapt(
 
 
 class AdaptiveBudgetOrchestrator(late_containment.ContainedOrchestrator):
-    """Contained production orchestrator with Stage-30 workload-derived deadlines."""
+    """Contained production orchestrator with Stage-40 family-qualified budgets."""
 
     def _run_regular_stage(self, stage: str) -> str | None:
         outcome = super()._run_regular_stage(stage)
-        if stage == "30" and outcome is None:
+        if stage == "40" and outcome is None:
             adapt(self.budget, job_dir=self.job_dir, state_path=self.state_path)
         return outcome
 

@@ -198,6 +198,8 @@
 
 **First source increment v0.6.1_21 (31 October 2026):** Independent default-OFF IPv6 GUI checkbox below Mode, native API/configd/launch handoff, immutable saved job selection and opt-in-gated real Stage-30 IPv6 control probe are implemented for source/CI review. Existing IPv6 route-gated domain AAAA/TLS probe is reused only on opt-in. **Stage 6 exit is NOT CLOSED:** IPv6 literal and AAAA-only jobs, end-to-end pinned replay, fixed 150/200/270/350-second job-wide budgets, fully qualified GUI and owner-installed matrix remain to implement/test. [Focused regression](../../scripts/test-strategy-lab-ipv6-opt-in.py).
 
+**Second source increment v0.6.1_22 (31 October 2026):** Strict single job-wide deadline is now computed only from actual Stage-40 family observation, not mere network IPv6 route, optional QUIC/UDP or endpoint count. Standard 150/200 and Extended 270/350, no repeated bonus; [regression](../../scripts/test-strategy-lab-adaptive-budget.sh). **Still OPEN:** IPv6 literal, AAAA-only end-to-end search, actual IPv6 IPFW capture/replay and owner-installed acceptance.
+
 **Outcome:** Use the existing Lab engine for pinned IPv6 endpoints, plus the owner-approved IPv6 checkbox under Mode, dual-family target gating and 150/200 / 270/350-second job budgets.
 
 | Scope | File | Planned change or check |
