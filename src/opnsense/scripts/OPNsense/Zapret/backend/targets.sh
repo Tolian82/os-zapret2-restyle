@@ -104,25 +104,21 @@ targets_normalize_hostlist()
 
 targets_python_bin()
 {
-    # The installed OPNsense package pins Python 3.13. Source-only tests
-    # may use a test interpreter, but not the installed appliance.
-    local python_bin=/usr/local/bin/python3.13
-    if [ ! -x "${python_bin}" ]; then
-        case "${BACKEND_DIR:-}" in
-            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
-                common_error "pinned Python 3.13 is required for managed IPv4/IPv6 targets"
-                return 1
-                ;;
-            *)
-                python_bin=$(command -v python3.13 2>/dev/null) ||
-                    python_bin=$(command -v python3 2>/dev/null) || {
-                        common_error "Python is required for IPSET compilation"
-                        return 1
-                    }
-                ;;
-        esac
+    # The service resolves once through the installed compatibility manifest.
+    # Isolated compiler entrypoints may resolve the same trusted contract.
+    if [ -n "${PYTHON_BIN:-}" ]; then
+        printf '%s\n' "${PYTHON_BIN}"
+        return 0
     fi
-    printf '%s\n' "${python_bin}"
+    _targets_runtime="${BACKEND_DIR:-}/../python_runtime.sh"
+    [ -r "${_targets_runtime}" ] || {
+        common_error "native IPSET Python runtime launcher unavailable"
+        return 1
+    }
+    /bin/sh "${_targets_runtime}" --resolve || {
+        common_error "no compatible native IPSET Python runtime"
+        return 1
+    }
 }
 
 targets_ipset_compiler()
