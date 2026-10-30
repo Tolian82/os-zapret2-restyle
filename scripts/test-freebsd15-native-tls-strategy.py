@@ -238,7 +238,8 @@ def compiled(root: Path, upstream: Path, phase: str) -> list[str]:
     expected = 0 if phase == "baseline" else 3
     if kinds != ["profile"]*3 or sum(row.count("--ipset-exclude="+ipref) for row in rows) != expected:
         raise RuntimeError("TLS Strategy production compiler/Exclude binding mismatch")
-    if any(row.count("--lua-desync=pktmod:ip_ttl=") != 1 for row in rows):
+    expected_strategy = f"--lua-desync=pktmod:ip_ttl={TTL4}:ip6_ttl={HOP6}"
+    if any(row.count(expected_strategy) != 1 for row in rows):
         raise RuntimeError("real upstream TLS Strategy missing from generated executable profile")
     return result.split()
 
