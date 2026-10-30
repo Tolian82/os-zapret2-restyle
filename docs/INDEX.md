@@ -20,7 +20,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_12`; running shared runtime and all eight profile Exclude references are confirmed, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python unification is deferred; stable `v0.6.0_1` unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_12`; running shared runtime and all eight profile Exclude references are confirmed, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python interpreter unification is **cancelled in the current dual-stack technical specification** and requires a new, separate future technical specification; stable `v0.6.0_1` unchanged.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; current owner-installed identity is `_12`, with no stable `v0.6.1` release authorization.
 
@@ -69,7 +69,7 @@
 ## Level 2 — active M0–M7 completion and acceptance
 
 - [Owner-approved completion plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — bounded milestones, acceptance gates, and no speculative Git provenance expansion.
-- [Additional Resources normative TЗ](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — normal update, exact-set reconciliation and preserved fail-closed recovery; new clean-reinstall tooling explicitly cancelled.
+- [Additional Resources normative technical specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — normal update, exact-set reconciliation and preserved fail-closed recovery; new clean-reinstall tooling explicitly cancelled.
 - [Single acceptance board](verification/EXTRA_RESOURCES_ACCEPTANCE.md) — actual candidate, evidence, pass/fail status, blocker and next action.
 - [Final owner acceptance and stable release authorization](verification/evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md) — accepted H1; M6 owner-closed without a cold boot; M7 exact delivery authorization.
 - [v0.5.8 stable release preparation and verification](releases/v0.5.8.md) — exact `0.5.8_1` candidate, included features and bounded release checks.

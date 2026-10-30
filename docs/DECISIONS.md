@@ -2750,3 +2750,13 @@ Active
 **Affected documents:** `docs/PROJECT_PRINCIPLES.md`, `docs/DECISIONS.md`, `docs/START_HERE.md`, `docs/ROADMAP.md`, [implementation task #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732).
 
 **Status:** Active. Architectural policy recorded; package-source changes and platform qualification not yet implemented.
+
+## 2026-10-30 — Python unification cancelled within the Exclude IPSet / IPv4/IPv6 specification
+
+**Latest owner decision (superseding the implementation timing and scope of the Python-specific 2026-10-30 entries above):** Cross-project Python interpreter/runtime unification is **CANCELLED within the currently approved Exclude IPSet / IPv4/IPv6 technical specification**, including Stage 5 and subsequent stages. It is **not deferred to any later stage of this same specification**, and it is not a dependency, acceptance criterion, or release blocker for the active dual-stack work.
+
+**Future boundary:** Python unification may be undertaken **after the present technical specification only under a new, separate owner-approved technical specification and implementation plan**. Previously recorded Python path/resolver requirements, [issue #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732), and the closed/unmerged [PR #740](https://github.com/Tolian82/os-zapret2-restyle/pull/740) remain historical design input, not authorization to implement, resume, or reserve `v0.6.1_13`. The next actual `PLUGIN_REVISION` is determined by a separately approved packaged-source change under DEV-032/033.
+
+**Unaffected canon:** Existing one-Python IPv4/IPv6 IPSET semantic compilation (`ipset_policy.py`), bug fixes required by the present work, general portability principle DEV-052, original native Config/FD9/IPFW ownership, and evidence/rollback gates remain in effect. This entry changes only the current scope/priority, not production code, package, installed appliance, or stable release.
+
+**Current authority:** [Exclude IPSet specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md), [staged plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md), and [START_HERE](START_HERE.md). **Status:** Current owner-approved scope correction; earlier Python implementation timing is superseded.
