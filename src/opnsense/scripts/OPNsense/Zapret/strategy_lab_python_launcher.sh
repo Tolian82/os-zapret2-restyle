@@ -2,9 +2,8 @@
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PYTHON_BIN=${STRATEGY_LAB_PYTHON_BIN:-/usr/local/bin/python3}
 PYTHON_ENTRY="${SCRIPT_DIR}/strategy_lab_python.py"
-EXPECTED_PYTHON=3.13
+PYTHON_RUNTIME_LAUNCHER="${SCRIPT_DIR}/python_runtime.sh"
 
 # Telemetry-derived containment defaults retained from Strategy Lab 0.4.0_8.
 # `_33` keeps the 150/270-second search budgets and the bounded cold lifecycle,
@@ -49,23 +48,20 @@ runtime_error()
     exit 70
 }
 
-requested_python=${PYTHON_BIN}
-case "${PYTHON_BIN}" in
-    */*)
-        ;;
-    *)
-        PYTHON_BIN=$(command -v "${PYTHON_BIN}" 2>/dev/null) ||
-            runtime_error "interpreter is not executable: ${requested_python}"
-        ;;
-esac
-
-[ -x "${PYTHON_BIN}" ] || runtime_error "interpreter is not executable: ${requested_python}"
 [ -r "${PYTHON_ENTRY}" ] || runtime_error "entry point is not readable: ${PYTHON_ENTRY}"
+[ -r "${PYTHON_RUNTIME_LAUNCHER}" ] || runtime_error "runtime launcher unavailable"
 
-python_version=$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null) ||
-    runtime_error "interpreter execution failed: ${PYTHON_BIN}"
-
-[ "${python_version}" = "${EXPECTED_PYTHON}" ] ||
-    runtime_error "unsupported interpreter version ${python_version}; expected ${EXPECTED_PYTHON}"
+if [ "${STRATEGY_LAB_PYTHON_BIN+x}" = x ]; then
+    requested_python="${STRATEGY_LAB_PYTHON_BIN}"
+    case "${requested_python}" in
+        */*) ;;
+        *) requested_python=$(command -v "${requested_python}" 2>/dev/null) ||
+            runtime_error "interpreter not found" ;;
+    esac
+    ZAPRET_PYTHON_BIN="${requested_python}"
+    export ZAPRET_PYTHON_BIN
+fi
+PYTHON_BIN=$(/bin/sh "${PYTHON_RUNTIME_LAUNCHER}" --resolve) ||
+    runtime_error "installed Python runtime is unavailable or incompatible"
 
 exec "${PYTHON_BIN}" "${PYTHON_ENTRY}" "$@"
