@@ -19,9 +19,9 @@ The successful [native TLS proof](STAGE5_TLS_NATIVE_HEADER_ATTRIBUTION.md) conce
 
 Existing tools cover parts of witnesses 1–3 and five-tuple analysis, but **do not yet** establish runtime-selected production TLS behavior or independent WAN packet origin. Do not add an alternative production parser, a second service/engine, IPFW rule, config writer or logging path to fill the gap.
 
-## Expected offline result (design schema, not yet implemented)
+## Expected offline result (bounded helper implemented, not an installed acceptance)
 
-A future non-executing, source-only binding helper may consume **already collected** bounded/sanitized native-owner, effective-argv, target-preflight, capture-lifecycle and offline-PCAP evidence. Never accept arbitrary booleans such as `strategy_selected=true` as independent proof; bind each claim to a named verified source, digest and compatible time/flow identity.
+The new [non-executing Phase-A binder](../../scripts/stage5-tls-phase-a-offline.py) consumes **already collected** native-owner, final argv release-policy digest, managed HOSTLIST and IPSET inputs, original acquisition plan and optionally offline PCAP evidence. It does **not** ingest or attest independent process-selection/capture-lifecycle testimony. The latter remain explicitly UNVERIFIED. The binder only claims eligibility of candidate executable profiles (not their actual execution). Never accept arbitrary booleans such as `strategy_selected=true` as independent proof; bind each claim to a named verified source, digest and compatible time/flow identity.
 
 | Evidence field | Minimum condition to claim it | Otherwise |
 | --- | --- | --- |
@@ -36,9 +36,9 @@ Every planned report is `PHASE_A_REVIEW_ONLY`, has `owner_live_authorized=false`
 
 ## Follow-on implementation and executable qualification gate
 
-A **separate** bounded source implementation may now be prepared with the following acceptance conditions, without accessing the owner appliance:
+The first bounded non-executing eligibility binder has been implemented in source with [focused offline tests](../../scripts/test-stage5-tls-phase-a-offline.py). Its output is deliberately limited to candidate eligibility, not production-selected-profile or packet mutation proof. The following conditions remain mandatory before any live Phase A may be proposed:
 
-1. Reuse the existing source-backed profile parser/selector and offline capture/owner verifiers; no duplicate command generator, network probe or alternate Python-runtime resolver. If installed CLI/process observability cannot uniquely attest the selected profile, demonstrate the limitation with an isolated test and keep it **UNVERIFIED**.
+1. Maintain the existing production parser/selector, native policy SHA/count witness and owner/PCAP verifiers. The new helper creates no command generator, network probe or alternate Python-runtime resolver, and always reports runtime profile selection **UNVERIFIED**. It does not prove installed process identity merely by observing native Config readiness.
 2. Execute focused offline tests for TLS/443 HOSTLIST match and mismatch; IPv4 and IPv6; first/middle/last executable profiles and `--new`/template/import/Extra; IPSET/Voice overlap; exact per-profile Exclude; missing or ambiguous process/flow/PCAP evidence; checksum/time/flow conflicts; and permanent false permission/acceptance flags.
 3. Qualify the **current actual configured strategy class** (fake/split if present), not a substituted laboratory `pktmod` or HTTP `http_hostcase`, against independent source/packet-effect witnesses in disposable FreeBSD 15.1 CI **before** proposing any new owner WAN trial. Do not promote a skipped native gate.
 4. Only after the source/CI gate and a new explicit owner approval, propose **one** reviewed, bounded baseline observation for the *same pinned endpoint*; Phase B (temporary Exclude via normal GUI Apply and exact restoration) needs **separate explicit approval** and a positive, independently attributable Phase-A mutation. Existing [A/B protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md) and [restoration reviewer](STAGE5_WAN_AB_READINESS.md) remain the sole owners of that later gate.
