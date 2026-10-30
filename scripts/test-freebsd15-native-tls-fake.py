@@ -54,8 +54,11 @@ def static_test() -> None:
     for family in (socket.AF_INET, socket.AF_INET6):
         # Synthetic DLT_NULL PCAP test: never presented as native runtime evidence.
         for payload in (hello, FAKE):
-            frame = native.fixture_frame(family, payload)
-            assert native.records(native.fixture_pcap(frame), family, payload) == [(55410, 6541, 64)]
+            frame = native.fixture_frame(family, payload, dstport=PORT)
+            pcap = native.fixture_pcap(frame)
+            assert native.records(pcap, family, payload, ports=(PORT, BYPASS)) == [(55410, PORT, 64)]
+            if native.records(pcap, family, payload):
+                raise RuntimeError('native legacy default ports leaked into new fake trial')
         first = [(55100, PORT, 64), (55101, PORT, 64), (55102, BYPASS, 64)]
         attest(first, [(55101, PORT, 64)], 55100, 55101, 55102, 'baseline')
         attest(first, [(55101, PORT, 64)], 55100, 55101, 55102, 'nonmatching')
@@ -207,8 +210,8 @@ def capture(adapter, controller, native, engine: Path, upstream: Path,
                     or not controller.wait_for_packet_flush(dump, cap, deadline=time.monotonic()+3)):
                 raise RuntimeError('missing native capture, engine, or IPFW evidence')
             raw = cap.read_bytes()
-            original = native.records(raw, family, hello)
-            forged = native.records(raw, family, FAKE)
+            original = native.records(raw, family, hello, ports=(PORT, BYPASS))
+            forged = native.records(raw, family, FAKE, ports=(PORT, BYPASS))
             attest(original, forged, baseline, active, bypass, phase)
         finally:
             if dump is not None:
