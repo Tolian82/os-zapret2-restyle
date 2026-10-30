@@ -89,14 +89,14 @@ def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
         raise base_orchestrator.OrchestrationError(
             "Strategy Lab budget requires the completed IPv4 network precheck"
         )
-    if not isinstance(baseline, dict) or not isinstance(baseline.get("endpoints"), list):
-        raise base_orchestrator.OrchestrationError(
-            "Strategy Lab budget requires recorded Stage-40 target evidence"
-        )
+    # Some existing adapters publish a valid Stage-40 PASS without recording
+    # per-family evidence. That can NEVER justify extra IPv6 time, but must not
+    # turn an otherwise valid IPv4 job into an internal ERROR.
+    has_baseline = isinstance(baseline, dict) and isinstance(baseline.get("endpoints"), list)
     ipv6_requested = status.get("ipv6_enabled") is True
     ipv4_target = status.get("target_type") == "ip"
     domain = status.get("target_type") == "domain"
-    family_endpoints = baseline["endpoints"]
+    family_endpoints = baseline["endpoints"] if has_baseline else []
     def has_family(family: str) -> bool:
         return any(
             isinstance(item, dict)
@@ -107,8 +107,8 @@ def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
 
     ipv4_eligible = ipv4_target or (domain and has_family("ipv4"))
     ipv6_eligible = (
-        domain and ipv6_requested and network.get("ipv6") == "available"
-        and has_family("ipv6")
+        domain and has_baseline and ipv6_requested
+        and network.get("ipv6") == "available" and has_family("ipv6")
     )
     # No bonus for IPv6 merely present on the network, checked-only, or
     # a single IPv4 literal. An AAAA-less domain must remain single-family.
@@ -121,6 +121,7 @@ def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
         "ipv6": bool(ipv6_eligible),
         "dual_family": dual_family,
         "ipv6_requested": ipv6_requested,
+        "family_evidence_available": bool(has_baseline),
         "quic_ipv4": mode == "extended" and network.get("quic_ipv4") == "available",
         "generic_udp": (
             mode == "extended" and isinstance(udp, dict)
