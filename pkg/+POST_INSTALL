@@ -19,7 +19,10 @@ UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
 EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
-EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-}"
+if [ -z "${EXTRA_PYTHON}" ]; then
+    EXTRA_PYTHON=$(/bin/sh /usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh --resolve) || exit 69
+fi
 
 reload_configd_actions()
 {
