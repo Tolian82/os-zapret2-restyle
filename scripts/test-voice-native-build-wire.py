@@ -8,6 +8,7 @@ that production orchestrator invokes before runtime activation.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 import subprocess
@@ -70,6 +71,7 @@ orchestrator_stage_native_voice "$2" "$3" "$4" "$5" \
         ["/bin/sh", "-c", runner, "voice-native-test", str(BACKEND),
          str(xml), str(managed), ACTIVE, wan, str(ordinary), str(output)],
         capture_output=True, text=True, timeout=30, check=False,
+        env={**os.environ, "PYTHON_BIN": sys.executable},
     )
 
 
