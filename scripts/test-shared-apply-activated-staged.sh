@@ -14,14 +14,14 @@ from pathlib import Path
 import re, sys
 p = Path(sys.argv[1])
 s = p.read_text()
-a = '    [ -x /usr/local/bin/python3.13 ] || return 70'
+a = '    [ -x "${PYTHON_BIN}" ] || return 70'
 assert s.count(a) == 1
 s = s.replace(a, '    : # mocked native interpreter')
-old_context = ('        _shared_cold_context=$(/usr/local/bin/python3.13 \\\n'
+old_context = ('        _shared_cold_context=$("${PYTHON_BIN}" \\\n'
                '            "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69')
 assert s.count(old_context) == 1
 s = s.replace(old_context, '        _shared_cold_context=$(mock_context) || return 69')
-prefix = '        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
+prefix = '        "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for cli, replacement in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old"',
      'finish_mock remove-saved'),
