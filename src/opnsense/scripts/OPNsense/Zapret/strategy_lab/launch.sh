@@ -71,6 +71,7 @@ cleanup_stale_active()
 start_job()
 {
     _strategy_lab_enable_quic=0
+    _strategy_lab_ipv6_enabled=0
     _strategy_lab_service_host='-'
     case "$#" in
         4)
@@ -98,6 +99,13 @@ start_job()
             _strategy_lab_udp_payload="$7"
             _strategy_lab_service_host="$8"
             ;;
+        9)
+            _strategy_lab_enable_quic="$5"
+            _strategy_lab_udp_port="$6"
+            _strategy_lab_udp_payload="$7"
+            _strategy_lab_service_host="$8"
+            _strategy_lab_ipv6_enabled="$9"
+            ;;
         *)
             usage_error "start requires TARGET MODE LANGUAGE and optional ENABLE_QUIC plus UDP_PORT UDP_PAYLOAD_BASE64 SERVICE_HOST"
             ;;
@@ -119,6 +127,7 @@ start_job()
     strategy_lab_mode_valid "${_strategy_lab_mode}" || usage_error "invalid mode"
     strategy_lab_language_valid "${_strategy_lab_language}" || usage_error "invalid language"
     case "${_strategy_lab_enable_quic}" in 0|1) ;; *) usage_error "invalid Enable QUIC value" ;; esac
+    case "${_strategy_lab_ipv6_enabled}" in 0|1) ;; *) usage_error "invalid IPv6 selection" ;; esac
     [ -x "${WORKER_SCRIPT}" ] || { emit_error_json "Strategy Lab worker is unavailable"; return 1; }
     [ -x "${TRANSACTION_SCRIPT}" ] || { emit_error_json "Strategy Lab lifecycle transaction is unavailable"; return 1; }
     [ -x "${DAEMON_BIN}" ] || { emit_error_json "Strategy Lab daemon launcher is unavailable"; return 1; }
@@ -134,7 +143,7 @@ start_job()
     _strategy_lab_job=$(basename "${_strategy_lab_jobdir}")
     strategy_lab_job_id_valid "${_strategy_lab_job}" || { rm -rf "${_strategy_lab_jobdir}"; emit_error_json "Strategy Lab job id generation failed"; return 1; }
 
-    strategy_lab_initialize_state "${_strategy_lab_job}" "${_strategy_lab_target}" "${_strategy_lab_mode}" "${_strategy_lab_language}"
+    strategy_lab_initialize_state "${_strategy_lab_job}" "${_strategy_lab_target}" "${_strategy_lab_mode}" "${_strategy_lab_language}" "${_strategy_lab_ipv6_enabled}"
     printf '%s\n' "${_strategy_lab_service_host}" > "${_strategy_lab_jobdir}/service-host" || {
         rm -rf "${_strategy_lab_jobdir}"
         emit_error_json "Strategy Lab service identity could not be persisted"
@@ -147,6 +156,12 @@ start_job()
         return 1
     }
     chmod 0644 "${_strategy_lab_jobdir}/quic-enabled"
+    printf '%s\n' "${_strategy_lab_ipv6_enabled}" > "${_strategy_lab_jobdir}/ipv6-enabled" || {
+        rm -rf "${_strategy_lab_jobdir}"
+        emit_error_json "Strategy Lab IPv6 selection could not be persisted"
+        return 1
+    }
+    chmod 0644 "${_strategy_lab_jobdir}/ipv6-enabled"
     if ! strategy_lab_udp_input_prepare "${_strategy_lab_job}" "${_strategy_lab_mode}" \
         "${_strategy_lab_udp_port}" "${_strategy_lab_udp_payload}"
     then

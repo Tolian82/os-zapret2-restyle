@@ -231,7 +231,9 @@ def _nonnegative_integer(value: str, label: str) -> int:
     return result
 
 
-def initialize(job_id: str, state_name: str, events_name: str, target: str, mode: str, language: str) -> None:
+def initialize(job_id: str, state_name: str, events_name: str, target: str, mode: str, language: str, ipv6_enabled: str = "0") -> None:
+    if ipv6_enabled not in {"0", "1"}:
+        raise UsageError("invalid Strategy Lab IPv6 selection")
     state = _state(job_id, state_name)
     events = _events(job_id, events_name, state)
     value = {
@@ -240,6 +242,7 @@ def initialize(job_id: str, state_name: str, events_name: str, target: str, mode
         "network": {}, "baseline": {}, "candidate_smoke": {}, "family_screening": {},
         "parameter_expansion": {}, "stability": {}, "shortlist": {}, "extended": {},
         "quic": {}, "udp": {}, "mode": mode, "language": language,
+        "ipv6_enabled": ipv6_enabled == "1",
         "initial_service_state": "", "cancel_requested": False,
         "cancel_requested_at": "", "current_stage": "00", "message": "",
         "progress": {"percent": 0, "stage": "00", "stage_key": "target_initialization", "message": ""},
@@ -499,7 +502,7 @@ def main(argv: Sequence[str]) -> int:
     if not args:
         raise UsageError("missing Strategy Lab state operation")
     op, args = args[0], args[1:]
-    if op == "initialize" and len(args) == 6:
+    if op == "initialize" and len(args) in {6, 7}:
         initialize(*args)
     elif op == "set-target" and len(args) == 5:
         set_target(*args)
