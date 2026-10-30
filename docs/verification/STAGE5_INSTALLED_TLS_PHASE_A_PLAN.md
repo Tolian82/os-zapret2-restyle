@@ -1,6 +1,6 @@
 # Stage 5 — installed TLS Strategy Phase A: identity and packet provenance plan
 
-**Status (30 October 2026): DESIGN / REVIEW ONLY.** This document is a bounded, **non-executing** plan for the owner's **existing** OPNsense 26.7.7 / FreeBSD 15.1 installation and **installed** `os-zapret2-restyle-0.6.1_12`. It neither sends traffic nor authorizes the owner to run commands, capture packets, install a newer candidate, edit Exclude, or invoke GUI Apply. Installed A07/A08 and IPv6/Voice acceptance remain **OPEN**.
+**Status (30 October 2026): non-executing offline eligibility helper implemented in source; REVIEW ONLY.** This document is a bounded, **non-executing** plan for the owner's **existing** OPNsense 26.7.7 / FreeBSD 15.1 installation and **installed** `os-zapret2-restyle-0.6.1_12`. It neither sends traffic nor authorizes the owner to run commands, capture packets, install a newer candidate, edit Exclude, or invoke GUI Apply. Installed A07/A08 and IPv6/Voice acceptance remain **OPEN**.
 
 ## User-observable question and evidence boundary
 
