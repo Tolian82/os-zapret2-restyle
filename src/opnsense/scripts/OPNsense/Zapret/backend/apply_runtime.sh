@@ -61,7 +61,7 @@ apply_runtime_probe()
     if [ "$2" = 1 ]; then
         [ -x "$DVTWS_BIN" ] || return 1
         validator_validate_engine_mapped "$DVTWS_BIN" "$1/dvtws.args" \
-            "$ACTIVE_DIR" "$1" "${PYTHON_BIN:-/usr/local/bin/python3.13}" || return 1
+            "$ACTIVE_DIR" "$1" "${PYTHON_BIN:?validated Python runtime missing}" || return 1
     fi
     _apply_engine=0
     _apply_supervisor=0
