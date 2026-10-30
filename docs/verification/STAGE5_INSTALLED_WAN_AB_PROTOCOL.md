@@ -61,6 +61,9 @@ On unexpected state change or uncertain rollback, immediately stop the experimen
 
 ## 6. Next engineering work, no owner action yet
 
+- The [installed TLS Phase-A identity and packet-provenance design](STAGE5_INSTALLED_TLS_PHASE_A_PLAN.md) requires four separate witnesses, including actual effective production TLS profile and independent engine-action/packet attribution. It is non-executing and does not authorize a fresh WAN capture, phase B or GUI Apply.
+
+
 - The [bounded read-only A07 target-selector](STAGE5_WAN_TARGET_READONLY.md) and 19 focused tests passed [PR #721 Project/Voice/FreeBSD15 CI](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40902179064). It only nominates candidates: actual five-tuple attribution, baseline Lua modification, excluded WAN packet evidence and owner-live acceptance all remain OPEN.
 - Qualify exact packet comparison semantics on a disposable FreeBSD 15.1 WAN-like path/CI fixture before asking for installed packet evidence; the existing loopback `dvtws2` test is the lower proof level.
 - A [consent-gated baseline-only lifecycle controller](STAGE5_WAN_SINGLE_BASELINE_CAPTURE.md) is a source/CI candidate, not owner-live acceptance: native owner/route/port/DLT checks and bounded process cleanup still require native FreeBSD qualification, then separate owner permission. It cannot toggle Exclude or start a second A/B phase; actual Lua baseline modification and GUI restoration proof remain independent.

@@ -1,0 +1,48 @@
+# Stage 5 — installed TLS Strategy Phase A: identity and packet provenance plan
+
+**Status (30 October 2026): DESIGN / REVIEW ONLY.** This document is a bounded, **non-executing** plan for the owner's **existing** OPNsense 26.7.7 / FreeBSD 15.1 installation and **installed** `os-zapret2-restyle-0.6.1_12`. It neither sends traffic nor authorizes the owner to run commands, capture packets, install a newer candidate, edit Exclude, or invoke GUI Apply. Installed A07/A08 and IPv6/Voice acceptance remain **OPEN**.
+
+## User-observable question and evidence boundary
+
+**Question:** Which *actual installed* TLS Strategy profile, if any, was eligible and selected for the pinned `yt3.ggpht.com` connection, and what **independent** evidence can identify an outgoing packet as a consequence of that profile rather than ordinary TCP/TLS/NAT/offload behavior?
+
+The owner-authorized historical baseline is exhausted: `192.168.80.251:54111 -> 142.251.127.198:443` on declared `vtnet1`, 18 outgoing / 14 incoming TCP packets. The existing [offline baseline review](STAGE5_WAN_AB_READINESS.md) correlates the five-tuple in an existing classic Ethernet PCAP, but proves neither WAN capture provenance, original ClientHello SNI, exact production-profile selection, Lua action, nor Exclude suppression. The SYN-space SACK/D-SACK-like observation is **not** a modification witness. Do not capture again merely to re-examine this baseline.
+
+The successful [native TLS proof](STAGE5_TLS_NATIVE_HEADER_ATTRIBUTION.md) concerns an intentionally chosen `pktmod:ip_ttl/ip6_ttl` profile on disposable FreeBSD loopback. The installed Strategy may instead use **fake/split** behavior and is not identified or qualified by that experiment. Reuse its methodology, never its claimed production identity.
+
+## Phase A contract — four independent witnesses
+
+1. **Installed owner / runtime identity (read-only):** accept only an existing native `voice_live_inspect.py` snapshot validated through [`stage5-installed-evidence.py`](../../scripts/stage5-installed-evidence.py): exactly the installed `0.6.1_12`, `native-common/ready`, Config digest, engine and supervisor attestation, owned IPFW scope. Preserve evidence SHA-256 and an observation label; do not publish raw Config or private logs. A Config digest or running PID alone is **not** proof that a particular TLS profile processed a packet.
+2. **Exact effective production Strategy identity (read-only):** use the existing [production-backed candidate selector](../../scripts/stage5-wan-target-preflight.py) and its actual `runtime-v2/dvtws.args` parsing through `global_exclusions.segments`, `templates_and_imports`, `inherited` and `visible`. Derive **executable** ordinals after `--new` and template/import inheritance, the effective TCP/443 and `--filter-l7=tls` gates, family filters, inclusion HOSTLISTs, `--ipset-exclude` exactly once **per profile**, and any Extra Arguments. Bind the resulting profile identity to a digest of the **actual final arguments and managed inputs**, not to a user-entered Strategy string or a guessed `--new` position. Require a separately attested running-process argument/start-time identity; determine the safe native collection mechanism and its limits in isolated FreeBSD testing **before** any future installed collection. Never assume that a matching candidate is the selected or executed profile.
+3. **Target/flow eligibility (read-only):** require one pinned destination IP, same-family source, exact TCP port 443 and Host/SNI intent, an existing matching managed HOSTLIST, no Voice IPSET collision, no global Exclude match, no conflicting L3/IPSET profile filter, and an eligible WAN/FIB route for that family. For `yt3.ggpht.com / 142.251.127.198`, historic eligibility is *candidate-only*: it must be independently current at any future separately authorized observation. The existing [non-executing acquisition-plan generator](../../scripts/stage5-wan-acquisition-plan.py) binds a declared five-tuple, not actual process traffic or WAN origin.
+4. **Independent packet provenance and modification:** record a bounded, verifiable capture lifecycle witness (real interface and DLT, source-port binding, actual tcpdump process and artifact hash, native owner and engine start-time continuity across the observation). Parse only with the existing [Ethernet TCP attribution parser](../../scripts/stage5-wan-pcap-attribution.py). The capture must independently identify a real TLS ClientHello and SNI if that fact is asserted; a declared curl `--resolve` and HTTP code are not packet-level proof. An actual Strategy mutation additionally requires **correlated engine/profile action evidence** plus independently attributable before/after or equivalent packet-effect observation, qualified first with the actual production fake/split profile in an isolated native test. If no trustworthy engine-selected-profile witness is available, return **`PROFILE_SELECTION_UNVERIFIED`**, not a fabricated pass. Do not derive a mutation solely from WAN TCP duplication, ACK/SACK, retransmission, TTL, byte counts or an HTTP response.
+
+Existing tools cover parts of witnesses 1–3 and five-tuple analysis, but **do not yet** establish runtime-selected production TLS behavior or independent WAN packet origin. Do not add an alternative production parser, a second service/engine, IPFW rule, config writer or logging path to fill the gap.
+
+## Expected offline result (design schema, not yet implemented)
+
+A future non-executing, source-only binding helper may consume **already collected** bounded/sanitized native-owner, effective-argv, target-preflight, capture-lifecycle and offline-PCAP evidence. Never accept arbitrary booleans such as `strategy_selected=true` as independent proof; bind each claim to a named verified source, digest and compatible time/flow identity.
+
+| Evidence field | Minimum condition to claim it | Otherwise |
+| --- | --- | --- |
+| `owner_identity_verified` | Existing production-native parsed ready owner, exact installed package and Config digest | `UNVERIFIED` |
+| `effective_profile_eligible` | Production compiler/parser effective executable profile, HOSTLIST and IP-family gates, exact Exclude reference | `UNVERIFIED` |
+| `runtime_profile_selected` | Independent running-engine/packet-specific action witness for the exact flow | `UNVERIFIED` |
+| `wan_packet_provenance` | Capture-process/interface/source-port/packet artifact independently bound at collection | `UNVERIFIED` |
+| `baseline_strategy_mutation` | Real selected profile action with unambiguous independently correlated packet alteration | `UNVERIFIED` |
+| `installed_a07` / `installed_a08` | **Never upgraded by Phase A** | `OPEN` / `OPEN` |
+
+Every planned report is `PHASE_A_REVIEW_ONLY`, has `owner_live_authorized=false`, `phase_b_permitted=false`, `exclude_effect_proven=false`; no current Phase-A artifact proves WAN A07. If source snapshots are incomplete, stale, conflicting or expose multiple indistinguishable profiles, stop at the earliest missing witness. No owner-specific local paths, private Config, complete managed IPSET, TLS record or raw packet bytes belong in a published report.
+
+## Follow-on implementation and executable qualification gate
+
+A **separate** bounded source implementation may now be prepared with the following acceptance conditions, without accessing the owner appliance:
+
+1. Reuse the existing source-backed profile parser/selector and offline capture/owner verifiers; no duplicate command generator, network probe or alternate Python-runtime resolver. If installed CLI/process observability cannot uniquely attest the selected profile, demonstrate the limitation with an isolated test and keep it **UNVERIFIED**.
+2. Execute focused offline tests for TLS/443 HOSTLIST match and mismatch; IPv4 and IPv6; first/middle/last executable profiles and `--new`/template/import/Extra; IPSET/Voice overlap; exact per-profile Exclude; missing or ambiguous process/flow/PCAP evidence; checksum/time/flow conflicts; and permanent false permission/acceptance flags.
+3. Qualify the **current actual configured strategy class** (fake/split if present), not a substituted laboratory `pktmod` or HTTP `http_hostcase`, against independent source/packet-effect witnesses in disposable FreeBSD 15.1 CI **before** proposing any new owner WAN trial. Do not promote a skipped native gate.
+4. Only after the source/CI gate and a new explicit owner approval, propose **one** reviewed, bounded baseline observation for the *same pinned endpoint*; Phase B (temporary Exclude via normal GUI Apply and exact restoration) needs **separate explicit approval** and a positive, independently attributable Phase-A mutation. Existing [A/B protocol](STAGE5_INSTALLED_WAN_AB_PROTOCOL.md) and [restoration reviewer](STAGE5_WAN_AB_READINESS.md) remain the sole owners of that later gate.
+
+**Stop conditions:** no usable profile, multiple plausible profiles without process-specific selection, changed native owner/argv/Config, missing source-port/DLT/capture provenance, no ClientHello/SNI attribution, or absent baseline mutation evidence: record `BLOCKED` or `INCONCLUSIVE`, **do not start Phase B**. A WAN without actual IPv6 eligibility is `UNAVAILABLE`, not an IPv4 failure. A07 cannot be inferred for A08; Voice media stays a separate verification.
+
+This plan creates **no package** and makes **no new live evidence claim**. The source line advances only through the mandatory per-`main` revision rule [DEV-032](../PROJECT_PRINCIPLES.md) / [GH-015](../GITHUB_PUBLICATION.md); `VERSION=0.6.1` and published/installed `0.6.1_12` are unchanged.
