@@ -28,131 +28,98 @@ PYTHONPATH="${ZAPRET_DIR}" "${PYTHON_BIN}" - <<'PY'
 import json
 import os
 from pathlib import Path
-
 from strategy_lab_py import adaptive_budget
 from strategy_lab_py.orchestrator import Budget, OrchestrationError
 
 root = Path(os.environ["STRATEGY_LAB_TEST_ROOT"])
 clock = Path(os.environ["STRATEGY_LAB_NOW_EPOCH_FILE"])
 
+def status_for(job: str, *, ipv6_on: bool, has_a: bool = True,
+               has_aaaa: bool = False, ipv6_route: bool = True,
+               target_type: str = "domain", endpoints: int = 2,
+               quic: bool = False, udp: bool = False):
+    directory = root / "jobs" / job
+    directory.mkdir(parents=True, exist_ok=True)
+    state = directory / "status.json"
+    baseline = []
+    for i in range(endpoints):
+        endpoint = {"endpoint": f"endpoint-{i+1}.example"}
+        if has_a:
+            endpoint["ipv4"] = {"status": "FAIL"}
+        if has_aaaa and ipv6_on and ipv6_route:
+            endpoint["ipv6"] = {"status": "FAIL"}
+        else:
+            endpoint["ipv6"] = {"status": "SKIPPED"}
+        baseline.append(endpoint)
+    state.write_text(json.dumps({
+        "schema": 2, "revision": 0, "job_id": job,
+        "target_type": target_type, "ipv6_enabled": ipv6_on,
+        "endpoints": [x["endpoint"] for x in baseline],
+        "baseline": {"endpoints": baseline},
+        "network": {"ipv4": "available", "ipv6": "available" if ipv6_route else "unavailable",
+                    "quic_ipv4": "available" if quic else "closed"},
+        "udp_request": {"configured": udp},
+    }) + "\n", encoding="utf-8")
+    return directory, state
 
-def status_for(job: str, *, endpoints: int, ipv6: bool, quic: bool, udp: bool) -> tuple[Path, Path]:
-    job_dir = root / "jobs" / job
-    job_dir.mkdir(parents=True, exist_ok=True)
-    state = job_dir / "status.json"
-    value = {
-        "schema": 2,
-        "revision": 0,
-        "job_id": job,
-        "endpoints": [f"endpoint-{index}.example" for index in range(1, endpoints + 1)],
-        "network": {
-            "ipv4": "available",
-            "ipv6": "available" if ipv6 else "unavailable",
-            "quic_ipv4": "available" if quic else "closed",
-        },
-        "udp_request": {"configured": udp, "port": 9999 if udp else None, "payload_bytes": 4 if udp else 0},
-    }
-    state.write_text(json.dumps(value) + "\n", encoding="utf-8")
-    return job_dir, state
+def case(name, mode, expected, **opts):
+    directory, state = status_for("job." + name, **opts)
+    budget = Budget(mode, state, "job." + name)
+    budget.record_initial()
+    plan = adaptive_budget.adapt(budget, job_dir=directory, state_path=state)
+    assert plan["policy"] == "eligible-families-v2"
+    assert plan["effective_seconds"]["search"] == expected, (name, plan)
+    assert budget.overall_deadline == budget.started_epoch + expected
+    assert budget.standard_deadline == budget.started_epoch + plan["effective_seconds"]["standard"]
+    assert json.loads(state.read_text())["search_budget_seconds"] == expected
+    assert json.loads((directory / "adaptive-budget.json").read_text()) == plan
+    assert adaptive_budget.calculate_plan(budget, json.loads(state.read_text()))["effective_seconds"] == plan["effective_seconds"]
+    return plan, budget
 
-
-# `_25` owner-live topology remains the exact floor: two endpoints, IPv4 only,
-# QUIC unavailable and no Generic UDP input.
-job_dir, state = status_for("job.ADAPTBASE", endpoints=2, ipv6=False, quic=False, udp=False)
-budget = Budget("extended", state, "job.ADAPTBASE")
-budget.record_initial()
-plan = adaptive_budget.adapt(budget, job_dir=job_dir, state_path=state)
-assert plan["policy"] == "eligible-work-v1"
-assert plan["additions_seconds"]["standard_total"] == 0
-assert plan["additions_seconds"]["extended_total"] == 0
-assert plan["effective_seconds"] == {"standard": 150, "extended": 120, "search": 270, "stage80": 120}
-value = json.loads(state.read_text(encoding="utf-8"))
-assert value["standard_budget_seconds"] == 150
-assert value["extended_budget_seconds"] == 120
-assert value["search_budget_seconds"] == 270
-assert value["stage80_budget_seconds"] == 120
-assert value["started_at"] == "1970-01-01T00:16:40Z"
-assert value["deadline_at"] == "1970-01-01T00:21:10Z"
-assert json.loads((job_dir / "adaptive-budget.json").read_text(encoding="utf-8")) == plan
-telemetry = json.loads((job_dir / "timing-telemetry.json").read_text(encoding="utf-8"))
-events = [event for event in telemetry["events"] if event.get("phase") == "budget_adaptation"]
-assert len(events) == 1 and events[0]["stage"] == "30" and events[0]["details"] == plan
-
-# Every currently optional measured branch extends only its owning finite parent.
-clock.write_text("2000\n", encoding="utf-8")
-job_dir, state = status_for("job.ADAPTFULL", endpoints=2, ipv6=True, quic=True, udp=True)
-budget = Budget("extended", state, "job.ADAPTFULL")
-started = budget.started_epoch
-plan = adaptive_budget.adapt(budget, job_dir=job_dir, state_path=state)
-assert plan["work_matrix"] == {
-    "mode": "extended",
-    "endpoint_count": 2,
-    "ipv4": True,
-    "ipv6": True,
-    "tls13": True,
-    "extended_tcp": True,
-    "quic_ipv4": True,
-    "generic_udp": True,
+# Any ordinary IPv4 or unchecked dual-stack target keeps strict one-family budget.
+plan, b = case("OFF", "standard", 150, ipv6_on=False, has_aaaa=True)
+assert not plan["work_matrix"]["dual_family"]
+case("OFFEXT", "extended", 270, ipv6_on=False, has_aaaa=True)
+# Checkbox alone, route alone, AAAA missing, and pure IPv4 literal never earn bonus.
+case("CHECKED_NO_AAAA", "extended", 270, ipv6_on=True, has_aaaa=False)
+case("NO_ROUTE", "extended", 270, ipv6_on=True, has_aaaa=True, ipv6_route=False)
+case("IPV4_IP", "extended", 270, ipv6_on=True, has_aaaa=True, target_type="ip")
+# QUIC, UDP or endpoint count must never inflate the overall user limit.
+case("EXTRAS", "extended", 270, ipv6_on=False, has_aaaa=False,
+     endpoints=4, quic=True, udp=True)
+# Only a real selected A+AAAA target earns the two-family increment.
+plan, b = case("BOTHSTD", "standard", 200, ipv6_on=True, has_aaaa=True)
+assert plan["effective_seconds"]["standard"] == 200
+plan, b = case("BOTHEXT", "extended", 350, ipv6_on=True, has_aaaa=True)
+assert plan["effective_seconds"] == {
+    "standard": 200, "extended": 150, "search": 350, "stage80": 150
 }
-assert plan["additions_seconds"] == {
-    "extra_endpoints_standard": 0,
-    "extra_endpoints_extended": 0,
-    "ipv6": 10,
-    "quic": 20,
-    "generic_udp": 15,
-    "standard_total": 10,
-    "extended_total": 35,
-}
-assert plan["effective_seconds"] == {"standard": 160, "extended": 155, "search": 315, "stage80": 155}
-assert budget.started_epoch == started == 2000
-assert budget.standard_deadline == 2160
-assert budget.overall_deadline == 2315
-clock.write_text("2160\n", encoding="utf-8")
-budget.begin_stage80()
-assert budget.stage80_deadline == 2315
-
-# Standard mode does not charge QUIC or Generic UDP branches that it cannot execute.
-clock.write_text("3000\n", encoding="utf-8")
-job_dir, state = status_for("job.ADAPTSTD", endpoints=2, ipv6=True, quic=True, udp=True)
-budget = Budget("standard", state, "job.ADAPTSTD")
-plan = adaptive_budget.adapt(budget, job_dir=job_dir, state_path=state)
-assert plan["work_matrix"]["quic_ipv4"] is False
-assert plan["work_matrix"]["generic_udp"] is False
-assert plan["effective_seconds"] == {"standard": 160, "extended": 120, "search": 160, "stage80": 120}
-
-# Endpoint growth is bounded and linear rather than an oversized guessed timeout.
-clock.write_text("4000\n", encoding="utf-8")
-job_dir, state = status_for("job.ADAPTFOUR", endpoints=4, ipv6=False, quic=False, udp=False)
-budget = Budget("extended", state, "job.ADAPTFOUR")
-plan = adaptive_budget.adapt(budget, job_dir=job_dir, state_path=state)
-assert plan["additions_seconds"]["extra_endpoints_standard"] == 60
-assert plan["additions_seconds"]["extra_endpoints_extended"] == 30
-assert plan["effective_seconds"] == {"standard": 210, "extended": 150, "search": 360, "stage80": 150}
-
-# Recalculation is idempotent: the calibrated base is cached, never compounded.
-again = adaptive_budget.calculate_plan(budget, json.loads(state.read_text(encoding="utf-8")))
-assert again["effective_seconds"] == plan["effective_seconds"]
-
-# A Stage-30 PASS contract without IPv4 availability cannot manufacture a budget plan.
-clock.write_text("5000\n", encoding="utf-8")
-job_dir, state = status_for("job.ADAPTBAD", endpoints=1, ipv6=False, quic=False, udp=False)
-value = json.loads(state.read_text(encoding="utf-8"))
-value["network"]["ipv4"] = "unavailable"
-state.write_text(json.dumps(value) + "\n", encoding="utf-8")
-budget = Budget("standard", state, "job.ADAPTBAD")
+assert plan["additions_seconds"] == {"standard_total": 50, "extended_total": 30}
+assert b.stage80_started is None
+clock.write_text(str(b.started_epoch + 200) + "\n")
+b.begin_stage80()
+assert b.stage80_deadline == b.started_epoch + 350
+# Invalid/missing Stage 40 evidence cannot qualify a guessed family.
+directory, state = status_for("job.NOBASE", ipv6_on=True, has_aaaa=True)
+bad = json.loads(state.read_text())
+bad.pop("baseline")
+state.write_text(json.dumps(bad))
 try:
-    adaptive_budget.calculate_plan(budget, value)
+    adaptive_budget.calculate_plan(Budget("standard", state, "job.NOBASE"), bad)
 except OrchestrationError as exc:
-    assert "IPv4 network precheck" in str(exc)
+    assert "Stage-40" in str(exc)
 else:
-    raise AssertionError("adaptive budget accepted an unavailable IPv4 baseline")
+    raise AssertionError("budget fabricated family coverage without Stage-40 evidence")
+# Single AAAA-only families get no mixed-family bonus (IPv4 network
+# preflight prerequisite currently remains under Stage 6 migration).
+case("AAAAONLY", "extended", 270, ipv6_on=True, has_a=False, has_aaaa=True)
+print("PASS: selected actual A/AAAA eligibility controls one immutable 150/200/270/350 job budget")
 PY
-
-grep -Fq 'POLICY = "eligible-work-v1"' "${ZAPRET_DIR}/strategy_lab_py/adaptive_budget.py" ||
+grep -Fq 'POLICY = "eligible-families-v2"' "${ZAPRET_DIR}/strategy_lab_py/adaptive_budget.py" ||
     fail 'adaptive budget policy marker is missing'
 grep -Fq 'return AdaptiveBudgetOrchestrator(job_id).run()' "${ZAPRET_DIR}/strategy_lab_py/adaptive_budget.py" ||
     fail 'production adaptive orchestrator owner is missing'
 grep -Fq 'return adaptive_budget.orchestrator_main(args)' "${ZAPRET_DIR}/strategy_lab_py/compat.py" ||
     fail 'production compatibility route does not use the adaptive budget owner'
 
-echo 'PASS: Strategy Lab derives finite parent budgets from measured endpoint/capability/protocol work while preserving the _25 floor and original job clock'
+echo 'PASS: Stage-40 target families select strict 150/200/270/350 overall budgets without duplicated IPv6/QUIC/UDP bonuses'
