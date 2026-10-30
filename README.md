@@ -95,6 +95,10 @@ flowchart LR
 
 **Strategy Lab is a major feature of the project.** Give it a target domain or IPv4 address and it evaluates real Zapret2 strategy families on the OPNsense firewall, checks stability, and returns verified candidates for **manual** use in Traffic Strategy. It cannot guarantee a working bypass on every ISP or target.
 
+![Strategy Lab — completed real-world testing run](docs/screenshots/strategy-lab.png)
+
+*Screenshot: a completed Strategy Lab run with three verified candidates and successful restoration of the original Zapret2 service. Results are specific to the tested ISP and target.*
+
 The Laboratory is designed around one practical question:
 
 > **Which Zapret2 strategy actually works for this target, on this ISP, from this exact OPNsense installation?**
