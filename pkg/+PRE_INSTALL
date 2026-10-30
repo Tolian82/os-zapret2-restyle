@@ -15,7 +15,28 @@ LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK_FILE:-/var/run/zapret2-lifecycle.lock}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 KLDSTAT_BIN="${KLDSTAT_BIN:-/sbin/kldstat}"
 IPFW_BIN="${IPFW_BIN:-/sbin/ipfw}"
-PYTHON_BIN="${PYTHON_BIN:-/usr/local/bin/python3.13}"
+# This hook runs BEFORE the incoming package files exist: use an already
+# installed contract if available, otherwise probe installed versioned Python
+# binaries read-only. An unrecognized runtime never implies a safe old owner.
+PYTHON_BIN="${PYTHON_BIN:-}"
+if [ -z "${PYTHON_BIN}" ]; then
+    _old_runtime=/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh
+    if [ -r "${_old_runtime}" ]; then
+        PYTHON_BIN=$(/bin/sh "${_old_runtime}" --resolve 2>/dev/null || true)
+    fi
+fi
+if [ -z "${PYTHON_BIN}" ]; then
+    _highest_python_minor=-1
+    for _probe in /usr/local/bin/python3.[0-9]* /usr/local/bin/python3; do
+        [ -f "${_probe}" ] && [ -x "${_probe}" ] || continue
+        _minor=$("${_probe}" -c 'import sys; print(sys.version_info.minor if sys.version_info.major == 3 else -1)' 2>/dev/null) || continue
+        case "${_minor}" in ''|*[!0-9]*) continue ;; esac
+        if [ "${_minor}" -gt "${_highest_python_minor}" ]; then
+            _highest_python_minor=${_minor}
+            PYTHON_BIN=${_probe}
+        fi
+    done
+fi
 COLD_INSPECT_BIN="${COLD_INSPECT_BIN:-/usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py}"
 
 # A test package can arrive while the INSTALLED (older) service has a
