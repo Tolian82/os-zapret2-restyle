@@ -127,6 +127,8 @@ jobs:
           /bin/sh -n src/opnsense/scripts/OPNsense/Zapret/python_runtime.sh
           /bin/sh -n scripts/test-python-runtime-contract.sh
           /bin/sh scripts/test-python-runtime-contract.sh
+      - name: Bind source checkout Python for isolated PHP integration tests
+        run: echo "ZAPRET_PYTHON_BIN=$(command -v python3.13)" >> "$GITHUB_ENV"
       - name: Stage 5 installed OPNsense one-shot read-only eligibility preflight
         run: |
           python3.13 -m py_compile scripts/stage5-installed-evidence.py scripts/test-stage5-installed-evidence.py scripts/stage5-installed-one-shot.py scripts/test-stage5-installed-one-shot.py
