@@ -23,7 +23,10 @@ LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 FIND_BIN="${FIND_BIN:-/usr/bin/find}"
 ENABLED_FREEBSD_REPO=0
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
-EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-}"
+if [ -z "${EXTRA_PYTHON}" ]; then
+    EXTRA_PYTHON=$(/bin/sh /usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh --resolve) || exit 69
+fi
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 
 set -eu
