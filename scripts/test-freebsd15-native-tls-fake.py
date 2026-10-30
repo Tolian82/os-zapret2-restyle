@@ -131,13 +131,21 @@ def capture(adapter, controller, native, engine: Path, upstream: Path,
                                      f'tcp and dst host {host} and dst portrange {PORT}-{BYPASS}'],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
             controller.tcpdump_ready(dump, deadline=time.monotonic()+5)
-            baseline = native.send_hello(family, host, PORT, hello)
+            def trial(stage: str, port: int) -> int:
+                try:
+                    return native.send_hello(family, host, port, hello)
+                except Exception as error:
+                    raise RuntimeError(
+                        f'ClientHello delivery failed at {phase}/IPv{4 if family == socket.AF_INET else 6}/'
+                        f'{stage}/tcp-{port}: {error}') from error
+
+            baseline = trial('un-diverted-baseline', PORT)
             adapter.add_rule(RULE, ARGV)
             installed = True
             if adapter.list_rules(19000, 19010) != {RULE: ARGV}:
                 raise RuntimeError('unexpected test-only IPFW ownership')
-            active = native.send_hello(family, host, PORT, hello)
-            bypass = native.send_hello(family, host, BYPASS, hello)
+            active = trial('divert-owned-active', PORT)
+            bypass = trial('un-diverted-bypass', BYPASS)
             if (proc.poll() is not None or adapter.rule_counters(RULE, ARGV)[0] < 1
                     or not controller.wait_for_packet_flush(dump, cap, deadline=time.monotonic()+3)):
                 raise RuntimeError('missing native capture, engine, or IPFW evidence')
