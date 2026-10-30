@@ -85,6 +85,9 @@ SERVICE_SOURCE="$BASE/../zapret_service.sh"
 NATIVE_INSTALL="$ROOT/installed"
 mkdir -p "$NATIVE_INSTALL"
 cp "$SERVICE_SOURCE" "$NATIVE_INSTALL/zapret_service.sh"
+# Production header now resolves the validated Python runtime; stage the same
+# source and single manifest so the mock installation mirrors real packaging.
+cp "$BASE/../python_runtime.sh" "$BASE/../python_runtime.conf" "$NATIVE_INSTALL/"
 chmod 0755 "$NATIVE_INSTALL/zapret_service.sh"
 awk '/^ensure_runtime_components\(\)$/ { exit } { print }' "$SERVICE_SOURCE" > "$ROOT/service-header.sh"
 [ -s "$ROOT/service-header.sh" ] || fail "native service entrypoint header unavailable"
@@ -92,6 +95,8 @@ awk '/^ensure_runtime_components\(\)$/ { exit } { print }' "$SERVICE_SOURCE" > "
     unset SERVICE_SCRIPT
     SCRIPT_DIR="$NATIVE_INSTALL"
     BACKEND_DIR="$BASE"
+    ZAPRET_PYTHON_BIN=$(command -v python3.13)
+    export ZAPRET_PYTHON_BIN
     . "$ROOT/service-header.sh"
     [ "$SERVICE_SCRIPT" = "$SCRIPT_DIR/zapret_service.sh" ] &&
     [ -x "$SERVICE_SCRIPT" ] ||
