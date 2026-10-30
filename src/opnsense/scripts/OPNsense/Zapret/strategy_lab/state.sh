@@ -29,6 +29,7 @@ strategy_lab_initialize_state()
     _strategy_lab_target="$2"
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"
+    _strategy_lab_ipv6_request="${5:-0}"
     _strategy_lab_jobdir=$(strategy_lab_job_dir "${_strategy_lab_job}")
     mkdir -p "${_strategy_lab_jobdir}" || return 1
 
@@ -38,7 +39,8 @@ strategy_lab_initialize_state()
         "$(strategy_lab_event_file "${_strategy_lab_job}")" \
         "${_strategy_lab_target}" \
         "${_strategy_lab_mode}" \
-        "${_strategy_lab_language}"
+        "${_strategy_lab_language}" \
+        "${_strategy_lab_ipv6_request}"
 }
 
 strategy_lab_set_target_contract()

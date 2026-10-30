@@ -75,7 +75,7 @@ $(document).ready(function () {
         testAction:'Проверка', strategyLabTitle:'Лаборатория стратегий', blockedDomain:'Заблокированный домен / IP', serviceHostLabel:'Host / SNI (опционально)',
         serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.',
         genericUdpLabel:'UDP порт (опционально)', runAction:'Запуск', enableQuic:'Включить QUIC',
-        modeLabel:'Режим',
+        modeLabel:'Режим', ipv6OptIn:'IPv6',
         resultSummary:'Сводка результатов', family:'Семейство', endpoints:'Назначения', outcome:'Результат', restoration:'Восстановление', replay:'Ответы',
         completeProfile:'Полный профиль Стратегий Трафика', fullOutput:'Полный вывод (расширенный)', stateLabel:'Состояние',
         verifiedScope:'Подтверждено финальным воспроизведением', scopeTcp:'TLS/TCP 443', scopeHttp:'HTTP/TCP 80', scopeQuic:'QUIC/UDP 443', scopeUdp:'другой UDP',
@@ -100,7 +100,7 @@ $(document).ready(function () {
         testAction:'Test', strategyLabTitle:'Strategy Lab', blockedDomain:'Blocked Domain / IP', serviceHostLabel:'Host / SNI (optional)',
         serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.',
         genericUdpLabel:'Generic UDP (optional)', runAction:'Run', enableQuic:'Enable QUIC',
-        modeLabel:'Mode',
+        modeLabel:'Mode', ipv6OptIn:'IPv6',
         resultSummary:'Result summary', family:'Family', endpoints:'Endpoints', outcome:'Outcome', restoration:'Restoration', replay:'Replay',
         completeProfile:'Complete Traffic Strategy profile', fullOutput:'Full output (advanced)', stateLabel:'State',
         verifiedScope:'Verified by final profile replay', scopeTcp:'TLS/TCP 443', scopeHttp:'HTTP/TCP 80', scopeQuic:'QUIC/UDP 443', scopeUdp:'other UDP',
@@ -127,6 +127,7 @@ $(document).ready(function () {
         setButtonText('#strategyLabBtn', ui.runAction);
         $('#strategyLabQuicRow').find('td').first().text(ui.enableQuic);
         $('#strategyLabModeLabel').text(ui.modeLabel + ':');
+        $('#strategyLabIpv6Label').text(ui.ipv6OptIn);
         $('#strategyLabMode option[value="standard"]').text(modeLabels.standard);
         $('#strategyLabMode option[value="extended"]').text(modeLabels.extended);
         var modeFontReference=$('#strategyLabInputsTable > tbody > tr > td.zapret-field-label').first();
@@ -174,6 +175,7 @@ $(document).ready(function () {
         strategyLabBusy = busy;
         $('#strategyLabBtn_progress').toggleClass('fa fa-spinner fa-pulse', busy);
         $('#strategyLabBtn').prop('disabled', busy); $('#strategyLabCancelBtn').prop('disabled', !busy || !activeJobId);
+        $('#strategyLabIpv6Enabled').prop('disabled', busy);
         $('#strategyLabEnableQuic').prop('disabled', busy || !quicPreferenceReady || quicPreferenceSaving);
         $('#strategyLabUdpPayload,#strategyLabUdpPayloadButton,#strategyLabUdpPort,#strategyLabServiceHostInput').prop('disabled', busy);
         $('#strategyLabSavedJobInput,#strategyLabOpenSavedJob').prop('disabled', busy);
@@ -353,7 +355,7 @@ $(document).ready(function () {
     function renderResultSummary(data) {
         var visible = terminal(data.state); $('#strategyLabResultBox').toggle(visible); if (!visible) return;
         $('#strategyLabResultTarget').text(data.target || '—');
-        $('#strategyLabResultMode').text(label(modeLabels, data.mode));
+        $('#strategyLabResultMode').text(label(modeLabels, data.mode) + ' / IPv6 ' + (data.ipv6_enabled === true ? (isRussian ? 'вкл.' : 'on') : (isRussian ? 'выкл.' : 'off')));
         $('#strategyLabResultOutcome').text(label(outcomeLabels, data.outcome || data.state));
         $('#strategyLabResultRestoration').text(data.restoration && data.restoration.verified === true ? ui.restorationPass : '—');
     }
@@ -501,8 +503,8 @@ $(document).ready(function () {
             $('#testDomainResult').text(data.status === 'ok' ? data.result : (isRussian ? 'Ошибка: ' : 'Error: ') + (data.message || (isRussian ? 'Неизвестная ошибка' : 'Unknown error')));
         });
     });
-    function startStrategyLab(target, serviceHost, mode, enableQuic, udpPort, udpPayloadBase64) {
-        apiPost('/api/zapret/strategy_lab/start', {target:target,service_host:serviceHost,mode:mode,language:isRussian?'ru':'en',enable_quic:enableQuic,udp_port:udpPort,udp_payload_base64:udpPayloadBase64}, function (data) {
+    function startStrategyLab(target, serviceHost, mode, enableQuic, udpPort, udpPayloadBase64, ipv6Enabled) {
+        apiPost('/api/zapret/strategy_lab/start', {target:target,service_host:serviceHost,mode:mode,language:isRussian?'ru':'en',enable_quic:enableQuic,udp_port:udpPort,udp_payload_base64:udpPayloadBase64,ipv6_enabled:ipv6Enabled}, function (data) {
             if (data.status === 'busy' && /^job\.[A-Za-z0-9]+$/.test(String(data.job_id || ''))) {
                 activeJobId=data.job_id; displayJobId(activeJobId); setBusy(true); pollStatus(); return;
             }
@@ -511,7 +513,7 @@ $(document).ready(function () {
                 setBusy(false); showInputError(data.message || ui.failed); return;
             }
             activeJobId=data.job_id;
-            renderJob({job_id:activeJobId,state:'queued',target:target,mode:mode,current_stage:'00',progress:{percent:0,stage:'00',stage_key:'target_initialization',message:''},stages:[]});
+            renderJob({job_id:activeJobId,state:'queued',target:target,mode:mode,ipv6_enabled:ipv6Enabled==='1',current_stage:'00',progress:{percent:0,stage:'00',stage_key:'target_initialization',message:''},stages:[]});
             $('#strategyLabMessage').text(ui.running); setBusy(true); pollStatus();
         });
     }
@@ -534,6 +536,7 @@ $(document).ready(function () {
         var target=$('#strategyLabDomainInput').val().trim(), mode=$('#strategyLabMode').val(); if (!target) return;
         var serviceHost=isIpv4Target(target)?$('#strategyLabServiceHostInput').val().trim():'';
         var enableQuic=$('#strategyLabEnableQuic').prop('checked')?'1':'0';
+        var ipv6Enabled=$('#strategyLabIpv6Enabled').prop('checked')?'1':'0';
         var udpPort='', nativeFile=null, fileInput=null;
         if (mode === 'extended') {
             udpPort=$('#strategyLabUdpPort').val().trim(); fileInput=document.getElementById('strategyLabUdpPayload');
@@ -547,7 +550,7 @@ $(document).ready(function () {
             $('#strategyLabShortlistBox,#strategyLabResultBox,#circularControls').hide(); $('#strategyLabRaw').text(''); $('#strategyLabMessage').text(ui.running); setBusy(true);
             $('#strategyLabState').text(label(statusLabels,'QUEUED'));
             renderProgress({current_stage:'00',progress:{percent:0,stage_key:'target_initialization'}});
-            startStrategyLab(target,serviceHost,mode,enableQuic,udpPort,payloadBase64);
+            startStrategyLab(target,serviceHost,mode,enableQuic,udpPort,payloadBase64,ipv6Enabled);
         }
         if (mode !== 'extended' || !udpPort) { beginStart(''); return; }
         if (udpPayloadSelection.ready) { beginStart(udpPayloadSelection.base64); return; }
@@ -607,7 +610,7 @@ $(document).ready(function () {
     justify-content:flex-end;
     gap:8px;
 }
-#strategyLabModeLabel {
+#strategyLabModeLabel,#strategyLabIpv6Label {
     flex:0 0 auto;
     text-align:right;
     white-space:nowrap;
@@ -616,6 +619,16 @@ $(document).ready(function () {
     width:160px;
     flex:0 0 160px;
 }
+.strategy-lab-ipv6-box {
+    width:160px;
+    flex:0 0 160px;
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    margin:0;
+    min-height:24px;
+}
+#strategyLabIpv6Enabled { margin:0; }
 .strategy-lab-file-picker {
     display:flex;
     align-items:center;
@@ -659,7 +672,7 @@ $(document).ready(function () {
 <div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
 <div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
-<div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain / IP') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org / 203.0.113.10"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
+<div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain / IP') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org / 203.0.113.10"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div><div class="strategy-lab-mode-control"><span id="strategyLabIpv6Label">IPv6</span><label class="strategy-lab-ipv6-box"><input type="checkbox" id="strategyLabIpv6Enabled" value="1" aria-label="IPv6" /></label></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
 <tr id="strategyLabServiceHostRow" style="display:none;"><td class="zapret-field-label">Host / SNI (optional)</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput" placeholder="example.com"/></td><td colspan="2"><small id="strategyLabServiceHostHelp"></small></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><div class="strategy-lab-file-picker"><button type="button" class="btn btn-default" id="strategyLabUdpPayloadButton" aria-controls="strategyLabUdpPayload">Choose file</button><span id="strategyLabUdpPayloadName" class="text-muted" aria-live="polite">No file selected</span><input type="file" class="strategy-lab-native-file-input" id="strategyLabUdpPayload" tabindex="-1" aria-hidden="true"/></div><small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Enable QUIC') }}</td><td class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>

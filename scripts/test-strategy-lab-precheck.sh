@@ -198,9 +198,14 @@ run_job()
 {
     target="$1"
     language="$2"
+    ipv6_selected="${3:-0}"
     printf '%s\n' RUNNING > "${STATE_FILE}"
     : > "${CALLS_FILE}"
-    output=$(launcher start "${target}" standard "${language}")
+    case "${ipv6_selected}" in
+        0) output=$(launcher start "${target}" standard "${language}") ;;
+        1) output=$(launcher start "${target}" standard "${language}" 0 - - - 1) ;;
+        *) fail 'invalid test IPv6 opt-in' ;;
+    esac
     job=$(printf '%s\n' "${output}" | jq -r '.job_id')
     wait_for_completion "${job}"
     launcher result "${job}"
@@ -228,7 +233,12 @@ MOCK_IPV6_ROUTE=1
 MOCK_QUIC_STATUS=0
 MOCK_TLS_PASS_HOST=accessible.example
 export MOCK_IPV6_ROUTE MOCK_QUIC_STATUS MOCK_TLS_PASS_HOST
-result=$(run_job accessible.example en)
+result_off=$(run_job accessible.example en)
+printf '%s\n' "${result_off}" | jq -e '.ipv6_enabled==false and .network.ipv6=="unavailable" and .baseline.endpoints[0].ipv6.status=="SKIPPED"' >/dev/null ||
+    fail 'unchecked IPv6 must not probe AAAA/TLS or report available'
+result=$(run_job accessible.example en 1)
+printf '%s\n' "${result}" | jq -e '.ipv6_enabled==true' >/dev/null ||
+    fail 'checked IPv6 selection was not persisted'
 printf '%s\n' "${result}" | jq -e '.outcome=="TARGET_ACCESSIBLE" and .baseline.all_accessible==true' >/dev/null ||
     fail "directly accessible target did not stop strategy search"
 printf '%s\n' "${result}" | jq -e '.stages[] | select(.number=="30" and .message=="PASS — IPv4, IPv6, and QUIC/IPv4 are available.")' >/dev/null ||

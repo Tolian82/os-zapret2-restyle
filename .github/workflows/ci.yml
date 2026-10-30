@@ -476,6 +476,13 @@ jobs:
 
       - name: Test Strategy Lab Python request and probe execution
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-probes.sh
+      - name: Stage 6 selected IPv6 GUI-to-native job and probe contract
+        run: |
+          python3.13 -m py_compile scripts/test-strategy-lab-ipv6-opt-in.py src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php
+          sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/state.sh
+          python3.13 scripts/test-strategy-lab-ipv6-opt-in.py
 
       - name: Test private Chrome ECH-disabled policy
         run: sh scripts/test-curl-impersonate-ech-policy.sh

@@ -52,12 +52,18 @@ def _network(workdir: Path, result_path: Path) -> int:
     started = time.monotonic()
     for name in ("curl", "netstat", "openssl"):
         request.binary(name)
+    try:
+        ipv6_selection = (workdir / 'ipv6-enabled').read_text(encoding='ascii').strip()
+    except FileNotFoundError:
+        ipv6_selection = '0'
+    if ipv6_selection not in {'0', '1'}:
+        raise UsageError('invalid persisted Strategy Lab IPv6 selection')
     route_available, route_result = request.ipv6_default_route()
     with ThreadPoolExecutor(max_workers=3) as pool:
         ipv4_future = pool.submit(request.curl_request, "yandex.ru", scheme="https", family="ipv4")
         ipv6_future = (
             pool.submit(request.curl_request, "one.one.one.one", scheme="https", family="ipv6")
-            if route_available else None
+            if route_available and ipv6_selection == '1' else None
         )
         quic_future = pool.submit(request.quic_ipv4_request)
         ipv4_result = ipv4_future.result()

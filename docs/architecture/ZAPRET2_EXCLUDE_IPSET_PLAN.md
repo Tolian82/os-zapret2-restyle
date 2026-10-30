@@ -196,6 +196,8 @@
 
 ## Stage 6. Strategy Lab IPv6 end-to-end
 
+**First source increment v0.6.1_21 (31 October 2026):** Independent default-OFF IPv6 GUI checkbox below Mode, native API/configd/launch handoff, immutable saved job selection and opt-in-gated real Stage-30 IPv6 control probe are implemented for source/CI review. Existing IPv6 route-gated domain AAAA/TLS probe is reused only on opt-in. **Stage 6 exit is NOT CLOSED:** IPv6 literal and AAAA-only jobs, end-to-end pinned replay, fixed 150/200/270/350-second job-wide budgets, fully qualified GUI and owner-installed matrix remain to implement/test. [Focused regression](../../scripts/test-strategy-lab-ipv6-opt-in.py).
+
 **Outcome:** Use the existing Lab engine for pinned IPv6 endpoints, plus the owner-approved IPv6 checkbox under Mode, dual-family target gating and 150/200 / 270/350-second job budgets.
 
 | Scope | File | Planned change or check |

@@ -172,6 +172,7 @@ class StrategyLabController extends ApiControllerBase
         $mode = trim((string)$this->request->getPost('mode', 'striptags', 'standard'));
         $language = trim((string)$this->request->getPost('language', 'striptags', 'en'));
         $enableQuic = trim((string)$this->request->getPost('enable_quic', 'striptags', '0'));
+        $ipv6Enabled = trim((string)$this->request->getPost('ipv6_enabled', 'striptags', '0'));
 
         if ($target === '') {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain or IPv4 address.'];
@@ -189,6 +190,9 @@ class StrategyLabController extends ApiControllerBase
         if (!in_array($enableQuic, ['0', '1'], true)) {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab QUIC setting.'];
         }
+        if (!in_array($ipv6Enabled, ['0', '1'], true)) {
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab IPv6 setting.'];
+        }
 
         $udpInput = $this->udpInput($mode);
         if ($udpInput['status'] !== 'ok') {
@@ -202,7 +206,8 @@ class StrategyLabController extends ApiControllerBase
             $enableQuic,
             $udpInput['port'],
             $udpInput['payload'],
-            $serviceHost['value'] !== '' ? $serviceHost['value'] : '-'
+            $serviceHost['value'] !== '' ? $serviceHost['value'] : '-',
+            $ipv6Enabled
         ]);
     }
 
