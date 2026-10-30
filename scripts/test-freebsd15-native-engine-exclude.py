@@ -35,15 +35,24 @@ ARGV = ["divert", str(PORT), "udp", "from", "any", "to", "any", "596-598",
         "out", "not", "diverted", "not", "sockarg", "xmit", "lo0"]
 
 
-def candidate(root: Path, excluded: bool) -> tuple[list[str], int]:
-    """Use the production compiler and exact immutable six-list manifest."""
-    release = root / ("excluded" if excluded else "baseline")
+def candidate(root: Path, excluded: bool, nonmatching: bool = False) -> tuple[list[str], int]:
+    """Use the production compiler; optionally test nonmatching Exclude entries."""
+    if excluded and nonmatching:
+        raise ValueError("Exclude test phase must have exactly one destination policy")
+    release = root / ("excluded" if excluded else "nonmatching" if nonmatching else "baseline")
     managed = release / "managed"
     managed.mkdir(parents=True)
     (managed / "hostlist-exclude.txt").write_text("")
     manifest: dict = {"schema_version": 1, "lists": {}}
     for name in LISTS:
-        raw = "127.0.0.1/32\n::1/128\n" if name == "exclude" and excluded else ""
+        raw = ""
+        if name == "exclude":
+            if excluded:
+                raw = "127.0.0.1/32\n::1/128\n"
+            elif nonmatching:
+                # Documentation-only networks are intentionally not loopback.
+                # The option must NOT bypass unrelated IPv4/IPv6 destinations.
+                raw = "192.0.2.1/32\n2001:db8::1/128\n"
         normalized, proof = parse_ipset(raw.encode(), name, collapse=name == "exclude")
         (managed / f"ipset-{name}.txt").write_text(normalized)
         manifest["lists"][name] = proof
@@ -70,8 +79,9 @@ def candidate(root: Path, excluded: bool) -> tuple[list[str], int]:
         raise RuntimeError("generated test must have three executable profiles")
     flag = "--ipset-exclude=" + ip_ref
     count = sum(row.count(flag) for row in rows)
-    expected = 3 if excluded else 0
-    if count != expected or any(row.count(flag) != int(excluded) for row in rows):
+    enabled = excluded or nonmatching
+    expected = 3 if enabled else 0
+    if count != expected or any(row.count(flag) != int(enabled) for row in rows):
         raise RuntimeError("generated test Exclude policy is not per-profile")
     return result.split(), count
 
@@ -81,15 +91,25 @@ def static_selftest() -> None:
         root = Path(tmp)
         (root / "upstream").mkdir()
         before, n0 = candidate(root, False)
+        unrelated, ncontrol = candidate(root, False, nonmatching=True)
         after, n1 = candidate(root, True)
-        if n0 != 0 or n1 != 3 or before == after:
-            raise RuntimeError("A/B candidate construction failed")
+        if n0 != 0 or ncontrol != 3 or n1 != 3 or len({tuple(before), tuple(unrelated), tuple(after)}) != 3:
+            raise RuntimeError("A/B + nonmatching-control candidate construction failed")
+        control = (root / "nonmatching/managed/ipset-exclude.txt").read_text().splitlines()
+        control_networks = {ipaddress.ip_network(value) for value in control}
+        if len(control_networks) != 2 or any(
+            ipaddress.ip_address(destination) in network
+            for destination in ("127.0.0.1", "::1")
+            for network in control_networks
+            if ipaddress.ip_address(destination).version == network.version
+        ):
+            raise RuntimeError("nonmatching Exclude negative control matches loopback")
         ips = (root / "excluded/managed/ipset-exclude.txt").read_text().splitlines()
         if {ipaddress.ip_network(x) for x in ips} != {
             ipaddress.ip_network("127.0.0.1/32"), ipaddress.ip_network("::1/128")
         }:
             raise RuntimeError("mixed-family witness mismatch")
-    print("NATIVE_ENGINE_EXCLUDE_STATIC=PASS: same destination, 3 final profiles, both IP families")
+    print("NATIVE_ENGINE_EXCLUDE_STATIC=PASS: same destination, 3 final profiles, both IP families, nonmatching negative control")
 
 
 def native(*args: str) -> subprocess.CompletedProcess[str]:
@@ -138,9 +158,10 @@ def check_transport(family: int, host: str, port: int) -> None:
             raise RuntimeError("unintercepted loopback path is not transparent")
 
 
-def run_phase(adapter: object, engine: Path, root: Path, excluded: bool) -> None:
-    args, _ = candidate(root, excluded)
-    log = root / ("excluded.log" if excluded else "baseline.log")
+def run_phase(adapter: object, engine: Path, root: Path, excluded: bool, nonmatching: bool = False) -> None:
+    args, _ = candidate(root, excluded, nonmatching=nonmatching)
+    phase = "excluded" if excluded else "nonmatching" if nonmatching else "baseline"
+    log = root / f"{phase}.log"
     with log.open("wb") as logfile:
         proc = subprocess.Popen([str(engine), *args], stdout=logfile, stderr=subprocess.STDOUT)
         installed = False
@@ -171,10 +192,10 @@ def run_phase(adapter: object, engine: Path, root: Path, excluded: bool) -> None
                             received, _ = receiver.recvfrom(4096)
                         except socket.timeout:
                             if excluded:
-                                raise RuntimeError(f"excluded {host}:{port} unexpectedly dropped")
+                                raise RuntimeError(f"matching Exclude {host}:{port} unexpectedly dropped")
                         else:
                             if not excluded or received != payload:
-                                raise RuntimeError(f"unexpected payload/acceptance at {host}:{port}, excluded={excluded}")
+                                raise RuntimeError(f"unexpected payload/acceptance at {host}:{port}, phase={phase}")
                     if proc.poll() is not None:
                         raise RuntimeError("dvtws2 exited during active A/B phase")
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver, \
@@ -211,11 +232,13 @@ def real_native(engine: Path) -> None:
         # This ephemeral tree exists ONLY inside the isolated guarded VM.
         root.chmod(0o755)
         (root / "upstream").mkdir()
-        for excluded in (False, True):
-            run_phase(adapter, engine, root, excluded)
+        # Three independent native phases distinguish true membership checks
+        # from an unsafe blanket bypass when any Exclude flag exists.
+        for excluded, nonmatching in ((False, False), (False, True), (True, False)):
+            run_phase(adapter, engine, root, excluded, nonmatching=nonmatching)
     if not table_mod.safe_default_rules(native("/sbin/ipfw", "-q", "list").stdout):
         raise RuntimeError("default-allow kernel guard not restored")
-    print(f"{MARKER}=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile same-destination DROP vs exact pass")
+    print(f"{MARKER}=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile baseline DROP, nonmatching Exclude DROP, matching Exclude pass")
 
 
 def main() -> int:
