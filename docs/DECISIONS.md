@@ -2738,3 +2738,15 @@ docs/verification/STAGE5_WAN_SINGLE_BASELINE_CAPTURE.md
 
 Status:
 Active
+
+## 2026-10-30 — Version-independent external dependencies and portable platform boundaries
+
+**Decision:** The owner approved a project-wide default of dependency-version independence, one authoritative machine-readable *external compatibility* manifest when version/range/ABI/pinned executable requirements are necessary, and a clearly separated reusable Zapret2 core versus OPNsense/pfSense integration boundaries. The permanent normative requirement is [DEV-052](PROJECT_PRINCIPLES.md). The earlier 30 October Python-specific decision remains one application of this general policy, not a parallel rule.
+
+**Reason:** OPNsense and FreeBSD packages, binaries, runtimes and kernel interfaces will evolve. Minor package updates should not force search-and-replace through unrelated modules. A future pfSense port should reuse the tested core and replace only qualified platform integration, not duplicate the whole implementation.
+
+**Consequences:** The next package-source increment `v0.6.1_13` implements the approved Python-entrypoint part of the policy under the existing task. When implementation genuinely needs an external dependency version, ABI or supported range, store its authority in one manifest, with other ecosystem-required declarations generated from or checked against it. A config-only manifest with duplicate values still hardcoded in Makefile/PHP/shell would **not** satisfy the decision. Maintain `VERSION` and `PLUGIN_REVISION` as their existing independent project/package authorities. Do not assert FreeBSD16/OPNsense or pfSense compatibility until qualified; do not prebuild unapproved platform variants or revive legacy runtime branches.
+
+**Affected documents:** `docs/PROJECT_PRINCIPLES.md`, `docs/DECISIONS.md`, `docs/START_HERE.md`, `docs/ROADMAP.md`, [implementation task #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732).
+
+**Status:** Active. Architectural policy recorded; package-source changes and platform qualification not yet implemented.
