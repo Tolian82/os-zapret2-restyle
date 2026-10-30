@@ -56,7 +56,9 @@ PLUGIN_NAME=$(get_make_var PLUGIN_NAME)
 PLUGIN_REVISION=$(get_make_var PLUGIN_REVISION)
 PLUGIN_COMMENT=$(get_make_var PLUGIN_COMMENT)
 PLUGIN_MAINTAINER=$(get_make_var PLUGIN_MAINTAINER)
-PLUGIN_DEPENDS=$(get_make_var PLUGIN_DEPENDS)
+# The installed and package dependency use the same compatibility manifest.
+. "./src/opnsense/scripts/OPNsense/Zapret/python_runtime.conf"
+PLUGIN_DEPENDS="${ZAPRET_PYTHON_PACKAGE}"
 PLUGIN_LICENSE=$(get_make_var PLUGIN_LICENSE)
 PLUGIN_VERSION=$(read_version)
 
@@ -122,7 +124,7 @@ dep_origin()
         luajit)     echo "lang/luajit" ;;
         jq)         echo "textproc/jq" ;;
         git)        echo "devel/git" ;;
-        python313)  echo "lang/python313" ;;
+        python3[0-9][0-9]) echo "lang/$1" ;;
         *)          echo "$1" ;;
     esac
 }
