@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — global Exclude IPSet and full IPv4/IPv6 dual-stack (approved 28 October 2026)
 
-**Active engineering prerequisite (30 October 2026):** Under the project-wide [DEV-052](PROJECT_PRINCIPLES.md) dependency/OS portability principle, following the first owner-observed installed Stage 5 baseline TCP capture, make installed/plugin Python invocation resilient to minor-version binary path changes (single interpreter-resolution contract, fail-closed semantics, no assumption that `python313` installs generic `python3`; avoid speculative ABI/FreeBSD16 support). Per `DEV-032`, a packaged implementation increments revision to `v0.6.1_13`; source/CI-only prior diagnostic commits properly remained `_12`. Keep Stage 5 A07/A08 and actual DPI/Exclude proof open, Stage 6 IPv6 Laboratory deferred until its approved gate.
+**Current Stage 5 regression step (30 October 2026):** Complete the existing isolated FreeBSD 15.1 / native `dvtws2` global Exclude IPSet IPv4/IPv6 A/B with a **nonmatching-IP negative control** in all three executable profiles. Both unexcluded and incorrectly matched destinations must still obey the strategy, while the exact Exclude destination bypasses modification; qualify real kernel behavior in CI without touching the owner's installed WAN. Actual installed A07/A08/IPv6/Voice acceptance remains OPEN, with any live A/B subject to fresh explicit approval and one bounded restoration plan. Python runtime version independence is **deferred** as separate [issue #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732); [PR #740](https://github.com/Tolian82/os-zapret2-restyle/pull/740) was closed without merging and is not the next package candidate. Keep `v0.6.1_12` for test/docs-only work under DEV-033.
 
 
 
