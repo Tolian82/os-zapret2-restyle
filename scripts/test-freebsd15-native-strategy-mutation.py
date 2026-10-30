@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 import subprocess
 import sys
@@ -79,6 +80,14 @@ def compile_candidate(root: Path, upstream: Path, phase: str) -> list[str]:
     lua = [upstream / "lua" / name for name in ("zapret-lib.lua", "zapret-antidpi.lua")]
     if not all(p.is_file() for p in lua):
         raise RuntimeError("pinned upstream native strategy Lua missing")
+    # The pinned upstream checkout is mktemp mode 0700. Native dvtws2 drops
+    # privileges while loading Lua, so stage exact original bytes in a 0755
+    # test-only tree instead of weakening permissions on the source checkout.
+    staged = root / "lua"
+    staged.mkdir(exist_ok=True)
+    for original in lua:
+        shutil.copyfile(original, staged / original.name)
+    lua = [staged / p.name for p in lua]
     raw = f"--port={DIVERT}\n" + "".join(f"--lua-init=@{p}\n" for p in lua)
     for i, port in enumerate(PORTS):
         raw += (f"--filter-tcp={port}\n--filter-l7=http\n--payload=http_req\n"
