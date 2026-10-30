@@ -19,7 +19,10 @@ VERSION="${2:-}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 SETUP_LOCK_FILE="${SETUP_LOCK_FILE:-${RUN_DIR}/setup.lock}"
-EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-}"
+if [ -z "${EXTRA_PYTHON}" ]; then
+    EXTRA_PYTHON=$(/bin/sh /usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh --resolve) || exit 69
+fi
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
 EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
 
