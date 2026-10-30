@@ -44,6 +44,16 @@ final class IPSetPolicyBridge
             ($python === null && !is_readable($runtimeLauncher))) {
             throw new \RuntimeException('Native Python IPSET preflight unavailable');
         }
+        // PHP's explicit child environment does not inherit the source-tree
+        // test override. Pass it only for an uninstalled source checkout,
+        // never for the installed production path.
+        $childEnvironment = ['LC_ALL' => 'C'];
+        if ($python === null && !is_file($installed)) {
+            $sourceOverride = getenv('ZAPRET_PYTHON_BIN');
+            if (is_string($sourceOverride) && $sourceOverride !== '') {
+                $childEnvironment['ZAPRET_PYTHON_BIN'] = $sourceOverride;
+            }
+        }
         $pipes = [];
         $process = @proc_open(
             $python === null
@@ -52,7 +62,7 @@ final class IPSetPolicyBridge
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
-            ['LC_ALL' => 'C']
+            $childEnvironment
         );
         if (!is_resource($process)) {
             throw new \RuntimeException('Native Python IPSET preflight unavailable');
