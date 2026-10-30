@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Regression: Remove builds a SAVED, UNCHANGED candidate in the GUI pipeline."""
 from pathlib import Path
+import os
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
@@ -112,6 +114,7 @@ require('extra-resources-native-trial)' in service and
 for cmd in (["php", "-l", str(SRC / "shared_apply_request.php")],
             ["sh", "-n", str(SRC / "zapret_service.sh")],
             ["php", str(ROOT / "scripts/test-shared-apply-request.php")]):
-    p = subprocess.run(cmd, text=True, capture_output=True)
+    p = subprocess.run(cmd, text=True, capture_output=True,
+                       env={**os.environ, "ZAPRET_PYTHON_BIN": sys.executable})
     require(p.returncode == 0, cmd[0] + " native syntax/candidate: " + p.stderr + p.stdout)
 print("PASS: saved unchanged Strategies+Voice candidate reuses original GUI builder and inherited FD9")
