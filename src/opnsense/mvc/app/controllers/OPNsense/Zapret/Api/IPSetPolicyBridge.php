@@ -28,17 +28,22 @@ final class IPSetPolicyBridge
             }
         }
         $encoded = json_encode($lists, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-        $binary = $python ?? (PHP_OS_FAMILY === 'BSD'
-            ? '/usr/local/bin/python3.13' : '/usr/bin/python3');
+        $runtimeLauncher = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
+        // Test overrides retain the direct interpreter route; installed
+        // preflight uses the same checked runtime as configd and FD9.
+        $binary = $python ?? '/bin/sh';
         $installed = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py';
         $source = dirname(__DIR__, 6) . '/scripts/OPNsense/Zapret/backend/ipset_policy.py';
         $script = $module ?? (is_file($installed) ? $installed : $source);
-        if (!is_file($script) || !is_file($binary) || !is_executable($binary)) {
+        if (!is_file($script) || !is_file($binary) || !is_executable($binary) ||
+            ($python === null && !is_readable($runtimeLauncher))) {
             throw new \RuntimeException('Native Python IPSET preflight unavailable');
         }
         $pipes = [];
         $process = @proc_open(
-            [$binary, $script, 'inspect'],
+            $python === null
+                ? [$binary, $runtimeLauncher, '--exec', $script, 'inspect']
+                : [$binary, $script, 'inspect'],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
