@@ -2693,3 +2693,48 @@ For **Remove Additional Resources**, keep the entire saved Strategies+Voice Conf
 **Current application:** In the v0.6.1 Exclude IPSet effort the one Python `ipset_policy.py` remains the semantic IPv4/IPv6 parser; the PHP `IPSetPolicyBridge.php` is strictly an invocation/transport adapter, not a second parser. Keep actual native `--ipset-exclude=` on every applicable Strategies/Voice runtime profile when the global list is populated. Delete the specific pre-Exclude-IPSet sealed-runtime and empty-field compatibility exceptions and their obsolete tests when performing the related current-source correction, not as parallel safety net. The owner's `v0.6.1_8` shell test showed `SAVED_IPSET=PASS` for all six lists and `PHP_BRIDGE=FAIL Native Python IPSET preflight unavailable`; this is a live defect to fix in the single current implementation, not a reason to revive an older PHP parser.
 
 **Scope and evidence:** This decision is effective immediately and recorded as the permanent development principle `DEV-050`. This documentation decision does not itself modify program source, the installed appliance or package revision; the current defect and old-branch deletion require their own source verification and testing-package delivery. Historical decisions and immutable GitHub tags are preserved as history, not as live alternative architecture.
+
+==================================================
+2026-10-30 — VERSION-INDEPENDENT PYTHON ENTRYPOINTS
+==================================================
+
+Date:
+2026-10-30
+
+Decision:
+Installed plugin Python entrypoints must not depend on literal minor-version
+binary paths such as /usr/local/bin/python3.13 or /usr/local/bin/python3.11.
+Use one verified fail-closed interpreter-resolution contract for shell, PHP,
+configd, installation hooks and Python shebang entrypoints. Child Python
+processes use sys.executable where already running under a verified
+interpreter. Keep a test-only interpreter override when needed.
+
+Reason:
+Binary minor versions change with platform releases. The owner rightly
+requested decoupling from binary path revisions. On 30 October 2026 the
+apparent Python3.13 absence proved to be commands entered on pfSense rather
+than OPNsense; that mistake does not invalidate the structural debt. The
+real OPNsense 26.7.7 has both python3 and python3.13, but FreeBSD lang/python313
+does not guarantee the generic python3 meta-port symlink.
+
+Consequences:
+Do not globally replace python3.13 with python3 without dependency and
+installer guarantees. Verify exact installed runtime and minimum Python
+features, no accidental fallback to an unsupported environment, correct
+execution by OPNsense configd and cold-install hooks. Preserve current
+fail-closed, FD9, native owner and transaction contracts. Version-specific
+CI images and historical records may retain explicit interpreter identity
+as test fixtures. The first actual packaged-source correction starts
+v0.6.1_13 under DEV-032; documentation and unbundled diagnostic changes
+properly retain v0.6.1_12 under DEV-033. Supporting FreeBSD16/pfSense
+requires separate platform/package proof, not alias substitution.
+
+Affected documents:
+docs/START_HERE.md
+docs/PROJECT_STATE.md
+docs/ROADMAP.md
+docs/verification/STAGE5_WAN_OWNER_REVIEW_CHECKPOINT.md
+docs/verification/STAGE5_WAN_SINGLE_BASELINE_CAPTURE.md
+
+Status:
+Active
