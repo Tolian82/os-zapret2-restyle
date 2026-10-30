@@ -167,6 +167,8 @@ def native(engine: Path) -> None:
     fake = module('native_tls_fake_profile', HERE/'test-freebsd15-native-tls-fake.py')
     with tempfile.TemporaryDirectory(prefix='stage5-native-argv-') as folder:
         root = Path(folder)
+        # dvtws2 may drop privilege before opening the temporary Lua resources.
+        root.chmod(0o755)
         argv = [str(engine),*fake.compiled(root,engine.parent.parent,'baseline')]
         processes = []
         paths = (root/'engine.pid',root/'supervisor.pid')
