@@ -29,10 +29,14 @@ revision = int(match.group(1))
 candidate = f"os-zapret2-restyle-{version}_{revision}.pkg"
 if not re.search(r"^PLUGIN_NAME=\s*zapret2-restyle\s*$", makefile, re.MULTILINE):
     fail("plugin name mismatch")
-if not re.search(r"^PLUGIN_DEPENDS=\s*python313\s*$", makefile, re.MULTILINE):
-    fail("python313 dependency is missing")
+compat = text("src/opnsense/scripts/OPNsense/Zapret/python_runtime.conf")
+if not re.search(r"^ZAPRET_PYTHON_PACKAGE=python313$", compat, re.MULTILINE):
+    fail("central dependency manifest missing current native package")
+if not re.search(r"^PLUGIN_DEPENDS=\s*\$\{ZAPRET_PYTHON_PACKAGE\}\s*$", makefile, re.MULTILINE):
+    fail("Makefile must derive the Python dependency from the manifest")
 
-require("scripts/build-pkg.sh", 'python313)  echo "lang/python313"')
+require("scripts/build-pkg.sh", 'python3[0-9][0-9]) echo "lang/$1"')
+require("scripts/build-pkg.sh", 'PLUGIN_DEPENDS="${ZAPRET_PYTHON_PACKAGE}"')
 require("scripts/build-pkg.sh", 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"')
 require(".github/workflows/ci.yml", 'release: "15.0"')
 require(".github/workflows/release.yml", "release: '15.0'")
