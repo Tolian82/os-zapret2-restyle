@@ -11,6 +11,10 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 . "${BACKEND}/registry.sh"
 . "${BACKEND}/storage.sh"
 . "${BACKEND}/targets.sh"
+# Standalone source-tree contract runs without the installed service resolver.
+# Use the CI-qualified interpreter explicitly; production callers use the
+# central installed python_runtime.sh contract instead.
+PYTHON_BIN=$(command -v python3.13) || fail "test Python3.13 unavailable"
 
 registry_build "${WORK}/registry.tsv"
 storage_catalog_build "${WORK}/storage.tsv"
