@@ -63,8 +63,9 @@ def status_for(job: str, *, ipv6_on: bool, has_a: bool = True,
     return directory, state
 
 def case(name, mode, expected, **opts):
-    directory, state = status_for("job." + name, **opts)
-    budget = Budget(mode, state, "job." + name)
+    job_id = "job." + name.replace("_", "")
+    directory, state = status_for(job_id, **opts)
+    budget = Budget(mode, state, job_id)
     budget.record_initial()
     plan = adaptive_budget.adapt(budget, job_dir=directory, state_path=state)
     assert plan["policy"] == "eligible-families-v2"
