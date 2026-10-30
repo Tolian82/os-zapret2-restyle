@@ -75,6 +75,9 @@ atomic_verify_tree() {
 }
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")/../src/opnsense/scripts/OPNsense/Zapret/backend" && pwd)
 . "$BASE/apply_runtime.sh"
+# Standalone fault-injection tests do not enter the installed service header.
+# Bind an explicit test interpreter; production supplies a validated one.
+PYTHON_BIN=$(command -v python3.13) || fail "test runtime unavailable"
 # Exercise the real service entrypoint header: mocks must never silently
 # supply SERVICE_SCRIPT when production leaves it unset (the owner-live _19
 # failure). Do not source the full CLI dispatcher or touch any real runtime.
