@@ -99,17 +99,16 @@ assert b.stage80_started is None
 clock.write_text(str(b.started_epoch + 200) + "\n")
 b.begin_stage80()
 assert b.stage80_deadline == b.started_epoch + 350
-# Invalid/missing Stage 40 evidence cannot qualify a guessed family.
+# A passed Stage-40 adapter may lack per-family detail; it must never
+# gain a guessed IPv6 bonus or fail an otherwise valid IPv4-only job.
 directory, state = status_for("job.NOBASE", ipv6_on=True, has_aaaa=True)
 bad = json.loads(state.read_text())
 bad.pop("baseline")
 state.write_text(json.dumps(bad))
-try:
-    adaptive_budget.calculate_plan(Budget("standard", state, "job.NOBASE"), bad)
-except OrchestrationError as exc:
-    assert "Stage-40" in str(exc)
-else:
-    raise AssertionError("budget fabricated family coverage without Stage-40 evidence")
+fallback = adaptive_budget.calculate_plan(Budget("standard", state, "job.NOBASE"), bad)
+assert fallback["effective_seconds"]["search"] == 150
+assert fallback["work_matrix"]["family_evidence_available"] is False
+assert fallback["work_matrix"]["dual_family"] is False
 # Single AAAA-only families get no mixed-family bonus (IPv4 network
 # preflight prerequisite currently remains under Stage 6 migration).
 case("AAAAONLY", "extended", 270, ipv6_on=True, has_a=False, has_aaaa=True)
