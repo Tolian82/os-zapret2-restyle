@@ -57,9 +57,20 @@ jobs:
           changed=$(git diff --name-only "${base_sha}" "${head_sha}")
           printf '%s\n' "${changed}"
 
+          # Every main revision edits Makefile. Treat its sole revision bump
+          # as metadata, without hiding any other Makefile/packaged-source edit.
+          classified_changed="${changed}"
+          if printf '%s\n' "${changed}" | grep -Fxq 'Makefile'; then
+            old_makefile=$(git show "${base_sha}:Makefile" | sed -E 's/^(PLUGIN_REVISION=)[[:space:]]*[0-9]+$/\1 __REVISION__/')
+            new_makefile=$(git show "${head_sha}:Makefile" | sed -E 's/^(PLUGIN_REVISION=)[[:space:]]*[0-9]+$/\1 __REVISION__/')
+            if [[ "${old_makefile}" == "${new_makefile}" ]]; then
+              classified_changed=$(printf '%s\n' "${changed}" | grep -Fxv 'Makefile' || true)
+            fi
+          fi
+
           docs_only=false
           if [[ "${EVENT_NAME}" != "workflow_dispatch" && -n "${changed}" ]]; then
-            non_docs=$(printf '%s\n' "${changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*\.md)$' || true)
+            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*\.md)$' || true)
             if [[ -z "${non_docs}" ]]; then
               docs_only=true
             fi
@@ -68,7 +79,7 @@ jobs:
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
-          elif printf '%s\n' "${changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
+          elif printf '%s\n' "${classified_changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
             package=true
           fi
 

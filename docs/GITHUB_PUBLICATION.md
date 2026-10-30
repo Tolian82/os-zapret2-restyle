@@ -55,9 +55,9 @@ GH-012. **Do not mix unrelated opportunistic cleanup into a task branch.** Prese
 
 GH-013. **A Ready PR is the default for complete intended work.** Use Draft only for intentionally incomplete work that must be published before it is merge-ready.
 
-GH-014. **The PR/squash title uses the latest candidate; each branch commit uses its own immutable package candidate.** Resolve current `VERSION`/`PLUGIN_REVISION` for the PR, each commit's own contemporaneous files for its subject, and the final merged commit for squash. The forward-only revision guard requires a one-step `_N` increment on each packaged-source commit after its migration marker; docs/governance/CI-only commits retain their identity (DEV-027–DEV-033). Earlier Git history is never rewritten merely to rename a revision.
+GH-014. **Every PR into `main` must introduce exactly the next revision of its actual base: same `VERSION` requires base `_N` -> PR head `_N+1`; an approved `VERSION` transition requires `_1`.** The PR title and squash subject must use the *new head candidate*, and every branch commit's title must reflect its actual contemporaneous candidate. Repeated fixups on one unmerged branch do not each consume another `main` revision; the full PR must have exactly one revision increment relative to its currently mergeable `main` base. Revalidate/rebase if `main` advances; never merge two PRs targeting the same stale `_N+1`. Earlier immutable history is never rewritten to backfill this new policy (`DEV-027`–`DEV-035`).
 
-GH-015. **A docs/governance/CI-only delivery may advance `main` without changing package metadata.** Apply `DEV-033`; its title prefix still names the current package candidate so chronology stays anchored.
+GH-015. **Docs/governance/tests/CI-only PRs also increment `PLUGIN_REVISION` exactly once for the resulting `main` commit.** They update the version/handoff metadata consistently, but do not by themselves require a FreeBSD package build, testing publication or a stable release. State the latest published/installed package separately from the newer source-only revision; apply `DEV-033`.
 
 ## Validation and CI failure handling
 
@@ -107,7 +107,7 @@ GH-033. **Repository hygiene checks are part of normal CI.** Do not disable or w
 
 GH-034. **Interpret owner package shorthand through `CHAT-015`, `CHAT-016`, and `CHAT-027`.** A testing package is persistent GitHub delivery, not an ephemeral Actions artifact unless the owner explicitly requests build evidence only.
 
-GH-035. **A testing package is tied to the immutable exact merged commit that introduced the current package identity.** Verify that the publication source is already an ancestor of current `main`, that its parent has a different package identity, and that candidate version/revision, tag target, uploaded `.pkg`, and checksum/digest all agree. Do not publish a current candidate from a later docs-only/governance commit merely because `VERSION` and `PLUGIN_REVISION` still match.
+GH-035. **Every published testing `.pkg` is tied to the exact immutable merged `main` source commit that first introduced its version/revision identity.** Verify ancestor status, distinct parent candidate, exact candidate version/revision, tag target, uploaded package identity and digest. Later `main` commits have *new* revision identities under `DEV-032`, even when they changed only docs, and therefore never silently replace or relabel an earlier published package. A source-only revision is not automatically a published `.pkg`; an explicitly requested package must be built and published from its exact candidate commit through `GH-060`–`GH-061`.
 
 GH-036. **Testing-package publication does not promote the stable project package repository.** No stable Pages/pkg-repository update or full-release claim occurs merely because a `.pkg` is published for testing.
 
@@ -117,7 +117,7 @@ GH-038. **Temporary testing-publication branches are removed after successful pu
 
 GH-060. **An owner package/patch command is complete only after direct GitHub testing-package delivery when a package candidate is involved.** For the shorthand governed by `CHAT-015`–`CHAT-016`: finish the source scope under the normal PR/CI/exact-head merge rules; when the command creates a new package candidate, immediately publish that exact candidate from its candidate-defining merged source commit through the generic testing publisher without asking for a second publication confirmation; verify prerelease/tag target, uploaded `.pkg`, checksum/digest, and publication-branch cleanup; complete the publication-record tail required by `GH-061` and `DOC-037`; and only then report completion with the direct GitHub `.pkg` asset URL **plus the three immediately executable owner-installation commands (`fetch`, `pkg add -f`, `pkg info -x`) containing the exact published package identity and URL, as required by `CHAT-027`**. A source PR, merge, CI package artifact, local `.pkg`, sandbox download, or chat attachment is not package completion. If GitHub publication is concretely blocked, report that blocker and do not substitute a chat-delivered package/archive. The product boundary remains `DEV-040`, and owner-facing file delivery obeys `CHAT-027`.
 
-GH-061. **Successful testing-package publication automatically creates one bounded Draft publication-record PR, and that PR is part of completion.** The generic publisher creates a branch from the then-current `main`, writes a machine-generated evidence record under `docs/verification/evidence/testing-publications/` containing the immutable candidate/tag/asset/digest/workflow facts, and opens a Draft docs-only PR with the current candidate prefix. The assistant then, without requesting new owner permission, reconciles only the additional bounded current documentation whose role actually changed, marks the exact-head PR ready, requires applicable documentation/governance CI to pass, squash-merges it, verifies the resulting `main`, and cleans the temporary branch. The publication-record PR must contain no product/package source, package metadata, workflow/script, repository-output, or binary change; it exists solely because these publication facts did not exist before source merge. A package/patch delivery that required this tail is not complete while that PR is absent, open, failed, unverified, or unmerged. Documentation ownership follows `DOC-037`.
+GH-061. **Successful testing-package publication automatically creates one bounded Draft publication-record PR, and that PR is part of completion.** The generic publisher creates a branch from the then-current `main`, writes a machine-generated evidence record under `docs/verification/evidence/testing-publications/` containing the immutable *published* candidate/tag/asset/digest/workflow facts, and opens a Draft docs-only PR. The assistant then, without new owner permission, reconciles only additional bounded current documentation, **increments `PLUGIN_REVISION` by one for this docs-only `main` change as required by `DEV-032`–`DEV-033`** (without publishing another package), updates the PR title to the *new source revision*, marks the exact-head PR ready, requires relevant docs/governance CI to pass, squash-merges, verifies resulting `main` and cleans temporary branches. The publication record keeps its original published-package version and digest; the new head source revision is explicitly **unpublished**. The publication-record PR may touch `Makefile` only for this revision increment, with no product/runtime, package-build, workflow/script, repository-output or binary changes. This record is part of the original testing-package delivery, not a second package publication. Documentation ownership follows `DOC-037`.
 
 ## Full release publication
 
@@ -143,7 +143,7 @@ GH-048. **A third-component transition is guarded by `DEV-034`–`DEV-035`.** It
 
 ## Release-trigger behavior
 
-GH-049. **Every `main` merge is classified, but ordinary changes do not publish a release.** Same-`VERSION` merges finish with no tag/release dispatch unless they are the exact explicit release-preparation case.
+GH-049. **Every new `main` commit is version-validated and release-classified:** same-`VERSION` commits must increment `_N` exactly once, and valid `VERSION` transitions start at `_1`; only the exact explicit release-preparation subject triggers a full release. An ordinary `main` revision increment does **not** publish a tag, package or stable release. Enforce both the base-to-PR-head gate and the actual parent-to-merged-`main` gate; rejected/stale revisions must be corrected before integration.
 
 GH-050. **A third-component-only `VERSION` change requires `_1` and is accepted as a development-stage transition without release by default.** Release occurs only with explicit release-preparation identity.
 
@@ -177,8 +177,9 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-005` | `DEV-027`–`DEV-040` |
 | `GH-006` | `DOC-016`, `DOC-049` |
 | `GH-011` | `DEV-017` |
-| `GH-014` | `DEV-027`–`DEV-033` |
+| `GH-014` | `DEV-027`–`DEV-035` |
 | `GH-015` | `DEV-033` |
+| `GH-035` | `DEV-032` |
 | `GH-017` | `DEV-012` |
 | `GH-019` | `DEV-013` |
 | `GH-020` | `DEV-014` |
@@ -198,7 +199,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-058` | `DOC-042`–`DOC-045` |
 | `GH-059` | `DOC-053` |
 | `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
-| `GH-061` | `DOC-037` |
+| `GH-061` | `DOC-037`, `DEV-032`–`DEV-033` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -210,7 +211,10 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-006` | `DOC-016` |
 | `GH-010`–`GH-014` | `CHAT-010` |
 | `GH-011` | additionally `DEV-017` |
+| `GH-014` | `DEV-033` |
 | `GH-015` | `DEV-033`, `CHAT-010` |
+| `GH-016` | `DEV-033` |
+| `GH-049` | `DEV-033` |
 | `GH-016`–`GH-023` | `CHAT-010` |
 | `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
 | `GH-026` | additionally `DOC-049` |

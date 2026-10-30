@@ -97,21 +97,32 @@ while IFS= read -r commit; do
   if [[ "$actual" != "$candidate: "* ]]; then
     echo "Invalid commit $commit: $actual; expected $candidate: ..." >&2; exit 1
   fi
-  # Prospective marker: older commits cannot be rewritten and keep their own identity.
+  # Existing immutable branch commits retain their own subject/candidate.
+  # One PR consumes exactly ONE main revision, regardless of its internal fixups.
   if marker_at "$commit" && marker_at "$commit^"; then
     old_version="$(version_at "$commit^")"; new_version="$(version_at "$commit")"
     old_revision="$(revision_at "$commit^")"; new_revision="$(revision_at "$commit")"
-    changed="$(git diff --name-only "$commit^" "$commit")"
     if [[ "$old_version" != "$new_version" ]]; then
-      [[ "$new_revision" == 1 ]] || { echo "Stage transition must reset revision at $commit" >&2; exit 1; }
-    elif printf '%s\n' "$changed" | grep -Eq '^(src/|pkg/|repository/|Makefile$|VERSION$|scripts/build-pkg\.sh$)'; then
-      if (( 10#$new_revision != 10#$old_revision + 1 )); then
-        echo "Packaged code needs one revision bump at $commit: $old_revision -> $new_revision" >&2; exit 1
-      fi
+      [[ "$new_revision" == 1 ]] || { echo "VERSION transition must reset revision at $commit" >&2; exit 1; }
     elif [[ "$old_revision" != "$new_revision" ]]; then
-      echo "Docs/CI-only commit cannot bump revision at $commit" >&2; exit 1
+      if (( 10#$new_revision != 10#$old_revision + 1 )); then
+        echo "A branch may only advance revision by one step at $commit: $old_revision -> $new_revision" >&2; exit 1
+      fi
     fi
   fi
 done < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA")
 ((count>0)) || { echo "Empty PR commit history" >&2; exit 1; }
-echo "PASS: $count commits ($frozen_count immutable pre-policy commits), strict forward title/revision guard, PR $expected"
+base_version="$(version_at "$BASE_SHA")"
+head_version="$(version_at "$HEAD_SHA")"
+base_revision="$(revision_at "$BASE_SHA")"
+head_revision="$(revision_at "$HEAD_SHA")"
+if [[ "$base_version" == "$head_version" ]]; then
+  if (( 10#$head_revision != 10#$base_revision + 1 )); then
+    echo "Every PR into main must increase PLUGIN_REVISION exactly once: $base_revision -> $head_revision" >&2
+    exit 1
+  fi
+elif [[ "$head_revision" != 1 ]]; then
+  echo "VERSION transition must begin at PLUGIN_REVISION=1" >&2
+  exit 1
+fi
+echo "PASS: $count commits ($frozen_count immutable pre-policy commits), base-to-head revision +1 or VERSION reset, PR $expected"

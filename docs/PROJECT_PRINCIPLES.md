@@ -75,17 +75,17 @@ DEV-026. **Repository/package identity remains independent.** The project is `To
 
 DEV-027. **`VERSION` is the single project-version source.** Its value has exactly three numeric components `A.B.C`.
 
-DEV-028. **`PLUGIN_REVISION` is the package revision suffix `_N`.** It identifies the concrete installable patch/iteration inside the current `VERSION`.
+DEV-028. **`PLUGIN_REVISION` is the monotonically increasing `main` source-revision suffix `_N` for the current `VERSION`.** It identifies the exact merged source snapshot and, only when built and published, the corresponding installable OPNsense package identity. A revision may legitimately exist in `main` without a built or published `.pkg`; publication state must be stated separately.
 
 DEV-029. **The second numeric component defines the long-lived project-state/release line.** In `v0.4.2_14`, `4` defines line `v0.4.x` and the scope of `PROJECT_STATE.md`.
 
 DEV-030. **The third numeric component defines the current development stage/task.** In `v0.4.2_14`, `2` identifies the genuine current development stage inside `v0.4.x`.
 
-DEV-031. **The `_N` suffix defines the concrete patch/iteration.** In `v0.4.2_14`, `_14` is the exact package candidate and handoff boundary.
+DEV-031. **The `_N` suffix identifies one distinct merged source revision within the current `VERSION`.** In `v0.4.2_14`, `_14` identifies the source snapshot, prospective package candidate and handoff boundary. It is a revision suffix, **not** the semantic-version minor component (`B` in `A.B.C`).
 
-DEV-032. **An ordinary packaged source/behavior change inside the same development stage increments only `PLUGIN_REVISION`.** It does not change `VERSION` merely because a new package is built.
+DEV-032. **Every new commit incorporated into `main` increments `PLUGIN_REVISION` exactly once (`_N` -> `_N+1`) while `VERSION` remains unchanged, without exception for documentation, governance, CI, tests or packaging.** One squash-merged PR produces one `main` commit and one increment; fixup commits on an *unmerged task branch* do not consume further revisions. Never skip, reuse, decrement or manually reserve suffixes. `VERSION` does not change merely because `main` advances. A genuine authorized `VERSION` transition resets the revision to `_1` instead, under `DEV-034`–`DEV-037`.
 
-DEV-033. **Documentation, governance, or CI-only changes change neither `VERSION` nor `PLUGIN_REVISION`.** They may advance `main` while package identity stays unchanged; GitHub handling follows `GH-015`.
+DEV-033. **Even documentation, governance, test and CI-only changes must increment `PLUGIN_REVISION` when merged into `main`.** Such a source-only revision does **not** automatically build or publish a package, move any immutable tag, authorize owner installation or constitute a stable release. Pull-request edits, unsquashed task-branch commits, issue/PR comments, CI re-runs, GitHub metadata and release/tag publication without a new `main` commit do **not** independently increment either `VERSION` or `PLUGIN_REVISION`. GitHub enforcement is defined in `GH-014`–`GH-016` and `GH-049`.
 
 DEV-034. **A genuine new development stage changes the third numeric component and starts at package revision `_1`.** Do not change the third component merely because many patches accumulated; it marks a real stage change.
 
@@ -137,7 +137,7 @@ DEV-052. **Version-independent external dependencies and platform-portable desig
 |---|---|
 | `DEV-001` | `CHAT-007`, `CHAT-009`, `CHAT-026` |
 | `DEV-017` | `GH-011` |
-| `DEV-033` | `GH-015` |
+| `DEV-033` | `GH-014`–`GH-016`, `GH-049` |
 | `DEV-036` | `GH-047`, `GH-051` |
 | `DEV-037` | `DOC-028`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-041` |
@@ -165,10 +165,10 @@ DEV-052. **Version-independent external dependencies and platform-portable desig
 | `DEV-029` | `DOC-026`, `GH-005`, `GH-014` |
 | `DEV-030` | `DOC-026`, `GH-005`, `GH-014` |
 | `DEV-031` | `DOC-026`, `GH-005`, `GH-014` |
-| `DEV-032` | `GH-005`, `GH-014` |
-| `DEV-033` | `GH-005`, `GH-014`, `GH-015` |
-| `DEV-034` | `GH-005`, `GH-048` |
-| `DEV-035` | `GH-005`, `GH-048` |
+| `DEV-032` | `DOC-037`, `GH-005`, `GH-014`, `GH-035`, `GH-061` |
+| `DEV-033` | `DOC-037`, `GH-005`, `GH-014`–`GH-015`, `GH-061` |
+| `DEV-034` | `GH-005`, `GH-014`, `GH-048` |
+| `DEV-035` | `GH-005`, `GH-014`, `GH-048` |
 | `DEV-036` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
 | `DEV-037` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
 | `DEV-038` | `GH-005`, `GH-041` |

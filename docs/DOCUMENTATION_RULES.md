@@ -97,7 +97,7 @@ DOC-035. **Standalone deep records must add distinct value.** Create them for di
 
 DOC-036. **Every logical development scope begins and ends with documentation reconciliation.** Before implementation, establish the current handoff/state/rules; before completion, reconcile every affected active fact, contract, handoff, plan, and proof pointer. The reconciliation decision is mandatory, but editing documentation files is not: when nothing documented changed, the correct result is an evidence-based no-op under `DOC-047`.
 
-DOC-037. **Every GitHub delivery includes a documentation-impact decision and one complete documentation reconciliation.** Facts, contracts, handoff, plan, and governance that exist before an engineering/source merge belong in that same logical source PR. Immutable testing-package facts that do not exist until after that merge and successful publication are the single bounded exception: the generic publisher must create the docs-only publication-record PR defined by `GH-060`–`GH-061`, and that PR is part of the same delivery rather than a second engineering scope. Before that tail is merged, reconcile every affected current document whose bounded role actually changed; do not create a separate ad-hoc cleanup PR for publication facts. GitHub execution follows `GH-053`.
+DOC-037. **Every GitHub delivery includes a documentation-impact decision and one complete documentation reconciliation.** Facts, contracts, handoff, plan, and governance that exist before an engineering/source merge belong in that same logical source PR. Immutable testing-package facts that do not exist until after that merge and successful publication are the single bounded exception: the generic publisher must create the publication-record PR defined by `GH-060`–`GH-061`, and that PR is part of the same delivery rather than a second engineering scope. The record PR increments the `main` source revision (including a `PLUGIN_REVISION`-only Makefile edit) under `DEV-032`–`DEV-033`, without creating or publishing an additional package. Before that tail is merged, reconcile every affected current document whose bounded role actually changed; do not create a separate ad-hoc cleanup PR for publication facts. GitHub execution follows `GH-053`.
 
 DOC-038. **A full release includes a complete README review.** Before the release defined by `DEV-039` and executed under `GH-039`–`GH-046`, review `README.md` against actual capabilities, installation path, support boundary, release identity, and contributor navigation.
 
@@ -151,7 +151,7 @@ This registry is part of the rule contract. It is maintained with rule changes a
 | `DOC-016` | `GH-006` |
 | `DOC-026` | `DEV-029`, `DEV-030`, `DEV-031` |
 | `DOC-028` | `DEV-036`, `DEV-037` |
-| `DOC-037` | `GH-053`, `GH-060`–`GH-061` |
+| `DOC-037` | `DEV-032`–`DEV-033`, `GH-053`, `GH-060`–`GH-061` |
 | `DOC-038` | `DEV-039`, `GH-039`–`GH-046` |
 | `DOC-047` | `GH-053`, `GH-054`, `GH-060`–`GH-061` |
 | `DOC-049` | `GH-004`, `GH-026` |
