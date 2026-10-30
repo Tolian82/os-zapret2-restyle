@@ -86,7 +86,7 @@ jobs:
           # Native engine Exclude proof changes require the REAL FreeBSD VM,
           # even when only a non-packaged regression script changes.
           native_wan_process=false
-          if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py); then
+          if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py)$'; then
             native_wan_process=true
           fi
           echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
