@@ -86,7 +86,7 @@ jobs:
           # Native engine Exclude proof changes require the REAL FreeBSD VM,
           # even when only a non-packaged regression script changes.
           native_wan_process=false
-          if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py)$'; then
+          if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py)$'; then
             native_wan_process=true
           fi
           echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
@@ -192,10 +192,11 @@ jobs:
           python3.13 scripts/test-global-exclusions.py
       - name: Isolated real-engine Exclude IPSet generator rehearsal
         run: |
-          python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py
+          python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
           python3.13 scripts/test-freebsd15-native-engine-exclude.py --static
           python3.13 scripts/test-freebsd15-native-strategy-mutation.py --static
           python3.13 scripts/test-freebsd15-native-tls-strategy.py --static
+          python3.13 scripts/test-freebsd15-native-tls-fake.py --static
       - name: Voice shared IPv4 targets
         run: sh scripts/test-voice-shared-ipsets.sh
 
@@ -731,7 +732,7 @@ jobs:
               echo 'Native FreeBSD 15.1 tcpdump lifecycle must PASS; SKIP is not acceptance' >&2
               exit 1
             }
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -798,6 +799,17 @@ jobs:
             printf '%s\n' "$native_tls_output"
             printf '%s\n' "$native_tls_output" | grep -Fqx 'NATIVE_TLS_CLIENTHELLO_HEADER=PASS: native TLS ClientHello selected pktmod TTL IPv4/IPv6, nonmatching Exclude modifies, exact matching Exclude preserves, IPFW/pcap cleaned' || {
               echo 'Isolated native TLS ClientHello packet mutation witness must PASS; no SKIP is allowed' >&2
+              exit 1
+            }
+            # Real upstream TLS fake, unique forged payload and genuine ClientHello.
+            # IPv4/IPv6, matching/nonmatching native Exclude, exact TCP flow.
+            native_fake_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-tls-fake.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_fake_output"
+              exit 1
+            }
+            printf '%s\n' "$native_fake_output"
+            printf '%s\n' "$native_fake_output" | grep -Fqx 'NATIVE_TLS_FAKE_PACKET=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello attributed on wire; IPFW cleaned' || {
+              echo 'Native TLS fake packet attribution MUST PASS; no SKIP is allowed' >&2
               exit 1
             }
 
