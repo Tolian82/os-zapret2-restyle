@@ -808,7 +808,7 @@ jobs:
               exit 1
             }
             printf '%s\n' "$native_fake_output"
-            printf '%s\n' "$native_fake_output" | grep -Fqx 'NATIVE_TLS_FAKE_PACKET=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello preserved; IPFW cleaned' || {
+            printf '%s\n' "$native_fake_output" | grep -Fqx 'NATIVE_TLS_FAKE_PACKET=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello attributed on wire; IPFW cleaned' || {
               echo 'Native TLS fake packet attribution MUST PASS; no SKIP is allowed' >&2
               exit 1
             }
