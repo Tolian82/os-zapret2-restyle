@@ -212,6 +212,11 @@ def capture(adapter, controller, native, engine: Path, upstream: Path,
             raw = cap.read_bytes()
             original = native.records(raw, family, hello, ports=(PORT, BYPASS))
             forged = native.records(raw, family, FAKE, ports=(PORT, BYPASS))
+            # Sanitized VM-only provenance on failure; no packet payload export.
+            print(f'NATIVE_TLS_FAKE_WITNESS={phase}/IPv{4 if family == socket.AF_INET else 6} '
+                  f'baseline={baseline} active={active} bypass={bypass} '
+                  f'original_flows={sorted({(s, d) for s, d, _ in original})} '
+                  f'fake_flows={sorted({(s, d) for s, d, _ in forged})}')
             attest(original, forged, baseline, active, bypass, phase)
         finally:
             if dump is not None:
