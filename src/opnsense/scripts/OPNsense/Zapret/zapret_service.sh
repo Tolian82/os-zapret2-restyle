@@ -2,6 +2,9 @@
 
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
 BACKEND_DIR="${BACKEND_DIR:-${SCRIPT_DIR}/backend}"
+# Single validated Python resolver shared by service, configd and GUI.
+PYTHON_RUNTIME_LAUNCHER="${SCRIPT_DIR}/python_runtime.sh"
+PYTHON_BIN=$(/bin/sh "${PYTHON_RUNTIME_LAUNCHER}" --resolve) || exit 69
 
 for module in common config parser registry storage targets target_mode \
     profile_normalizer profile_pipeline exclude blobs ports firewall generator validator atomic \
@@ -383,7 +386,7 @@ native_voice_lifecycle_inspect_service()
 {
     # One read-only lifecycle classifier shares the existing FD9 route.
     # It never mutates the common owner or activates Voice ON.
-    _native_voice_router_python="/usr/local/bin/python3.13"
+    _native_voice_router_python="${PYTHON_BIN}"
     _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
     [ -x "${_native_voice_router_python}" ] &&
     [ -r "${_native_voice_router_script}" ] || {
@@ -397,7 +400,7 @@ native_voice_lifecycle_inspect_service()
 # This MUST NOT invoke the private five-resource actuator.
 native_voice_candidate_preflight_service()
 {
-    _native_voice_router_python="/usr/local/bin/python3.13"
+    _native_voice_router_python="${PYTHON_BIN}"
     _native_voice_router_script="${BACKEND_DIR}/voice_native_lifecycle_router.py"
     [ -x "${_native_voice_router_python}" ] &&
     [ -r "${_native_voice_router_script}" ] || {
@@ -419,7 +422,7 @@ native_voice_preview_draft_service()
     esac
     [ "${_voice_mask}" != 00000 ] || return 64
     printf '%s\n' "${_voice_sha}" | grep -Eq '^[0-9a-f]{64}$' || return 64
-    _voice_python="/usr/local/bin/python3.13"
+    _voice_python="${PYTHON_BIN}"
     _voice_route="${BACKEND_DIR}/voice_native_draft_preview_route.py"
     [ -x "${_voice_python}" ] && [ -r "${_voice_route}" ] || {
         echo "ERROR: native Voice read-only preview unavailable" >&2
@@ -435,9 +438,9 @@ native_voice_preview_draft_service()
 extra_resources_preview_saved_service()
 {
     [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
-    [ -x /usr/local/bin/python3.13 ] || return 69
+    [ -x "${PYTHON_BIN}" ] || return 69
     [ -r "${SCRIPT_DIR}/extra_resources_saved_route.py" ] || return 69
-    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_saved_route.py" preview-saved
+    "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_saved_route.py" preview-saved
 }
 
 # One actual runtime/Config Apply owner: the existing service process holds
@@ -523,8 +526,8 @@ shared_apply_recover_saved_service()
     apply_runtime_commit || return 70
     # This terminal transition is made ONLY after physical runtime/IPFW
     # completion. If this write fails, Config-saved evidence remains pending.
-    [ -x /usr/local/bin/python3.13 ] || return 70
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+    [ -x "${PYTHON_BIN}" ] || return 70
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
         finish-saved "$_shared_saved_id" || return 70
     printf "recovered-saved-id=%s\n" "$_shared_saved_id"
 }
@@ -598,8 +601,8 @@ shared_apply_recover_activating_pristine_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
     firewall_shared_runtime verify "$_shared_pristine_dir/release" - || return 69
-    [ -x /usr/local/bin/python3.13 ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+    [ -x "${PYTHON_BIN}" ] || return 69
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
         recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69
     printf "recovered-pristine-id=%s\n" "$_shared_pristine_id"
 }
@@ -630,7 +633,7 @@ shared_apply_recover_activated_cold_service()
     if [ "$_shared_cold_phase" = config-saved ]; then
         [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
         [ "${EXTRA_RESOURCES_NATIVE_REMOVE_RESTORE:-0}" = 1 ] || return 75
-        _shared_cold_context=$(/usr/local/bin/python3.13 \
+        _shared_cold_context=$("${PYTHON_BIN}" \
             "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69
         _shared_cold_old_snapshot=$(shared_apply_native_config saved \
             "$_shared_cold_old" "$_shared_cold_old_page" |
@@ -724,12 +727,12 @@ shared_apply_recover_activated_cold_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$_shared_cold_old_root/release" - || return 70
-    [ -x /usr/local/bin/python3.13 ] || return 70
+    [ -x "${PYTHON_BIN}" ] || return 70
     if [ "$_shared_cold_phase" = config-saved ]; then
-        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
             finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70
     else
-        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
             "finish-$_shared_cold_phase" "$_shared_cold_id" "$_shared_cold_old" || return 70
     fi
     printf "recovered-%s-id=%s\n" "$_shared_cold_phase" "$_shared_cold_id"
@@ -805,8 +808,8 @@ shared_apply_recover_activating_parked_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$_parked_old_root/release" - || return 70
-    [ -x /usr/local/bin/python3.13 ] || return 70
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+    [ -x "${PYTHON_BIN}" ] || return 70
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
         finish-activating "$_parked_id" "$_parked_old" || return 70
     printf "recovered-parked-id=%s\n" "$_parked_id"
 }
@@ -822,16 +825,16 @@ shared_apply_recover_prepared_service()
     [ "${#_shared_recover_id}" -eq 32 ] || return 69
     case "$_shared_recover_id" in ""|*[!a-f0-9]*) return 69 ;; esac
     case "$_shared_recover_page" in voice|strategies) ;; *) return 69 ;; esac
-    [ -x /usr/local/bin/python3.13 ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+    [ -x "${PYTHON_BIN}" ] || return 69
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
         recover-prepared "$_shared_recover_id"
 }
 # Read the durable owner only under the existing FreeBSD FD9. This is a
 # tiny native boot dispatcher, not a second runtime or Config persistence.
 shared_apply_inspect_service()
 {
-    [ -x /usr/local/bin/python3.13 ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" inspect
+    [ -x "${PYTHON_BIN}" ] || return 69
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" inspect
 }
 
 # Stop exactly the committed common owner, using the original FD9 lifecycle.
@@ -1045,8 +1048,8 @@ shared_apply_bundle_service()
 {
     [ "$#" -eq 2 ] || return 64
     case "$1" in seal|verify) ;; *) return 64 ;; esac
-    [ -x /usr/local/bin/python3.13 ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_seal.py" "$1" "$2"
+    [ -x "${PYTHON_BIN}" ] || return 69
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_seal.py" "$1" "$2"
 }
 shared_apply_execute_service()
 {
@@ -1299,10 +1302,10 @@ shared_apply_prepare_service()
     esac
     [ "${#1}" -eq 32 ] || return 64
     preflight_shared_apply_journal common-apply || return 69
-    [ -x /usr/local/bin/python3.13 ] || return 69
+    [ -x "${PYTHON_BIN}" ] || return 69
     _shared_work="/var/db/zapret2/shared-work/$1"
     [ -d "$_shared_work" ] && [ ! -L "$_shared_work" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_render.py" render "$1" || {
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_render.py" render "$1" || {
         printf '%s\n' preflight-rejected=render
         return 0
     }
@@ -1333,7 +1336,7 @@ extra_resources_native_previous_owner_service()
 {
     [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
     preflight_shared_apply_journal strategy-lab-native || return 69
-    _extra_owner_line=$(/usr/local/bin/python3.13 \
+    _extra_owner_line=$("${PYTHON_BIN}" \
         "${BACKEND_DIR}/shared_apply_operation.py" owner-witness) || return 69
     set -- $_extra_owner_line
     [ "$#" -eq 4 ] && [ "$1" = owner-witness ] || return 69
@@ -1489,7 +1492,7 @@ extra_resources_native_trial_service()
     [ "${EXTRA_RESOURCES_NATIVE_REMOVE_TRIAL:-0}" = 1 ] || return 75
     preflight_shared_apply_journal common-apply || return 69
     shared_apply_require_tools || return 69
-    _extra_trial_context=$(/usr/local/bin/python3.13 \
+    _extra_trial_context=$("${PYTHON_BIN}" \
         "${BACKEND_DIR}/shared_apply_operation.py" remove-trial-context) || return 69
     set -- $_extra_trial_context
     [ "$#" -eq 4 ] && [ "$1" = remove-trial-owner ] || return 69
@@ -1639,9 +1642,9 @@ extra_resources_native_trial_service()
 shared_apply_record_service()
 {
     [ "$#" -eq 6 ] || return 64
-    [ -x /usr/local/bin/python3.13 ] || return 69
+    [ -x "${PYTHON_BIN}" ] || return 69
     [ -r "${BACKEND_DIR}/shared_apply_operation.py" ] || return 69
-    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+    "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
         record "$1" "$2" "$3" "$4" "$5" "$6"
 }
 
@@ -1666,7 +1669,7 @@ extra_resources_native_recover_prepared_service()
     case "$_extra_prepared_old_page" in strategies|voice) ;; *) return 69 ;; esac
     case "$_extra_prepared_old_hash" in ""|*[!a-f0-9]*) return 69 ;; esac
     [ "${#_extra_prepared_old_hash}" -eq 64 ] || return 69
-    _extra_prepared_probe=$(/usr/local/bin/python3.13 \
+    _extra_prepared_probe=$("${PYTHON_BIN}" \
         "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69
     if [ "$_extra_prepared_probe" = "remove-prepared none" ]; then
         printf '%s\n' native-remove-prepared=not-needed
@@ -1781,7 +1784,7 @@ extra_resources_native_restore_previous_service()
     [ "${#_extra_restore_hash}" -eq 64 ] || return 64
     # This CLI checks exact old witness in the original fsynced resource
     # journal and the existing committed/restored shared Apply predecessor.
-    _extra_pair=$(/usr/local/bin/python3.13 \
+    _extra_pair=$("${PYTHON_BIN}" \
         "${BACKEND_DIR}/shared_apply_operation.py" remove-rollback-pair) || return 69
     set -- $_extra_pair
     [ "$#" -eq 6 ] && [ "$1" = remove-rollback ] || return 69
@@ -1839,7 +1842,7 @@ extra_resources_native_restore_previous_service()
         # journal is atomically reverted. No other config or owner writer.
         atomic_verify_tree "$_extra_restore_work/release" "$ACTIVE_DIR" || return 70
         apply_runtime_probe "$_extra_restore_work/release" 1 || return 70
-        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \
+        "${PYTHON_BIN}" "${BACKEND_DIR}/shared_apply_operation.py" \
             remove-revert-committed "$_extra_trial_id" "$_extra_restore_id" || return 70
     fi
     shared_apply_bundle_service verify "$_extra_restore_id" || return 70
@@ -1913,7 +1916,7 @@ shared_apply_recover_reviewed_legacy_service()
 {
     [ "$#" -eq 0 ] || return 64
     preflight_shared_apply_journal common-recover-reviewed-legacy || return 69
-    _review_identity=$(/usr/local/bin/python3.13 \
+    _review_identity=$("${PYTHON_BIN}" \
         "$BACKEND_DIR/shared_apply_operation.py" review-legacy) || return 69
     set -- $_review_identity
     [ "$#" -eq 4 ] && [ "$1" = review-legacy ] || return 69
@@ -1932,14 +1935,14 @@ shared_apply_recover_reviewed_legacy_service()
     shared_apply_reviewed_legacy_attest_service "$_review_id" \
         "$_review_base" "$_review_candidate" 1 || return 70
     # Root FD9 CLI rechecks sealed bundle, operation ID and phase.
-    /usr/local/bin/python3.13 "$BACKEND_DIR/shared_apply_operation.py" \
+    "${PYTHON_BIN}" "$BACKEND_DIR/shared_apply_operation.py" \
         finish-reviewed-legacy "$_review_id" || return 70
     printf 'reviewed-legacy-restored=%s\n' "$_review_id"
 }
 
 shared_apply_status_observe_service()
 {
-    _status_python=/usr/local/bin/python3.13
+    _status_python="${PYTHON_BIN}"
     _status_inspector="${BACKEND_DIR}/voice_live_inspect.py"
     [ -x "$_status_python" ] && [ -r "$_status_inspector" ] || return 69
     if _status_json=$("$_status_python" "$_status_inspector" 2>/dev/null); then
@@ -2031,14 +2034,14 @@ telegram_voice_compat_apply_service()
 telegram_voice_native_status_service()
 {
     shared_apply_require_tools || return 2
-    [ -x /usr/local/bin/python3.13 ] || return 2
+    [ -x "${PYTHON_BIN}" ] || return 2
     _compat_saved=$(/usr/local/bin/php \
         "$SCRIPT_DIR/shared_apply_request.php" telegram-saved) || return 2
     _compat_requested=$(printf '%s\n' "$_compat_saved" |
         shared_apply_json_field '.requested|select(.=="on" or .=="off")') || return 2
     _compat_digest=$(printf '%s\n' "$_compat_saved" |
         shared_apply_json_field '.snapshot|select(test("^[a-f0-9]{64}$"))') || return 2
-    if _compat_report=$(/usr/local/bin/python3.13 \
+    if _compat_report=$("${PYTHON_BIN}" \
         "$BACKEND_DIR/voice_live_inspect.py" 2>/dev/null); then
         _compat_rc=0
     else
@@ -2210,7 +2213,7 @@ service_dispatch()
             [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
             STRATEGY_LAB_LIFECYCLE_OWNER=1
             export STRATEGY_LAB_LIFECYCLE_OWNER
-            /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" plan
+            "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_operation.py" plan
             ;;
         native-voice-lifecycle-inspect)
             native_voice_lifecycle_inspect_service
@@ -2251,18 +2254,18 @@ service_dispatch()
             # original native service owns FD9 through the full transaction.
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
             [ "${EXTRA_RESOURCES_REMOVE_OWNER_ACCEPTANCE:-0}" = 1 ] || return 75
-            [ -x /usr/local/bin/python3.13 ] &&
+            [ -x "${PYTHON_BIN}" ] &&
             [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
             STRATEGY_LAB_LIFECYCLE_OWNER=1
             export STRATEGY_LAB_LIFECYCLE_OWNER
             case "$1" in
                 extra-resources-recover-test)
                     [ "$#" -eq 1 ] || return 64
-                    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" recover-test
+                    "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_operation.py" recover-test
                     ;;
                 *)
                     [ "$#" -eq 2 ] || return 64
-                    /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" "$1" "$2"
+                    "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_operation.py" "$1" "$2"
                     ;;
             esac
             ;;
@@ -2271,17 +2274,17 @@ service_dispatch()
             # a native launcher-confirmed removal and exact revalidated plan.
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] &&
             [ "${EXTRA_RESOURCES_REMOVE_CONFIRMED:-0}" = 1 ] || return 75
-            [ -x /usr/local/bin/python3.13 ] &&
+            [ -x "${PYTHON_BIN}" ] &&
             [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
             STRATEGY_LAB_LIFECYCLE_OWNER=1
             export STRATEGY_LAB_LIFECYCLE_OWNER
-            /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" remove "${2:-}"
+            "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_operation.py" remove "${2:-}"
             ;;
         extra-resources-install|extra-resources-recover)
             # Launcher owns setup.lock before acquiring original FD9.
             # Native lifecycle callbacks never acquire a second lock.
             [ "${EXTRA_RESOURCES_SETUP_LOCK_OWNER:-0}" = 1 ] || return 75
-            [ -x /usr/local/bin/python3.13 ] || return 69
+            [ -x "${PYTHON_BIN}" ] || return 69
             [ -r "${SCRIPT_DIR}/extra_resources_operation.py" ] || return 69
             STRATEGY_LAB_LIFECYCLE_OWNER=1
             export STRATEGY_LAB_LIFECYCLE_OWNER
@@ -2289,7 +2292,7 @@ service_dispatch()
                 extra-resources-install) _extra_mode=install ;;
                 *) _extra_mode=recover ;;
             esac
-            /usr/local/bin/python3.13 "${SCRIPT_DIR}/extra_resources_operation.py" "$_extra_mode"
+            "${PYTHON_BIN}" "${SCRIPT_DIR}/extra_resources_operation.py" "$_extra_mode"
             ;;
         strategy-lab)
             run_strategy_lab_worker "${STRATEGY_LAB_WORKER}" "${2:-}"
@@ -2313,13 +2316,7 @@ service_dispatch()
 preflight_shared_apply_journal()
 {
     _shared_gate_script="${BACKEND_DIR}/shared_apply_operation.py"
-    _shared_gate_python=/usr/local/bin/python3.13
-    if [ ! -x "${_shared_gate_python}" ]; then
-        case "${BACKEND_DIR}" in
-            /usr/local/opnsense/scripts/OPNsense/Zapret/backend) ;;
-            *) _shared_gate_python=$(command -v python3.13 2>/dev/null || true) ;;
-        esac
-    fi
+    _shared_gate_python="${PYTHON_BIN}"
     if [ ! -r "${_shared_gate_script}" ] ||
        [ -z "${_shared_gate_python}" ] ||
        [ ! -x "${_shared_gate_python}" ]; then
