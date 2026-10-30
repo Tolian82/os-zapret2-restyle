@@ -1,0 +1,40 @@
+name: Stage 5 A07 offline readiness
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage5-wan-ab-readiness.py'
+      - 'scripts/test-stage5-wan-ab-readiness.py'
+      - 'scripts/stage5-wan-acquisition-plan.py'
+      - 'scripts/stage5-wan-baseline-capture.py'
+      - 'scripts/stage5-wan-pcap-attribution.py'
+      - 'scripts/stage5-installed-evidence.py'
+      - '.github/workflows/stage5-a07-offline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/stage5-wan-ab-readiness.py'
+      - 'scripts/test-stage5-wan-ab-readiness.py'
+      - 'scripts/stage5-wan-acquisition-plan.py'
+      - 'scripts/stage5-wan-baseline-capture.py'
+      - 'scripts/stage5-wan-pcap-attribution.py'
+      - 'scripts/stage5-installed-evidence.py'
+      - '.github/workflows/stage5-a07-offline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-readiness:
+    name: Offline A07 A/B/restoration contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Syntax and bounded no-network regressions
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-ab-readiness.py scripts/test-stage5-wan-ab-readiness.py
+          python3.13 scripts/test-stage5-wan-ab-readiness.py
