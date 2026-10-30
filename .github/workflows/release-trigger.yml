@@ -47,6 +47,18 @@ jobs:
           [[ "${PREVIOUS_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           IFS='.' read -r PREVIOUS_MAJOR PREVIOUS_SECOND PREVIOUS_THIRD <<< "${PREVIOUS_VERSION}"
 
+          PREVIOUS_REVISION=$(git show "${GITHUB_SHA}^:Makefile" | sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' | head -1)
+          [[ "${PREVIOUS_REVISION}" =~ ^(0|[1-9][0-9]*)$ ]] || {
+            echo "Previous main revision is invalid or missing." >&2
+            exit 1
+          }
+          if [[ "${VERSION_VALUE}" == "${PREVIOUS_VERSION}" ]]; then
+            if (( 10#${REVISION} != 10#${PREVIOUS_REVISION} + 1 )); then
+              echo "Every main commit must increment PLUGIN_REVISION exactly once: ${PREVIOUS_REVISION} -> ${REVISION}" >&2
+              exit 1
+            fi
+          fi
+
           RELEASE_PATTERN="^v${ESCAPED_VERSION}_${REVISION}: Prepare release v${ESCAPED_VERSION}( \(#[0-9]+\))?$"
           PUBLISH=false
           if [[ "${SUBJECT}" =~ ${RELEASE_PATTERN} ]]; then

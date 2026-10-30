@@ -7,49 +7,82 @@ cd "$tmp"
 git init -q
 git config user.name "Revision Test"
 git config user.email "test@example.invalid"
-echo 0.5.1 > VERSION
-printf 'PLUGIN_REVISION=    1\n' > Makefile
-mkdir -p src
-echo one > src/code.py
+echo 0.6.1 > VERSION
+printf 'PLUGIN_REVISION=    12\n' > Makefile
+mkdir -p src .github
+echo original > src/code.py
+echo active > .github/REVISION_GUARD
 git add .
-git commit -qm "v0.5.1_1: Initial candidate"
+git commit -qm "v0.6.1_12: Initial main"
 base="$(git rev-parse HEAD)"
-echo legacy >> src/code.py
-git add src
-git commit -qm "v0.5.1_1: Historical unbumped code"
-mkdir -p .github
-echo 1 > .github/REVISION_GUARD
-sed 's/REVISION=    1/REVISION=    2/' Makefile > Makefile.new
-mv Makefile.new Makefile
-git add .
-git commit -qm "v0.5.1_2: Correct and enable revision enforcement"
+
+# Even documentation-only PRs MUST increment the source revision.
 echo docs > notes.md
 git add notes.md
-git commit -qm "v0.5.1_2: Docs-only"
-good="$(git rev-parse HEAD)"
-bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$good" "v0.5.1_2: Voice"
-echo code >> src/code.py
-git add src
-git commit -qm "v0.5.1_2: Unbumped"
-if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$(git rev-parse HEAD)" "v0.5.1_2: Voice" >/dev/null 2>&1; then
-  echo "FAIL: unbumped code passed" >&2; exit 1
+git commit -qm "v0.6.1_12: Docs without increment"
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" HEAD "v0.6.1_12: Docs" >/dev/null 2>&1; then
+  echo "FAIL: unchanged revision passed for docs-only PR" >&2; exit 1
 fi
-git reset --hard -q "$good"
-echo code >> src/code.py
-sed 's/REVISION=    2/REVISION=    3/' Makefile > Makefile.new
+git reset --hard -q "$base"
+
+sed 's/REVISION=    12/REVISION=    13/' Makefile > Makefile.new
 mv Makefile.new Makefile
+echo docs > notes.md
 git add .
-git commit -qm "v0.5.1_3: Bumped code"
-now="$(git rev-parse HEAD)"
-bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$now" "v0.5.1_3: Voice"
-if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$now" "v0.5.1_2: Stale" >/dev/null 2>&1; then
-  echo "FAIL: stale title passed" >&2; exit 1
+git commit -qm "v0.6.1_13: Docs-only increments main identity"
+good="$(git rev-parse HEAD)"
+bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$good" "v0.6.1_13: Docs"
+
+# Additional commits on the SAME pending PR must not consume another main revision.
+echo fixup >> notes.md
+git add notes.md
+git commit -qm "v0.6.1_13: Fix docs in the same PR"
+fixed="$(git rev-parse HEAD)"
+bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$fixed" "v0.6.1_13: Docs"
+
+# Packaged code in a later fixup of that SAME PR stays one candidate.
+echo correction >> src/code.py
+git add src
+git commit -qm "v0.6.1_13: Correct packaged source in the same PR"
+current="$(git rev-parse HEAD)"
+bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$current" "v0.6.1_13: Product"
+
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$current" "v0.6.1_12: Stale" >/dev/null 2>&1; then
+  echo "FAIL: stale PR title passed" >&2; exit 1
 fi
+
+# A second main PR from _13 needs _14; it cannot reuse _13.
+echo next > second.md
+git add second.md
+git commit -qm "v0.6.1_13: New docs PR without bump"
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$current" HEAD "v0.6.1_13: No bump" >/dev/null 2>&1; then
+  echo "FAIL: next PR reused prior revision" >&2; exit 1
+fi
+git reset --hard -q "$current"
+sed 's/REVISION=    13/REVISION=    15/' Makefile > Makefile.new
+mv Makefile.new Makefile
+git add Makefile
+git commit -qm "v0.6.1_15: Skipped a main revision"
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$current" HEAD "v0.6.1_15: Skip" >/dev/null 2>&1; then
+  echo "FAIL: skipped _14 passed" >&2; exit 1
+fi
+git reset --hard -q "$current"
+
+# A true new development stage resets to _1, not a continuous _14.
+echo 0.6.2 > VERSION
+sed 's/REVISION=    13/REVISION=    1/' Makefile > Makefile.new
+mv Makefile.new Makefile
+git add VERSION Makefile
+git commit -qm "v0.6.2_1: Approved new development stage"
+bash "$ROOT/scripts/verify-pr-revisions.sh" "$current" HEAD "v0.6.2_1: Stage"
+
+# No generic escape hatch for unversioned commit messages.
 git reset --hard -q "$good"
-echo newer > bad-subject.md
-git add bad-subject.md
-git commit -qm "docs: Record v0.5.2_8 native save merge milestone and handoff"
-if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" "$(git rev-parse HEAD)" "v0.5.1_2: Voice" >/dev/null 2>&1; then
-  echo "FAIL: new commit with copied historical subject bypassed exact-SHA guard" >&2; exit 1
+echo bad > bad.md
+git add bad.md
+git commit -qm "docs: New unversioned message"
+if bash "$ROOT/scripts/verify-pr-revisions.sh" "$base" HEAD "v0.6.1_13: Docs" >/dev/null 2>&1; then
+  echo "FAIL: new unversioned commit passed" >&2; exit 1
 fi
-echo "PASS: strict version-boundary, immutable historic SHA exception and forward revision-regression"
+
+echo "PASS: docs-only bump, source fixup, stale/skip/reuse refusal, stage reset and commit-title policy"
