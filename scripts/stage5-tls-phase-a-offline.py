@@ -61,6 +61,7 @@ def inspect(bundle: Path, plan_file: Path, baseline: Path | None = None) -> dict
     target = companion('phase_a_selector', HERE / 'stage5-wan-target-preflight.py')
     owner = companion('phase_a_owner', HERE / 'stage5-installed-evidence.py')
     native = companion('phase_a_native', NATIVE / 'global_exclusions.py')
+    signature = companion('phase_a_signature', HERE / 'stage5-tls-profile-signature.py')
     plan = ctl.safe_plan(plan_file)
     manifest = plan['analysis_manifest']
     ip = ipaddress.ip_address(manifest['remote_ip'])
@@ -106,6 +107,9 @@ def inspect(bundle: Path, plan_file: Path, baseline: Path | None = None) -> dict
             if key not in ('owner', 'argv', 'witness'))).hexdigest(),
         'final_profile_count': len(profiles),
         'eligible_profile_indexes': eligible,
+        'eligible_profile_action_signatures': signature.candidate_signatures(
+            argv, native, eligible, len(profiles)),
+        'action_signatures_are_runtime_proof': False,
         'candidate_classification': ('TARGET_EXCLUDED_OR_VOICE_OVERLAP' if blocked else
                                      'NO_ELIGIBLE_TLS_PROFILE' if not eligible else
                                      'MULTIPLE_ELIGIBLE_PROFILES' if len(eligible) > 1 else

@@ -144,9 +144,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage5-wan-target-preflight.py scripts/test-stage5-wan-target-preflight.py
           python3.13 scripts/test-stage5-wan-target-preflight.py
-      - name: Stage 5 TLS Phase-A offline native profile identity binder
+      - name: Stage 5 TLS Phase-A offline configured Lua action signatures
         run: |
-          python3.13 -m py_compile scripts/stage5-tls-phase-a-offline.py scripts/test-stage5-tls-phase-a-offline.py
+          python3.13 -m py_compile scripts/stage5-tls-profile-signature.py scripts/test-stage5-tls-profile-signature.py scripts/stage5-tls-phase-a-offline.py scripts/test-stage5-tls-phase-a-offline.py
+          python3.13 scripts/test-stage5-tls-profile-signature.py
           python3.13 scripts/test-stage5-tls-phase-a-offline.py
       - name: Stage 5 offline WAN TCP PCAP attribution, both IP families
         run: |

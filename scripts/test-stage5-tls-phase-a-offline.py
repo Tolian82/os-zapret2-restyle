@@ -17,11 +17,16 @@ spec = importlib.util.spec_from_file_location('phasea', SCRIPT)
 phasea = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(phasea)
 
+signature_spec = importlib.util.spec_from_file_location(
+    'phase_a_test_signature', SCRIPT.with_name('stage5-tls-profile-signature.py'))
+signature = importlib.util.module_from_spec(signature_spec)
+signature_spec.loader.exec_module(signature)
+
 
 class Native:
     @staticmethod
     def segments(text):
-        return [x for x in text.split('--new') if x.strip()]
+        return [x.strip().split() for x in text.split('--new') if x.strip()]
     @staticmethod
     def templates_and_imports(rows):
         return {}, ['profile'] * len(rows)
@@ -99,7 +104,8 @@ class PhaseATests(unittest.TestCase):
                          'baseline': {'source_ip': '192.168.80.251', 'source_port': 54111}}
         self.tools = {'phase_a_controller': Controller(self.manifest),
                       'phase_a_selector': Target(), 'phase_a_owner': Owner(),
-                      'phase_a_native': Native(), 'phase_a_pcap': Pcap()}
+                      'phase_a_native': Native(), 'phase_a_pcap': Pcap(),
+                      'phase_a_signature': signature}
         patcher = patch.object(phasea, 'companion', side_effect=lambda name, path: self.tools[name])
         patcher.start();self.addCleanup(patcher.stop)
         for key, (name, _) in phasea.FILES.items():
@@ -129,6 +135,21 @@ class PhaseATests(unittest.TestCase):
         self.assertFalse(result['owner_live_authorized'])
         self.assertEqual(('OPEN','OPEN'),(result['installed_a07'],result['installed_a08']))
         self.assertNotIn('yt3.ggpht.com\n',json.dumps(result))
+        self.assertEqual(['NONE'],result['eligible_profile_action_signatures'][0]['lua_action_families'])
+        self.assertFalse(result['action_signatures_are_runtime_proof'])
+
+    def test_real_fake_action_signature_is_only_configured_candidate(self):
+        f=self.bundle/'dvtws.args'
+        f.write_text(f.read_text()+' --lua-desync=fake:blob=secret_value')
+        self.refresh_policy()
+        result=self.inspect()
+        record=result['eligible_profile_action_signatures'][0]
+        self.assertEqual(['FAKE'],record['lua_action_families'])
+        self.assertEqual('CONFIGURED_CANDIDATE_ONLY',record['qualification'])
+        self.assertNotIn('secret_value',json.dumps(result))
+        self.assertEqual('UNVERIFIED',result['runtime_profile_selected'])
+        self.assertEqual('UNVERIFIED',result['baseline_strategy_mutation'])
+        self.assertEqual('OPEN',result['installed_a07'])
 
     def test_ipv6_same_family(self):
         self.manifest['remote_ip']='2001:4860:4860::8888'
@@ -152,8 +173,9 @@ class PhaseATests(unittest.TestCase):
         for name in ('ipset-exclude.txt','ipset-telegram.txt'):
             file=self.bundle/name
             file.write_text('142.251.127.0/24\n')
-            self.assertEqual('TARGET_EXCLUDED_OR_VOICE_OVERLAP',
-                             self.inspect()['candidate_classification'])
+            result=self.inspect()
+            self.assertEqual('TARGET_EXCLUDED_OR_VOICE_OVERLAP',result['candidate_classification'])
+            self.assertEqual([],result['eligible_profile_action_signatures'])
             file.write_text('')
 
     def test_ipv6_exclusion_does_not_exclude_ipv4(self):
