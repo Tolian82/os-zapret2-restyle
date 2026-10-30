@@ -20,7 +20,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–5 source/CI qualified; Stage 5 installed FreeBSD15 IPFW acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_12`; running shared runtime and all eight profile Exclude references are confirmed, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python unification is deferred; stable `v0.6.0_1` unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_12`; running shared runtime and all eight profile Exclude references are confirmed, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python interpreter unification is **cancelled in the current dual-stack TЗ** and requires a new, separate future TЗ; stable `v0.6.0_1` unchanged.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; current owner-installed identity is `_12`, with no stable `v0.6.1` release authorization.
 
