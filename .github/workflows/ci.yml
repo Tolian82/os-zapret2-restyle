@@ -757,8 +757,8 @@ jobs:
               exit 1
             }
             printf '%s\n' "$native_exclude_output"
-            printf '%s\n' "$native_exclude_output" | grep -Fqx 'NATIVE_ENGINE_EXCLUDE_WIRE=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile same-destination DROP vs exact pass' || {
-              echo 'Native FreeBSD 15.1 real-engine IPv4/IPv6 Exclude packet A/B must PASS' >&2
+            printf '%s\n' "$native_exclude_output" | grep -Fqx 'NATIVE_ENGINE_EXCLUDE_WIRE=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile baseline DROP, nonmatching Exclude DROP, matching Exclude pass' || {
+              echo 'Native FreeBSD 15.1 real-engine IPv4/IPv6 Exclude three-phase negative-control packet test must PASS' >&2
               exit 1
             }
 
