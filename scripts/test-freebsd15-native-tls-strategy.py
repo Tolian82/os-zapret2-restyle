@@ -188,6 +188,23 @@ def static_test() -> None:
                 pass
             else:
                 raise RuntimeError("malformed/untrusted loopback PCAP accepted")
+    # Exercise the real policy compiler twice per phase: the native harness
+    # reuses its same managed policy for IPv4 and IPv6. Static tests must catch
+    # path/idempotence failures before the expensive FreeBSD job.
+    backend = HERE.parent / "src/opnsense/scripts/OPNsense/Zapret/backend"
+    if str(backend) not in sys.path:
+        sys.path.insert(0, str(backend))
+    with tempfile.TemporaryDirectory(prefix="stage5-tls-static-") as folder:
+        root = Path(folder)
+        upstream = root / "upstream"
+        (upstream / "lua").mkdir(parents=True)
+        for name in ("zapret-lib.lua", "zapret-antidpi.lua"):
+            (upstream / "lua" / name).write_text("-- static fixture only\n")
+        for phase in ("baseline", "nonmatching", "excluded"):
+            before = compiled(root, upstream, phase)
+            again = compiled(root, upstream, phase)
+            if before != again:
+                raise RuntimeError("IPv4/IPv6 repeated native TLS candidate changed")
     print("NATIVE_TLS_HEADER_STATIC=PASS: OpenSSL ClientHello, both lo0 packet decoders, exact flow/hop controls")
 
 
@@ -205,7 +222,8 @@ def compiled(root: Path, upstream: Path, phase: str) -> list[str]:
     from ipset_policy import LISTS, parse_ipset
     release = root / phase
     managed = release / "managed"
-    managed.mkdir(parents=True)
+    # Both IP families share one immutable phase-specific policy directory.
+    managed.mkdir(parents=True, exist_ok=True)
     (managed / "hostlist-exclude.txt").write_text("")
     manifest = {"schema_version": 1, "lists": {}}
     for name in LISTS:
