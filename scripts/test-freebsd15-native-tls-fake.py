@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -112,6 +113,58 @@ def compiled(root: Path, upstream: Path, phase: str) -> list[str]:
     return result.split()
 
 
+
+def send_active(family: int, host: str, port: int, hello: bytes) -> tuple[int, bool]:
+    """Identify the sender independently; loopback fake may corrupt peer TCP receive.
+
+    The native outgoing PCAP, not this receiver, must witness the original packet.
+    Peer delivery is mandatory in the matching-Exclude phase only.
+    """
+    observed, errors, source_ports = [], [], []
+    with socket.socket(family, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if family == socket.AF_INET6:
+            server.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        server.bind((host, port))
+        server.listen(1)
+        server.settimeout(5)
+
+        def reader():
+            try:
+                conn, _ = server.accept()
+                with conn:
+                    conn.settimeout(3)
+                    buf = b''
+                    try:
+                        while len(buf) < len(hello):
+                            part = conn.recv(2048)
+                            if not part:
+                                break
+                            buf += part
+                    except socket.timeout:
+                        # The fake can alter loopback peer TCP sequencing; not
+                        # grounds for claiming intact delivery in A/N phases.
+                        pass
+                    observed.append(buf)
+            except BaseException as exc:
+                errors.append(exc)
+
+        worker = threading.Thread(target=reader, daemon=True)
+        worker.start()
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as client:
+                client.settimeout(5)
+                client.connect((host, port))
+                source_ports.append(client.getsockname()[1])
+                client.sendall(hello)
+                client.shutdown(socket.SHUT_WR)
+        finally:
+            worker.join(timeout=9)
+        if worker.is_alive() or errors or len(source_ports) != 1 or len(observed) != 1:
+            raise RuntimeError('active TLS sender/peer observation incomplete')
+        return source_ports[0], observed[0] == hello
+
+
 def capture(adapter, controller, native, engine: Path, upstream: Path,
             root: Path, phase: str, family: int, hello: bytes) -> None:
     host = '127.0.0.1' if family == socket.AF_INET else '::1'
@@ -144,7 +197,11 @@ def capture(adapter, controller, native, engine: Path, upstream: Path,
             installed = True
             if adapter.list_rules(19000, 19010) != {RULE: ARGV}:
                 raise RuntimeError('unexpected test-only IPFW ownership')
-            active = trial('divert-owned-active', PORT)
+            active, peer_intact = send_active(family, host, PORT, hello)
+            if phase == 'excluded' and not peer_intact:
+                raise RuntimeError('matching Exclude did not restore intact TLS peer delivery')
+            print(f'NATIVE_TLS_FAKE_PEER={phase}/IPv{4 if family == socket.AF_INET else 6}: '
+                  f'intact={int(peer_intact)} (VM peer observation, not fake proof)')
             bypass = trial('un-diverted-bypass', BYPASS)
             if (proc.poll() is not None or adapter.rule_counters(RULE, ARGV)[0] < 1
                     or not controller.wait_for_packet_flush(dump, cap, deadline=time.monotonic()+3)):
@@ -196,7 +253,7 @@ def main() -> int:
                         root, phase, family, hello)
     if not table.safe_default_rules(guard.native('/sbin/ipfw', '-q', 'list').stdout):
         raise RuntimeError('native default-allow kernel rules not restored')
-    print(MARKER+'=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello preserved; IPFW cleaned')
+    print(MARKER+'=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello attributed on wire; IPFW cleaned')
     return 0
 
 
