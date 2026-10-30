@@ -83,22 +83,12 @@ orchestrator_stage_native_voice()
     _orchestrator_voice_output="$9"
     _orchestrator_voice_layout="${10:-private}"
 
-    _orchestrator_voice_python="/usr/local/bin/python3.13"
-    if [ ! -x "${_orchestrator_voice_python}" ]; then
-        # Native FreeBSD installations must use the pinned package Python.
-        # Repository CI may run from an uninstalled source tree.
-        case "${BACKEND_DIR:-}" in
-            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
-                common_error "native Voice compiler requires /usr/local/bin/python3.13"
-                return 1
-                ;;
-            *)
-                _orchestrator_voice_python=$(command -v python3.13) || {
-                    common_error "Python 3.13 is required to compile native Voice"
-                    return 1
-                }
-                ;;
-        esac
+    _orchestrator_voice_python="${PYTHON_BIN:-}"
+    if [ -z "${_orchestrator_voice_python}" ]; then
+        _orchestrator_voice_python=$(/bin/sh "${BACKEND_DIR}/../python_runtime.sh" --resolve) || {
+            common_error "no compatible Python for native Voice compiler"
+            return 1
+        }
     fi
 
     [ -r "${BACKEND_DIR}/voice_release_stage.py" ] || {
