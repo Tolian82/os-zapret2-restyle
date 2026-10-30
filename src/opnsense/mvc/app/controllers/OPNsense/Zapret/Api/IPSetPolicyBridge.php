@@ -35,6 +35,11 @@ final class IPSetPolicyBridge
         $installed = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py';
         $source = dirname(__DIR__, 6) . '/scripts/OPNsense/Zapret/backend/ipset_policy.py';
         $script = $module ?? (is_file($installed) ? $installed : $source);
+        // Isolated source-tree PHP tests use the *same* packaged resolver.
+        // An installed appliance with a missing installed launcher still fails.
+        if ($python === null && !is_file($installed)) {
+            $runtimeLauncher = dirname(__DIR__, 6) . '/scripts/OPNsense/Zapret/python_runtime.sh';
+        }
         if (!is_file($script) || !is_file($binary) || !is_executable($binary) ||
             ($python === null && !is_readable($runtimeLauncher))) {
             throw new \RuntimeException('Native Python IPSET preflight unavailable');
