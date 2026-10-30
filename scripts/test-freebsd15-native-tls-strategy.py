@@ -58,7 +58,7 @@ def hello_fixture() -> bytes:
     return hello
 
 
-def records(raw: bytes, family: int, hello: bytes):
+def records(raw: bytes, family: int, hello: bytes, *, ports: tuple[int, ...] = PORTS):
     """Bounded test-only FreeBSD lo0 DLT_NULL or DLT_LOOP IPv4/IPv6 parser."""
     if len(raw) < 24 or len(raw) > 8 * 1024 * 1024 or raw[:4] not in PCAP_ENDIAN:
         raise RuntimeError("invalid or oversized isolated lo0 PCAP")
@@ -115,7 +115,7 @@ def records(raw: bytes, family: int, hello: bytes):
         payload = tcp[offset:]
         if (address[0] == address[1] and str(address[1]) ==
                 ("127.0.0.1" if family == socket.AF_INET else "::1")
-                and dstport in PORTS and payload == hello):
+                and dstport in ports and payload == hello):
             seen.append((srcport, dstport, hop))
     if count < 1:
         raise RuntimeError("empty native capture")
