@@ -87,7 +87,7 @@ class OfflineBaselineReviewTests(unittest.TestCase):
             p = Path(tmp, 'stub.py')
             with self.assertRaises(m.ReviewError):
                 m.companion('missing_companion', p)
-            p.write_text('VALUE = 42\\n')
+            p.write_text('VALUE = 42\n')
             loaded = m.companion('safe_companion', p)
             self.assertEqual(42, loaded.VALUE)
             symlink = Path(tmp, 'sym.py'); symlink.symlink_to(p)
