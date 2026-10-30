@@ -2,7 +2,7 @@
 
 ## Текущий приоритет — global Exclude IPSet and full IPv4/IPv6 dual-stack (approved 28 October 2026)
 
-**Active engineering prerequisite (30 October 2026):** Following the first owner-observed installed Stage 5 baseline TCP capture, make installed/plugin Python invocation resilient to minor-version binary path changes (single interpreter-resolution contract, fail-closed semantics, no assumption that `python313` installs generic `python3`; avoid speculative ABI/FreeBSD16 support). Per `DEV-032`, a packaged implementation increments revision to `v0.6.1_13`; source/CI-only prior diagnostic commits properly remained `_12`. Keep Stage 5 A07/A08 and actual DPI/Exclude proof open, Stage 6 IPv6 Laboratory deferred until its approved gate.
+**Active engineering prerequisite (30 October 2026):** Under the project-wide [DEV-052](PROJECT_PRINCIPLES.md) dependency/OS portability principle, following the first owner-observed installed Stage 5 baseline TCP capture, make installed/plugin Python invocation resilient to minor-version binary path changes (single interpreter-resolution contract, fail-closed semantics, no assumption that `python313` installs generic `python3`; avoid speculative ABI/FreeBSD16 support). Per `DEV-032`, a packaged implementation increments revision to `v0.6.1_13`; source/CI-only prior diagnostic commits properly remained `_12`. Keep Stage 5 A07/A08 and actual DPI/Exclude proof open, Stage 6 IPv6 Laboratory deferred until its approved gate.
 
 
 
