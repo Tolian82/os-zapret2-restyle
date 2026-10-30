@@ -132,7 +132,9 @@ def kernel_args(pid: int) -> bytes:
     proc = subprocess.run(['/sbin/sysctl', '-b', f'kern.proc.args.{pid}'],
                           capture_output=True, timeout=4, check=False)
     if proc.returncode or proc.stderr and len(proc.stderr) > 4096:
-        raise IdentityError('native kernel argv unavailable')
+        # Diagnostic is from sysctl itself, not argv; redact newlines and cap.
+        reason = proc.stderr.decode('utf-8', 'replace').replace('\n', ' ').strip()[:180]
+        raise IdentityError(f'native kernel argv unavailable (rc={proc.returncode}; sysctl={reason!r})')
     return proc.stdout
 
 
