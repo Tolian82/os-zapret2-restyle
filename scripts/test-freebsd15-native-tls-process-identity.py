@@ -5,6 +5,7 @@ Never authorizes owner-appliance commands or claims packet-specific Lua selectio
 """
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import importlib.util
 import os
@@ -129,13 +130,35 @@ def module(name: str, path: Path):
 def kernel_args(pid: int) -> bytes:
     if type(pid) is not int or pid <= 1:
         raise IdentityError('invalid native engine PID')
-    proc = subprocess.run(['/sbin/sysctl', '-b', f'kern.proc.args.{pid}'],
-                          capture_output=True, timeout=4, check=False)
-    if proc.returncode or proc.stderr and len(proc.stderr) > 4096:
-        # Diagnostic is from sysctl itself, not argv; redact newlines and cap.
-        reason = proc.stderr.decode('utf-8', 'replace').replace('\n', ' ').strip()[:180]
-        raise IdentityError(f'native kernel argv unavailable (rc={proc.returncode}; sysctl={reason!r})')
-    return proc.stdout
+    # FreeBSD's dynamic PID component is not a resolvable sysctl(8) name;
+    # resolve its *parent* MIB, then append the numeric PID via libc sysctl(3).
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        mapper = libc.sysctlnametomib
+        mapper.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+                           ctypes.POINTER(ctypes.c_size_t)]
+        mapper.restype = ctypes.c_int
+        parent = (ctypes.c_int * 16)()
+        count = ctypes.c_size_t(len(parent))
+        if mapper(b'kern.proc.args', parent, ctypes.byref(count)) != 0 or count.value != 3:
+            raise IdentityError('native process args MIB unavailable')
+        oid = (ctypes.c_int * 4)(parent[0], parent[1], parent[2], pid)
+        reader = libc.sysctl
+        reader.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_uint, ctypes.c_void_p,
+                           ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p,
+                           ctypes.c_size_t]
+        reader.restype = ctypes.c_int
+        buffer = (ctypes.c_ubyte * MAX_ARGV)()
+        size = ctypes.c_size_t(MAX_ARGV)
+        if reader(oid, 4, ctypes.cast(buffer, ctypes.c_void_p),
+                  ctypes.byref(size), None, 0) != 0:
+            raise IdentityError('native kernel argv read failed errno=' +
+                                str(ctypes.get_errno()))
+        if not 3 <= size.value <= MAX_ARGV:
+            raise IdentityError('native kernel argv empty or oversized')
+        return bytes(buffer[:size.value])
+    except AttributeError as exc:
+        raise IdentityError('native FreeBSD libc sysctl interface unavailable') from exc
 
 
 def attest(controller, pidfiles: tuple[Path, Path], expected: list[str]) -> dict:
@@ -160,8 +183,6 @@ def native(engine: Path) -> None:
     gate.require_isolated_freebsd()
     if not engine.is_file() or not os.access(engine, os.X_OK):
         raise IdentityError('pinned upstream executable missing')
-    if not Path('/sbin/sysctl').is_file():
-        raise IdentityError('native kernel argv interface missing')
     controller = gate.production_controller()
     backend = HERE.parent/'src/opnsense/scripts/OPNsense/Zapret/backend'
     if str(backend) not in sys.path:
