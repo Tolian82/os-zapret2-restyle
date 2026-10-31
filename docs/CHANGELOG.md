@@ -6,13 +6,14 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
-## [v0.6.2] — owner-authorized stable release preparation, 2026-10-31
+## [v0.6.2] — full stable Web/pkg release, 2026-10-31
 
 - Add IPv4/IPv6 managed IPSET targets, one global **Exclude IPSet** applied across ordinary and Voice profiles, domain-only **Exclude Domains**, CIDR canonicalization, and universal `/0`/full-family rejection in user IP lists.
 - Expand Voice destination IPSET compilation and FreeBSD15 IPFW capture/rollback to mixed IPv4/IPv6 with a single shared runtime; do not claim validated media/call bypass.
 - Add the Strategy Lab opt-in IPv6 checkbox, IPv6-literal/AAAA-only/A+AAAA target handling and real pinned-family TLS replay, with Standard 150/200 s and Extended 270/350 s job budgets. Explicitly skip unsupported IPv6-only QUIC.
 - Qualification: three real native FreeBSD15.1 IPv6 Stage6 scenarios and six Stage7 integration contracts passed; owner-installed testing `0.6.1_30` read-only audit reports 18 PASS / 0 WARN / 0 FAIL and observed IPv4 Lab Stage85/90/99 restoration.
-- Boundary: owner's stand lacks live IPv6 (waived, not passed); installed WAN packet attribution A07/A08 and Voice call/media results remain unverified. Full release/package/Pages publication needs independent workflow verification; no stable release outcome is preclaimed.
+- Published: [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) non-prerelease with `0.6.2_1.pkg` and SHA256SUMS; [full FreeBSD15 and Pages workflow passed](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41207085714). The later `v0.6.2_2` is docs-only, not a new package.
+- Boundary: owner's stand lacks live IPv6 (waived, not passed); installed WAN packet attribution A07/A08 and Voice call/media results remain unverified. Owner Web install/upgrade of stable 0.6.2_1 and independent public Pages HTTP response remain unobserved.
 
 
 ## [v0.5.7] — full Web/pkg release preparation, 2026-10-22

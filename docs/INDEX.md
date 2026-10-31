@@ -18,7 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
-- [Owner-authorized v0.6.2 full-release preparation](releases/v0.6.2.md) — exact `0.6.2_1` source/README and mandatory GitHub Release + FreeBSD15 Pages/pkg gates; installed `_30` audit 18/18 but live IPv6 WAN waived.
+- [Verified full stable v0.6.2](releases/v0.6.2.md) — immutable `0.6.2_1.pkg`, SHA256SUMS, non-prerelease Release and successful FreeBSD15 Pages/pkg deployment; follow-up source `_2` is docs-only, installed `_30` audit 18/18 and live IPv6 WAN waived.
+- [Full v0.6.2 publication evidence](verification/evidence/2026-10-31-v0.6.2-full-release-publication.md) — exact main/tag, package SHA-256, Actions and Pages success, and owner Web/independent HTTP observation limits.
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–7 source/CI qualified (Stage6 limited to the owner's three native scenarios); installed A07/A08 WAN packet proof OPEN; Stage8 aggregate read-only owner acceptance 18/18 PASS, live IPv6 waived. Voice/P2P redesign remains deferred.
