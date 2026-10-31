@@ -1,10 +1,10 @@
-# Native OPNsense Packaging and Unified External Compatibility — Per-File Development Plan v1.2
+# Native OPNsense Packaging and Unified External Compatibility — Per-File Development Plan v1.3
 
-**Authority:** [Approved technical specification v1.2](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md).
-**Origin:** updated from previously prepared *Development Plan v1.0*, keeping five stages, ordered concrete steps, file mapping and fifteen increments while applying approved v1.1/v1.2 changes.
-**Independent document revision:** `v1.2` here is exclusively the editorial revision of this development plan; the technical specification has its own independently assigned editorial revision. Neither is a GitHub source/package version. Document revisions are independent of root `VERSION`, `PLUGIN_REVISION`, `_N` GitHub commits, tags and releases: none of those events automatically renumbers this plan or specification, and a document-revision change does not itself version or release the plugin.
+**Authority:** [Approved technical specification v1.3](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md).
+**Origin:** updated from previously prepared *Development Plan v1.0*, keeping five stages, ordered concrete steps, file mapping and fifteen increments while applying approved v1.1/v1.2/v1.3 refinements.
+**Independent document revision:** `v1.3` here is exclusively the editorial revision of this development plan; the technical specification has its own independently assigned editorial revision. Neither is a GitHub source/package version. Document revisions are independent of root `VERSION`, `PLUGIN_REVISION`, `_N` GitHub commits, tags and releases: none of those events automatically renumbers this plan or specification, and a document-revision change does not itself version or release the plugin.
 **Preparation baseline:** exact `main` `8339e9ddda16f6910344c26f798c62aca4306c5e`, `VERSION=0.6.2`, `PLUGIN_REVISION=5`; re-pin current `main` before implementation.
-**Status:** owner-authorized Stage 0 is next; no code implementation, appliance experiment or package publication has yet been performed under this plan.
+**Status:** owner-authorized Stage 0 source/CI audit is in progress through Stage 0.13 (source-only `v0.6.2_16`). Actual target provider/ELF/hook qualification and native packaging have NOT occurred under this plan. Owner approved v1.3 lifecycle requirements on 1 November 2026.
 **Immutable:** `os-zapret2-restyle` package, `PLUGIN_NAME=zapret2-restyle`, internal service/configd `zapret`, `VERSION`, `PLUGIN_REVISION` policy and separate Zapret2 engine release manager. Published stable `v0.6.2` / `0.6.2_1.pkg` remains unchanged.
 
 ## Working rules and proof levels
@@ -35,7 +35,7 @@ At each step: pin current SHA; inspect real caller/source/test; state observable
 | 0.10 | Compare required executable modes in Git and old installed package: `zapret_service.sh`, shell entrypoints, rc syshooks and private launchers; identify old builder's staging `chmod` effects. |
 | 0.11 | Inspect signed private `curl-impersonate` source package and extracted ELF architecture, loader, shared libraries, target OPNsense providers and exact hashes. |
 | 0.12 | Read-only inspect former `/usr/local/etc/pkg/repos/FreeBSD.conf` override and saved plugin-state backup; define proof of plugin ownership and foreign-edit negative cases. |
-| 0.13 | Record four pkg hook execution stages, `FD9`, process identity/signal ownership, `configctl zapret`, Config, IPFW foreign-owner refusal and rollback for RUNNING/STOPPED. |
+| 0.13 | **DONE, source-only**: [Stage 0.13 exact-HEAD audit](../verification/evidence/2026-11-01-v0.6.2_16-stage0-hook-lifecycle.md) records all four hooks, FD9, old PRE_DEINSTALL without independent retry, configd worker SIGTERM and service Git `100644`; refer to binding **LH-01–LH-07** in spec `8. Actual installed replacement remains NOT VERIFIED |
 | 0.14 | Map `scripts/test_freebsd15_package_ci.py`, `test-freebsd15-package-ci.sh`, `test-package-lifecycle-restart.sh`, `test-package-cold-kernel.py`, `test-setup-release-selection.sh` and workflows; flag assertions of retired packaging/Python. |
 | 0.15 | Define a finite scenario table: clean OPNsense install, RUNNING/STOPPED replacement, caller changes, wrong Python/ABI, Python-loss Stop, private ELF/provider failure, owned vs foreign FreeBSD.conf recovery. |
 | 0.16 | Deliver an exact-HEAD path/line file map, dependency ownership matrix, baseline package/hash, allowed exceptions, acceptance inputs and risk/stop conditions. |
@@ -79,20 +79,20 @@ At each step: pin current SHA; inspect real caller/source/test; state observable
 | 2.08 | **CHANGE** `Makefile` to declare correct target OPNsense `PLUGIN_DEPENDS`: all mandatory appliance runtime and engine-build prerequisites including justified `pkgconf`, `gmake`, `luajit` (not CI-only tools). |
 | 2.09 | Validate each target repo dependency's real name/version/origin from pkg; no manual name→origin table or invented `version: 0`. |
 | 2.10 | Fail closed for unavailable qualified target package, missing Python generic link or unsupported ABI; stock FreeBSD **system package installation** is not a target fallback. |
-| 2.11 | Audit/fix only required Git executable modes, notably `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`, directly executed shells, rc hooks and launchers; compare generated package modes. |
+| 2.11 | **LH-05:** inventory source Git direct-service/rc/configd/hook modes and ensure `zapret_service.sh` Git `100755`, verifying real native `.pkg` and installed modes; no bespoke blanket chmod |
 | 2.12 | Stage `src/etc/inc/plugins.inc.d/zapret.inc`, `src/etc/rc.syshook.d/{start,stop}/20-zapret`, `src/opnsense/service/conf/actions.d/actions_zapret.conf`, MVC, backend and templates without feature rewrite. |
-| 2.13 | Stage all four `pkg/+PRE_INSTALL`, `+POST_INSTALL`, `+PRE_DEINSTALL`, `+POST_DEINSTALL` as official `scripts-manual`; compare generated hooks and exclude unwanted auto stages. |
+| 2.13 | **LH-01/LH-06/LH-07:** stage four authoritative `pkg/+...` hooks through official `scripts-manual`, reject unexpected auto-hook addition, verify phase-available old/new files and restart-marker owner |
 | 2.14 | Keep `scripts/build-curl-impersonate.sh` signed FreeBSD latest **private extraction only**; stage existing private binary, libs, licenses and launchers in `libexec/zapret2-restyle` without installing FreeBSD system package. |
 | 2.15 | Inspect each relevant bundled ELF executable/library for architecture, ABI loader and dynamic shared-library requirements **against actual compatible target OPNsense providers**. |
 | 2.16 | Run packaged private launcher locally on qualified target OPNsense: Chrome TLS profile, ECH-off and HTTP/3/QUIC capabilities where actually used; no uncontrolled WAN requirement. |
 | 2.17 | Record signed source package and private binary SHA-256; rerun ELF/provider/capability gate whenever the signed latest artifact bytes change. |
-| 2.18 | Compare every required old vs native package file, symlink, installed executable mode, templates, configd/rc registration, private asset and hook; no blanket `chmod` as evidence. |
+| 2.18 | **LH-05:** compare exact Git modes (including source `zapret_service.sh` `100755`), native package/installed executable modes, direct calls, symlinks, configd/rc/templates, private asset and hooks. Do not accept blanket staging chmod or syntax-only proof |
 | 2.19 | **CHANGE** `scripts/build-pkg.sh` to thin validation/staging/orchestrator calling native BSD `make package` from temporary `security/zapret2-restyle`; preserve CLI and `dist/` contract. |
 | 2.20 | Delete old sed-evaluated Make parser, `dep_origin()`, fake dependencies, manual plist/manifest, and own `pkg-static create` from production builder in the same packaging scope. |
 | 2.21 | Track exact upstream and project commits independently; ensure `PLUGIN_HASH` refers to project and resulting `.pkg` has correct owner website/identity. |
 | 2.22 | Build native candidate; extract `.pkg` manifest, real deps/versions/origins, OPNsense/package ABI and exact package SHA-256. |
-| 2.23 | Exercise real hook ordering in isolated qualified OPNsense: clean install, selected current predecessor RUNNING/STOPPED replacement, forced reinstall/removal; incoming PRE_INSTALL may not reference new files. |
-| 2.24 | Exercise packaged `configctl zapret status/start/stop/restart` and direct executable scripts; preserve FD9, native ownership and current behavior pending Python migration. |
+| 2.23 | **LH-01/LH-02/LH-06/LH-07:** observe **real pkg hook order** on qualified isolated OPNsense for clean install, exact supported predecessor RUNNING/STOPPED, forced reinstall/removal and interrupted retry. Verify incoming PRE_INSTALL sees OLD code (no future JSON/launcher) and refuses if old PRE_DEINSTALL cannot safely prove FD9/owner |
+| 2.24 | **LH-04:** exercise packaged `configctl zapret status/start/stop/restart` and direct hooks; record watcher/worker identity, safe action reload and positive readiness without mandating SIGTERM; verify negative PID/worker ownership and no global Web GUI restart |
 | 2.25 | **CHANGE/TEST** `scripts/test_freebsd15_package_ci.py` and `scripts/test-freebsd15-package-ci.sh`: require native builder/real target provenance, remove assertions demanding `python313` or hand-built manifest; keep versioned CI VM fixtures. |
 | 2.26 | **REVIEW/TEST** `scripts/test-package-lifecycle-restart.sh`, `scripts/test-package-cold-kernel.py`: preserve lifecycle and kernel rollback safety with new package format. |
 | 2.27 | Record Stage2 native candidate SHA, provider, ELF, files/modes/hook evidence; mark **not final** until Python Stage3 rebuild. |
@@ -109,11 +109,11 @@ At each step: pin current SHA; inspect real caller/source/test; state observable
 | 3.01 | Validate installed generic `/usr/local/bin/python3` provider and single `compatibility.json`; no production minor-version selection. |
 | 3.02 | Implement at most one necessary shared shell interpreter contract under `src/opnsense/scripts/OPNsense/Zapret/`; `exec` rather than persistent wrapper, no second manager. |
 | 3.03 | Early Python-free existence check; full Python policy/modules check before any Start/Apply/Config/IPFW mutation; preserve CLI/API error contracts. |
-| 3.04 | Test `FD9` inheritance, PID/process group and signal/cancellation, argv, stdout/stderr, exit codes and timeouts; do not reacquire same lock. |
+| 3.04 | **LH-02:** test actual predecessor hook and service FD9 inheritance, busy/inherited lock, cold journal/Status=2, signal ownership, PID/group, argv/stdout/stderr, timeouts and no recursive lock acquisition; fail closed on unknown owner |
 | 3.05 | **CHANGE** `backend/targets.sh`, `backend/generator.sh` removing local python3.13 fallback while preserving HOSTLIST/IPSET/placeholder outputs. |
 | 3.06 | **CHANGE/REVIEW** `backend/firewall.sh`, `backend/apply_runtime.sh`, `backend/orchestrator.sh` and actual caller shells; preserve atomic Apply/foreign IPFW refusal/rollback. |
 | 3.07 | **CHANGE** `zapret_service.sh` Python selection only where needed, preserving one `dvtws2` and `configctl zapret` interfaces. |
-| 3.08 | Implement Python-independent **safe native Stop** of verified plugin-owned `dvtws2`/IPFW even if Python link/version missing; preserve FD9, exact owner and refuse ambiguous/foreign resources. |
+| 3.08 | **LH-03:** provide Python-independent truthful native Status and bounded Stop for independently verified plugin-owned `dvtws2`/IPFW despite missing/broken/wrong Python; preserve FD9/signals and reject unknown/foreign/partial ownership without mutation |
 | 3.09 | Implement truthful Python-independent `Status`/degraded diagnostics where feasible; never report healthy when interpreter is unavailable or contaminate machine stdout. |
 | 3.10 | Negative tests: absent/wrong interpreter blocks dependent Start/Apply before mutation but never blocks ownership-safe native Stop; later failures retain same-operation cleanup. |
 | 3.11 | **CHANGE** `setup.sh`: remove temporary stock FreeBSD repo activation and independently installing system dependencies; rely on qualified OPNsense pkg owner without changing Zapret2 engine version/source/compile. |
@@ -129,9 +129,9 @@ At each step: pin current SHA; inspect real caller/source/test; state observable
 | 3.21 | **CHANGE** `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/IPSetPolicyBridge.php`: verified common Python command; preserve JSON and distinguish unavailable runtime from user validation. |
 | 3.22 | **CHANGE** `src/opnsense/service/conf/actions.d/actions_zapret.conf` direct Voice/preflight/inventory Python actions; keep configd `zapret` namespace and response shape. |
 | 3.23 | **REVIEW** other API controllers (`SettingsController.php`, `StrategyLabController.php`, `VoiceController.php`) for actual direct interpreter calls only. |
-| 3.24 | **REVIEW** four `pkg/+...` hooks for stage-available policy files/dependencies and correct RUNNING/STOPPED ownership; never require new files in PRE_INSTALL. |
+| 3.24 | **LH-01/LH-02/LH-04/LH-06:** REVIEW/CHANGE four hooks for actual phase-available files/dependencies, old PRE_DEINSTALL no-FD9-retry refusal, verified configd worker/readiness (stale/reused/multiple PID tests, no unrelated signals), restart-marker lifetime and safe RUNNING/STOPPED rollback. Never require new files in incoming PRE_INSTALL |
 | 3.25 | Scan production shebangs, PHP, shell, Python for direct minor-version interpreter constants and unsafe fallbacks; preserve narrow historical/CI fixture exemptions. |
-| 3.26 | Real consumer tests across shell/PHP/configd/hooks/shebang/Python children: argv, JSON/stdout, FD9, PID/signals, missing Python/link/module, no-mutation refusal and native Stop/Status. |
+| 3.26 | **LH-01–LH-07:** real shell/PHP/configd/hook/shebang/Python consumer tests for argv/JSON, FD9, PID/group/signals and PID reuse, missing Python/module/link, unknown/foreign owner, no-mutation refusal, safe native Stop/Status and interrupted package marker/rollback |
 | 3.27 | Rebuild through the **single official Stage2 native path** after all Python/setup changes; retest real manifest, hooks, modes, target ELF and record **new** final candidate SHA-256. |
 | 3.28 | Run bounded isolated qualified OPNsense tests for service, Apply, Lab, Voice, Extra Resources and current-package RUNNING/STOPPED replacement; separate source, package and installed proof. |
 | 3.29 | **CHANGE/TEST** stale checks in `scripts/test_freebsd15_package_ci.py`, `scripts/test-setup-release-selection.sh` and affected launch tests in same scope; do not disable old assertions without replacement coverage. |
@@ -149,9 +149,9 @@ At each step: pin current SHA; inspect real caller/source/test; state observable
 | 4.02 | Validate matrix schema, source/staged hash, distinct product/pkg ABI, accepted patch updates and unsupported Python/platform negatives. |
 | 4.03 | Verify target OPNsense repo/bootstrap before Make evaluation, exact unmodified official `Mk/plugins.mk` commit and separate project SHA/PLUGIN_HASH. |
 | 4.04 | Inspect actual built `.pkg` identity, FreeBSD ABI, `pkg query` name/version/origin, no `version: 0`, and no parallel project package engine. |
-| 4.05 | Compare old/new required paths, modes, symlinks, four hooks, rc/configd/templates and private binary; exercise packaged direct entrypoints. |
+| 4.05 | **LH-05/LH-07:** compare exact Git `100755` direct service mode → extracted native `.pkg` → installed executable modes, plus old/new paths, symlinks, four manual hooks, configd/rc/templates/private binary and packaged direct calls |
 | 4.06 | Enforce target OPNsense ELF/loader/shared-provider and packaged private curl Chrome/ECH-off/HTTP3-QUIC tests for actual private binary hash. |
-| 4.07 | Test true consumer FD9/process/signal semantics, missing/wrong Python pre-mutation refusal, and Python-independent safe Stop/Status preserving foreign IPFW. |
+| 4.07 | **LH-01–LH-07:** verify real package hook phase/order and actual predecessor FD9/owner refusal, configd worker PID reuse/stale signal refusal, RUNNING/STOPPED markers/rollback, and Python-loss interpreter-independent safe Stop/Status without touching foreign IPFW/processes |
 | 4.08 | Test legacy FreeBSD.conf residue with valid owned override/backup and changed/foreign/ambiguous cases: exact atomic restore or read-only refusal. |
 | 4.09 | Inject deliberate invalid production Python minor lock, wrong ABI, fake pkg version/origin, contradictory matrix, missing generic link and missing private shared library; assert failures. |
 | 4.10 | **CHANGE** `scripts/verify-release-package.sh` to validate extracted native package metadata, SHA-256 and provenance instead of inferred Makefile claims. |
@@ -201,9 +201,9 @@ These are work packages, **not reserved `_N` version numbers**. Every merged sou
 | `Makefile`, `VERSION`; **NEW** `compatibility.json` | Stage 1 schema, Stage 2 native `PLUGIN_PYTHON` and target OPNsense dependencies; preserve version source |
 | `scripts/build-pkg.sh`; optional **NEW** `scripts/bootstrap-opnsense-build.sh` | Stage 2 verified target bootstrap, temporary complete official `opnsense/plugins`, one `make package` |
 | `scripts/build-curl-impersonate.sh`, `scripts/check-curl-impersonate.sh`, `scripts/run-curl-impersonate.sh` | Stage 2 signed private artifact, target ELF/shared providers, Chrome/ECH/QUIC, exact hashes |
-| `pkg/+PRE_INSTALL`, `pkg/+POST_INSTALL`, `pkg/+PRE_DEINSTALL`, `pkg/+POST_DEINSTALL` | Stage 2 `scripts-manual`, Stage 3 Python-availability ordering, Stage 4 lifecycle |
+| `pkg/+PRE_INSTALL`, `pkg/+POST_INSTALL`, `pkg/+PRE_DEINSTALL`, `pkg/+POST_DEINSTALL` | LH-01/LH-02/LH-04/LH-06/LH-07: Stage 2 manual scripts and old/new phase qualification; Stage 3 FD9/worker/rollback; Stage 4 real lifecycle |
 | `src/opnsense/scripts/OPNsense/Zapret/setup.sh`, `setup_launcher.sh`, `setup_transaction.sh` | Stage 3 native pkg instead of FreeBSD repo toggling; verified owner-only `FreeBSD.conf` restore/refusal |
-| `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` | Stage 3 one interpreter policy, native safe Stop/Status under Python loss and FD9/foreign IPFW |
+| `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` | LH-05 Stage 2 Git `100755` → native package → installed mode; LH-02/LH-03 Stage 3 FD9, common interpreter, Python-loss safe Status/Stop |
 | `src/opnsense/scripts/OPNsense/Zapret/backend/{targets,generator,firewall,apply_runtime,orchestrator}.sh` | Stage 3 real Python caller migration, same generated config and IPFW owner |
 | `src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh`, `strategy_lab/*.sh`, `strategy_lab_py/*.py` | Stage 3 common Python, preserve Stage85/90/99 budgets/signals |
 | `src/opnsense/scripts/OPNsense/Zapret/backend/voice_*.py` | Stage 3 only actual Python spawn changes, preserve Voice IPv4/IPv6/Exclude |
@@ -214,9 +214,9 @@ These are work packages, **not reserved `_N` version numbers**. Every merged sou
 | `scripts/test_freebsd15_package_ci.py`, `test-freebsd15-package-ci.sh`, `test-package-lifecycle-restart.sh` | Stage 2/3 replace obsolete manual-manifest and `python313` expectations |
 | `scripts/verify-release-package.sh`, `scripts/build-pkg-repository.sh`, `repository/zapret2-restyle.conf` | Stage 4 actual ABI and package SHA-256, preserve existing Pages package repository |
 | `.github/workflows/{ci,testing-package-delivery-ci,publish-prerelease,release}.yml` | Stage 4 one native build route; testing/stable publication separately authorized |
-| This plan and [approved v1.2 specification](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) | Plan is subordinate; implementation updates actual current facts/evidence only |
+| This plan and [approved v1.3 specification](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) | Plan is subordinate; implementation updates actual current facts/evidence only |
 
-## Required v1.2 acceptance trace
+## Required v1.3 acceptance trace
 
 | Spec gate | Required plan evidence |
 |---|---|
@@ -230,7 +230,14 @@ These are work packages, **not reserved `_N` version numbers**. Every merged sou
 | AC-08 executable modes, four hooks, target-compatible private ELF and rollback | 0.10–0.13, 2.11–2.23, 4.05–4.08 |
 | AC-09 CI rejects divergence and final/authorized published asset SHA | 4.01–4.14, 4.19–4.20 |
 | AC-10 current docs and honest independent proof levels | 0.16, 4.13–4.24 |
+| **LH-01** phase-available old PRE_INSTALL/owner refusal | 0.13, 2.13/2.23, 3.24/3.26, 4.07 |
+| **LH-02** old PRE_DEINSTALL FD9/unsafe-owner refusal | 0.13, 2.23, 3.04/3.24/3.26, 4.07 |
+| **LH-03** Python-loss truthful Stop/Status / foreign IPFW | 3.08/3.26, 4.07 |
+| **LH-04** configd watcher/worker identity / PID reuse | 2.24, 3.24/3.26, 4.07 |
+| **LH-05** Git `100755` / native pkg / installed executable | 0.10/0.13, 2.11/2.18, 4.05 |
+| **LH-06** RUNNING/STOPPED marker / interrupted rollback | 2.13/2.23, 3.24/3.26, 4.07 |
+| **LH-07** actual pkg/target hook order and package SHA-256 | 2.23–2.24, 3.26–3.28, 4.05–4.07 |
 
-**Definition of done:** actual native-built target-qualified *final post-Python* `.pkg` with correct real target `pkg` dependencies, effective file modes, four manual hooks, target-compatible private ELF, Python-independent native Stop where safe, owned-only old repository cleanup, and AC-01–AC-10 evidence **bound to one exact final package SHA-256**. This plan is not proof of implementation, installation or release.
+**Definition of done:** all LH-01–LH-07 and AC-01–AC-10 evidenced on the actual native-built target-qualified *final post-Python* `.pkg` with correct real target `pkg` dependencies, effective file modes, four manual hooks, target-compatible private ELF, Python-independent native Stop where safe, owned-only old repository cleanup, and AC-01–AC-10 evidence **bound to one exact final package SHA-256**. This plan is not proof of implementation, installation or release.
 
-**Next execution step:** Stage 0 (I-00), authorized by the owner after publication of this plan. Refresh the exact `main` SHA and complete the read-only audit before Stage 1. No testing or stable package release is implied.
+**Next execution step:** complete remaining Stage 0.14–0.16 offline audit plus actual target provider/ABI/ELF/old repository qualification; Stage 0.13 source findings alone do not establish installed hook/FD9 or Python-loss safety. Stage 1 remains BLOCKED. No package publication is implied.
