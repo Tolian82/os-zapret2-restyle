@@ -108,6 +108,8 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-published-package-audit.py scripts/test-stage0-published-package-audit.py
           python3.13 scripts/test-stage0-published-package-audit.py
+          python3.13 -m py_compile scripts/stage0-private-elf-audit.py scripts/test-stage0-private-elf-audit.py
+          python3.13 scripts/test-stage0-private-elf-audit.py
       - name: Obtain exact historical GitHub assets and required archive decompressor
         shell: bash
         run: |
@@ -142,6 +144,21 @@ jobs:
             --expected-version '0.6.2_1' \
             --expected-sha256 1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f \
             --json "${RUNNER_TEMP}/stage0-stable-0.6.2_1.json"
+      - name: Verify static private ELF loader and DT_NEEDED from both published old packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v readelf
+          python3.13 scripts/stage0-private-elf-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.1_30.pkg" \
+            --expected-package-sha256 f14be8fa63ee51dfd3fa9c3bbdcb340bde2945fddff61bd278aa54a87d97826d \
+            --expected-elf-sha256 e4af7ba05b6ad8dd997aefeae3a9c15a08be2700534d043cd93c7987f97c451f \
+            --json "${RUNNER_TEMP}/stage0-private-elf-0.6.1_30.json"
+          python3.13 scripts/stage0-private-elf-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.2_1.pkg" \
+            --expected-package-sha256 1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f \
+            --expected-elf-sha256 e4af7ba05b6ad8dd997aefeae3a9c15a08be2700534d043cd93c7987f97c451f \
+            --json "${RUNNER_TEMP}/stage0-private-elf-0.6.2_1.json"
       - name: Upload read-only old-package manifest and file/mode/hook evidence
         uses: actions/upload-artifact@v4
         with:
@@ -149,6 +166,8 @@ jobs:
           path: |
             ${{ runner.temp }}/stage0-installed-predecessor-0.6.1_30.json
             ${{ runner.temp }}/stage0-stable-0.6.2_1.json
+            ${{ runner.temp }}/stage0-private-elf-0.6.1_30.json
+            ${{ runner.temp }}/stage0-private-elf-0.6.2_1.json
           if-no-files-found: error
           retention-days: 30
 
