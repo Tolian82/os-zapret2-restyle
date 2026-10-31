@@ -196,7 +196,7 @@ jobs:
           python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
           python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-ipfw.py
           python3.13 scripts/test-freebsd15-native-strategy-lab-ipfw.py --static
-          python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-engine.py
+          python3.13 -m py_compile scripts/test-freebsd15-stage6-three-acceptance.py scripts/test-freebsd15-native-strategy-lab-engine.py
           python3.13 scripts/test-freebsd15-native-strategy-lab-engine.py --static
           python3.13 scripts/test-freebsd15-native-engine-exclude.py --static
           python3.13 scripts/test-freebsd15-native-strategy-mutation.py --static
@@ -734,7 +734,7 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          prepare: pkg install -y python313 git luajit pkgconf jq
+          prepare: pkg install -y python313 git luajit pkgconf jq curl
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-process-continuity.py scripts/test-freebsd15-native-tls-process-identity.py
@@ -757,7 +757,7 @@ jobs:
               echo 'Native FreeBSD 15.1 tcpdump lifecycle must PASS; SKIP is not acceptance' >&2
               exit 1
             }
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-engine.py scripts/test-freebsd15-native-strategy-lab-ipfw.py scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-stage6-three-acceptance.py scripts/test-freebsd15-native-strategy-lab-engine.py scripts/test-freebsd15-native-strategy-lab-ipfw.py scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -823,6 +823,23 @@ jobs:
               echo 'Real Strategy Lab Stage40-to-dvtws2 IPv4/IPv6 TLS BPF witness must PASS; SKIP is not accepted' >&2
               exit 1
             }
+            # Exactly three new Stage6 acceptance scenarios, no matrix expansion.
+            three_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_THREE_ACCEPTANCE=1 /usr/local/bin/python3.13 scripts/test-freebsd15-stage6-three-acceptance.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$three_output"
+              exit 1
+            }
+            printf '%s\n' "$three_output"
+            for marker in \
+              'STAGE6_THREE_ACCEPTANCE_1=PASS: AAAA-only real Stage85 3/3 verified TLS and IPFW' \
+              'STAGE6_THREE_ACCEPTANCE_2=PASS: native IPv6 OFF/ON Stage30 and real A+AAAA TLS candidate' \
+              'STAGE6_THREE_ACCEPTANCE_3=PASS: real untrusted TLS fails closed; no owned process/IPFW remains' \
+              'STAGE6_THREE_ACCEPTANCE=PASS: 1=AAAA-only real Stage85 CA-verified 3/3; 2=IPv6 OFF/ON and real A+AAAA pinned TLS; 3=wrong-CA failure and exact cleanup'
+            do
+              printf '%s\n' "$three_output" | grep -Fqx "$marker" || {
+                echo "All three exact Stage6 native acceptance results must PASS; no SKIP accepted" >&2
+                exit 1
+              }
+            done
             native_exclude_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-engine-exclude.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
               printf '%s\n' "$native_exclude_output"
               exit 1
