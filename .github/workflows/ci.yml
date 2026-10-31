@@ -93,6 +93,41 @@ jobs:
           echo "docs_only=${docs_only}" >> "${GITHUB_OUTPUT}"
           echo "package=${package}" >> "${GITHUB_OUTPUT}"
 
+  stage0-source-audit:
+    name: Stage 0 exact-head read-only source inventory
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate Stage 0 audit parser and CLI on a real fixture Git index
+        run: |
+          python3.13 -m py_compile scripts/stage0-source-audit.py scripts/test-stage0-source-audit.py
+          python3.13 scripts/test-stage0-source-audit.py
+      - name: Record full tracked path/mode/blob and active path/line evidence
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-source-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-source-inventory.json" \
+            --markdown "${RUNNER_TEMP}/stage0-source-inventory.md"
+      - name: Preserve read-only source inventory artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-source-inventory-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/stage0-source-inventory.json
+            ${{ runner.temp }}/stage0-source-inventory.md
+          if-no-files-found: error
+          retention-days: 30
+
   validate-docs:
     name: Validate documentation
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.docs_only == 'true' }}
