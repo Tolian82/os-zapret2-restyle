@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [v0.6.2] — owner-authorized stable release preparation, 2026-10-31
+
+- Add IPv4/IPv6 managed IPSET targets, one global **Exclude IPSet** applied across ordinary and Voice profiles, domain-only **Exclude Domains**, CIDR canonicalization, and universal `/0`/full-family rejection in user IP lists.
+- Expand Voice destination IPSET compilation and FreeBSD15 IPFW capture/rollback to mixed IPv4/IPv6 with a single shared runtime; do not claim validated media/call bypass.
+- Add the Strategy Lab opt-in IPv6 checkbox, IPv6-literal/AAAA-only/A+AAAA target handling and real pinned-family TLS replay, with Standard 150/200 s and Extended 270/350 s job budgets. Explicitly skip unsupported IPv6-only QUIC.
+- Qualification: three real native FreeBSD15.1 IPv6 Stage6 scenarios and six Stage7 integration contracts passed; owner-installed testing `0.6.1_30` read-only audit reports 18 PASS / 0 WARN / 0 FAIL and observed IPv4 Lab Stage85/90/99 restoration.
+- Boundary: owner's stand lacks live IPv6 (waived, not passed); installed WAN packet attribution A07/A08 and Voice call/media results remain unverified. Full release/package/Pages publication needs independent workflow verification; no stable release outcome is preclaimed.
+
+
 ## [v0.5.7] — full Web/pkg release preparation, 2026-10-22
 
 - `v0.5.7_10` testing-package source: force `--ech false` for private Chrome HTTP/HTTPS/HTTP3 probes via the shared launcher, retaining endpoint identity and certificate/attribution requirements. Owner-reproduced `rutracker.org` ECH-on timeout versus ECH-off TLS 1.3 / HTTP 301 motivates the change. A focused launcher test covers HTTPS, HTTP3 and attempted caller override. [Testing package published](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.5.7_10) for FreeBSD 15 amd64 (SHA-256 `69fe9cc7206f1ebcd77edb4f91bd65ca95b975d974c6e4a8417551ac166edea0`); full release and owner-installed retest pending.
