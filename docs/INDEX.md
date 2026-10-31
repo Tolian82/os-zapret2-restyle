@@ -16,13 +16,15 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — FIRST PRIORITY: global Exclude IPSet and IPv4/IPv6 dual-stack
+## Level 2 — current full v0.6.2 release and dual-stack capabilities
+
+- [Owner-authorized v0.6.2 full-release preparation](releases/v0.6.2.md) — exact `0.6.2_1` source/README and mandatory GitHub Release + FreeBSD15 Pages/pkg gates; installed `_30` audit 18/18 but live IPv6 WAN waived.
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
-- [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–7 source/CI qualified (Stage6 limited to the owner's three native scenarios); installed Stage5 WAN and Stage8 OPNsense acceptance OPEN. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_12`; running shared runtime and all eight profile Exclude references are confirmed, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python interpreter unification is **cancelled in the current dual-stack technical specification** and requires a new, separate future technical specification; stable `v0.6.0_1` unchanged.
+- [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–7 source/CI qualified (Stage6 limited to the owner's three native scenarios); installed A07/A08 WAN packet proof OPEN; Stage8 aggregate read-only owner acceptance 18/18 PASS, live IPv6 waived. Voice/P2P redesign remains deferred.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — published and owner-installed testing `v0.6.1_30`; aggregate read-only audit 18/18 confirms running shared runtime, all eight global Exclude bindings and clean Lab IPFW, while installed packet-level A07/A08, IPv6 WAN and Voice media remain OPEN. Python interpreter unification is **cancelled in the current dual-stack technical specification** and requires a new, separate future technical specification; previous verified stable `v0.6.0_1`; owner-authorized v0.6.2 release preparation.
 
-- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; current owner-installed identity is `_12`, with no stable `v0.6.1` release authorization.
+- [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; historical owner-installed testing identity is `_30`; no stable `v0.6.1` release was authorized.
 
 - [Published `v0.6.1_8` GUI correction testing package evidence](verification/evidence/testing-publications/v0.6.1_8.md) — exact source/tag, SHA-256, FreeBSD15 package and no stable repo promotion; owner GUI acceptance pending.
 - [Published `v0.6.1_7` correction testing package evidence](verification/evidence/testing-publications/v0.6.1_7.md) — exact tag/source, FreeBSD15 asset, SHA-256 and no stable repo promotion; owner-installed service startup still OPEN.

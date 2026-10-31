@@ -285,7 +285,7 @@
 | BOUNDARY | `docs/releases/v0.6.0.md` | Preserve immutable already published v0.6.0 notes and evidence. |
 | BOUNDARY | `docs/GITHUB_PUBLICATION.md` | Apply GitHub exact-head branch/PR/CI and publication rules, no self-authorized stable release. |
 
-**Exit gate 8:** All A01–A24 acceptance results documented with their actual evidence level; no release or live PASS inferred from source code or green CI. Exact package identity and owner-live gates remain explicit.
+**Exit gate 8 (31 October 2026):** Owner-installed `_30` returned 18 PASS / 0 WARN / 0 FAIL in a three-group, read-only package/runtime/8-profile Exclude/IPFW/Voice inventory audit. Owner also observed the successful IPv4 Standard Lab Stage85/90/99 and restoration. This closes the selected installed read-only and IPv4 observation rows, **not all A01–A24 as live PASS**. Real live IPv6 on the owner's IPv4-only stand is explicitly waived and recorded NOT TESTED; installed WAN A07/A08, real Voice calls and some failure/GUI transitions remain unverified. Owner authorized a complete `v0.6.2_1` stable release with documented proof limits; GitHub Release pkg/digest and Pages/Web repository evidence remain mandatory external publication gates.
 
 ## 9. Referenced runtime paths and intentional non-changes
 
