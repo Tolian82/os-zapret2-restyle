@@ -195,6 +195,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-legacy-repo-ownership.py scripts/test-stage0-legacy-repo-ownership.py
           python3.13 scripts/test-stage0-legacy-repo-ownership.py -v
+      - name: Test public OPNsense package candidates and official source guards offline
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-public-providers.py scripts/test-stage0-opnsense-public-providers.py
+          python3.13 scripts/test-stage0-opnsense-public-providers.py -v
       - name: Preflight read-only OPNsense target witness without appliance
         run: sh scripts/test-stage0-target-opnsense-readonly.sh
       - name: Record full tracked path/mode/blob and active path/line evidence
@@ -215,6 +219,31 @@ jobs:
             --expected-head "${EXPECTED_HEAD}" \
             --json "${RUNNER_TEMP}/stage0-configd-callpath.json" \
             --markdown "${RUNNER_TEMP}/stage0-configd-callpath.md"
+      - name: Inspect public OPNsense 26.7 candidate names and pinned official source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/stage0-public-opnsense"
+          cd "${RUNNER_TEMP}/stage0-public-opnsense"
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/plist' -o core-plist
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/defaults.mk' -o defaults.mk
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/plugins.mk' -o plugins.mk
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' -o public-packages.html
+          python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
+            --archive-html public-packages.html --core-plist core-plist \
+            --defaults-mk defaults.mk --plugins-mk plugins.mk \
+            --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"
+      - name: Preserve unsigned public mirror candidate and immutable source qualification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-public-opnsense-providers-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/stage0-public-opnsense-providers.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Preserve read-only source inventory artifacts
         uses: actions/upload-artifact@v4
         with:
