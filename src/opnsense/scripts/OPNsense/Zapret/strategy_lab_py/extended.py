@@ -312,6 +312,14 @@ def quic(job_id: str, endpoints_file: str, network_file: str, result_file: str) 
             result.update(status="skipped", reason="host_sni_required", direct=direct)
             _atomic_json(output, result)
             return EX_OK
+        # Stage 80 QUIC is currently IPv4-pinned only. An AAAA-only
+        # domain or IPv6 literal must not reach the IPv4-only request
+        # helper and turn an unsupported optional branch into a job error.
+        # Keep the independent TLS/HTTP finalists eligible for Stage 85.
+        if ":" in ip:
+            result.update(status="skipped", reason="ipv6_quic_unavailable", direct=direct)
+            _atomic_json(output, result)
+            return EX_OK
         execution = request.quic_target_request(host, ip)
         proof = request.chrome_quic_evidence(execution, expected_ip=ip)
         direct.append({
