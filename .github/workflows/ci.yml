@@ -168,6 +168,8 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-source-audit.py scripts/test-stage0-source-audit.py
           python3.13 scripts/test-stage0-source-audit.py
+      - name: Preflight read-only OPNsense target witness without appliance
+        run: sh scripts/test-stage0-target-opnsense-readonly.sh
       - name: Record full tracked path/mode/blob and active path/line evidence
         shell: bash
         env:
