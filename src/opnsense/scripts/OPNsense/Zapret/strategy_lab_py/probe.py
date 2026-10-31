@@ -96,7 +96,7 @@ def _network(workdir: Path, result_path: Path) -> int:
         "network_precheck",
         telemetry.elapsed_ms(started),
         stage="30",
-        outcome="pass" if ipv4 == "available" else "prerequisite",
+        outcome="pass" if ipv4 == "available" or (ipv6_selection == "1" and ipv6 == "available") else "prerequisite",
         details={
             "ipv4_ms": ipv4_result.duration_ms,
             "ipv6_route_ms": route_result.duration_ms,
@@ -104,7 +104,7 @@ def _network(workdir: Path, result_path: Path) -> int:
             "quic_ipv4_ms": quic_result.duration_ms,
         },
     )
-    return EX_OK if ipv4 == "available" else EX_PREREQUISITE
+    return EX_OK if ipv4 == "available" or (ipv6_selection == "1" and ipv6 == "available") else EX_PREREQUISITE
 
 
 def _dns_failure_public(endpoint: str, log_text: str) -> dict[str, Any]:
@@ -117,16 +117,16 @@ def _dns_failure_public(endpoint: str, log_text: str) -> dict[str, Any]:
     }
 
 
-def _domain_public(endpoint: str, ipv4: request.CommandResult, ipv6: request.CommandResult | None,
+def _domain_public(endpoint: str, ipv4: request.CommandResult | None, ipv6: request.CommandResult | None,
                    ipv4_ip: str | None = None, ipv6_ip: str | None = None,
                    ipv4_cert_retry: request.CommandResult | None = None) -> dict[str, Any]:
     ipv4_proof = request.chrome_https_evidence(
         ipv4, expected_ip=ipv4_ip, allow_certificate_error=True
-    )
+    ) if ipv4 is not None else None
     # Some curl builds omit remote_ip on exit 60. Do not infer a pinned peer
     # from --resolve alone: use one separate bounded --insecure retry ONLY
     # after the original certificate failure and require exact observed IP.
-    if (not ipv4_proof["accessible"] and ipv4_cert_retry is not None and
+    if (ipv4_proof is not None and not ipv4_proof["accessible"] and ipv4_cert_retry is not None and
             ipv4_ip is not None and request.chrome_certificate_error(ipv4)):
         retry_proof = request.chrome_certificate_retry_evidence(
             ipv4_cert_retry, expected_ip=ipv4_ip
@@ -147,20 +147,21 @@ def _domain_public(endpoint: str, ipv4: request.CommandResult, ipv6: request.Com
     ipv6_proof = request.chrome_https_evidence(
         ipv6, expected_ip=ipv6_ip, allow_certificate_error=True
     ) if ipv6 is not None else None
-    ipv4_status = "PASS" if ipv4_proof["accessible"] else "FAIL"
+    ipv4_status = "SKIPPED" if ipv4_proof is None else ("PASS" if ipv4_proof["accessible"] else "FAIL")
     ipv6_status = "SKIPPED" if ipv6_proof is None else ("PASS" if ipv6_proof["accessible"] else "FAIL")
-    ipv4_log = request.combined_log(ipv4)
+    ipv4_log = request.combined_log(ipv4) if ipv4 is not None else ""
     ipv6_log = request.combined_log(ipv6) if ipv6 is not None else ""
     return {
         "endpoint": endpoint,
-        "status": ipv4_status,
-        "exit_code": request.curl_exit(ipv4),
-        "transport": "https-ipv4",
-        "reachability": ipv4_proof,
-        "detail": request.tail20(ipv4_log),
+        "status": "PASS" if ("PASS" in {ipv4_status, ipv6_status} and "FAIL" not in {ipv4_status, ipv6_status}) else "FAIL",
+        "exit_code": (request.curl_exit(ipv4) if ipv4 is not None else
+                      request.curl_exit(ipv6) if ipv6 is not None else 1),
+        "transport": "https-ipv6" if ipv4 is None and ipv6 is not None else "https-ipv4",
+        "reachability": ipv4_proof if ipv4_proof is not None else ipv6_proof,
+        "detail": request.tail20(ipv4_log if ipv4 is not None else ipv6_log),
         "ipv4": {
             "status": ipv4_status,
-            "exit_code": request.curl_exit(ipv4),
+            "exit_code": None if ipv4 is None else request.curl_exit(ipv4),
             "detail": request.tail20(ipv4_log),
         },
         "ipv6": {
@@ -254,7 +255,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
         "tls_ipv4_certificate_retry": tls4_cert_retry.evidence() if tls4_cert_retry is not None else None,
         "tls_ipv6": tls6.evidence() if tls6 is not None else None,
     }
-    if not dns_a.ok or tls4 is None:
+    if tls4 is None and tls6 is None:
         public = _dns_failure_public(endpoint, dns_a_log)
     else:
         public = _domain_public(
@@ -262,7 +263,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
             dns_aaaa.answers[0] if dns_aaaa and dns_aaaa.ok and dns_aaaa.answers else None,
             ipv4_cert_retry=tls4_cert_retry,
         )
-    return public, evidence, not dns_a.ok, dns_aaaa is not None and not dns_aaaa.ok
+    return public, evidence, tls4 is None and tls6 is None, dns_aaaa is not None and not dns_aaaa.ok
 
 
 def _ip_endpoint(endpoint: str, index: int, workdir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -307,6 +308,8 @@ def _baseline(target: str, target_type: str, endpoints_path: Path, network_path:
             if a_failed:
                 dns_a_status = "FAIL"
                 dns_failed = True
+            elif not (isinstance(evidence.get("dns_a"), dict) and evidence["dns_a"].get("classification") == "pass"):
+                dns_a_status = "UNAVAILABLE"
             if aaaa_failed and dns_aaaa_status == "PASS":
                 dns_aaaa_status = "PARTIAL"
     else:

@@ -20,6 +20,15 @@ class EndpointEpochError(RuntimeError):
     """Search-epoch evidence is unavailable or inconsistent."""
 
 
+def _canonical_ip(value: str) -> str:
+    if not isinstance(value, str) or "%" in value:
+        raise EndpointEpochError("search-epoch IP zone identifiers are invalid")
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError as exc:
+        raise EndpointEpochError(f"invalid search-epoch IP address: {value}") from exc
+
+
 def _canonical_ipv4(value: str) -> str:
     try:
         address = ipaddress.ip_address(value)
@@ -122,19 +131,27 @@ def _validated_bindings(value: Any) -> tuple[dict[str, Any], ...]:
             or not isinstance(selected, str)
         ):
             raise EndpointEpochError("search-epoch binding is invalid")
-        normalized = tuple(dict.fromkeys(_canonical_ipv4(address) for address in addresses))
-        selected_ip = _canonical_ipv4(selected)
+        normalized = tuple(dict.fromkeys(_canonical_ip(address) for address in addresses))
+        selected_ip = _canonical_ip(selected)
         if selected_ip not in normalized:
             raise EndpointEpochError("search-epoch selected address is not in its endpoint set")
+        secondary_ip = item.get("selected_ipv6")
+        if secondary_ip is not None:
+            secondary_ip = _canonical_ip(secondary_ip)
+            if (ipaddress.ip_address(secondary_ip).version != 6
+                    or secondary_ip not in normalized
+                    or ipaddress.ip_address(selected_ip).version != 4):
+                raise EndpointEpochError("search-epoch additional IPv6 selection is invalid")
         seen_endpoints.add(endpoint)
-        bindings.append(
-            {
-                "index": index,
-                "endpoint": endpoint,
-                "addresses": list(normalized),
-                "selected_ip": selected_ip,
-            }
-        )
+        binding = {
+            "index": index,
+            "endpoint": endpoint,
+            "addresses": list(normalized),
+            "selected_ip": selected_ip,
+        }
+        if secondary_ip is not None:
+            binding["selected_ipv6"] = secondary_ip
+        bindings.append(binding)
     return tuple(bindings)
 
 
@@ -162,27 +179,41 @@ def create(
         if evidence.get("endpoint") != endpoint:
             raise EndpointEpochError("search-epoch endpoint evidence order changed")
         if target_type == "ip":
-            addresses = [_canonical_ipv4(endpoint)]
+            addresses = [_canonical_ip(endpoint)]
         else:
-            dns = evidence.get("dns_a")
-            answers = dns.get("answers") if isinstance(dns, dict) else None
-            if (
-                not isinstance(dns, dict)
-                or dns.get("classification") != "pass"
-                or not isinstance(answers, list)
-                or not answers
-                or not all(isinstance(answer, str) for answer in answers)
-            ):
+            # Stage-40 chooses the exact first eligible address. Retain
+            # both recorded families for audit, but never infer an AAAA from
+            # network capability alone.
+            addresses = []
+            for key, version in (("dns_a", 4), ("dns_aaaa", 6)):
+                dns = evidence.get(key)
+                if not isinstance(dns, dict) or dns.get("classification") != "pass":
+                    continue
+                answers = dns.get("answers")
+                if not isinstance(answers, list) or not answers:
+                    continue
+                for answer in answers:
+                    canonical = _canonical_ip(answer)
+                    if ipaddress.ip_address(canonical).version != version:
+                        raise EndpointEpochError(
+                            f"search-epoch DNS family mismatch for {endpoint}"
+                        )
+                    if canonical not in addresses:
+                        addresses.append(canonical)
+            if not addresses:
                 raise EndpointEpochError(
                     f"search-epoch DNS evidence is unavailable for {endpoint}"
                 )
-            addresses = list(dict.fromkeys(_canonical_ipv4(answer) for answer in answers))
         raw_bindings.append(
             {
                 "index": index,
                 "endpoint": endpoint,
                 "addresses": addresses,
                 "selected_ip": addresses[0],
+                **({"selected_ipv6": next(ip for ip in addresses if ipaddress.ip_address(ip).version == 6)}
+                   if ipaddress.ip_address(addresses[0]).version == 4
+                   and any(ipaddress.ip_address(ip).version == 6 for ip in addresses)
+                   else {}),
             }
         )
     bindings = _validated_bindings(raw_bindings)

@@ -200,6 +200,8 @@
 
 **Second source increment v0.6.1_22 (31 October 2026):** Strict single job-wide deadline is now computed only from actual Stage-40 family observation, not mere network IPv6 route, optional QUIC/UDP or endpoint count. Standard 150/200 and Extended 270/350, no repeated bonus; [regression](../../scripts/test-strategy-lab-adaptive-budget.sh). **Still OPEN:** IPv6 literal, AAAA-only end-to-end search, actual IPv6 IPFW capture/replay and owner-installed acceptance.
 
+**Third source increment v0.6.1_23 (31 October 2026):** IPv6 literals require explicit checkbox ON in RU/EN GUI/API and native launch. Canonical validation uses existing Python launcher, Host/SNI stays independent, and actual HTTPS is bracketed + fixed-family pinned; AAAA-only domain Stage40 no longer requires an A record. Epoch records both independently resolved A and AAAA and pins candidate attempts with distinct IPFW rule counters, with IPv6 QUIC explicitly unqualified. [Focused checks](../../scripts/test-strategy-lab-ipv6-targets.py). **Exit gate remains OPEN:** native FreeBSD IPv6 interception/replay, Stage85, fault restoration and installed acceptance are pending.
+
 **Outcome:** Use the existing Lab engine for pinned IPv6 endpoints, plus the owner-approved IPv6 checkbox under Mode, dual-family target gating and 150/200 / 270/350-second job budgets.
 
 | Scope | File | Planned change or check |

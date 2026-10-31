@@ -91,6 +91,10 @@ class StrategyLabController extends ApiControllerBase
         if (filter_var($raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
             return ['target' => $raw, 'type' => 'ip'];
         }
+        if (filter_var($raw, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false) {
+            $canonical = inet_ntop(inet_pton($raw));
+            return ['target' => $canonical, 'type' => 'ip'];
+        }
         $domain = $this->domainValue($raw);
         return $domain !== '' ? ['target' => $domain, 'type' => 'domain'] : ['target' => '', 'type' => ''];
     }
@@ -102,7 +106,7 @@ class StrategyLabController extends ApiControllerBase
             return ['status' => 'ok', 'value' => ''];
         }
         if ($targetType !== 'ip') {
-            return ['status' => 'error', 'message' => 'Host / SNI is valid only for an IPv4 Strategy Lab target.'];
+            return ['status' => 'error', 'message' => 'Host / SNI is valid only for an IP Strategy Lab target.'];
         }
         $value = $this->domainValue($raw);
         if ($value === '') {
@@ -175,7 +179,7 @@ class StrategyLabController extends ApiControllerBase
         $ipv6Enabled = trim((string)$this->request->getPost('ipv6_enabled', 'striptags', '0'));
 
         if ($target === '') {
-            return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain or IPv4 address.'];
+            return ['status' => 'error', 'message' => 'Invalid Strategy Lab domain or IP address.'];
         }
         $serviceHost = $this->serviceHost($targetType);
         if ($serviceHost['status'] !== 'ok') {
@@ -192,6 +196,12 @@ class StrategyLabController extends ApiControllerBase
         }
         if (!in_array($ipv6Enabled, ['0', '1'], true)) {
             return ['status' => 'error', 'message' => 'Invalid Strategy Lab IPv6 setting.'];
+        }
+
+        if ($targetType === 'ip' && strpos($target, ':') !== false && $ipv6Enabled !== '1') {
+            return ['status' => 'error', 'message' => $language === 'ru'
+                ? 'Для проверки IPv6-адреса включите галочку IPv6.'
+                : 'Enable IPv6 to test an IPv6 address.'];
         }
 
         $udpInput = $this->udpInput($mode);

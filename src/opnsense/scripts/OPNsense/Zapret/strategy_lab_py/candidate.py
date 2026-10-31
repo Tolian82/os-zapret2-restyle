@@ -280,23 +280,27 @@ def _pinned_endpoints(
     epoch = endpoint_epoch.load(job_dir(job_id), endpoints)
 
     for item in epoch.bindings:
-        index = int(item["index"])
-        endpoint = str(item["endpoint"])
-        selected = str(item["selected_ip"])
-        if selected not in unique:
-            unique.append(selected)
-        rule = rule_base + unique.index(selected)
-        if rule > rule_max:
-            raise RuntimeError("candidate endpoint set exceeds reserved firewall rule range")
-        bindings.append(
-            {
-                "index": index,
-                "endpoint": endpoint,
-                "addresses": list(item["addresses"]),
-                "selected_ip": selected,
-                "rule": rule,
-            }
-        )
+        # Every candidate tests each explicitly pinned eligible family.
+        # The epoch still identifies the original endpoint exactly once.
+        selected_addresses = [str(item["selected_ip"])]
+        if "selected_ipv6" in item:
+            selected_addresses.append(str(item["selected_ipv6"]))
+        for selected in selected_addresses:
+            if selected not in unique:
+                unique.append(selected)
+            rule = rule_base + unique.index(selected)
+            if rule > rule_max:
+                raise RuntimeError("candidate endpoint set exceeds reserved firewall rule range")
+            bindings.append(
+                {
+                    "index": int(item["index"]),
+                    "endpoint": str(item["endpoint"]),
+                    "addresses": list(item["addresses"]),
+                    "selected_ip": selected,
+                    "family": "ipv6" if ":" in selected else "ipv4",
+                    "rule": rule,
+                }
+            )
 
     _write_text(work / "addresses-ipv4.txt", "".join(f"{address}\n" for address in unique))
     _write_text(

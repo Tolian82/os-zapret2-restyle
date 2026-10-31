@@ -254,9 +254,25 @@ def _curl_command(
             raise UsageError("invalid TLS version")
         command.extend([f"--tlsv{tls_version}", "--tls-max", tls_version])
     if bound_ip is not None:
-        port = 443 if scheme == "https" else 80
-        resolve_ip = f"[{bound_ip}]" if ":" in bound_ip else bound_ip
-        command.extend(["--resolve", f"{host}:{port}:{resolve_ip}"])
+        if "%" in bound_ip:
+            raise UsageError("IP zone identifiers are not supported")
+        try:
+            address = ipaddress.ip_address(bound_ip)
+        except ValueError as exc:
+            raise UsageError("invalid pinned remote IP address") from exc
+        if address.version != (6 if family == "ipv6" else 4):
+            raise UsageError("pinned remote IP family differs from requested curl family")
+        try:
+            literal_host = ipaddress.ip_address(host)
+        except ValueError:
+            literal_host = None
+        if literal_host is not None:
+            if literal_host != address:
+                raise UsageError("IP literal host cannot change its remote destination")
+        else:
+            port = 443 if scheme == "https" else 80
+            resolve_ip = f"[{address}]" if address.version == 6 else str(address)
+            command.extend(["--resolve", f"{host}:{port}:{resolve_ip}"])
     if insecure:
         if scheme != "https" or bound_ip is None:
             raise UsageError("unverified retry is only valid for pinned HTTPS")
@@ -270,7 +286,7 @@ def _curl_command(
         "--range", "0-65535",
         "--output", "/dev/null",
         "--write-out", "exit=%{exitcode} remote_ip=%{remote_ip} http=%{http_version} code=%{response_code} bytes=%{size_download} ssl_verify=%{ssl_verify_result} appconnect=%{time_appconnect}\\n",
-        f"{scheme}://{host}/",
+        f"{scheme}://[{host}]/" if ":" in host else f"{scheme}://{host}/",
     ])
     return command
 
@@ -559,6 +575,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args:
         raise UsageError("request operation is required")
     op = args[0]
+    if op == "canonical-ipv6":
+        if len(args) != 2:
+            raise UsageError("request canonical-ipv6 requires one IP literal")
+        if "%" in args[1]:
+            raise UsageError("IPv6 zone identifiers are not supported")
+        try:
+            address = ipaddress.IPv6Address(args[1])
+        except ValueError as exc:
+            raise UsageError("invalid IPv6 literal") from exc
+        # No scope IDs, brackets, ports or ambiguous domain coercion.
+        print(str(address))
+        return EX_OK
     if op == "dns":
         if len(args) != 4:
             raise UsageError("request dns requires HOST TYPE OUTPUT")
