@@ -199,6 +199,8 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-opnsense-public-providers.py scripts/test-stage0-opnsense-public-providers.py
           python3.13 scripts/test-stage0-opnsense-public-providers.py -v
+          python3.13 -m py_compile scripts/stage0-opnsense-repo-trust-source.py scripts/test-stage0-opnsense-repo-trust-source.py
+          python3.13 scripts/test-stage0-opnsense-repo-trust-source.py -v
       - name: Test exact-HEAD package hook FD9, signal and owner inventory with real Git fixtures
         run: |
           python3.13 -m py_compile scripts/stage0-hook-lifecycle-audit.py scripts/test-stage0-hook-lifecycle-audit.py
@@ -232,6 +234,10 @@ jobs:
           curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
             'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/plist' -o core-plist
           curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/src/etc/pkg/repos/OPNsense.conf.shadow.in' -o official-repo-main.conf.in
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
+            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/src/etc/pkg/repos/OPNsense-aux.conf.shadow.in' -o official-repo-aux.conf.in
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
             'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/defaults.mk' -o defaults.mk
           curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
             'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/plugins.mk' -o plugins.mk
@@ -241,11 +247,16 @@ jobs:
             --archive-html public-packages.html --core-plist core-plist \
             --defaults-mk defaults.mk --plugins-mk plugins.mk \
             --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"
-      - name: Preserve unsigned public mirror candidate and immutable source qualification artifact
+          python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-repo-trust-source.py" \
+            --main-repo official-repo-main.conf.in --aux-repo official-repo-aux.conf.in \
+            --json "${RUNNER_TEMP}/stage0-official-repo-trust-source.json"
+      - name: Preserve unsigned mirror candidates and pinned official repository trust source evidence
         uses: actions/upload-artifact@v4
         with:
           name: stage0-public-opnsense-providers-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/stage0-public-opnsense-providers.json
+          path: |
+            ${{ runner.temp }}/stage0-public-opnsense-providers.json
+            ${{ runner.temp }}/stage0-official-repo-trust-source.json
           if-no-files-found: error
           retention-days: 30
       - name: Record exact-head four hook execution calls, FD9 and signal risks
