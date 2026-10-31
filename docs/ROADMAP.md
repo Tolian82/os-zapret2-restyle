@@ -1,6 +1,8 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — v0.6.2 full release PUBLISHED; owner Web upgrade optional (31.10.2026)
+## Current next direction — native packaging and compatibility; stable v0.6.2 already published (31 October 2026)
+
+The owner has approved [native OPNsense packaging and unified compatibility — technical specification v1.0](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md). **Next deliverable:** an exact-HEAD per-file implementation plan, not code or package publication. The scope uses official temporary `opnsense/plugins` staging, `Mk/plugins.mk`, FreeBSD `pkg` for dependencies, `PLUGIN_PYTHON`, one compatibility matrix and one common interpreter contract. The old Python work remains excluded from the completed Exclude IPSet/IPv6 specification. Source-only `v0.6.2_3` does not create another `.pkg`; published `v0.6.2` assets are immutable.
 
 Owner installed `v0.6.1_30` and completed the Stage8 aggregate read-only audit with **18 PASS, zero warnings, zero failures**. The installed IPv4 Strategy Lab Stage85/90/99 and restoration were already observed. The owner waived live IPv6 testing on an IPv4-only stand; native FreeBSD15 IPv6 tests remain qualified independently. No observed critical runtime defect is open in this acceptance scope, but installed WAN packet-level A07/A08 and actual Voice calls remain unverified. **Published:** [v0.6.2 GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), exact `0.6.2_1.pkg`/SHA256SUMS and FreeBSD15 Pages pkg deployment [workflow PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41207085714); owner Web upgrade and independent Pages HTTP GET not observed. Source-only follow-up `_2` records immutable facts without another package. No extra IPv6 tests are requested on the current stand. [Release document](releases/v0.6.2.md).
 
