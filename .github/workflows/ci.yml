@@ -199,6 +199,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-opnsense-public-providers.py scripts/test-stage0-opnsense-public-providers.py
           python3.13 scripts/test-stage0-opnsense-public-providers.py -v
+      - name: Test exact-HEAD package hook FD9, signal and owner inventory with real Git fixtures
+        run: |
+          python3.13 -m py_compile scripts/stage0-hook-lifecycle-audit.py scripts/test-stage0-hook-lifecycle-audit.py
+          python3.13 scripts/test-stage0-hook-lifecycle-audit.py -v
       - name: Preflight read-only OPNsense target witness without appliance
         run: sh scripts/test-stage0-target-opnsense-readonly.sh
       - name: Record full tracked path/mode/blob and active path/line evidence
@@ -244,6 +248,14 @@ jobs:
           path: ${{ runner.temp }}/stage0-public-opnsense-providers.json
           if-no-files-found: error
           retention-days: 30
+      - name: Record exact-head four hook execution calls, FD9 and signal risks
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-hook-lifecycle-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-hook-lifecycle.json"
       - name: Preserve read-only source inventory artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -253,6 +265,7 @@ jobs:
             ${{ runner.temp }}/stage0-source-inventory.md
             ${{ runner.temp }}/stage0-configd-callpath.json
             ${{ runner.temp }}/stage0-configd-callpath.md
+            ${{ runner.temp }}/stage0-hook-lifecycle.json
           if-no-files-found: error
           retention-days: 30
 
