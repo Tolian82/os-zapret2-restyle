@@ -1,8 +1,8 @@
 # Native OPNsense Packaging and Unified External Compatibility — Technical Specification v1.0
 
-**Status:** OWNER-APPROVED intended contract, NOT YET IMPLEMENTED.  
-**Approval:** 31 October 2026; standalone follow-up to the completed IPv4/IPv6 / Exclude IPSet scope and full v0.6.2 release.  
-**Project:** `Tolian82/os-zapret2-restyle`.  
+**Status:** OWNER-APPROVED intended contract, NOT YET IMPLEMENTED.
+**Approval:** 31 October 2026; standalone follow-up to the completed IPv4/IPv6 / Exclude IPSet scope and full v0.6.2 release.
+**Project:** `Tolian82/os-zapret2-restyle`.
 **Next deliverable:** exact-current-HEAD, detailed per-file implementation plan. No production implementation, package publication or owner-appliance experiment is authorized by recording this document.
 
 ## 1. Purpose and boundaries
