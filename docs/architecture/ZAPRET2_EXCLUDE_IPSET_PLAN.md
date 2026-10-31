@@ -202,6 +202,8 @@
 
 **Third source increment v0.6.1_23 (31 October 2026):** IPv6 literals require explicit checkbox ON in RU/EN GUI/API and native launch. Canonical validation uses existing Python launcher, Host/SNI stays independent, and actual HTTPS is bracketed + fixed-family pinned; AAAA-only domain Stage40 no longer requires an A record. Epoch records both independently resolved A and AAAA and pins candidate attempts with distinct IPFW rule counters, with IPv6 QUIC explicitly unqualified. [Focused checks](../../scripts/test-strategy-lab-ipv6-targets.py). **Exit gate remains OPEN:** native FreeBSD IPv6 interception/replay, Stage85, fault restoration and installed acceptance are pending.
 
+**Fourth source increment v0.6.1_24 (31 October 2026):** The separate Extended Stage-80 QUIC direct probe must not pass an AAAA-only or IPv6 literal pin into the IPv4-only QUIC helper. Unsupported IPv6 QUIC becomes an explicit saved `skipped/ipv6_quic_unavailable` branch without turning the optional stage into an error. Mixed A+AAAA domains retain the existing IPv4 QUIC probe. The new [real-entrypoint regression](../../scripts/test-strategy-lab-ipv6-targets.py) checks both boundaries. Native candidate IPv6 interception, Stage85 replay and restoration, installed A25/A26 and publication remain OPEN.
+
 **Outcome:** Use the existing Lab engine for pinned IPv6 endpoints, plus the owner-approved IPv6 checkbox under Mode, dual-family target gating and 150/200 / 270/350-second job budgets.
 
 | Scope | File | Planned change or check |

@@ -2,6 +2,8 @@
 """IPv6 literal, AAAA-only and dual-family exact-pinning Stage 6 contracts."""
 from __future__ import annotations
 from pathlib import Path
+import json
+from types import SimpleNamespace
 import sys
 import tempfile
 import unittest
@@ -10,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
 sys.path.insert(0, str(PKG))
-from strategy_lab_py import endpoint_epoch, candidate, probe, request, ip_target_support
+from strategy_lab_py import endpoint_epoch, candidate, probe, request, ip_target_support, extended
 
 class Result:
     stdout = "exit=0 remote_ip=2001:db8::10 http=1.1 code=200 bytes=42 ssl_verify=0 appconnect=0.1"
@@ -143,6 +145,62 @@ class DualStack(unittest.TestCase):
         self.assertEqual(result["transport"], "quic-ipv6")
         self.assertEqual(result["reachability"]["reason"], "ipv6_quic_unavailable")
         proof.assert_not_called()
+
+    def test_extended_stage80_skips_aaaa_only_and_ipv6_literal_quic(self):
+        # This is the real Stage-80 entrypoint, not the candidate-only guard.
+        # In particular it must never call request.quic_target_request,
+        # whose address grammar and proof accept IPv4 only.
+        for endpoint in ("example.org", "2001:db8::10"):
+            with self.subTest(endpoint=endpoint), tempfile.TemporaryDirectory() as tmp:
+                endpoints = Path(tmp) / "endpoints.txt"
+                endpoints.write_text(endpoint + "\n", encoding="utf-8")
+                output = Path(tmp) / "quic.json"
+                epoch = SimpleNamespace(
+                    epoch_id="se1-test",
+                    bindings=({"endpoint": endpoint, "selected_ip": "2001:db8::10"},),
+                )
+                with (patch.object(extended, "_search_epoch", return_value=epoch),
+                      patch.object(extended.search, "_cancel_requested", return_value=False),
+                      patch.object(request, "quic_target_request") as request_quic,
+                      patch.object(request, "chrome_quic_evidence") as proof_quic):
+                    self.assertEqual(
+                        extended.quic("job.ABCDEF", str(endpoints), str(Path(tmp) / "network"), str(output)),
+                        extended.EX_OK,
+                    )
+                result = json.loads(output.read_text(encoding="utf-8"))
+                self.assertEqual(result["status"], "skipped")
+                self.assertEqual(result["reason"], "ipv6_quic_unavailable")
+                self.assertEqual(result["direct"], [])
+                self.assertEqual(result["tested"], [])
+                request_quic.assert_not_called()
+                proof_quic.assert_not_called()
+
+    def test_extended_stage80_mixed_aaaa_keeps_supported_ipv4_quic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            endpoints = Path(tmp) / "endpoints.txt"
+            endpoints.write_text("example.org\n", encoding="utf-8")
+            output = Path(tmp) / "quic.json"
+            epoch = SimpleNamespace(
+                epoch_id="se1-test",
+                bindings=({
+                    "endpoint": "example.org",
+                    "selected_ip": "192.0.2.14",
+                    "selected_ipv6": "2001:db8::10",
+                },),
+            )
+            with (patch.object(extended, "_search_epoch", return_value=epoch),
+                  patch.object(extended.search, "_cancel_requested", return_value=False),
+                  patch.object(request, "quic_target_request", return_value=Result()) as request_quic,
+                  patch.object(request, "chrome_quic_evidence", return_value={"accessible": True}) as proof_quic):
+                self.assertEqual(
+                    extended.quic("job.ABCDEF", str(endpoints), str(Path(tmp) / "network"), str(output)),
+                    extended.EX_OK,
+                )
+            result = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "direct_accessible")
+            self.assertEqual(result["direct"][0]["selected_ip"], "192.0.2.14")
+            request_quic.assert_called_once_with("example.org", "192.0.2.14")
+            proof_quic.assert_called_once()
 
     def test_fixed_ipv6_ip_baseline_preserves_host(self):
         with tempfile.TemporaryDirectory() as tmp:
