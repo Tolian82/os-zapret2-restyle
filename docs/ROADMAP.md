@@ -1,8 +1,8 @@
 # os-zapret2-restyle — краткий master plan
 
-## Текущий приоритет — owner-authorized full v0.6.2 release (31.10.2026)
+## Текущий приоритет — v0.6.2 full release PUBLISHED; owner Web upgrade optional (31.10.2026)
 
-Owner installed `v0.6.1_30` and completed the Stage8 aggregate read-only audit with **18 PASS, zero warnings, zero failures**. The installed IPv4 Strategy Lab Stage85/90/99 and restoration were already observed. The owner waived live IPv6 testing on an IPv4-only stand; native FreeBSD15 IPv6 tests remain qualified independently. No observed critical runtime defect is open in this acceptance scope, but installed WAN packet-level A07/A08 and actual Voice calls remain unverified. **Next:** exact `v0.6.2_1` release-preparation PR, CI, semantic tag, non-prerelease `.pkg`/SHA256SUMS and Pages/pkg verification. Do not represent source preparation as completed publication. [Release document](releases/v0.6.2.md).
+Owner installed `v0.6.1_30` and completed the Stage8 aggregate read-only audit with **18 PASS, zero warnings, zero failures**. The installed IPv4 Strategy Lab Stage85/90/99 and restoration were already observed. The owner waived live IPv6 testing on an IPv4-only stand; native FreeBSD15 IPv6 tests remain qualified independently. No observed critical runtime defect is open in this acceptance scope, but installed WAN packet-level A07/A08 and actual Voice calls remain unverified. **Published:** [v0.6.2 GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), exact `0.6.2_1.pkg`/SHA256SUMS and FreeBSD15 Pages pkg deployment [workflow PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41207085714); owner Web upgrade and independent Pages HTTP GET not observed. Source-only follow-up `_2` records immutable facts without another package. No extra IPv6 tests are requested on the current stand. [Release document](releases/v0.6.2.md).
 
 ### Historical Stage 5–8 evidence and limitations
 

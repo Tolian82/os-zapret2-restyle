@@ -21,9 +21,9 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release target** | **v0.6.2** (`0.6.2_1` / FreeBSD 15 amd64); tag, package, checksums and GitHub Pages repository must be verified after the release workflow. Previously verified stable: [v0.6.0](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.0). |
+| **Latest full Web/pkg release** | [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) — verified FreeBSD 15 `0.6.2_1.pkg`, `SHA256SUMS` and successful GitHub Pages pkg repository deployment. |
 | **Latest owner-installed testing package** | [v0.6.1_30](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.1_30) — 18/18 read-only appliance checks passed, including running service, eight global Exclude bindings and no stale Lab firewall rules. |
-| **Current development candidate** | `VERSION=0.6.2`, `PLUGIN_REVISION=1`; exact full release-preparation candidate `v0.6.2_1`. Previously published testing package `v0.6.1_30` remains separate until full release publication succeeds. |
+| **Current development candidate** | `v0.6.2_2` source-only publication record; **no `0.6.2_2.pkg` exists**. The installed release artifact remains `v0.6.2` / `0.6.2_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -33,7 +33,7 @@
 
 **Verification limits:** the owner observed a successful `v0.6.1_30` Standard Strategy Lab IPv4 run (three stable TLS 1.3 candidates, Stage85/90/99 and restoration), and a subsequent read-only appliance audit passed **18 checks with zero warnings/errors**: eight effective global IP exclusions, shared `dvtws2` runtime, three owned IPFW rules, no stale Lab rules. Separate native FreeBSD 15.1 CI qualified three real IPv6 cases. The owner's OPNsense stand lacks IPv6; live IPv6 WAN testing was explicitly waived, **not passed**. These results do not establish actual ISP-side DPI bypass, packet-level installed A07/A08 or successful voice calls. Results prove the observed scenarios, not every possible DPI/ISP/QUIC bypass. The five Voice/STUN profiles are configurable, but **no successful Telegram media/call bypass has been confirmed on the owner's direct ISP route**; other services likewise have no validated voice presets. See [Strategy Lab evidence](docs/verification/evidence/2026-10-22-v0.5.6_17-stage6-installed-hygiene.md) and [Voice research closure](docs/verification/evidence/2026-10-20-telegram-native-voice-provider-blocked-final-closure.md).
 
-**Full-release verification boundary:** This release carries the qualified dual-stack/Exclude IPSet source and the accepted IPv4 appliance evidence. A published GitHub Release, matching SHA256SUMS and deployed `FreeBSD:15:amd64` package repository must each be checked independently; no successful owner's Web GUI upgrade or real IPv6 WAN traffic is inferred. [Current release preparation](docs/releases/v0.6.2.md) · [Dual-stack specification](docs/architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md).
+**Full-release verification boundary:** The [v0.6.2 stable GitHub Release](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) published the exact FreeBSD 15 `0.6.2_1.pkg` and SHA256SUMS; the [release workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41207085714) verified package repository generation and successful GitHub Pages deployment for `FreeBSD:15:amd64`. An independent public Pages HTTP fetch was unavailable in the verification environment, and the owner's Web GUI upgrade, real IPv6 WAN traffic, installed WAN Exclude effects and Voice MEDIA/CALL are not inferred. [Current release preparation](docs/releases/v0.6.2.md) · [Dual-stack specification](docs/architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md).
 
 ## Architecture overview
 
@@ -341,7 +341,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-The last fully verified stable publication before this release preparation is **[v0.6.0](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.0)**. This repository source prepares the owner-authorized **v0.6.2** full release with updated IPv4/IPv6 and global Exclude IPSet functionality; only the completed release workflow can establish that `v0.6.2` is published. The latest installed testing evidence is from `v0.6.1_30`, and the optional Voice MEDIA/CALL claims remain unverified. [Release preparation](docs/releases/v0.6.2.md) · [Current handoff](docs/START_HERE.md).
+The current verified stable publication is **[v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2)** with `0.6.2_1.pkg`, checksum and FreeBSD15 Pages/pkg workflow completed. `v0.6.2_2` is a later documentation-only source revision, not another published package. Owner-installed evidence comes from `v0.6.1_30`; the owner has not yet confirmed `0.6.2_1` Web upgrade, real IPv6 WAN or Voice MEDIA/CALL. [Release preparation](docs/releases/v0.6.2.md) · [Current handoff](docs/START_HERE.md).
 
 Useful entry points:
 
