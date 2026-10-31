@@ -7,6 +7,7 @@ eligible work. It never changes candidate/search semantics or restarts the job c
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import tempfile
@@ -74,6 +75,13 @@ def _base_seconds(budget: base_orchestrator.Budget) -> dict[str, int]:
     return value
 
 
+def _ipv6_literal(value: Any) -> bool:
+    try:
+        return ipaddress.ip_address(value).version == 6
+    except (TypeError, ValueError):
+        return False
+
+
 def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
     """Use Stage-40 target family evidence, never route availability alone."""
     endpoints = status.get("endpoints")
@@ -85,16 +93,19 @@ def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
         raise base_orchestrator.OrchestrationError(
             "Strategy Lab budget requires resolved endpoints"
         )
-    if not isinstance(network, dict) or network.get("ipv4") != "available":
+    if not isinstance(network, dict) or not (
+        network.get("ipv4") == "available"
+        or (status.get("ipv6_enabled") is True and network.get("ipv6") == "available")
+    ):
         raise base_orchestrator.OrchestrationError(
-            "Strategy Lab budget requires the completed IPv4 network precheck"
+            "Strategy Lab budget requires an available selected network family"
         )
     # Some existing adapters publish a valid Stage-40 PASS without recording
     # per-family evidence. That can NEVER justify extra IPv6 time, but must not
     # turn an otherwise valid IPv4 job into an internal ERROR.
     has_baseline = isinstance(baseline, dict) and isinstance(baseline.get("endpoints"), list)
     ipv6_requested = status.get("ipv6_enabled") is True
-    ipv4_target = status.get("target_type") == "ip"
+    ipv4_target = status.get("target_type") == "ip" and not _ipv6_literal(status.get("target"))
     domain = status.get("target_type") == "domain"
     family_endpoints = baseline["endpoints"] if has_baseline else []
     def has_family(family: str) -> bool:
@@ -107,7 +118,8 @@ def _work_matrix(status: dict[str, Any], mode: str) -> dict[str, Any]:
 
     ipv4_eligible = ipv4_target or (domain and has_family("ipv4"))
     ipv6_eligible = (
-        domain and has_baseline and ipv6_requested
+        (domain and has_baseline or (status.get("target_type") == "ip" and _ipv6_literal(status.get("target"))))
+        and ipv6_requested
         and network.get("ipv6") == "available" and has_family("ipv6")
     )
     # No bonus for IPv6 merely present on the network, checked-only, or

@@ -13,6 +13,14 @@ strategy_lab_ipv4_valid()
     '
 }
 
+strategy_lab_ipv6_canonical()
+{
+    # Use the existing validated Strategy Lab Python launcher, not a second
+    # address parser or a different interpreter selection policy.
+    _slv6_launcher="${STRATEGY_LAB_PYTHON_LAUNCHER:-${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}/strategy_lab_python_launcher.sh}"
+    "${_slv6_launcher}" request canonical-ipv6 "$1" 2>/dev/null
+}
+
 strategy_lab_domain_valid()
 {
     _strategy_lab_domain="$1"
@@ -52,6 +60,9 @@ strategy_lab_normalize_target()
         printf '%s\n' "${_strategy_lab_input}"
         return 0
     fi
+    case "${_strategy_lab_input}" in
+        *:*) strategy_lab_ipv6_canonical "${_strategy_lab_input}"; return $? ;;
+    esac
     strategy_lab_normalize_domain "${_strategy_lab_input}"
 }
 
@@ -66,6 +77,10 @@ strategy_lab_target_type()
         printf '%s\n' ip
         return 0
     fi
+    case "$1" in
+        *:*) strategy_lab_ipv6_canonical "$1" >/dev/null || return 1
+             printf '%s\n' ip; return 0 ;;
+    esac
     strategy_lab_domain_valid "$1" || return 1
     printf '%s\n' domain
 }
@@ -101,7 +116,9 @@ strategy_lab_write_endpoints()
             esac
             ;;
         ip)
-            strategy_lab_ipv4_valid "${_strategy_lab_target}" || return 1
+            if ! strategy_lab_ipv4_valid "${_strategy_lab_target}"; then
+                [ "$(strategy_lab_ipv6_canonical "${_strategy_lab_target}")" = "${_strategy_lab_target}" ] || return 1
+            fi
             _strategy_lab_service_host=$(strategy_lab_service_host 2>/dev/null || true)
             if [ -n "${_strategy_lab_service_host}" ]; then
                 printf '%s\n' "${_strategy_lab_service_host}" > "${_strategy_lab_output}"

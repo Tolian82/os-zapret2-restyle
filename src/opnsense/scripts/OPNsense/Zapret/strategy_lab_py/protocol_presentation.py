@@ -40,12 +40,15 @@ def stage30_message(
     ipv4 = network.get("ipv4")
     ipv6 = network.get("ipv6")
     quic = network.get("quic_ipv4")
-    if ipv4 != "available" or ipv6 not in {"available", "unavailable"} or quic not in {"available", "closed"}:
+    if (ipv4 not in {"available", "unavailable"}
+            or ipv6 not in {"available", "unavailable"}
+            or (ipv4 != "available" and ipv6 != "available")
+            or quic not in {"available", "closed"}):
         raise ProtocolPresentationError("unexpected network capability classification")
 
     ru = language == "ru"
     if ru:
-        parts = ["PASS — IPv4 доступен"]
+        parts = ["PASS — IPv4 доступен" if ipv4 == "available" else "PASS — IPv4 недоступен"]
         parts.append("IPv6 доступен" if ipv6 == "available" else "IPv6 недоступен")
         parts.append("QUIC открыт" if quic == "available" else "QUIC закрыт")
         if mode != "extended":
@@ -59,7 +62,7 @@ def stage30_message(
             parts.append("проверки IPv6 исключены")
         return "; ".join(parts) + "."
 
-    parts = ["PASS — IPv4 is available"]
+    parts = ["PASS — IPv4 is available" if ipv4 == "available" else "PASS — IPv4 is unavailable"]
     parts.append("IPv6 is available" if ipv6 == "available" else "IPv6 is unavailable")
     parts.append("QUIC is open" if quic == "available" else "QUIC is blocked")
     if mode != "extended":

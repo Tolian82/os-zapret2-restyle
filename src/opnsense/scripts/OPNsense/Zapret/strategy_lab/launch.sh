@@ -128,6 +128,9 @@ start_job()
     strategy_lab_language_valid "${_strategy_lab_language}" || usage_error "invalid language"
     case "${_strategy_lab_enable_quic}" in 0|1) ;; *) usage_error "invalid Enable QUIC value" ;; esac
     case "${_strategy_lab_ipv6_enabled}" in 0|1) ;; *) usage_error "invalid IPv6 selection" ;; esac
+    case "${_strategy_lab_target}" in
+        *:*) [ "${_strategy_lab_ipv6_enabled}" = 1 ] || usage_error "enable IPv6 for an IPv6 literal target" ;;
+    esac
     [ -x "${WORKER_SCRIPT}" ] || { emit_error_json "Strategy Lab worker is unavailable"; return 1; }
     [ -x "${TRANSACTION_SCRIPT}" ] || { emit_error_json "Strategy Lab lifecycle transaction is unavailable"; return 1; }
     [ -x "${DAEMON_BIN}" ] || { emit_error_json "Strategy Lab daemon launcher is unavailable"; return 1; }

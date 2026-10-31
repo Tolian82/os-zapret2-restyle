@@ -1,7 +1,7 @@
-"""IPv4 Strategy Lab target contract with optional Host/SNI service identity.
+"""Dual-stack Strategy Lab IP-literal target contract with optional Host/SNI identity.
 
 This module installs the target-aware behavior at the packaged Python entry point so the
-existing domain path stays unchanged while IP jobs use a fixed destination IPv4 address.
+existing domain path stays unchanged while IP jobs use a fixed destination address.
 For IP jobs the endpoint identity may be a separate service hostname; TLS/HTTP/QUIC probes
 therefore connect to the pinned IP while preserving the endpoint Host/SNI identity.
 """
@@ -77,7 +77,7 @@ def _epoch_create(
     evidence_values = tuple(baseline_evidence)
     if not target or not endpoint_values or len(endpoint_values) != len(evidence_values):
         raise endpoint_epoch.EndpointEpochError("search-epoch target contract is invalid")
-    destination = endpoint_epoch._canonical_ipv4(target)
+    destination = endpoint_epoch._canonical_ip(target)
     raw_bindings: list[dict[str, Any]] = []
     for index, (endpoint, evidence) in enumerate(
         zip(endpoint_values, evidence_values, strict=True), 1
@@ -127,29 +127,30 @@ def _ip_endpoint(
     workdir: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if not _IP_BASELINE_TARGET:
-        raise probe.ProbeError("Strategy Lab IPv4 baseline target is unavailable")
+        raise probe.ProbeError("Strategy Lab IP baseline target is unavailable")
+    family = "ipv6" if ":" in _IP_BASELINE_TARGET else "ipv4"
     result = request.curl_request(
         endpoint,
         scheme="https",
-        family="ipv4",
+        family=family,
         tls_version=None,
         bound_ip=_IP_BASELINE_TARGET,
     )
     log = request.combined_log(result)
-    request.write_text(workdir / f"endpoint-{index}.tls-ipv4.log", log)
+    request.write_text(workdir / f"endpoint-{index}.tls-{family}.log", log)
     proof = request.chrome_https_evidence(result, expected_ip=_IP_BASELINE_TARGET)
     public = {
         "endpoint": endpoint,
         "status": "PASS" if proof["accessible"] else "FAIL",
         "exit_code": request.curl_exit(result),
-        "transport": "https-ipv4",
+        "transport": f"https-{family}",
         "reachability": proof,
         "detail": request.tail20(log),
     }
     evidence = {
         "endpoint": endpoint,
         "destination_ip": _IP_BASELINE_TARGET,
-        "tls_ipv4": result.evidence(),
+        f"tls_{family}": result.evidence(),
     }
     return public, evidence
 
@@ -168,8 +169,12 @@ def _baseline(
             target, target_type, endpoints_path, network_path, workdir, result_path
         )
     previous = _IP_BASELINE_TARGET
-    _IP_BASELINE_TARGET = endpoint_epoch._canonical_ipv4(target)
+    _IP_BASELINE_TARGET = endpoint_epoch._canonical_ip(target)
     try:
+        if ":" in _IP_BASELINE_TARGET:
+            network = probe._load_json(network_path)
+            if network.get("ipv6") != "available":
+                raise probe.ProbeError("IPv6 target is unavailable: no verified IPv6 control route")
         return _ORIGINAL_BASELINE(
             target, target_type, endpoints_path, network_path, workdir, result_path
         )
@@ -206,36 +211,43 @@ def _candidate_probe(
         remote_ip = selected
         transport = f"udp-{spec.port}"
     elif spec.protocol == "quic":
-        if candidate._is_ipv4(endpoint):
+        if ":" in selected or candidate._is_ipv4(endpoint):
             execution = candidate._unsupported_execution(
-                "QUIC hostname verification requires Host / SNI for an IPv4 target"
+                "QUIC target pinning for IPv6 is not qualified; Host / SNI required for IPv4 literal"
             )
             exit_code = 64
         else:
             execution = request.quic_target_request(endpoint, selected)
             exit_code = candidate._execution_status(execution)
-        quic_proof = request.chrome_quic_evidence(execution, expected_ip=selected)
+        # QUIC native target pinning is IPv4-only today. Explicitly mark
+        # IPv6 as unsupported; do not pass its address to IPv4-only proof.
+        quic_proof = (
+            {"accessible": False, "reason": "ipv6_quic_unavailable", "remote_ip": ""}
+            if ":" in selected
+            else request.chrome_quic_evidence(execution, expected_ip=selected)
+        )
         remote_ip = str(quic_proof.get("remote_ip", ""))
-        transport = "quic-ipv4"
+        transport = "quic-ipv6" if ":" in selected else "quic-ipv4"
     elif spec.protocol == "http":
         execution = request.curl_request(
-            endpoint, scheme="http", family="ipv4", bound_ip=selected
+            endpoint, scheme="http", family="ipv6" if ":" in selected else "ipv4", bound_ip=selected
         )
         exit_code = request.curl_exit(execution)
         remote_ip = candidate._remote_ip(execution.stdout)
-        transport = "http-ipv4"
+        transport = "http-ipv6" if ":" in selected else "http-ipv4"
     else:
         tls_version = "1.2" if spec.protocol == "tls12" else None
         execution = request.curl_request(
             endpoint,
             scheme="https",
-            family="ipv4",
+            family="ipv6" if ":" in selected else "ipv4",
             tls_version=tls_version,
             bound_ip=selected,
         )
         exit_code = request.curl_exit(execution)
         remote_ip = candidate._remote_ip(execution.stdout)
-        transport = "https-ipv4" if spec.protocol == "tls13" else f"{spec.protocol}-ipv4"
+        family = "ipv6" if ":" in selected else "ipv4"
+        transport = f"https-{family}" if spec.protocol == "tls13" else f"{spec.protocol}-{family}"
 
     after_packets, after_bytes = candidate._counter(rule)
     endpoint_match = remote_ip == selected
@@ -294,7 +306,7 @@ def _search_spec(*args: Any, **kwargs: Any) -> Any:
 
 
 def install() -> None:
-    """Install the IPv4 target behavior once for the packaged Python process."""
+    """Install the dual-stack IP-target behavior once for the packaged Python process."""
     global _INSTALLED
     if _INSTALLED:
         return

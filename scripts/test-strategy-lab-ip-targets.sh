@@ -4,6 +4,9 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ZAPRET_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 TARGET_SH="${ZAPRET_DIR}/strategy_lab/target.sh"
+SCRIPT_DIR="${ZAPRET_DIR}"
+STRATEGY_LAB_PYTHON_BIN="${STRATEGY_LAB_TEST_PYTHON:-python3.13}"
+export SCRIPT_DIR STRATEGY_LAB_PYTHON_BIN
 PYTHON_LAUNCHER="${ZAPRET_DIR}/strategy_lab_python_launcher.sh"
 PYTHON=${STRATEGY_LAB_TEST_PYTHON:-python3.13}
 JQ=$(command -v jq || true)
@@ -24,6 +27,8 @@ strategy_lab_job_dir(){ printf '%s/%s\n' "${STRATEGY_LAB_JOBS_DIR}" "$1"; }
 
 [ "$(strategy_lab_normalize_target 203.0.113.10)" = 203.0.113.10 ] || fail 'canonical IPv4 target was rejected'
 [ "$(strategy_lab_target_type 203.0.113.10)" = ip ] || fail 'IPv4 target type was not classified as ip'
+[ "$(strategy_lab_normalize_target '2001:0db8:0::0010')" = '2001:db8::10' ] || fail 'IPv6 address was not canonicalized'
+[ "$(strategy_lab_target_type '2001:db8::10')" = ip ] || fail 'IPv6 literal target was not classified as ip'
 [ "$(strategy_lab_normalize_target Example.COM.)" = example.com ] || fail 'domain normalization regressed'
 [ "$(strategy_lab_target_type example.com)" = domain ] || fail 'domain target type regressed'
 if strategy_lab_normalize_target 203.0.113.010 >/dev/null 2>&1; then fail 'non-canonical IPv4 target was accepted'; fi
