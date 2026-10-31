@@ -71,8 +71,8 @@ class PublicProviders(unittest.TestCase):
 
     def test_file_href_security(self):
         c = audit.PackageHrefParser()
-        c.feed('<a href="../python313-1.pkg">bad</a><a href="%2e%2e/foo.pkg">bad</a><a href="https://evil.invalid/a.pkg">bad</a><a href="python313-3.13.20.pkg">good</a>')
-        self.assertEqual(c.filenames, {'python313-3.13.20.pkg'})
+        c.feed('<a href="../python313-1.pkg">bad</a><a href="%2e%2e/foo.pkg">bad</a><a href="https://evil.invalid/a.pkg">bad</a><a href="python313-3.13.20.pkg">good</a><a href="pkgconf-3.0.7%2C1.pkg">encoded</a>')
+        self.assertEqual(c.filenames, {'python313-3.13.20.pkg', 'pkgconf-3.0.7,1.pkg'})
 
 
 if __name__ == '__main__':

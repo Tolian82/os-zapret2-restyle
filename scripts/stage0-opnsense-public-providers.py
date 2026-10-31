@@ -10,6 +10,7 @@ from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
+from urllib.parse import unquote
 
 CORE_SHA = 'ac08367416c1d66dea87df0ef0de24c315b5d5bc'
 PLUGINS_SHA = '79a5f88b7b27a706c10511ea5587c9d0e0dbdced'
@@ -25,7 +26,7 @@ class PackageHrefParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag.lower() != 'a':
             return
-        href = dict(attrs).get('href', '')
+        href = unquote(dict(attrs).get('href', ''))
         # Accept only a plain filename, not a malicious path, encoded slash or URL.
         if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+,-]*\.pkg', href):
             self.filenames.add(href)
