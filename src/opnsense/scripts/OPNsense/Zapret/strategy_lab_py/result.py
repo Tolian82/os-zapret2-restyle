@@ -105,6 +105,17 @@ def _valid_ipv4(value: str) -> bool:
     return address.version == 4 and str(address) == value
 
 
+def _valid_ip(value: str) -> bool:
+    """Accept only canonical, unscoped IPv4 or IPv6 destination literals."""
+    if not isinstance(value, str) or "%" in value:
+        return False
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return str(address) == value
+
+
 def _valid_domain(value: str) -> bool:
     if not value or len(value) > 253 or _valid_ipv4(value):
         return False
@@ -138,15 +149,15 @@ def _selector_addresses(value: str) -> list[str]:
     if not value:
         raise ResultError("generic UDP selector addresses are unavailable")
     addresses = value.split(",")
-    if not addresses or any(not _valid_ipv4(address) for address in addresses):
+    if not addresses or any(not _valid_ip(address) for address in addresses):
         raise ResultError("generic UDP selector addresses are invalid")
-    return addresses
+    return list(dict.fromkeys(addresses))
 
 
 def selector_for(target: str, target_type: str, protocol: str, addresses: str = "") -> str:
     if target_type == "ip":
-        if not _valid_ipv4(target):
-            raise ResultError("invalid IPv4 target")
+        if not _valid_ip(target):
+            raise ResultError("invalid IP target")
         return f"--ipset-ip={target}"
     if target_type != "domain" or not _valid_domain(target):
         raise ResultError("invalid domain target")
@@ -411,6 +422,28 @@ def _replay_once(
     return value
 
 
+def _ipv6_epoch_replay_witness(replay: dict[str, Any], pins: list[tuple[str, str]]) -> bool:
+    """For an IPv6 search, require every exact epoch pin and its IPFW proof."""
+    rows = replay.get("endpoints")
+    if not isinstance(rows, list) or len(rows) != len(pins):
+        return False
+    for row, (endpoint, selected) in zip(rows, pins, strict=True):
+        if not isinstance(row, dict):
+            return False
+        firewall = row.get("firewall")
+        if (
+            row.get("endpoint") != endpoint
+            or row.get("selected_ip") != selected
+            or row.get("remote_ip") != selected
+            or row.get("endpoint_match") is not True
+            or row.get("status") != "PASS"
+            or not isinstance(firewall, dict)
+            or firewall.get("intercepted") is not True
+        ):
+            return False
+    return True
+
+
 def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_path: Path | None = None, cancel_check: Callable[[], None] | None = None) -> dict[str, Any]:
     job = job_dir(job_id)
     stability_path = stability_path or job / "stability.json"
@@ -442,6 +475,13 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
         raise ResultError("Strategy Lab job target changed after the search epoch was created")
     if stability.get("search_epoch_id") != epoch.epoch_id:
         raise ResultError("Strategy Lab stability evidence belongs to another search epoch")
+    epoch_pins = [
+        (str(binding["endpoint"]), str(binding[key]))
+        for binding in epoch.bindings
+        for key in ("selected_ip", "selected_ipv6")
+        if key in binding
+    ]
+    has_ipv6_pins = any(":" in address for _, address in epoch_pins)
     work = job / "profile-replay"
     if work.exists():
         shutil.rmtree(work)
@@ -459,8 +499,19 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
         addresses = str(source.get("selector_addresses", ""))
         if protocol == "udp" and target_type == "domain":
             try:
-                _selector_addresses(addresses)
+                selected = _selector_addresses(addresses)
             except ResultError:
+                continue
+            # The final profile may only target addresses proven by Stage 40
+            # and fixed in the immutable search epoch, never arbitrary IPs
+            # copied from a candidate result or an older search generation.
+            allowed_udp_pins = {
+                str(binding[key])
+                for binding in epoch.bindings
+                for key in ("selected_ip", "selected_ipv6")
+                if key in binding
+            }
+            if any(address not in allowed_udp_pins for address in selected):
                 continue
         strategy = source.get("strategy")
         if not isinstance(strategy, str):
@@ -472,7 +523,13 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
             _replay_once(job_id, endpoints_path, source, profile_path, target, target_type, attempt, payload_path, cancel_check)
             for attempt in range(1, PROFILE_REPLAY_ATTEMPTS + 1)
         ]
-        pass_count = sum(1 for item in attempts if item.get("all_pass") is True and item.get("profile_exact") is True)
+        pass_count = sum(
+            1 for item in attempts
+            if item.get("all_pass") is True
+            and item.get("profile_exact") is True
+            and item.get("runner_status") == EX_OK
+            and (not has_ipv6_pins or _ipv6_epoch_replay_witness(item, epoch_pins))
+        )
         endpoint_consistent = all(
             item.get("search_epoch_id") == epoch.epoch_id for item in attempts
         )
@@ -490,6 +547,10 @@ def build_shortlist(job_id: str, stability_path: Path | None = None, shortlist_p
                 "attempt_count": len(attempts), "pass_count": pass_count,
                 "search_epoch_id": epoch.epoch_id,
                 "endpoint_consistent": endpoint_consistent,
+                "ipv6_epoch_pins_verified": (
+                    all(_ipv6_epoch_replay_witness(item, epoch_pins) for item in attempts)
+                    if has_ipv6_pins else None
+                ),
                 "verified": (
                     len(attempts) == PROFILE_REPLAY_ATTEMPTS
                     and pass_count == PROFILE_REPLAY_ATTEMPTS

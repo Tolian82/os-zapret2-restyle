@@ -120,6 +120,146 @@ persisted = json.loads((job / "status.json").read_text(encoding="utf-8"))
 assert persisted["circular_eligible"] is True
 assert persisted["circular_eligibility_reason"] == "eligible"
 assert persisted["circular_candidate_count"] == 3
+
+# Stage 6: exercise the actual Stage-85 shortlist/replay entrypoint on
+# canonical IPv6 literals, AAAA-only names and dual A+AAAA search epochs.
+def run_ipv6_stage85(name, target, kind, ipv4, ipv6, with_udp=False, forged_udp=False, bad_runner=False, replay_fault=""):
+    job_name = "job." + name
+    run_job = Path(os.environ["STRATEGY_LAB_JOBS_DIR"]) / job_name
+    run_job.mkdir(parents=True, exist_ok=True)
+    pins = [address for address in (ipv4, ipv6) if address]
+    evidence = {"endpoint": target}
+    if ipv4:
+        evidence["dns_a"] = {"classification": "pass", "answers": [ipv4]}
+    if ipv6:
+        evidence["dns_aaaa"] = {"classification": "pass", "answers": [ipv6]}
+    recorded = endpoint_epoch.create(run_job, target, kind, [target], [evidence])
+    (run_job / "endpoints.txt").write_text(target + "\n", encoding="utf-8")
+    (run_job / "status.json").write_text(
+        json.dumps({"target": target, "target_type": kind,
+                    "mode": "extended" if with_udp else "standard"}) + "\n",
+        encoding="utf-8",
+    )
+    fragment = "--lua-desync=multisplit:pos=1\n"
+    source = {
+        "id": "ipv6-stage85", "family": "multisplit", "strategy": fragment,
+        "stable": True, "search_epoch_id": recorded.epoch_id,
+        "endpoints": [{"endpoint": target, "selected_ip": address,
+                       "remote_ip": address, "status": "PASS"} for address in pins],
+    }
+    (run_job / "stability.json").write_text(
+        json.dumps({"search_epoch_id": recorded.epoch_id,
+                    "candidates": [source]}) + "\n", encoding="utf-8",
+    )
+    if with_udp:
+        (run_job / "udp-payload.bin").write_bytes(b"stage85-ipv6-probe")
+        udp_source = dict(source)
+        if forged_udp:
+            udp_source["endpoints"] = [
+                {"endpoint": target, "selected_ip": "2001:db8::ffff",
+                 "remote_ip": "2001:db8::ffff", "status": "PASS"}]
+        (run_job / "udp.json").write_text(
+            json.dumps({"port": 50101, "working": udp_source}) + "\n",
+            encoding="utf-8",
+        )
+    calls = []
+    expected_tcp = ("--ipset-ip=" + target if kind == "ip"
+                    else "--hostlist-domains=" + target)
+    expected_udp = "--ipset-ip=" + ",".join(sorted(pins))
+    def ipv6_replay(job_id, endpoints_file, output_file, candidate_id,
+                    family, profile_file, use_hostlist):
+        profile_text = Path(profile_file).read_text(encoding="utf-8")
+        protocol = os.environ.get("STRATEGY_LAB_CANDIDATE_PROTOCOL")
+        selector = os.environ.get("STRATEGY_LAB_PROFILE_REPLAY_SELECTOR")
+        expected = expected_udp if protocol == "udp" else expected_tcp
+        assert selector == expected, (name, protocol, selector, expected)
+        assert profile_text.splitlines().count(expected) == 1
+        calls.append((protocol, selector))
+        rows = [
+            {"endpoint": target, "selected_ip": pin, "remote_ip": pin,
+             "status": "PASS", "endpoint_match": True,
+             "firewall": {"intercepted": True}}
+            for pin in pins
+        ]
+        if replay_fault == "address_drift":
+            rows[0]["selected_ip"] = "2001:db8::dead"
+            rows[0]["remote_ip"] = "2001:db8::dead"
+        elif replay_fault == "missing_ipv6":
+            rows.pop()
+        elif replay_fault == "no_ipfw":
+            rows[0]["firewall"]["intercepted"] = False
+        elif replay_fault:
+            raise AssertionError("unknown replay fault: " + replay_fault)
+        Path(output_file).write_text(json.dumps({
+            "id": candidate_id, "family": family, "strategy": profile_text,
+            "search_epoch_id": recorded.epoch_id, "all_pass": True,
+            "endpoints": rows,
+        }) + "\n", encoding="utf-8")
+        return 70 if bad_runner else 0
+    old_runner = result.candidate.run_candidate
+    result.candidate.run_candidate = ipv6_replay
+    try:
+        shortlist = result.build_shortlist(job_name)
+    finally:
+        result.candidate.run_candidate = old_runner
+    expected_count = 0 if bad_runner or replay_fault else (2 if with_udp and not forged_udp else 1)
+    assert shortlist["count"] == expected_count
+    attempted_count = 2 if with_udp and not forged_udp else 1
+    assert len(calls) == attempted_count * 3
+    assert all(row["profile_replay"]["verified"] for row in shortlist["items"])
+    if not bad_runner and not replay_fault:
+        assert any(row["profile"].splitlines().count(expected_tcp) == 1
+                   for row in shortlist["items"] if row["protocol"] == "tls13")
+    if with_udp and not forged_udp and not bad_runner and not replay_fault:
+        assert any(row["protocol"] == "udp" and expected_udp in row["profile"]
+                   for row in shortlist["items"])
+    else:
+        assert not any(row["protocol"] == "udp" for row in shortlist["items"])
+    return run_job, recorded
+
+
+run_job_literal, literal_epoch = run_ipv6_stage85("literal6", "2001:db8::5", "ip", None, "2001:db8::5")
+run_ipv6_stage85("aaaaonly", "aaaa.example", "domain", None, "2001:db8::6", with_udp=True)
+run_ipv6_stage85("dualfamily", "dual.example", "domain", "198.51.100.31", "2001:db8::7", with_udp=True)
+run_ipv6_stage85("forgedudp", "forged.example", "domain", None, "2001:db8::8",
+                 with_udp=True, forged_udp=True)
+run_ipv6_stage85("failedrunner", "failure.example", "domain", None, "2001:db8::9",
+                 bad_runner=True)
+run_ipv6_stage85("addressdrift", "drift.example", "domain", None, "2001:db8::10",
+                 replay_fault="address_drift")
+run_ipv6_stage85("missingipv6", "partial.example", "domain", "198.51.100.51", "2001:db8::11",
+                 replay_fault="missing_ipv6")
+run_ipv6_stage85("ipfwmissing", "intercept.example", "domain", None, "2001:db8::12",
+                 replay_fault="no_ipfw")
+stale = json.loads((run_job_literal / "stability.json").read_text(encoding="utf-8"))
+stale["search_epoch_id"] = "se1-stale-search-epoch"
+(run_job_literal / "stability.json").write_text(json.dumps(stale) + "\n", encoding="utf-8")
+try:
+    result.build_shortlist("job.literal6")
+except result.ResultError:
+    pass
+else:
+    raise AssertionError("Stage85 accepted stale search-epoch source")
+
+for wrong in ("fe80::1%lo0", "[2001:db8::1]", "2001:DB8::1",
+              "2001:db8::1/128", "::/0", "2001:db8::1,,203.0.113.8"):
+    try:
+        result.selector_for(wrong, "ip", "tls13")
+    except result.ResultError:
+        pass
+    else:
+        raise AssertionError("noncanonical IPv6 selector accepted: " + wrong)
+    try:
+        result._selector_addresses(wrong)
+    except result.ResultError:
+        pass
+    else:
+        raise AssertionError("noncanonical UDP pin accepted: " + wrong)
+assert result._selector_addresses(
+    "2001:db8::5,198.51.100.31,2001:db8::5"
+) == ["2001:db8::5", "198.51.100.31"]
+print("PASS: Stage85 IPv6 literal, AAAA-only and A+AAAA mock replay; forged UDP, runner error, stale epoch, address drift, missing family and missing IPFW refused")
+
 PY
 
 "${PYTHON}" "${TMP}/test.py" || fail 'Python final result regression failed'
