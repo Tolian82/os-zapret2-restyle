@@ -3,7 +3,7 @@
 **Primary specification:** [ZAPRET2_EXCLUDE_IPSET_SPEC.md](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (`DS-EXCLUDE-2026-10-28`).
 **Status:** Owner-approved **first-priority current execution plan**. Stage 1 (`v0.6.1_1`) is merged and passed applicable source/CI/FreeBSD 15 package-build gates. **Stage 2 `v0.6.1_2` source/CI gate is CLOSED**; [PR #683](https://github.com/Tolian82/os-zapret2-restyle/pull/683) passed the [Project/Voice/FreeBSD 15 checks](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40653479292), was merged as [21f564d](https://github.com/Tolian82/os-zapret2-restyle/commit/21f564d64d70480dfd66c4c6229cdca53878c6ef) and passed post-merge main CI. **Stage 3 `v0.6.1_3` source/CI gate is CLOSED** ([PR #685](https://github.com/Tolian82/os-zapret2-restyle/pull/685), [Project/Voice/FreeBSD 15 CI attempt 2 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40657793778), [merged main 2b5f102](https://github.com/Tolian82/os-zapret2-restyle/commit/2b5f1029bf53b74b9526b62aecf243eb456c246d), [post-merge main CI PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/40659404426)). **Stage 4 is next**. Stages 4–8 are not yet implemented. Stage 0 was documentation publication.
 **Published baseline:** stable `v0.6.0` (`0.6.0_1` package). Current testing-only package published: `VERSION=0.6.1`, `PLUGIN_REVISION=9`, [exact FreeBSD15 asset](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.1_9/os-zapret2-restyle-0.6.1_9.pkg). Source/FreeBSD CI and post-merge main CI PASS; owner-installed `_9` GUI and native IPv6/exclusion remain OPEN. Stages 1–5 have qualified source gates; **Stage 5 installed hardware gate remains OPEN**.
-**Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Later packaged-source patches increment `PLUGIN_REVISION`; any stable full release still requires separate explicit owner approval.
+**Release/version policy:** The owner started implementation, so Stage 1 opens `v0.6.1_1` under `DEV-034`. Every later commit merged into `main`, including documentation-only commits, increments `PLUGIN_REVISION` under [DEV-032–DEV-033](../PROJECT_PRINCIPLES.md); a source revision does not automatically publish a package, and a stable full release still requires separate explicit owner approval.
 
 ## 0. Execution rules and scope
 
@@ -43,7 +43,7 @@
 | BOUNDARY | `docs/history/archive/v0.5.x.md` | Preserve the archived v0.5.x snapshot without retroactive rewrites. |
 | BOUNDARY | `docs/releases/v0.6.0.md` | Preserve published stable v0.6.0 release notes and immutable package identity. |
 
-**Exit gate 0:** Both docs are linked from active handoff/state/roadmap/navigation; `DECISIONS` retains history; docs links and rule contracts pass CI. `VERSION` and `PLUGIN_REVISION` unchanged. No feature PASS claimed.
+**Exit gate 0:** Both docs are linked from active handoff/state/roadmap/navigation; `DECISIONS` retains history; docs links and rule contracts pass CI. `VERSION` unchanged; a docs-only `main` merge still increments `PLUGIN_REVISION` exactly once under DEV-032–DEV-033 without publishing a package. No feature PASS claimed.
 
 ## Stage 1. One Python IPSET compiler and immutable manifest
 
@@ -265,12 +265,12 @@
 
 ## Stage 8. Versioned GitHub delivery and installed acceptance
 
-**Outcome:** Publish incremental source through normal GitHub workflow; version only for actual packaged changes and never infer stable release authorization.
+**Outcome:** Publish incremental source through the normal GitHub workflow; advance `_N` for every `main` commit regardless of changed-file type, without inferring package publication or stable-release authorization.
 
 | Scope | File | Planned change or check |
 |---|---|---|
 | CHANGE | `VERSION` | At first actual new development stage, change VERSION from 0.6.0 to 0.6.1 once per DEV-034; **never** for docs-only planning. |
-| CHANGE | `Makefile` | Reset PLUGIN_REVISION to 1 with new VERSION, then advance `_N` one step for packaged changes; keep PLUGIN_NAME and `zapret` service name. |
+| CHANGE | `Makefile` | Reset PLUGIN_REVISION to 1 with an approved new VERSION, then advance `_N` once for every `main` commit (including docs-only); keep PLUGIN_NAME and `zapret` service name. |
 | REVIEW | `.github/workflows/ci.yml` | Run applicable tests and FreeBSD15 package matrix; amend workflow only if registration requires it, no weakened gates. |
 | DOC | `docs/architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md` | Maintain accepted specification; document only new explicitly approved clarifications and evidence. |
 | DOC | `docs/architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md` | Record staged progress, source/CI/installed evidence and next stage without claiming missing PASS. |
