@@ -10,9 +10,9 @@ MENU_PHP="${MENU_PHP:-${ROOT_DIR}/src/opnsense/mvc/app/models/OPNsense/Zapret/Me
 VOICE="${VOICE:-${ROOT_DIR}/src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt}"
 fail(){ echo "FAIL: $*" >&2; exit 1; }
 require(){ grep -Fq "$2" "$1" || fail "missing contract text in $1: $2"; }
-EN_FIRST='Enter a domain or IPv4 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.'
+EN_FIRST='Enter a domain, IPv4 or IPv6 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.'
 EN_SECOND='Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
-RU_FIRST='Введите домен или IPv4-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.'
+RU_FIRST='Введите домен, IPv4- или IPv6-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.'
 RU_SECOND='Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
 
 require "${VIEW}" "document.documentElement.lang || ''"
@@ -37,7 +37,7 @@ require "${VIEW}" "testAction:'Проверка'"
 require "${VIEW}" "strategyLabTitle:'Лаборатория стратегий'"
 require "${VIEW}" "blockedDomain:'Заблокированный домен / IP'"
 require "${VIEW}" "serviceHostLabel:'Host / SNI (опционально)'"
-require "${VIEW}" "serviceHostHelp:'Для IPv4-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.'"
+require "${VIEW}" "serviceHostHelp:'Для IP-цели укажите имя сервиса, если TLS/HTTP/QUIC должны использовать отдельный Host / SNI.'"
 require "${VIEW}" "genericUdpLabel:'UDP порт (опционально)'"
 require "${VIEW}" "chooseFile:'Выбрать файл'"
 require "${VIEW}" "noFileSelected:'Файл не выбран'"
@@ -57,7 +57,7 @@ require "${VIEW}" "testDomainHelp:'Enter a domain and click Test to check HTTPS 
 require "${VIEW}" "strategyLabTitle:'Strategy Lab'"
 require "${VIEW}" "blockedDomain:'Blocked Domain / IP'"
 require "${VIEW}" "serviceHostLabel:'Host / SNI (optional)'"
-require "${VIEW}" "serviceHostHelp:'For an IPv4 target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.'"
+require "${VIEW}" "serviceHostHelp:'For an IP target, provide the service name when TLS/HTTP/QUIC must use a separate Host / SNI identity.'"
 require "${VIEW}" "genericUdpLabel:'Generic UDP (optional)'"
 require "${VIEW}" "chooseFile:'Choose file'"
 require "${VIEW}" "noFileSelected:'No file selected'"
@@ -170,4 +170,4 @@ require "${SETTINGS}" "'enabled' => (string)\$model->strategylab->enablequic ===
 require "${MODEL}" '<enablequic type="BooleanField">'
 require "${MODEL}" '<Default>0</Default>'
 
-echo 'PASS: Laboratory guidance and UI support domain or IPv4 targets with conditional Host/SNI, deterministic RU/EN file-picker chrome, accepted OPNsense layout, and persistence contracts'
+echo 'PASS: Laboratory guidance and UI support domain or IPv4/IPv6 targets with conditional Host/SNI, deterministic RU/EN file-picker chrome, accepted OPNsense layout, and persistence contracts'
