@@ -504,6 +504,11 @@ jobs:
       - name: Test Strategy Lab Python CandidateSpec and ResourceInventory
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-spec.sh
 
+      - name: Verify exact IPv4/IPv6 curl family in Stage50 and Stage85 candidate probes
+        run: |
+          python3.13 -m py_compile scripts/test-strategy-lab-candidate-ipv6-curl.py
+          python3.13 scripts/test-strategy-lab-candidate-ipv6-curl.py
+
       - name: Test Strategy Lab native Zapret2 search graph
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-search-graph.sh
 
