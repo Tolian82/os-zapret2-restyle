@@ -187,6 +187,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-source-audit.py scripts/test-stage0-source-audit.py
           python3.13 scripts/test-stage0-source-audit.py
+      - name: Validate exact configd actions and PHP caller inventory with negative Git fixture tests
+        run: |
+          python3.13 -m py_compile scripts/stage0-configd-callpath-audit.py scripts/test-stage0-configd-callpath-audit.py
+          python3.13 scripts/test-stage0-configd-callpath-audit.py
       - name: Preflight read-only OPNsense target witness without appliance
         run: sh scripts/test-stage0-target-opnsense-readonly.sh
       - name: Record full tracked path/mode/blob and active path/line evidence
@@ -198,6 +202,15 @@ jobs:
             --expected-head "${EXPECTED_HEAD}" \
             --json "${RUNNER_TEMP}/stage0-source-inventory.json" \
             --markdown "${RUNNER_TEMP}/stage0-source-inventory.md"
+      - name: Report exact-head configd direct entrypoints and PHP caller references
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-configd-callpath-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-configd-callpath.json" \
+            --markdown "${RUNNER_TEMP}/stage0-configd-callpath.md"
       - name: Preserve read-only source inventory artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -205,6 +218,8 @@ jobs:
           path: |
             ${{ runner.temp }}/stage0-source-inventory.json
             ${{ runner.temp }}/stage0-source-inventory.md
+            ${{ runner.temp }}/stage0-configd-callpath.json
+            ${{ runner.temp }}/stage0-configd-callpath.md
           if-no-files-found: error
           retention-days: 30
 
