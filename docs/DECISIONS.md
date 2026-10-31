@@ -21,6 +21,23 @@ Do not store here:
 Current task status, implementation history, detailed procedures, or full architecture descriptions.
 
 ==================================================
+HISTORICAL VERSION-POLICY SUPERSESSION (2026-11-01)
+==================================================
+
+This decision ledger preserves the original wording and dated rationale of earlier
+approvals. Its older exemptions for governance/documentation-only changes from
+`PLUGIN_REVISION` increments (including the 2026-07-31 standing-authorization
+item 6 and the 2026-08-01 documentation preflight decisions) are **SUPERSEDED**.
+They are not current instructions. The current canonical rule is
+[DEV-032–DEV-033](PROJECT_PRINCIPLES.md), enforced by
+[GH-014–GH-015 and GH-049](GITHUB_PUBLICATION.md): **every commit merged into
+`main` increments `PLUGIN_REVISION` exactly once, even for docs-only changes**.
+`VERSION` stays unchanged unless an independently authorized version transition
+occurs; a source-only revision does not imply a built or published `.pkg`.
+Original historical text below is deliberately retained, not silently rewritten,
+per DOC-004, DOC-005 and DOC-013.
+
+==================================================
 DECISION FORMAT
 ==================================================
 

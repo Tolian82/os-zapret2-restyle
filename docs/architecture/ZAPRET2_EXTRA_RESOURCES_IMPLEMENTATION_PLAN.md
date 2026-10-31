@@ -104,7 +104,7 @@ Lua/BIN can be durably snapshotted, attested, and restored after failure.
 
 - Минимальные изменения в существующих компонентах, без нового отдельного GUI, новой архитектуры Apply, очередной лаборатории либо фонового автоматического обновления ресурсов.
 - **Каждый этап — измеримый результат**, короткие целевые проверки и устранение блокирующего дефекта до перехода дальше. Не раздувать проект повторением закрытых тестов.
-- Каждый push с изменением кода повышает ревизию плагина по принятой политике. Документационные изменения могут не повышать версию. Не публиковать релиз по инициативе исполнителя.
+- Every new commit merged into `main` increments `PLUGIN_REVISION` exactly once, including documentation-only, governance, tests, and CI changes, under [DEV-032–DEV-033](../PROJECT_PRINCIPLES.md). This does not automatically create or publish an installable package or stable release. Do not initiate a stable release without the owner's authorization.
 - Для каждого кандидата — нативная семантика zapret2, воспроизводимость и честное доказательство результата; наличие файла в каталоге не равно способности обойти DPI.
 
 
@@ -117,7 +117,7 @@ Source `v0.5.7_28` implements explicitly invoked schema-2 mutating upstream reco
 
 **This completion plan supersedes the historical next-step proposal to implement experimental `_47` per-path Git-write provenance.** The existing `v0.5.7_46` source is the baseline, not an owner-installed acceptance. The five original feature stages remain normative; M0–M7 make their final acceptance finite. New, unapproved research is not a delivery gate; useful changes may be proposed with evidence and require owner approval to enlarge scope.
 
-- **M0 — Requirements and completion contract:** reconcile requirements, plan, current handoff, and one acceptance board; no runtime mutation or package revision change. Gate: docs CI and main-integrity pass, no contradictory live-acceptance claims.
+- **M0 — Requirements and completion contract:** reconcile requirements, plan, current handoff, and one acceptance board; no runtime mutation or package publication. A documentation-only merge into `main` still increments `PLUGIN_REVISION` under DEV-032–DEV-033. Gate: docs CI and main-integrity pass, no contradictory live-acceptance claims.
 - **M1 — Testing-package qualification:** inspect immutable `0.5.7_46` candidate or the smallest later defect-fix revision; require current Project/Voice/FreeBSD15 build evidence. Publish one persistent `v0.5.7_N` testing package (not a stable release), verify tag, asset identity and SHA-256. Gate: exact installable package exists on GitHub.
 - **M2 — Appliance baseline:** owner-assisted read-only status/inventory/transaction inspection, working hypervisor-console access and a recoverable VM snapshot or equivalent. Gate: known starting conditions and usable recovery access; stray untracked Lua/BIN do not automatically disqualify the baseline.
 - **M3 — Normal install and GUI:** owner-live install/upgrade, Started-only manual extra-resource action, exact-set reconciliation of arbitrary orphan/colliding Lua/BIN, backed-up originals, actual Stop/Start and PID/health verification; repeat click, RU/EN, F5, two Apply buttons, retained strategies. Gate: original Stage 2/3 behavior passes on installed package.
