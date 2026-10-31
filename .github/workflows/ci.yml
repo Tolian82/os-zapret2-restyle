@@ -196,6 +196,8 @@ jobs:
           python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
           python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-ipfw.py
           python3.13 scripts/test-freebsd15-native-strategy-lab-ipfw.py --static
+          python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-engine.py
+          python3.13 scripts/test-freebsd15-native-strategy-lab-engine.py --static
           python3.13 scripts/test-freebsd15-native-engine-exclude.py --static
           python3.13 scripts/test-freebsd15-native-strategy-mutation.py --static
           python3.13 scripts/test-freebsd15-native-tls-strategy.py --static
@@ -732,7 +734,7 @@ jobs:
         with:
           release: "15.1"
           usesh: true
-          prepare: pkg install -y python313 git luajit pkgconf
+          prepare: pkg install -y python313 git luajit pkgconf jq
           run: |
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-process-continuity.py scripts/test-freebsd15-native-tls-process-identity.py
@@ -755,7 +757,7 @@ jobs:
               echo 'Native FreeBSD 15.1 tcpdump lifecycle must PASS; SKIP is not acceptance' >&2
               exit 1
             }
-            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-ipfw.py scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-engine.py scripts/test-freebsd15-native-strategy-lab-ipfw.py scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
             native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
               printf '%s\n' "$native_probe_output"
               exit 1
@@ -810,6 +812,15 @@ jobs:
             printf '%s\n' "$native_tls_identity_output"
             printf '%s\n' "$native_tls_identity_output" | grep -Fqx 'NATIVE_TLS_PROCESS_ARGV_IDENTITY=PASS: FreeBSD15.1 real dvtws2 kernel NUL-argv equals exact expected profile; PID/start unchanged, stale/reordered refused, cleaned' || {
               echo 'Native TLS kernel argv identity MUST PASS; no SKIP is allowed' >&2
+              exit 1
+            }
+            lab_engine_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_STRATEGY_LAB_ENGINE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-strategy-lab-engine.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$lab_engine_output"
+              exit 1
+            }
+            printf '%s\n' "$lab_engine_output"
+            printf '%s\n' "$lab_engine_output" | grep -Fqx 'STAGE6_NATIVE_LAB_ENGINE=PASS: production Stage40 CandidateSpec, real dvtws2 IPv4/IPv6 TLS delivery, IPFW counters and exact cleanup; BPF active header not claimed' || {
+              echo 'Real Strategy Lab Stage40-to-dvtws2 IPv4/IPv6 TLS BPF witness must PASS; SKIP is not accepted' >&2
               exit 1
             }
             native_exclude_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-engine-exclude.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
