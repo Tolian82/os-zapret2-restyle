@@ -62,6 +62,46 @@ if [ -f /usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate
     run 'bundled ELF dynamic dependencies (static read)' elfdump -d /usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate
 fi
 
+# Public archived ELF requests PT_INTERP=/libexec/ld-elf.so.1 and six
+# DT_NEEDED sonames. Report candidates and linker cache WITHOUT loading ELF.
+# Existence, pkg ownership or ldconfig presence does not prove ABI compatibility.
+say '=== PRIVATE ELF LOADER AND SONAME CANDIDATES (READ ONLY) ==='
+file_report 'private-elf-loader-candidate' /libexec/ld-elf.so.1
+ldconfig_cache=''
+if command -v ldconfig >/dev/null 2>&1; then
+    if ldconfig_cache=$(ldconfig -r 2>/dev/null); then
+        say 'LDCONFIG_CACHE=READ_ONLY_CAPTURED'
+    else
+        say 'LDCONFIG_CACHE=UNVERIFIED'
+    fi
+else
+    say 'LDCONFIG_CACHE=UNAVAILABLE'
+fi
+for soname in 'libc++.so.1' 'libc.so.7' 'libcxxrt.so.1' 'libgcc_s.so.1' 'libm.so.5' 'libthr.so.3'
+do
+    say "=== REQUIRED SONAME ${soname} ==="
+    _candidate=0
+    for dir in /lib /usr/lib /usr/local/lib
+    do
+        candidate="${dir}/${soname}"
+        if [ -e "$candidate" ] || [ -L "$candidate" ]; then
+            file_report "soname-${soname}" "$candidate"
+            _candidate=1
+        fi
+    done
+    [ "$_candidate" -eq 1 ] || say "SONAME_DEFAULT_PATH=${soname}:NO_CANDIDATE_IN_THREE_DIRECTORIES"
+    if [ -n "$ldconfig_cache" ]; then
+        if printf '%s\n' "$ldconfig_cache" | grep -F -- "${soname} =>" >/dev/null 2>&1; then
+            say "SONAME_LDCONFIG_CACHE=${soname}:LISTED_UNVERIFIED"
+        else
+            say "SONAME_LDCONFIG_CACHE=${soname}:NOT_LISTED_OR_FORMAT_UNKNOWN"
+        fi
+    else
+        say "SONAME_LDCONFIG_CACHE=${soname}:UNVERIFIED"
+    fi
+done
+say 'ELF_RUNTIME_LINK_AND_CAPABILITY=NOT_PROVEN_BY_THIS_PROBE'
+
 repo=/usr/local/etc/pkg/repos/FreeBSD.conf
 backup=/var/db/zapret2-restyle/FreeBSD.conf.backup
 file_report 'former FreeBSD.conf override' "$repo"
@@ -75,5 +115,17 @@ if [ -f "$repo" ] && [ -f "$backup" ]; then
 else
     say 'REPO_BACKUP_COMPARISON=NO_PAIR'
 fi
+if [ -L "$repo" ]; then
+    say 'REPO_LEGACY_TEMPLATE_SHAPE=SYMLINK_REFUSE'
+elif [ -f "$repo" ]; then
+    if printf 'FreeBSD-ports: { enabled: yes }\n' | cmp -s - "$repo"; then
+        say 'REPO_LEGACY_TEMPLATE_SHAPE=EXACT_UNPROVEN'
+    else
+        say 'REPO_LEGACY_TEMPLATE_SHAPE=NOT_EXACT_OR_FOREIGN'
+    fi
+else
+    say 'REPO_LEGACY_TEMPLATE_SHAPE=NOT_REGULAR_OR_ABSENT'
+fi
 say 'REPO_OWNERSHIP=NOT_PROVEN_BY_THIS_PROBE'
+say 'SIGNED_REPOSITORY_AND_TARGET_ABI=NOT_PROVEN_BY_THIS_PROBE'
 say 'STAGE0_TARGET_PROBE=END_READ_ONLY'
