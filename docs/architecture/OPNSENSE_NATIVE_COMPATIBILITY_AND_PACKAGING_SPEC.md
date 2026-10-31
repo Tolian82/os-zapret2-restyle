@@ -3,9 +3,11 @@
 **Status:** OWNER-APPROVED intended contract, NOT YET IMPLEMENTED.
 **Approval:** 31 October 2026; owner-approved v1.2 revision of the standalone follow-up to the completed IPv4/IPv6 / Exclude IPSet scope and full v0.6.2 release.
 **Project:** `Tolian82/os-zapret2-restyle`.
-**Next deliverable:** exact-current-HEAD, detailed per-file implementation plan. No production implementation, package publication or owner-appliance experiment is authorized by recording this document.
+**Next implementation deliverable:** Stage 0 audit under the separately approved per-file plan v1.2. This document alone does not authorize production changes, package publication or owner-appliance experiments.
 
 This file is revised in place from v1.0 and v1.1 to v1.2; both previous revisions remain available in Git history, with no second active specification. Revision history belongs in the [current-line ledger](../history/current/v0.6.x.md).
+
+**Independent document revision:** `v1.2` identifies only the editorial revision of this technical specification. It is **not** the GitHub project/source version, `VERSION`, `PLUGIN_REVISION`, package revision, tag or release version. Advancing any GitHub/plugin version does not automatically advance the specification revision; editing or approving the specification does not automatically change the plugin version or publish a release. The specification revision changes only when its own content/requirements are deliberately revised.
 
 ## 1. Purpose and boundaries
 
@@ -303,7 +305,7 @@ Publication authority follows [CHAT-015–CHAT-017 and CHAT-027](../CHAT_RULES.m
 
 Do not create a new package/dependency manager, custom Python version manager, altered OPNsense build-system fork, parallel package builder, speculative platform adapters, legacy product fallbacks, or an indiscriminate production code rewrite. No service rename; no change to engine version ownership.
 
-The approved specification is the normative specialist contract for this **new** scope. Its publication is **documentation only**. The next action is a detailed per-file plan under v1.1. A later implementation/delivery instruction is required; its testing-package authority is interpreted under section 14 without duplicate confirmation, while stable promotion remains separately owner-controlled.
+The approved specification is the normative specialist contract for this **new** scope. Its publication is **documentation only**. The separately approved per-file plan v1.2 is now recorded, and the owner has subsequently authorized starting Stage 0. Further implementation/delivery follows the approved plan and applicable publication rules; its testing-package authority is interpreted under section 14 without duplicate confirmation, while stable promotion remains separately owner-controlled.
 
 ## 16. Official reference implementation
 

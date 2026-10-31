@@ -2,8 +2,9 @@
 
 **Authority:** [Approved technical specification v1.2](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md).
 **Origin:** updated from previously prepared *Development Plan v1.0*, keeping five stages, ordered concrete steps, file mapping and fifteen increments while applying approved v1.1/v1.2 changes.
+**Independent document revision:** `v1.2` here is exclusively the editorial revision of this development plan; the technical specification has its own independently assigned editorial revision. Neither is a GitHub source/package version. Document revisions are independent of root `VERSION`, `PLUGIN_REVISION`, `_N` GitHub commits, tags and releases: none of those events automatically renumbers this plan or specification, and a document-revision change does not itself version or release the plugin.
 **Preparation baseline:** exact `main` `8339e9ddda16f6910344c26f798c62aca4306c5e`, `VERSION=0.6.2`, `PLUGIN_REVISION=5`; re-pin current `main` before implementation.
-**Status:** detailed plan for owner review and future step-by-step execution; **no code implementation or package publication authorized by this documentation change**.
+**Status:** owner-authorized Stage 0 is next; no code implementation, appliance experiment or package publication has yet been performed under this plan.
 **Immutable:** `os-zapret2-restyle` package, `PLUGIN_NAME=zapret2-restyle`, internal service/configd `zapret`, `VERSION`, `PLUGIN_REVISION` policy and separate Zapret2 engine release manager. Published stable `v0.6.2` / `0.6.2_1.pkg` remains unchanged.
 
 ## Working rules and proof levels
@@ -232,4 +233,4 @@ These are work packages, **not reserved `_N` version numbers**. Every merged sou
 
 **Definition of done:** actual native-built target-qualified *final post-Python* `.pkg` with correct real target `pkg` dependencies, effective file modes, four manual hooks, target-compatible private ELF, Python-independent native Stop where safe, owned-only old repository cleanup, and AC-01–AC-10 evidence **bound to one exact final package SHA-256**. This plan is not proof of implementation, installation or release.
 
-**Next owner decision:** authorize Stage 0 implementation separately, after refreshing exact actual `main` and reviewing the current v1.2 specification.
+**Next execution step:** Stage 0 (I-00), authorized by the owner after publication of this plan. Refresh the exact `main` SHA and complete the read-only audit before Stage 1. No testing or stable package release is implied.
