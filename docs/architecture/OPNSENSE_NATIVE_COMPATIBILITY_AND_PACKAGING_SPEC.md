@@ -1,11 +1,11 @@
-# Native OPNsense Packaging and Unified External Compatibility — Technical Specification v1.1
+# Native OPNsense Packaging and Unified External Compatibility — Technical Specification v1.2
 
 **Status:** OWNER-APPROVED intended contract, NOT YET IMPLEMENTED.
-**Approval:** 31 October 2026; owner-approved v1.1 revision of the standalone follow-up to the completed IPv4/IPv6 / Exclude IPSet scope and full v0.6.2 release.
+**Approval:** 31 October 2026; owner-approved v1.2 revision of the standalone follow-up to the completed IPv4/IPv6 / Exclude IPSet scope and full v0.6.2 release.
 **Project:** `Tolian82/os-zapret2-restyle`.
 **Next deliverable:** exact-current-HEAD, detailed per-file implementation plan. No production implementation, package publication or owner-appliance experiment is authorized by recording this document.
 
-This file replaces its v1.0 text in place. The earlier revision remains available in Git history; there is no second active specification. Revision history belongs in the [current-line ledger](../history/current/v0.6.x.md).
+This file is revised in place from v1.0 and v1.1 to v1.2; both previous revisions remain available in Git history, with no second active specification. Revision history belongs in the [current-line ledger](../history/current/v0.6.x.md).
 
 ## 1. Purpose and boundaries
 
@@ -132,6 +132,14 @@ The reference for executable permissions is the required installed-package behav
 
 Keep current signed FreeBSD `latest` private `curl-impersonate` retrieval and existing capability/provenance checks. Stage its binary and private launcher scripts under their established packaged `libexec/zapret2-restyle` destination. Do not turn a bundled private build artifact into a mandatory installed system package merely for convenience.
 
+#### Private ELF binary compatibility with target OPNsense
+
+Private extraction from a signed FreeBSD `latest` package proves origin, **not** runtime compatibility with qualified OPNsense. For each resolved private `curl-impersonate` artifact verify the actual ELF architecture/ABI, executable loader and dynamic library requirements using available target-platform facilities (for example `file`, `readelf`, `ldd`); identify actual ABI-compatible shared-library providers in the **target OPNsense** package environment. Include all binaries or libraries material to the private launcher path.
+
+The packaged private entrypoint must execute in a qualified target environment and demonstrate relevant local capabilities used by Strategy Lab (Chrome profile, ECH-off and HTTP/3/QUIC where applicable). A successful stock FreeBSD build-VM smoke test is not target acceptance. Missing or incompatible providers cause a fail-closed diagnostic **before** use. Required libraries come only from qualified OPNsense packages or an expressly validated private-bundling policy; never install FreeBSD system packages into the appliance to satisfy them. Local smoke tests do not require uncontrolled WAN access.
+
+Record the signed source package digest, bundled binary digest, dynamic-library providers and exact qualified environment identity; rerun the gate on every changed `latest` private binary.
+
 The official build must retain the package identity `os-zapret2-restyle`, current project `VERSION` and `PLUGIN_REVISION`, project website (`PLUGIN_WWW=https://github.com/Tolian82/os-zapret2-restyle`), maintainer, license and valid OPNsense annotations; do not produce an unexpected `-devel` suffix or upstream-derived project version.
 
 ### 5.3. Exactly one packaging engine
@@ -170,8 +178,9 @@ The native build resolves/installs dependencies as designed and emits real `name
 8. A missing executable, missing generic symlink, incompatible Python, missing module or unreadable entrypoint must fail closed with meaningful diagnostics; never silently choose an arbitrary executable from `PATH`.
 9. Preserve the inherited lifecycle descriptor **FD9**, process identity/group assumptions and signal delivery for Stop, cancellation and timeouts. A shared launcher transfers control through `exec`/equivalent without an extra persistent parent. Do not close inherited ownership descriptors, reacquire the same lock recursively or detach work from the existing cancellation/restoration owner.
 10. Perform every available compatibility check before the corresponding entrypoint stops the service or mutates Config, IPFW or runtime state. Define the bootstrap explicitly: check executable availability before invoking Python, then validate the installed policy and required modules using the common contract. Package-hook checks may only consume dependencies/files present at that hook phase, as required by sections 4.1 and 8. A later failure retains the existing same-operation cleanup and truthful recovery result; never infer a safe state from a failed check.
+11. **Native safe Stop and truthful Status must not become dependent on unavailable Python where their underlying operations are interpreter-independent.** If `dvtws2` is active but Python is missing, incompatible or its generic link is broken, reject new Python-dependent Start/Apply/Strategy mutations; continue to allow safe native Stop and bounded cleanup of **verified plugin-owned** IPFW/process resources, with process identity, FD9, signals and ownership checks preserved. Never flush unrelated IPFW state or treat uncertain ownership as safe. Keep interpreter-independent Status and degraded-state diagnostics where feasible, without false success. This is not a substitute Python, an independent service owner or a legacy fallback.
 
-The real caller tests must exercise FD9 inheritance, signals, process ownership and refusal before mutation in addition to argv, streams and exit status. Diagnostics must not contaminate a machine-readable stdout/API response or misclassify an unavailable runtime as invalid user input.
+The real caller tests must exercise FD9 inheritance, signals, process ownership, safe Stop and truthful Status when Python is unavailable, and refusal before mutation in addition to argv, streams and exit status. Diagnostics must not contaminate a machine-readable stdout/API response or misclassify an unavailable runtime as invalid user input.
 
 A simple shebang rewrite is insufficient if a PHP, configd or shell caller still contains a versioned path; verify **real** caller-to-callee contracts.
 
@@ -184,6 +193,14 @@ During a package replacement, incoming `+PRE_INSTALL` can run **before new files
 Keep configd watcher/action registration, template updates, lifecycle lock/FD9, foreign/incomplete IPFW refusal, service RUNNING/STOPPED state, safe interrupted-operation recovery, transaction atomicity, restoration and extra-resources operations. No speculative old-version transition branches under DEV-050; immediate current-operation rollback and cleanup remain mandatory.
 
 Select the exact currently supported installed package as the replacement baseline in the implementation plan. Verify replacement in both RUNNING and STOPPED states with configuration retained; this is a bounded current-package transition, not a compatibility matrix for arbitrary historical packages. If a deliberate current-format setup/Apply is required, state that consequence explicitly instead of adding a legacy product path.
+
+### 8.1. Bounded recovery boundary for residual old FreeBSD repository overrides
+
+The former `setup.sh` could leave a temporary plugin-created override at `/usr/local/etc/pkg/repos/FreeBSD.conf` and a backup in the plugin state directory after interruption. While removing that old repository-mutation code, provide a bounded **read-only detection** of such residue; never assume a user's current repository file is owned by the plugin.
+
+Only when the temporary content, matching valid backup and absence of subsequent foreign edits are all **unambiguously verified** may a scoped recovery atomically restore the exact backed-up content, retaining the backup on failure. If provenance, backup integrity or current ownership is ambiguous, do not overwrite, normalize or remove the user's file or backup; emit actionable manual recovery guidance and refuse unsafe dependency provisioning. Never automatically enable stock FreeBSD system repositories.
+
+This is an explicitly bounded safety/cleanup responsibility for the current environment, not a permanent old-version migration framework or a general `pkg` repository editor.
 
 ## 9. OPNsense ABI, FreeBSD ABI and repository publication
 
@@ -206,9 +223,9 @@ Required groups:
 | Group | At least these files and integrations |
 |---|---|
 | Identity/policy | `Makefile`, `VERSION`, new `compatibility.json`, schema/validator tests |
-| Build | `scripts/build-pkg.sh`, target-environment bootstrap, `scripts/build-curl-impersonate.sh`, private launch scripts, effective installed modes and staging |
+| Build | `scripts/build-pkg.sh`, target-environment bootstrap, `scripts/build-curl-impersonate.sh`, private launch scripts, target ELF/shared-library compatibility checks, effective installed modes and staging |
 | Package lifecycle | four `pkg/+...` scripts and generated hooks |
-| Runtime and Python | `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`, `setup.sh` dependency provisioning, `setup_transaction.sh`, `strategy_lab_python_launcher.sh`, Python entrypoints and backend modules; FD9, process and signal contracts |
+| Runtime and Python | `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh`, `setup.sh` dependency provisioning and bounded old FreeBSD.conf residue detection/recovery-or-refusal, `setup_transaction.sh`, `strategy_lab_python_launcher.sh`, Python entrypoints and backend modules; FD9, process and signal contracts, Python-independent native Stop/Status |
 | GUI/configd | `src/opnsense/service/conf/actions.d/actions_zapret.conf`, `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/IPSetPolicyBridge.php` and other actual callers |
 | Publication | `scripts/build-pkg-repository.sh`, `repository/zapret2-restyle.conf`, `scripts/verify-release-package.sh` |
 | CI/tests/docs | the four package workflows, targeted tests and fixture exceptions, `README.md` only if user-facing facts change, current docs and navigation |
@@ -219,11 +236,11 @@ Versions in historical records, golden fixtures, explicitly reproducible CI envi
 
 - **CI-01 Full-tree coverage:** scan active production/build/CI sources; classify every literal external version, executable and ABI; use narrow documented allowlists.
 - **CI-02 Matrix:** validate schema and positive supported combination; negative invalid/missing matrix, unsupported OPNsense product ABI/FreeBSD ABI/Python, inconsistent capabilities and unsupported architecture.
-- **CI-03 Python:** test actual shell, PHP, configd, package-hook, shebang and Python-child paths; preserve args, stdout/stderr, exit status, timeouts, FD9, process ownership and signals; reject absent/unsupported interpreter, wrong link and missing module before the applicable mutation boundary.
+- **CI-03 Python:** test actual shell, PHP, configd, package-hook, shebang and Python-child paths; preserve args, stdout/stderr, exit status, timeouts, FD9, process ownership and signals; reject absent/unsupported interpreter, wrong link and missing module before the applicable mutation boundary. With a verified owned native engine running, simulate unavailable Python and prove safe Stop/owned cleanup, truthful Status and foreign-resource refusal.
 - **CI-04 Native build:** verify target-repository/environment bootstrap before Make evaluation, genuine upstream `Mk/plugins.mk`, exact upstream revision, single standard `make package` path and correct product/source identity; reject fallback ABI values as qualification evidence.
 - **CI-05 Package metadata:** inspect the **real built `.pkg`** for version, name, ABI and real `pkg`-derived name/version/origin with target-repository provenance; reject fake `version: "0"`. Bind artifact results to package SHA-256 and verify identical published Release/Pages bytes when publication is authorized.
-- **CI-06 Package contents:** compare old/new necessary files, effective installed execute permissions, rc/configd/templates, four manual hooks, private `curl-impersonate` resources and OPNsense annotations. Exercise direct entrypoints from the packaged files; source modes alone are insufficient. Metadata changes need not be byte-identical.
-- **CI-07 Regression:** preserve GUI/API, Start/Stop/Restart/Status, Strategies Apply, Strategy Lab, Voice/IPSet/Exclude, setup/removal, FD9, IPFW owner and restoration paths actually affected by changes; use the finite scenario set below and existing relevant regression coverage.
+- **CI-06 Package contents and private ELF compatibility:** compare old/new necessary files, effective installed execute permissions, rc/configd/templates, four manual hooks, private `curl-impersonate` resources and OPNsense annotations. Verify private ELF/loader architecture, required dynamic libraries and actual target OPNsense providers; locally exercise relevant capabilities through the packaged launcher. Revalidate whenever private binary bytes change. Exercise direct entrypoints from packaged files; source modes alone are insufficient. Metadata changes need not be byte-identical.
+- **CI-07 Regression:** preserve GUI/API, Start/Stop/Restart/Status, Strategies Apply, Strategy Lab, Voice/IPSet/Exclude, setup/removal, FD9, IPFW owner and restoration paths actually affected by changes, plus ownership-verified recovery/refusal of old FreeBSD.conf residue without modifying foreign settings; use the finite scenario set below and existing relevant regression coverage.
 - **CI-08 Negative injection:** deliberately insert a forbidden hard-coded Python version, wrong ABI, fake dependency version or divergent matrix in an isolated test; each corresponding guard must refuse it.
 - **CI-09 Evidence honesty:** separately report source checks, isolated FreeBSD/native package checks and actual owner-installed OPNsense evidence. Unexecuted/waived IPv6/WAN/Voice scenarios are not `PASS` and do not automatically reopen prior accepted scope.
 
@@ -239,6 +256,9 @@ Before implementation, the per-file plan assigns these scenarios their exact inp
 | Current-package replacement | Replace the identified supported baseline in RUNNING and STOPPED cases; preserve Config and the required final service/ownership state, with real package-hook ordering |
 | Changed entrypoints | Exercise each changed caller category and affected user operation through its real installed/consumed path, including cancellation and cleanup where launch behavior changes |
 | Incompatibility refusal | Missing/wrong interpreter or link, invalid/missing policy and incompatible platform are rejected at the earliest valid boundary; verify no premature mutation and truthful same-operation recovery for later failures |
+| Python-loss native Stop/Status | With verified plugin-owned `dvtws2` running but Python unavailable, safe native Stop cleans only owned resources, Status reports the actual/degraded state and foreign/ambiguous resources remain untouched |
+| Private target ELF compatibility | Qualified target OPNsense resolves packaged `curl-impersonate` ELF/loader, dynamic libraries and providers and runs the private launcher/local Chrome/ECH/QUIC capabilities; missing providers fail closed |
+| Interrupted old repository override | Verified plugin override plus matching untouched backup permits only atomic exact restoration; ambiguous or foreign `FreeBSD.conf` and backup must be left untouched with actionable refusal |
 
 Automate source and isolated-environment checks wherever possible. Any genuinely necessary owner-appliance observations are one consolidated, reviewed batch rather than repeated piecemeal console requests. Report unavailable checks as unverified. Previously accepted or waived WAN/IPv6/Voice-media investigations are not reopened by this specification.
 
@@ -246,11 +266,11 @@ Automate source and isolated-environment checks wherever possible. Any genuinely
 
 | Stage | Work | Required exit evidence |
 |---|---|---|
-| 0. Exact baseline | current SHA; all-file/version/entrypoint audit; dependencies by purpose and execution location; old package manifest/files/permissions; exception list and finite acceptance scenarios | reproducible path/line map and baseline |
+| 0. Exact baseline | current SHA; all-file/version/entrypoint audit; dependencies by purpose and execution location; old package manifest/files/permissions, old FreeBSD.conf override/backup and bundled ELF/library inventory; exception list and finite acceptance scenarios | reproducible path/line map and baseline |
 | 1. Policy | JSON schema/source, policy validator, positive/negative tests | single consistent authoritative matrix |
-| 2. Minimal native packaging | qualify target-environment bootstrap; official temporary tree and evaluated `PLUGIN_PYTHON`; native deps/manual hooks, private artifacts, executable modes, ABI/repository alignment; retain current functional behavior while proving this build boundary | a real native-built candidate `.pkg` with verified inputs, manifest, hooks and installed modes before broad Python caller changes |
-| 3. Python integration | shared interpreter contract across all real entrypoints, remove duplicated decisions, integrate appliance dependency provisioning and preserve FD9/process/signal ownership | consumer-level tests, native rebuild and unchanged required runtime behavior |
-| 4. CI/acceptance | cross-tree guards, final artifact checks, focused regressions and the bounded target-platform scenarios | applicable gates evidenced for the final package SHA-256 without false PASS |
+| 2. Minimal native packaging | qualify target-environment bootstrap; official temporary tree and evaluated `PLUGIN_PYTHON`; native deps/manual hooks, private ELF/library target compatibility, executable modes, ABI/repository alignment; retain current functional behavior while proving this build boundary | a real native-built candidate `.pkg` with verified inputs, manifest, hooks, target-compatible private binary and installed modes before broad Python caller changes |
+| 3. Python integration | shared interpreter contract across all real entrypoints, remove duplicated decisions, integrate appliance dependency provisioning and bounded old FreeBSD.conf residue handling; preserve Python-independent native Stop/Status where safe, FD9/process/signal ownership | consumer-level tests including Python-loss Stop/Status, repository ownership refusal, native rebuild and unchanged required runtime behavior |
+| 4. CI/acceptance | cross-tree guards, final artifact and target binary checks, safe Stop with missing Python, old repository residue/refusal, focused regressions and the bounded target-platform scenarios | applicable gates evidenced for the final package SHA-256 without false PASS |
 
 Implementation stages must be split into minimal, testable increments and follow current project PR/version governance. Documentation acceptance does not authorize the implementation.
 
@@ -260,14 +280,14 @@ Stage 2 is an isolated qualification step, not a permanent second packaging engi
 
 | ID | Required result |
 |---|---|
-| AC-01 | All production Python entrypoints use one validated interpreter contract preserving FD9, process identity, signals, streams and failure semantics |
+| AC-01 | All production Python entrypoints use one validated interpreter contract preserving FD9, process identity, signals, streams and failure semantics, without making safe native Stop or truthful Status depend on unavailable Python |
 | AC-02 | No independent minor-version Python executable or path in feature code |
 | AC-03 | `pkg` owns system dependencies from the qualified target OPNsense repositories; appliance-side build tools have explicit provision and the resulting `+MANIFEST` contains actual name/version/origin |
 | AC-04 | One matrix defines qualified OPNsense product ABI, FreeBSD package ABI, CPU architecture and Python policy, with admitted patch updates distinguished from new unsupported branches |
 | AC-05 | Official, provenance-attested `Mk/plugins.mk` / `make package` builds every package type after verified environment bootstrap |
-| AC-06 | GUI, configd, service, Strategies, Strategy Lab, Voice, installation/removal and relevant recovery behavior are retained through the bounded acceptance scenarios |
+| AC-06 | GUI, configd, service, Strategies, Strategy Lab, Voice, installation/removal and relevant recovery behavior are retained through the bounded acceptance scenarios including Python-loss Stop/Status and owned old repository cleanup/refusal |
 | AC-07 | Product/package names, `zapret` service key, `VERSION`, `PLUGIN_REVISION` and separate Zapret2 engine version policy are unchanged |
-| AC-08 | All required installed files, effective executable permissions, four manual hooks and native state/rollback safety invariants are retained |
+| AC-08 | All required installed files, effective executable permissions, four manual hooks, target-compatible bundled ELF/shared-library providers and native state/rollback safety invariants are retained |
 | AC-09 | CI rejects reintroduced fragmented version policy and inconsistent package/compatibility artifacts; package results identify exact SHA-256 and authorized Release/Pages publication uses identical verified bytes |
 | AC-10 | Documentation and evidence accurately distinguish intended scope, source implementation, CI/package proof and owner-installed acceptance |
 
@@ -275,7 +295,7 @@ All criteria are required to close the future engineering implementation, not th
 
 ## 14. Required final implementation report
 
-Report exact source/upstream SHA, matrix schema/hash, final package SHA-256, full-tree exceptions and touched files, dependency purpose/execution location/provisioning owner, target-repository/environment bootstrap evidence, `pkg query` metadata and extracted `+MANIFEST`, private artifact hashes, FreeBSD/OPNsense ABI, old/new package content/mode comparisons, actual fast checks, CI links and the bounded target/owner-appliance evidence. List skipped/unverified cases explicitly; do not attach earlier artifact results to unverified rebuilt bytes.
+Report exact source/upstream SHA, matrix schema/hash, final package SHA-256, full-tree exceptions and touched files, dependency purpose/execution location/provisioning owner, target-repository/environment bootstrap evidence, `pkg query` metadata and extracted `+MANIFEST`, private artifact hashes and target ELF/dynamic-library provenance, FreeBSD/OPNsense ABI, old/new package content/mode comparisons, Python-loss safe Stop/Status and bounded repository override/backup restoration-or-refusal evidence, actual fast checks, CI links and the bounded target/owner-appliance evidence. List skipped/unverified cases explicitly; do not attach earlier artifact results to unverified rebuilt bytes.
 
 Publication authority follows [CHAT-015–CHAT-017 and CHAT-027](../CHAT_RULES.md), [GH-034–GH-040 and GH-060–GH-061](../GITHUB_PUBLICATION.md). An owner command to make a patch/package already includes the applicable testing-package delivery and its documentation tail when a package candidate is involved; do not request a second publication permission. Full stable release promotion requires explicit release authority. This documentation-only revision authorizes neither implementation nor package delivery; an explicit build/CI-only instruction may also stop at that requested boundary.
 
