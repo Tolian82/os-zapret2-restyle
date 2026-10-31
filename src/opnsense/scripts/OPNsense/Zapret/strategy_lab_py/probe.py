@@ -259,7 +259,7 @@ def _domain_endpoint(endpoint: str, index: int, workdir: Path, ipv6_enabled: boo
         public = _dns_failure_public(endpoint, dns_a_log)
     else:
         public = _domain_public(
-            endpoint, tls4, tls6, dns_a.answers[0],
+            endpoint, tls4, tls6, dns_a.answers[0] if dns_a.ok and dns_a.answers else None,
             dns_aaaa.answers[0] if dns_aaaa and dns_aaaa.ok and dns_aaaa.answers else None,
             ipv4_cert_retry=tls4_cert_retry,
         )
