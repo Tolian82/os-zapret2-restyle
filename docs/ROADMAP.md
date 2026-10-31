@@ -1,6 +1,6 @@
 # os-zapret2-restyle — краткий master plan
 
-## Current next direction — native packaging and compatibility; stable v0.6.2 already published (31 October 2026)
+## Текущий приоритет — native packaging and compatibility; stable v0.6.2 already published (31 October 2026)
 
 The owner has approved [native OPNsense packaging and unified compatibility — technical specification v1.0](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md). **Next deliverable:** an exact-HEAD per-file implementation plan, not code or package publication. The scope uses official temporary `opnsense/plugins` staging, `Mk/plugins.mk`, FreeBSD `pkg` for dependencies, `PLUGIN_PYTHON`, one compatibility matrix and one common interpreter contract. The old Python work remains excluded from the completed Exclude IPSet/IPv6 specification. Source-only `v0.6.2_3` does not create another `.pkg`; published `v0.6.2` assets are immutable.
 
