@@ -436,6 +436,7 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
     spec = spec or ProtocolSpec("tls13", "tcp", 443, "tls")
     endpoint = str(binding["endpoint"])
     selected = str(binding["selected_ip"])
+    selected_family = "ipv6" if ":" in selected else "ipv4"
     rule = int(binding["rule"])
     before_packets, before_bytes = _counter(rule)
 
@@ -448,7 +449,10 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
         remote_ip = selected
         transport = f"udp-{spec.port}"
     elif spec.protocol == "quic":
-        if _is_ipv4(endpoint):
+        if selected_family == "ipv6":
+            execution = _unsupported_execution("QUIC IPv6 endpoint pinning is unsupported")
+            exit_code = 64
+        elif _is_ipv4(endpoint):
             execution = _unsupported_execution("QUIC hostname verification requires a domain endpoint")
             exit_code = 64
         else:
@@ -456,23 +460,23 @@ def _probe_endpoint(binding: dict[str, Any], spec: ProtocolSpec | None = None) -
             exit_code = _execution_status(execution)
         quic_proof = request.chrome_quic_evidence(execution, expected_ip=selected)
         remote_ip = str(quic_proof.get("remote_ip", ""))
-        transport = "quic-ipv4"
+        transport = "quic-ipv4" if selected_family == "ipv4" else "quic-ipv6-unavailable"
     elif _is_ipv4(endpoint):
         execution = request.tcp_request(selected, spec.port)
         exit_code = _execution_status(execution)
         remote_ip = selected
         transport = f"tcp-{spec.port}"
     elif spec.protocol == "http":
-        execution = request.curl_request(endpoint, scheme="http", bound_ip=selected)
+        execution = request.curl_request(endpoint, scheme="http", family=selected_family, bound_ip=selected)
         exit_code = request.curl_exit(execution)
         remote_ip = _remote_ip(execution.stdout)
-        transport = "http-ipv4"
+        transport = f"http-{selected_family}"
     else:
         tls_version = "1.2" if spec.protocol == "tls12" else None
-        execution = request.curl_request(endpoint, scheme="https", tls_version=tls_version, bound_ip=selected)
+        execution = request.curl_request(endpoint, scheme="https", family=selected_family, tls_version=tls_version, bound_ip=selected)
         exit_code = request.curl_exit(execution)
         remote_ip = _remote_ip(execution.stdout)
-        transport = "https-ipv4" if spec.protocol == "tls13" else f"{spec.protocol}-ipv4"
+        transport = f"https-{selected_family}" if spec.protocol == "tls13" else f"{spec.protocol}-{selected_family}"
 
     after_packets, after_bytes = _counter(rule)
     endpoint_match = remote_ip == selected
