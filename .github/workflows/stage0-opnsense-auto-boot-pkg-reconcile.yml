@@ -1,0 +1,74 @@
+name: Stage 0 OPNsense automatic start syshook synthetic package reconciliation
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-automatic-boot-pkg-reconcile.py
+      - scripts/test-stage0-opnsense-automatic-boot-pkg-reconcile.py
+      - scripts/stage0-opnsense-real-boot-pkg-recovery.py
+      - scripts/stage0-opnsense-pkg-fresh-recovery.py
+      - .github/workflows/stage0-opnsense-auto-boot-pkg-reconcile.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-auto-start:
+    name: OPNsense real boot invokes start syshook, relocks only safe private fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Exact compile and 16 offline boot-reconciliation safety contracts
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-automatic-boot-pkg-reconcile.py scripts/test-stage0-opnsense-automatic-boot-pkg-reconcile.py
+          python3.13 scripts/test-stage0-opnsense-automatic-boot-pkg-reconcile.py -v
+      - name: Prepare disposable OPNsense then clean shutdown and automatic syshook on REAL boot
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          # Essential: the pinned action cleanly shuts down the prepared VM,
+          # then starts a NEW QEMU guest before executing run.
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            mkdir -m 700 /root/stage0-fresh-process-recovery-v0.6.2_45
+            fetch -o /root/stage0-fresh-process-recovery-v0.6.2_45/published-original-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            chmod 600 /root/stage0-fresh-process-recovery-v0.6.2_45/published-original-0.6.2_1.pkg
+            /usr/local/bin/python3 scripts/stage0-opnsense-automatic-boot-pkg-reconcile.py prepare
+          run: |
+            set -eu
+            # SSH can become available before OPNsense finishes rc.syshook
+            # start. Wait only for reports created by the actual boot hooks;
+            # never invoke the recovery handler from this verification step.
+            retries=0
+            while [ "$retries" -lt 90 ]; do
+              if [ -f /root/stage0-fresh-process-recovery-v0.6.2_45/automatic-boot-reconcile.json ] && [ -f /root/stage0-fresh-process-recovery-v0.6.2_45/start-syshook.boot-id ]; then
+                break
+              fi
+              retries=$((retries + 1))
+              sleep 2
+            done
+            echo "AUTO_BOOT_HOOK_READINESS_POLLS=$retries"
+            echo "=== AUTO BOOT SYSHOOK DIAGNOSTIC ==="
+            if [ -f /root/stage0-fresh-process-recovery-v0.6.2_45/auto-start-hook.log ]; then
+              cat /root/stage0-fresh-process-recovery-v0.6.2_45/auto-start-hook.log
+            else
+              echo "NO TEST-OWNED AUTO SYSHOOK LOG PRESENT"
+            fi
+            echo "=== BOOT WITNESS ==="
+            if [ -f /root/stage0-fresh-process-recovery-v0.6.2_45/start-syshook.boot-id ]; then
+              cat /root/stage0-fresh-process-recovery-v0.6.2_45/start-syshook.boot-id
+            else
+              echo "NO TEST-OWNED READONLY START WITNESS"
+            fi
+            /usr/local/bin/python3 scripts/stage0-opnsense-automatic-boot-pkg-reconcile.py verify
