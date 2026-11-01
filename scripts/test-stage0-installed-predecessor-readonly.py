@@ -12,6 +12,7 @@ spec.loader.exec_module(m)
 
 def manifest():
     return {"name": m.NAME, "version": m.VERSION, "abi": m.ABI,
+            "arch": "freebsd:15:x86:64", "origin": "opnsense/os-zapret2-restyle",
             "scripts": {p: "#!/bin/sh\necho " + p + "\n" for p in m.PHASES}}
 
 
@@ -41,6 +42,34 @@ class Provenance(unittest.TestCase):
             a = args()
             a[1][key] = val
             with self.subTest(key=key), self.assertRaisesRegex(m.Refusal, "INSTALLED_PACKAGE_IDENTITY"):
+                m.verify_data(*a)
+
+    def test_changed_native_arch_or_origin_refuses_even_when_abi_matches(self):
+        for key, bad in (("arch", "freebsd:14:x86:64"),
+                         ("origin", "unknown/not-the-signed-package")):
+            a = args()
+            self.assertEqual(a[1]["abi"], m.ABI)
+            a[1][key] = bad
+            with self.subTest(key=key), self.assertRaisesRegex(
+                    m.Refusal, "INSTALLED_PACKAGE_IDENTITY_" + key.upper() + "_MISMATCH"):
+                m.verify_data(*a)
+
+    def test_missing_or_untrusted_native_arch_origin_refuses(self):
+        for key in ("arch", "origin"):
+            for which in (0, 1):
+                a = args()
+                del a[which][key]
+                with self.subTest(key=key, which=which), self.assertRaisesRegex(
+                        m.Refusal, "INSTALLED_PACKAGE_IDENTITY_" + key.upper() + "_MISMATCH"):
+                    m.verify_data(*a)
+
+    def test_extra_archived_or_installed_lifecycle_hook_refuses(self):
+        for which in (0, 1):
+            a = args()
+            a[which]["scripts"]["pre-upgrade"] = "#!/bin/sh\nexit 0\n"
+            with self.subTest(which=which), self.assertRaisesRegex(
+                    m.Refusal, ("ARCHIVE" if which == 0 else "INSTALLED") +
+                    "_FOUR_MANUAL_HOOKS_MISSING_OR_EXTRA"):
                 m.verify_data(*a)
 
     def test_missing_historical_hook(self):

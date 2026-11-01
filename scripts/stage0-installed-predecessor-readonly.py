@@ -81,24 +81,29 @@ def verify_data(archived, installed, archived_service, installed_service, owner,
         raise Refusal("ARCHIVE_PACKAGE_IDENTITY_MISMATCH")
     if not isinstance(installed, dict):
         raise Refusal("INSTALLED_PACKAGE_IDENTITY_MISMATCH")
-    # pkg's installed raw JSON may omit the archive "abi" field; in that
-    # case require its arch token to match the immutable archived manifest.
+    # The trusted archive SHA authenticates these provenance fields. Both
+    # native pkg representations must identify the same arch and origin;
+    # matching an ABI alone must not admit an inconsistent package.
+    for key in ("arch", "origin"):
+        value = archived.get(key)
+        if not isinstance(value, str) or not value or installed.get(key) != value:
+            raise Refusal("INSTALLED_PACKAGE_IDENTITY_" + key.upper() + "_MISMATCH")
+    # A native installed manifest may omit ABI; only the independently
+    # queried target ABI plus matching archive arch then justify acceptance.
     installed_abi = installed.get("abi")
-    if installed_abi is None:
-        archived_arch = archived.get("arch")
-        if not isinstance(archived_arch, str) or not archived_arch or installed.get("arch") != archived_arch:
-            raise Refusal("INSTALLED_PACKAGE_IDENTITY_ARCH_MISMATCH")
-    elif installed_abi != ABI:
+    if installed_abi is not None and installed_abi != ABI:
         raise Refusal("INSTALLED_PACKAGE_IDENTITY_ABI_MISMATCH")
     for item, manifest in (("ARCHIVE", archived), ("INSTALLED", installed)):
         if manifest.get("name") != NAME or manifest.get("version") != VERSION:
             raise Refusal(item + "_PACKAGE_IDENTITY_MISMATCH")
         hooks = manifest.get("scripts")
-        if not isinstance(hooks, dict) or any(
-            not isinstance(hooks.get(p), str) or not hooks[p].startswith("#!/bin/sh\n")
+        # Unrecognized lifecycle scripts may execute independently of the
+        # four approved phases. Refuse additions, not just modified bodies.
+        if not isinstance(hooks, dict) or set(hooks) != set(PHASES) or any(
+            not isinstance(hooks[p], str) or not hooks[p].startswith("#!/bin/sh\n")
             for p in PHASES
         ):
-            raise Refusal(item + "_FOUR_MANUAL_HOOKS_MISSING")
+            raise Refusal(item + "_FOUR_MANUAL_HOOKS_MISSING_OR_EXTRA")
     for phase in PHASES:
         if archived["scripts"][phase] != installed["scripts"][phase]:
             raise Refusal("INSTALLED_HOOK_BODY_MISMATCH:" + phase)
