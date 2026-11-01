@@ -170,13 +170,24 @@ def verify(f):
            "REAL_FD9_RETRY_MISSING")
     expect(state.read_text().strip() == "stopped" and marker.exists() and
            "stop\n" in entries, "RUNNING_PRE_INSTALL_INVALID")
-    # Historical POST_INSTALL with mock worker/signal only (no real configd).
+    # A strictly OLD Status implementation still demands inherited FD9:
+    # historical POST_INSTALL calls direct Status, so it must refuse final
+    # success and preserve the marker. This failure is an observed NEGATIVE.
+    call(f, "post-install", success=False)
+    expect(marker.exists() and "status:no-fd9" in trace.read_text(),
+           "LEGACY_POST_INSTALL_MUST_REFUSE_UNVERIFIED_STATUS")
+    # Replacement installs the new service before incoming POST_INSTALL.
+    # Model the explicit change of service generation, not a silent fix to
+    # the immutable original hook body. This is a MOCKED successor only.
+    state.write_text("stopped\n")
+    (root / "reloaded").unlink(missing_ok=True)
+    f["env"]["FD9_REQUIRED"] = "0"
     call(f, "post-install")
     entries = trace.read_text()
     expect(state.read_text().strip() == "running" and not marker.exists() and
            "kill:-TERM 4343" in entries and "configctl:zapret start" in entries and
            "register" in entries and "configure" in entries,
-           "RUNNING_POST_INSTALL_NOT_RESTORED")
+           "SUCCESSOR_MOCK_POST_INSTALL_NOT_RESTORED")
     # STOPPED: no restart marker or automatic Start.
     trace.write_text("")
     (root / "reloaded").unlink(missing_ok=True)
@@ -187,7 +198,8 @@ def verify(f):
     call(f, "post-install")
     expect("configctl:zapret start" not in trace.read_text() and
            state.read_text().strip() == "stopped", "STOPPED_AUTOSTARTED")
-    # OLD PRE_DEINSTALL: no FD9 retry, refuses status=2, does not Stop or erase marker.
+    # OLD PRE_DEINSTALL: old service again, no FD9 retry.
+    f["env"]["FD9_REQUIRED"] = "1"
     trace.write_text("")
     journal.write_text("{}\n")
     state.write_text("running\n")
@@ -224,7 +236,7 @@ def verify(f):
     call(f, "post-deinstall")
     expect(marker.exists() and trace.read_text() == "",
            "HISTORICAL_POST_DEINSTALL_NOT_NOOP")
-    return ("FD9_RUNNING_PRE_INSTALL", "MOCKED_WORKER_RUNNING_RESTORE",
+    return ("FD9_RUNNING_PRE_INSTALL", "LEGACY_POST_INSTALL_STATUS_REFUSAL", "MOCKED_SUCCESSOR_WORKER_RUNNING_RESTORE",
             "STOPPED_NO_AUTOSTART", "OLD_PRE_DEINSTALL_FD9_REFUSAL",
             "INCOMPLETE_REFUSAL", "STOP_FAILURE_REFUSAL",
             "POST_DEINSTALL_NOOP")
