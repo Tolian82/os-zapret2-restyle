@@ -2,6 +2,8 @@
 """Offline refusal, outcomes, and no accidental real-host mutation contracts."""
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 from unittest import mock
 
@@ -18,6 +20,17 @@ class NativeIncomingRefusal(unittest.TestCase):
         self.assertIn("exit 73", source)
         self.assertIn(s.REFUSAL_LINE, source)
         self.assertNotIn("pkg delete", source)
+
+    def test_exact_hook_trace_is_valid_shell_and_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            trace = Path(tmp) / "trace.txt"
+            script = s.phase_hook(trace, "new", "pre-install")
+            self.assertIn("/bin/echo", script)
+            self.assertNotIn("printf", script)
+            result = subprocess.run(["/bin/sh"], input=script, text=True,
+                                    capture_output=True, check=False)
+            self.assertEqual(result.returncode, 73)
+            self.assertEqual(trace.read_text().splitlines(), [s.REFUSAL_LINE])
 
     def test_unrelated_hook_remains_nonmutating(self):
         source = s.phase_hook(Path("/tmp/test"), "old", "pre-deinstall")
