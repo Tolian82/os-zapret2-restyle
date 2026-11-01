@@ -19,10 +19,14 @@ import tempfile
 ARCHIVE_SHA = "1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f"
 PHASES = ("pre-install", "post-install", "pre-deinstall", "post-deinstall")
 NAME = "zapret2-stage0-phase-order-fixture"
-EXPECTED = (
+# Observed from actual disposable FreeBSD15.1 pkg add -f on PR #791:
+# forced add replaces files without invoking old deinstall-phase scripts.
+EXPECTED_FORCED_ADD = (
     "old:pre-install", "old:post-install",
-    "new:pre-install", "old:pre-deinstall",
-    "old:post-deinstall", "new:post-install",
+    "new:pre-install", "new:post-install",
+)
+EXPECTED = EXPECTED_FORCED_ADD + (
+    "new:pre-deinstall", "new:post-deinstall",
 )
 
 
@@ -141,29 +145,38 @@ def run_vm(archive, report):
                    ASSUME_ALWAYS_YES="yes")
         # Real pkg, separate local DB, file payload strictly inside work.
         run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", str(old)], env)
+        old_installed = run(["pkg", "-o", "REPO_AUTOUPDATE=false", "query",
+                             "%n|%v", NAME], env).strip()
+        if old_installed != NAME + "|0.6.2_1":
+            raise Refusal("OLD_FIXTURE_NOT_ACTUALLY_INSTALLED")
         run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", "-f", str(new)], env)
-        rows = trace.read_text(encoding="ascii").splitlines()
-        try:
-            check_trace(rows)
-        except Refusal:
-            # Instrumented fixture phases are public synthetic labels,
-            # safe to print even when the disposable guest fails to sync an artifact.
-            print("STAGE0_OBSERVED_PHASES=" + json.dumps(rows))
-            report.write_text(json.dumps({
-                "status": "NOT_VERIFIED", "observed_order": rows,
-                "expected_order": list(EXPECTED), "historical_hooks": hooks,
-                "real_pkg_invoked": True, "opnsense_pkg_lifecycle_verified": False
-            }, sort_keys=True), encoding="utf-8")
-            raise
+        forced_rows = trace.read_text(encoding="ascii").splitlines()
         installed = run(["pkg", "-o", "REPO_AUTOUPDATE=false", "query",
                          "%n|%v", NAME], env).strip()
         if installed != NAME + "|0.6.2_27":
             raise Refusal("REAL_PKG_INSTALLED_IDENTITY_MISMATCH")
+        # A separate explicit pkg delete demonstrates that the native manager
+        # can invoke deinstall hooks: they are simply not invoked on add -f.
+        if tuple(forced_rows) == EXPECTED_FORCED_ADD:
+            run(["pkg", "-o", "REPO_AUTOUPDATE=false", "delete", NAME], env)
+        rows = trace.read_text(encoding="ascii").splitlines()
+        try:
+            check_trace(rows)
+        except Refusal:
+            print("STAGE0_OBSERVED_PHASES=" + json.dumps(rows))
+            report.write_text(json.dumps({
+                "status": "NOT_VERIFIED", "forced_add_order": forced_rows,
+                "observed_order": rows, "expected_order": list(EXPECTED),
+                "historical_hooks": hooks, "real_pkg_invoked": True,
+                "opnsense_pkg_lifecycle_verified": False
+            }, sort_keys=True), encoding="utf-8")
+            raise
         report.write_text(json.dumps({
             "status": "PASS_FREEBSD15_1_PKG_SCHEDULER",
             "freebsd_vm": os_version,
             "immutable_old_archive_sha256": ARCHIVE_SHA,
             "immutable_old_archive_four_hooks": hooks,
+            "forced_add_order": forced_rows, "explicit_delete_order": rows[len(forced_rows):],
             "observed_order": rows, "real_pkg_invoked": True,
             "synthetic_tracer_scripts_not_real_hook_bodies": True,
             "isolated_pkg_database_and_payload": True,
@@ -182,7 +195,7 @@ def main():
     except Refusal as exc:
         print("STAGE0_REAL_PKG_SCHEDULER=NOT_VERIFIED:" + str(exc))
         return 1
-    print("STAGE0_REAL_PKG_SCHEDULER=PASS: FreeBSD15.1 real pkg phase order with synthetic isolated fixture")
+    print("STAGE0_REAL_PKG_SCHEDULER=PASS: FreeBSD15.1 pkg add -f skips old pre/post-deinstall; explicit delete invokes new pre/post-deinstall")
     return 0
 
 
