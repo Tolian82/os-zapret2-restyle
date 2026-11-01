@@ -54,6 +54,18 @@ class NativeIncomingRefusal(unittest.TestCase):
                                     b"new\n", TRACE + ["new:post-install"]),
                          "REPLACED_DESPITE_INCOMING_PRE_INSTALL_REFUSAL")
 
+    def test_guest_identity_command_uses_supported_product_abi_flag(self):
+        with mock.patch.object(s, "invoke", return_value=type("R", (), {
+                 "returncode": 0, "stdout": "26.7\\n"})()) as command:
+            self.assertEqual(s.successful(["opnsense-version", "-a"]).strip(), "26.7")
+            command.assert_called_once_with(["opnsense-version", "-a"], None)
+
+    def test_native_command_failure_works_for_single_argument(self):
+        with mock.patch.object(s, "invoke", return_value=type("R", (), {
+                 "returncode": 1, "stdout": ""})()):
+            with self.assertRaisesRegex(s.Refusal, "NATIVE_COMMAND_FAILED:opnsense-version"):
+                s.successful(["opnsense-version"])
+
     def test_non_target_refuses_before_any_mutation(self):
         class Linux:
             sysname = "Linux"
