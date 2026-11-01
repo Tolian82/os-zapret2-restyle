@@ -81,6 +81,12 @@ def native_roundtrip(archive):
         paths = list(dist.glob(pre.NAME + "-" + pre.VERSION + ".pkg"))
         if len(paths) != 1:
             raise pre.Refusal("SYNTHETIC_PACKAGE_NOT_CREATED_EXACTLY_ONCE")
+        # Exact fixture archive is the correct reference, not the authored
+        # pre-pkg-create JSON (pkg may normalize the script representation).
+        try:
+            packaged = json.loads(call(["tar", "-xOf", str(paths[0]), "+MANIFEST"], env))
+        except (ValueError, TypeError):
+            raise pre.Refusal("SYNTHETIC_ARCHIVE_MANIFEST_INVALID") from None
         call([*pkg, "add", str(paths[0])], env)
         raw = call([*pkg, "info", "-R", "--raw-format", "json", pre.NAME], env)
         try:
@@ -105,8 +111,17 @@ def native_roundtrip(archive):
         state = installed.lstat()
         if not stat.S_ISREG(state.st_mode):
             raise pre.Refusal("SYNTHETIC_INSTALLED_PAYLOAD_NOT_REGULAR")
+        # Harmless synthetic scripts only; never print owner-appliance data.
+        if isinstance(packaged.get("scripts"), dict) and isinstance(current.get("scripts"), dict):
+            print("STAGE0_NATIVE_HOOK_DIFFERENCES=" + json.dumps({phase: {
+                "archive_bytes": len(packaged["scripts"].get(phase, "").encode()),
+                "db_bytes": len(current["scripts"].get(phase, "").encode()),
+                "archive_prefix": repr(packaged["scripts"].get(phase, "")[:120]),
+                "db_prefix": repr(current["scripts"].get(phase, "")[:120]),
+            } for phase in pre.PHASES if packaged["scripts"].get(phase) != current["scripts"].get(phase)},
+                sort_keys=True), flush=True)
         # "26.7" below is a controlled fixture, NOT observed from OPNsense.
-        verified = pre.verify_data(fixture, current, payload, installed.read_bytes(),
+        verified = pre.verify_data(packaged, current, payload, installed.read_bytes(),
                                    owner, stat.S_IMODE(state.st_mode), "26.7", pre.ABI, "fixture-vm")
         if verified["real_fd9_tested"] or verified["actual_pkg_replacement"]:
             raise pre.Refusal("SYNTHETIC_FIXTURE_CLAIMED_REAL_LIFECYCLE")
