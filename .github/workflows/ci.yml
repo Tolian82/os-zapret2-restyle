@@ -19,6 +19,7 @@ jobs:
       package: ${{ steps.paths.outputs.package }}
       docs_only: ${{ steps.paths.outputs.docs_only }}
       native_wan_process: ${{ steps.paths.outputs.native_wan_process }}
+      stage0_private_elf: ${{ steps.paths.outputs.stage0_private_elf }}
 
     steps:
       - uses: actions/checkout@v6
@@ -89,6 +90,11 @@ jobs:
           if printf '%s\n' "${changed}" | grep -Eq '^(scripts/test-freebsd15-native-wan-process-continuity[.]py|scripts/stage5-wan-baseline-capture[.]py|scripts/test-freebsd15-native-engine-exclude[.]py|scripts/test-freebsd15-native-strategy-mutation[.]py|scripts/test-freebsd15-native-tls-strategy[.]py|scripts/test-freebsd15-native-tls-fake[.]py|scripts/test-freebsd15-native-tls-process-identity[.]py)$'; then
             native_wan_process=true
           fi
+          stage0_private_elf=false
+          if printf '%s\n' "${changed}" | grep -Eq '^scripts/(stage0-private-curl-native-runtime|test-stage0-private-curl-native-runtime)[.]py$'; then
+            stage0_private_elf=true
+          fi
+          echo "stage0_private_elf=${stage0_private_elf}" >> "${GITHUB_OUTPUT}"
           echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
           echo "docs_only=${docs_only}" >> "${GITHUB_OUTPUT}"
           echo "package=${package}" >> "${GITHUB_OUTPUT}"
@@ -168,6 +174,42 @@ jobs:
             ${{ runner.temp }}/stage0-stable-0.6.2_1.json
             ${{ runner.temp }}/stage0-private-elf-0.6.1_30.json
             ${{ runner.temp }}/stage0-private-elf-0.6.2_1.json
+          if-no-files-found: error
+          retention-days: 30
+
+  stage0-private-elf-native-runtime:
+    name: Stage 0 exact published ELF FreeBSD 15.1 dynamic runtime
+    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.stage0_private_elf == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate archive probe negative/syntax contracts before VM
+        run: |
+          python3.13 -m py_compile scripts/stage0-private-curl-native-runtime.py scripts/test-stage0-private-curl-native-runtime.py
+          python3.13 scripts/test-stage0-private-curl-native-runtime.py -v
+      - name: Execute immutable published 0.6.2_1 ELF in isolated FreeBSD 15.1 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          prepare: pkg install -y python313
+          run: |
+            set -eu
+            fetch -o stage0-stable-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3.13 scripts/stage0-private-curl-native-runtime.py \
+              --package stage0-stable-0.6.2_1.pkg \
+              --json stage0-private-elf-native-0.6.2_1.json
+      - name: Preserve exact stable private ELF runtime qualification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-private-elf-native-${{ github.event.pull_request.head.sha }}
+          path: stage0-private-elf-native-0.6.2_1.json
           if-no-files-found: error
           retention-days: 30
 
