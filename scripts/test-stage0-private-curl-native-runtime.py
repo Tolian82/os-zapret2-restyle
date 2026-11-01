@@ -38,7 +38,7 @@ class NativePrivateCurlContract(TestCase):
             archive = Path(tmp) / 'invalid.pkg'
             archive.write_bytes(b'not a published package')
             with mock.patch.object(audit, 'get_archive_member') as extract:
-                with self.assertRaisesRegex(ValueError, 'archive SHA-256 mismatch'):
+                with self.assertRaisesRegex(ValueError, 'archived stable package SHA-256 mismatch'):
                     audit.confirm_archives(archive)
                 extract.assert_not_called()
 
