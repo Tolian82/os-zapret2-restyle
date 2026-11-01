@@ -138,10 +138,10 @@ def run_vm(archive, report):
         new = build_fixture(work, "new", "0.6.2_27", trace)
         env = os.environ.copy()
         env.update(PKG_DBDIR=str(db), PKG_CACHEDIR=str(cache),
-                   ASSUME_ALWAYS_YES="yes", REPO_AUTOUPDATE="false")
+                   ASSUME_ALWAYS_YES="yes")
         # Real pkg, separate local DB, file payload strictly inside work.
-        run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", "-y", str(old)], env)
-        run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", "-f", "-y", str(new)], env)
+        run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", str(old)], env)
+        run(["pkg", "-o", "REPO_AUTOUPDATE=false", "add", "-f", str(new)], env)
         rows = trace.read_text(encoding="ascii").splitlines()
         try:
             check_trace(rows)
