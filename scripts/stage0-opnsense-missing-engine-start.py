@@ -10,11 +10,13 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import stat
 import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
 ENGINE = Path('/usr/local/etc/zapret2/binaries/my/dvtws2')
+LOCK = Path('/var/run/zapret2-lifecycle.lock')
 ERROR = 'ERROR: zapret2 runtime is not installed or installation is incomplete'
 
 
@@ -59,9 +61,27 @@ def classify_start(result, before, after):
     return 'REAL_OLD_START_REFUSED_MISSING_RUNTIME_BEFORE_FIREWALL'
 
 
-def call_start(service, lock):
+def original_lock_identity(path=LOCK, *, required=False):
+    # The real native Python owner verifies the exact ORIGINAL lock pathname,
+    # even if a shell test sets LIFECYCLE_LOCK_FILE to a temporary path.
+    # Inspect only: never create, unlink, change permissions or replace this file.
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        need(not required, 'ORIGINAL_FD9_LOCK_DISAPPEARED')
+        return None
+    need(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1,
+         'ORIGINAL_FD9_LOCK_FOREIGN_OR_SYMLINK')
+    return (info.st_dev, info.st_ino)
+
+
+def call_start(service):
+    # Let installed original service acquire the exact /var/run FD9 lock.
+    # The previously tested temporary FD9 path is not acceptable to native
+    # shared_apply_operation.py's actual require_lifecycle_lock contract.
     env = os.environ.copy()
-    env.update(LIFECYCLE_LOCK_FILE=str(lock), LOCKF_BIN='/usr/bin/lockf')
+    env.pop('LIFECYCLE_LOCK_FILE', None)
+    env.update(LOCKF_BIN='/usr/bin/lockf')
     try:
         return subprocess.run([service, 'start'], env=env, capture_output=True,
                               text=True, timeout=40, check=False)
@@ -87,8 +107,11 @@ def prove(archive):
     need(before.get('status') == 'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
          'REAL_OLD_NOT_VERIFIED_COLD')
     require_missing_engine()
-    with tempfile.TemporaryDirectory(prefix='stage0-absent-runtime-') as folder:
-        result = call_start(old.SERVICE, Path(folder) / 'fd9.lock')
+    initial_lock = original_lock_identity()
+    result = call_start(old.SERVICE)
+    final_lock = original_lock_identity(required=True)
+    need(initial_lock is None or initial_lock == final_lock,
+         'ORIGINAL_FD9_LOCK_IDENTITY_CHANGED')
     require_missing_engine()
     after = guard.snapshot(archive)
     refused = classify_start(result, before, after)
@@ -100,6 +123,7 @@ def prove(archive):
             'original_package_unchanged_cold': True,
             'runtime_engine_absent_before_and_after': True,
             'ipfw_unchanged_unloaded': True,
+            'original_fd9_lock_used': True,
             'package_callback_invoked': False, 'old_stop_invoked': False,
             'configd_or_gui_mutation_invoked': False,
             'real_running_engine_tested': False,

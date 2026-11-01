@@ -77,6 +77,18 @@ class Contracts(unittest.TestCase):
                 m.prove(Path('/not-real'))
             loader.assert_not_called()
 
+    def test_fd9_lock_missing_before_allowed(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(m.original_lock_identity(Path(d)/'missing'))
+            with self.assertRaisesRegex(m.Refusal, 'DISAPPEARED'):
+                m.original_lock_identity(Path(d)/'missing', required=True)
+
+    def test_fd9_lock_symlink_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'lock';path.symlink_to('/tmp/no-lock-file')
+            with self.assertRaisesRegex(m.Refusal, 'FOREIGN_OR_SYMLINK'):
+                m.original_lock_identity(path)
+
     def test_no_running_or_pkg_safety_claim(self):
         text=SOURCE.read_text()
         for token in ("'real_running_engine_tested': False",
