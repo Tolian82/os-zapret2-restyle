@@ -146,6 +146,9 @@ def run_vm(archive, report):
         try:
             check_trace(rows)
         except Refusal:
+            # Instrumented fixture phases are public synthetic labels,
+            # safe to print even when the disposable guest fails to sync an artifact.
+            print("STAGE0_OBSERVED_PHASES=" + json.dumps(rows))
             report.write_text(json.dumps({
                 "status": "NOT_VERIFIED", "observed_order": rows,
                 "expected_order": list(EXPECTED), "historical_hooks": hooks,
