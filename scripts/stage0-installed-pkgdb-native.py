@@ -87,6 +87,17 @@ def native_roundtrip(archive):
             current = json.loads(raw)
         except (TypeError, ValueError):
             raise pre.Refusal("REAL_PKG_INSTALLED_RAW_MANIFEST_NOT_JSON") from None
+        # Diagnostic exposes only synthetic fixture metadata when pkg's raw
+        # installed representation differs from the authored archive manifest.
+        print("STAGE0_NATIVE_PKGDB_OBSERVED=" + json.dumps({
+            "keys": sorted(current) if isinstance(current, dict) else [],
+            "name": current.get("name") if isinstance(current, dict) else None,
+            "version": current.get("version") if isinstance(current, dict) else None,
+            "abi": current.get("abi") if isinstance(current, dict) else None,
+            "arch": current.get("arch") if isinstance(current, dict) else None,
+            "scripts": sorted(current.get("scripts", {})) if isinstance(current, dict)
+                and isinstance(current.get("scripts"), dict) else [],
+        }, sort_keys=True), flush=True)
         owner = call([*pkg, "which", "-q", str(installed)], env).strip()
         state = installed.lstat()
         if not stat.S_ISREG(state.st_mode):
