@@ -1,0 +1,45 @@
+name: Stage 0 orphaned native pkg unlock and direct root bypass on OPNsense
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-pkg-orphaned-unlock.py
+      - scripts/test-stage0-opnsense-pkg-orphaned-unlock.py
+      - scripts/stage0-opnsense-pkg-relock-failures.py
+      - scripts/stage0-opnsense-native-pkg-lock.py
+      - scripts/stage0-opnsense-pkg-sidecar-bypass.py
+      - scripts/stage0-opnsense-prepkg-readonly.py
+      - .github/workflows/stage0-opnsense-pkg-orphaned-unlock.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-orphaned-unlock:
+    name: Genuine original old read-only and private pkg SIGKILL orphan/bypass
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Exact Python syntax and 15 offline safety contracts
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-pkg-orphaned-unlock.py scripts/test-stage0-opnsense-pkg-orphaned-unlock.py
+          python3.13 scripts/test-stage0-opnsense-pkg-orphaned-unlock.py -v
+      - name: Disposable OPNsense 26.7 native private pkg orphan and direct root bypass
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3 scripts/stage0-opnsense-pkg-orphaned-unlock.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
