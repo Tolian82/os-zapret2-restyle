@@ -14,8 +14,14 @@ spec.loader.exec_module(n)
 
 
 class RealPkgSchedulerContract(unittest.TestCase):
-    def test_expected_transition_has_all_six_true_pkg_phases(self):
-        self.assertEqual(len(n.EXPECTED), 6)
+    def test_actual_force_add_skips_old_deinstall_and_explicit_delete_invokes_new(self):
+        self.assertEqual(n.EXPECTED_FORCED_ADD,
+                         ("old:pre-install", "old:post-install",
+                          "new:pre-install", "new:post-install"))
+        self.assertNotIn("old:pre-deinstall", n.EXPECTED)
+        self.assertNotIn("old:post-deinstall", n.EXPECTED)
+        self.assertEqual(n.EXPECTED[-2:],
+                         ("new:pre-deinstall", "new:post-deinstall"))
         self.assertTrue(n.check_trace(list(n.EXPECTED)))
 
     def test_swapped_or_missing_deinstall_is_not_accepted(self):
