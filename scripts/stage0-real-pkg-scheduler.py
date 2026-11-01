@@ -70,8 +70,12 @@ def run(args, env=None, timeout=90):
     except (OSError, subprocess.SubprocessError):
         raise Refusal("NATIVE_PKG_COMMAND_UNAVAILABLE_OR_TIMEOUT") from None
     if result.returncode:
-        # Do not print native pkg diagnostic URLs or host configuration.
-        raise Refusal("NATIVE_PKG_COMMAND_FAILED:" + args[0] + ":" + args[1])
+        # This script runs only on a disposable FreeBSD VM, with fixture pkg
+        # metadata. Keep bounded stderr for diagnosing real pkg refusals.
+        diagnostic = " ".join(result.stderr.split())[:350]
+        diagnostic = re.sub(r"https?://[^ ]+", "[url]", diagnostic)
+        raise Refusal("NATIVE_PKG_COMMAND_FAILED:" + args[0] + ":" + args[1] +
+                      ":rc=" + str(result.returncode) + ":" + diagnostic)
     return result.stdout
 
 
