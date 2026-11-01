@@ -1,0 +1,41 @@
+name: Stage 0 OPNsense authentic missing dvtws2 Start refusal
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-missing-engine-start.py
+      - scripts/test-stage0-opnsense-missing-engine-start.py
+      - .github/workflows/stage0-opnsense-missing-engine-start.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-old-start-no-runtime:
+    name: Authentic old service Start with no dvtws2 must remain cold
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Exact source compile and 14 refusal contracts
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-missing-engine-start.py scripts/test-stage0-opnsense-missing-engine-start.py
+          python3.13 scripts/test-stage0-opnsense-missing-engine-start.py -v
+      - name: Disposable native OPNsense 26.7 genuine old Start no-runtime negative
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3 scripts/stage0-opnsense-missing-engine-start.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
