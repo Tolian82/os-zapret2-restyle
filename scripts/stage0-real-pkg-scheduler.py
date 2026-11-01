@@ -14,7 +14,6 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-import tarfile
 import tempfile
 
 ARCHIVE_SHA = "1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f"
@@ -38,13 +37,14 @@ def digest(blob):
 def check_archive(path):
     if digest(path.read_bytes()) != ARCHIVE_SHA:
         raise Refusal("IMMUTABLE_ARCHIVE_SHA256_MISMATCH")
+    # Native bsdtar understands the actual zstd-compressed FreeBSD .pkg.
     try:
-        with tarfile.open(path, mode="r:*") as tar:
-            f = tar.extractfile("+MANIFEST")
-            if f is None:
-                raise Refusal("ARCHIVE_MANIFEST_MISSING")
-            manifest = json.load(f)
-    except (OSError, ValueError, tarfile.TarError):
+        manifest_raw = subprocess.run(["tar", "-xOf", str(path), "+MANIFEST"],
+                                      capture_output=True, check=False, timeout=30)
+        if manifest_raw.returncode:
+            raise Refusal("ARCHIVE_MANIFEST_MISSING")
+        manifest = json.loads(manifest_raw.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
         raise Refusal("ARCHIVE_MANIFEST_INVALID") from None
     if manifest.get("name") != "os-zapret2-restyle" or manifest.get("version") != "0.6.2_1":
         raise Refusal("PREDECESSOR_IDENTITY_MISMATCH")
