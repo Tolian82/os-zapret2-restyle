@@ -123,6 +123,16 @@ def run_vm():
         installed = query.stdout.strip() if query.returncode == 0 else "ABSENT"
         payload = marker.read_bytes() if marker.is_file() and not marker.is_symlink() else None
         lines = trace.read_text(encoding="utf-8").splitlines()
+        # A refusing hook must be observed, not inferred from a nonzero pkg
+        # exit; always print enough exact native evidence before classification.
+        print("STAGE0_PREINSTALL_NATIVE_OBSERVATION=" + json.dumps({
+            "pkg_add_exit_code": attempted.returncode,
+            "pkg_add_stdout_tail": attempted.stdout[-900:],
+            "pkg_add_stderr_tail": attempted.stderr[-900:],
+            "installed_after": installed,
+            "payload_after": (payload.decode("ascii") if payload is not None else None),
+            "hook_trace": lines,
+        }, sort_keys=True), flush=True)
         outcome = classify(attempted.returncode, installed, payload, lines)
         return {
             "schema": 1, "status": "OBSERVED_INCOMING_PRE_INSTALL_REFUSAL_PKG_OUTCOME",
