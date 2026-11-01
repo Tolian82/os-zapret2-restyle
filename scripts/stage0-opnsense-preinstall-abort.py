@@ -48,7 +48,7 @@ def phase_hook(trace, role, phase):
     line = role + ":" + phase
     if role == "new" and phase == "pre-install":
         line = REFUSAL_LINE
-    script = "#!/bin/sh\nprintf '%s\\n' '" + line + "' >> '" + str(trace) + "'\n"
+    script = "#!/bin/sh\n/bin/echo '" + line + "' >> '" + str(trace) + "'\n"
     return script + ("exit 73\n" if line == REFUSAL_LINE else "exit 0\n")
 
 
