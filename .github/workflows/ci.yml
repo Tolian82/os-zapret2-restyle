@@ -101,7 +101,7 @@ jobs:
             stage0_pkg_scheduler=true
           fi
           stage0_historical_fd9=false
-          if printf '%s\n' "${changed}" | grep -Eq '^scripts/(stage0-archived-hooks-native-fd9|test-stage0-archived-hooks-native-fd9)[.]py$'; then
+          if printf '%s\n' "${changed}" | grep -Eq '^scripts/(stage0-archived-hooks-native-fd9|test-stage0-archived-hooks-native-fd9|stage0-installed-pkgdb-native|test-stage0-installed-pkgdb-native)[.]py$'; then
             stage0_historical_fd9=true
           fi
           echo "stage0_historical_fd9=${stage0_historical_fd9}" >> "${GITHUB_OUTPUT}"
@@ -207,6 +207,8 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-archived-hooks-native-fd9.py scripts/test-stage0-archived-hooks-native-fd9.py
           python3.13 scripts/test-stage0-archived-hooks-native-fd9.py -v
+          python3.13 -m py_compile scripts/stage0-installed-pkgdb-native.py scripts/test-stage0-installed-pkgdb-native.py
+          python3.13 scripts/test-stage0-installed-pkgdb-native.py -v
       - name: Execute original published 0.6.2_1 hooks using real lockf in disposable FreeBSD 15.1
         uses: vmactions/freebsd-vm@v1
         with:
@@ -219,6 +221,9 @@ jobs:
             /usr/local/bin/python3.13 scripts/stage0-archived-hooks-native-fd9.py \
               --archive stage0-historical-0.6.2_1.pkg \
               --json stage0-historical-real-fd9.json
+            /usr/local/bin/python3.13 scripts/stage0-installed-pkgdb-native.py \
+              --disposable-freebsd-vm \
+              --archive stage0-historical-0.6.2_1.pkg
       - name: Preserve actual historical four-hook and native FD9 evidence
         if: always()
         uses: actions/upload-artifact@v4
