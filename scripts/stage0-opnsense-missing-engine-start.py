@@ -49,7 +49,10 @@ def classify_start(result, before, after):
     need(before.get('safe_pkg_transaction_authorized') is False and
          after.get('safe_pkg_transaction_authorized') is False,
          'UNSAFE_PREPKG_AUTHORIZATION_OBSERVED')
-    need(result.returncode == 1, 'REAL_START_NOT_REFUSED_AS_EXPECTED')
+    need(result.returncode == 1,
+         'REAL_START_NOT_REFUSED_AS_EXPECTED:rc=' + str(result.returncode) +
+         ':stderr=' + repr(result.stderr.strip()[:240]) +
+         ':stdout=' + repr(result.stdout.strip()[:100]))
     need(ERROR in result.stderr and 'reinstall the plugin' in result.stderr,
          'REAL_START_DIAGNOSTIC_CHANGED')
     need(not result.stdout.strip(), 'UNEXPECTED_START_STDOUT')
