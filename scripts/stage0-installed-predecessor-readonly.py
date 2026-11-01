@@ -55,6 +55,20 @@ def archive_data(path):
     return old, run("tar", "-xOf", str(path), matches[0])
 
 
+def installed_manifest_from_json(raw):
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        raise Refusal("INSTALLED_RAW_MANIFEST_NOT_JSON") from None
+    if isinstance(parsed, list):
+        if len(parsed) != 1 or not isinstance(parsed[0], dict):
+            raise Refusal("INSTALLED_RAW_MANIFEST_NOT_EXACTLY_ONE_PACKAGE")
+        parsed = parsed[0]
+    if not isinstance(parsed, dict):
+        raise Refusal("INSTALLED_RAW_MANIFEST_NOT_OBJECT")
+    return parsed
+
+
 def verify_data(archived, installed, archived_service, installed_service, owner,
                 mode, product, pkg_abi, guest):
     if product != "26.7":
@@ -63,9 +77,21 @@ def verify_data(archived, installed, archived_service, installed_service, owner,
         raise Refusal("UNQUALIFIED_PACKAGE_ABI")
     if not guest or guest.lower() in ("none", "unknown", ""):
         raise Refusal("NO_VIRTUAL_GUEST_WITNESS")
+    if not isinstance(archived, dict) or archived.get("abi") != ABI:
+        raise Refusal("ARCHIVE_PACKAGE_IDENTITY_MISMATCH")
+    if not isinstance(installed, dict):
+        raise Refusal("INSTALLED_PACKAGE_IDENTITY_MISMATCH")
+    # pkg's installed raw JSON may omit the archive "abi" field; in that
+    # case require its arch token to match the immutable archived manifest.
+    installed_abi = installed.get("abi")
+    if installed_abi is None:
+        archived_arch = archived.get("arch")
+        if not isinstance(archived_arch, str) or not archived_arch or installed.get("arch") != archived_arch:
+            raise Refusal("INSTALLED_PACKAGE_IDENTITY_ARCH_MISMATCH")
+    elif installed_abi != ABI:
+        raise Refusal("INSTALLED_PACKAGE_IDENTITY_ABI_MISMATCH")
     for item, manifest in (("ARCHIVE", archived), ("INSTALLED", installed)):
-        if not isinstance(manifest, dict) or any(manifest.get(k) != v for k, v in
-                (("name", NAME), ("version", VERSION), ("abi", ABI))):
+        if manifest.get("name") != NAME or manifest.get("version") != VERSION:
             raise Refusal(item + "_PACKAGE_IDENTITY_MISMATCH")
         hooks = manifest.get("scripts")
         if not isinstance(hooks, dict) or any(
@@ -103,10 +129,8 @@ def run_guest(archive, expected_hostname):
     pkg_abi = run("pkg", "config", "ABI").decode().strip()
     guest = run("sysctl", "-n", "kern.vm_guest").decode().strip()
     old, payload = archive_data(archive)
-    try:
-        current = json.loads(run("pkg", "info", "-R", "--raw-format", "json", NAME))
-    except (TypeError, ValueError):
-        raise Refusal("INSTALLED_RAW_MANIFEST_NOT_JSON") from None
+    current = installed_manifest_from_json(
+        run("pkg", "info", "-R", "--raw-format", "json", NAME))
     service = Path(SERVICE)
     info = service.lstat()  # Do not follow symlinks to unrelated files.
     if not stat.S_ISREG(info.st_mode):
