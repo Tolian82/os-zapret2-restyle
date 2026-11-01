@@ -32,6 +32,30 @@ class NativePkgDBContract(unittest.TestCase):
             self.assertEqual(list(meta["files"]), [str(path)])
             self.assertNotIn("/usr/local/opnsense", str(path))
 
+    def test_native_raw_json_shape_is_bounded(self):
+        import json
+        manifest = mod.fixture_manifest(Path("/tmp/guest/mock-service.sh"), b"#!/bin/sh\nexit 0\n")
+        for data in (manifest, [manifest]):
+            self.assertEqual(mod.pre.installed_manifest_from_json(json.dumps(data)), manifest)
+        for data in ([], [manifest, manifest], "unexpected"):
+            with self.subTest(data=data), self.assertRaises(mod.pre.Refusal):
+                mod.pre.installed_manifest_from_json(json.dumps(data))
+
+    def test_installed_abi_falls_back_to_exact_archive_arch(self):
+        import copy
+        archived = mod.fixture_manifest(Path("/tmp/guest/mock-service.sh"), b"#!/bin/sh\nexit 0\n")
+        installed = copy.deepcopy(archived)
+        del installed["abi"]
+        result = mod.pre.verify_data(archived, installed, b"test", b"test",
+                                     mod.pre.NAME + "-" + mod.pre.VERSION, 0o755,
+                                     "26.7", mod.pre.ABI, "fixture-vm")
+        self.assertEqual(result["status"], "PASS_READ_ONLY_PROVENANCE")
+        installed["arch"] = "wrong"
+        with self.assertRaisesRegex(mod.pre.Refusal, "ARCH_MISMATCH"):
+            mod.pre.verify_data(archived, installed, b"test", b"test",
+                                mod.pre.NAME + "-" + mod.pre.VERSION, 0o755,
+                                "26.7", mod.pre.ABI, "fixture-vm")
+
     def test_digest_fails_before_any_pkg_operation(self):
         with tempfile.TemporaryDirectory() as d:
             archive = Path(d) / "incorrect.pkg"
