@@ -1,0 +1,43 @@
+name: Stage 0 real original predecessor fresh install on disposable OPNsense
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-installed-predecessor.py
+      - scripts/test-stage0-opnsense-installed-predecessor.py
+      - scripts/stage0-installed-predecessor-readonly.py
+      - scripts/stage0-opnsense-guest-readonly.py
+      - .github/workflows/stage0-opnsense-installed-predecessor.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installed-predecessor:
+    name: Real OPNsense 26.7 original pkg fresh install and provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Offline real-hook install safety preflight
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-installed-predecessor.py scripts/test-stage0-opnsense-installed-predecessor.py
+          python3.13 scripts/test-stage0-opnsense-installed-predecessor.py -v
+      - name: Install authentic published 0.6.2_1 with original hooks and verify pkgdb on disposable OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3 scripts/stage0-opnsense-installed-predecessor.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
