@@ -343,6 +343,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-hook-lifecycle-audit.py scripts/test-stage0-hook-lifecycle-audit.py
           python3.13 scripts/test-stage0-hook-lifecycle-audit.py -v
+      - name: Verify installed predecessor provenance refusal contracts (offline only)
+        run: |
+          python3.13 -m py_compile scripts/stage0-installed-predecessor-readonly.py scripts/test-stage0-installed-predecessor-readonly.py
+          python3.13 scripts/test-stage0-installed-predecessor-readonly.py -v
       - name: Preflight read-only OPNsense target witness without appliance
         run: sh scripts/test-stage0-target-opnsense-readonly.sh
       - name: Record full tracked path/mode/blob and active path/line evidence
