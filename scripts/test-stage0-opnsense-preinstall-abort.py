@@ -56,7 +56,7 @@ class NativeIncomingRefusal(unittest.TestCase):
 
     def test_guest_identity_command_uses_supported_product_abi_flag(self):
         with mock.patch.object(s, "invoke", return_value=type("R", (), {
-                 "returncode": 0, "stdout": "26.7\\n"})()) as command:
+                 "returncode": 0, "stdout": "26.7\n"})()) as command:
             self.assertEqual(s.successful(["opnsense-version", "-a"]).strip(), "26.7")
             command.assert_called_once_with(["opnsense-version", "-a"], None)
 
