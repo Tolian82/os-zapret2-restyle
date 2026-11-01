@@ -233,6 +233,10 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage0-configd-callpath-audit.py scripts/test-stage0-configd-callpath-audit.py
           python3.13 scripts/test-stage0-configd-callpath-audit.py
+      - name: Test OPNsense isolated signed catalog and installed ELF target witness (no network)
+        run: |
+          python3.13 -m py_compile scripts/stage0-target-trust-runtime.py scripts/test-stage0-target-trust-runtime.py
+          python3.13 scripts/test-stage0-target-trust-runtime.py -v
       - name: Test legacy FreeBSD.conf read-only ownership-refusal scenarios
         run: |
           python3.13 -m py_compile scripts/stage0-legacy-repo-ownership.py scripts/test-stage0-legacy-repo-ownership.py
