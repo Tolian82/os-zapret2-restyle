@@ -38,7 +38,7 @@ def invoke(argv, env=None, timeout=90):
 
 def successful(argv, env=None):
     result = invoke(argv, env)
-    require(result.returncode == 0, "NATIVE_PKG_SETUP_FAILED:" + argv[0] + ":" + argv[1])
+    require(result.returncode == 0, "NATIVE_COMMAND_FAILED:" + " ".join(argv[:2]))
     return result.stdout
 
 
@@ -97,7 +97,7 @@ def classify(exit_code, installed, payload, trace):
 def run_vm():
     require(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
             os.uname().machine == "amd64", "ONLY_ROOT_DISPOSABLE_OPNSENSE_AMD64")
-    version = successful(["opnsense-version"]).strip()
+    version = successful(["opnsense-version", "-a"]).strip()
     require(version.startswith("26.7"), "WRONG_OPNSENSE_GUEST")
     require(successful(["pkg", "config", "ABI"]).strip() == "FreeBSD:15:amd64",
             "WRONG_PKG_ABI")
