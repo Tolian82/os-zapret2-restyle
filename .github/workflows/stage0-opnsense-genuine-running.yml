@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Compile and run 20 strict CI runner contracts
+      - name: Compile and run 22 strict CI runner contracts
         run: |
           python3.13 -m py_compile scripts/stage0-opnsense-genuine-running.py scripts/test-stage0-opnsense-genuine-running.py
           python3.13 scripts/test-stage0-opnsense-genuine-running.py -v

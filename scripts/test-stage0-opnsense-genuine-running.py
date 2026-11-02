@@ -74,6 +74,39 @@ class TestGenuineRunning(unittest.TestCase):
                 with self.assertRaisesRegex(m.Refusal,'NONEMPTY'):
                     m.original_template_hostlists()
 
+    def fake_pinned_source_and_target(self, root):
+        source=root/'upstream'
+        target=root/'runtime'
+        (source/'binaries/my').mkdir(parents=True)
+        engine=source/'binaries/my/dvtws2'
+        engine.write_bytes(b'actual binary fixture');engine.chmod(0o755)
+        (source/'lua').mkdir()
+        for name in ('zapret-lib.lua','zapret-antidpi.lua','zapret-auto.lua'):
+            (source/'lua'/name).write_bytes(b'-- fixture')
+        (source/'files/fake').mkdir(parents=True)
+        (source/'files/fake/example.bin').write_bytes(b'fixture')
+        target.mkdir()
+        for name in ('zapret.conf','hostlist.txt','hostlist-exclude.txt'):
+            (target/name).write_bytes(b'')
+        return source,target
+
+    def test_pinned_source_fake_directory_is_copied(self):
+        with tempfile.TemporaryDirectory() as d:
+            source,target=self.fake_pinned_source_and_target(Path(d))
+            with mock.patch.object(m,'RUNTIME',target),mock.patch.object(m,'ENGINE',target/'binaries/my/dvtws2'):
+                digest=m.stage_engine(source)
+            self.assertEqual(len(digest),64)
+            self.assertEqual((target/'files/fake/example.bin').read_bytes(),b'fixture')
+
+    def test_missing_pinned_source_fake_directory_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            source,target=self.fake_pinned_source_and_target(Path(d))
+            import shutil
+            shutil.rmtree(source/'files/fake')
+            with mock.patch.object(m,'RUNTIME',target),mock.patch.object(m,'ENGINE',target/'binaries/my/dvtws2'):
+                with self.assertRaisesRegex(m.Refusal,'GENUINE_UPSTREAM_FAKE_BLOB_DIRECTORY_MISSING'):
+                    m.stage_engine(source)
+
     def test_test_model_voice_absent(self):
         root=m.insert_test_model(ET.Element('opnsense'))
         self.assertIsNone(root.find('./OPNsense/Zapret/voice'))

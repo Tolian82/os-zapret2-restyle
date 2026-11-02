@@ -171,6 +171,24 @@ def stage_engine(upstream):
         new.parent.chmod(0o755)
         shutil.copyfile(old, new)
         new.chmod(0o755 if rel.endswith('/dvtws2') else 0o644)
+    # The original backend blob resolver checks this exact upstream
+    # directory even when the one test strategy has no external blob.
+    # Ship authentic pinned source resources, never a fabricated fixture.
+    fake = upstream / 'files/fake'
+    need(fake.is_dir() and not fake.is_symlink(),
+         'GENUINE_UPSTREAM_FAKE_BLOB_DIRECTORY_MISSING')
+    target = RUNTIME / 'files/fake'
+    need(not target.exists() and not target.is_symlink(),
+         'PREEXISTING_FAKE_BLOB_DIRECTORY_REFUSED')
+    need(all(x.is_file() and not x.is_symlink() for x in fake.iterdir()),
+         'NONREGULAR_UPSTREAM_FAKE_BLOB_INPUT')
+    shutil.copytree(fake, target, symlinks=False)
+    for item in (RUNTIME / 'files', target):
+        item.chmod(0o755)
+    for item in target.iterdir():
+        item.chmod(0o644)
+    need(target.is_dir() and len(list(target.iterdir())) == len(list(fake.iterdir())),
+         'UPSTREAM_BLOB_COPY_MISMATCH')
     return hashlib.sha256(ENGINE.read_bytes()).hexdigest()
 
 
