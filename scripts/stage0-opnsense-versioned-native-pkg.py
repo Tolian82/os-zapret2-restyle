@@ -228,7 +228,7 @@ def run(archive):
         failed = pkg.faulted_real_pkg_add(successor)
         observed = pkg.classify_fault(failed)
         after_fault = installed_successor(
-            successor, digest, service, original, old, inspector)
+            successor, digest, service, original, providers, old, inspector)
         pkg.same_config(original_config)
         # Independently admitted compensation, not native pkg atomicity.
         need(hashlib.sha256(archive.read_bytes()).hexdigest() ==
