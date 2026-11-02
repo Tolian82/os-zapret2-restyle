@@ -59,7 +59,26 @@ def qualify():
          "FRESH_26_7_OPNSENSE_GUEST_UNQUALIFIED")
 
 
-def compare_manifest(original, candidate):
+def provider_versions(original):
+    """Resolve only the old manifest dependency names against actual pkgdb."""
+    deps = original.get("deps")
+    need(isinstance(deps, dict), "OLD_ARCHIVE_DEPENDENCIES_INVALID")
+    result = {}
+    for name, item in sorted(deps.items()):
+        need(isinstance(name, str) and name and
+             isinstance(item, dict) and
+             isinstance(item.get("origin"), str) and item.get("origin"),
+             "OLD_ARCHIVE_DEPENDENCY_UNQUALIFIED")
+        p = command(["pkg", "query", "%n|%o|%v", name], timeout=20)
+        parts = p.stdout.strip().split("|")
+        need(p.returncode == 0 and len(parts) == 3 and
+             parts[0] == name and parts[1] == item["origin"] and parts[2],
+             "INSTALLED_OPNSENSE_DEPENDENCY_PROVIDER_MISMATCH:" + name)
+        result[name] = {"origin": parts[1], "version": parts[2]}
+    return result
+
+
+def compare_manifest(original, candidate, providers=None):
     need(candidate.get("name") == NAME and candidate.get("version") == TEST_VERSION,
          "TEST_ARCHIVE_IDENTITY_MISMATCH")
     for field in ("origin", "arch", "abi", "prefix"):
@@ -73,10 +92,21 @@ def compare_manifest(original, candidate):
     need(candidate.get("files") == original.get("files") and
          isinstance(original.get("files"), dict) and bool(original["files"]),
          "TEST_ARCHIVE_FILE_MANIFEST_CHANGED")
-    need(candidate.get("deps") == original.get("deps"),
-         "TEST_ARCHIVE_DEPENDENCIES_CHANGED:old=" +
-         json.dumps(original.get("deps"), sort_keys=True)[:350] +
-         ":created=" + json.dumps(candidate.get("deps"), sort_keys=True)[:350])
+    old_deps, new_deps = original.get("deps"), candidate.get("deps")
+    need(isinstance(old_deps, dict) and isinstance(new_deps, dict) and
+         set(old_deps) == set(new_deps), "TEST_ARCHIVE_DEPENDENCIES_CHANGED")
+    for name, old_item in old_deps.items():
+        new_item = new_deps[name]
+        if new_item == old_item:
+            continue
+        # Actual OPNsense pkg create upgrades the historical placeholder
+        # dependency version "0" to the INSTALLED OPNsense package version.
+        # This exact normalization was observed with python313 0 -> 3.13.14.
+        # Do not permit any name/origin change or arbitrary version drift.
+        need(providers is not None and old_item.get("version") == "0" and
+             old_item.get("origin") == new_item.get("origin") and
+             new_item == providers.get(name),
+             "TEST_ARCHIVE_DEPENDENCIES_CHANGED:" + name)
 
 
 def build_test_successor(archive, work, old):
@@ -99,11 +129,12 @@ def build_test_successor(archive, work, old):
          stat.S_IMODE(original_path.lstat().st_mode) == 0o755 and
          original_path.read_bytes() == old_service,
          "DERIVED_STAGING_SERVICE_NOT_AUTHENTIC")
+    providers = provider_versions(original)
     candidate = dict(original)
     candidate["version"] = TEST_VERSION
     # Preserve original install payload, dependencies and four hook bodies.
     # The result exercises pkg version replacement, not new runtime behavior.
-    compare_manifest(original, candidate)
+    compare_manifest(original, candidate, providers)
     m = work / "successor-manifest.json"
     m.write_text(json.dumps(candidate, sort_keys=True), encoding="utf-8")
     made = command(["pkg", "create", "-M", str(m), "-r", str(root), "-o", str(dest)])
@@ -119,19 +150,19 @@ def build_test_successor(archive, work, old):
         actual = json.loads(raw.stdout)
     except ValueError:
         raise Refusal("DERIVED_ARCHIVE_MANIFEST_INVALID") from None
-    compare_manifest(original, actual)
+    compare_manifest(original, actual, providers)
     sha = hashlib.sha256(package.read_bytes()).hexdigest()
-    return package, sha, old_service, original
+    return package, sha, old_service, original, providers
 
 
-def installed_successor(archive, sha, service_bytes, original, old, inspector):
+def installed_successor(archive, sha, service_bytes, original, providers, old, inspector):
     need(hashlib.sha256(archive.read_bytes()).hexdigest() == sha,
          "DERIVED_ARCHIVE_CHANGED")
     record = command(["pkg", "info", "-R", "--raw-format", "json", NAME])
     need(record.returncode == 0, "NEW_VERSION_PKGDB_MISSING")
     current = old.installed_manifest_from_json(record.stdout)
     # Test-only generated package uses exactly the previous hooks/files.
-    compare_manifest(original, current)
+    compare_manifest(original, current, providers)
     service = Path(old.SERVICE)
     info = service.lstat()
     need(stat.S_ISREG(info.st_mode) and not service.is_symlink() and
@@ -175,7 +206,7 @@ def run(archive):
     original_config = pkg.immutable_config()
     pkg.snapshot(archive, inspector)
     with tempfile.TemporaryDirectory(prefix="stage0-versioned-native-pkg-") as td:
-        successor, digest, service, original = build_test_successor(
+        successor, digest, service, original, providers = build_test_successor(
             archive, Path(td), old)
         need(old.run_guest(archive, hostname) == initial,
              "SUCCESSOR_BUILD_MUTATED_ORIGINAL_PKG")
@@ -183,7 +214,7 @@ def run(archive):
         normal = pkg.real_pkg_add(successor)
         pkg.check_success(normal)
         positive = installed_successor(
-            successor, digest, service, original, old, inspector)
+            successor, digest, service, original, providers, old, inspector)
         pkg.same_config(original_config)
         # Compensate the successful test-only version transition to old.
         back = pkg.real_pkg_add(archive)
