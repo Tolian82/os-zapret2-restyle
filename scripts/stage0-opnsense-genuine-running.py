@@ -269,11 +269,19 @@ def run(archive):
     snapshot, mode, uid, gid, xml = original_config()
     generated_old, generated_mode, generated_owner = original_generated()
     saved_hostlists = original_template_hostlists()
+    runtime_info = RUNTIME.lstat()
+    need(stat.S_ISDIR(runtime_info.st_mode) and not RUNTIME.is_symlink(),
+         'NATIVE_RUNTIME_ROOT_NOT_REGULAR_DIRECTORY')
+    runtime_initial_mode = stat.S_IMODE(runtime_info.st_mode)
     with tempfile.TemporaryDirectory(prefix='stage0-owned-real-start-') as td:
         folder=Path(td)
         upstream.build(folder)
         upstream_sha = upstream.PIN
         engine_sha = stage_engine(folder/'upstream')
+        # Genuine upstream Setup makes this directory traversable by nobody;
+        # the package-only template may have a restrictive original mode.
+        # Only the disposable guest is changed, with exact mode restoration.
+        RUNTIME.chmod(0o755)
         try:
             generated = ET.tostring(insert_test_model(xml), encoding='utf-8')
             write_config(generated,mode,owner=(uid,gid))
@@ -310,6 +318,9 @@ def run(archive):
                 if path.is_symlink() or not path.is_file() or path.read_bytes().strip():
                     raise Refusal('TEMPLATE_HOSTLIST_FOREIGN_CHANGE_REFUSE_RESTORE')
                 write_config(before, saved_mode, path, owner)
+            RUNTIME.chmod(runtime_initial_mode)
+            need(stat.S_IMODE(RUNTIME.lstat().st_mode) == runtime_initial_mode,
+                 'ORIGINAL_RUNTIME_DIRECTORY_MODE_NOT_RESTORED')
     need(identity == original.run_guest(archive,hostname),
          'ORIGINAL_INSTALLED_PKG_CHANGED_AFTER_RUNNING_EXPERIMENT')
     need(inspector.snapshot(archive)['status']=='PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
