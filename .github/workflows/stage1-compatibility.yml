@@ -44,6 +44,11 @@ jobs:
           sh -n scripts/compatibility-bootstrap.sh
           python3.13 scripts/test-stage1-native-compatibility.py -v
           python3.13 scripts/stage1-native-policy-static.py
+          python3.13 scripts/test-native-opnsense-package.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-stopped-upgrade.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-running-upgrade.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-force-reinstall.py -v
           python3.13 scripts/validate-compatibility.py
           python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:15:amd64 --architecture amd64 --python-version 3.13.16
           if python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:16:amd64 --architecture amd64 --python-version 3.13.16 > /tmp/forbidden-abi.stdout 2>/tmp/forbidden-abi.stderr; then
