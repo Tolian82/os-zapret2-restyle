@@ -1,0 +1,49 @@
+name: Stage 2 genuine STOPPED predecessor to official native OPNsense package
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/native-opnsense-package.py
+      - scripts/stage2-opnsense-real-native-clean-install.py
+      - scripts/stage2-opnsense-real-native-stopped-upgrade.py
+      - scripts/test-stage2-opnsense-real-native-stopped-upgrade.py
+      - .github/workflows/stage2-real-native-stopped-upgrade.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-stopped-replacement:
+    name: Authentic published STOPPED old pkg to genuine native Mk successor on isolated OPNsense
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Fast negative contracts before genuine package replacement
+        run: |
+          python3.13 -m py_compile scripts/stage2-opnsense-real-native-stopped-upgrade.py scripts/test-stage2-opnsense-real-native-stopped-upgrade.py
+          python3.13 scripts/test-stage2-opnsense-real-native-stopped-upgrade.py -v
+          python3.13 scripts/test-native-opnsense-package.py -v
+      - name: Actual archived STOPPED package to real official-native successor
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-stopped-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
