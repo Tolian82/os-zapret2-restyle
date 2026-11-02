@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline focused Stage 1.05-1.09 native integration and refusal contracts."""
+import ast
 import hashlib
 import importlib.util
 from pathlib import Path
@@ -96,6 +97,9 @@ class Stage1NativePolicyTests(unittest.TestCase):
         build = (HERE / "native-opnsense-package.py").read_text()
         make = (HERE.parent / "Makefile").read_text()
         self.assertNotIn('ABI = "FreeBSD:15:amd64"', build)
+        self.assertFalse(any(isinstance(node, ast.Name) and node.id == "ABI"
+                             for node in ast.walk(ast.parse(build))),
+                         "stale unbound ABI result reference in native builder")
         self.assertNotIn('result["PLUGIN_ABI"] == "26.7"', build)
         self.assertNotIn('manifest.get("arch") == "freebsd:15:x86:64"', build)
         self.assertNotIn("python313", make)
