@@ -21,7 +21,7 @@ DISALLOWED = {
     "INDEPENDENT_PRODUCT_ABI_ASSIGNMENT": re.compile(
         r"(?m)^\s*(?:PRODUCT_ABI|OPNSENSE_ABI|ABI)\s*=\s*[\"']"),
     "INDEPENDENT_MK_PRODUCT_ABI_MATCH": re.compile(
-        r'result\[\"PLUGIN_ABI\"\]\s*==\s*[\"'][0-9]+\.'),
+        r"result\[\W?PLUGIN_ABI\W?\]\s*==\s*['\"]\d+\.")
 }
 
 
