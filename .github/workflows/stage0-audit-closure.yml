@@ -1,9 +1,6 @@
 name: Stage 0 audit closure evidence-only contract
 
 on:
-  push:
-    branches:
-      - stage0/closure-evidence-and-ci-v0.6.2_66
   pull_request:
     paths:
       - Makefile
