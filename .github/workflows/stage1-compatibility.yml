@@ -1,9 +1,6 @@
 name: Stage 1 OPNsense FreeBSD compatibility source policy
 
 on:
-  push:
-    branches:
-      - stage1/staged-policy-native-abi-v0.6.2_68
   pull_request:
     paths:
       - compatibility.json
@@ -20,6 +17,8 @@ on:
       - docs/PROJECT_STATE.md
       - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
       - docs/verification/evidence/2026-11-02-v0.6.2_67-stage1-compatibility-schema.md
+      - docs/verification/evidence/2026-11-02-v0.6.2_68-stage1-native-policy-parity.md
+      - .github/workflows/ci.yml
   workflow_dispatch:
 
 permissions:
