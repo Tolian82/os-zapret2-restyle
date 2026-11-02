@@ -41,6 +41,18 @@ class Stage0ClosureTests(unittest.TestCase):
             with self.assertRaisesRegex(m.Refusal,"FOREIGN_FILE_OWNERSHIP_MISCLASSIFIED"):
                 m.verify(m.ROOT)
 
+    def test_unqualified_future_plan_state_rejected(self):
+        original=m.read
+        def fake(root,path):
+            content=original(root,path)
+            if path==Path("docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"):
+                return content.replace("**Stage 1 status: SOURCE/NATIVE-CI ACCEPTED**",
+                                       "**Stage 1 status: UNKNOWN**")
+            return content
+        with patch.object(m,"read",side_effect=fake):
+            with self.assertRaisesRegex(m.Refusal,"WRONG_PLAN_STATE"):
+                m.verify(m.ROOT)
+
     def test_no_mutation_executables(self):
         s=S.read_text()
         for forbidden in ("subprocess.run(", "os.system(", "pkg delete ", "pkg add ",
