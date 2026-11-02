@@ -74,7 +74,9 @@ def compare_manifest(original, candidate):
          isinstance(original.get("files"), dict) and bool(original["files"]),
          "TEST_ARCHIVE_FILE_MANIFEST_CHANGED")
     need(candidate.get("deps") == original.get("deps"),
-         "TEST_ARCHIVE_DEPENDENCIES_CHANGED")
+         "TEST_ARCHIVE_DEPENDENCIES_CHANGED:old=" +
+         json.dumps(original.get("deps"), sort_keys=True)[:350] +
+         ":created=" + json.dumps(candidate.get("deps"), sort_keys=True)[:350])
 
 
 def build_test_successor(archive, work, old):
