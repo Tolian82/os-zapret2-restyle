@@ -1,0 +1,44 @@
+name: Stage 0 actual old OPNsense owned running and stop
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-genuine-running.py
+      - scripts/test-stage0-opnsense-genuine-running.py
+      - .github/workflows/stage0-opnsense-genuine-running.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  genuine-old-running:
+    name: Authentic old Start Status Stop with pinned real upstream engine on isolated lo0
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Compile and run 32 strict CI runner contracts
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-genuine-running.py scripts/test-stage0-opnsense-genuine-running.py
+          python3.13 scripts/test-stage0-opnsense-genuine-running.py -v
+      - name: Native disposable OPNsense 26.7 actual old running and stop
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git gmake pkgconf lua54
+            /usr/local/bin/pkgconf --exists lua-5.4
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 /usr/local/bin/python3 scripts/stage0-opnsense-genuine-running.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
