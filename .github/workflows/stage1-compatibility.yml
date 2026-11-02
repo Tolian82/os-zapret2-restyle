@@ -1,9 +1,6 @@
 name: Stage 1 OPNsense FreeBSD compatibility source policy
 
 on:
-  push:
-    branches:
-      - ci/native-package-classifier-v0.6.2_69
   pull_request:
     paths:
       - compatibility.json
