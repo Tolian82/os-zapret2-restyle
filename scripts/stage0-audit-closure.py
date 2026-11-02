@@ -39,7 +39,9 @@ def verify(root):
          "package candidate: `os-zapret2-restyle-0.6.2_" + rev.group(1) + ".pkg`" in state,"WRONG_STATE")
     need("**Stage 0 audit status: CLOSED**" in plan and
          ("Stage 1 READY FOR IMPLEMENTATION" in plan or
-          "Stage 1 IN PROGRESS" in plan),"WRONG_PLAN_STATE")
+          "Stage 1 IN PROGRESS" in plan or
+          "**Stage 1 status: SOURCE/NATIVE-CI ACCEPTED**" in plan),
+         "WRONG_PLAN_STATE")
     need("**Решение:** `CLOSED_AUDIT_ONLY`" in e and
          "Stage 0 AUDIT CLOSED" in e,"NOT_AUDIT_ONLY")
     rows=re.findall(r"(?m)^\| (0\.\d{2}) \| (AUDITED|NEGATIVE_CLASSIFIED) \|",e)
