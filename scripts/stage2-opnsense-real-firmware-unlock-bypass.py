@@ -46,6 +46,14 @@ def qualify():
              (locked, unsafe, stopped, native, clean)),
          "CURRENT_NATIVE_SOURCE_REVISION_MISMATCH")
 
+def package_locked():
+    """Query the exact installed package metadata, not list exit semantics."""
+    result = locked.pkg(["query", "%k", NAME])
+    value = result.stdout.strip()
+    need(result.returncode == 0 and value in ("0", "1"),
+         "TARGET_PACKAGE_LOCK_METADATA_UNAVAILABLE")
+    return value == "1"
+
 def wait_until_unlocked(predicate, *, attempts=80, delay=0.25, sleep=time.sleep):
     """Bounded polling: stock configd firmware action launches via daemon -f."""
     need(attempts >= 1 and attempts <= 80 and delay >= 0 and delay <= 0.25,
@@ -108,7 +116,7 @@ def execute(archive):
         need(status.returncode == 2 and unsafe.only_orphan_loopback_divert(),
              "OLD_STATUS_2_OR_ORPHAN_NOT_CONFIRMED")
         lock_result = locked.pkg(["lock", "-y", NAME])
-        need(lock_result.returncode == 0 and locked.locked(),
+        need(lock_result.returncode == 0 and locked.locked() and package_locked(),
              "REAL_INSTALLED_OLD_LOCK_UNAVAILABLE")
         pkg_before = locked.installed_record()
         need(unsafe.installed_identity() == before_id,
@@ -117,8 +125,8 @@ def execute(archive):
                             NAME], timeout=30)
         # A zero configctl exit is just command submission, not unlock proof.
         need(unlock.returncode == 0, "CONFIGD_STOCK_UNLOCK_SUBMISSION_FAILED")
-        unlocked = wait_until_unlocked(locked.locked)
-        need(unlocked and not locked.locked(),
+        unlocked = wait_until_unlocked(package_locked)
+        need(unlocked and not package_locked(),
              "STOCK_CONFIGD_UNLOCK_NOT_OBSERVED")
         before_pkg_unchanged = (
             locked.installed_record() == pkg_before
