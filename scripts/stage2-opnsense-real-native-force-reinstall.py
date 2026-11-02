@@ -12,7 +12,7 @@ import sys
 import importlib.util
 
 HERE = Path(__file__).resolve().parent
-REVISION = "73"
+REVISION = "74"
 OPTIN = "ZAPRET2_STAGE2_REAL_SAME_VERSION_REINSTALL"
 
 
