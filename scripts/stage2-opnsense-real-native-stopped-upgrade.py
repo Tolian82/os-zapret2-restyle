@@ -102,6 +102,69 @@ def redacted_config_delta(before, after):
                                      a.find('OPNsense') is not b.find('OPNsense')}
 
 
+
+def prove_preserved_config(before, after):
+    """Allow solely OPNsense's plugin registration and revision metadata.
+
+    No unrelated Config field, sibling, plugin entry or foreign value may move.
+    """
+    try:
+        a = ET.fromstring(before)
+        b = ET.fromstring(after)
+    except ET.ParseError:
+        raise Refusal('REPLACEMENT_CONFIG_XML_INVALID') from None
+    need(a.tag == 'opnsense' and b.tag == 'opnsense',
+         'REPLACEMENT_CONFIG_ROOT_WRONG')
+    fa = a.find('system/firmware')
+    fb = b.find('system/firmware')
+    need(fa is not None and fb is not None,
+         'REPLACEMENT_EXISTING_FIRMWARE_MISSING')
+    pa, pb = fa.findall('plugins'), fb.findall('plugins')
+    need(len(pa) <= 1 and len(pb) == 1,
+         'REPLACEMENT_PLUGIN_REGISTRY_AMBIGUOUS')
+
+    def names(nodes):
+        raw = (nodes[0].text or '') if nodes else ''
+        entries = [x for x in raw.split(',') if x]
+        need(len(entries) == len(set(entries)) and
+             all(x.strip() == x and x for x in entries),
+             'REPLACEMENT_DUPLICATE_OR_MALFORMED_PLUGIN_LIST')
+        return entries
+
+    before_names = names(pa)
+    after_names = names(pb)
+    expected = set(before_names) | {native.NAME}
+    need(set(after_names) == expected and native.NAME in after_names and
+         (after_names == before_names or after_names == sorted(expected)),
+         'REPLACEMENT_FOREIGN_PLUGIN_REGISTRY_MODIFIED')
+
+    aa, bb = copy.deepcopy(a), copy.deepcopy(b)
+    for root in (aa, bb):
+        for revision in root.findall('revision'):
+            root.remove(revision)
+        firmware = root.find('system/firmware')
+        for node in firmware.findall('plugins'):
+            firmware.remove(node)
+
+    def strip_formatting(node):
+        if not (node.text or '').strip():
+            node.text = None
+        node.tail = None
+        for child in node:
+            strip_formatting(child)
+
+    strip_formatting(aa)
+    strip_formatting(bb)
+    need(ET.tostring(aa, encoding='utf-8') == ET.tostring(bb, encoding='utf-8'),
+         'REPLACEMENT_CONFIG_CHANGED_BEYOND_OFFICIAL_METADATA:' +
+         json.dumps(redacted_config_delta(before, after), sort_keys=True))
+    return {'plugin_names_preserved': True,
+            'plugin_registry_count': len(after_names),
+            'plugin_name_registered': True,
+            'all_non_registry_config_preserved': True,
+            'only_normal_revision_metadata_exempted': True}
+
+
 def check_old_archive(path):
     need(path.is_file() and not path.is_symlink(), 'OLD_ARCHIVE_NOT_REGULAR')
     archive, _service = old.archive_data(path)  # immutable published SHA
@@ -176,10 +239,7 @@ def execute(archive):
     status = clean.cold_status()
     runtime = verify_cold_runtime()
     config_after = Path('/conf/config.xml').read_bytes()
-    need(normalized_config(config_before) == normalized_config(config_after),
-         'OPNSENSE_CONFIG_CHANGED_BEYOND_REVISION_ON_STOPPED_REPLACEMENT:' +
-         json.dumps(redacted_config_delta(config_before, config_after),
-                    sort_keys=True))
+    registration = prove_preserved_config(config_before, config_after)
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_STOPPED_VERSION_REPLACEMENT',
             'tested_exact_project_sha': package['project_sha'],
             'native_source_package_sha256': expected_sha,
@@ -189,7 +249,7 @@ def execute(archive):
             'old_preflight': baseline['status'], 'actual_pkg': proof,
             'installed_files': files, 'installed_hook_bodies_verified': True,
             'installed_native_deps': pkgdb['deps'], 'new_service': status,
-            'new_runtime': runtime, 'config_preserved_except_revision': True,
+            'new_runtime': runtime, 'config_registry_and_other_fields_verified': registration,
             'original_old_predeinstall_execution_proven': False,
             'fd9_held_across_pkg_operation': False,
             'direct_privileged_pkg_bypass_prevented': False,
