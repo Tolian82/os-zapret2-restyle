@@ -12,6 +12,10 @@ spec = importlib.util.spec_from_file_location(
     "native_compatibility_candidate", HERE / "native-opnsense-package.py")
 native = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(native)
+guard_spec = importlib.util.spec_from_file_location(
+    "stage1_static_compatibility", HERE / "stage1-native-policy-static.py")
+guard = importlib.util.module_from_spec(guard_spec)
+guard_spec.loader.exec_module(guard)
 POLICY = native.validated_policy()
 TARGET = POLICY["supported_platforms"][0]
 
@@ -100,6 +104,24 @@ class Stage1NativePolicyTests(unittest.TestCase):
         self.assertIn('platform["freebsd_pkg_abi"]', build)
         self.assertIn('"pkg", "config", "ABI"', build)
         self.assertIn('"opnsense-version", "-a"', build)
+
+    def test_static_guard_rejects_new_competing_production_abi(self):
+        sources = {p: (native.ROOT / p).read_text()
+                   for p in guard.PRODUCTION}
+        self.assertEqual(guard.scan(sources)["status"],
+                         "PASS_SCOPED_NATIVE_POLICY_SINGLE_SOURCE")
+        for code, snippet in [
+            ("DUPLICATE_FREEBSD_ABI", 'ABI = "FreeBSD:16:amd64"'),
+            ("VERSIONED_PYTHON_EXECUTABLE", '/usr/local/bin/python3.14'),
+            ("INDEPENDENT_PRODUCT_ABI_ASSIGNMENT", 'PRODUCT_ABI = "27.1"'),
+            ("INDEPENDENT_MK_PRODUCT_ABI_MATCH",
+             'result["PLUGIN_ABI"] == "26.7"'),
+        ]:
+            changed = dict(sources)
+            changed["scripts/native-opnsense-package.py"] += "\\n" + snippet + "\\n"
+            with self.subTest(code=code), self.assertRaisesRegex(
+                    guard.Refusal, code):
+                guard.scan(changed)
 
     def test_python_independent_probe_no_missing_installed_manifest(self):
         sh = (HERE / "compatibility-bootstrap.sh").read_text()
