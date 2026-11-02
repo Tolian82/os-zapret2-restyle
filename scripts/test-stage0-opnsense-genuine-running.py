@@ -222,7 +222,7 @@ class TestGenuineRunning(unittest.TestCase):
     def test_residual_guard_not_skipped(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn('inspector.check_process_census(census)',source)
-        self.assertIn('POST_STOP_POSSIBLE_ZAPRET_PROCESS_PRESENT',source)
+        self.assertIn('POST_STOP_ORIGINAL_GUARD_ACCEPTED_RESIDUAL',source)
         self.assertIn("'-o', 'pid=', '-o', 'ppid='",source)
 
     def test_no_fake_kernel_cold_after_original_stop(self):
