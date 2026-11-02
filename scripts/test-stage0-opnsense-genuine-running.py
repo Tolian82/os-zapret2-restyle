@@ -159,6 +159,13 @@ class TestGenuineRunning(unittest.TestCase):
             self.assertEqual(path.read_bytes(),b'<opnsense/>')
             self.assertEqual(path.stat().st_mode & 0o777,0o640)
 
+    def test_temp_runtime_traversal_restored_contract(self):
+        source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
+        self.assertIn("runtime_initial_mode = stat.S_IMODE(runtime_info.st_mode)",source)
+        self.assertIn("RUNTIME.chmod(0o755)",source)
+        self.assertIn("RUNTIME.chmod(runtime_initial_mode)",source)
+        self.assertIn("ORIGINAL_RUNTIME_DIRECTORY_MODE_NOT_RESTORED",source)
+
     def test_config_write_not_follow_symlink(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn('stat.S_ISREG(info.st_mode)',source)

@@ -203,7 +203,13 @@ def bounded_running(service, expected_bin):
     stage = Path('/var/run/zapret2-execution.status')
     stage_tail = (stage.read_text(errors='replace')[-850:] if
                   stage.is_file() and not stage.is_symlink() else 'NO_STAGE')
-    need(rc == 0, 'REAL_START_FAILED:rc=' + str(rc) +
+    dirs = [Path('/usr/local'), Path('/usr/local/etc'), RUNTIME,
+            RUNTIME / 'lua', RUNTIME / 'lua/zapret-lib.lua']
+    ownership = [(str(path), oct(stat.S_IMODE(path.lstat().st_mode)),
+                  path.lstat().st_uid, path.lstat().st_gid)
+                 for path in dirs if path.exists()]
+    need(rc == 0, 'REAL_START_FAILED:paths=' + repr(ownership) +
+         ':rc=' + str(rc) +
          ':stdout_head=' + repr(out[:220]) +
          ':stdout_tail=' + repr(out[-250:]) +
          ':stderr_head=' + repr(err[:320]) +
