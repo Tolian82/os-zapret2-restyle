@@ -18,7 +18,7 @@ FUNCS = {'Refusal', 'need', 'normalized_config', 'check_old_archive',
 NODES = [node for node in TREE.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))
          and node.name in FUNCS]
 NS = {'copy': copy, 'ET': ET, 'Path': Path, 'os': os,
-      'OPTIN': 'ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE', 'REVISION': '71',
+      'OPTIN': 'ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE', 'REVISION': '72',
       'OLD_VERSION': '0.6.2_1', 'hashlib': hashlib, 'json': __import__('json')}
 exec(compile(ast.fix_missing_locations(ast.Module(body=NODES, type_ignores=[])),
              str(SOURCE), 'exec'), NS)

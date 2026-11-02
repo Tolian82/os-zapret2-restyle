@@ -7,6 +7,8 @@ on:
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/test-stage2-opnsense-real-native-clean-install.py
+      - scripts/stage2-packaged-configctl-readonly.py
+      - scripts/test-stage2-packaged-configctl-readonly.py
       - .github/workflows/stage2-real-native-clean-install.yml
   workflow_dispatch:
 
@@ -29,6 +31,8 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/stage2-opnsense-real-native-clean-install.py scripts/test-stage2-opnsense-real-native-clean-install.py
           python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
+          python3.13 -m py_compile scripts/stage2-packaged-configctl-readonly.py scripts/test-stage2-packaged-configctl-readonly.py
+          python3.13 scripts/test-stage2-packaged-configctl-readonly.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
       - name: Genuine source-build and clean pkg add in disposable OPNsense 26.7
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
@@ -45,3 +49,4 @@ jobs:
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_PACKAGED_CONFIGCTL_READONLY=1 /usr/local/bin/python3 scripts/stage2-packaged-configctl-readonly.py
