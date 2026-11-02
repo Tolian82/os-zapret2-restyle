@@ -72,6 +72,21 @@ class StoppedNativeContracts(unittest.TestCase):
         r = NS['prove_preserved_config'](before, after)
         self.assertTrue(r['all_non_registry_config_preserved'])
 
+
+    def test_existing_plugin_sorted_without_foreign_loss(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><system><firmware><plugins>os-zapret2-restyle,foo</plugins></firmware></system></opnsense>'
+        after = b'<opnsense><system><firmware><plugins>foo,os-zapret2-restyle</plugins></firmware></system></opnsense>'
+        result = NS['prove_preserved_config'](before, after)
+        self.assertEqual(result['plugin_registry_count'], 2)
+
+    def test_unrelated_new_registration_refused(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><system><firmware><plugins>foo</plugins></firmware></system></opnsense>'
+        after = b'<opnsense><system><firmware><plugins>foo,os-zapret2-restyle,bar</plugins></firmware></system></opnsense>'
+        with self.assertRaisesRegex(NS['Refusal'], 'FOREIGN_PLUGIN'):
+            NS['prove_preserved_config'](before, after)
+
     def test_foreign_plugin_removal_refused(self):
         NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
         before = b'<opnsense><system><firmware><plugins>foo,bar</plugins></firmware></system></opnsense>'
