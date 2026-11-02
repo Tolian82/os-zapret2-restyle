@@ -55,6 +55,25 @@ class TestGenuineRunning(unittest.TestCase):
                 self.assertEqual(m.original_generated()[0],path.read_bytes())
                 self.assertEqual(m.original_generated()[2][0],path.lstat().st_uid)
 
+    def test_empty_installed_template_hostlists_saved(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            (root/'hostlist.txt').write_bytes(b'\n')
+            (root/'hostlist-exclude.txt').write_bytes(b'')
+            with mock.patch.object(m,'RUNTIME',root):
+                saved=m.original_template_hostlists()
+                self.assertEqual(len(saved),2)
+                self.assertEqual(saved[root/'hostlist.txt'][0],b'\n')
+
+    def test_nonempty_installed_template_hostlist_is_foreign(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            (root/'hostlist.txt').write_text('foreign.example')
+            (root/'hostlist-exclude.txt').write_bytes(b'')
+            with mock.patch.object(m,'RUNTIME',root):
+                with self.assertRaisesRegex(m.Refusal,'NONEMPTY'):
+                    m.original_template_hostlists()
+
     def test_test_model_voice_absent(self):
         root=m.insert_test_model(ET.Element('opnsense'))
         self.assertIsNone(root.find('./OPNsense/Zapret/voice'))
