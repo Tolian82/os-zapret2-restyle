@@ -73,7 +73,9 @@ def qualify_guest():
 def original_config():
     info = CONFIG.lstat()
     need(stat.S_ISREG(info.st_mode) and not CONFIG.is_symlink() and info.st_uid == 0,
-         'CONFIG_NOT_OWNED_REGULAR_FILE')
+         'CONFIG_NOT_OWNED_REGULAR_FILE:mode=' + oct(info.st_mode) +
+         ':uid=' + str(info.st_uid) + ':nlink=' + str(info.st_nlink) +
+         ':target=' + (os.readlink(CONFIG) if CONFIG.is_symlink() else 'none'))
     data = CONFIG.read_bytes()
     root = ET.fromstring(data)
     need(root.find('./OPNsense/Zapret') is None,
