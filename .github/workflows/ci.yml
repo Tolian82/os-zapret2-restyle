@@ -82,7 +82,7 @@ jobs:
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
-          elif printf '%s\n' "${classified_changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
+          elif printf '%s\n' "${classified_changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/native-opnsense-package\.py$|scripts/build-curl-impersonate\.sh$|scripts/test-freebsd15-package-ci\.sh$)'; then
             package=true
           fi
 
@@ -939,6 +939,9 @@ jobs:
 
       - name: Test Node 24 release actions
         run: sh scripts/test-release-node24-actions.sh
+
+      - name: Test official native package path classification
+        run: python3.13 scripts/test-stage2-native-package-ci-classifier.py
 
       - name: Test FreeBSD 15 package CI contract
         run: sh scripts/test-freebsd15-package-ci.sh
