@@ -234,6 +234,12 @@ def bounded_running(service, expected_bin):
     return number
 
 
+def residual_processes(census, tokens):
+    """Exact disallowed-command tokens; no weakening of pre-pkg owner guard."""
+    return [line.strip() for line in census.splitlines()
+            if any(token in line for token in tokens)]
+
+
 def stop_and_observe_kernel(service, inspector):
     rc, out, err = status(service,'stop')
     need(rc == 0, 'REAL_OLD_STOP_FAILED:' + str(rc) + ':' + (out+' '+err)[-280:])
@@ -254,6 +260,18 @@ def stop_and_observe_kernel(service, inspector):
         need(probe.returncode == 0,
              'POST_STOP_KERNEL_MODULE_IDENTITY_CHANGED:' + loaded)
     census = inspector.checked_process_census()
+    matches = residual_processes(census, inspector.PROCESS_TOKENS)
+    if matches:
+        # Diagnostic ONLY: do not bless matching processes or send signals.
+        # PID/PPID let us distinguish a lingering real supervisor from a
+        # false-positive command line in the disposable KVM guest.
+        pid_census = command('/bin/ps', '-ax', '-o', 'pid=', '-o', 'ppid=',
+                             '-o', 'command=')
+        need(pid_census.returncode == 0,
+             'POST_STOP_RESIDUAL_PROCESS_IDENTITY_UNAVAILABLE')
+        detailed = residual_processes(pid_census.stdout, inspector.PROCESS_TOKENS)
+        raise Refusal('POST_STOP_POSSIBLE_ZAPRET_PROCESS_PRESENT:'
+                      + repr(detailed[:8] or matches[:8])[:1600])
     inspector.check_process_census(census)
     return 'STOPPED_NO_OWNED_RULES_KERNEL_MODULES_STILL_LOADED'
 

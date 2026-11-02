@@ -177,6 +177,24 @@ class TestGenuineRunning(unittest.TestCase):
         self.assertIn("'POST_STOP_FOREIGN_OR_REMAINING_IPFW_RULES'",source)
         self.assertNotIn("command('/sbin/kldunload'",source)
 
+    def test_residual_process_matches_dvtws_and_supervisor(self):
+        lines = ('12 /usr/local/etc/zapret2/binaries/my/dvtws2 --port=989\n'
+                 '13 /usr/local/opnsense/scripts/OPNsense/Zapret/backend/supervisor_loop.sh\n'
+                 '14 /usr/sbin/daemon -f harmless\n')
+        self.assertEqual(len(m.residual_processes(
+            lines, ('/dvtws2', '/supervisor_loop.sh', '/zapret_service.sh'))), 2)
+
+    def test_residual_process_refuses_wrong_similar_process(self):
+        lines = '1 python scripts/stage0-opnsense-genuine-running.py\n'
+        self.assertEqual(m.residual_processes(
+            lines, ('/dvtws2','/supervisor_loop.sh','/zapret_service.sh')), [])
+
+    def test_residual_guard_not_skipped(self):
+        source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
+        self.assertIn('inspector.check_process_census(census)',source)
+        self.assertIn('POST_STOP_POSSIBLE_ZAPRET_PROCESS_PRESENT',source)
+        self.assertIn("'-o', 'pid=', '-o', 'ppid='",source)
+
     def test_no_fake_kernel_cold_after_original_stop(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn("'original_cold_after_stop':False",source)
