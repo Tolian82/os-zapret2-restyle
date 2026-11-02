@@ -1,12 +1,16 @@
 name: Stage 1 OPNsense FreeBSD compatibility source policy
 
 on:
+  push:
+    branches:
+      - ci/native-package-classifier-v0.6.2_69
   pull_request:
     paths:
       - compatibility.json
       - scripts/validate-compatibility.py
       - scripts/native-opnsense-package.py
       - scripts/test-stage1-native-compatibility.py
+      - scripts/test-stage2-native-package-ci-classifier.py
       - scripts/stage1-native-policy-static.py
       - scripts/compatibility-bootstrap.sh
       - scripts/test-compatibility.py
@@ -43,6 +47,8 @@ jobs:
           sh -n scripts/compatibility-bootstrap.sh
           python3.13 scripts/test-stage1-native-compatibility.py -v
           python3.13 scripts/stage1-native-policy-static.py
+          python3.13 -m py_compile scripts/test-stage2-native-package-ci-classifier.py
+          python3.13 scripts/test-stage2-native-package-ci-classifier.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
           python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
           python3.13 scripts/test-stage2-opnsense-real-native-stopped-upgrade.py -v
