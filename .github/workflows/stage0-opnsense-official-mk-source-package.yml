@@ -3,6 +3,7 @@ name: Stage 0 official OPNsense Mk source package proof
 on:
   pull_request:
     paths:
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - scripts/stage0-opnsense-official-mk-source-package.py
       - scripts/test-stage0-opnsense-official-mk-source-package.py
       - .github/workflows/stage0-opnsense-official-mk-source-package.yml
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   official-mk-source:
-    name: Real OPNsense 26.7 official Mk source-package metadata and blocking mode
+    name: Real OPNsense 26.7 official Mk source-package executable mode
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
