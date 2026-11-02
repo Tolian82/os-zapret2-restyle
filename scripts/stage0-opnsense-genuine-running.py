@@ -200,7 +200,15 @@ def plugin_rules():
 
 def bounded_running(service, expected_bin):
     rc, out, err = status(service,'start')
-    need(rc == 0, 'REAL_START_FAILED:' + str(rc) + ':' + (out+' '+err)[-350:])
+    stage = Path('/var/run/zapret2-execution.status')
+    stage_tail = (stage.read_text(errors='replace')[-850:] if
+                  stage.is_file() and not stage.is_symlink() else 'NO_STAGE')
+    need(rc == 0, 'REAL_START_FAILED:rc=' + str(rc) +
+         ':stdout_head=' + repr(out[:220]) +
+         ':stdout_tail=' + repr(out[-250:]) +
+         ':stderr_head=' + repr(err[:320]) +
+         ':stderr_tail=' + repr(err[-300:]) +
+         ':stage=' + repr(stage_tail))
     rc, out, err = status(service,'status')
     need(rc == 0 and 'zapret is running' in out,
          'ORIGINAL_SERVICE_NOT_RUNNING:' + str(rc) + ':' + (out+' '+err)[-240:])
