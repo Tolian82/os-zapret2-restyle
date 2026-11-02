@@ -33,7 +33,7 @@ class NativeBuilderTests(unittest.TestCase):
                 mod.git_head()
 
     def test_mk_accepts_derived_python_and_real_dependencies(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_69",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_70",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake pkgconf luajit git jq ca_root_nss",
@@ -47,7 +47,7 @@ class NativeBuilderTests(unittest.TestCase):
                 vars)
 
     def test_mk_refuses_unsafe_dependency_mismatch(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_69",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_70",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake", "PLUGIN_DEVEL":""}
