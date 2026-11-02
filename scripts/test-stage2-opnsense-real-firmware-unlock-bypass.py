@@ -3,6 +3,7 @@
 import ast
 from pathlib import Path
 import time
+from types import SimpleNamespace
 import unittest
 
 SOURCE = Path(__file__).with_name("stage2-opnsense-real-firmware-unlock-bypass.py")
@@ -59,6 +60,26 @@ class GenuineFirmwareUnlockTests(unittest.TestCase):
                                     "AUTHENTIC_PREINSTALL_REFUSAL_NOT_OBSERVED"):
             self.classify(True, True, 0, "old", "new", "new", False, True)
 
+    def test_exact_pkg_lock_metadata_zero_one_and_refusal(self):
+        scope = extract("need", "package_locked")
+        scope["NAME"] = "os-zapret2-restyle"
+        check = scope["package_locked"]
+        expected = ["query", "%k", "os-zapret2-restyle"]
+        for raw, want in (("1\\n", True), ("0\\n", False)):
+            with self.subTest(raw=raw):
+                def query(args):
+                    self.assertEqual(args, expected)
+                    return SimpleNamespace(returncode=0, stdout=raw)
+                scope["locked"] = SimpleNamespace(pkg=query)
+                self.assertIs(check(), want)
+        for raw, rc in (("", 0), ("2", 0), ("0\\n1", 0), ("0", 1)):
+            with self.subTest(raw=raw, rc=rc):
+                scope["locked"] = SimpleNamespace(pkg=lambda args:
+                    SimpleNamespace(returncode=rc, stdout=raw))
+                with self.assertRaisesRegex(RuntimeError,
+                                            "TARGET_PACKAGE_LOCK_METADATA_UNAVAILABLE"):
+                    check()
+
     def test_bounded_asynchronous_unlock_poll(self):
         calls = []
         self.assertTrue(self.wait(lambda: len(calls) < 2,
@@ -78,7 +99,7 @@ class GenuineFirmwareUnlockTests(unittest.TestCase):
             'locked.pkg(["lock", "-y", NAME])',
             "pkg_before = locked.installed_record()",
             '["/usr/local/sbin/configctl", "firmware", "unlock",',
-            "wait_until_unlocked(locked.locked)",
+            "wait_until_unlocked(package_locked)",
             'locked.pkg(["add", "-f", str(successor)]',
             "STAGE2_CONFIGD_UNLOCK_PRE_CLEANUP=", "unsafe.remove_test_orphan()"
         )
