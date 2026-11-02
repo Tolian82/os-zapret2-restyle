@@ -60,14 +60,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/os-zapret2-restyle-0.6.2_68.pkg
-          tar -xOf dist/os-zapret2-restyle-0.6.2_68.pkg +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_68" and (.deps | keys | length == 7)'
           package="dist/os-zapret2-restyle-0.6.2_68.pkg"
-          member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json
-          sha256sum dist/os-zapret2-restyle-0.6.2_68.pkg
-          echo "PASS: source-only native package; not installed, published, or released"
-)
-          test "$(printf '%s\\n' "$member" | wc -l)" -eq 1
+          test -f "$package"
+          tar -xOf "$package" +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_68" and (.deps | keys | length == 7)'
+          member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json$')
+          test "$(printf '%s\n' "$member" | wc -l)" -eq 1
           tar -xOf "$package" "$member" | cmp - compatibility.json
-          sha256sum dist/os-zapret2-restyle-0.6.2_68.pkg
-          echo "PASS: source-only native package; not installed, published, or released"
+          sha256sum "$package"
+          echo "PASS: source-only native package and exact source policy; not published"
