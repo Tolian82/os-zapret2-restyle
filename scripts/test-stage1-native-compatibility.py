@@ -118,7 +118,7 @@ class Stage1NativePolicyTests(unittest.TestCase):
              'result["PLUGIN_ABI"] == "26.7"'),
         ]:
             changed = dict(sources)
-            changed["scripts/native-opnsense-package.py"] += "\\n" + snippet + "\\n"
+            changed["scripts/native-opnsense-package.py"] += "\n" + snippet + "\n"
             with self.subTest(code=code), self.assertRaisesRegex(
                     guard.Refusal, code):
                 guard.scan(changed)
