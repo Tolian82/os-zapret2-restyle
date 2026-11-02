@@ -65,14 +65,14 @@ class GenuineFirmwareUnlockTests(unittest.TestCase):
         scope["NAME"] = "os-zapret2-restyle"
         check = scope["package_locked"]
         expected = ["query", "%k", "os-zapret2-restyle"]
-        for raw, want in (("1\\n", True), ("0\\n", False)):
+        for raw, want in (("1\n", True), ("0\n", False)):
             with self.subTest(raw=raw):
                 def query(args):
                     self.assertEqual(args, expected)
                     return SimpleNamespace(returncode=0, stdout=raw)
                 scope["locked"] = SimpleNamespace(pkg=query)
                 self.assertIs(check(), want)
-        for raw, rc in (("", 0), ("2", 0), ("0\\n1", 0), ("0", 1)):
+        for raw, rc in (("", 0), ("2", 0), ("0\n1", 0), ("0", 1)):
             with self.subTest(raw=raw, rc=rc):
                 scope["locked"] = SimpleNamespace(pkg=lambda args:
                     SimpleNamespace(returncode=rc, stdout=raw))
