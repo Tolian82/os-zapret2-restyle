@@ -70,8 +70,18 @@ class WorkerIdentityTests(unittest.TestCase):
     def test_worker_direct_parent_required(self):
         self.worker = row(4242, 99, 'python3 /usr/local/opnsense/service/configd.py console')
         with patch.object(witness, 'run', side_effect=self.fake):
-            with self.assertRaisesRegex(witness.Refusal, 'NOT_DIRECT_OWNED_CHILD'):
+            with self.assertRaisesRegex(witness.Refusal, 'PARENT_MISMATCH'):
                 witness.snapshot(self.pidfile)
+
+    def test_worker_command_path_and_suffix_refuse_separately(self):
+        for command, reason in (
+            ('python3 /tmp/foreign/configd.py console', 'COMMAND_PATH_MISMATCH'),
+            ('python3 /usr/local/opnsense/service/configd.py other',
+             'CONSOLE_SUFFIX_MISMATCH')):
+            self.worker = row(4242, 4142, command)
+            with self.subTest(reason=reason), patch.object(witness, 'run', side_effect=self.fake):
+                with self.assertRaisesRegex(witness.Refusal, reason):
+                    witness.snapshot(self.pidfile)
 
     def test_watcher_not_a_console_worker(self):
         self.watcher = row(4142, 1, 'python3 /usr/local/opnsense/service/configd.py console')

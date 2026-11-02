@@ -76,9 +76,10 @@ def snapshot(path=PID_FILE):
     worker_pid = workers(parent)
     need(worker_pid != parent, 'CONFIGD_WORKER_IS_WATCHER')
     worker = process(worker_pid)
-    need(worker['ppid'] == parent and SERVICE in worker['command'] and
-         worker['command'].rstrip().endswith('configd.py console'),
-         'CONFIGD_WORKER_NOT_DIRECT_OWNED_CHILD')
+    need(worker['ppid'] == parent, 'CONFIGD_WORKER_PARENT_MISMATCH')
+    need(SERVICE in worker['command'], 'CONFIGD_WORKER_COMMAND_PATH_MISMATCH')
+    need(worker['command'].rstrip().endswith('configd.py console'),
+         'CONFIGD_WORKER_CONSOLE_SUFFIX_MISMATCH')
     return {'watcher': watcher, 'worker': worker}
 
 
