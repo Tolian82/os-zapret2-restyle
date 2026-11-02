@@ -302,7 +302,7 @@ def build():
              "DIST_PACKAGE_SHA_CHANGED")
     return {"schema": 1, "status": "PASS_OFFICIAL_NATIVE_BUILD_SOURCE_ONLY",
             "project_sha": sha, "framework_sha": private.old.UPSTREAM_SHA,
-            "target_abi": ABI, "provider_catalog_sha256": catalog_digest,
+            "target_abi": platform["freebsd_pkg_abi"], "provider_catalog_sha256": catalog_digest,
             "evaluated_native_make": variables,
             "private_signed_source_sha256": bundle["signed_freebsd_latest_package_sha256"],
             "private_elf_sha256": bundle["private_binary_sha256"],
