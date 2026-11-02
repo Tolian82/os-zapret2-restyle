@@ -20,7 +20,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 VERSION = "0.6.2"
-REVISION = "72"
+REVISION = "73"
 NAME = "os-zapret2-restyle"
 POLICY_DEST = "share/zapret2-restyle/compatibility.json"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"
