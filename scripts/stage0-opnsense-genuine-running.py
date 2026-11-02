@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Stage0 actual archived old OPNsense Start/Status/Stop: disposable CI VM only.
+
+Exact genuine historical package, pinned genuine upstream ELF, native Config
+template, single loopback-only TCP port 65431 and owned-IPFW teardown. Never
+run on a gateway: explicit CI opt-in + fresh KVM guest checks. No pkg upgrade.
+"""
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import xml.etree.ElementTree as ET
+
+HERE = Path(__file__).resolve().parent
+CONFIG = Path('/conf/config.xml')
+RUNTIME = Path('/usr/local/etc/zapret2')
+ENGINE = RUNTIME / 'binaries/my/dvtws2'
+GENERATED = RUNTIME / 'zapret.conf'
+PID = Path('/var/run/dvtws2.pid')
+RULE = 19000
+PORT = 65431
+OPTIN = 'ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST'
+
+
+class Refusal(Exception):
+    pass
+
+
+def need(ok, reason):
+    if not ok:
+        raise Refusal(reason)
+
+
+def module(name):
+    spec = importlib.util.spec_from_file_location(name.replace('-', '_').replace('.', '_'),
+                                                   HERE / name)
+    obj = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(obj)
+    return obj
+
+
+def command(*args, timeout=75):
+    try:
+        return subprocess.run(args, capture_output=True, text=True,
+                              timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal('COMMAND_UNAVAILABLE_OR_TIMEOUT:' + args[0]) from None
+
+
+def status(service, action):
+    result = command(service, action, timeout=120)
+    return (result.returncode, result.stdout.strip(), result.stderr.strip())
+
+
+def qualify_guest():
+    need(os.getenv(OPTIN) == '1' and os.geteuid() == 0 and
+         os.uname().sysname == 'FreeBSD' and os.uname().machine == 'amd64',
+         'DISPOSABLE_RUNNING_EXPLICIT_OPTIN_AND_FREEBSD_ROOT_REQUIRED')
+    guest = module('stage0-opnsense-guest-readonly.py')
+    need(guest.evaluate(guest.observe()).get('status') ==
+         'PASS_ISOLATED_OPNSENSE_26_7_GUEST_IDENTITY',
+         'TARGET_NOT_QUALIFIED_DISPOSABLE_OPNSENSE')
+    need(command('/sbin/ifconfig', 'lo0').returncode == 0,
+         'MISSING_SAFE_LOOPBACK_INTERFACE')
+
+
+def original_config():
+    info = CONFIG.lstat()
+    need(stat.S_ISREG(info.st_mode) and not CONFIG.is_symlink() and info.st_uid == 0,
+         'CONFIG_NOT_OWNED_REGULAR_FILE')
+    data = CONFIG.read_bytes()
+    root = ET.fromstring(data)
+    need(root.find('./OPNsense/Zapret') is None,
+         'FOREIGN_OR_EXISTING_ZAPRET_CONFIG_REFUSE_OVERWRITE')
+    return data, stat.S_IMODE(info.st_mode), root
+
+
+def insert_test_model(root):
+    opn = root.find('./OPNsense')
+    if opn is None:
+        opn = ET.SubElement(root, 'OPNsense')
+    z = ET.SubElement(opn, 'Zapret')
+    g = ET.SubElement(z, 'general')
+    for k, v in [('enabled','1'), ('waninterface','lo0'), ('divertport','989'),
+                 ('ports',str(PORT))]:
+        ET.SubElement(g,k).text = v
+    s = ET.SubElement(z, 'strategy')
+    ET.SubElement(s, 'trafficargs').text = (
+        '--filter-tcp=' + str(PORT) + '\n--filter-l7=tls\n'
+        '--lua-desync=pktmod:ip_ttl=23')
+    ET.SubElement(s, 'extraargs').text = ''
+    h = ET.SubElement(z, 'hostlist')
+    ET.SubElement(h, 'mode').text = 'all'
+    return root
+
+
+def write_config(data, mode):
+    fd, name = tempfile.mkstemp(prefix='stage0-config-', dir='/conf')
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(name, mode)
+        os.replace(name, CONFIG)
+    finally:
+        if os.path.exists(name):
+            os.unlink(name)
+
+
+def fresh_owned_paths():
+    for p in (ENGINE, GENERATED, RUNTIME / 'runtime-v2', PID,
+              Path('/var/run/zapret2-supervisor-daemon.pid'),
+              Path('/var/run/zapret2-supervisor-monitor.pid')):
+        need(not p.exists() and not p.is_symlink(),
+             'PREEXISTING_RUNTIME_OR_FOREIGN_PATH:' + str(p))
+
+
+def stage_engine(upstream):
+    need(not RUNTIME.is_symlink() and
+         (not RUNTIME.exists() or (RUNTIME.is_dir() and not any(RUNTIME.iterdir()))),
+         'GLOBAL_RUNTIME_NOT_NEW_OR_EMPTY')
+    engine = upstream / 'binaries/my/dvtws2'
+    need(engine.is_file() and not engine.is_symlink() and os.access(engine, os.X_OK),
+         'PINNED_ENGINE_NOT_BUILT')
+    for rel in ['binaries/my/dvtws2','lua/zapret-lib.lua',
+                'lua/zapret-antidpi.lua', 'lua/zapret-auto.lua']:
+        old = upstream / rel
+        need(old.is_file() and not old.is_symlink(), 'MISSING_UPSTREAM_RESOURCE:' + rel)
+        new = RUNTIME / rel
+        new.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        new.parent.chmod(0o755)
+        shutil.copyfile(old, new)
+        new.chmod(0o755 if rel.endswith('/dvtws2') else 0o644)
+    return hashlib.sha256(ENGINE.read_bytes()).hexdigest()
+
+
+def plugin_rules():
+    listing = command('/sbin/ipfw', '-q', 'list')
+    need(listing.returncode == 0, 'IPFW_LIST_UNAVAILABLE')
+    return [l for l in listing.stdout.splitlines() if l.startswith('190')]
+
+
+def bounded_running(service, expected_bin):
+    rc, out, err = status(service,'start')
+    need(rc == 0, 'REAL_START_FAILED:' + str(rc) + ':' + (out+' '+err)[-350:])
+    rc, out, err = status(service,'status')
+    need(rc == 0 and 'zapret is running' in out,
+         'ORIGINAL_SERVICE_NOT_RUNNING:' + str(rc) + ':' + (out+' '+err)[-240:])
+    need(PID.is_file() and not PID.is_symlink(), 'ENGINE_PIDFILE_ABSENT_OR_SYMLINK')
+    number = PID.read_text().strip()
+    need(number.isdecimal() and int(number) > 1, 'ENGINE_PIDFILE_INVALID')
+    commandline = command('/bin/ps','-p',number,'-o','command=')
+    need(commandline.returncode == 0 and
+         commandline.stdout.split(' ')[0] == str(ENGINE),
+         'RUNNING_PROCESS_EXECUTABLE_NOT_OWNED:' + commandline.stdout[:170])
+    need(hashlib.sha256(ENGINE.read_bytes()).hexdigest() == expected_bin,
+         'RUNNING_ENGINE_BINARY_CHANGED')
+    rules = plugin_rules()
+    need(any(l.startswith(str(RULE)+' ') and 'divert 989' in l and '65431' in l
+             and 'lo0' in l for l in rules),
+         'OWNED_LOOPBACK_ONLY_DIVERT_NOT_OBSERVED:' + repr(rules))
+    return number
+
+
+def stop_and_restore_kernel(service, fd9):
+    rc, out, err = status(service,'stop')
+    need(rc == 0, 'REAL_OLD_STOP_FAILED:' + str(rc) + ':' + (out+' '+err)[-280:])
+    rc, out, err = status(service,'status')
+    need(rc == 1 and out == 'zapret is not running',
+         'SERVICE_NOT_STOPPED_AFTER_OLD_STOP:' + str(rc) + ':' + (out+' '+err)[-250:])
+    need(not plugin_rules(), 'OLD_STOP_LEFT_PLUGIN_IPFW_RULES')
+    need(not PID.exists(), 'OLD_STOP_LEFT_ENGINE_PIDFILE')
+    # Only the guest's own default-accept kernel objects may be unloaded.
+    guard = module('stage0-opnsense-foreign-ipfw-admission.py')
+    ipfw = command('/sbin/ipfw','-q','list')
+    need(ipfw.returncode == 0 and guard.only_default(ipfw.stdout),
+         'UNQUALIFIED_FOREIGN_IPFW_REFUSE_UNLOAD')
+    need(command('/sbin/kldunload','ipdivert').returncode == 0,
+         'FAILED_TO_UNLOAD_TEST_ONLY_IPDIVERT')
+    need(command('/sbin/kldunload','ipfw').returncode == 0,
+         'FAILED_TO_UNLOAD_TEST_ONLY_IPFW')
+    guard.unloaded(fd9)
+
+
+def run(archive):
+    qualify_guest()
+    installer = module('stage0-opnsense-installed-predecessor.py')
+    inspector = module('stage0-opnsense-prepkg-readonly.py')
+    original = module('stage0-installed-predecessor-readonly.py')
+    upstream = module('stage0-opnsense-upstream-engine-build.py')
+    installer.install_and_verify(archive)
+    hostname = original.run('hostname','-s').decode().strip()
+    identity = original.run_guest(archive,hostname)
+    need(inspector.snapshot(archive)['status']=='PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
+         'REAL_OLD_NOT_INITIAL_COLD')
+    fresh_owned_paths()
+    snapshot, mode, xml = original_config()
+    need(not RUNTIME.exists() and not RUNTIME.is_symlink(),
+         'RUNTIME_DIRECTORY_ALREADY_EXISTS_OR_FOREIGN')
+    with tempfile.TemporaryDirectory(prefix='stage0-owned-real-start-') as td:
+        folder=Path(td)
+        upstream.build(folder)
+        upstream_sha = upstream.PIN
+        engine_sha = stage_engine(folder/'upstream')
+        try:
+            generated = ET.tostring(insert_test_model(xml), encoding='utf-8')
+            write_config(generated,mode)
+            # The real historical service calls actual configctl template reload.
+            # This is a fresh disposable VM, Config and generated runtime are
+            # test-owned. Never mock the production template command.
+            pid = bounded_running(original.SERVICE, engine_sha)
+            stop_and_restore_kernel(original.SERVICE, inspector)
+        finally:
+            # Source-only experiment: only restore Config if its exact
+            # test-generated contents are still present; no generic Stop
+            # of unknown owners or deletion of foreign files.
+            if CONFIG.read_bytes()==generated:
+                write_config(snapshot,mode)
+            else:
+                raise Refusal('CONFIG_CHANGED_DURING_TEST_REFUSE_OVERWRITE')
+    need(identity == original.run_guest(archive,hostname),
+         'ORIGINAL_INSTALLED_PKG_CHANGED_AFTER_RUNNING_EXPERIMENT')
+    need(inspector.snapshot(archive)['status']=='PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
+         'AFTER_STOP_ORIGINAL_COLD_UNVERIFIED')
+    return {'schema':1,'status':'PASS_GENUINE_OLD_RUNNING_STOP_ON_DISPOSABLE_OPNSENSE',
+            'upstream_sha':upstream_sha,'built_engine_sha256':engine_sha,
+            'real_original_start_status_stop':True,'real_running_pid_observed':pid,
+            'real_loopback_owned_ipfw_rule_observed':True,
+            'native_fd9_original_service':True,
+            'original_pkg_unchanged':True,
+            'original_cold_after_stop':True,'genuine_running_engine_tested':True,
+            'actual_package_upgrade_tested':False,
+            'full_lifecycle_acceptance_passed':False,'stage0_closed':False}
+
+
+def main():
+    if len(sys.argv)!=2:
+        print('STAGE0_GENUINE_RUN=REFUSED:ARCHIVE_REQUIRED',file=sys.stderr)
+        return 2
+    try:
+        print('STAGE0_GENUINE_RUN='+json.dumps(run(Path(sys.argv[1])),sort_keys=True))
+        return 0
+    except (Refusal, OSError, ValueError, TypeError, KeyError, ET.ParseError) as e:
+        print('STAGE0_GENUINE_RUN=REFUSED:'+str(e),file=sys.stderr)
+        return 2
+
+
+if __name__=='__main__':
+    sys.exit(main())
