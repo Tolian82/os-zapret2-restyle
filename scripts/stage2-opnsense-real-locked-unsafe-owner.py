@@ -55,9 +55,14 @@ def locked():
 
 def installed_record():
     result = pkg(["info", "-R", "--raw-format", "json", NAME])
-    need(result.returncode == 0 and result.stdout.strip().startswith("{"),
+    need(result.returncode == 0 and result.stdout.strip(),
          "PKGDB_RAW_RECORD_UNAVAILABLE")
-    return result.stdout
+    # Real FreeBSD pkg may emit a one-element JSON array. Reuse the already
+    # native-qualified canonical one-package parser; never accept extras.
+    record = old.installed_manifest_from_json(result.stdout)
+    need(record.get("name") == NAME and record.get("version") == "0.6.2_1",
+         "PKGDB_OLD_IDENTITY_MISMATCH")
+    return json.dumps(record, sort_keys=True, separators=(",", ":"))
 
 def classify_locked_refusal(exit_code, before, after, is_locked, unchanged):
     need(is_locked, "NATIVE_LOCK_NOT_PRESERVED")
