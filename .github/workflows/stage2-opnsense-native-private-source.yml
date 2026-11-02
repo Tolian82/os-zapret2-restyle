@@ -1,0 +1,50 @@
+name: Stage 2 signed private curl in official native OPNsense package
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage2-opnsense-native-private-source.py
+      - scripts/test-stage2-opnsense-native-private-source.py
+      - scripts/build-curl-impersonate.sh
+      - scripts/check-curl-impersonate.sh
+      - scripts/run-curl-impersonate.sh
+      - .github/workflows/stage2-opnsense-native-private-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-private:
+    name: Signed FreeBSD latest private curl → real OPNsense 26.7 Mk package
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Fast exact-source syntax and private negative unit contracts
+        run: |
+          python3.13 -m py_compile scripts/stage2-opnsense-native-private-source.py scripts/test-stage2-opnsense-native-private-source.py
+          python3.13 scripts/test-stage2-opnsense-native-private-source.py -v
+          sh -n scripts/build-curl-impersonate.sh
+          sh -n scripts/check-curl-impersonate.sh
+          sh -n scripts/run-curl-impersonate.sh
+      - name: Native signed-source/private-ELF/Mk qualification inside isolated OPNsense
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git python313 ca_root_nss
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-native-private-source.py
