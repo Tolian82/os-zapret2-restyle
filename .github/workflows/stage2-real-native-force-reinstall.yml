@@ -1,6 +1,9 @@
 name: Stage 2 true native STOPPED same-version force reinstall
 
 on:
+  push:
+    branches:
+      - stage2/native-real-same-version-reinstall-v0.6.2_65
   pull_request:
     paths:
       - Makefile
@@ -35,6 +38,7 @@ jobs:
           python3.13 scripts/test-stage2-opnsense-real-native-force-reinstall.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
       - name: Genuine forced same-version reinstall with original hooks in disposable OPNsense
+        if: ${{ github.event_name != 'push' }}
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: "26.7"
