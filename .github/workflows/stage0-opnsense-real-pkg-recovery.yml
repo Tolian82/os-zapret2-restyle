@@ -1,0 +1,43 @@
+name: Stage 0 published pkg fault and same-version compensation
+
+on:
+  pull_request:
+    paths:
+      - scripts/stage0-opnsense-real-pkg-recovery.py
+      - scripts/test-stage0-opnsense-real-pkg-recovery.py
+      - .github/workflows/stage0-opnsense-real-pkg-recovery.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authentic-old-pkg-recovery:
+    name: Real published 0.6.2_1 pkg hook fault and compensation in disposable OPNsense
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Run offline negative and transition contracts
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-real-pkg-recovery.py scripts/test-stage0-opnsense-real-pkg-recovery.py
+          python3.13 scripts/test-stage0-opnsense-real-pkg-recovery.py -v
+      - name: Run native exact archived published package with intentional hook failure
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          mem: 4096
+          cpu: 2
+          disable-cache: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git gmake pkgconf lua54
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_REAL_PKG_RECOVERY=1 /usr/local/bin/python3 scripts/stage0-opnsense-real-pkg-recovery.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
