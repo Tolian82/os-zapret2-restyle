@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "target_product": "OPNsense",
+  "supported_platforms": [
+    {
+      "opnsense_product_abi": "26.7",
+      "freebsd_pkg_abi": "FreeBSD:15:amd64",
+      "architecture": "amd64",
+      "python": {
+        "policy": "opnsense-PLUGIN_PYTHON",
+        "entrypoint": "/usr/local/bin/python3",
+        "supported": ["3.13"]
+      },
+      "qualification": {
+        "scope": "isolated-native-build-and-pkg-install-only",
+        "evidence": "docs/verification/evidence/2026-11-02-v0.6.2_65-real-native-force-reinstall.md"
+      }
+    }
+  ],
+  "required_capabilities": [],
+  "exceptions": []
+}
