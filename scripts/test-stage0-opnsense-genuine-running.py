@@ -174,7 +174,16 @@ class TestGenuineRunning(unittest.TestCase):
     def test_foreign_ipfw_unsafe_unload_refusal_contract(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn("guard.only_default(ipfw.stdout)",source)
-        self.assertIn("'UNQUALIFIED_FOREIGN_IPFW_REFUSE_UNLOAD'",source)
+        self.assertIn("'POST_STOP_FOREIGN_OR_REMAINING_IPFW_RULES'",source)
+        self.assertNotIn("command('/sbin/kldunload'",source)
+
+    def test_no_fake_kernel_cold_after_original_stop(self):
+        source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
+        self.assertIn("'original_cold_after_stop':False",source)
+        self.assertIn("'kernel_modules_remain_loaded':True",source)
+        self.assertIn("'no_owned_ipfw_rules_after_stop':True",source)
+        self.assertIn('inspector.check_process_census(census)',source)
+        self.assertNotIn('stop_and_restore_kernel',source)
 
     def test_original_fd9_protected(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()

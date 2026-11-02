@@ -234,7 +234,7 @@ def bounded_running(service, expected_bin):
     return number
 
 
-def stop_and_restore_kernel(service, fd9):
+def stop_and_observe_kernel(service, inspector):
     rc, out, err = status(service,'stop')
     need(rc == 0, 'REAL_OLD_STOP_FAILED:' + str(rc) + ':' + (out+' '+err)[-280:])
     rc, out, err = status(service,'status')
@@ -242,17 +242,20 @@ def stop_and_restore_kernel(service, fd9):
          'SERVICE_NOT_STOPPED_AFTER_OLD_STOP:' + str(rc) + ':' + (out+' '+err)[-250:])
     need(not plugin_rules(), 'OLD_STOP_LEFT_PLUGIN_IPFW_RULES')
     need(not PID.exists(), 'OLD_STOP_LEFT_ENGINE_PIDFILE')
-    # Only the guest's own default-accept kernel objects may be unloaded.
+    # The production Stop does NOT own shared-kernel module lifecycle.
+    # Confirm only the native built-in default allow remains; do not
+    # forcibly unload ipfw or ipdivert as a false cold-state target.
     guard = module('stage0-opnsense-foreign-ipfw-admission.py')
     ipfw = command('/sbin/ipfw','-q','list')
     need(ipfw.returncode == 0 and guard.only_default(ipfw.stdout),
-         'UNQUALIFIED_FOREIGN_IPFW_REFUSE_UNLOAD')
-    need(command('/sbin/kldunload','ipdivert').returncode == 0,
-         'FAILED_TO_UNLOAD_TEST_ONLY_IPDIVERT')
-    need(command('/sbin/kldunload','ipfw').returncode == 0,
-         'FAILED_TO_UNLOAD_TEST_ONLY_IPFW')
-    guard.unloaded(fd9)
-
+         'POST_STOP_FOREIGN_OR_REMAINING_IPFW_RULES')
+    for loaded in ('ipfw', 'ipdivert'):
+        probe = command('/sbin/kldstat','-q','-m',loaded)
+        need(probe.returncode == 0,
+             'POST_STOP_KERNEL_MODULE_IDENTITY_CHANGED:' + loaded)
+    census = inspector.checked_process_census()
+    inspector.check_process_census(census)
+    return 'STOPPED_NO_OWNED_RULES_KERNEL_MODULES_STILL_LOADED'
 
 def run(archive):
     qualify_guest()
@@ -298,7 +301,7 @@ def run(archive):
             # This is a fresh disposable VM, Config and generated runtime are
             # test-owned. Never mock the production template command.
             pid = bounded_running(original.SERVICE, engine_sha)
-            stop_and_restore_kernel(original.SERVICE, inspector)
+            stop_result = stop_and_observe_kernel(original.SERVICE, inspector)
         finally:
             # Source-only experiment: only restore Config if its exact
             # test-generated contents are still present; no generic Stop
@@ -323,15 +326,23 @@ def run(archive):
                  'ORIGINAL_RUNTIME_DIRECTORY_MODE_NOT_RESTORED')
     need(identity == original.run_guest(archive,hostname),
          'ORIGINAL_INSTALLED_PKG_CHANGED_AFTER_RUNNING_EXPERIMENT')
-    need(inspector.snapshot(archive)['status']=='PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
-         'AFTER_STOP_ORIGINAL_COLD_UNVERIFIED')
-    return {'schema':1,'status':'PASS_GENUINE_OLD_RUNNING_STOP_ON_DISPOSABLE_OPNSENSE',
+    rc, out, err = status(original.SERVICE,'status')
+    need(rc == 1 and out == 'zapret is not running',
+         'FINAL_ORIGINAL_STOPPED_NOT_VERIFIED')
+    need(not plugin_rules() and not PID.exists(),
+         'FINAL_OWNED_RUNTIME_NOT_CLEAN')
+    return {'schema':1,
+            'status':'PASS_GENUINE_OLD_RUNNING_STOPPED_WITH_KERNEL_MODULES_LOADED',
             'upstream_sha':upstream_sha,'built_engine_sha256':engine_sha,
             'real_original_start_status_stop':True,'real_running_pid_observed':pid,
             'real_loopback_owned_ipfw_rule_observed':True,
             'native_fd9_original_service':True,
             'original_pkg_unchanged':True,
-            'original_cold_after_stop':True,'genuine_running_engine_tested':True,
+            'original_cold_after_stop':False,
+            'kernel_modules_remain_loaded':True,
+            'no_owned_ipfw_rules_after_stop':True,
+            'stop_kernel_observation':stop_result,
+            'genuine_running_engine_tested':True,
             'actual_package_upgrade_tested':False,
             'full_lifecycle_acceptance_passed':False,'stage0_closed':False}
 
