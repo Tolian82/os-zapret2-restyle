@@ -80,6 +80,15 @@ class NativePackageClassification(unittest.TestCase):
                 self.assertIn('release: "26.7"', content)
                 self.assertIn("vmactions/opnsense-vm@", content)
 
+    def test_native_candidate_package_name_is_derived_from_makefile(self):
+        # A native _72 build must never be checked as the previous _71 file.
+        content = (ROOT / ".github/workflows/stage2-native-production-build.yml").read_text()
+        self.assertIn("version=$(tr -d", content)
+        self.assertIn("revision=$(sed -nE", content)
+        self.assertIn('package="dist/os-zapret2-restyle-${version}_${revision}.pkg"', content)
+        self.assertIn('--arg expected "${version}_${revision}"', content)
+        self.assertNotRegex(content, r'os-zapret2-restyle-0\.6\.2_[0-9]+\.pkg')
+
     def test_introducing_old_bug_is_rejected(self):
         source = WORKFLOW.read_text()
         broken = source.replace("|scripts/native-opnsense-package\\.py$", "")
