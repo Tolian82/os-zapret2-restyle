@@ -71,6 +71,37 @@ class VersionedTests(unittest.TestCase):
                     mod.Refusal, "PROVENANCE_CHANGED"):
                 mod.compare_manifest(manifest(mod.OLD_VERSION), candidate)
 
+    def test_native_resolved_dependency_requires_exact_installed_provider(self):
+        old = manifest(mod.OLD_VERSION)
+        created = manifest(mod.TEST_VERSION)
+        created["deps"]["python313"]["version"] = "3.13.14"
+        provider = {"python313": {"origin": "lang/python313", "version": "3.13.14"}}
+        mod.compare_manifest(old, created, provider)
+        with self.assertRaisesRegex(mod.Refusal, "DEPENDENCIES_CHANGED"):
+            mod.compare_manifest(old, created)
+        with self.assertRaisesRegex(mod.Refusal, "DEPENDENCIES_CHANGED"):
+            mod.compare_manifest(old, created, {"python313": {
+                "origin": "lang/python313", "version": "3.13.13"}})
+        created["deps"]["python313"]["origin"] = "foreign/python313"
+        with self.assertRaisesRegex(mod.Refusal, "DEPENDENCIES_CHANGED"):
+            mod.compare_manifest(old, created, provider)
+
+    def test_actual_pkg_dependency_provider_rejects_mismatched_origin(self):
+        old = manifest(mod.OLD_VERSION)
+        with mock.patch.object(mod, "command", return_value=subprocess.CompletedProcess(
+                ["pkg"], 0, "python313|foreign/python313|3.13.14\n", "")):
+            with self.assertRaisesRegex(mod.Refusal, "PROVIDER_MISMATCH"):
+                mod.provider_versions(old)
+
+    def test_actual_pkg_dependency_provider_matches_exact_name_origin_and_version(self):
+        old = manifest(mod.OLD_VERSION)
+        with mock.patch.object(mod, "command", return_value=subprocess.CompletedProcess(
+                ["pkg"], 0, "python313|lang/python313|3.13.14\n", "")) as caller:
+            self.assertEqual(mod.provider_versions(old), {
+                "python313": {"origin": "lang/python313", "version": "3.13.14"}})
+            caller.assert_called_once_with(
+                ["pkg", "query", "%n|%o|%v", "python313"], timeout=20)
+
     def test_manifest_refuses_wrong_version_and_dependencies(self):
         new = manifest(mod.OLD_VERSION)
         with self.assertRaisesRegex(mod.Refusal, "IDENTITY_MISMATCH"):
@@ -99,7 +130,7 @@ class VersionedTests(unittest.TestCase):
                         ["pkg"], 0, json.dumps(manifest(mod.OLD_VERSION)), "")):
                 with self.assertRaisesRegex(mod.Refusal, "IDENTITY_MISMATCH"):
                     mod.installed_successor(package, sha, b"x",
-                        manifest(mod.OLD_VERSION), old, inspector)
+                        manifest(mod.OLD_VERSION), None, old, inspector)
 
     def test_refuse_changed_candidate_before_pkgdb_inspection(self):
         with tempfile.TemporaryDirectory() as d:
@@ -108,7 +139,7 @@ class VersionedTests(unittest.TestCase):
             with mock.patch.object(mod, "command") as run:
                 with self.assertRaisesRegex(mod.Refusal, "ARCHIVE_CHANGED"):
                     mod.installed_successor(path, "0"*64, b"x",
-                        manifest(mod.OLD_VERSION), mock.Mock(), mock.Mock())
+                        manifest(mod.OLD_VERSION), None, mock.Mock(), mock.Mock())
                 run.assert_not_called()
 
     def test_success_report_cannot_claim_official_production_atomicity(self):
