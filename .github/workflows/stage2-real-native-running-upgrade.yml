@@ -1,9 +1,6 @@
 name: Stage 2 genuine RUNNING old owner to official native OPNsense successor
 
 on:
-  push:
-    branches:
-      - stage2/native-real-running-upgrade-v0.6.2_64
   pull_request:
     paths:
       - Makefile
