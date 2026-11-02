@@ -1,0 +1,44 @@
+name: Stage 1 OPNsense FreeBSD compatibility source policy
+
+on:
+  pull_request:
+    paths:
+      - compatibility.json
+      - scripts/validate-compatibility.py
+      - scripts/test-compatibility.py
+      - scripts/stage0-audit-closure.py
+      - .github/workflows/stage1-compatibility.yml
+      - Makefile
+      - docs/START_HERE.md
+      - docs/PROJECT_STATE.md
+      - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
+      - docs/verification/evidence/2026-11-02-v0.6.2_67-stage1-compatibility-schema.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Validate FreeBSD 15 policy, refuse unqualified FreeBSD 16 and Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Stage 1 1.01-1.04 fast contract and negative scenarios
+        run: |
+          python3.13 -m py_compile scripts/validate-compatibility.py scripts/test-compatibility.py scripts/stage0-audit-closure.py
+          python3.13 scripts/test-compatibility.py -v
+          python3.13 scripts/validate-compatibility.py
+          python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:15:amd64 --architecture amd64 --python-version 3.13.16
+          if python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:16:amd64 --architecture amd64 --python-version 3.13.16 > /tmp/forbidden-abi.stdout 2>/tmp/forbidden-abi.stderr; then
+            echo 'FAIL: unexpected FreeBSD 16 admission' >&2
+            exit 1
+          fi
+          grep -Fx 'COMPATIBILITY=REFUSED:UNSUPPORTED_FREEBSD_ABI' /tmp/forbidden-abi.stderr
+          python3.13 scripts/stage0-audit-closure.py
+          python3.13 scripts/test-current-handoff-identity.py

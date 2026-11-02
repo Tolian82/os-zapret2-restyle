@@ -29,14 +29,17 @@ def verify(root):
     start=read(root,Path("docs/START_HERE.md"))
     state=read(root,Path("docs/PROJECT_STATE.md"))
     plan=read(root,Path("docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"))
+    rev = re.search(r"(?m)^PLUGIN_REVISION=\s*(\d+)\s*$", make)
     need(read(root,Path("VERSION")).strip()=="0.6.2" and
-         re.search(r"(?m)^PLUGIN_REVISION=\s*66\s*$",make),"WRONG_VERSION")
-    need("**Current handoff identity:** `v0.6.2_66`." in start and
-         "`PLUGIN_REVISION=66`" in start,"WRONG_HANDOFF")
-    need("Текущий этап — **`v0.6.2_66`**" in state and
-         "package candidate: `os-zapret2-restyle-0.6.2_66.pkg`" in state,"WRONG_STATE")
+         rev is not None and int(rev.group(1)) >= 66,"WRONG_VERSION")
+    candidate = "v0.6.2_" + rev.group(1)
+    need("**Current handoff identity:** `" + candidate + "`." in start and
+         "`PLUGIN_REVISION=" + rev.group(1) + "`" in start,"WRONG_HANDOFF")
+    need("Текущий этап — **`" + candidate + "`**" in state and
+         "package candidate: `os-zapret2-restyle-0.6.2_" + rev.group(1) + ".pkg`" in state,"WRONG_STATE")
     need("**Stage 0 audit status: CLOSED**" in plan and
-         "Stage 1 READY FOR IMPLEMENTATION" in plan,"WRONG_PLAN_STATE")
+         ("Stage 1 READY FOR IMPLEMENTATION" in plan or
+          "Stage 1 IN PROGRESS" in plan),"WRONG_PLAN_STATE")
     need("**Решение:** `CLOSED_AUDIT_ONLY`" in e and
          "Stage 0 AUDIT CLOSED" in e,"NOT_AUDIT_ONLY")
     rows=re.findall(r"(?m)^\| (0\.\d{2}) \| (AUDITED|NEGATIVE_CLASSIFIED) \|",e)
@@ -64,7 +67,7 @@ def verify(root):
         need(term in e,"PRODUCT_SAFETY_BOUNDARY_MISSING:"+term)
     return {"schema":1,"status":"PASS_STAGE0_AUDIT_RECORD_ONLY",
             "step_count":len(STEPS),"stage0_audit_closed":True,
-            "stage1_implemented":False,"full_product_acceptance":False,
+            "stage1_complete":False,"full_product_acceptance":False,
             "foreign_repository_cleanup_permitted":False,
             "root_pkg_atomicity_proven":False,"owner_appliance_modified":False,
             "package_published":False}
