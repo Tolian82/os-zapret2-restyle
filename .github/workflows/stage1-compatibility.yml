@@ -5,6 +5,10 @@ on:
     paths:
       - compatibility.json
       - scripts/validate-compatibility.py
+      - scripts/native-opnsense-package.py
+      - scripts/test-stage1-native-compatibility.py
+      - scripts/stage1-native-policy-static.py
+      - scripts/compatibility-bootstrap.sh
       - scripts/test-compatibility.py
       - scripts/stage0-audit-closure.py
       - .github/workflows/stage1-compatibility.yml
@@ -13,6 +17,8 @@ on:
       - docs/PROJECT_STATE.md
       - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
       - docs/verification/evidence/2026-11-02-v0.6.2_67-stage1-compatibility-schema.md
+      - docs/verification/evidence/2026-11-02-v0.6.2_68-stage1-native-policy-parity.md
+      - .github/workflows/ci.yml
   workflow_dispatch:
 
 permissions:
@@ -33,6 +39,15 @@ jobs:
         run: |
           python3.13 -m py_compile scripts/validate-compatibility.py scripts/test-compatibility.py scripts/stage0-audit-closure.py
           python3.13 scripts/test-compatibility.py -v
+          python3.13 -m py_compile scripts/test-stage1-native-compatibility.py scripts/stage1-native-policy-static.py
+          sh -n scripts/compatibility-bootstrap.sh
+          python3.13 scripts/test-stage1-native-compatibility.py -v
+          python3.13 scripts/stage1-native-policy-static.py
+          python3.13 scripts/test-native-opnsense-package.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-stopped-upgrade.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-running-upgrade.py -v
+          python3.13 scripts/test-stage2-opnsense-real-native-force-reinstall.py -v
           python3.13 scripts/validate-compatibility.py
           python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:15:amd64 --architecture amd64 --python-version 3.13.16
           if python3.13 scripts/validate-compatibility.py --opnsense-abi 26.7 --freebsd-pkg-abi FreeBSD:16:amd64 --architecture amd64 --python-version 3.13.16 > /tmp/forbidden-abi.stdout 2>/tmp/forbidden-abi.stderr; then

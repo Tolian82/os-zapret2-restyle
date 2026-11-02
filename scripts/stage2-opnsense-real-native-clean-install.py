@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 NAME = "os-zapret2-restyle"
-REVISION = "67"
+REVISION = "68"
 VERSION = "0.6.2_" + REVISION
 OPTIN = "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL"
 PRESERVED = ("/var/run/zapret2-restyle/pkg-upgrade.restart",
@@ -266,8 +266,8 @@ def installed_pkg_manifest(archive):
 
 def verify_installed_files(archive, manifest):
     files = manifest.get("files")
-    need(isinstance(files, dict) and len(files) == 290,
-         "EXPECTED_290_NATIVE_FILES_MISSING")
+    need(isinstance(files, dict) and len(files) == 291,
+         "EXPECTED_291_NATIVE_FILES_MISSING")
     tar_names = required(["tar", "-tf", str(archive)], "TAR_LIST_FAILED").splitlines()
     checked = 0
     for name in files:
@@ -293,9 +293,17 @@ def verify_installed_files(archive, manifest):
         p = Path("/usr/local") / rel
         need(stat.S_IMODE(p.lstat().st_mode) == 0o755,
              "INSTALLED_EXECUTABLE_NOT_0755:" + rel)
+    # Stage 1.05 requires actual installed bytes, not merely a pkgdb path.
+    policy_path = Path("/usr/local") / native.POLICY_DEST
+    policy_bytes = (native.ROOT / "compatibility.json").read_bytes()
+    need(policy_path.read_bytes() == policy_bytes and
+         "/usr/local/" + native.POLICY_DEST in files,
+         "POLICY_INSTALLED_BYTES_MISMATCH")
     need(checked == len(files), "INSTALLED_FILES_COUNT_MISMATCH")
     return {"exact_installed_package_file_count": checked,
             "files_owned_by_real_pkgdb": True,
+            "compatibility_installed_equals_source": True,
+            "compatibility_sha256": hashlib.sha256(policy_bytes).hexdigest(),
             "source_service_mode": "0755",
             "installed_private_executables_mode": "0755"}
 
@@ -332,7 +340,7 @@ def execute():
         required(["tar", "-xOf", str(path), "+MANIFEST"], "PREINSTALL_ARCHIVE_READ_FAILED"))
     need(manifest_before["version"] == VERSION and
          manifest_before["name"] == NAME and
-         manifest_before["abi"] == native.ABI and
+         manifest_before["abi"] == native.qualified_target()["freebsd_pkg_abi"] and
          set(manifest_before.get("scripts", {})) == set(native.HOOKS.values()),
          "PREINSTALL_NATIVE_PACKAGE_IDENTITY_FAILED")
     installation = pkg_add(path)

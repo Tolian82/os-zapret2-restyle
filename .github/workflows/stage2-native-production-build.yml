@@ -6,6 +6,10 @@ on:
       - Makefile
       - scripts/build-pkg.sh
       - scripts/native-opnsense-package.py
+      - compatibility.json
+      - scripts/validate-compatibility.py
+      - scripts/stage1-native-policy-static.py
+      - scripts/compatibility-bootstrap.sh
       - scripts/test-native-opnsense-package.py
       - scripts/test_freebsd15_package_ci.py
       - .github/workflows/stage2-native-production-build.yml
@@ -33,7 +37,8 @@ jobs:
           python3.13 -m py_compile scripts/native-opnsense-package.py scripts/test-native-opnsense-package.py scripts/test_freebsd15_package_ci.py
           python3.13 scripts/test-native-opnsense-package.py -v
           python3.13 scripts/test_freebsd15_package_ci.py
-          sh -n scripts/build-pkg.sh
+          sh -n scripts/build-pkg.sh scripts/compatibility-bootstrap.sh
+          python3.13 scripts/test-stage1-native-compatibility.py -v
       - name: Real official OPNsense 26.7 native product build, no install
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
@@ -48,13 +53,18 @@ jobs:
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            sh scripts/compatibility-bootstrap.sh
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" sh scripts/build-pkg.sh
             sh scripts/verify-release-package.sh
       - name: Verify copied-back source-only native package and version
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/os-zapret2-restyle-0.6.2_67.pkg
-          tar -xOf dist/os-zapret2-restyle-0.6.2_67.pkg +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_67" and (.deps | keys | length == 7)'
-          sha256sum dist/os-zapret2-restyle-0.6.2_67.pkg
-          echo "PASS: source-only native package; not installed, published, or released"
+          package="dist/os-zapret2-restyle-0.6.2_68.pkg"
+          test -f "$package"
+          tar -xOf "$package" +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_68" and (.deps | keys | length == 7)'
+          member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json$')
+          test "$(printf '%s\n' "$member" | wc -l)" -eq 1
+          tar -xOf "$package" "$member" | cmp - compatibility.json
+          sha256sum "$package"
+          echo "PASS: source-only native package and exact source policy; not published"

@@ -20,9 +20,9 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 VERSION = "0.6.2"
-REVISION = "67"
+REVISION = "68"
 NAME = "os-zapret2-restyle"
-ABI = "FreeBSD:15:amd64"
+POLICY_DEST = "share/zapret2-restyle/compatibility.json"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"
 EXPECTED_ROLES = ("python-runtime", "engine-build-make", "engine-build-pkgconf",
                   "engine-runtime-luajit", "setup-git", "setup-json",
@@ -44,6 +44,7 @@ def load_module(path, name):
 private = load_module("stage2-opnsense-native-private-source.py", "signed_private")
 provider = load_module("stage2-opnsense-native-provider-preflight.py",
                        "native_provider")
+compat = load_module("validate-compatibility.py", "single_compatibility_policy")
 # These helpers have immutable earlier witness revision defaults. Reuse only
 # source/ELF/guest verification primitives, NOT their old manifest verdicts.
 private.old.REVISION = REVISION
@@ -88,16 +89,53 @@ def git_head():
     return expected
 
 
+def validated_policy():
+    policy = compat.load(ROOT / "compatibility.json")
+    compat.validate(policy, ROOT)
+    return policy
+
+
+def qualified_target(py=None):
+    """Match real product, pkg ABI, CPU and observed Python to one policy."""
+    policy = validated_policy()
+    product = provider.command("opnsense-version", "-a")
+    abi = provider.command("pkg", "config", "ABI")
+    cpu = os.uname().machine
+    if py is None:
+        py = private.old.qualify_python_provider()
+    report = compat.check_target(policy, product, abi, cpu,
+                                 py["python_runtime"].removeprefix("Python "))
+    need(report["native_lifecycle_acceptance"] is False,
+         "UNQUALIFIED_LIFECYCLE_ACCEPTANCE")
+    return next(p for p in policy["supported_platforms"] if
+                (p["opnsense_product_abi"], p["freebsd_pkg_abi"],
+                 p["architecture"]) == (product, abi, cpu))
+
+
+def stage_policy(plugin):
+    """Stage byte-identical policy source, never a separate version table."""
+    source = ROOT / "compatibility.json"
+    need(source.is_file() and not source.is_symlink(), "POLICY_SOURCE_NOT_REGULAR")
+    validated_policy()
+    destination = plugin / "src" / POLICY_DEST
+    need(not destination.exists() and not destination.is_symlink(),
+         "POLICY_STAGING_COLLISION")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, destination)
+    need(destination.read_bytes() == source.read_bytes(),
+         "POLICY_STAGING_SOURCE_HASH_MISMATCH")
+    return hashlib.sha256(source.read_bytes()).hexdigest()
+
+
 def gate():
     need(os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
          os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK") == "1",
          "NATIVE_BUILD_NOT_OPTED_IN_TO_ISOLATED_CI")
+    # Retain the independently qualified historical KVM isolation witness.
+    # The old witness is not a qualification of future FreeBSD 16 guests.
     private.old.guest_gate()
-    need(provider.command("opnsense-version", "-a") == "26.7",
-         "NOT_OPNSENSE_26_7")
-    need(provider.command("pkg", "config", "ABI") == ABI,
-         "NOT_TARGET_FREEBSD15_ABI")
+    return qualified_target()
 
 
 def installed_provider_names():
@@ -122,14 +160,14 @@ def installed_provider_names():
     return observed, installed, hashlib.sha256(raw.encode()).hexdigest()
 
 
-def native_make_variables(plugin, sha, py, installed):
+def native_make_variables(plugin, sha, py, installed, platform):
     keys = ("PLUGIN_PKGNAME", "PLUGIN_PKGVERSION", "PLUGIN_ABI", "PLUGIN_HASH",
             "PLUGIN_WWW", "PLUGIN_PYTHON", "PLUGIN_DEPENDS", "PLUGIN_DEVEL")
     result = {key: private.old.mkvar(plugin, sha, key) for key in keys}
     deps = result["PLUGIN_DEPENDS"].split()
     need(result["PLUGIN_PKGNAME"] == NAME and
          result["PLUGIN_PKGVERSION"] == VERSION + "_" + REVISION and
-         result["PLUGIN_ABI"] == "26.7" and
+         result["PLUGIN_ABI"] == platform["opnsense_product_abi"] and
          result["PLUGIN_HASH"] == sha and
          result["PLUGIN_WWW"] == PROJECT_URL and
          result["PLUGIN_PYTHON"] == py["native_plugin_python"] and
@@ -145,7 +183,7 @@ def archived_file(pkg, name):
     return command(["tar", "-xOf", str(pkg), member], timeout=35)
 
 
-def verify_native_package(pkg, plugin, sha, deps, bundle):
+def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
     need(pkg.is_file() and not pkg.is_symlink(),
          "NATIVE_PKG_NOT_FOUND")
     try:
@@ -154,8 +192,9 @@ def verify_native_package(pkg, plugin, sha, deps, bundle):
         raise Refusal("INVALID_NATIVE_PKG_MANIFEST") from None
     need(manifest.get("name") == NAME and
          manifest.get("version") == VERSION + "_" + REVISION and
-         manifest.get("abi") == ABI and
-         manifest.get("arch") == "freebsd:15:x86:64" and
+         manifest.get("abi") == platform["freebsd_pkg_abi"] and
+         manifest.get("arch") == "freebsd:" +
+             platform["freebsd_pkg_abi"].split(":")[1] + ":x86:64" and
          manifest.get("origin") == "opnsense/" + NAME and
          manifest.get("www") == PROJECT_URL,
          "NATIVE_PKG_IDENTITY_WRONG")
@@ -177,7 +216,7 @@ def verify_native_package(pkg, plugin, sha, deps, bundle):
         need(isinstance(hooks[phase], str) and hooks[phase].encode() == expected,
              "NATIVE_MANUAL_HOOK_BYTES_CHANGED:" + phase)
     files = manifest.get("files")
-    need(isinstance(files, dict) and len(files) >= 290,
+    need(isinstance(files, dict) and len(files) >= 291,
          "NATIVE_SOURCE_FILESET_INCOMPLETE")
     source = plugin / "src"
     name_to_source = {}
@@ -190,7 +229,17 @@ def verify_native_package(pkg, plugin, sha, deps, bundle):
         name_to_source[rel] = path
     need(len(name_to_source) == len(files) - 1,
          "NATIVE_UNEXPECTED_STAGED_FILE_COUNT")  # one generated version marker
+    source_policy = (ROOT / "compatibility.json").read_bytes()
+    staged_policy = (source / POLICY_DEST).read_bytes()
+    need(staged_policy == source_policy and
+         hashlib.sha256(staged_policy).hexdigest() == policy_sha,
+         "POLICY_STAGED_SOURCE_MISMATCH")
+    need("/usr/local/" + POLICY_DEST in files, "POLICY_MISSING_FROM_MANIFEST")
     names = command(["tar", "-tf", str(pkg)]).decode().splitlines()
+    archived_policy = archived_file(pkg, POLICY_DEST)
+    need(archived_policy == source_policy and
+         hashlib.sha256(archived_policy).hexdigest() == policy_sha,
+         "POLICY_ARCHIVED_BYTES_MISMATCH")
     modes = command(["tar", "-tvf", str(pkg)]).decode().splitlines()
     for rel, path in name_to_source.items():
         member = private.old.exact_installed_tar_member(names, rel)
@@ -217,7 +266,10 @@ def verify_native_package(pkg, plugin, sha, deps, bundle):
             "original_manual_hooks": list(HOOKS.values()),
             "source_service_mode": "0755", "private_executables_mode": "0755",
             "source_package_hash_annotation": True,
-            "sha256": hashlib.sha256(pkg.read_bytes()).hexdigest()}
+            "sha256": hashlib.sha256(pkg.read_bytes()).hexdigest(),
+            "compatibility_sha256": policy_sha,
+            "compatibility_archive_equals_source": True,
+            "compatibility_qualified_abi": platform["freebsd_pkg_abi"]}
 
 
 def build():
@@ -227,12 +279,15 @@ def build():
     with tempfile.TemporaryDirectory(prefix="zapret2-native-build-") as scratch:
         official = private.old.clone_official(Path(scratch))
         plugin = private.old.prepare_source(official)
-        variables = native_make_variables(plugin, sha, py, installed)
+        platform = qualified_target(py)
+        policy_sha = stage_policy(plugin)
+        variables = native_make_variables(plugin, sha, py, installed, platform)
         private_dir, bundle = private.prepare_private(plugin, Path(scratch))
         command(["make", "-C", str(plugin), "PLUGIN_HASH=" + sha,
                  "PLUGIN_WWW=" + PROJECT_URL, "package"], timeout=370)
         pkg = plugin / "work" / "pkg" / (NAME + "-" + VERSION + "_" + REVISION + ".pkg")
-        evidence = verify_native_package(pkg, plugin, sha, installed, bundle)
+        evidence = verify_native_package(pkg, plugin, sha, installed, bundle,
+                                         platform, policy_sha)
         # Preserve the existing CLI delivery: one package in dist/, no
         # published repo/release and never install this candidate.
         output = ROOT / "dist"
@@ -247,7 +302,7 @@ def build():
              "DIST_PACKAGE_SHA_CHANGED")
     return {"schema": 1, "status": "PASS_OFFICIAL_NATIVE_BUILD_SOURCE_ONLY",
             "project_sha": sha, "framework_sha": private.old.UPSTREAM_SHA,
-            "target_abi": ABI, "provider_catalog_sha256": catalog_digest,
+            "target_abi": platform["freebsd_pkg_abi"], "provider_catalog_sha256": catalog_digest,
             "evaluated_native_make": variables,
             "private_signed_source_sha256": bundle["signed_freebsd_latest_package_sha256"],
             "private_elf_sha256": bundle["private_binary_sha256"],

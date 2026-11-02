@@ -17,9 +17,9 @@ spec.loader.exec_module(mod)
 
 class RealInstallContracts(unittest.TestCase):
     def test_bound_to_real_source_revision(self):
-        self.assertEqual(mod.REVISION, "67")
-        self.assertEqual(mod.VERSION, "0.6.2_67")
-        self.assertEqual(mod.native.REVISION, "67")
+        self.assertEqual(mod.REVISION, "68")
+        self.assertEqual(mod.VERSION, "0.6.2_68")
+        self.assertEqual(mod.native.REVISION, "68")
 
     def test_explicit_cold_install_optin_required(self):
         with patch.dict(os.environ, {mod.OPTIN: "", "GITHUB_ACTIONS": "true",
@@ -64,7 +64,7 @@ class RealInstallContracts(unittest.TestCase):
     def test_discard_foreign_install_manifest(self):
         example = {"name": mod.NAME, "version": mod.VERSION,
                    "origin": "opnsense/" + mod.NAME, "arch": "freebsd:15:x86:64",
-                   "abi": mod.native.ABI,
+                   "abi": mod.native.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"],
                    "deps": {"python313":{"origin":"lang/python313","version":"3.13.14"}},
                    "scripts": {x:"#!/bin/sh\nexit 0\n"
                                for x in mod.native.HOOKS.values()}}
@@ -80,7 +80,7 @@ class RealInstallContracts(unittest.TestCase):
                    for x in mod.native.HOOKS.values()}
         a = {"name": mod.NAME, "version": mod.VERSION,
              "origin": "opnsense/"+mod.NAME, "arch": "freebsd:15:x86:64",
-             "abi": mod.native.ABI, "deps":{}, "scripts":scripts}
+             "abi": mod.native.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"], "deps":{}, "scripts":scripts}
         changed = {**a, "scripts":{**scripts, "post-install":"#!/bin/sh\nexit 71\n"}}
         with patch.object(mod, "required") as req, patch.object(
                 mod.prior, "installed_manifest_from_json",return_value=changed):

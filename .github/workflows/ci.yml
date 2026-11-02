@@ -668,6 +668,14 @@ jobs:
         run: bash scripts/test-pr-revision-policy.sh
       - name: Check primary revision metadata before costly test matrix
         run: python3.13 scripts/test-current-handoff-identity.py
+      - name: Validate single Stage 1 production compatibility policy before costly matrix
+        run: |
+          python3.13 -m py_compile scripts/validate-compatibility.py scripts/test-compatibility.py scripts/test-stage1-native-compatibility.py scripts/stage1-native-policy-static.py
+          sh -n scripts/compatibility-bootstrap.sh
+          python3.13 scripts/validate-compatibility.py
+          python3.13 scripts/test-compatibility.py
+          python3.13 scripts/test-stage1-native-compatibility.py
+          python3.13 scripts/stage1-native-policy-static.py
 
       - name: Fast real native Remove trial and original owner rollback contracts
         run: |
