@@ -60,9 +60,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          package="dist/os-zapret2-restyle-0.6.2_71.pkg"
+          version=$(tr -d '\r\n' < VERSION)
+          revision=$(sed -nE 's/^PLUGIN_REVISION=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' Makefile)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$revision" =~ ^[1-9][0-9]*$ ]]
+          package="dist/os-zapret2-restyle-${version}_${revision}.pkg"
           test -f "$package"
-          tar -xOf "$package" +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_71" and (.deps | keys | length == 7)'
+          tar -xOf "$package" +MANIFEST | jq -e --arg expected "${version}_${revision}" '.name == "os-zapret2-restyle" and .version == $expected and (.deps | keys | length == 7)'
           member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json$')
           test "$(printf '%s\n' "$member" | wc -l)" -eq 1
           tar -xOf "$package" "$member" | cmp - compatibility.json
