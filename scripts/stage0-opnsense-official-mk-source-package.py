@@ -7,7 +7,8 @@ pkgdb of zapret2, service, configd, /conf, IPFW or owner's FreeBSD.conf.
 
 The partial artifact has project source and exact authoritative manual hooks,
 but intentionally lacks separately sourced signed private curl-impersonate
-assets. Its 0644 historical service executable is an explicit open blocker.
+assets. Source service must now have tracked Git 100755 and native pkg 0755;
+this partial archive still cannot be installed or published.
 """
 import hashlib
 import importlib.util
@@ -25,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 UPSTREAM = "https://github.com/opnsense/plugins.git"
 UPSTREAM_SHA = "79a5f88b7b27a706c10511ea5587c9d0e0dbdced"
-REVISION = "57"
+REVISION = "58"
 VERSION = "0.6.2"
 NAME = "os-zapret2-restyle"
 KEY = "ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK"
@@ -273,17 +274,16 @@ def evaluate_archive(archive, plugin, source_service, provider):
          "OFFICIAL_NATIVE_SOURCE_SERVICE_CONTENT_CHANGED")
     verbose = cmd(["tar", "-tvf", str(archive)]).splitlines()
     matching = [line for line in verbose if line.rstrip().endswith(" " + service_member)]
-    need(len(matching) == 1 and matching[0].split()[0] == "-rw-r--r--",
-         "HISTORICAL_SOURCE_MODE_NOT_PRESERVED_BY_NATIVE_BUILD")
-    # The old production builder chmods this service during packaging,
-    # while the official upstream native builder preserves its Git 100644.
-    # This is an observed release BLOCKER, not a permission to auto-chmod.
+    need(len(matching) == 1 and matching[0].split()[0] == "-rwxr-xr-x",
+         "NATIVE_SOURCE_SERVICE_MODE_NOT_0755")
+    # Official Mk/plugins.mk must inherit 0755 from Git without a
+    # corrective chmod by the native rehearsal or production builder.
     need(not any(CURL in x for x in names),
          "PARTIAL_SOURCE_PACKAGE_UNEXPECTED_PRIVATE_CURL_ARTIFACT")
     return {"source_file_count": count,
-            "native_service_archive_mode": "0644",
-            "native_service_mode_is_safe": False,
-            "historical_git_mode_100644_preserved": True,
+            "native_service_archive_mode": "0755",
+            "native_service_mode_is_safe": True,
+            "source_git_mode_100755_proved": True,
             "private_curl_assets_bundled": False,
             "source_service_sha256": hashlib.sha256(source_service).hexdigest(),
             "noninstallable_qualification_only": True,
@@ -297,9 +297,21 @@ def run():
     source_service_path = ROOT / "src" / SERVICE
     info = source_service_path.lstat()
     need(stat.S_ISREG(info.st_mode) and not source_service_path.is_symlink() and
-         stat.S_IMODE(info.st_mode) == 0o644,
-         "CURRENT_GIT_SERVICE_MODE_DEBT_NOT_REPRODUCED")
+         stat.S_IMODE(info.st_mode) == 0o755,
+         "SOURCE_SERVICE_NOT_EXECUTABLE_0755")
     source_bytes = source_service_path.read_bytes()
+    # Bind the effective mode to the tracked Git object, not just a
+    # temporary filesystem chmod or the CI checkout's permissions.
+    listed = cmd(["git", "-c", "safe.directory=" + str(ROOT),
+                  "-C", str(ROOT), "ls-tree", "HEAD",
+                  "src/" + SERVICE])
+    parts = listed.split("\t", 1)
+    need(len(parts) == 2 and parts[1] == "src/" + SERVICE and
+         re.fullmatch(r"100755 blob [a-f0-9]{40}", parts[0]) is not None,
+         "GIT_SERVICE_MODE_NOT_TRACKED_AS_100755")
+    actual_blob = cmd(["git", "hash-object", str(source_service_path)])
+    need(parts[0].split()[-1] == actual_blob,
+         "SOURCE_SERVICE_BYTES_DIFFER_FROM_EXACT_GIT_TREE")
     with tempfile.TemporaryDirectory(prefix="stage0-official-native-source-") as td:
         official = clone_official(Path(td))
         plugin = prepare_source(official)

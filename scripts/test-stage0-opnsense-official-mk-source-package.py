@@ -23,7 +23,7 @@ PROVIDER = {
     "installed_python_provider": "python313|lang/python313|3.13.14",
 }
 VARS = {
-    "PLUGIN_PKGNAME": mod.NAME, "PLUGIN_PKGVERSION": "0.6.2_57",
+    "PLUGIN_PKGNAME": mod.NAME, "PLUGIN_PKGVERSION": "0.6.2_58",
     "PLUGIN_ABI": "26.7", "PLUGIN_PYTHON": "313",
     "PLUGIN_HASH": "f" * 40,
     "PLUGIN_WWW": "https://github.com/Tolian82/os-zapret2-restyle",
@@ -36,7 +36,7 @@ def make_manifest(temp):
     for file in mod.PHASES:
         (p / file).write_text("#!/bin/sh\nexit 0\n")
     return {
-        "name": mod.NAME, "version": "0.6.2_57",
+        "name": mod.NAME, "version": "0.6.2_58",
         "origin": "opnsense/" + mod.NAME,
         "www": "https://github.com/Tolian82/os-zapret2-restyle",
         "deps": {"python313": {"origin": "lang/python313", "version": "3.13.14"}},
@@ -57,7 +57,7 @@ class OfficialMkTests(unittest.TestCase):
     def test_authoritative_upstream_is_sha_pinned(self):
         self.assertEqual(len(mod.UPSTREAM_SHA), 40)
         self.assertEqual(mod.UPSTREAM, "https://github.com/opnsense/plugins.git")
-        self.assertEqual(mod.REVISION, "57")
+        self.assertEqual(mod.REVISION, "58")
 
     def test_project_sha_uses_exact_checkout_scoped_git_trust(self):
         sha = "f" * 40
@@ -210,9 +210,20 @@ class OfficialMkTests(unittest.TestCase):
                 mod.evaluate_archive(Path(td) / "missing.pkg", Path(td),
                                      b"old", PROVIDER)
 
+    def test_source_executable_git_and_archive_mode_are_binding(self):
+        source = (HERE / "stage0-opnsense-official-mk-source-package.py").read_text()
+        self.assertIn('re.fullmatch(r"100755 blob [a-f0-9]{40}"', source)
+        self.assertIn('"SOURCE_SERVICE_BYTES_DIFFER_FROM_EXACT_GIT_TREE"', source)
+        self.assertIn('stat.S_IMODE(info.st_mode) == 0o755', source)
+        self.assertIn('matching[0].split()[0] == "-rwxr-xr-x"', source)
+        self.assertIn('"NATIVE_SOURCE_SERVICE_MODE_NOT_0755"', source)
+        self.assertNotIn('"historical_git_mode_100644_preserved": True', source)
+        self.assertNotIn('chmod(', source)
+
     def test_technical_result_cannot_claim_safe_product_or_install(self):
         content = (HERE / "stage0-opnsense-official-mk-source-package.py").read_text()
-        for clause in ('"native_service_mode_is_safe": False',
+        for clause in ('"native_service_mode_is_safe": True',
+                       '"source_git_mode_100755_proved": True',
                        '"private_curl_assets_bundled": False',
                        '"native_pkg_install_executed": False',
                        '"production_builder_replaced": False',
