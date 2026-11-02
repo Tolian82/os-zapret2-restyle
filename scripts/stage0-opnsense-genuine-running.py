@@ -140,7 +140,10 @@ def original_generated():
 def stage_engine(upstream):
     need(not RUNTIME.is_symlink() and RUNTIME.is_dir() and
          {p.name for p in RUNTIME.iterdir()} == {'zapret.conf'},
-         'GLOBAL_RUNTIME_HAS_UNQUALIFIED_PREEXISTING_CONTENT')
+         'GLOBAL_RUNTIME_HAS_UNQUALIFIED_PREEXISTING_CONTENT:entries=' +
+         repr(sorted((p.name + (':symlink' if p.is_symlink() else ':dir' if p.is_dir() else ':file'))
+                     for p in RUNTIME.iterdir())) if RUNTIME.is_dir() and not RUNTIME.is_symlink()
+              else 'absent_or_symlink'))
     engine = upstream / 'binaries/my/dvtws2'
     need(engine.is_file() and not engine.is_symlink() and os.access(engine, os.X_OK),
          'PINNED_ENGINE_NOT_BUILT')
