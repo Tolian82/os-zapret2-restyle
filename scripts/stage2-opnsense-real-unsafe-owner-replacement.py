@@ -160,30 +160,32 @@ def execute(archive):
              "SUCCESSOR_ARCHIVE_CHANGED")
         need(only_orphan_loopback_divert(),
              "ORPHANED_MANAGED_IPFW_CHANGED_BY_PACKAGE")
-        # Evidence, not a post-hoc gate: root pkg may mutate firmware Config
-        # despite a failed PRE_INSTALL; do not erase that diagnostic.
+        # Evidence, not a post-hoc gate: root pkg may mutate firmware Config.
         config_unchanged = Path("/conf/config.xml").read_bytes() == config_before
+        # Emit the actual native pkgdb result before even cleanup diagnostics.
+        print("STAGE2_UNSAFE_OWNER_PRE_CLEANUP=" + json.dumps({
+            "installed_pkg_after": after_id, "real_pkg_exit": pkg_result.returncode,
+            "authentic_hook_refusal_text": refused,
+            "config_unchanged": config_unchanged
+        }, sort_keys=True), flush=True)
     finally:
         if injected:
             remove_test_orphan()
         current = foreign.command("/sbin/ipfw", "-q", "list")
         need(current.returncode == 0 and
              foreign.only_default(current.stdout),
-             "UNSAFE_IPFW_UNLOAD_REFUSED")
-        need(foreign.command("/sbin/kldunload", "ipdivert").returncode == 0,
-             "DISPOSABLE_IPDIVERT_UNLOAD_FAILED")
-        need(foreign.command("/sbin/kldunload", "ipfw").returncode == 0,
-             "DISPOSABLE_IPFW_UNLOAD_FAILED")
-    foreign.unloaded(inspector)
+             "TEST_RULE_CLEANUP_NOT_DEFAULT_ONLY")
+        # ipfw/ipdivert module unloading is deliberately NOT a product
+        # operation. The single-use KVM guest is destroyed after this job.
     need(pkg_result is not None and after_id is not None,
          "REAL_PKG_COMMAND_NOT_OBSERVED")
     verdict = classify(old_id, new_id, after_id, refused)
     if after_id == old_id:
         need(config_unchanged is True,
              "OLD_PKG_PRESERVED_BUT_CONFIG_MUTATED")
+        final_status = foreign.command(str(old.SERVICE), "status")
         need(clean.digest(Path(old.SERVICE)) == service_sha and
-             inspector.snapshot(archive)["status"] ==
-             "PASS_COLD_READ_ONLY_SNAPSHOT_ONLY",
+             final_status.returncode == 1,
              "OLD_PKGDB_PRESERVED_BUT_PAYLOAD_OR_OWNER_CHANGED")
     return {"schema": 1, "status": "OBSERVED_NATIVE_UNSAFE_OWNER_PKG",
             "orphaned_test_divert": "lo0 TCP/65431 / ipfw 19000",
@@ -196,6 +198,7 @@ def execute(archive):
             "config_unchanged": config_unchanged,
             "orphaned_managed_divert_preserved": True,
             "test_rule_safely_cleaned": True,
+            "ipfw_ipdivert_modules_left_loaded_in_disposable_guest": True,
             "root_pkg_atomic_refusal_proved": False,
             "owner_appliance_modified": False,
             "new_package_published": False}
