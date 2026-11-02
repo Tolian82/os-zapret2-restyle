@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist/os-zapret2-restyle-0.6.2_65.pkg
-          tar -xOf dist/os-zapret2-restyle-0.6.2_65.pkg +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_65" and (.deps | keys | length == 7)'
-          sha256sum dist/os-zapret2-restyle-0.6.2_65.pkg
+          test -f dist/os-zapret2-restyle-0.6.2_66.pkg
+          tar -xOf dist/os-zapret2-restyle-0.6.2_66.pkg +MANIFEST | jq -e '.name == "os-zapret2-restyle" and .version == "0.6.2_66" and (.deps | keys | length == 7)'
+          sha256sum dist/os-zapret2-restyle-0.6.2_66.pkg
           echo "PASS: source-only native package; not installed, published, or released"
