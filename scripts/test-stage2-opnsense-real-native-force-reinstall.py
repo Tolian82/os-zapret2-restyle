@@ -28,6 +28,7 @@ class RealForceReinstallTest(unittest.TestCase):
         flags = {k: "1" for k in
                  (m.OPTIN, "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL",
                   "ZAPRET2_NATIVE_BUILD_CI", "GITHUB_ACTIONS")}
+        flags["GITHUB_ACTIONS"] = "true"
         with patch.dict(os.environ, flags), patch.object(
             m.clean, "preflight", return_value=b"xml"), patch.object(
             m.native, "REVISION", "unqualified"):
