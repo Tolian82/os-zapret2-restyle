@@ -189,6 +189,36 @@ class TestGenuineRunning(unittest.TestCase):
         self.assertEqual(m.residual_processes(
             lines, ('/dvtws2','/supervisor_loop.sh','/zapret_service.sh')), [])
 
+    def test_exact_native_supervisor_parent_leak_is_negative(self):
+        line=('77448     1 daemon: /usr/local/opnsense/scripts/OPNsense/'
+              'Zapret/supervisor_loop.sh[77846] (daemon)')
+        result=m.classify_post_stop_residuals([line])
+        self.assertEqual(result['outcome'],
+                         'HISTORICAL_STOP_LEFT_DAEMONIZED_SUPERVISOR_PARENT')
+        self.assertEqual(result['orphan_pid'],77448)
+
+    def test_supervisor_parent_multiple_owners_fail_closed(self):
+        line=('77448     1 daemon: /usr/local/opnsense/scripts/OPNsense/'
+              'Zapret/supervisor_loop.sh[77846] (daemon)')
+        with self.assertRaisesRegex(m.Refusal,'MULTIPLE_OR_FOREIGN'):
+            m.classify_post_stop_residuals([line,line])
+
+    def test_unknown_supervisor_process_is_not_clean(self):
+        line='782 1 /bin/sh /usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh'
+        with self.assertRaisesRegex(m.Refusal,'UNRECOGNIZED'):
+            m.classify_post_stop_residuals([line])
+
+    def test_no_orphans_explicitly_separate_from_orphan_negative(self):
+        outcome=m.classify_post_stop_residuals([])
+        self.assertEqual(outcome['outcome'],'NO_OWNED_PROCESSES_AFTER_STOP')
+        self.assertIsNone(outcome['orphan_pid'])
+
+    def test_orphan_does_not_grant_pkg_authorization(self):
+        source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
+        self.assertIn("'native_pkg_replacement_safe_after_stop':False",source)
+        self.assertIn("'historical_supervisor_parent_leak_reproduced':not stop_clean",source)
+        self.assertIn("inspector.check_process_census(census)",source)
+
     def test_residual_guard_not_skipped(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn('inspector.check_process_census(census)',source)
