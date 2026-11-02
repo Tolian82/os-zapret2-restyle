@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline negative contract tests for real versioned disposable native pkg gate."""
+import ast
 import importlib.util
 import json
 import os
@@ -141,6 +142,14 @@ class VersionedTests(unittest.TestCase):
                     mod.installed_successor(path, "0"*64, b"x",
                         manifest(mod.OLD_VERSION), None, mock.Mock(), mock.Mock())
                 run.assert_not_called()
+
+    def test_every_installed_successor_call_supplies_provider_witness(self):
+        tree = ast.parse((HERE / "stage0-opnsense-versioned-native-pkg.py").read_text())
+        calls = [node for node in ast.walk(tree)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id == "installed_successor"]
+        self.assertEqual(len(calls), 2)
+        self.assertEqual([len(node.args) for node in calls], [7, 7])
 
     def test_success_report_cannot_claim_official_production_atomicity(self):
         source = (HERE / "stage0-opnsense-versioned-native-pkg.py").read_text()
