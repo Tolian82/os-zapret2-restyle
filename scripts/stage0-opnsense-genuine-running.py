@@ -243,8 +243,24 @@ def residual_processes(census, tokens):
 
 
 OLD_SUPERVISOR_PARENT = re.compile(
-    r'^\\s*(\\d+)\\s+1\\s+daemon: /usr/local/opnsense/scripts/OPNsense/'
-    r'Zapret/supervisor_loop\\.sh\\[(\\d+)\\] \\(daemon\\)\\s*
+    r'^\s*(\d+)\s+1\s+daemon: /usr/local/opnsense/scripts/OPNsense/'
+    r'Zapret/supervisor_loop\.sh\[(\d+)\] \(daemon\)\s*$')
+
+
+def classify_post_stop_residuals(detailed):
+    """Known historical orphan is negative product evidence, never clean Stop."""
+    if not detailed:
+        return {'outcome': 'NO_OWNED_PROCESSES_AFTER_STOP', 'orphan_pid': None}
+    need(len(detailed) == 1, 'POST_STOP_MULTIPLE_OR_FOREIGN_OWNERS:' + repr(detailed[:6]))
+    match = OLD_SUPERVISOR_PARENT.fullmatch(detailed[0])
+    need(match is not None, 'POST_STOP_UNRECOGNIZED_PROCESS:' + repr(detailed[0][:550]))
+    need(match.group(1) != match.group(2),
+         'POST_STOP_ORPHAN_PARENT_CHILD_ID_COLLISION')
+    return {'outcome': 'HISTORICAL_STOP_LEFT_DAEMONIZED_SUPERVISOR_PARENT',
+            'orphan_pid': int(match.group(1)), 'reported_child_pid': int(match.group(2))}
+
+
+def stop_and_observe_kernel(service, inspector):
     rc, out, err = status(service,'stop')
     need(rc == 0, 'REAL_OLD_STOP_FAILED:' + str(rc) + ':' + (out+' '+err)[-280:])
     rc, out, err = status(service,'status')
@@ -263,8 +279,8 @@ OLD_SUPERVISOR_PARENT = re.compile(
         probe = command('/sbin/kldstat','-q','-m',loaded)
         need(probe.returncode == 0,
              'POST_STOP_KERNEL_MODULE_IDENTITY_CHANGED:' + loaded)
-    # The historical daemon -P supervisor parent can briefly outlive the
-    # monitor. Give only a bounded, read-only 3s exit grace period.
+    # A historical daemon -P supervisor parent may outlive the monitor.
+    # Allow at most 3 seconds of read-only natural exit; no signals here.
     census = inspector.checked_process_census()
     matches = residual_processes(census, inspector.PROCESS_TOKENS)
     for _ in range(3):
@@ -276,9 +292,7 @@ OLD_SUPERVISOR_PARENT = re.compile(
     if not matches:
         inspector.check_process_census(census)
         return classify_post_stop_residuals([])
-    # DO NOT bypass the original strict cold-owner process guard. Preserve
-    # its refusal as evidence and classify only the one exact process form
-    # observed with historical 0.6.2_1 in an already qualified disposable VM.
+    # Invoke the original strict owner guard and require it to refuse.
     try:
         inspector.check_process_census(census)
     except inspector.Refusal as exc:
@@ -291,9 +305,8 @@ OLD_SUPERVISOR_PARENT = re.compile(
     need(pid_census.returncode == 0, 'POST_STOP_RESIDUAL_IDENTITY_UNAVAILABLE')
     detailed = residual_processes(pid_census.stdout, inspector.PROCESS_TOKENS)
     need(detailed, 'POST_STOP_RESIDUAL_VANISHED_DURING_IDENTITY_PROBE')
-    # The following outcome is NEGATIVE *product evidence* even if CI proves
-    # the reproduction. The process is not terminated, ignored, or considered
-    # safely stopped for any future package operation.
+    # Historical parent leak is a NEGATIVE product witness, not proof of a
+    # clean Stop nor authority to replace a package or kill the parent.
     return classify_post_stop_residuals(detailed)
 
 def run(archive):
@@ -388,161 +401,6 @@ def run(archive):
             'stop_all_processes_clean':stop_clean,
             'historical_supervisor_parent_leak_reproduced':not stop_clean,
             'native_pkg_replacement_safe_after_stop':False,
-            'genuine_running_engine_tested':True,
-            'actual_package_upgrade_tested':False,
-            'full_lifecycle_acceptance_passed':False,'stage0_closed':False}
-
-
-def main():
-    if len(sys.argv)!=2:
-        print('STAGE0_GENUINE_RUN=REFUSED:ARCHIVE_REQUIRED',file=sys.stderr)
-        return 2
-    try:
-        print('STAGE0_GENUINE_RUN='+json.dumps(run(Path(sys.argv[1])),sort_keys=True))
-        return 0
-    except (Refusal, OSError, ValueError, TypeError, KeyError, ET.ParseError) as e:
-        print('STAGE0_GENUINE_RUN=REFUSED:'+str(e),file=sys.stderr)
-        return 2
-
-
-if __name__=='__main__':
-    sys.exit(main())
-)
-
-
-def classify_post_stop_residuals(detailed):
-    """A known historical failure is *recorded*, never accepted as clean Stop."""
-    if not detailed:
-        return {'outcome': 'NO_OWNED_PROCESSES_AFTER_STOP', 'orphan_pid': None}
-    need(len(detailed) == 1, 'POST_STOP_MULTIPLE_OR_FOREIGN_OWNERS:' + repr(detailed[:6]))
-    match = OLD_SUPERVISOR_PARENT.fullmatch(detailed[0])
-    need(match is not None, 'POST_STOP_UNRECOGNIZED_PROCESS:' + repr(detailed[0][:550]))
-    need(match.group(1) != match.group(2),
-         'POST_STOP_ORPHAN_PARENT_CHILD_ID_COLLISION')
-    return {'outcome': 'HISTORICAL_STOP_LEFT_DAEMONIZED_SUPERVISOR_PARENT',
-            'orphan_pid': int(match.group(1)), 'reported_child_pid': int(match.group(2))}
-
-
-def stop_and_observe_kernel(service, inspector):
-    rc, out, err = status(service,'stop')
-    need(rc == 0, 'REAL_OLD_STOP_FAILED:' + str(rc) + ':' + (out+' '+err)[-280:])
-    rc, out, err = status(service,'status')
-    need(rc == 1 and out == 'zapret is not running',
-         'SERVICE_NOT_STOPPED_AFTER_OLD_STOP:' + str(rc) + ':' + (out+' '+err)[-250:])
-    need(not plugin_rules(), 'OLD_STOP_LEFT_PLUGIN_IPFW_RULES')
-    need(not PID.exists(), 'OLD_STOP_LEFT_ENGINE_PIDFILE')
-    # The production Stop does NOT own shared-kernel module lifecycle.
-    # Confirm only the native built-in default allow remains; do not
-    # forcibly unload ipfw or ipdivert as a false cold-state target.
-    guard = module('stage0-opnsense-foreign-ipfw-admission.py')
-    ipfw = command('/sbin/ipfw','-q','list')
-    need(ipfw.returncode == 0 and guard.only_default(ipfw.stdout),
-         'POST_STOP_FOREIGN_OR_REMAINING_IPFW_RULES')
-    for loaded in ('ipfw', 'ipdivert'):
-        probe = command('/sbin/kldstat','-q','-m',loaded)
-        need(probe.returncode == 0,
-             'POST_STOP_KERNEL_MODULE_IDENTITY_CHANGED:' + loaded)
-    census = inspector.checked_process_census()
-    matches = residual_processes(census, inspector.PROCESS_TOKENS)
-    if matches:
-        # Diagnostic ONLY: do not bless matching processes or send signals.
-        # PID/PPID let us distinguish a lingering real supervisor from a
-        # false-positive command line in the disposable KVM guest.
-        pid_census = command('/bin/ps', '-ax', '-o', 'pid=', '-o', 'ppid=',
-                             '-o', 'command=')
-        need(pid_census.returncode == 0,
-             'POST_STOP_RESIDUAL_PROCESS_IDENTITY_UNAVAILABLE')
-        detailed = residual_processes(pid_census.stdout, inspector.PROCESS_TOKENS)
-        raise Refusal('POST_STOP_POSSIBLE_ZAPRET_PROCESS_PRESENT:'
-                      + repr(detailed[:8] or matches[:8])[:1600])
-    inspector.check_process_census(census)
-    return 'STOPPED_NO_OWNED_RULES_KERNEL_MODULES_STILL_LOADED'
-
-def run(archive):
-    qualify_guest()
-    installer = module('stage0-opnsense-installed-predecessor.py')
-    inspector = module('stage0-opnsense-prepkg-readonly.py')
-    original = module('stage0-installed-predecessor-readonly.py')
-    upstream = module('stage0-opnsense-upstream-engine-build.py')
-    installer.install_and_verify(archive)
-    hostname = original.run('hostname','-s').decode().strip()
-    identity = original.run_guest(archive,hostname)
-    need(inspector.snapshot(archive)['status']=='PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
-         'REAL_OLD_NOT_INITIAL_COLD')
-    fresh_owned_paths()
-    snapshot, mode, uid, gid, xml = original_config()
-    generated_old, generated_mode, generated_owner = original_generated()
-    saved_hostlists = original_template_hostlists()
-    runtime_info = RUNTIME.lstat()
-    need(stat.S_ISDIR(runtime_info.st_mode) and not RUNTIME.is_symlink(),
-         'NATIVE_RUNTIME_ROOT_NOT_REGULAR_DIRECTORY')
-    runtime_initial_mode = stat.S_IMODE(runtime_info.st_mode)
-    with tempfile.TemporaryDirectory(prefix='stage0-owned-real-start-') as td:
-        folder=Path(td)
-        upstream.build(folder)
-        upstream_sha = upstream.PIN
-        engine_sha = stage_engine(folder/'upstream')
-        # Genuine upstream Setup makes this directory traversable by nobody;
-        # the package-only template may have a restrictive original mode.
-        # Only the disposable guest is changed, with exact mode restoration.
-        RUNTIME.chmod(0o755)
-        try:
-            generated = ET.tostring(insert_test_model(xml), encoding='utf-8')
-            write_config(generated,mode,owner=(uid,gid))
-            reload = command('/usr/local/sbin/configctl', 'template', 'reload',
-                             'OPNsense/Zapret')
-            need(reload.returncode == 0 and reload.stdout.strip() == 'OK',
-                 'NATIVE_TEMPLATE_GENERATION_REFUSED:' +
-                 (reload.stdout+reload.stderr)[-250:])
-            rendered = GENERATED.read_text()
-            need('ZAPRET_ENABLED="1"' in rendered and 'WAN_IF="lo0"' in rendered and
-                 '--filter-tcp='+str(PORT) in rendered,
-                 'NATIVE_TEMPLATE_DID_NOT_RENDER_ISOLATED_TEST_MODEL')
-            # The real historical service calls actual configctl template reload.
-            # This is a fresh disposable VM, Config and generated runtime are
-            # test-owned. Never mock the production template command.
-            pid = bounded_running(original.SERVICE, engine_sha)
-            stop_result = stop_and_observe_kernel(original.SERVICE, inspector)
-        finally:
-            # Source-only experiment: only restore Config if its exact
-            # test-generated contents are still present; no generic Stop
-            # of unknown owners or deletion of foreign files.
-            if CONFIG.read_bytes()==generated:
-                write_config(snapshot,mode,owner=(uid,gid))
-            else:
-                raise Refusal('CONFIG_CHANGED_DURING_TEST_REFUSE_OVERWRITE')
-            # The generated Zapret file pre-existed from authentic package
-            # installation. Restore only this verified test-owned rendered
-            # file, never an unrelated or replaced pathname.
-            if GENERATED.is_symlink() or not GENERATED.is_file() or not \
-               GENERATED.read_bytes().startswith(b'# Auto-generated by OPNsense os-zapret2 plugin'):
-                raise Refusal('GENERATED_CONFIG_FOREIGN_CHANGE_REFUSE_RESTORE')
-            write_config(generated_old,generated_mode,GENERATED,generated_owner)
-            for path, (before, saved_mode, owner) in saved_hostlists.items():
-                if path.is_symlink() or not path.is_file() or path.read_bytes().strip():
-                    raise Refusal('TEMPLATE_HOSTLIST_FOREIGN_CHANGE_REFUSE_RESTORE')
-                write_config(before, saved_mode, path, owner)
-            RUNTIME.chmod(runtime_initial_mode)
-            need(stat.S_IMODE(RUNTIME.lstat().st_mode) == runtime_initial_mode,
-                 'ORIGINAL_RUNTIME_DIRECTORY_MODE_NOT_RESTORED')
-    need(identity == original.run_guest(archive,hostname),
-         'ORIGINAL_INSTALLED_PKG_CHANGED_AFTER_RUNNING_EXPERIMENT')
-    rc, out, err = status(original.SERVICE,'status')
-    need(rc == 1 and out == 'zapret is not running',
-         'FINAL_ORIGINAL_STOPPED_NOT_VERIFIED')
-    need(not plugin_rules() and not PID.exists(),
-         'FINAL_OWNED_RUNTIME_NOT_CLEAN')
-    return {'schema':1,
-            'status':'PASS_GENUINE_OLD_RUNNING_STOPPED_WITH_KERNEL_MODULES_LOADED',
-            'upstream_sha':upstream_sha,'built_engine_sha256':engine_sha,
-            'real_original_start_status_stop':True,'real_running_pid_observed':pid,
-            'real_loopback_owned_ipfw_rule_observed':True,
-            'native_fd9_original_service':True,
-            'original_pkg_unchanged':True,
-            'original_cold_after_stop':False,
-            'kernel_modules_remain_loaded':True,
-            'no_owned_ipfw_rules_after_stop':True,
-            'stop_kernel_observation':stop_result,
             'genuine_running_engine_tested':True,
             'actual_package_upgrade_tested':False,
             'full_lifecycle_acceptance_passed':False,'stage0_closed':False}
