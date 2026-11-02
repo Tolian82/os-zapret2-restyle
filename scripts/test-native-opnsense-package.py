@@ -15,9 +15,9 @@ spec.loader.exec_module(mod)
 
 class NativeBuilderTests(unittest.TestCase):
     def test_revision_and_exact_target(self):
-        self.assertEqual(mod.REVISION, "69")
-        self.assertEqual(mod.private.old.REVISION, "69")
-        self.assertEqual(mod.provider.mk.REVISION, "69")
+        self.assertEqual(mod.REVISION, "70")
+        self.assertEqual(mod.private.old.REVISION, "70")
+        self.assertEqual(mod.provider.mk.REVISION, "70")
         self.assertEqual(mod.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"], "FreeBSD:15:amd64")
 
     def test_missing_optin_refused(self):
