@@ -2,6 +2,7 @@
 """Fast isolated contract tests against the exact Stage 2 stopped replacement functions."""
 import ast
 import copy
+import hashlib
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,12 +14,12 @@ import xml.etree.ElementTree as ET
 SOURCE = Path(__file__).with_name('stage2-opnsense-real-native-stopped-upgrade.py')
 TREE = ast.parse(SOURCE.read_text(encoding='utf-8'))
 FUNCS = {'Refusal', 'need', 'normalized_config', 'check_old_archive',
-         'replace_with_actual_pkg', 'execute'}
+         'replace_with_actual_pkg', 'execute', 'redacted_config_delta', 'prove_preserved_config'}
 NODES = [node for node in TREE.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))
          and node.name in FUNCS]
 NS = {'copy': copy, 'ET': ET, 'Path': Path, 'os': os,
       'OPTIN': 'ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE', 'REVISION': '63',
-      'OLD_VERSION': '0.6.2_1'}
+      'OLD_VERSION': '0.6.2_1', 'hashlib': hashlib, 'json': __import__('json')}
 exec(compile(ast.fix_missing_locations(ast.Module(body=NODES, type_ignores=[])),
              str(SOURCE), 'exec'), NS)
 
@@ -51,6 +52,46 @@ class StoppedNativeContracts(unittest.TestCase):
     def test_config_malformed_refused(self):
         with self.assertRaisesRegex(NS['Refusal'], 'XML_INVALID'):
             NS['normalized_config'](b'<opnsense>')
+
+
+    def test_redacted_delta_never_exposes_config_values(self):
+        a = b'<opnsense><system><hostname>secret-alpha</hostname></system><custom>private-one</custom></opnsense>'
+        b = b'<opnsense><system><hostname>secret-beta</hostname></system><custom>private-two</custom></opnsense>'
+        result = NS['redacted_config_delta'](a, b)
+        self.assertIn('hostname', result['system_changed_tags'])
+        self.assertTrue(any(t.startswith('other_tag_sha256_') for t in result['root_changed_tags']))
+        self.assertNotIn('secret-alpha', str(result))
+        self.assertNotIn('secret-beta', str(result))
+        self.assertNotIn('private-one', str(result))
+        self.assertNotIn('private-two', str(result))
+
+    def test_registered_plugin_only_accepted(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><revision>old</revision><system><hostname>private</hostname><firmware><plugins>foo</plugins><type>production</type></firmware></system></opnsense>'
+        after = b'<opnsense><revision>new</revision><system><hostname>private</hostname><firmware><plugins>foo,os-zapret2-restyle</plugins><type>production</type></firmware></system></opnsense>'
+        r = NS['prove_preserved_config'](before, after)
+        self.assertTrue(r['all_non_registry_config_preserved'])
+
+    def test_foreign_plugin_removal_refused(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><system><firmware><plugins>foo,bar</plugins></firmware></system></opnsense>'
+        after = b'<opnsense><system><firmware><plugins>os-zapret2-restyle</plugins></firmware></system></opnsense>'
+        with self.assertRaisesRegex(NS['Refusal'], 'FOREIGN_PLUGIN'):
+            NS['prove_preserved_config'](before, after)
+
+    def test_unrelated_config_change_refused(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><system><hostname>private1</hostname><firmware><plugins>foo</plugins></firmware></system></opnsense>'
+        after = b'<opnsense><system><hostname>private2</hostname><firmware><plugins>foo,os-zapret2-restyle</plugins></firmware></system></opnsense>'
+        with self.assertRaisesRegex(NS['Refusal'], 'BEYOND_OFFICIAL_METADATA'):
+            NS['prove_preserved_config'](before, after)
+
+    def test_duplicate_plugin_refused(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        before = b'<opnsense><system><firmware><plugins>foo</plugins></firmware></system></opnsense>'
+        after = b'<opnsense><system><firmware><plugins>foo,foo,os-zapret2-restyle</plugins></firmware></system></opnsense>'
+        with self.assertRaisesRegex(NS['Refusal'], 'DUPLICATE'):
+            NS['prove_preserved_config'](before, after)
 
     def test_old_archive_checks_version(self):
         with tempfile.TemporaryDirectory() as folder:
