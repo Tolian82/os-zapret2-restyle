@@ -1,0 +1,43 @@
+name: Stage 2 configd watcher-worker read-only identity
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/stage2-configd-worker-readonly.py
+      - scripts/test-stage2-configd-worker-readonly.py
+      - .github/workflows/stage2-configd-worker-readonly.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  configd-readonly:
+    name: Inspect real configd watcher/worker on disposable OPNsense
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Execute read-only configd identity positive and negative contracts
+        run: |
+          python3.13 -m py_compile scripts/stage2-configd-worker-readonly.py scripts/test-stage2-configd-worker-readonly.py
+          python3.13 scripts/test-stage2-configd-worker-readonly.py -v
+      - name: Observe actual OPNsense configd ancestry and readiness without signals
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            GITHUB_ACTIONS=true ZAPRET2_STAGE2_READONLY_CONFIGD_CI=1 /usr/local/bin/python3 scripts/stage2-configd-worker-readonly.py

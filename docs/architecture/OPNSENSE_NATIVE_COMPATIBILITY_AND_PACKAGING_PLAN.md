@@ -240,4 +240,4 @@ These are work packages, **not reserved `_N` version numbers**. Every merged sou
 
 **Definition of done:** all LH-01–LH-07 and AC-01–AC-10 evidenced on the actual native-built target-qualified *final post-Python* `.pkg` with correct real target `pkg` dependencies, effective file modes, four manual hooks, target-compatible private ELF, Python-independent native Stop where safe, owned-only old repository cleanup, and AC-01–AC-10 evidence **bound to one exact final package SHA-256**. This plan is not proof of implementation, installation or release.
 
-**Next execution step (Stage 2.23–2.24):** after exact _70 CI/merge, qualify actual old/native pkg hooks, unsafe owner/FD9 refusal and configd worker PID ownership on isolated OPNsense. Stage 3/4 and final package acceptance remain open.
+**Next execution step (Stage 2.23–2.24):** qualify [bounded no-signal configd identity `_71`](../verification/evidence/2026-11-02-v0.6.2_71-stage2-configd-worker-readonly.md) on disposable OPNsense, then genuine old/new pkg hook phase/FD9 owner refusal and packaged configctl actions. Snapshots are not permission to signal; safe PID-reuse signalling remains Stage 3.24.
