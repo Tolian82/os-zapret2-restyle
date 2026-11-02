@@ -1,0 +1,47 @@
+name: Stage 2 real clean install of authentic native OPNsense package
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/native-opnsense-package.py
+      - scripts/stage2-opnsense-real-native-clean-install.py
+      - scripts/test-stage2-opnsense-real-native-clean-install.py
+      - .github/workflows/stage2-real-native-clean-install.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  actual-native-clean-install:
+    name: Real native Mk package add + installed pkgdb and file/mode/hooks on isolated OPNsense
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Fast negative tests before real pkg install
+        run: |
+          python3.13 -m py_compile scripts/stage2-opnsense-real-native-clean-install.py scripts/test-stage2-opnsense-real-native-clean-install.py
+          python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
+          python3.13 scripts/test-native-opnsense-package.py -v
+      - name: Genuine source-build and clean pkg add in disposable OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
