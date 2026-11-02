@@ -95,7 +95,7 @@ class TestGenuineRunning(unittest.TestCase):
     def test_config_write_not_follow_symlink(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
         self.assertIn('stat.S_ISREG(info.st_mode)',source)
-        self.assertIn('os.replace(name, CONFIG)',source)
+        self.assertIn('os.replace(name, target)',source)
 
     def test_foreign_ipfw_unsafe_unload_refusal_contract(self):
         source=(HERE/'stage0-opnsense-genuine-running.py').read_text()
