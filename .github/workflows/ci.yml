@@ -1221,13 +1221,15 @@ jobs:
             }
 
   package:
-    name: Build FreeBSD 15 package
+    name: Build official OPNsense 26.7 native package (source-only CI)
     if: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.package == 'true' }}
     runs-on: ubuntu-latest
     needs: [changes, validate]
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Read package version
         id: version
@@ -1246,36 +1248,42 @@ jobs:
 
           echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
 
-      - name: Build package inside FreeBSD 15 VM
-        uses: vmactions/freebsd-vm@v1
+      - name: Build package inside qualified OPNsense 26.7 VM
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
-          release: "15.0"
-          usesh: true
-          prepare: pkg install -y jq python313 gmake pkgconf luajit git
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          mem: 4096
+          cpu: 2
           run: |
-            test "$(freebsd-version -u | cut -d. -f1)" = "15"
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-foundation.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-probes.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-spec.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-graph.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh
-            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
-            /usr/local/bin/python3.13 scripts/test-voice-ipfw-adapter.py
-            /usr/local/bin/python3.13 scripts/test-voice-live-inspect.py
-            /usr/local/bin/python3.13 scripts/test-voice-generator-interop.py
-            /usr/local/bin/python3.13 scripts/test-voice-common-runtime.py
-            /usr/local/bin/python3.13 scripts/test-voice-native-build-wire.py
-            /usr/local/bin/python3.13 scripts/test-voice-native-lifecycle-router.py
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            test "$(opnsense-version -a)" = "26.7"
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-foundation.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-state-persistence.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-orchestration.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-probes.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-candidate-spec.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-candidate-family.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-search-graph.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-adaptive-planner.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-search-extended.sh
+            /usr/local/bin/python3 scripts/test-voice-ipfw-adapter.py
+            /usr/local/bin/python3 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3 scripts/test-voice-generator-interop.py
+            /usr/local/bin/python3 scripts/test-voice-common-runtime.py
+            /usr/local/bin/python3 scripts/test-voice-native-build-wire.py
+            /usr/local/bin/python3 scripts/test-voice-native-lifecycle-router.py
             sh scripts/test-voice-atomic-rollback-preflight.sh
-            /usr/local/bin/python3.13 scripts/test-ipset-policy.py
-            /usr/local/bin/python3.13 scripts/test-voice-targets-integration.py
-            sh scripts/build-pkg.sh
-            sh scripts/test-private-curl-native-ech.sh
+            /usr/local/bin/python3 scripts/test-ipset-policy.py
+            /usr/local/bin/python3 scripts/test-voice-targets-integration.py
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" sh scripts/build-pkg.sh
 
-      - name: Inspect built FreeBSD 15 package
+      - name: Inspect native OPNsense 26.7 package
         run: |
           set -eu
           contents=$(mktemp)
@@ -1286,11 +1294,11 @@ jobs:
           tar -tf dist/*.pkg > "${contents}"
           head -30 "${contents}"
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw|forward_supervisor|candidate_engine_start|forward_stop)[.]py$' "${contents}"; then
-            echo "ERROR: retired private Voice backend leaked into installable FreeBSD package" >&2
+            echo "ERROR: retired private Voice backend leaked into native OPNsense package" >&2
             exit 1
           fi
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
-            echo "ERROR: retired operator Voice workers leaked into FreeBSD package" >&2
+            echo "ERROR: retired operator Voice workers leaked into native OPNsense package" >&2
             exit 1
           fi
           grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh' "${contents}"
@@ -1346,7 +1354,7 @@ jobs:
           tar -xf dist/*.pkg -C "${extracted}"
           php scripts/test-voice-ui-route.php "${extracted}/usr/local/opnsense"
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
-          jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and .deps.python313.origin == "lang/python313" and (.deps | has("php85-posix") | not)' "${manifest}" >/dev/null
+          jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and (.deps | keys | length == 7) and (.deps | has("git") and has("jq") and has("gmake") and has("pkgconf") and has("luajit") and has("ca_root_nss")) and (.deps | has("php85-posix") | not)' "${manifest}" >/dev/null
           head -80 "${manifest}"
 
       - name: Upload package artifact

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Stage 2 official native package CI contract plus preserved Model-C tests."""
 from pathlib import Path
 import re
 import sys
@@ -27,30 +28,38 @@ if not match:
     fail("invalid PLUGIN_REVISION")
 revision = int(match.group(1))
 candidate = f"os-zapret2-restyle-{version}_{revision}.pkg"
-if not re.search(r"^PLUGIN_NAME=\s*zapret2-restyle\s*$", makefile, re.MULTILINE):
-    fail("plugin name mismatch")
-if not re.search(r"^PLUGIN_DEPENDS=\s*python313\s*$", makefile, re.MULTILINE):
-    fail("python313 dependency is missing")
-
-require("scripts/build-pkg.sh", 'python313)  echo "lang/python313"')
-require("scripts/build-pkg.sh", 'cp -R src/opnsense "${STAGE}/usr/local/opnsense"')
-require(".github/workflows/ci.yml", 'release: "15.0"')
-require(".github/workflows/release.yml", "release: '15.0'")
-require(".github/workflows/ci.yml", 'pkg install -y jq python313')
-require(".github/workflows/ci.yml", 'and (.deps | has("php85-posix") | not)')
-require(".github/workflows/release.yml", 'prepare: pkg install -y jq')
+require("Makefile", 'PLUGIN_DEPENDS=     python${PLUGIN_PYTHON} gmake pkgconf luajit git jq ca_root_nss')
+require("Makefile", '.include "../../Mk/plugins.mk"')
+require("scripts/build-pkg.sh", 'exec /usr/local/bin/python3')
+require("scripts/build-pkg.sh", "native-opnsense-package.py")
+require("scripts/native-opnsense-package.py", 'private.old.clone_official(Path(scratch))')
+require("scripts/native-opnsense-package.py", "private.prepare_private(plugin")
+require("scripts/native-opnsense-package.py", 'native_make_variables(plugin, sha, py, installed)')
+require("scripts/native-opnsense-package.py", "verify_native_package(")
+require("scripts/native-opnsense-package.py", '"publication_approved": False')
+require(".github/workflows/ci.yml", 'name: Build official OPNsense 26.7 native package (source-only CI)')
+require(".github/workflows/ci.yml", 'uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235')
+require(".github/workflows/ci.yml", 'copyback: true')
+require(".github/workflows/ci.yml", 'ZAPRET2_NATIVE_BUILD_CI=1')
+require(".github/workflows/ci.yml", 'scripts/test-freebsd15-package-ci')
+require(".github/workflows/release.yml", 'name: Build package and pkg repository inside qualified OPNsense 26.7')
+require(".github/workflows/release.yml", "native-product-installed-acceptance.json")
+require(".github/workflows/release.yml", 'sh scripts/verify-release-package.sh')
+require(".github/workflows/ci.yml", 'tar -tf dist/*.pkg > "${contents}"')
+require(".github/workflows/ci.yml", 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"')
+require(".github/workflows/ci.yml", '.abi == "FreeBSD:15:amd64"')
+require(".github/workflows/ci.yml", 'has("ca_root_nss")')
+require(".github/workflows/release.yml", 'pages/FreeBSD:15:amd64')
 require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_lock.php", "['/usr/bin/id', '-u']")
 require("scripts/test-shared-apply-lock.sh", 'php -n "$ROOT/scripts/test-shared-apply-uid.php"')
 require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php", 'SharedApplyLifecycleLock::effectiveUid()')
 require("src/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php", 'SharedApplyLifecycleLock::effectiveUid()')
-require(".github/workflows/ci.yml", 'tar -tf dist/*.pkg > "${contents}"')
-require(".github/workflows/ci.yml", 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"')
-require(".github/workflows/ci.yml", '.abi == "FreeBSD:15:amd64"')
-require(".github/workflows/ci.yml", '.arch == "freebsd:15:x86:64"')
-require(".github/workflows/ci.yml", '.deps.python313.origin == "lang/python313"')
-require(".github/workflows/ci.yml", 'freebsd-version -u')
-require(".github/workflows/ci.yml", 'scripts/test-freebsd15-package-ci')
-
+builder = text("scripts/build-pkg.sh") + text("scripts/native-opnsense-package.py")
+for obsolete in ("pkg-static create", "dep_origin()", "jq -n", "version\":\"0",
+                 "find \"${STAGE}\" -type f -name \"*.sh\" -exec chmod",
+                 'sed -n "s/^'):
+    if obsolete in builder:
+        fail(f"retired private builder logic remains: {obsolete}")
 entry = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py"
 measurement = "src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/model_c_lifecycle_measurement.py"
 lifecycle_test = "scripts/test-strategy-lab-model-c-lifecycle-measurement.sh"
@@ -105,4 +114,4 @@ require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md",
         "real installed Zapret2 service")
 require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md",
         "native GUI-path prechecks")
-print(f"PASS: FreeBSD 15 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")
+print(f"PASS: Official OPNsense 26.7 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")
