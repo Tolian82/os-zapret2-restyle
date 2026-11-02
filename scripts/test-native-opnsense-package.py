@@ -15,10 +15,10 @@ spec.loader.exec_module(mod)
 
 class NativeBuilderTests(unittest.TestCase):
     def test_revision_and_exact_target(self):
-        self.assertEqual(mod.REVISION, "67")
-        self.assertEqual(mod.private.old.REVISION, "67")
-        self.assertEqual(mod.provider.mk.REVISION, "67")
-        self.assertEqual(mod.ABI, "FreeBSD:15:amd64")
+        self.assertEqual(mod.REVISION, "68")
+        self.assertEqual(mod.private.old.REVISION, "68")
+        self.assertEqual(mod.provider.mk.REVISION, "68")
+        self.assertEqual(mod.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"], "FreeBSD:15:amd64")
 
     def test_missing_optin_refused(self):
         with patch.dict(os.environ, {"ZAPRET2_NATIVE_BUILD_CI": "",
@@ -33,7 +33,7 @@ class NativeBuilderTests(unittest.TestCase):
                 mod.git_head()
 
     def test_mk_accepts_derived_python_and_real_dependencies(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_67",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_68",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake pkgconf luajit git jq ca_root_nss",
@@ -42,11 +42,12 @@ class NativeBuilderTests(unittest.TestCase):
         with patch.object(mod.private.old, "mkvar",
                           side_effect=lambda p,s,k:vars[k]):
             self.assertEqual(mod.native_make_variables(
-                Path("/tmp"), "f"*40, {"native_plugin_python":"313"},installed),
+                Path("/tmp"), "f"*40, {"native_plugin_python":"313"},installed,
+                mod.validated_policy()["supported_platforms"][0]),
                 vars)
 
     def test_mk_refuses_unsafe_dependency_mismatch(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_67",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_68",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake", "PLUGIN_DEVEL":""}
@@ -55,7 +56,8 @@ class NativeBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(mod.Refusal,"VARS_OR_REAL_DEPS_MISMATCH"):
                 mod.native_make_variables(Path("/tmp"), "f"*40,
                                           {"native_plugin_python":"313"},
-                                          {"python313":{}, "git":{}})
+                                          {"python313":{}, "git":{}},
+                                          mod.validated_policy()["supported_platforms"][0])
 
     def test_archive_verification_requires_exact_manual_hooks_and_modes(self):
         source = (HERE / "native-opnsense-package.py").read_text()
@@ -72,7 +74,7 @@ class NativeBuilderTests(unittest.TestCase):
         for snippet in ('private.old.clone_official(Path(scratch))',
                         'private.prepare_private(plugin, Path(scratch))',
                         'command(["make", "-C", str(plugin)',
-                        'verify_native_package(pkg, plugin, sha, installed, bundle)',
+                        'verify_native_package(pkg, plugin, sha, installed, bundle,',
                         'shutil.copyfile(pkg, dest)'):
             self.assertIn(snippet, source)
         for forbidden in ("pkg-static create", "dep_origin()", "chmod("):
