@@ -20,7 +20,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 VERSION = "0.6.2"
-REVISION = "61"
+REVISION = "62"
 NAME = "os-zapret2-restyle"
 ABI = "FreeBSD:15:amd64"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"
