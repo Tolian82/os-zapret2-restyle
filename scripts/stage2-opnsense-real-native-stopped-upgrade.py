@@ -139,7 +139,9 @@ def execute(archive):
     runtime = verify_cold_runtime()
     config_after = Path('/conf/config.xml').read_bytes()
     need(normalized_config(config_before) == normalized_config(config_after),
-         'OPNSENSE_CONFIG_CHANGED_BEYOND_REVISION_ON_STOPPED_REPLACEMENT')
+         'OPNSENSE_CONFIG_CHANGED_BEYOND_REVISION_ON_STOPPED_REPLACEMENT:' +
+         json.dumps(clean.config_structure_diagnostic(config_before, config_after),
+                    sort_keys=True))
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_STOPPED_VERSION_REPLACEMENT',
             'tested_exact_project_sha': package['project_sha'],
             'native_source_package_sha256': expected_sha,
