@@ -36,11 +36,11 @@ class UnsafePkgContract(unittest.TestCase):
                        "only_orphan_loopback_divert()",
                        "ORPHAN_RULE = 19000",
                        "ORPHAN_PORT = 65431",
-                       "DISPOSABLE_IPDIVERT_UNLOAD_FAILED",
+                       "ipfw_ipdivert_modules_left_loaded_in_disposable_guest",
                        "foreign.only_default(current.stdout)"):
             self.assertIn(marker, TEXT)
         for forbidden in ("configctl", "zapret start", "zapret stop",
-                          "foreign.foreign_rule_add()"):
+                          "foreign.foreign_rule_add()", "kldunload"):
             self.assertNotIn(forbidden, TEXT)
 
     def test_real_original_status_and_pkgdb_observed(self):
