@@ -64,6 +64,44 @@ def normalized_config(raw):
     return ET.tostring(root, encoding='utf-8')
 
 
+
+def redacted_config_delta(before, after):
+    """Expose only tags/structural counts, never any Config user values."""
+    try:
+        a = ET.fromstring(before)
+        b = ET.fromstring(after)
+    except ET.ParseError:
+        return {'xml_readable': False}
+    known_root = {'system', 'OPNsense', 'installedpackages', 'version',
+                  'lastchange', 'interfaces', 'filter', 'nat', 'widgets'}
+    known_system = {'firmware', 'hostname', 'webgui', 'ssh', 'timezone'}
+    known_firmware = {'plugins', 'type'}
+
+    def tag_label(tag, allowed):
+        return tag if tag in allowed else 'other_tag_sha256_' + hashlib.sha256(
+            tag.encode('utf-8')).hexdigest()[:12]
+
+    def changed(parent_a, parent_b, allowed):
+        aa = {e.tag: e for e in parent_a} if parent_a is not None else {}
+        bb = {e.tag: e for e in parent_b} if parent_b is not None else {}
+        return [tag_label(k, allowed) for k in sorted(set(aa) | set(bb))
+                if k not in aa or k not in bb or
+                ET.tostring(aa[k]) != ET.tostring(bb[k])]
+
+    return {'xml_readable': True,
+            'root_changed_tags': changed(a, b, known_root),
+            'system_changed_tags': changed(a.find('system'), b.find('system'),
+                                           known_system),
+            'firmware_changed_tags': changed(a.find('system/firmware'),
+                                             b.find('system/firmware'),
+                                             known_firmware),
+            'opnsense_node_changed': ET.tostring(a.find('OPNsense')) !=
+                                     ET.tostring(b.find('OPNsense')) if
+                                     a.find('OPNsense') is not None and
+                                     b.find('OPNsense') is not None else
+                                     a.find('OPNsense') is not b.find('OPNsense')}
+
+
 def check_old_archive(path):
     need(path.is_file() and not path.is_symlink(), 'OLD_ARCHIVE_NOT_REGULAR')
     archive, _service = old.archive_data(path)  # immutable published SHA
@@ -140,7 +178,7 @@ def execute(archive):
     config_after = Path('/conf/config.xml').read_bytes()
     need(normalized_config(config_before) == normalized_config(config_after),
          'OPNSENSE_CONFIG_CHANGED_BEYOND_REVISION_ON_STOPPED_REPLACEMENT:' +
-         json.dumps(clean.config_structure_diagnostic(config_before, config_after),
+         json.dumps(redacted_config_delta(config_before, config_after),
                     sort_keys=True))
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_STOPPED_VERSION_REPLACEMENT',
             'tested_exact_project_sha': package['project_sha'],
