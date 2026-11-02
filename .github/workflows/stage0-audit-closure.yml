@@ -1,0 +1,37 @@
+name: Stage 0 audit closure evidence-only contract
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - docs/START_HERE.md
+      - docs/PROJECT_STATE.md
+      - docs/ROADMAP.md
+      - docs/releases/v0.6.2.md
+      - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
+      - docs/verification/evidence/2026-11-02-v0.6.2_66-stage0-audit-closure.md
+      - scripts/stage0-audit-closure.py
+      - scripts/test-stage0-audit-closure.py
+      - .github/workflows/stage0-audit-closure.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-only:
+    name: Check 16 Stage 0 audit baselines and reject unqualified product acceptance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Source-only Stage 0 acceptance record and negative cases
+        run: |
+          python3.13 -m py_compile scripts/stage0-audit-closure.py scripts/test-stage0-audit-closure.py
+          python3.13 scripts/test-stage0-audit-closure.py -v
+          python3.13 scripts/stage0-audit-closure.py
+          python3.13 scripts/test-current-handoff-identity.py
