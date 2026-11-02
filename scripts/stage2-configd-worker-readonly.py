@@ -78,8 +78,9 @@ def snapshot(path=PID_FILE):
     worker = process(worker_pid)
     need(worker['ppid'] == parent, 'CONFIGD_WORKER_PARENT_MISMATCH')
     need(SERVICE in worker['command'], 'CONFIGD_WORKER_COMMAND_PATH_MISMATCH')
-    need(worker['command'].rstrip().endswith('configd.py console'),
-         'CONFIGD_WORKER_CONSOLE_SUFFIX_MISMATCH')
+    need(re.search(r'(?<!\S)' + re.escape(SERVICE) +
+                   r'\s+console(?=\s|$)', worker['command']) is not None,
+         'CONFIGD_WORKER_CONSOLE_ROLE_MISMATCH')
     return {'watcher': watcher, 'worker': worker}
 
 

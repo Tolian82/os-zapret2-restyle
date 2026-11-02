@@ -77,11 +77,17 @@ class WorkerIdentityTests(unittest.TestCase):
         for command, reason in (
             ('python3 /tmp/foreign/configd.py console', 'COMMAND_PATH_MISMATCH'),
             ('python3 /usr/local/opnsense/service/configd.py other',
-             'CONSOLE_SUFFIX_MISMATCH')):
+             'CONSOLE_ROLE_MISMATCH')):
             self.worker = row(4242, 4142, command)
             with self.subTest(reason=reason), patch.object(witness, 'run', side_effect=self.fake):
                 with self.assertRaisesRegex(witness.Refusal, reason):
                     witness.snapshot(self.pidfile)
+
+    def test_real_worker_extra_arguments_do_not_hide_verified_console_role(self):
+        self.worker = row(4242, 4142,
+                          'python3 /usr/local/opnsense/service/configd.py console --worker-info')
+        with patch.object(witness, 'run', side_effect=self.fake):
+            self.assertEqual(witness.snapshot(self.pidfile)['worker']['ppid'], 4142)
 
     def test_watcher_not_a_console_worker(self):
         self.watcher = row(4142, 1, 'python3 /usr/local/opnsense/service/configd.py console')
