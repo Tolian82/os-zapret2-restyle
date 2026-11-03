@@ -8,6 +8,7 @@ root-pkg admission, owner-live upgrade, rollback or configd PID-reuse safety.
 import hashlib
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import re
 import stat
@@ -19,7 +20,7 @@ import xml.etree.ElementTree as ET
 import importlib.util
 
 HERE = Path(__file__).resolve().parent
-REVISION = "82"
+REVISION = revision_from_makefile()
 OPTIN = "ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE"
 
 

@@ -9,13 +9,14 @@ import hashlib
 import importlib.util
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import sys
 import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 OPTIN = 'ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE'
-REVISION = '82'
+REVISION = revision_from_makefile()
 OLD_VERSION = '0.6.2_1'
 
 

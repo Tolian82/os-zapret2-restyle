@@ -16,11 +16,12 @@ import stat
 import subprocess
 import sys
 import tempfile
+from stage2_source_revision import revision_from_makefile
 
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 VERSION = "0.6.2"
-REVISION = "82"
+REVISION = revision_from_makefile()
 NAME = "os-zapret2-restyle"
 POLICY_DEST = "share/zapret2-restyle/compatibility.json"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"

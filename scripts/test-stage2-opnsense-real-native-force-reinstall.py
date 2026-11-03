@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from stage2_source_revision import revision_from_makefile
 from unittest.mock import Mock, patch
 
 SOURCE = Path(__file__).with_name("stage2-opnsense-real-native-force-reinstall.py")
@@ -15,7 +16,7 @@ spec.loader.exec_module(m)
 
 class RealForceReinstallTest(unittest.TestCase):
     def test_revision(self):
-        self.assertEqual(m.REVISION, "82")
+        self.assertEqual(m.REVISION, revision_from_makefile())
 
     def test_refuse_without_disposable_gates_before_guest(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(

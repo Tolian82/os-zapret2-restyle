@@ -7,12 +7,13 @@ or a product transaction-safety acceptance. Never run on owner hardware.
 import importlib.util
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import sys
 import time
 
 HERE = Path(__file__).resolve().parent
-REVISION = "82"
+REVISION = revision_from_makefile()
 OPTIN = "ZAPRET2_STAGE2_REAL_FIRMWARE_UNLOCK_BYPASS"
 NAME = "os-zapret2-restyle"
 

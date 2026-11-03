@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 import copy
 import re
 from pathlib import Path
@@ -19,7 +20,7 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 NAME = "os-zapret2-restyle"
-REVISION = "82"
+REVISION = revision_from_makefile()
 VERSION = "0.6.2_" + REVISION
 OPTIN = "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL"
 PRESERVED = ("/var/run/zapret2-restyle/pkg-upgrade.restart",
