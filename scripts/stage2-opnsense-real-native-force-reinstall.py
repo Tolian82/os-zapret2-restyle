@@ -6,13 +6,14 @@ Do not run against an owner system. No package is published.
 """
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import sys
 
 import importlib.util
 
 HERE = Path(__file__).resolve().parent
-REVISION = "82"
+REVISION = revision_from_makefile()
 OPTIN = "ZAPRET2_STAGE2_REAL_SAME_VERSION_REINSTALL"
 
 

@@ -8,6 +8,7 @@ The test's real pkg may replace the old package in one-use CI VM only.
 import importlib.util
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import signal
 import stat
@@ -17,7 +18,7 @@ import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
-REVISION = "82"
+REVISION = revision_from_makefile()
 OPTIN = "ZAPRET2_STAGE2_REAL_HELD_FD9_PKG"
 LIFECYCLE_LOCK = Path("/var/run/zapret2-lifecycle.lock")
 LOCKF = "/usr/bin/lockf"

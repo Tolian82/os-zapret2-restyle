@@ -6,11 +6,12 @@ This is a hazard/mitigation measurement, NOT an atomic updater or root veto.
 import importlib.util
 import json
 import os
+from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-REVISION = "82"
+REVISION = revision_from_makefile()
 OPTIN = "ZAPRET2_STAGE2_REAL_LOCKED_UNSAFE_OWNER_PKG"
 NAME = "os-zapret2-restyle"
 
