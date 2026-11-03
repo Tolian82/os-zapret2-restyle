@@ -4,24 +4,9 @@ on:
   workflow_run:
     workflows:
       - 'CI'
-      - 'Pull request title'
-      - 'Stage 0 audit closure evidence-only contract'
-      - 'Stage 1 OPNsense FreeBSD compatibility source policy'
-      - 'Stage 2 actual old FD9 held across authentic native pkg'
-      - 'Stage 2 configd watcher-worker read-only identity'
-      - 'Stage 2 genuine OPNsense Mk production builder (source-only acceptance)'
-      - 'Stage 2 genuine RUNNING old owner to official native OPNsense successor'
-      - 'Stage 2 genuine STOPPED predecessor to official native OPNsense package'
-      - 'Stage 2 genuine locked predecessor versus unsafe native pkg'
-      - 'Stage 2 genuine pre-pkg locked cold revalidation without nested Status'
-      - 'Stage 2 genuine stock OPNsense firmware Unlock bypass'
-      - 'Stage 2 historical service Status under original FD9'
-      - 'Stage 2 native unsafe-owner real pkg replacement witness'
-      - 'Stage 2 real clean install of authentic native OPNsense package'
-      - 'Stage 2 true native STOPPED same-version force reinstall'
     types: [completed]
   schedule:
-    - cron: '17,47 * * * *'
+    - cron: '7,17,27,37,47,57 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -31,8 +16,10 @@ on:
 permissions:
   contents: read
   actions: read
-  pull-requests: read
   issues: write
+  # GitHub's PR timeline comment endpoint has returned 403 with issues:write
+  # despite the declared scope. Do not execute code from an untrusted PR.
+  pull-requests: write
 
 concurrency:
   group: pr-completion-watchdog-${{ github.repository }}
