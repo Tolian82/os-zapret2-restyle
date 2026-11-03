@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 OPTIN = 'ZAPRET2_STAGE2_REAL_STOPPED_UPGRADE'
-REVISION = '78'
+REVISION = '79'
 OLD_VERSION = '0.6.2_1'
 
 
