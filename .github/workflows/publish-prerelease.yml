@@ -104,16 +104,23 @@ jobs:
             echo "already_published=false" >> "${GITHUB_OUTPUT}"
           fi
 
-      - name: Build package inside FreeBSD 15 VM
+      - name: Build source-only native OPNsense 26.7 testing candidate
         if: steps.publication.outputs.already_published != 'true'
-        uses: vmactions/freebsd-vm@v1
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
-          release: '15.0'
-          usesh: true
-          prepare: pkg install -y jq
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          mem: 4096
+          cpu: 2
           run: |
-            test "$(freebsd-version -u | cut -d. -f1)" = "15"
-            sh scripts/build-pkg.sh
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            sh scripts/compatibility-bootstrap.sh
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}" sh scripts/build-pkg.sh
 
       - name: Recover already-published package for verification
         if: steps.publication.outputs.already_published == 'true'
@@ -164,7 +171,7 @@ jobs:
             --target "${TARGET_SHA}" \
             --title "${TAG}" \
             --prerelease \
-            --notes $'Testing candidate for owner-assisted live verification.\n\nFreeBSD 15 amd64 only. This prerelease does not publish GitHub Pages or the pkg repository.'
+            --notes $'Testing candidate built with official OPNsense 26.7 Mk for FreeBSD:15:amd64. Not evidence of safe pkg upgrade, LH-08/AC-11, or owner acceptance. This prerelease does not publish GitHub Pages or the pkg repository.'
 
       - name: Verify published release contract
         shell: bash

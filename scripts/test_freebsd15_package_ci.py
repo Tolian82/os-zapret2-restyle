@@ -53,6 +53,14 @@ require(".github/workflows/ci.yml", 'scripts/test-freebsd15-package-ci')
 require(".github/workflows/release.yml", 'name: Build package and pkg repository inside qualified OPNsense 26.7')
 require(".github/workflows/release.yml", "native-product-installed-acceptance.json")
 require(".github/workflows/release.yml", 'sh scripts/verify-release-package.sh')
+for workflow in (".github/workflows/publish-prerelease.yml",
+                 ".github/workflows/testing-package-delivery-ci.yml"):
+    require(workflow, 'vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235')
+    require(workflow, 'release: "26.7"')
+    require(workflow, "ZAPRET2_NATIVE_BUILD_CI=1")
+    require(workflow, 'ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}"')
+    if "vmactions/freebsd-vm@" in text(workflow):
+        fail(f"obsolete stock FreeBSD package builder path: {workflow}")
 require(".github/workflows/ci.yml", 'tar -tf dist/*.pkg > "${contents}"')
 require(".github/workflows/ci.yml", 'tar -xOf dist/*.pkg +MANIFEST > "${manifest}"')
 require(".github/workflows/ci.yml", '.abi == "FreeBSD:15:amd64"')

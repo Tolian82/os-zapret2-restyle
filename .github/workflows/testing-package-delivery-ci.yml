@@ -25,30 +25,42 @@ jobs:
           sh scripts/test-github-branch-hygiene.sh
 
   package:
-    name: Qualify testing-package build on FreeBSD 15
+    name: Qualify official OPNsense 26.7 testing-package build (source-only)
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
 
-      - name: Build package inside FreeBSD 15 VM
-        uses: vmactions/freebsd-vm@v1
+      - name: Build candidate inside qualified OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
-          release: '15.0'
-          usesh: true
-          prepare: pkg install -y jq
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          mem: 4096
+          cpu: 2
           run: |
-            test "$(freebsd-version -u | cut -d. -f1)" = "15"
-            sh scripts/build-pkg.sh
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            sh scripts/compatibility-bootstrap.sh
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}" sh scripts/build-pkg.sh
 
-      - name: Verify package manifest
+      - name: Verify exact native package identity and policy
         shell: bash
         run: |
           set -euo pipefail
-          PACKAGE=$(find dist -maxdepth 1 -type f -name 'os-zapret2-restyle-*.pkg' -print -quit)
-          test -n "${PACKAGE}"
-          MANIFEST=$(mktemp)
-          trap 'rm -f "${MANIFEST}"' EXIT
-          tar -xOf "${PACKAGE}" +MANIFEST > "${MANIFEST}"
-          jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"' "${MANIFEST}" >/dev/null
-          sha256sum "${PACKAGE}"
+          version=$(tr -d '\r\n' < VERSION)
+          revision=$(sed -nE 's/^PLUGIN_REVISION=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' Makefile)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$revision" =~ ^[1-9][0-9]*$ ]]
+          package="dist/os-zapret2-restyle-${version}_${revision}.pkg"
+          test -f "$package"
+          tar -xOf "$package" +MANIFEST | jq -e --arg v "${version}_${revision}" '.name == "os-zapret2-restyle" and .version == $v and .abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64"'
+          member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json$')
+          test "$(printf '%s\n' "$member" | wc -l)" -eq 1
+          tar -xOf "$package" "$member" | cmp - compatibility.json
+          sha256sum "$package"
+          echo 'PASS: source-only native testing-package candidate verified; not published or installed'
