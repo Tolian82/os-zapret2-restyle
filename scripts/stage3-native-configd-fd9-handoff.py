@@ -82,6 +82,17 @@ def readonly_query_mode():
     return value=='1'
 
 
+def late_journal_mode():
+    """One-use final pre-pkg veto test; requires genuine read-only pkg admission."""
+    value=os.environ.get('ZAPRET2_STAGE3_LATE_JOURNAL','')
+    need(value in ('','1'),'LATE_JOURNAL_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_LATE_JOURNAL_CI')=='1' and
+             readonly_query_mode() and not fault_mode(),
+             'LATE_JOURNAL_TEST_MODE_UNQUALIFIED')
+    return value=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -115,6 +126,8 @@ def action_bytes(head):
            'ZAPRET2_STAGE3_HANDOFF_FAULT='+fault+' ') if fault else ''
     if readonly_query_mode():
         extra+='ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 '
+    if late_journal_mode():
+        extra+='ZAPRET2_STAGE3_LATE_JOURNAL=1 ZAPRET2_STAGE3_LATE_JOURNAL_CI=1 '
     return ('[launch]\n'
             'command:/usr/bin/env GITHUB_ACTIONS=true '
             'ZAPRET2_STAGE3_DETACHED_FD9=1 '
@@ -188,6 +201,7 @@ def worker(head):
     qualify(head)
     fault=fault_mode()
     query_enabled=readonly_query_mode()
+    late_journal=late_journal_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -224,6 +238,18 @@ def worker(head):
     try:
         need(base.wait_file(RELEASE,55)==b'RELEASE_TEST_ONLY',
              'WORKER_RELEASE_NOT_AUTHORIZED')
+        if late_journal:
+            # The real old owner became unsafe AFTER successful native pkg query
+            # and original FD9 ACK. Final check must veto before any pkg dispatch.
+            gate=load('stage3-native-configd-final-gate.py')
+            refusal=gate.deny_late_journal_before_pkg(
+                base.cold_owner_held,fields['inode'],os.fstat(9).st_ino)
+            base.create_owned(DONE,json.dumps({
+                **refusal,'sha':head,'pid':os.getpid(),
+                'original_fd9_inode':fields['inode'],
+                'nonce_sha256':digest,'native_mutating_pkg_invoked':False},
+                sort_keys=True).encode())
+            return
         base.cold_owner_held()
         base.create_owned(DONE,json.dumps({
             'status':'FD9_CONTINUOUS_AFTER_CONFIGD_RESTART','schema':1,
@@ -237,6 +263,7 @@ def worker(head):
 def launch(head):
     qualify(head)
     readonly_query_mode()
+    late_journal_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY):
@@ -304,6 +331,7 @@ def wait_ready(head,nonce):
 def execute(head):
     qualify(head)
     query_enabled=readonly_query_mode()
+    late_journal=late_journal_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -329,6 +357,9 @@ def execute(head):
     base.create_owned(TICKET,json.dumps({'head':head,'nonce':nonce}).encode())
     base.create_owned(ACTION,action_bytes(head))
     released=False
+    journal_verified=False
+    journal=None
+    journal_parent_created=False
     try:
         base.run(['/usr/sbin/service','configd','restart'],45)
         actions=base.run(['/usr/local/sbin/configctl','configd','actions'],15)
@@ -355,18 +386,52 @@ def execute(head):
         base.run(['/usr/sbin/service','configd','restart'],45)
         base.check_original_fd9_busy()
         need(wait_ready(head,nonce)==ready,'WORKER_IDENTITY_DRIFT_AFTER_RELOAD')
+        if late_journal:
+            # Inject only a known-invalid, test-owned journal in disposable VM,
+            # AFTER genuine read-only pkg query/ACK, BEFORE final pkg dispatch.
+            journal=load('stage0-opnsense-old-unknown-owner.py')
+            journal.ensure_no_journal()
+            journal_parent_created=journal.create_disposable_root_if_absent()
+            need(journal.create_owned_corrupt_journal() is True,
+                 'KNOWN_INVALID_LATE_JOURNAL_NOT_CREATED')
+            journal.verify_corrupt_journal()
+            base.check_original_fd9_busy()
         base.create_owned(RELEASE,b'RELEASE_TEST_ONLY')
         released=True
         done=json.loads(base.wait_file(DONE,45))
-        need(done.get('status')=='FD9_CONTINUOUS_AFTER_CONFIGD_RESTART' and
-             done.get('pid')==ready['pid'] and done.get('sha')==head and
-             done.get('original_fd9_inode')==ready['original_fd9_inode'] and
-             done.get('nonce_sha256')==ready['nonce_sha256'] and
-             done.get('native_pkg_mutation_invoked') is False,
-             'WORKER_DID_NOT_COMPLETE_CONTINUOUS_FD9_SESSION')
+        if late_journal:
+            need(done.get('status')=='REFUSED_LATE_JOURNAL_BEFORE_MUTATING_PKG' and
+                 done.get('real_owner_check_invoked') is True and
+                 done.get('native_mutating_pkg_dispatch_reached') is False and
+                 done.get('reason')=='REAL_ORIGINAL_FD9_JOURNAL_VETO' and
+                 done.get('pid')==ready['pid'] and done.get('sha')==head and
+                 done.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 done.get('nonce_sha256')==ready['nonce_sha256'] and
+                 done.get('native_mutating_pkg_invoked') is False,
+                 'LATE_OWNER_REACHED_PKG_OR_WRONG_VETO')
+            journal.verify_corrupt_journal()
+            journal_verified=True
+        else:
+            need(done.get('status')=='FD9_CONTINUOUS_AFTER_CONFIGD_RESTART' and
+                 done.get('pid')==ready['pid'] and done.get('sha')==head and
+                 done.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 done.get('nonce_sha256')==ready['nonce_sha256'] and
+                 done.get('native_pkg_mutation_invoked') is False,
+                 'WORKER_DID_NOT_COMPLETE_CONTINUOUS_FD9_SESSION')
     finally:
         if not released and not RELEASE.exists() and not RELEASE.is_symlink():
             base.create_owned(RELEASE,b'RELEASE_TEST_ONLY')
+        # Never remove a late journal on an unproven worker verdict: unknown
+        # state must remain visible, not become a false clean owner.
+        if late_journal and journal_verified:
+            journal.remove_only_owned_journal()
+            if journal_parent_created:
+                parent=journal.JOURNAL.parent
+                need(parent.is_dir() and not parent.is_symlink() and
+                     stat.S_IMODE(parent.stat().st_mode)==0o700 and
+                     not tuple(parent.iterdir()),
+                     'OWNED_JOURNAL_PARENT_CHANGED_NO_DELETE')
+                parent.rmdir()
         need(base.trusted(ACTION)==action_bytes(head),
              'CANNOT_CLEAN_CHANGED_CONFIGD_ACTION')
         ACTION.unlink()
@@ -406,9 +471,13 @@ def execute(head):
     else:
         need(base.LOCK.is_file() and base.LOCK.lstat().st_ino==inode,
              'PREEXISTING_ORIGINAL_LOCK_CHANGED')
-    return {'schema':1,'status':('PASS_TEST_ONLY_CONFIGD_FD9_NATIVE_PKG_READ_ONLY_QUERY'
-                                 if query_enabled else
-                                 'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9'),
+    return {'schema':1,'status':(
+                'PASS_TEST_ONLY_CONFIGD_FD9_LATE_JOURNAL_VETO_BEFORE_PKG'
+                if late_journal else
+                'PASS_TEST_ONLY_CONFIGD_FD9_NATIVE_PKG_READ_ONLY_QUERY'
+                if query_enabled else
+                'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9'),
+            'late_owner_refused_before_pkg':late_journal,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
