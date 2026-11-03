@@ -14,7 +14,7 @@ import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-hook = root / "pkg/+PRE_INSTALL"
+hook = Path(os.environ.get("ZAPRET2_TEST_PRE_INSTALL", str(root / "pkg/+PRE_INSTALL")))
 
 with tempfile.TemporaryDirectory() as td:
     base = Path(td)
@@ -101,7 +101,8 @@ with tempfile.TemporaryDirectory() as td:
     (state_dir / "pkg-upgrade.restart").touch()
     (state_dir / "pkg-replacement.restart").touch()
     trace.unlink(missing_ok=True)
-    future = subprocess.run(["sh", str(root / "pkg/+PRE_DEINSTALL")],
+    future = subprocess.run(["sh", os.environ.get("ZAPRET2_TEST_PRE_DEINSTALL",
+                                            str(root / "pkg/+PRE_DEINSTALL"))],
                             env=env, capture_output=True, text=True)
     assert future.returncode != 0
     assert "aborted before Stop" in future.stderr
