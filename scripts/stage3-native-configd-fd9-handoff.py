@@ -40,6 +40,7 @@ DONE=ROOT/'done'
 FAILED=ROOT/'failed'
 RELEASE=ROOT/'release'
 PIDFILE=ROOT/'supervisor.pid'
+QUERY=ROOT/'pkg-readonly.json'
 PREFIX='STAGE3_CONFIGD_ATOMIC_FD9='
 
 
@@ -71,6 +72,40 @@ def fault_mode():
     return fault
 
 
+def readonly_query_mode():
+    """One-use no-mutation native pkg boundary, never a production updater."""
+    value=os.environ.get('ZAPRET2_STAGE3_READONLY_PKG','')
+    need(value in ('','1'),'READ_ONLY_PKG_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_READONLY_PKG_CI')=='1' and
+             not fault_mode(),'READ_ONLY_PKG_MODE_UNQUALIFIED')
+    return value=='1'
+
+
+def readonly_pkg_query(head,fields):
+    """Actual installed native pkg read query while inherited historical FD9 lives."""
+    need(os.fstat(9).st_ino==fields['inode'],
+         'READ_ONLY_PKG_LOST_ORIGINAL_FD9_BEFORE_QUERY')
+    base.cold_owner_held()
+    proc=subprocess.run(['/usr/sbin/pkg','-o','REPO_AUTOUPDATE=false',
+                         'query','%n|%v','os-zapret2-restyle'],
+                        capture_output=True,text=True,timeout=8,check=False)
+    need(proc.returncode==0 and
+         proc.stdout.strip()=='os-zapret2-restyle|0.6.2_1',
+         'READ_ONLY_PKG_QUERY_NOT_AUTHENTIC_OLD')
+    base.cold_owner_held()
+    need(os.fstat(9).st_ino==fields['inode'],
+         'READ_ONLY_PKG_LOST_ORIGINAL_FD9_AFTER_QUERY')
+    marker={'schema':1,'status':'NATIVE_PKG_QUERY_UNDER_TRANSFERRED_FD9',
+            'sha':head,'pid':os.getpid(),
+            'original_fd9_inode':fields['inode'],
+            'nonce_sha256':hashlib.sha256(fields['nonce'].encode()).hexdigest(),
+            'native_pkg_read_only_query_invoked':True,
+            'native_mutating_pkg_invoked':False}
+    base.create_owned(QUERY,json.dumps(marker,sort_keys=True).encode())
+    return marker
+
+
 def action_bytes(head):
     script=str(Path(__file__).resolve())
     need(re.fullmatch(r'/[A-Za-z0-9_./-]+',script) is not None,
@@ -78,6 +113,8 @@ def action_bytes(head):
     fault=fault_mode()
     extra=('ZAPRET2_STAGE3_HANDOFF_NEGATIVE=1 '
            'ZAPRET2_STAGE3_HANDOFF_FAULT='+fault+' ') if fault else ''
+    if readonly_query_mode():
+        extra+='ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 '
     return ('[launch]\n'
             'command:/usr/bin/env GITHUB_ACTIONS=true '
             'ZAPRET2_STAGE3_DETACHED_FD9=1 '
@@ -150,6 +187,7 @@ def accept_rights(conn,head):
 def worker(head):
     qualify(head)
     fault=fault_mode()
+    query_enabled=readonly_query_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -168,6 +206,10 @@ def worker(head):
                    'created_original_lock_inode':fields['created'],
                    'nonce_sha256':digest,'native_pkg_mutation_invoked':False}
             base.create_owned(READY,json.dumps(ready,sort_keys=True).encode())
+            if query_enabled:
+                # No ACK until genuine native read-only pkg query completes
+                # under the already-transferred original FD9.
+                readonly_pkg_query(head,fields)
             # Faults are *only* in a one-use CI fixture; os._exit causes
             # genuine kernel descriptor closure, not simulated exceptions.
             if fault=='drop_ack':
@@ -194,9 +236,10 @@ def worker(head):
 
 def launch(head):
     qualify(head)
+    readonly_query_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
-    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED):
+    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY):
         need(not p.exists() and not p.is_symlink(),
              'ONE_USE_HANDOFF_RESOURCE_ALREADY_PRESENT:'+p.name)
     created,inode=open_original_fd9()
@@ -260,6 +303,7 @@ def wait_ready(head,nonce):
 
 def execute(head):
     qualify(head)
+    query_enabled=readonly_query_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -294,6 +338,16 @@ def execute(head):
         need('ACKED_CONTINUOUS_FD9_TRANSFER' in output,
              'CONFIGD_DID_NOT_COMPLETE_ATOMIC_HANDOFF')
         ready=wait_ready(head,nonce)
+        if query_enabled:
+            attestation=json.loads(base.trusted(QUERY))
+            need(attestation.get('status')=='NATIVE_PKG_QUERY_UNDER_TRANSFERRED_FD9' and
+                 attestation.get('sha')==head and
+                 attestation.get('pid')==ready['pid'] and
+                 attestation.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 attestation.get('nonce_sha256')==ready['nonce_sha256'] and
+                 attestation.get('native_pkg_read_only_query_invoked') is True and
+                 attestation.get('native_mutating_pkg_invoked') is False,
+                 'NATIVE_PKG_QUERY_FD9_ATTESTATION_UNQUALIFIED')
         need(ready['created_original_lock_inode'] is (not existed) and
              (inode is None or ready['original_fd9_inode']==inode),
              'HANDOFF_ORIGINAL_INODE_CHANGED')
@@ -319,7 +373,8 @@ def execute(head):
         base.run(['/usr/sbin/service','configd','restart'],45)
     need(managed.owner_snapshot(old,guard,base.OLD)==before,
          'HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW')
-    for p in (TICKET,READY,DONE,RELEASE):
+    for p in ((TICKET,READY,DONE,RELEASE,QUERY) if query_enabled
+              else (TICKET,READY,DONE,RELEASE)):
         need(base.trusted(p) is not None,'MISSING_OWNED_TEST_FILE')
         p.unlink()
     expiry=time.monotonic()+8
@@ -351,7 +406,10 @@ def execute(head):
     else:
         need(base.LOCK.is_file() and base.LOCK.lstat().st_ino==inode,
              'PREEXISTING_ORIGINAL_LOCK_CHANGED')
-    return {'schema':1,'status':'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9',
+    return {'schema':1,'status':('PASS_TEST_ONLY_CONFIGD_FD9_NATIVE_PKG_READ_ONLY_QUERY'
+                                 if query_enabled else
+                                 'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9'),
+            'native_pkg_read_only_query_under_detached_fd9':query_enabled,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
             'old_package_config_process_ipfw_unchanged':True,
