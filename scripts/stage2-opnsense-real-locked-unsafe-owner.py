@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 
 HERE = Path(__file__).resolve().parent
-REVISION = "80"
+REVISION = "81"
 OPTIN = "ZAPRET2_STAGE2_REAL_LOCKED_UNSAFE_OWNER_PKG"
 NAME = "os-zapret2-restyle"
 

@@ -15,7 +15,7 @@ spec.loader.exec_module(m)
 
 class RealForceReinstallTest(unittest.TestCase):
     def test_revision(self):
-        self.assertEqual(m.REVISION, "80")
+        self.assertEqual(m.REVISION, "81")
 
     def test_refuse_without_disposable_gates_before_guest(self):
         with patch.dict(os.environ, {}, clear=True), patch.object(

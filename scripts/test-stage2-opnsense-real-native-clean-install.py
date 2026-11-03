@@ -17,9 +17,9 @@ spec.loader.exec_module(mod)
 
 class RealInstallContracts(unittest.TestCase):
     def test_bound_to_real_source_revision(self):
-        self.assertEqual(mod.REVISION, "80")
-        self.assertEqual(mod.VERSION, "0.6.2_80")
-        self.assertEqual(mod.native.REVISION, "80")
+        self.assertEqual(mod.REVISION, "81")
+        self.assertEqual(mod.VERSION, "0.6.2_81")
+        self.assertEqual(mod.native.REVISION, "81")
 
     def test_explicit_cold_install_optin_required(self):
         with patch.dict(os.environ, {mod.OPTIN: "", "GITHUB_ACTIONS": "true",
