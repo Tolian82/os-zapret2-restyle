@@ -39,6 +39,8 @@ class HandoffContracts(unittest.TestCase):
                 m.qualify(HEAD)
 
     def test_socket_receiver_requires_exact_one_original_fd9(self):
+        # Transport ownership is exercised by test-native-pkg-handoff.py.
+        # Here we require the CI adapter to consume exactly that product API.
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'original.lock'
             path.write_text('test')
@@ -49,25 +51,19 @@ class HandoffContracts(unittest.TestCase):
                 old9=None
             a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_STREAM)
             try:
-                original_fstat=os.fstat
-                def root_owned_fstat(value):
-                    st=original_fstat(value)
-                    return SimpleNamespace(st_uid=0,st_nlink=st.st_nlink,
-                                           st_mode=st.st_mode,st_dev=st.st_dev,
-                                           st_ino=st.st_ino)
-                # The Linux offline runner is not root; simulate only uid
-                # while preserving the real SCM_RIGHTS descriptor/inode.
-                with patch.object(m,'ticket',return_value=NONCE),\
-                     patch.object(m.base,'LOCK',path),\
-                     patch.object(m.base,'cold_owner_held'),\
-                     patch.object(m.os,'fstat',side_effect=root_owned_fstat):
-                    msg=json.dumps({'head':HEAD,'nonce':NONCE,
-                                    'created':False,'inode':path.stat().st_ino}).encode()
-                    a.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,
-                                       array.array('i',[fd]))])
-                    result=m.accept_rights(b,HEAD)
-                    self.assertEqual(result['inode'],os.fstat(9).st_ino)
-                    self.assertEqual(os.fstat(9).st_ino,path.stat().st_ino)
+                product=m.load_product_handoff()
+                msg=json.dumps({'head':HEAD,'nonce':NONCE,
+                                'created':False,'inode':path.stat().st_ino}).encode()
+                a.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,
+                                   array.array('i',[fd]))])
+                with patch.object(m,'load_product_handoff',return_value=product),\
+                     patch.object(product,'verify_original_lock') as verify,\
+                     patch.object(product.os,'geteuid',return_value=0),\
+                     patch.object(m,'ticket',return_value=NONCE),\
+                     patch.object(m.base,'cold_owner_held'):
+                    fields=m.accept_rights(b,HEAD)
+                    self.assertEqual(fields['inode'],os.fstat(9).st_ino)
+                    verify.assert_called_once()
             finally:
                 a.close(); b.close(); os.close(fd)
                 if old9 is None:
@@ -81,8 +77,12 @@ class HandoffContracts(unittest.TestCase):
         try:
             a.sendall(json.dumps({'head':HEAD,'nonce':NONCE,
                                   'created':False,'inode':44}).encode())
-            with self.assertRaisesRegex(m.base.Refusal,
-                                        'MISSING_OR_EXTRA_FD9_RIGHTS'):
+            product=m.load_product_handoff()
+            with patch.object(m,'load_product_handoff',return_value=product),\
+                 patch.object(product.os,'geteuid',return_value=0),\
+                 patch.object(m,'ticket',return_value=NONCE),\
+                 self.assertRaisesRegex(m.base.Refusal,
+                                        'MISSING_TRUNCATED_OR_EXTRA_FD9_RIGHTS'):
                 m.accept_rights(b,HEAD)
         finally:
             a.close(); b.close()
@@ -90,7 +90,7 @@ class HandoffContracts(unittest.TestCase):
     def test_wrong_nonce_refused_despite_attached_descriptor(self):
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'original.lock'
-            path.write_text('t')
+            path.write_text('test')
             fd=os.open(path,os.O_RDWR)
             a,b=socket.socketpair(socket.AF_UNIX,socket.SOCK_STREAM)
             try:
@@ -98,12 +98,23 @@ class HandoffContracts(unittest.TestCase):
                                 'created':False,'inode':path.stat().st_ino}).encode()
                 a.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,
                                    array.array('i',[fd]))])
-                with patch.object(m,'ticket',return_value=NONCE):
-                    with self.assertRaisesRegex(m.base.Refusal,
-                                                'TRANSFER_TICKET_OR_OWNER_UNTRUSTED'):
-                        m.accept_rights(b,HEAD)
+                product=m.load_product_handoff()
+                with patch.object(m,'load_product_handoff',return_value=product),\
+                     patch.object(product.os,'geteuid',return_value=0),\
+                     patch.object(m,'ticket',return_value=NONCE),\
+                     self.assertRaisesRegex(m.base.Refusal,
+                                            'HANDOFF_ENVELOPE_UNTRUSTED'):
+                    m.accept_rights(b,HEAD)
             finally:
-                a.close();b.close();os.close(fd)
+                a.close(); b.close(); os.close(fd)
+
+    def test_product_transport_is_only_fd9_receive_decoder(self):
+        source=FILE.read_text()
+        block=source.split('def accept_rights(conn,head):',1)[1].split(
+            'def worker(head):',1)[0]
+        self.assertIn('product.receive_original_fd9(',block)
+        self.assertNotIn('conn.recvmsg(',block)
+        self.assertNotIn('array.array(',block)
 
     def test_invalid_ready_nonce_and_pid_fail_closed(self):
         good={'status':'HANDOFF_WORKER_HOLDS_ORIGINAL_FD9',

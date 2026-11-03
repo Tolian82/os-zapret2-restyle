@@ -96,8 +96,9 @@ def execute():
     need(manifest["version"] == "0.6.2_" + REVISION,
          "FIRST_INSTALLED_NATIVE_PACKAGE_VERSION_MISMATCH")
     first_files = clean.verify_installed_files(path, manifest)
-    need(first_files["exact_installed_package_file_count"] == 291,
-         "FIRST_NATIVE_INSTALL_291_FILES_NOT_VERIFIED")
+    need(first_files["exact_installed_package_file_count"] ==
+         len(manifest["files"]),
+         "FIRST_NATIVE_INSTALL_MANIFEST_FILESET_NOT_VERIFIED")
     first_cold = assert_cold()
     xml_after_first = Path("/conf/config.xml").read_bytes()
     first_registry = clean.verify_official_first_install_registration(

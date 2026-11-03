@@ -81,6 +81,8 @@ class RealForceReinstallTest(unittest.TestCase):
                          "stopped.prove_preserved_config(",
                          "assert_cold()", "force_same_version(path)"):
             self.assertIn(fragment, text)
+        self.assertIn('len(manifest["files"])',text)
+        self.assertNotIn('== 291',text)
         self.assertNotIn("--script-no-exec", text)
         self.assertNotIn("pkg add -I", text)
 

@@ -200,37 +200,33 @@ def open_original_fd9():
             os.close(fd)
 
 
+def load_product_handoff():
+    """Use product source shared with the future installed supervisor."""
+    path=HERE.parent/'src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py'
+    need(path.is_file() and not path.is_symlink(),
+         'PRODUCT_NATIVE_FD9_TRANSPORT_MISSING')
+    spec=importlib.util.spec_from_file_location('native_pkg_handoff',path)
+    module=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def accept_rights(conn,head):
-    payload,anc,flags,_=conn.recvmsg(500,socket.CMSG_SPACE(16))
-    fds=[]
-    for level,kind,data in anc:
-        if level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS:
-            chunk=array.array('i')
-            chunk.frombytes(data[:len(data)-(len(data)%chunk.itemsize)])
-            fds.extend(chunk.tolist())
+    product=load_product_handoff()
     try:
-        need(flags==0 and len(fds)==1,'MISSING_OR_EXTRA_FD9_RIGHTS')
-        fields=json.loads(payload)
-        need(fields.get('head')==head and fields.get('nonce')==ticket(head) and
-             isinstance(fields.get('created'),bool) and
-             isinstance(fields.get('inode'),int) and fields['inode']>0,
-             'TRANSFER_TICKET_OR_OWNER_UNTRUSTED')
-        fd=fds[0]
-        st=os.fstat(fd)
-        path=base.LOCK.lstat()
-        need(st.st_uid==0 and st.st_nlink==1 and stat.S_ISREG(st.st_mode)
-             and (st.st_dev,st.st_ino)==(path.st_dev,path.st_ino)
-             and st.st_ino==fields['inode'],
-             'TRANSFERRED_FD9_NOT_ORIGINAL_INODE')
+        fd,fields=product.receive_original_fd9(
+            conn,head=head,nonce=ticket(head))
+    except product.HandoffRefusal as exc:
+        raise base.Refusal(str(exc)) from None
+    try:
         os.dup2(fd,9)
         need(os.fstat(9).st_ino==fields['inode'],'FD9_DUPLICATION_FAILED')
-        # BSD flock state is held by the same open file description.
+        # No ACK or pkg before the real historical old-owner revalidation.
         base.cold_owner_held()
         return fields
     finally:
-        for fd in fds:
-            if fd!=9:
-                os.close(fd)
+        if fd!=9:
+            os.close(fd)
 
 
 def worker(head):
@@ -437,6 +433,10 @@ def execute(head):
              built.get('project_sha')==head,
              'OFFICIAL_NATIVE_CANDIDATE_BUILD_UNQUALIFIED')
         native_archive=native.ROOT/built['output']
+        product_rel='opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py'
+        need(native.archived_file(native_archive,product_rel)==
+             (HERE.parent/'src'/product_rel).read_bytes(),
+             'OFFICIAL_NATIVE_ARCHIVE_FD9_TRANSPORT_BYTES_UNQUALIFIED')
         native_archive_sha=built['real_native_pkg']['sha256']
         native_revision=native.REVISION
         need(native_archive.is_file() and not native_archive.is_symlink() and

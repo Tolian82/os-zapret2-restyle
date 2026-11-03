@@ -13,6 +13,8 @@ on:
       - scripts/test-stage3-native-configd-detached-fd9.py
       - scripts/stage3-native-configd-fd9-handoff.py
       - scripts/test-stage3-native-configd-fd9-handoff.py
+      - scripts/test-native-pkg-handoff.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py
       - scripts/stage3-native-configd-fd9-faults.py
       - scripts/test-stage3-native-configd-fd9-faults.py
       - scripts/test-stage3-native-configd-fd9-readonly-pkg.py
@@ -187,7 +189,8 @@ jobs:
       - name: Validate fixed-root native FD9 socket transfer and fail-closed contracts
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-configd-fd9-handoff.py scripts/test-stage3-native-configd-fd9-handoff.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py scripts/test-native-pkg-handoff.py scripts/stage3-native-configd-fd9-handoff.py scripts/test-stage3-native-configd-fd9-handoff.py
+          python3.13 scripts/test-native-pkg-handoff.py -v
           python3.13 scripts/test-stage3-native-configd-fd9-handoff.py -v
       - name: Witness real no-pkg configctl FD9 handoff in disposable OPNsense 26.7
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
