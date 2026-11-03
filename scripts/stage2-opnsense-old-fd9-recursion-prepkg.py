@@ -149,12 +149,13 @@ def baseline(archive, inspector):
         "config": Path("/conf/config.xml").read_bytes(),
         "markers_absent": all(not p.exists() and not p.is_symlink()
                               for p in inspector.MARKERS),
-        "owner_process_census": inspector.checked_process_census(),
+        "owner_processes_absent": inspector.check_process_census(
+            inspector.checked_process_census()) is None,
     }
 
 def unchanged(previous, current, *, expected_ipfw=None):
     for field in ("pkgdb", "identity", "service_sha256", "config",
-                  "markers_absent", "owner_process_census"):
+                  "markers_absent", "owner_processes_absent"):
         need(current[field] == previous[field],
              "PRE_PKG_NEGATIVE_MUTATED:" + field)
     need(current["markers_absent"], "RESTART_MARKER_CREATED")
