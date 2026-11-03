@@ -203,6 +203,82 @@ def already_notified(comments, sha, state):
                for x in comments)
 
 
+
+def classify_http_error(error):
+    """Expose only fixed HTTP diagnostics, never an untrusted API error body.
+
+    GitHub returned 403 on POST /issues/857/comments even though the runner
+    explicitly granted Issues:write. A bare "403" had hidden the useful
+    distinction between integration policy and primary/secondary rate limits.
+    """
+    try:
+        raw = error.read(4096)
+        body = json.loads(raw.decode('utf-8', 'replace'))
+        message = body.get('message', '') if isinstance(body, dict) else ''
+    except (OSError, ValueError, TypeError, UnicodeError):
+        message = ''
+    low = message.lower() if isinstance(message, str) else ''
+    remaining = (error.headers.get('X-RateLimit-Remaining', '') if error.headers
+                 else '')
+    if 'secondary rate limit' in low or 'abuse detection' in low:
+        category = 'SECONDARY_RATE_LIMIT'
+    elif remaining == '0' or 'api rate limit exceeded' in low:
+        category = 'PRIMARY_RATE_LIMIT'
+    elif 'resource not accessible by integration' in low:
+        category = 'INTEGRATION_ACCESS_DENIED'
+    elif error.code in (401, 403):
+        category = 'AUTHORIZATION_OR_POLICY'
+    else:
+        category = 'OTHER_HTTP_ERROR'
+    metadata = []
+    if error.headers:
+        permissions = error.headers.get('X-Accepted-GitHub-Permissions', '')
+        if isinstance(permissions, str):
+            names = sorted(set(re.findall(
+                r'\b(?:issues|pull_requests)=(?:read|write)\b', permissions)))
+            if names:
+                metadata.append('accepted_' + '_'.join(
+                    item.replace('=', '_') for item in names))
+        retry = error.headers.get('Retry-After', '')
+        if isinstance(retry, str) and retry.isdecimal() and int(retry) <= 3600:
+            metadata.append('retry_after_' + retry)
+        request_id = error.headers.get('X-GitHub-Request-Id', '')
+        if isinstance(request_id, str) and re.fullmatch(
+                r'[A-Za-z0-9:._-]{4,120}', request_id):
+            metadata.append('request_id_' + request_id)
+    return ('GITHUB_API_REFUSAL_' + str(int(error.code)) + '_' + category +
+            (':' + ':'.join(metadata) if metadata else ''))
+
+
+def delivery_error_label(exc):
+    match = re.match(r'^GITHUB_API_REFUSAL_\d{3}_[A-Z_]+', str(exc))
+    return match.group(0) if match else 'GITHUB_NOTIFICATION_OPERATION_FAILED'
+
+
+def step_summary(repo, number, sha, state, delivery):
+    """Always leave a trusted Actions job summary even if PR comments fail.
+
+    A job summary is an inspectable fallback, NOT an external notification.
+    Do not interpolate PR titles/bodies, URLs from check runs or API errors.
+    """
+    path = os.environ.get('GITHUB_STEP_SUMMARY')
+    if not path:
+        return
+    if (not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo) or
+            not isinstance(number, int) or number <= 0 or
+            not isinstance(sha, str) or
+            not re.fullmatch(r'[a-fA-F0-9]{40}', sha) or
+            not re.fullmatch(r'[A-Z_]{3,50}', state) or
+            not re.fullmatch(r'[A-Z0-9_]{3,120}', delivery)):
+        raise ValueError('UNTRUSTED_WATCHDOG_SUMMARY_FIELDS')
+    entry = (f'- [PR #{number}](https://github.com/{repo}/pull/{number}) '
+             f'— **{state}** — head `{sha}` — delivery: `{delivery}`\n')
+    try:
+        with open(path, 'a', encoding='utf-8') as output:
+            output.write(entry)
+    except OSError:
+        print('WATCHDOG_STEP_SUMMARY_WRITE_UNAVAILABLE', flush=True)
+
 class Api:
     def __init__(self, token, repo):
         if not token or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo):
@@ -223,7 +299,7 @@ class Api:
             with urllib.request.urlopen(request, timeout=25) as response:
                 return json.load(response)
         except urllib.error.HTTPError as exc:
-            raise RuntimeError('GITHUB_API_REFUSAL_' + str(exc.code)) from None
+            raise RuntimeError(classify_http_error(exc)) from None
 
     def pages(self, path):
         output = []
@@ -252,6 +328,55 @@ def newest_job_progress(api, run):
                 if item.get(attr):
                     timestamps.append(item[attr])
     return max(timestamps, default=run.get('run_started_at') or run.get('created_at'))
+
+
+
+# One exact post-merge write probe for the original PR #857 failure.
+# Runs only on a trusted main push that modifies the watchdog workflow,
+# once per repository. The closed PR is deliberately never reopened.
+DELIVERY_SMOKE_MARKER = '<!-- zapret2-pr-watchdog-v0.6.2_90-write-probe -->'
+
+
+def smoke_original_pr_delivery(api):
+    """Verify actual PR timeline comment ability on the already-merged #857.
+
+    A controlled, deduplicated comment proves the exact previously failed
+    REST endpoint. It does NOT imply any open PR was monitored or auto-merged.
+    """
+    if (os.environ.get('GITHUB_EVENT_NAME') != 'push' or
+            os.environ.get('GITHUB_REF') != 'refs/heads/main'):
+        return
+    number = 857
+    pr = api.call('pulls/' + str(number))
+    if pr.get('state') != 'closed' or pr.get('merged') is not True:
+        raise RuntimeError('WATCHDOG_WRITE_SMOKE_TARGET_UNQUALIFIED')
+    sha = pr.get('head', {}).get('sha', '')
+    if not re.fullmatch(r'[a-fA-F0-9]{40}', sha):
+        raise RuntimeError('WATCHDOG_WRITE_SMOKE_HEAD_UNQUALIFIED')
+    try:
+        comments = api.pages('issues/' + str(number) + '/comments')
+        if any(DELIVERY_SMOKE_MARKER in (item.get('body') or '')
+               for item in comments):
+            step_summary(api.repo, number, sha, 'DELIVERY_SMOKE', 'ALREADY_NOTIFIED')
+            return
+        api.call('issues/' + str(number) + '/comments', {
+            'body': DELIVERY_SMOKE_MARKER +
+                    '\nWatchdog v0.6.2_90 delivery smoke: the trusted-main '
+                    'GitHub Actions token successfully wrote one PR timeline '
+                    'comment to the already-merged PR #857. This is a '
+                    'permission/delivery check only. It does not mean a '
+                    'watchdog can automatically repair or merge PRs, and '
+                    'does not prove alerts for a different open PR.'
+        }, method='POST')
+    except RuntimeError as exc:
+        label = delivery_error_label(exc)
+        step_summary(api.repo, number, sha, 'DELIVERY_SMOKE', label)
+        print('::error title=Watchdog original PR delivery smoke failed::' +
+              label + '; inspect the trusted workflow summary', flush=True)
+        raise
+    step_summary(api.repo, number, sha, 'DELIVERY_SMOKE', 'COMMENT_POSTED')
+    print('WATCHDOG_V90_ORIGINAL_PR_TIMELINE_SMOKE_POSTED', flush=True)
+
 
 
 def run_once(api, root=BASE):
@@ -283,6 +408,7 @@ def run_once(api, root=BASE):
             state, details = classify(pr, expected, runs, job_progress=progress)
         print('PR #' + str(number) + ': ' + state, flush=True)
         if state not in ACTIONABLE:
+            step_summary(api.repo, number, pr['head']['sha'], state, 'NOT_ACTIONABLE')
             continue
         if state == 'CHECK_FAILED' and selected:
             job_details = []
@@ -299,18 +425,33 @@ def run_once(api, root=BASE):
                                  if x.get('conclusion') == 'failure'), 'failed or cancelled job')
                     job_details.append(name + ': ' + str(step) + ' (' + str(job.get('html_url', 'job URL missing')) + ')')
             details = job_details + details
-        comments = api.pages('issues/' + str(number) + '/comments')
-        if already_notified(comments, pr['head']['sha'], state):
-            continue
-        refreshed = api.call('pulls/' + str(number))
-        if refreshed.get('state') != 'open' or refreshed.get('head', {}).get('sha') != pr['head']['sha']:
-            continue
-        api.call('issues/' + str(number) + '/comments',
-                 {'body': alert_body(pr, state, details)}, method='POST')
+        try:
+            comments = api.pages('issues/' + str(number) + '/comments')
+            if already_notified(comments, pr['head']['sha'], state):
+                step_summary(api.repo, number, pr['head']['sha'], state, 'ALREADY_NOTIFIED')
+                continue
+            refreshed = api.call('pulls/' + str(number))
+            if (refreshed.get('state') != 'open' or
+                    refreshed.get('head', {}).get('sha') != pr['head']['sha']):
+                step_summary(api.repo, number, pr['head']['sha'], state, 'HEAD_CHANGED_SKIP')
+                continue
+            api.call('issues/' + str(number) + '/comments',
+                     {'body': alert_body(pr, state, details)}, method='POST')
+        except RuntimeError as exc:
+            failure = delivery_error_label(exc)
+            step_summary(api.repo, number, pr['head']['sha'], state, failure)
+            print('::error title=PR watchdog delivery failed::PR #' +
+                  str(number) + ' ' + failure +
+                  '; inspect this job summary and GitHub notification policy',
+                  flush=True)
+            raise
+        step_summary(api.repo, number, pr['head']['sha'], state, 'COMMENT_POSTED')
         alerts += 1
     print(json.dumps({'schema': 1, 'open_managed_prs': scanned,
                       'alerts_posted': alerts, 'mode': 'notifications-only'}, sort_keys=True))
 
 
 if __name__ == '__main__':
-    run_once(Api(os.environ.get('GH_TOKEN'), os.environ.get('GH_REPOSITORY', '')))
+    api = Api(os.environ.get('GH_TOKEN'), os.environ.get('GH_REPOSITORY', ''))
+    smoke_original_pr_delivery(api)
+    run_once(api)

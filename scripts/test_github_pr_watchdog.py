@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Offline positive, negative, concurrency and notification contracts for PR watchdog."""
 from datetime import datetime, timezone
+import contextlib
+import io
+import json
+import os
+import urllib.error
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
@@ -164,6 +170,189 @@ class SecurityTests(unittest.TestCase):
             w.run_once(a, Path(td))
             w.run_once(a, Path(td))
             self.assertEqual(len(comments), 1)
+
+
+
+class DeliveryFallbackTests(unittest.TestCase):
+    def test_github_403_permission_denial_is_classified_without_echoing_secrets(self):
+        error = urllib.error.HTTPError(
+            'https://api.github.com/hidden', 403, 'Forbidden',
+            {'X-Accepted-GitHub-Permissions':
+             'issues=write; pull_requests=write',
+             'X-GitHub-Request-Id': '1C8:AB:421:88'},
+            io.BytesIO(json.dumps({
+                'message': 'Resource not accessible by integration',
+                'sensitive': 'NEVER_PRINT_ME'
+            }).encode()))
+        message = w.classify_http_error(error)
+        self.assertIn('GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED', message)
+        self.assertIn('accepted_issues_write_pull_requests_write', message)
+        self.assertIn('request_id_1C8:AB:421:88', message)
+        self.assertNotIn('NEVER_PRINT_ME', message)
+        self.assertEqual(
+            w.delivery_error_label(RuntimeError(message)),
+            'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED')
+
+    def test_secondary_and_primary_rate_limits_are_distinguished(self):
+        for body, headers, expected in (
+            ({'message': 'You have exceeded a secondary rate limit'},
+             {'Retry-After': '40'}, 'SECONDARY_RATE_LIMIT'),
+            ({'message': 'API rate limit exceeded'},
+             {'X-RateLimit-Remaining': '0'}, 'PRIMARY_RATE_LIMIT'),
+            ({'message': 'Other refusal, private SECRET'}, {},
+             'AUTHORIZATION_OR_POLICY'),
+        ):
+            with self.subTest(expected=expected):
+                err = urllib.error.HTTPError(
+                    'https://api.github.com/hidden', 403, 'Forbidden',
+                    headers, io.BytesIO(json.dumps(body).encode()))
+                status = w.classify_http_error(err)
+                self.assertIn(expected, status)
+                self.assertNotIn('SECRET', status)
+
+    def test_action_summary_is_bounded_and_no_pr_content_can_be_injected(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'summary.md'
+            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(output)}):
+                w.step_summary('Owner/repo', 42, SHA, 'READY_FOR_OWNER_REVIEW',
+                               'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED')
+                content = output.read_text()
+                self.assertIn('https://github.com/Owner/repo/pull/42', content)
+                self.assertIn('READY_FOR_OWNER_REVIEW', content)
+                self.assertIn('GITHUB_API_REFUSAL_403', content)
+                with self.assertRaisesRegex(ValueError,
+                                            'UNTRUSTED_WATCHDOG_SUMMARY_FIELDS'):
+                    w.step_summary('Owner/repo', 42, SHA,
+                                   'READY_FOR_OWNER_REVIEW',
+                                   'PRIVATE\nTRICK')
+                self.assertEqual(content, output.read_text())
+
+    def test_post_403_keeps_green_pr_visible_and_fails_the_job(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            policies = path / '.github/workflows'
+            policies.mkdir(parents=True)
+            (policies / 'ci.yml').write_text(
+                'name: CI\non:\n  pull_request:\n')
+            summary = path / 'summary.md'
+            pr = make_pr()
+            pr['title'] = 'ATTACKER\nINJECTED_TOKEN_SECRET'
+            class Stub:
+                repo = 'Owner/repo'
+                def pages(self, location):
+                    if location.startswith('pulls?'):
+                        return [pr]
+                    if location.endswith('/files'):
+                        return [{'filename': 'Makefile'}]
+                    if location.startswith('actions/runs?'):
+                        return [make_run()]
+                    if location.endswith('/comments'):
+                        return []
+                    raise AssertionError(location)
+                def call(self, location, payload=None, method=None):
+                    if location == 'pulls/42':
+                        return pr
+                    if location == 'issues/42/comments' and method == 'POST':
+                        raise RuntimeError(
+                            'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED')
+                    raise AssertionError(location)
+            with patch.dict(os.environ, {'GITHUB_STEP_SUMMARY': str(summary)}):
+                # A simulated 403 must not create a real Actions ::error.
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(
+                            RuntimeError, 'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED'):
+                        w.run_once(Stub(), path)
+            data = summary.read_text()
+            self.assertIn('READY_FOR_OWNER_REVIEW', data)
+            self.assertIn('GITHUB_API_REFUSAL_403', data)
+            self.assertIn('https://github.com/Owner/repo/pull/42', data)
+            self.assertNotIn('ATTACKER', data)
+            self.assertNotIn('INJECTED_TOKEN_SECRET', data)
+
+    def test_one_time_original_merged_pr_smoke_posts_exactly_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            summary = Path(folder) / 'summary.md'
+            comments = []
+            calls = []
+            class Stub:
+                repo = 'Owner/repo'
+                def pages(self, location):
+                    self_assert.assertEqual(location, 'issues/857/comments')
+                    return [{'body': body} for body in comments]
+                def call(self, location, payload=None, method=None):
+                    calls.append((location, method))
+                    if location == 'pulls/857':
+                        return {'state': 'closed', 'merged': True,
+                                'head': {'sha': SHA}}
+                    if location == 'issues/857/comments' and method == 'POST':
+                        comments.append(payload['body'])
+                        return {'id': 975}
+                    raise AssertionError(location)
+            self_assert = self
+            with patch.dict(os.environ, {
+                    'GITHUB_EVENT_NAME': 'push',
+                    'GITHUB_REF': 'refs/heads/main',
+                    'GITHUB_STEP_SUMMARY': str(summary)}):
+                w.smoke_original_pr_delivery(Stub())
+                w.smoke_original_pr_delivery(Stub())
+            self.assertEqual(len(comments), 1)
+            self.assertIn(w.DELIVERY_SMOKE_MARKER, comments[0])
+            self.assertEqual(
+                sum(path == 'issues/857/comments' and method == 'POST'
+                    for path, method in calls), 1)
+            self.assertIn('COMMENT_POSTED', summary.read_text())
+            self.assertIn('ALREADY_NOTIFIED', summary.read_text())
+
+    def test_smoke_write_denied_reports_403_without_untrusted_content(self):
+        with tempfile.TemporaryDirectory() as folder:
+            summary = Path(folder) / 'summary.md'
+            class Stub:
+                repo = 'Owner/repo'
+                def pages(self, location):
+                    return []
+                def call(self, location, payload=None, method=None):
+                    if location == 'pulls/857':
+                        return {'state': 'closed', 'merged': True,
+                                'head': {'sha': SHA}}
+                    if location == 'issues/857/comments' and method == 'POST':
+                        raise RuntimeError(
+                            'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED')
+                    raise AssertionError(location)
+            with patch.dict(os.environ, {
+                    'GITHUB_EVENT_NAME': 'push',
+                    'GITHUB_REF': 'refs/heads/main',
+                    'GITHUB_STEP_SUMMARY': str(summary)}):
+                # The mocked denial is an expected negative, not a CI error.
+                with contextlib.redirect_stdout(io.StringIO()):
+                    with self.assertRaisesRegex(
+                            RuntimeError, 'GITHUB_API_REFUSAL_403_INTEGRATION_ACCESS_DENIED'):
+                        w.smoke_original_pr_delivery(Stub())
+            self.assertIn('DELIVERY_SMOKE', summary.read_text())
+            self.assertIn('GITHUB_API_REFUSAL_403', summary.read_text())
+
+    def test_smoke_never_writes_on_pull_request_or_schedule(self):
+        class NoApi:
+            repo = 'Owner/repo'
+            def pages(self, location):
+                raise AssertionError(location)
+            def call(self, location, payload=None, method=None):
+                raise AssertionError(location)
+        for event in ('pull_request', 'workflow_run', 'schedule'):
+            with self.subTest(event=event),patch.dict(
+                    os.environ, {'GITHUB_EVENT_NAME': event,
+                                 'GITHUB_REF': 'refs/heads/main'}):
+                w.smoke_original_pr_delivery(NoApi())
+
+    def test_debounced_workflow_still_has_reliable_periodic_fallback(self):
+        text = (Path(w.__file__).resolve().parents[1] /
+                '.github/workflows/pr-completion-watchdog.yml').read_text()
+        self.assertEqual(text.count("      - 'CI'"), 1)
+        self.assertEqual(text.count('    workflows:'), 1)
+        self.assertIn("cron: '7,17,27,37,47,57 * * * *'", text)
+        self.assertIn('  pull-requests: write', text)
+        self.assertIn('  issues: write', text)
+        self.assertIn('ref: ${{ github.event.repository.default_branch }}', text)
+        self.assertNotIn('ref: ${{ github.event.pull_request.head.sha }}', text)
 
 
 if __name__ == '__main__':
