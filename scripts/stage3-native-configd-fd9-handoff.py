@@ -61,16 +61,29 @@ def ticket(head):
     return x['nonce']
 
 
+def fault_mode():
+    """Allow only fixed fault injection scenarios inside disposable OPNsense CI."""
+    fault=os.environ.get('ZAPRET2_STAGE3_HANDOFF_FAULT','')
+    if fault:
+        need(os.environ.get('ZAPRET2_STAGE3_HANDOFF_NEGATIVE')=='1' and
+             fault in ('drop_ack','stall_ack','post_ack_exit'),
+             'UNQUALIFIED_TEST_ONLY_HANDOFF_FAULT')
+    return fault
+
+
 def action_bytes(head):
     script=str(Path(__file__).resolve())
     need(re.fullmatch(r'/[A-Za-z0-9_./-]+',script) is not None,
          'ACTION_SCRIPT_PATH_UNTRUSTED')
+    fault=fault_mode()
+    extra=('ZAPRET2_STAGE3_HANDOFF_NEGATIVE=1 '
+           'ZAPRET2_STAGE3_HANDOFF_FAULT='+fault+' ') if fault else ''
     return ('[launch]\n'
             'command:/usr/bin/env GITHUB_ACTIONS=true '
             'ZAPRET2_STAGE3_DETACHED_FD9=1 '
             'ZAPRET2_STAGE3_ATOMIC_HANDOFF=1 '
             'ZAPRET2_STAGE2_LOCKED_COLD_REVALIDATION=1 '
-            'ZAPRET2_NATIVE_PROJECT_SHA='+head+' '
+            'ZAPRET2_NATIVE_PROJECT_SHA='+head+' '+extra+
             '/usr/local/bin/python3 '+script+' --launch '+head+'\n'
             'parameters:\n'
             'type:script_output\n'
@@ -136,6 +149,7 @@ def accept_rights(conn,head):
 
 def worker(head):
     qualify(head)
+    fault=fault_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -154,8 +168,17 @@ def worker(head):
                    'created_original_lock_inode':fields['created'],
                    'nonce_sha256':digest,'native_pkg_mutation_invoked':False}
             base.create_owned(READY,json.dumps(ready,sort_keys=True).encode())
+            # Faults are *only* in a one-use CI fixture; os._exit causes
+            # genuine kernel descriptor closure, not simulated exceptions.
+            if fault=='drop_ack':
+                os._exit(96)
+            if fault=='stall_ack':
+                time.sleep(17)
+                os._exit(97)
             # Launcher still owns FD9 at ACK: no moment with no lock holder.
             conn.sendall(('ACK:'+fields['nonce']+':'+str(os.getpid())).encode())
+            if fault=='post_ack_exit':
+                os._exit(98)
     try:
         need(base.wait_file(RELEASE,55)==b'RELEASE_TEST_ONLY',
              'WORKER_RELEASE_NOT_AUTHORIZED')
