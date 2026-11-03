@@ -87,6 +87,27 @@ class NativePkgContract(unittest.TestCase):
                     'os-zapret2-restyle|0.6.2_99',
                     'os-zapret2-restyle|0.6.2_99',1)
 
+    def test_late_refusal_specific_not_any_error(self):
+        class Refusal(Exception):
+            pass
+        self.assertTrue(m.qualify_late_native_refusal(
+            Refusal('UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:bad'),False))
+        for err,reached in (
+                (Refusal('different error'),False),
+                (Exception('UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:bad'),False),
+                (Refusal('UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:bad'),True)):
+            with self.subTest(err=str(err),reached=reached),self.assertRaisesRegex(
+                    m.Refusal,'LATE_REAL_PKG_DISPATCH_VETO_UNQUALIFIED'):
+                m.qualify_late_native_refusal(err,reached)
+
+    def test_late_dispatch_barrier_and_tripwire_wired(self):
+        code=SOURCE.read_text()
+        for fragment in ('late_journal_fault=False',
+                         'dispatch=forbidden_dispatch',
+                         'NATIVE_PKG_LATE_JOURNAL_BARRIER_NOT_RELEASED',
+                         'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL'):
+            self.assertIn(fragment,code)
+
     def test_no_mutating_pkg_without_explicit_dual_optin(self):
         with patch.dict(os.environ,{
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG':'',
@@ -114,13 +135,17 @@ class NativePkgContract(unittest.TestCase):
         for x in ('def native_pkg_mode():', 'transaction.native_transaction(',
                   'native.build()', 'PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9',
                   'NATIVE_CONFIGD_PKG_OR_OWNERSHIP_ATTESTATION_UNQUALIFIED',
-                  'native_mutating_pkg_under_detached_fd9'):
+                  'native_mutating_pkg_under_detached_fd9',
+                   'def native_late_journal_mode():',
+                   'NATIVE_PKG_PRE_DISPATCH_BARRIER_NOT_AUTHENTIC'):
             self.assertIn(x,code)
         for x in ('  configd-native-mutating-pkg:',
                   '  configd-readonly-pkg:', '  configd-late-owner-veto:',
                   '  configd-atomic-handoff-faults:',
                   'scripts/test-stage3-native-configd-mutating-pkg.py -v',
-                  'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1'):
+                  'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1',
+                   '  configd-native-late-journal-dispatch:',
+                   'ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL=1'):
             self.assertIn(x,yml)
 
 

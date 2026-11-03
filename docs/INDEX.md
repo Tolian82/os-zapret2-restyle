@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.04 actual shared pkg-dispatch late unsafe-owner veto (`_100`)](verification/evidence/2026-11-03-v0.6.2_100-stage3-native-final-pkg-late-journal-refusal.md) — authenticated original FD9 pre-dispatch barrier and true late old journal refusal before nonmutating pkg tripwire; native CI pending; no installed updater.
+
 - [Verified full stable v0.6.2](releases/v0.6.2.md) — immutable `0.6.2_1.pkg`, SHA256SUMS, non-prerelease Release and successful FreeBSD15 Pages/pkg deployment; follow-up source `_2` is docs-only, installed `_30` audit 18/18 and live IPv6 WAN waived.
 - [Full v0.6.2 publication evidence](verification/evidence/2026-10-31-v0.6.2-full-release-publication.md) — exact main/tag, package SHA-256, Actions and Pages success, and owner Web/independent HTTP observation limits.
 - [Stage 2.23 real unsafe-owner native pkg replacement experiment](verification/evidence/2026-11-02-v0.6.2_74-stage2-real-unsafe-owner-native-pkg.md) — genuine old package plus orphaned loopback-only divert IPFW; [KVM #41515449795](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41515449795) verified pkgdb replacement and Config byte change **despite real hook refusal**; atomic upgrade remains BLOCKED.
@@ -52,7 +54,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–7 source/CI qualified (Stage6 limited to the owner's three native scenarios); installed A07/A08 WAN packet proof OPEN; Stage8 aggregate read-only owner acceptance 18/18 PASS, live IPv6 waived. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — source-only `v0.6.2_94`: actual configd-triggered independent root supervisor holding original FD9 through configd restart, no package mutation; prior `_93` UNKNOWN worker fail-closed result preserved. **LH-08/AC-11 BLOCKED**, immutable stable `v0.6.2/0.6.2_1.pkg` unchanged.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — `_100` shared real pkg-dispatch old-owner veto under the original transferred FD9, no supported installed updater or stock firmware/Web protection; LH-08/AC-11 BLOCKED.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; historical owner-installed testing identity is `_30`; no stable `v0.6.1` release was authorized.
 
