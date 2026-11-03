@@ -36,16 +36,36 @@ def load(name):
     return module
 
 
+def load_product_candidate():
+    """Reuse exact packaged product candidate gate, never a test-only copy."""
+    import sys
+    source=(HERE.parent/'src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py')
+    need(source.is_file() and not source.is_symlink(),
+         'NATIVE_PKG_PRODUCT_CANDIDATE_GATE_MISSING')
+    sys.path.insert(0,str(source.parent))
+    spec=importlib.util.spec_from_file_location('native_pkg_candidate',source)
+    product=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(product)
+    return product
+
+
 def validate_candidate(path,digest,revision):
-    """Preflight exact official-native-built archive; never trust a request path."""
     need(isinstance(revision,str) and revision.isdecimal() and
          re.fullmatch('[0-9a-f]{64}',digest or '') is not None,
          'MUTATING_NATIVE_PKG_IDENTITY_INVALID')
-    need(path.name==f'{NAME}-0.6.2_{revision}.pkg' and
-         path.is_file() and not path.is_symlink() and
-         path.stat().st_uid==0 and
-         hashlib.sha256(path.read_bytes()).hexdigest()==digest,
-         'MUTATING_NATIVE_PKG_ARCHIVE_UNQUALIFIED')
+    product=load_product_candidate()
+    try:
+        return product.inspect_archive(path,'0.6.2_'+revision,digest)
+    except product.CandidateRefusal as exc:
+        raise Refusal(str(exc)) from None
+
+
+def attest_candidate_fd9(product,path,digest,revision,expected_inode):
+    try:
+        return product.inspect_with_original_fd9(
+            path,'0.6.2_'+revision,digest,expected_inode)
+    except product.CandidateRefusal as exc:
+        raise Refusal(str(exc)) from None
 
 
 def accept_pkg_effect(rc,out,err,installed,expected,native_calls):
@@ -95,12 +115,17 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
     need(isinstance(ticket,str) and len(ticket)==32,
          'ROOT_CONFIGD_TRANSFER_TICKET_INVALID')
     candidate=Path(os.environ.get('ZAPRET2_STAGE3_NATIVE_PKG_PATH',''))
-    validate_candidate(candidate,selected_sha,revision)
+    candidate_attestation=validate_candidate(candidate,selected_sha,revision)
+    product=load_product_candidate()
+    need(candidate_attestation.get('status')=='READ_ONLY_NATIVE_PKG_ARCHIVE_BOUND' and
+         candidate_attestation.get('sha256')==selected_sha,
+         'PRODUCT_CANDIDATE_INITIAL_INSPECTION_NOT_PROVEN')
     need(isinstance(expected_inode,int) and expected_inode>0 and
          os.fstat(9).st_ino==expected_inode,
          'WORKER_FD9_NOT_ORIGINAL_BEFORE_MUTATING_PKG')
     locked.check_fd9()
     delegate.verify_old_cold_admission(archive)
+    attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
     initial=old.run('pkg','info','-R','--raw-format','json',NAME)
     need(old.installed_manifest_from_json(initial)['version']=='0.6.2_1',
          'GENUINE_OLD_PKGDB_VERSION_CHANGED_BEFORE_PKG')
@@ -153,6 +178,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
             def forbidden_dispatch(path,environment):
                 dispatched.append(True)
                 raise Refusal('UNSAFE_REAL_NATIVE_PKG_DISPATCH_REACHED')
+            attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
             try:
                 delegate.admitted_pkg_dispatch(
                     archive,candidate,env,dispatch=forbidden_dispatch)
@@ -168,12 +194,14 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
             return {'schema':1,
                     'status':'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL',
                     'real_owner_check_invoked':True,
+                    'product_candidate_fd9_rechecked':True,
                     'native_mutating_pkg_dispatch_reached':False,
                     'original_fd9_retained_at_refusal':True,
                     'native_mutating_pkg_invoked':False,
                     'lh08_ac11_accepted':False}
         # Identical final owner admission helper used by existing native _89.
         # NO controller-side gap: this same detached child owns FD9 throughout.
+        attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
         rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
         locked.check_fd9()
         calls=delegate.count_calls(folder)-first
@@ -206,6 +234,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
                 'real_old_hook_delegated_lock_calls':calls,
                 'installed_native_package_identity':actual,
                 'exact_native_successor_sha256':selected_sha,
+                'product_candidate_fd9_rechecked':True,
                 'installed_files_modes_verified':True,
                 'new_service_cold_under_transferred_fd9':True,
                 'foreign_config_values_preserved':True,

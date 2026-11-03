@@ -18,6 +18,7 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 product-source native pkg candidate / original FD9 (`_102`)](verification/evidence/2026-11-04-v0.6.2_102-stage3-native-product-candidate-admission.md) — strict read-only opened archive identity/digest and real FD9 recheck for authentic native package positive/late veto; installed upgrade not yet supported, LH-08/AC-11 BLOCKED.
 - [Stage 3.04/3.24 product-source original FD9 transport (`_101`)](verification/evidence/2026-11-04-v0.6.2_101-stage3-installed-fd9-transport-source.md) — new OPNsense backend receiver reused by native configd handoff with exact official Mk archive-byte proof. No installed updater or first-line supported firmware/Web protection; LH-08/AC-11 BLOCKED.
 
 - [Stage 3.04 actual shared pkg-dispatch late unsafe-owner veto (`_100`)](verification/evidence/2026-11-03-v0.6.2_100-stage3-native-final-pkg-late-journal-refusal.md) — authenticated original FD9 pre-dispatch barrier and true late old journal refusal before nonmutating pkg tripwire; native CI pending; no installed updater.
@@ -56,7 +57,7 @@
 
 - [Approved current technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) — 24 binding requirements and 24 acceptance criteria, one global IP exclusion for Strategies/Voice, domain-only Exclude Domains, and strict `/0` prohibition for all user IP lists including Voice.
 - [Current staged, per-file implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md) — stages 0–8, 160 file assignments covering 132 unique paths, entry/exit gates, Stages 1–7 source/CI qualified (Stage6 limited to the owner's three native scenarios); installed A07/A08 WAN packet proof OPEN; Stage8 aggregate read-only owner acceptance 18/18 PASS, live IPv6 waived. Voice/P2P redesign remains deferred.
-- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — `_101` shared product-source historical FD9 transport, exact archived native .pkg bytes, no installed supported updater; LH-08/AC-11 BLOCKED.
+- [Current handoff](START_HERE.md) and [current state](PROJECT_STATE.md) — `_102` native package candidate/FD9 read-only product gate, no installed supported updater; LH-08/AC-11 BLOCKED.
 
 - [v0.6.1 development-stage candidate record](releases/v0.6.1.md) — historical testing-package records and publication evidence for the ongoing development line; historical owner-installed testing identity is `_30`; no stable `v0.6.1` release was authorized.
 

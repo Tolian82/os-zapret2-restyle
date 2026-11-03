@@ -26,11 +26,14 @@ class NativePkgContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'os-zapret2-restyle-0.6.2_99.pkg'
             p.write_bytes(b'one-use-fake-candidate-for-offline-pure-tests')
-            good=hashlib.sha256(p.read_bytes()).hexdigest()
-            os_stat=p.stat()
-            root_stat=SimpleNamespace(st_uid=0,st_mode=os_stat.st_mode)
-            with patch.object(Path,'stat',return_value=root_stat):
-                m.validate_candidate(p,good,'99')
+            digest=hashlib.sha256(p.read_bytes()).hexdigest()
+            with patch.object(m,'load_product_candidate') as load:
+                load.return_value.inspect_archive.return_value={
+                    'status':'READ_ONLY_NATIVE_PKG_ARCHIVE_BOUND','sha256':digest}
+                result=m.validate_candidate(p,digest,'99')
+                self.assertEqual(result['sha256'],digest)
+                load.return_value.inspect_archive.assert_called_once_with(
+                    p,'0.6.2_99',digest)
 
     def test_candidate_refuses_wrong_sha_and_revision(self):
         with tempfile.TemporaryDirectory() as d:
@@ -48,7 +51,10 @@ class NativePkgContract(unittest.TestCase):
             actual.write_bytes(b'x')
             p=Path(d)/'os-zapret2-restyle-0.6.2_99.pkg'
             p.symlink_to(actual)
-            with self.assertRaisesRegex(m.Refusal,'ARCHIVE_UNQUALIFIED'):
+            product=m.load_product_candidate()
+            with patch.object(product.os,'geteuid',return_value=0),\
+                 patch.object(m,'load_product_candidate',return_value=product),\
+                 self.assertRaisesRegex(m.Refusal,'ARCHIVE_UNQUALIFIED'):
                 m.validate_candidate(p,hashlib.sha256(b'x').hexdigest(),'99')
 
     def test_success_requires_hook_invocation_not_only_pkg_rc(self):
@@ -114,6 +120,14 @@ class NativePkgContract(unittest.TestCase):
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI':''}):
             with self.assertRaisesRegex(m.Refusal,'OPTIN_REQUIRED'):
                 m.native_transaction(None,'0'*64,'99',1)
+
+    def test_product_archive_gate_rechecked_under_original_fd9(self):
+        code=SOURCE.read_text()
+        self.assertIn('product.inspect_archive(',code)
+        self.assertIn('product.inspect_with_original_fd9(',code)
+        self.assertIn('attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)',code)
+        self.assertIn("'product_candidate_fd9_rechecked':True",code)
+        self.assertNotIn('path.stat().st_uid',code)
 
     def test_source_uses_shared_final_gate_and_original_historical_fd9(self):
         text=SOURCE.read_text()

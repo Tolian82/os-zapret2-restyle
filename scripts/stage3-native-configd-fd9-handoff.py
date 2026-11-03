@@ -433,10 +433,12 @@ def execute(head):
              built.get('project_sha')==head,
              'OFFICIAL_NATIVE_CANDIDATE_BUILD_UNQUALIFIED')
         native_archive=native.ROOT/built['output']
-        product_rel='opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py'
-        need(native.archived_file(native_archive,product_rel)==
-             (HERE.parent/'src'/product_rel).read_bytes(),
-             'OFFICIAL_NATIVE_ARCHIVE_FD9_TRANSPORT_BYTES_UNQUALIFIED')
+        for product_rel in (
+                'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py',
+                'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py'):
+            need(native.archived_file(native_archive,product_rel)==
+                 (HERE.parent/'src'/product_rel).read_bytes(),
+                 'OFFICIAL_NATIVE_ARCHIVE_FD9_ADMISSION_BYTES_UNQUALIFIED:'+product_rel)
         native_archive_sha=built['real_native_pkg']['sha256']
         native_revision=native.REVISION
         need(native_archive.is_file() and not native_archive.is_symlink() and
@@ -525,6 +527,7 @@ def execute(head):
                  done.get('original_fd9_inode')==ready['original_fd9_inode'] and
                  done.get('nonce_sha256')==ready['nonce_sha256'] and
                  done.get('real_owner_check_invoked') is True and
+                 done.get('product_candidate_fd9_rechecked') is True and
                  done.get('native_mutating_pkg_dispatch_reached') is False and
                  done.get('native_mutating_pkg_invoked') is False and
                  done.get('original_fd9_retained_at_refusal') is True and
@@ -542,6 +545,7 @@ def execute(head):
                  done.get('real_pkg_exit')==0 and
                  done.get('installed_native_package_identity')==expected_identity and
                  done.get('exact_native_successor_sha256')==native_archive_sha and
+                 done.get('product_candidate_fd9_rechecked') is True and
                  done.get('original_fd9_retained_during_actual_pkg') is True and
                  done.get('installed_files_modes_verified') is True and
                  done.get('foreign_config_values_preserved') is True and
