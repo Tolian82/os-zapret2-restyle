@@ -661,6 +661,11 @@ jobs:
           python3.13 -m py_compile scripts/test-native-template-heredoc.py
           python3.13 scripts/test-native-template-heredoc.py
 
+      - name: Fail-closed GitHub PR watchdog unit and negative security contracts
+        run: |
+          python3.13 -m py_compile scripts/github_pr_watchdog.py scripts/test_github_pr_watchdog.py
+          python3.13 scripts/test_github_pr_watchdog.py -v
+
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils php-cli
 
