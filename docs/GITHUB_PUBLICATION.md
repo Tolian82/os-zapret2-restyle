@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-10-26
+**Updated:** 2026-11-03
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -18,7 +18,8 @@ Read this file completely before GitHub mutation.
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
 - validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
-- merge, post-merge verification, cleanup: `GH-024`–`GH-030`;
+- merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
+- issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
 - testing package: `GH-034`–`GH-038`, `GH-060`–`GH-061`;
 - full release: `GH-039`–`GH-048`;
@@ -78,6 +79,14 @@ GH-022. **Never report a skipped or unrun job as PASS.** A legitimately path-ski
 GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI-infrastructure changes run required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
 
 GH-062. **Быстрые локальные проверки — обязательный входной контроль ДО открытия PR и запуска длинной CI-матрицы.** Перед публикацией ветки/открытием PR с изменённым кодом, тестами или конфигурацией разработчик **самостоятельно выполняет на точных подготовленных файлах** доступные быстрые проверки синтаксиса и форматирования, целевые unit/contract/regression-тесты для изменённого поведения и **запускает каждый новый или изменённый тест**, а не только проверяет его текст. Проверяются также относящиеся к изменению версия/ревизия, заголовок PR и элементарные ошибки тестовых фикстур, регулярных выражений, shell, PHP, Python и JavaScript. **Любой провал блокирует открытие PR и долгую CI:** сначала исправить ошибку локально в том же scope, повторить быстрый тест до успеха, и лишь затем запускать полную требуемую матрицу. При каждом последующем изменении head те же затронутые быстрые проверки повторяются **до отправки изменений**. Для docs-only и изменений правил выполняются локальные проверки ссылок, идентификаторов правил, реестров перекрёстных ссылок и целостности документации; это не требует запускать продуктовую матрицу, если она не относится к изменению. Если конкретный тест технически невозможно выполнить локально (например, требуется FreeBSD 15), явно зафиксировать причину и выполнить максимально узкую доступную отдельную проверку до длинной матрицы; **не объявлять невыполненную проверку успешной**. Перечень действительно выполненных команд и их результаты отражаются в PR. Длинная CI остаётся обязательной по сфере изменения, но не служит средством обнаружения простых ошибок, которые можно найти до PR.
+
+## Issue execution, PR completion and unattended monitoring
+
+GH-063. **An Issue is a tracked request, not running implementation or an installed watcher.** Opening, linking or updating an Issue does not automatically assign an agent, start coding, open a PR, run CI or deploy monitoring. For an owner-authorized implementation, specify its concrete execution path and acceptance evidence and advance to a scoped branch/PR in the active work whenever possible. If blocked, state the reason explicitly and leave the Issue open. Close as completed only after implementation and verification; use a clearly reasoned non-completion disposition if applicable. Never describe an idle Issue as a stuck PR.
+
+GH-064. **The executing developer remains accountable for the PR's terminal outcome.** A Ready PR or successful CI run is not delivery. Observe and validate all scope-required checks for the **current PR head SHA**, never treating failed, cancelled, skipped, missing, queued, stalled or old-head checks as PASS. Repair same-scope failures in the same PR; when all required checks pass, verify the actual base, next source revision, review/authorization and safety gates, then complete the authorized exact-head merge, post-merge `main` verification and temporary branch cleanup. If the PR cannot be completed or work cannot continue, report that it remains OPEN with its head SHA, precise blocker and next action instead of claiming completion. Do not bypass required checks or authorization.
+
+GH-065. **Unattended completion alerts require a real, separately operating automation.** An Issue, GitHub Actions CI, open/idle chat or intention to follow up is not a watchdog and cannot wake an inactive assistant. A deployed GitHub-native watcher must check owner-managed open PRs against their **current head** and scope-specific required checks on relevant CI completion, with a bounded scheduled fallback; classify ready-but-open, failed, stalled and stale conditions and send deduplicated actionable notifications. Obsolete, cancelled or skipped checks never establish current-head PASS. Privileged watchers must not execute untrusted PR code, leak secrets, weaken protections or silently auto-merge. Notifications alone do not repair or merge PRs; autonomous action requires separately configured authorization and all normal safety gates.
 
 ## PR merge and post-merge verification
 
