@@ -892,6 +892,9 @@ jobs:
       - name: Test package lifecycle service refresh
         run: sh scripts/test-package-lifecycle-restart.sh
 
+      - name: Test native package hook archive-refusal contracts
+        run: python3.13 scripts/test-native-package-hook-regression-contracts.py
+
       - name: Test package replacement on attested cold kernel
         run: python3.13 scripts/test-package-cold-kernel.py
 
@@ -1303,6 +1306,10 @@ jobs:
 
           ls -lh dist/
           tar -tf dist/*.pkg > "${contents}"
+          if grep -Eq '(^|/)(__pycache__/|[^/]+[.]pyc$)' "${contents}"; then
+            echo "ERROR: untracked Python bytecode leaked into native package" >&2
+            exit 1
+          fi
           head -30 "${contents}"
           if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw|forward_supervisor|candidate_engine_start|forward_stop)[.]py$' "${contents}"; then
             echo "ERROR: retired private Voice backend leaked into native OPNsense package" >&2
@@ -1367,6 +1374,11 @@ jobs:
           tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
           jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and (.deps | keys | length == 7) and (.deps | has("git") and has("jq") and has("gmake") and has("pkgconf") and has("luajit") and has("ca_root_nss")) and (.deps | has("php85-posix") | not)' "${manifest}" >/dev/null
           head -80 "${manifest}"
+
+      - name: Verify real native package hook bodies and isolated lifecycle regressions
+        run: |
+          set -eu
+          python3 scripts/test-native-package-hook-regression.py dist/*.pkg
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7

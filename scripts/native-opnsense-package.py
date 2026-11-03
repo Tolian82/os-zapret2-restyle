@@ -20,7 +20,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 VERSION = "0.6.2"
-REVISION = "81"
+REVISION = "82"
 NAME = "os-zapret2-restyle"
 POLICY_DEST = "share/zapret2-restyle/compatibility.json"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"
@@ -183,6 +183,73 @@ def archived_file(pkg, name):
     return command(["tar", "-xOf", str(pkg), member], timeout=35)
 
 
+def tracked_source_paths():
+    """Bind staged source files to the exact tracked checkout, not CI caches."""
+    git = ["git", "-c", "safe.directory=" + str(ROOT), "-C", str(ROOT)]
+    status = command(git + ["status", "--porcelain", "--untracked-files=no",
+                            "--", "src/opnsense", "src/etc"], timeout=25)
+    need(not status, "NATIVE_TRACKED_SOURCE_WORKTREE_DIRTY")
+    raw = command(git + ["ls-files", "-z", "--", "src/opnsense", "src/etc"],
+                  timeout=25)
+    need(raw and raw.endswith(b"\0"), "NATIVE_TRACKED_SOURCE_LIST_MISSING")
+    entries = raw[:-1].split(b"\0")
+    expected = set()
+    for entry in entries:
+        parts = Path(entry.decode("utf-8")).parts
+        need(len(parts) >= 3 and parts[0] == "src" and
+             parts[1] in ("opnsense", "etc") and
+             "." not in parts and ".." not in parts,
+             "NATIVE_TRACKED_SOURCE_PATH_UNQUALIFIED")
+        expected.add(Path(*parts[1:]).as_posix())
+    need(len(expected) == len(entries), "NATIVE_TRACKED_SOURCE_DUPLICATE")
+    return expected
+
+
+def scrub_staged_source(plugin, expected):
+    """Remove only staged Python bytecode; reject any other untracked payload.
+
+    The *checkout* remains untouched. This happens before generated policy and
+    private assets are added, so every remaining file must be Git-tracked.
+    """
+    root = plugin / "src"
+    need(root.is_dir() and not root.is_symlink(), "NATIVE_STAGE_SOURCE_ROOT_INVALID")
+    actual = set()
+    ephemeral = []
+    cache_directories = []
+    for path in root.rglob("*"):
+        need(not path.is_symlink(), "NATIVE_STAGED_SOURCE_SYMLINK")
+        if path.is_dir():
+            if path.name == "__pycache__":
+                cache_directories.append(path)
+            continue
+        need(path.is_file(), "NATIVE_STAGED_SOURCE_NOT_REGULAR")
+        rel = path.relative_to(root).as_posix()
+        if rel in expected:
+            actual.add(rel)
+        elif "__pycache__" in path.relative_to(root).parts and path.suffix == ".pyc":
+            ephemeral.append(path)
+        else:
+            raise Refusal("NATIVE_UNTRACKED_STAGED_SOURCE_FORBIDDEN:" + rel)
+    need(actual == expected, "NATIVE_TRACKED_SOURCE_MISSING_OR_DIFFERENT:" +
+         repr(sorted(expected - actual)[:4]))
+    # Perform validation for the whole inventory before any staged deletion.
+    for path in ephemeral:
+        path.unlink()
+    for directory in sorted(cache_directories, key=lambda p: len(p.parts), reverse=True):
+        try:
+            directory.rmdir()
+        except OSError:
+            raise Refusal("NATIVE_UNQUALIFIED_PYCACHE_DIRECTORY:" +
+                          directory.relative_to(root).as_posix()) from None
+    need(all(path.is_file() and not path.is_symlink()
+             for path in (root / rel for rel in expected)),
+         "NATIVE_STAGED_TRACKED_FILE_CHANGED_AFTER_CLEANUP")
+    return {"tracked_source_files": len(actual),
+            "discarded_staged_bytecode_files": len(ephemeral),
+            "other_untracked_source_accepted": False,
+            "checkout_mutated": False}
+
+
 def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
     need(pkg.is_file() and not pkg.is_symlink(),
          "NATIVE_PKG_NOT_FOUND")
@@ -279,6 +346,7 @@ def build():
     with tempfile.TemporaryDirectory(prefix="zapret2-native-build-") as scratch:
         official = private.old.clone_official(Path(scratch))
         plugin = private.old.prepare_source(official)
+        staged_source = scrub_staged_source(plugin, tracked_source_paths())
         platform = qualified_target(py)
         policy_sha = stage_policy(plugin)
         variables = native_make_variables(plugin, sha, py, installed, platform)
@@ -309,6 +377,7 @@ def build():
             "private_chrome_profile": bundle["profile"],
             "private_target_libraries": bundle["target_ldd_libraries"],
             "real_native_pkg": evidence,
+            "tracked_stage_source": staged_source,
             "output": "dist/" + NAME + "-" + VERSION + "_" + REVISION + ".pkg",
             "production_script_uses_official_Mk": True,
             "actual_product_pkg_installed": False,

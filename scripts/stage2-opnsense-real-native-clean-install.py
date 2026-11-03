@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 NAME = "os-zapret2-restyle"
-REVISION = "81"
+REVISION = "82"
 VERSION = "0.6.2_" + REVISION
 OPTIN = "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL"
 PRESERVED = ("/var/run/zapret2-restyle/pkg-upgrade.restart",

@@ -12,7 +12,7 @@ import sys
 import time
 
 HERE = Path(__file__).resolve().parent
-REVISION = "81"
+REVISION = "82"
 OPTIN = "ZAPRET2_STAGE2_REAL_FIRMWARE_UNLOCK_BYPASS"
 NAME = "os-zapret2-restyle"
 
