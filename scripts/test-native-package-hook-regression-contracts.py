@@ -113,7 +113,7 @@ class NativePackageHookContracts(unittest.TestCase):
             # Keys are synthesized from file name; verify test hooks consume them.
             target = "test-package-lifecycle-restart.sh"
             self.assertIn(key, (HERE / target).read_text())
-        self.assertIn("NATIVE_HOOK_MOCK_REGRESSION_ONLY", src)
+        self.assertIn("PASS_NATIVE_PACKAGE_HOOK_MOCK_REGRESSION_ONLY", src)
         self.assertNotIn('["pkg", "add"', src)
         self.assertNotIn('["pkg", "delete"', src)
         self.assertNotIn('["pkg", "upgrade"', src)
