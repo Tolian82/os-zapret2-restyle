@@ -95,7 +95,10 @@ version_specific=$(find "${ROOT_DIR}/.github/workflows" -maxdepth 1 -type f -nam
 require_fixed "- 'publish/v*_*'" "${PRERELEASE_WORKFLOW}" 'generic testing publisher branch contract is missing'
 require_fixed 'workflow_dispatch:' "${PRERELEASE_WORKFLOW}" 'generic testing publisher lacks manual dispatch fallback'
 require_fixed 'pull-requests: write' "${PRERELEASE_WORKFLOW}" 'testing publisher cannot create publication-record PRs'
-require_fixed "release: '15.0'" "${PRERELEASE_WORKFLOW}" 'generic testing publisher does not build on FreeBSD 15'
+require_fixed 'vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235' "${PRERELEASE_WORKFLOW}" 'publisher must use pinned official OPNsense VM'
+require_fixed 'release: "26.7"' "${PRERELEASE_WORKFLOW}" 'publisher does not qualify OPNsense 26.7'
+require_fixed 'ZAPRET2_NATIVE_BUILD_CI=1' "${PRERELEASE_WORKFLOW}" 'publisher does not opt in to native Mk'
+require_fixed 'ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}"' "${PRERELEASE_WORKFLOW}" 'publisher lacks exact source SHA'
 require_fixed 'git merge-base --is-ancestor "${TARGET_SHA}" origin/main' "${PRERELEASE_WORKFLOW}" 'testing publisher does not require source ancestry in main'
 require_fixed 'PARENT_IDENTITY=$(identity_at "${TARGET_SHA}^")' "${PRERELEASE_WORKFLOW}" 'testing publisher does not verify candidate-defining parent identity'
 require_fixed '[[ "${PARENT_IDENTITY}" != "${CURRENT_IDENTITY}" ]]' "${PRERELEASE_WORKFLOW}" 'testing publisher can publish from a later same-identity docs/governance commit'
@@ -112,12 +115,20 @@ if grep -Eq 'actions/upload-artifact|upload-artifact@' "${PRERELEASE_WORKFLOW}";
   fail 'testing package publisher must not use an Actions artifact as delivery'
 fi
 
-# Publisher-contract changes have their own CI gate and real FreeBSD 15 package qualification.
+# Publisher-contract changes have their own isolated OPNsense native Mk package CI gate.
 require_fixed 'name: Testing package delivery contract' "${DELIVERY_CI}" 'testing-package delivery CI workflow is missing its identity'
 require_fixed "- '.github/workflows/publish-prerelease.yml'" "${DELIVERY_CI}" 'delivery CI does not trigger on publisher changes'
 require_fixed "- 'scripts/test-github-branch-hygiene.sh'" "${DELIVERY_CI}" 'delivery CI does not trigger on governance-test changes'
 require_fixed 'sh scripts/test-github-branch-hygiene.sh' "${DELIVERY_CI}" 'delivery CI does not execute the governance contract'
-require_fixed "release: '15.0'" "${DELIVERY_CI}" 'delivery CI does not qualify package build on FreeBSD 15'
+require_fixed 'vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235' "${DELIVERY_CI}" 'delivery CI must use pinned official OPNsense VM'
+require_fixed 'release: "26.7"' "${DELIVERY_CI}" 'delivery CI does not qualify OPNsense 26.7'
+require_fixed 'ZAPRET2_NATIVE_BUILD_CI=1' "${DELIVERY_CI}" 'delivery CI does not opt in to native Mk'
+require_fixed 'ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}"' "${DELIVERY_CI}" 'delivery CI lacks exact source SHA'
+for workflow in "${PRERELEASE_WORKFLOW}" "${DELIVERY_CI}"; do
+  if grep -Fq 'vmactions/freebsd-vm@' "${workflow}"; then
+    fail "obsolete stock FreeBSD production package build remains: ${workflow}"
+  fi
+done
 require_fixed '.abi == "FreeBSD:15:amd64"' "${DELIVERY_CI}" 'delivery CI does not verify FreeBSD 15 package ABI'
 
 # Full release trigger/workflow enforce current version semantics.
