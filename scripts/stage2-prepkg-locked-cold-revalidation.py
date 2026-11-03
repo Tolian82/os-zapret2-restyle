@@ -88,17 +88,22 @@ def inside_lock(archive):
     check_fd9()
     old = load('stage0-installed-predecessor-readonly.py')
     guard = load('stage0-opnsense-prepkg-readonly.py')
-    host = old.run('hostname', '-s').decode().strip()
-    prov = old.run_guest(archive, host)
-    before = (old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME),
-              digest(old.SERVICE), digest('/conf/config.xml'))
-    observation = qualified_cold(
-        prov, guard, guard.command(['/bin/ps', '-ax', '-o', 'command=']),
-        guard.command(['/sbin/kldstat', '-q', '-m', 'ipfw']),
-        guard.command(['/sbin/kldstat', '-q', '-m', 'ipdivert']),
-        guard.command(['/sbin/ipfw', '-q', 'list']))
-    after = (old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME),
-             digest(old.SERVICE), digest('/conf/config.xml'))
+    try:
+        host = old.run('hostname', '-s').decode().strip()
+        prov = old.run_guest(archive, host)
+        before = (old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME),
+                  digest(old.SERVICE), digest('/conf/config.xml'))
+        observation = qualified_cold(
+            prov, guard, guard.command(['/bin/ps', '-ax', '-o', 'command=']),
+            guard.command(['/sbin/kldstat', '-q', '-m', 'ipfw']),
+            guard.command(['/sbin/kldstat', '-q', '-m', 'ipdivert']),
+            guard.command(['/sbin/ipfw', '-q', 'list']))
+        after = (old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME),
+                 digest(old.SERVICE), digest('/conf/config.xml'))
+    except (old.Refusal, guard.Refusal) as exc:
+        # Preserve genuine old/guard refusal without an unhandled traceback.
+        # This is STILL a pre-pkg diagnostic refusal, never admission.
+        raise Refusal(str(exc)) from None
     need(before == after, 'PKGDB_SERVICE_OR_CONFIG_CHANGED_WITHIN_LOCK')
     return {'status': 'PASS_LOCKED_COLD_READ_ONLY_DIAGNOSTIC',
             'observed': observation, 'independent_original_fd9_exclusive': True,
