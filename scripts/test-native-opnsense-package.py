@@ -15,9 +15,9 @@ spec.loader.exec_module(mod)
 
 class NativeBuilderTests(unittest.TestCase):
     def test_revision_and_exact_target(self):
-        self.assertEqual(mod.REVISION, "78")
-        self.assertEqual(mod.private.old.REVISION, "78")
-        self.assertEqual(mod.provider.mk.REVISION, "78")
+        self.assertEqual(mod.REVISION, "79")
+        self.assertEqual(mod.private.old.REVISION, "79")
+        self.assertEqual(mod.provider.mk.REVISION, "79")
         self.assertEqual(mod.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"], "FreeBSD:15:amd64")
 
     def test_missing_optin_refused(self):
@@ -33,7 +33,7 @@ class NativeBuilderTests(unittest.TestCase):
                 mod.git_head()
 
     def test_mk_accepts_derived_python_and_real_dependencies(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_78",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_79",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake pkgconf luajit git jq ca_root_nss",
@@ -47,7 +47,7 @@ class NativeBuilderTests(unittest.TestCase):
                 vars)
 
     def test_mk_refuses_unsafe_dependency_mismatch(self):
-        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_78",
+        vars = {"PLUGIN_PKGNAME":mod.NAME, "PLUGIN_PKGVERSION":"0.6.2_79",
                 "PLUGIN_ABI":"26.7", "PLUGIN_HASH":"f"*40,
                 "PLUGIN_WWW":mod.PROJECT_URL, "PLUGIN_PYTHON":"313",
                 "PLUGIN_DEPENDS":"python313 gmake", "PLUGIN_DEVEL":""}
