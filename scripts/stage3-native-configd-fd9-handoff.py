@@ -93,6 +93,20 @@ def late_journal_mode():
     return value=='1'
 
 
+def native_pkg_mode():
+    """Exact one-shot disposable native pkg mutation under authenticated old FD9."""
+    value=os.environ.get('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG','')
+    need(value in ('','1'),'NATIVE_MUTATING_PKG_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI')=='1' and
+             os.environ.get('ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK')=='1' and
+             os.environ.get('ZAPRET2_NATIVE_BUILD_CI')=='1' and
+             os.environ.get('ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF')=='1' and
+             readonly_query_mode() and not late_journal_mode() and not fault_mode(),
+             'NATIVE_MUTATING_PKG_NOT_DISPOSABLE_OR_MODE_CONFLICT')
+    return value=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -128,6 +142,12 @@ def action_bytes(head):
         extra+='ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 '
     if late_journal_mode():
         extra+='ZAPRET2_STAGE3_LATE_JOURNAL=1 ZAPRET2_STAGE3_LATE_JOURNAL_CI=1 '
+    if native_pkg_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
+                'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
+                'ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 '
+                'ZAPRET2_NATIVE_BUILD_CI=1 '
+                'ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF=1 ')
     return ('[launch]\n'
             'command:/usr/bin/env GITHUB_ACTIONS=true '
             'ZAPRET2_STAGE3_DETACHED_FD9=1 '
@@ -202,6 +222,7 @@ def worker(head):
     fault=fault_mode()
     query_enabled=readonly_query_mode()
     late_journal=late_journal_mode()
+    pkg_enabled=native_pkg_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -238,6 +259,29 @@ def worker(head):
     try:
         need(base.wait_file(RELEASE,55)==b'RELEASE_TEST_ONLY',
              'WORKER_RELEASE_NOT_AUTHORIZED')
+        if pkg_enabled:
+            # Exactly one configd transferred FD9 owns the complete native
+            # replacement; no controller-side pkg and no production hook edit.
+            signed=json.loads(base.trusted(TICKET))
+            need(set(signed)=={'head','nonce','package_path','package_sha256',
+                                'revision'} and signed['head']==head and
+                 signed['nonce']==fields['nonce'],
+                 'NATIVE_PKG_ROOT_TICKET_CHANGED_AFTER_ACK')
+            os.environ['ZAPRET2_STAGE3_NATIVE_PKG_PATH']=signed['package_path']
+            transaction=load('stage3-native-configd-mutating-pkg.py')
+            try:
+                verdict=transaction.native_transaction(
+                    base.OLD,signed['package_sha256'],signed['revision'],fields['inode'])
+            except Exception as exc:
+                # An interrupted real pkg has UNKNOWN state, never PASS.
+                raise base.Refusal('NATIVE_MUTATING_PKG_WORKER_FAILED:'+
+                                   type(exc).__name__+':'+str(exc)[:90]) from None
+            base.create_owned(DONE,json.dumps({
+                **verdict,'sha':head,'pid':os.getpid(),
+                'original_fd9_inode':fields['inode'],
+                'nonce_sha256':digest,
+                'native_mutating_pkg_invoked':True},sort_keys=True).encode())
+            return
         if late_journal:
             # The real old owner became unsafe AFTER successful native pkg query
             # and original FD9 ACK. Final check must veto before any pkg dispatch.
@@ -264,6 +308,7 @@ def launch(head):
     qualify(head)
     readonly_query_mode()
     late_journal_mode()
+    native_pkg_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY):
@@ -328,10 +373,24 @@ def wait_ready(head,nonce):
     raise base.Refusal('FD9_HANDOFF_READY_TIMED_OUT')
 
 
+def wait_native_pkg_done(limit=270):
+    """Bounded success/error witness; fail immediately on worker failure."""
+    expiry=time.monotonic()+limit
+    while time.monotonic()<expiry:
+        if FAILED.exists() or FAILED.is_symlink():
+            raise base.Refusal('NATIVE_PKG_WORKER_FAILED_NO_SUCCESS:'+
+                               base.trusted(FAILED,200).decode('ascii','replace'))
+        if DONE.exists() or DONE.is_symlink():
+            return base.trusted(DONE,3000)
+        time.sleep(.2)
+    raise base.Refusal('NATIVE_PKG_WORKER_RESULT_TIMED_OUT_UNKNOWN_STATE')
+
+
 def execute(head):
     qualify(head)
     query_enabled=readonly_query_mode()
     late_journal=late_journal_mode()
+    pkg_enabled=native_pkg_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -343,6 +402,26 @@ def execute(head):
          'FOREIGN_HANDOFF_DIRECTORY_PRESENT')
     need(not ACTION.exists() and not ACTION.is_symlink(),
          'FOREIGN_CONFIGD_ACTION_PRESENT')
+    native_archive=None
+    native_archive_sha=None
+    native_revision=None
+    if pkg_enabled:
+        stopped=load('stage2-opnsense-real-native-stopped-upgrade.py')
+        clean=stopped.clean
+        native=stopped.native
+        native.gate()
+        clean.plugin_absent()
+        stopped.check_old_archive(base.OLD)
+        built=native.build()
+        need(built.get('status')=='PASS_OFFICIAL_NATIVE_BUILD_SOURCE_ONLY' and
+             built.get('project_sha')==head,
+             'OFFICIAL_NATIVE_CANDIDATE_BUILD_UNQUALIFIED')
+        native_archive=native.ROOT/built['output']
+        native_archive_sha=built['real_native_pkg']['sha256']
+        native_revision=native.REVISION
+        need(native_archive.is_file() and not native_archive.is_symlink() and
+             clean.digest(native_archive)==native_archive_sha,
+             'OFFICIAL_NATIVE_CANDIDATE_ARCHIVE_CHANGED')
     need(installer.install_and_verify(base.OLD)['status']==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
          'OLD_INSTALLED_PROVENANCE_UNVERIFIED')
@@ -354,7 +433,12 @@ def execute(head):
     inode=base.LOCK.lstat().st_ino if existed else None
     ROOT.mkdir(mode=0o700)
     nonce=secrets.token_hex(16)
-    base.create_owned(TICKET,json.dumps({'head':head,'nonce':nonce}).encode())
+    ticket_data={'head':head,'nonce':nonce}
+    if pkg_enabled:
+        ticket_data.update(package_path=str(native_archive),
+                           package_sha256=native_archive_sha,
+                           revision=native_revision)
+    base.create_owned(TICKET,json.dumps(ticket_data,sort_keys=True).encode())
     base.create_owned(ACTION,action_bytes(head))
     released=False
     journal_verified=False
@@ -398,8 +482,24 @@ def execute(head):
             base.check_original_fd9_busy()
         base.create_owned(RELEASE,b'RELEASE_TEST_ONLY')
         released=True
-        done=json.loads(base.wait_file(DONE,45))
-        if late_journal:
+        done=json.loads(wait_native_pkg_done() if pkg_enabled
+                        else base.wait_file(DONE,45))
+        if pkg_enabled:
+            expected_identity='os-zapret2-restyle|0.6.2_'+native_revision
+            need(done.get('status')=='PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9' and
+                 done.get('sha')==head and done.get('pid')==ready['pid'] and
+                 done.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 done.get('nonce_sha256')==ready['nonce_sha256'] and
+                 done.get('native_mutating_pkg_invoked') is True and
+                 done.get('real_pkg_exit')==0 and
+                 done.get('installed_native_package_identity')==expected_identity and
+                 done.get('exact_native_successor_sha256')==native_archive_sha and
+                 done.get('original_fd9_retained_during_actual_pkg') is True and
+                 done.get('installed_files_modes_verified') is True and
+                 done.get('foreign_config_values_preserved') is True and
+                 done.get('lh08_ac11_accepted') is False,
+                 'NATIVE_CONFIGD_PKG_OR_OWNERSHIP_ATTESTATION_UNQUALIFIED')
+        elif late_journal:
             need(done.get('status')=='REFUSED_LATE_JOURNAL_BEFORE_MUTATING_PKG' and
                  done.get('real_owner_check_invoked') is True and
                  done.get('native_mutating_pkg_dispatch_reached') is False and
@@ -436,8 +536,16 @@ def execute(head):
              'CANNOT_CLEAN_CHANGED_CONFIGD_ACTION')
         ACTION.unlink()
         base.run(['/usr/sbin/service','configd','restart'],45)
-    need(managed.owner_snapshot(old,guard,base.OLD)==before,
-         'HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW')
+    if pkg_enabled:
+        need(load('stage2-opnsense-real-unsafe-owner-replacement.py').installed_identity()
+             =='os-zapret2-restyle|0.6.2_'+native_revision,
+             'POST_CONFIGD_NATIVE_PKG_INSTALLED_IDENTITY_DRIFT')
+        need(load('stage2-opnsense-real-native-clean-install.py').digest(native_archive)
+             ==native_archive_sha,
+             'POST_CONFIGD_NATIVE_PKG_ARCHIVE_DRIFT')
+    else:
+        need(managed.owner_snapshot(old,guard,base.OLD)==before,
+             'HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW')
     for p in ((TICKET,READY,DONE,RELEASE,QUERY) if query_enabled
               else (TICKET,READY,DONE,RELEASE)):
         need(base.trusted(p) is not None,'MISSING_OWNED_TEST_FILE')
@@ -472,6 +580,8 @@ def execute(head):
         need(base.LOCK.is_file() and base.LOCK.lstat().st_ino==inode,
              'PREEXISTING_ORIGINAL_LOCK_CHANGED')
     return {'schema':1,'status':(
+                'PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9'
+                if pkg_enabled else
                 'PASS_TEST_ONLY_CONFIGD_FD9_LATE_JOURNAL_VETO_BEFORE_PKG'
                 if late_journal else
                 'PASS_TEST_ONLY_CONFIGD_FD9_NATIVE_PKG_READ_ONLY_QUERY'
@@ -479,10 +589,12 @@ def execute(head):
                 'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9'),
             'late_owner_refused_before_pkg':late_journal,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
+            'native_mutating_pkg_under_detached_fd9':pkg_enabled,
+            'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
-            'old_package_config_process_ipfw_unchanged':True,
-            'native_mutating_pkg_invoked':False,
+            'old_package_config_process_ipfw_unchanged':not pkg_enabled,
+            'native_mutating_pkg_invoked':pkg_enabled,
             'stock_web_firmware_or_direct_root_pkg_protected':False,
             'final_owner_check_to_pkg_race_closed':False,
             'lh08_ac11_accepted':False,'owner_appliance_modified':False}
