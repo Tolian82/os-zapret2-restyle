@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from stage2_source_revision import revision_from_makefile
 from unittest.mock import Mock, patch
 
 HERE = Path(__file__).resolve().parent
@@ -19,7 +20,7 @@ spec.loader.exec_module(runner)
 
 class GenuineRunningContracts(unittest.TestCase):
     def test_candidate_revision_and_old_published_identity(self):
-        self.assertEqual(runner.REVISION, "82")
+        self.assertEqual(runner.REVISION, revision_from_makefile())
         self.assertEqual(runner.old.VERSION, "0.6.2_1")
         self.assertEqual(runner.old.ARCHIVE_SHA,
                          "1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f")
