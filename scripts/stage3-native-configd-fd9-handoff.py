@@ -435,7 +435,8 @@ def execute(head):
         native_archive=native.ROOT/built['output']
         for product_rel in (
                 'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py',
-                'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py'):
+                'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py',
+                'opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py'):
             need(native.archived_file(native_archive,product_rel)==
                  (HERE.parent/'src'/product_rel).read_bytes(),
                  'OFFICIAL_NATIVE_ARCHIVE_FD9_ADMISSION_BYTES_UNQUALIFIED:'+product_rel)

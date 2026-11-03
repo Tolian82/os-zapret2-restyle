@@ -163,6 +163,24 @@ class RealInstallContracts(unittest.TestCase):
         self.assertIn('checked == len(files)',source)
         self.assertNotIn('len(files) == 291',source)
 
+    def test_installed_managed_inspector_is_real_and_nonmutating(self):
+        source = (HERE / "stage2-opnsense-real-native-clean-install.py").read_text()
+        for fragment in ('def verify_installed_managed_cli(',
+                         'managed = verify_installed_managed_cli(path, require_sha)',
+                         '"installed_managed_inspection": managed',
+                         '"PASS_INSTALLED_MANAGED_READ_ONLY_CLI"',
+                         '"ORIGINAL_FD9_BUSY_BEFORE_INSPECTION"',
+                         '"UPGRADE_NOT_IMPLEMENTED_NO_PKG"',
+                         '"MANAGED_INSPECTION_MUTATED_PKGDB_CONFIG_OR_CANDIDATE"'):
+            self.assertIn(fragment, source)
+        cli = HERE.parent / "src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py"
+        self.assertTrue(cli.is_file())
+        product = cli.read_text()
+        self.assertIn("transport.receive_original_fd9(", product)
+        self.assertIn("candidate.inspect_with_original_fd9(", product)
+        self.assertIn("'pkg_invoked': False", product)
+        self.assertNotIn("'pkg', 'add'", product)
+
     def test_full_installed_source_witness_and_no_false_claim(self):
         source = (HERE / "stage2-opnsense-real-native-clean-install.py").read_text()
         for phrase in ('native.gate()', 'native.build()',
