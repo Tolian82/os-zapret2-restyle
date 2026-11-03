@@ -145,9 +145,13 @@ class DelegatedOldFD9Tests(unittest.TestCase):
     def test_read_only_cold_precondition_before_mutating_pkg(self):
         s=SOURCE.read_text()
         self.assertLess(s.index('locked.inside_lock(archive)'),
-                        s.index('rc, out, err = run_pkg(successor, env)'))
+                        s.index('rc, out, err = admitted_pkg_dispatch(archive, successor, env)'))
         self.assertLess(s.index('count_calls(folder)\n        need(before_calls'),
-                        s.index('rc, out, err = run_pkg(successor, env)'))
+                        s.index('rc, out, err = admitted_pkg_dispatch(archive, successor, env)'))
+        final_gate = s[s.index('def admitted_pkg_dispatch('):
+                       s.index('def inside_lock(', s.index('def admitted_pkg_dispatch('))]
+        self.assertLess(final_gate.index('verify_old_cold_admission(archive)'),
+                        final_gate.index('run_pkg if dispatch is None'))
         self.assertIn("native_calls >= 1",s)
         self.assertIn('old.run_guest', (HERE/'stage2-prepkg-locked-cold-revalidation.py').read_text())
         self.assertIn('locked.check_fd9()',s)
