@@ -138,7 +138,9 @@ def classify(result, case):
         need(result.returncode == 2 and
              'STAGE2_LOCKED_COLD=REFUSED:UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:'
              in result.stderr and not result.stdout.strip(),
-             'UNKNOWN_OWNER_NOT_REFUSED_UNDER_FD9')
+             'UNKNOWN_OWNER_NOT_REFUSED_UNDER_FD9:rc=' + str(result.returncode) +
+             ':stderr=' + repr(result.stderr.strip()[:240]) +
+             ':stdout=' + repr(result.stdout.strip()[:120]))
         return 'UNKNOWN_JOURNAL_DENIED_UNDER_ORIGINAL_FD9'
     raise Refusal('UNRECOGNIZED_PROBE_CASE')
 
