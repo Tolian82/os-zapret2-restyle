@@ -74,6 +74,40 @@ class InlineConfigdWorkerTests(unittest.TestCase):
         self.assertFalse(result['native_pkg_called_inside_configd_worker'])
         self.assertFalse(result['lh08_ac11_accepted'])
 
+    def test_unqualified_actual_worker_must_be_distinct_no_pkg_result(self):
+        old = SimpleNamespace(
+            run=lambda *_:'{}',
+            installed_manifest_from_json=lambda _: {'version':'0.6.2_1'})
+        guard = SimpleNamespace(snapshot=lambda _:
+                               {'status':'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY'})
+        for why in ('REAL_CONFIGD_WORKER_PGREP_NO_MATCH',
+                    'REAL_CONFIGD_WORKER_ANCESTRY_PS_GONE',
+                    'REAL_CONFIGD_WORKER_AMBIGUOUS',
+                    'NOT_INSIDE_ACTUAL_CONFIGD_WORKER'):
+            with self.subTest(reason=why),patch.object(m,'gate'),\
+                 patch.object(m,'load',side_effect=[old,guard]),\
+                 patch.object(m,'worker_ancestry',
+                              side_effect=m.Refusal(why)),\
+                 patch.object(m,'actual_incoming_hook',
+                              return_value='VERIFIED_REAL_HOOK'):
+                report=m.inside('d'*40)
+            self.assertEqual(
+                report['status'],
+                'PASS_REAL_CONFIGD_UNKNOWN_WORKER_REFUSED_BEFORE_PKG')
+            self.assertFalse(report['configd_worker_census_qualified'])
+            self.assertFalse(report['worker_is_real_configd_ancestor'])
+            self.assertFalse(report['native_pkg_called_inside_configd_worker'])
+            self.assertEqual(report['unknown_worker_refusal_reason'],why)
+        with patch.object(m,'gate'),patch.object(m,'load',
+                          side_effect=[old,guard]),\
+             patch.object(m,'worker_ancestry',
+                          side_effect=m.Refusal('ARBITRARY_FAILURE')),\
+             patch.object(m,'actual_incoming_hook',
+                          return_value='VERIFIED_REAL_HOOK'):
+            with self.assertRaisesRegex(m.Refusal,
+                                        'UNQUALIFIED_CONFIGD_PROBE'):
+                m.inside('d'*40)
+
     def test_real_inline_veto_does_not_modify_existing_old_state(self):
         with tempfile.TemporaryDirectory() as d:
             temporary=Path(d)/'actions_zapret2_stage3_ci.conf'
