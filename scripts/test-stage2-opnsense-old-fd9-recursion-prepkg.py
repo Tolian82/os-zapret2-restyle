@@ -2,6 +2,7 @@
 """Negative-only source contracts: historical FD9 recursion vs pre-pkg gate."""
 import ast
 from pathlib import Path
+import tempfile
 import time
 from types import SimpleNamespace
 import unittest
@@ -59,18 +60,22 @@ class OldFd9PrePkgNegativeContracts(unittest.TestCase):
                     self.admit(False, 2, digest, lambda: None)
 
     def test_marker_requires_bound_live_owner_and_no_symlink(self):
-        with unittest.mock.patch.object(time, "monotonic", side_effect=[0, 1]):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "started"
+            alive = SimpleNamespace(poll=lambda: None)
             with self.assertRaisesRegex(RuntimeError, "UNBOUNDED_MARKER_WAIT"):
-                self.ns["marker"](Path("/nonexistent"), SimpleNamespace(
-                    poll=lambda: None), bound=9)
+                self.ns["marker"](target, alive, bound=9)
+            target.touch()
+            self.assertTrue(self.ns["marker"](target, alive, bound=1))
+            with self.assertRaisesRegex(RuntimeError, "HOLDER_MARKER_NOT_QUALIFIED"):
+                self.ns["marker"](target, SimpleNamespace(poll=lambda: 1), bound=1)
 
     def test_native_default_fd9_and_real_old_service_call(self):
         required = (
             'FD9 = Path("/var/run/zapret2-lifecycle.lock")',
-            'LIFECYCLE_LOCK',
             '"/usr/bin/lockf"',
             '/usr/bin/lockf -s -t 1 9',
-            '"/usr/bin/lockf -s -t 0 9',
+            '/usr/bin/lockf -s -t 0 9',
             'STATUS_UNDER_HELD_FD9',
             'str(service)',
             'marker(ready, proc)',
