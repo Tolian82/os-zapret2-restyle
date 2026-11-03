@@ -7,7 +7,7 @@ import stat
 import subprocess
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE / 'stage2-prepkg-locked-cold-revalidation.py'
@@ -99,6 +99,34 @@ class LockedColdReadOnlyContracts(unittest.TestCase):
         g.check_kernel_cold.return_value='UNKNOWN'
         with self.assertRaisesRegex(mod.Refusal,'NATIVE_KERNEL_NOT_COLD'):
             mod.qualified_cold(prov,g,*a)
+
+    def test_original_module_refusals_become_bounded_local_refusals(self):
+        class OldFailure(Exception):
+            pass
+        class GuardFailure(Exception):
+            pass
+        old=SimpleNamespace(Refusal=OldFailure, SERVICE='/unused/service',
+                            run=Mock(return_value=b'guest'),
+                            run_guest=Mock(return_value={
+                                'status':'PASS_READ_ONLY_PROVENANCE',
+                                'package':'os-zapret2-restyle-0.6.2_1'}))
+        guard=SimpleNamespace(Refusal=GuardFailure,
+                              command=Mock(return_value=result(0)))
+        with patch.object(mod,'qualify'), patch.object(mod,'check_fd9'), \
+             patch.object(mod,'load',side_effect=[old,guard]), \
+             patch.object(mod,'digest',return_value='same'):
+            old.run_guest.side_effect=OldFailure('REAL_OLD_UNQUALIFIED')
+            with self.assertRaisesRegex(mod.Refusal, 'REAL_OLD_UNQUALIFIED'):
+                mod.inside_lock(Path('/unused.pkg'))
+        old.run_guest.side_effect=None
+        with patch.object(mod,'qualify'), patch.object(mod,'check_fd9'), \
+             patch.object(mod,'load',side_effect=[old,guard]), \
+             patch.object(mod,'digest',return_value='same'), \
+             patch.object(mod,'qualified_cold',
+                          side_effect=GuardFailure('UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:foreign')):
+            with self.assertRaisesRegex(mod.Refusal,
+                                        'UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE'):
+                mod.inside_lock(Path('/unused.pkg'))
 
     def test_source_enforces_nonrecursive_no_pkg_boundary(self):
         source=SOURCE.read_text(encoding='utf-8')
