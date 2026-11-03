@@ -1,0 +1,64 @@
+name: PR completion watchdog
+
+on:
+  workflow_run:
+    workflows:
+      - 'CI'
+      - 'Pull request title'
+      - 'Stage 0 audit closure evidence-only contract'
+      - 'Stage 1 OPNsense FreeBSD compatibility source policy'
+      - 'Stage 2 actual old FD9 held across authentic native pkg'
+      - 'Stage 2 configd watcher-worker read-only identity'
+      - 'Stage 2 genuine OPNsense Mk production builder (source-only acceptance)'
+      - 'Stage 2 genuine RUNNING old owner to official native OPNsense successor'
+      - 'Stage 2 genuine STOPPED predecessor to official native OPNsense package'
+      - 'Stage 2 genuine locked predecessor versus unsafe native pkg'
+      - 'Stage 2 genuine pre-pkg locked cold revalidation without nested Status'
+      - 'Stage 2 genuine stock OPNsense firmware Unlock bypass'
+      - 'Stage 2 historical service Status under original FD9'
+      - 'Stage 2 native unsafe-owner real pkg replacement witness'
+      - 'Stage 2 real clean install of authentic native OPNsense package'
+      - 'Stage 2 true native STOPPED same-version force reinstall'
+    types: [completed]
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pr-completion-watchdog.yml
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  issues: write
+
+concurrency:
+  group: pr-completion-watchdog-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  alert-owner:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout trusted default branch only
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Offline positive and negative monitoring contracts
+        run: |
+          python3.13 -m py_compile scripts/github_pr_watchdog.py scripts/test_github_pr_watchdog.py
+          python3.13 scripts/test_github_pr_watchdog.py -v
+      - name: Classify open same-repository PRs and notify only actionable transitions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+        run: python3.13 scripts/github_pr_watchdog.py
