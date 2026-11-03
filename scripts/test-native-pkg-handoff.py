@@ -43,8 +43,20 @@ class Transport(unittest.TestCase):
                 ancillary=[(socket.SOL_SOCKET,socket.SCM_RIGHTS,
                             array.array('i',[fd]))] if send_fd else []
                 a.sendmsg([json.dumps(raw).encode()],ancillary)
+                real_fstat=os.fstat
+                real_lstat=Path.lstat
+                def root_stat(st):
+                    values=list(st)
+                    values[4]=0  # st_uid only; preserve real inode/mode/link count
+                    return os.stat_result(values)
+                def root_fstat(value):
+                    return root_stat(real_fstat(value))
+                def root_lstat(path,*args,**kwargs):
+                    st=real_lstat(path,*args,**kwargs)
+                    return root_stat(st) if path == p else st
                 with patch.object(m,'LOCK',p),patch.object(m.os,'geteuid',return_value=0),\
-                        patch.object(m.os,'fstat',wraps=os.fstat) as check:
+                        patch.object(m.os,'fstat',side_effect=root_fstat) as check,\
+                        patch.object(Path,'lstat',root_lstat):
                     if lock and send_fd and data is None:
                         received,fields=m.receive_original_fd9(b,head=HEAD,nonce=NONCE)
                         try:
