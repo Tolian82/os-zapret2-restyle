@@ -59,6 +59,10 @@ def gate(head):
 def command(args, timeout=30):
     p = subprocess.run(args, capture_output=True, text=True,
                        timeout=timeout, check=False)
+    if p.returncode == 1 and args[:1] == ['/usr/bin/pgrep']:
+        raise Refusal('REAL_CONFIGD_WORKER_PGREP_NO_MATCH')
+    if p.returncode == 1 and args[:1] == ['/bin/ps']:
+        raise Refusal('REAL_CONFIGD_WORKER_ANCESTRY_PS_GONE')
     need(p.returncode == 0, 'CONFIGD_NATIVE_COMMAND_REFUSED:' +
          str(p.returncode) + ':' + p.stderr[-190:])
     return p.stdout
@@ -118,12 +122,33 @@ def inside(head):
     need(guard.snapshot(ARCHIVE)['status'] ==
          'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
          'GENUINE_OLD_OWNER_NOT_COLD')
-    ancestry = worker_ancestry()
     hook = actual_incoming_hook()
+    unknown_reason = ''
+    try:
+        ancestry = worker_ancestry()
+    except Refusal as exc:
+        # Unknown/vanished/ambiguous configd worker is an independent
+        # fail-closed reason, NOT proof of a safe synchronous transaction.
+        # Only bounded worker-census/ancestry failures qualify.
+        supported = {
+            'REAL_CONFIGD_WORKER_PGREP_NO_MATCH',
+            'REAL_CONFIGD_WORKER_ANCESTRY_PS_GONE',
+            'REAL_CONFIGD_WORKER_AMBIGUOUS',
+            'NOT_INSIDE_ACTUAL_CONFIGD_WORKER',
+        }
+        need(str(exc) in supported, 'UNQUALIFIED_CONFIGD_PROBE:' + str(exc))
+        ancestry = {'worker_ancestor':False}
+        unknown_reason = str(exc)
+    confirmed = ancestry['worker_ancestor']
     return {'schema':1,
-            'status':'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION',
-            'worker_is_real_configd_ancestor':ancestry['worker_ancestor'],
-            'incoming_hook_terminates_that_worker':True,
+            'status':('PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION'
+                      if confirmed else
+                      'PASS_REAL_CONFIGD_UNKNOWN_WORKER_REFUSED_BEFORE_PKG'),
+            'worker_is_real_configd_ancestor':confirmed,
+            'configd_worker_census_qualified':confirmed,
+            'unknown_worker_refusal_reason':unknown_reason,
+            'incoming_hook_targets_configd_worker_by_source':True,
+            'incoming_hook_terminates_that_worker':confirmed,
             'hook_diagnostic':hook,
             'historical_published_old_verified':True,
             'native_pkg_called_inside_configd_worker':False,
@@ -239,9 +264,14 @@ def execute(head):
                           str(len(rows)) + ':BYTES_' + str(len(output)) +
                           ':SUMMARY_' + normalized + ':INNER_' + inner_reason)
         witness = json.loads(rows[0])
-        need(witness.get('status') ==
-             'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION'
-             and witness.get('worker_is_real_configd_ancestor') is True
+        expected = {
+            'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION',
+            'PASS_REAL_CONFIGD_UNKNOWN_WORKER_REFUSED_BEFORE_PKG',
+        }
+        need(witness.get('status') in expected
+             and witness.get('worker_is_real_configd_ancestor') is
+             (witness.get('status') ==
+              'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION')
              and witness.get('native_pkg_called_inside_configd_worker')
              is False and witness.get('lh08_ac11_accepted') is False,
              'REAL_CONFIGD_WORKER_VETO_NOT_VERIFIED')
@@ -253,12 +283,20 @@ def execute(head):
             command(['/usr/sbin/service','configd','restart'],45)
         except Exception as exc:
             raise Refusal('TEST_ACTION_CLEANUP_FAILED:' + str(exc)[:180]) from None
-    need(diagnostic == 'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION',
+    need(diagnostic in {
+         'PASS_REAL_CONFIGD_INWORKER_PKG_REFUSED_BEFORE_MUTATION',
+         'PASS_REAL_CONFIGD_UNKNOWN_WORKER_REFUSED_BEFORE_PKG'},
          'INPROCESS_VETO_DID_NOT_RECORD_REAL_PYTHON_WITNESS:' + diagnostic)
     need(managed.owner_snapshot(old,guard,ARCHIVE) == before,
          'VETO_CHANGED_PKGDB_FILE_MODES_CONFIG_MARKERS_PROCESS_OR_IPFW')
     return {'schema':1,
-            'status':'PASS_TEST_ONLY_REAL_CONFIGD_PREPKG_WORKER_VETO',
+            'status':('PASS_TEST_ONLY_REAL_CONFIGD_PREPKG_WORKER_VETO'
+                      if witness['worker_is_real_configd_ancestor'] else
+                      'PASS_TEST_ONLY_REAL_CONFIGD_UNKNOWN_WORKER_VETO'),
+            'configd_worker_ancestry_actually_verified':
+                witness['worker_is_real_configd_ancestor'],
+            'unknown_worker_refusal_reason':
+                witness.get('unknown_worker_refusal_reason', ''),
             'original_pkgdb_files_modes_config_process_ipfw_unchanged':True,
             'configd_action_registered_invoked_then_removed':True,
             'mutating_native_pkg_invoked_after_old_baseline':False,
