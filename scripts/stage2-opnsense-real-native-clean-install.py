@@ -267,8 +267,9 @@ def installed_pkg_manifest(archive):
 
 def verify_installed_files(archive, manifest):
     files = manifest.get("files")
-    need(isinstance(files, dict) and len(files) == 291,
-         "EXPECTED_291_NATIVE_FILES_MISSING")
+    need(isinstance(files, dict) and
+         "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py" in files,
+         "NATIVE_PACKAGE_SHARED_FD9_TRANSPORT_FILE_MISSING")
     tar_names = required(["tar", "-tf", str(archive)], "TAR_LIST_FAILED").splitlines()
     checked = 0
     for name in files:

@@ -157,6 +157,12 @@ class RealInstallContracts(unittest.TestCase):
         with self.assertRaisesRegex(mod.Refusal, "FIRMWARE_TYPE_WAS_CHANGED"):
             mod.verify_official_first_install_registration(old,new)
 
+    def test_source_files_are_manifest_derived_not_frozen_to_291(self):
+        source=(HERE/'stage2-opnsense-real-native-clean-install.py').read_text()
+        self.assertIn('NATIVE_PACKAGE_SHARED_FD9_TRANSPORT_FILE_MISSING',source)
+        self.assertIn('checked == len(files)',source)
+        self.assertNotIn('len(files) == 291',source)
+
     def test_full_installed_source_witness_and_no_false_claim(self):
         source = (HERE / "stage2-opnsense-real-native-clean-install.py").read_text()
         for phrase in ('native.gate()', 'native.build()',
