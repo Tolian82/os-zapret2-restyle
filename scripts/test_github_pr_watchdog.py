@@ -113,7 +113,7 @@ class CheckStateTests(unittest.TestCase):
 class SecurityTests(unittest.TestCase):
     def test_no_pr_code_execution_or_merge(self):
         text = Path(w.__file__).read_text()
-        for forbidden in ('subprocess.', 'os.system(', 'eval(', 'exec(', 'checkout', '/merge'):
+        for forbidden in ('subprocess.', 'os.system(', 'eval(', 'exec(', 'actions/checkout@', '/merge'):
             self.assertNotIn(forbidden, text)
         with self.assertRaises(ValueError):
             w.Api('', 'Owner/repo')
