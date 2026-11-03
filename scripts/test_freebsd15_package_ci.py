@@ -36,6 +36,8 @@ require("scripts/native-opnsense-package.py", 'private.old.clone_official(Path(s
 require("scripts/native-opnsense-package.py", "private.prepare_private(plugin")
 require("scripts/native-opnsense-package.py", 'native_make_variables(plugin, sha, py, installed, platform)')
 require("scripts/native-opnsense-package.py", 'policy_sha = stage_policy(plugin)')
+require("scripts/native-opnsense-package.py", "scrub_staged_source(plugin, tracked_source_paths())")
+require("scripts/native-opnsense-package.py", '"other_untracked_source_accepted": False')
 require("scripts/native-opnsense-package.py", 'platform = qualified_target(py)')
 require("scripts/native-opnsense-package.py", "verify_native_package(")
 require("scripts/native-opnsense-package.py", '"publication_approved": False')
