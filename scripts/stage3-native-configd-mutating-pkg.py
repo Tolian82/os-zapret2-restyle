@@ -61,7 +61,17 @@ def accept_pkg_effect(rc,out,err,installed,expected,native_calls):
     return True
 
 
-def native_transaction(archive,selected_sha,revision,expected_inode):
+def qualify_late_native_refusal(exc, dispatch_reached):
+    """Reject any response except the genuine last-owner journal refusal."""
+    need(type(exc).__name__ == 'Refusal' and
+         str(exc).startswith('UNVERIFIED_JOURNAL_MARKER_OR_PIDFILE:') and
+         dispatch_reached is False,
+         'LATE_REAL_PKG_DISPATCH_VETO_UNQUALIFIED')
+    return True
+
+
+def native_transaction(archive,selected_sha,revision,expected_inode,
+                       late_journal_fault=False):
     """Keep original FD9 in this detached worker through actual pkg add -f."""
     delegate=load('stage2-native-delegated-fd9-handoff.py')
     stopped=load('stage2-opnsense-real-native-stopped-upgrade.py')
@@ -73,6 +83,10 @@ def native_transaction(archive,selected_sha,revision,expected_inode):
          os.environ.get('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI')=='1',
          'DISPOSABLE_CONFIGD_NATIVE_MUTATING_PKG_OPTIN_REQUIRED')
     delegate.qualify()
+    if late_journal_fault:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL')=='1' and
+             os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL_CI')=='1',
+             'NATIVE_LATE_JOURNAL_TEST_OPTIN_REQUIRED')
     need(native.REVISION==revision and old.ARCHIVE_SHA==delegate.load(
          'stage3-native-configd-detached-fd9.py').SHA_OLD,
          'NATIVE_SOURCE_REVISION_OR_PUBLISHED_OLD_UNQUALIFIED')
@@ -122,6 +136,42 @@ def native_transaction(archive,selected_sha,revision,expected_inode):
         need(old.run('pkg','info','-R','--raw-format','json',NAME)==initial and
              Path('/conf/config.xml').read_bytes()==config_before,
              'PREPKG_OWNER_CHECK_MUTATED_OLD_STATE')
+        if late_journal_fault:
+            # Actual shared pkg dispatcher: replace mutating pkg with a
+            # fail-closed tripwire so its invocation is always a test failure.
+            handoff=load('stage3-native-configd-fd9-handoff.py')
+            base=load('stage3-native-configd-detached-fd9.py')
+            base.create_owned(handoff.PREPKG_READY,json.dumps({
+                'sha':os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+                'pid':os.getpid(),'original_fd9_inode':expected_inode,
+                'nonce_sha256':hashlib.sha256(ticket.encode()).hexdigest()
+            },sort_keys=True).encode())
+            need(base.wait_file(handoff.PREPKG_RESUME,55)==
+                 b'RESUME_TEST_ONLY_AFTER_CORRUPT_JOURNAL',
+                 'NATIVE_PKG_LATE_JOURNAL_BARRIER_NOT_RELEASED')
+            dispatched=[]
+            def forbidden_dispatch(path,environment):
+                dispatched.append(True)
+                raise Refusal('UNSAFE_REAL_NATIVE_PKG_DISPATCH_REACHED')
+            try:
+                delegate.admitted_pkg_dispatch(
+                    archive,candidate,env,dispatch=forbidden_dispatch)
+            except delegate.Refusal as exc:
+                qualify_late_native_refusal(exc,bool(dispatched))
+            else:
+                raise Refusal('UNSAFE_REAL_NATIVE_PKG_OWNER_ACCEPTED')
+            need(not dispatched and
+                 old.run('pkg','info','-R','--raw-format','json',NAME)==initial and
+                 Path('/conf/config.xml').read_bytes()==config_before,
+                 'NATIVE_LATE_PKG_REFUSAL_CHANGED_OLD_STATE')
+            locked.check_fd9()
+            return {'schema':1,
+                    'status':'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL',
+                    'real_owner_check_invoked':True,
+                    'native_mutating_pkg_dispatch_reached':False,
+                    'original_fd9_retained_at_refusal':True,
+                    'native_mutating_pkg_invoked':False,
+                    'lh08_ac11_accepted':False}
         # Identical final owner admission helper used by existing native _89.
         # NO controller-side gap: this same detached child owns FD9 throughout.
         rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
