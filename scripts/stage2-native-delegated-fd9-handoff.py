@@ -166,6 +166,43 @@ def run_pkg(path, env):
     return proc.returncode, out, err
 
 
+
+def verify_old_cold_admission(archive):
+    """Reusable genuine old STOPPED owner predicate under original exclusive FD9.
+
+    This helper is shared by the positive _89 native pkg path and the _91
+    late-fault rejection witness. It never calls original Status recursively
+    while FD9 is held, modifies product hooks, or invokes native pkg.
+    """
+    qualify()
+    locked = load('stage2-prepkg-locked-cold-revalidation.py')
+    locked.check_fd9()
+    try:
+        report = locked.inside_lock(archive)
+    except locked.Refusal as exc:
+        raise Refusal(str(exc)) from None
+    need(report['status'] == 'PASS_LOCKED_COLD_READ_ONLY_DIAGNOSTIC'
+         and report['lh08_ac11_accepted'] is False
+         and report['native_pkg_mutation_invoked'] is False
+         and report['independent_original_fd9_exclusive'] is True,
+         'REAL_OLD_COLD_ADMISSION_UNQUALIFIED')
+    locked.check_fd9()
+    return 'AUTHENTIC_OLD_COLD_OWNER_UNDER_ORIGINAL_FD9'
+
+
+def admitted_pkg_dispatch(archive, successor, env, dispatch=None):
+    """Check owner again IMMEDIATELY before the native pkg call.
+
+    Test-only optional dispatcher is a fail-closed tripwire in negative CI;
+    normal _89 positive operation uses actual unchanged run_pkg.
+    This does NOT close all races against privileged root bypass or protect
+    OPNsense firmware/Web.
+    """
+    verify_old_cold_admission(archive)
+    return (run_pkg if dispatch is None else dispatch)(successor, env)
+
+
+
 def inside_lock(archive, successor, expected_sha):
     qualify()
     old = load('stage0-installed-predecessor-readonly.py')
@@ -178,11 +215,7 @@ def inside_lock(archive, successor, expected_sha):
     need(successor.is_file() and not successor.is_symlink() and
          clean.digest(successor) == expected_sha,
          'NATIVE_SUCCESSOR_PACKAGE_CHANGED')
-    locked.check_fd9()
-    need(locked.inside_lock(archive)['status'] ==
-         'PASS_LOCKED_COLD_READ_ONLY_DIAGNOSTIC',
-         'REAL_OLD_COLD_ADMISSION_UNQUALIFIED')
-    locked.check_fd9()
+    verify_old_cold_admission(archive)
     config_before = Path('/conf/config.xml').read_bytes()
     initial = old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME)
     need(old.installed_manifest_from_json(initial)['version'] == '0.6.2_1',
@@ -224,7 +257,10 @@ def inside_lock(archive, successor, expected_sha):
         need(old.run('pkg', 'info', '-R', '--raw-format', 'json', NAME) == initial and
              Path('/conf/config.xml').read_bytes() == config_before,
              'PREFLIGHT_MODIFIED_ORIGINAL_STATE')
-        rc, out, err = run_pkg(successor, env)
+        # _91 also exercises this exact late gate with real injected unsafe
+        # IPFW/journal, proving no dispatch when ownership changes after the
+        # initial cold admission and before the native pkg handoff.
+        rc, out, err = admitted_pkg_dispatch(archive, successor, env)
         locked.check_fd9()
         native_calls = count_calls(folder) - before_calls
         new_identity = native.NAME + '|' + native.VERSION + '_' + native.REVISION
