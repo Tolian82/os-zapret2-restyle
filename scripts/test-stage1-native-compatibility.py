@@ -76,7 +76,7 @@ class Stage1NativePolicyTests(unittest.TestCase):
                 native.stage_policy(root)
 
     def test_native_mk_product_identity_from_matrix(self):
-        vars = {"PLUGIN_PKGNAME": native.NAME, "PLUGIN_PKGVERSION": "0.6.2_80",
+        vars = {"PLUGIN_PKGNAME": native.NAME, "PLUGIN_PKGVERSION": "0.6.2_81",
                 "PLUGIN_ABI": TARGET["opnsense_product_abi"],
                 "PLUGIN_HASH": "f"*40, "PLUGIN_WWW": native.PROJECT_URL,
                 "PLUGIN_PYTHON": "313",

@@ -17,7 +17,7 @@ import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
-REVISION = "80"
+REVISION = "81"
 OPTIN = "ZAPRET2_STAGE2_REAL_HELD_FD9_PKG"
 LIFECYCLE_LOCK = Path("/var/run/zapret2-lifecycle.lock")
 LOCKF = "/usr/bin/lockf"
