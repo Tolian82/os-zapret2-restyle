@@ -56,14 +56,18 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def regular_root_bytes(path):
+def regular_root_bytes(path, *, config_snapshot_only=False):
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
         raise OwnerRefusal('OLD_OWNED_FILE_UNAVAILABLE:' + str(path)) from None
     try:
         before = os.fstat(fd)
-        require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and
+        # OPNsense may own /conf/config.xml with its own dedicated service
+        # uid (observed: 789/0640 on isolated 26.7). Its bytes are only a
+        # stable read-only diagnostic snapshot, never authority for pkg.
+        require(stat.S_ISREG(before.st_mode) and
+                (config_snapshot_only or before.st_uid == 0) and
                 before.st_nlink == 1 and not (stat.S_IMODE(before.st_mode) & 0o022),
                 'OLD_OWNED_FILE_UNTRUSTED:' + str(path) +
                 ':uid=' + str(before.st_uid) +
@@ -162,12 +166,12 @@ def inspect_stopped(archive, version, original_fd9_inode):
     owner = read_command(['/usr/sbin/pkg', 'which', '-q', str(SERVICE)]).stdout.decode().strip()
     require(owner in (NAME, NAME + '-' + version),
             'OLD_SERVICE_PKG_OWNERSHIP_UNPROVEN')
-    config, _config_mode = regular_root_bytes(CONFIG)
+    config, _config_mode = regular_root_bytes(CONFIG, config_snapshot_only=True)
     kernel = cold_screen()
     require(read_command(pkg_args).stdout == pkg_before,
             'OLD_PKGDB_CHANGED_DURING_SCREEN')
     service_after, mode_after = regular_root_bytes(SERVICE)
-    config_after, _ = regular_root_bytes(CONFIG)
+    config_after, _ = regular_root_bytes(CONFIG, config_snapshot_only=True)
     require(service_after == service and mode_after == mode and config_after == config,
             'OLD_SERVICE_OR_CONFIG_CHANGED_DURING_SCREEN')
     cold_screen()
@@ -175,6 +179,8 @@ def inspect_stopped(archive, version, original_fd9_inode):
     return {'status': 'READ_ONLY_STOPPED_PREDECESSOR_SCREENED',
             'installed_version': version, 'service_sha256': digest(service),
             'config_sha256': digest(config), 'kernel': kernel,
+            'config_ownership_authorized': False,
+            'config_readonly_snapshot_only': True,
             'historical_status_called_under_fd9': False,
             'old_owner_qualified': False, 'pkg_invoked': False,
             'lh08_ac11_accepted': False}
