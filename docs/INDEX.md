@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.34 _124 CI-only signed grant under real configd original FD9 before mutating native pkg](verification/evidence/2026-11-04-v0.6.2_124-stage3-signed-grant-original-fd9-pkg.md) — true test-only pkg dispatch with prior signature and real archive pinning; no production protected entrypoint.
+
 - [Stage 3.33 _123 CI-only signed grant measured genuine old/official native candidate bytes](verification/evidence/2026-11-04-v0.6.2_123-stage3-measured-native-package-grant.md) — archive SHA bound to signed grant before SQLite, native real-archive smoke, no supported upgrade.
 
 - [Stage 3.32 _122 CI-only signed operator-grant exact-operation authorization](verification/evidence/2026-11-04-v0.6.2_122-stage3-signed-operator-grant.md) — separate operator signature, no unapproved SQLite action or real pkg grant.
