@@ -40,6 +40,33 @@ class ManagedCLIContracts(unittest.TestCase):
                                      '0.6.2_103','a'*64]),0)
             inspect.assert_called_once()
 
+    def test_predecessor_readonly_command_is_distinct_from_updater(self):
+        with patch.object(m,'inspect_independent',return_value={'status':'PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN'}) as inspect:
+            self.assertEqual(m.main(['inspect-predecessor','/tmp/old.pkg','0.6.2_1','a'*64]),0)
+            inspect.assert_called_once_with(Path('/tmp/old.pkg'),'0.6.2_1','a'*64,mode='predecessor')
+        with patch.object(m,'inspect_independent') as inspect:
+            self.assertEqual(m.main(['inspect-predecessor','/tmp/old.pkg']),78)
+            inspect.assert_not_called()
+
+    def test_old_owner_negative_worker_attestation_is_not_success(self):
+        pid, head, nonce, inode, sha=244, 'a'*40, 'b'*32, 77, 'c'*64
+        refusal={'status':'REFUSED_MANAGED_OLD_OWNER','worker_pid':pid,
+                 'session_head':head,
+                 'nonce_sha256':hashlib.sha256(nonce.encode()).hexdigest(),
+                 'original_fd9_inode':inode, 'archive_sha256':sha,
+                 'pkg_invoked':False,'old_owner_qualified':False,
+                 'lh08_ac11_accepted':False,
+                 'reason':'OLD_KERNEL_IPFW_OR_IPDIVERT_NOT_PROVEN_COLD'}
+        self.assertTrue(m._attested_old_refusal(refusal,pid,head,nonce,inode,sha))
+        for changed in ({'pkg_invoked':True},{'old_owner_qualified':True},
+                        {'lh08_ac11_accepted':True},{'session_head':'x'*40},
+                        {'nonce_sha256':'0'*64},{'worker_pid':999},
+                        {'reason':''},{'reason':'X'*241},
+                        {'status':'PASS_MANAGED_READ_ONLY_INSPECTION'}):
+            with self.subTest(changed=changed):
+                self.assertFalse(m._attested_old_refusal(
+                    dict(refusal,**changed),pid,head,nonce,inode,sha))
+
     def test_nonroot_refused_before_historical_lock_creation(self):
         with patch.object(m.os,'geteuid',return_value=1000),patch.object(m.os,'open') as op:
             with self.assertRaisesRegex(m.ManagedRefusal,'ROOT_FREEBSD_MANAGED_INSPECTION_ONLY'):

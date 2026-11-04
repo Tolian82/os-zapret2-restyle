@@ -20,6 +20,7 @@ import sys
 sys.dont_write_bytecode = True
 import native_pkg_handoff as transport
 import native_pkg_candidate as candidate
+import native_pkg_old_owner as predecessor
 
 LOCK = Path('/var/run/zapret2-lifecycle.lock')
 MAX_MESSAGE = 4096
@@ -90,9 +91,27 @@ def _read_response(sock):
         raise ManagedRefusal('MANAGED_WORKER_RESULT_NOT_JSON') from None
 
 
-def inspect_independent(archive, version, digest):
+def _attested_old_refusal(result, pid, head, nonce, inode, digest):
+    """Authenticate fail-closed refusal details; never treat refusal as PASS."""
+    return (isinstance(result, dict) and
+            result.get('status') == 'REFUSED_MANAGED_OLD_OWNER' and
+            result.get('worker_pid') == pid and
+            result.get('session_head') == head and
+            result.get('nonce_sha256') ==
+                hashlib.sha256(nonce.encode()).hexdigest() and
+            result.get('original_fd9_inode') == inode and
+            result.get('archive_sha256') == digest and
+            result.get('pkg_invoked') is False and
+            result.get('old_owner_qualified') is False and
+            result.get('lh08_ac11_accepted') is False and
+            isinstance(result.get('reason'), str) and
+            0 < len(result['reason']) <= 240)
+
+
+def inspect_independent(archive, version, digest, mode='candidate'):
     """Genuine detached subprocess owns transferred original FD9 until result."""
     require(isinstance(archive, Path), 'PACKAGE_REQUEST_PATH_REQUIRED')
+    require(mode in ('candidate', 'predecessor'), 'MANAGED_INSPECTION_MODE_INVALID')
     candidate.identity(archive, version, digest)
     source, source_sha = _product_script_identity()
     fd, created, inode = original_lock_fd()
@@ -109,7 +128,7 @@ def inspect_independent(archive, version, digest):
         parent.settimeout(95)
         command = [sys.executable, '-B', str(source), '--worker',
                    str(child.fileno()), head, nonce, source_sha,
-                   str(os.getpid()), str(archive), version, digest]
+                   str(os.getpid()), str(archive), version, digest, mode]
         proc = subprocess.Popen(command, close_fds=True, pass_fds=(child.fileno(),),
                                 start_new_session=True, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -120,8 +139,15 @@ def inspect_independent(archive, version, digest):
                          array.array('i', [fd]))])
         parent.shutdown(socket.SHUT_WR)
         result = _read_response(parent)
-        require(proc.wait(timeout=12) == 0 and isinstance(result, dict) and
-                result.get('status') == 'PASS_MANAGED_READ_ONLY_INSPECTION' and
+        exit_code = proc.wait(timeout=12)
+        if exit_code == 0 and mode == 'predecessor' and _attested_old_refusal(
+                result, proc.pid, head, nonce, inode, digest):
+            transport.verify_original_lock(fd, inode)
+            raise ManagedRefusal('MANAGED_OLD_OWNER_REFUSED:' + result['reason'])
+        require(exit_code == 0 and isinstance(result, dict) and
+                result.get('status') == ('PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN' if
+                    mode == 'predecessor' else 'PASS_MANAGED_READ_ONLY_INSPECTION') and
+                result.get('predecessor_cold_screened', False) is (mode == 'predecessor') and
                 result.get('worker_pid') == proc.pid and
                 result.get('session_head') == head and
                 result.get('nonce_sha256') == hashlib.sha256(nonce.encode()).hexdigest() and
@@ -148,7 +174,7 @@ def inspect_independent(archive, version, digest):
 
 
 def worker(socket_fd, head, nonce, source_sha, parent_pid,
-           archive, version, digest):
+           archive, version, digest, mode):
     """This cannot dispatch pkg; it receives only a read-only archive probe."""
     require(os.geteuid() == 0 and os.uname().sysname == 'FreeBSD' and
             os.uname().machine == 'amd64', 'ROOT_FREEBSD_WORKER_REQUIRED')
@@ -166,7 +192,35 @@ def worker(socket_fd, head, nonce, source_sha, parent_pid,
                 Path(archive), version, digest, fields['inode'])
             require(result['status'] == 'READ_ONLY_NATIVE_PKG_ARCHIVE_BOUND' and
                     result['sha256'] == digest, 'WORKER_CANDIDATE_UNQUALIFIED')
-            answer = {'status': 'PASS_MANAGED_READ_ONLY_INSPECTION',
+            require(mode in ('candidate', 'predecessor'), 'MANAGED_WORKER_MODE_INVALID')
+            if mode == 'predecessor':
+                try:
+                    old = predecessor.inspect_stopped(
+                        Path(archive), version, fields['inode'])
+                except predecessor.OwnerRefusal as exc:
+                    # Authenticated negative only. Never authorize pkg or
+                    # manufacture a successful old-owner qualification.
+                    refusal = {
+                        'status': 'REFUSED_MANAGED_OLD_OWNER', 'worker_pid': os.getpid(),
+                        'session_head': head,
+                        'nonce_sha256': hashlib.sha256(nonce.encode()).hexdigest(),
+                        'original_fd9_inode': fields['inode'],
+                        'archive_sha256': digest, 'reason': str(exc)[:240],
+                        'pkg_invoked': False, 'old_owner_qualified': False,
+                        'lh08_ac11_accepted': False}
+                    conn.sendall(json.dumps(refusal, sort_keys=True).encode('ascii'))
+                    return refusal
+                require(old['status'] == 'READ_ONLY_STOPPED_PREDECESSOR_SCREENED' and
+                        old['old_owner_qualified'] is False and
+                        old['pkg_invoked'] is False,
+                        'OLD_PREDECESSOR_SCREEN_UNQUALIFIED')
+                # Reject a swapped archive or dropped original FD9 during old
+                # pkgdb/Config/kernel census, not merely at its beginning.
+                candidate.inspect_with_original_fd9(
+                    Path(archive), version, digest, fields['inode'])
+            answer = {'status': ('PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN' if
+                                 mode == 'predecessor' else 'PASS_MANAGED_READ_ONLY_INSPECTION'),
+                      'predecessor_cold_screened': mode == 'predecessor',
                       'worker_pid': os.getpid(), 'session_head': head,
                       'nonce_sha256': hashlib.sha256(nonce.encode()).hexdigest(),
                       'original_fd9_inode': fields['inode'],
@@ -181,16 +235,18 @@ def worker(socket_fd, head, nonce, source_sha, parent_pid,
 def main(argv=None):
     args = sys.argv[1:] if argv is None else argv
     try:
-        if len(args) == 4 and args[0] == 'inspect-candidate':
-            result = inspect_independent(Path(args[1]), args[2], args[3])
+        if len(args) == 4 and args[0] in ('inspect-candidate', 'inspect-predecessor'):
+            mode = 'predecessor' if args[0] == 'inspect-predecessor' else 'candidate'
+            result = inspect_independent(Path(args[1]), args[2], args[3], mode=mode)
             print('ZAPRET2_MANAGED=' + json.dumps(result, sort_keys=True))
             return 0
-        if len(args) == 9 and args[0] == '--worker':
+        if len(args) == 10 and args[0] == '--worker':
             worker(*args[1:])
             return 0
         raise ManagedRefusal('UPGRADE_NOT_IMPLEMENTED_NO_PKG')
     except (ManagedRefusal, candidate.CandidateRefusal,
-            transport.HandoffRefusal, OSError, ValueError) as exc:
+            transport.HandoffRefusal, predecessor.OwnerRefusal,
+            OSError, ValueError) as exc:
         print('ZAPRET2_MANAGED=REFUSED:' + str(exc), file=sys.stderr)
         return 78
 

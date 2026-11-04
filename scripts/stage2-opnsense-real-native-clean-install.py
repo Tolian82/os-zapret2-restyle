@@ -377,6 +377,22 @@ def verify_installed_managed_cli(archive, expected_sha):
              "INSTALLED_MANAGED_BUSY_FD9_NOT_REFUSED")
     finally:
         os.close(fd)
+    predecessor = run(cli + ["inspect-predecessor", str(archive), VERSION, expected_sha],
+                      timeout=135)
+    need(predecessor.returncode == 0 and
+         predecessor.stdout.startswith("ZAPRET2_MANAGED="),
+         "INSTALLED_MANAGED_PREDECESSOR_COLD_SCREEN_UNQUALIFIED:" +
+         str(predecessor.returncode) + ":" + predecessor.stderr[-160:])
+    try:
+        old_state = json.loads(predecessor.stdout.split("ZAPRET2_MANAGED=", 1)[1])
+    except ValueError:
+        raise Refusal("INSTALLED_MANAGED_PREDECESSOR_NOT_JSON") from None
+    need(old_state.get("status") == "PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN" and
+         old_state.get("predecessor_cold_screened") is True and
+         old_state.get("old_owner_qualified") is False and
+         old_state.get("pkg_invoked") is False and
+         old_state.get("lh08_ac11_accepted") is False,
+         "INSTALLED_MANAGED_PREDECESSOR_FALSE_ADMISSION")
     need(required(["pkg", "info", "-R", "--raw-format", "json", NAME],
                   "MANAGED_POST_INSPECT_PKGDB_MISSING") == original_pkgdb and
          Path("/conf/config.xml").read_bytes() == config_before and
@@ -390,6 +406,7 @@ def verify_installed_managed_cli(archive, expected_sha):
             "wrong_digest_refused": True,
             "busy_original_fd9_refused": True,
             "upgrade_command_refused_before_pkg": True,
+            "installed_predecessor_cold_screened_read_only": True,
             "pkgdb_and_config_unchanged": True,
             "pkg_invoked_by_managed_cli": False,
             "old_owner_qualified": False,

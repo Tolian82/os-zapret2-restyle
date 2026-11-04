@@ -4,6 +4,9 @@ on:
     paths:
       - Makefile
       - scripts/stage2-prepkg-locked-cold-revalidation.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_old_owner.py
+      - scripts/test-native-pkg-old-owner.py
       - scripts/test-stage2-prepkg-locked-cold-revalidation.py
       - scripts/stage0-opnsense-prepkg-readonly.py
       - scripts/stage0-installed-predecessor-readonly.py
@@ -33,6 +36,7 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage2-prepkg-locked-cold-revalidation.py scripts/test-stage2-prepkg-locked-cold-revalidation.py
           python3.13 scripts/test-stage2-prepkg-locked-cold-revalidation.py -v
+          python3.13 scripts/test-native-pkg-old-owner.py -v
       - name: Genuine historical package cold read-only revalidation under original FD9 on disposable OPNsense 26.7
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235

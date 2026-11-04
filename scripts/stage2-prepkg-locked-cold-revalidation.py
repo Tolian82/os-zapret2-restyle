@@ -158,7 +158,7 @@ def assert_unchanged(old, guard, archive, before):
     need(old.run_guest(archive, host)['status'] == 'PASS_READ_ONLY_PROVENANCE',
          'ORIGINAL_INSTALLED_PROVENANCE_CHANGED')
 
-def busy_negative(archive, prior):
+def busy_negative(archive, prior, product_cli):
     with tempfile.TemporaryDirectory(prefix='stage2-busy-fd9-') as folder:
         marker = Path(folder) / 'held'
         proc = None
@@ -169,13 +169,62 @@ def busy_negative(archive, prior):
                                     text=True, start_new_session=True)
             prior.wait_held(marker, proc)
             observed = classify(call_locked(archive), 'busy')
+            old = load('stage0-installed-predecessor-readonly.py')
+            blocked = subprocess.run(
+                [sys.executable, '-B', str(product_cli), 'inspect-predecessor',
+                 str(archive), old.VERSION, old.ARCHIVE_SHA],
+                capture_output=True, text=True, timeout=35, check=False)
+            need(blocked.returncode == 78 and
+                 'ORIGINAL_FD9_BUSY_BEFORE_INSPECTION' in blocked.stderr,
+                 'PRODUCT_PREDECESSOR_BUSY_NOT_REFUSED_BEFORE_PKG')
         finally:
             if proc is not None and proc.poll() is None:
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.communicate(timeout=8)
     return observed
 
+def staged_product_cli(folder):
+    """Use verified product bytes as trusted root-only *test* code, never a bootstrap.
+
+    GitHub checkout ownership is intentionally not root on KVM. Do not weaken
+    production source-inode trust: construct a private root-owned immutable-byte
+    witness solely inside the disposable native CI guest.
+    """
+    qualify()
+    root = Path(folder)
+    st = root.lstat()
+    need(stat.S_ISDIR(st.st_mode) and st.st_uid == 0 and
+         stat.S_IMODE(st.st_mode) == 0o700 and not root.is_symlink(),
+         'DISPOSABLE_CLI_ROOT_DIRECTORY_UNTRUSTED')
+    source = HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret/backend'
+    for name in ('native_pkg_managed.py', 'native_pkg_old_owner.py',
+                 'native_pkg_candidate.py', 'native_pkg_handoff.py'):
+        origin = source / name
+        need(origin.is_file() and not origin.is_symlink(),
+             'TRACKED_PRODUCT_SOURCE_UNQUALIFIED:' + name)
+        content = origin.read_bytes()
+        target = root / name
+        need(not target.exists() and not target.is_symlink(),
+             'DISPOSABLE_CLI_TARGET_EXISTS:' + name)
+        target.write_bytes(content)
+        target.chmod(0o600)
+        info = target.lstat()
+        need(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and
+             stat.S_IMODE(info.st_mode) == 0o600 and
+             hashlib.sha256(target.read_bytes()).digest() ==
+             hashlib.sha256(content).digest(),
+             'STAGED_CLI_NOT_ROOT_OWNED_OR_BYTES_DIFFER:' + name)
+    return root / 'native_pkg_managed.py'
+
+
 def execute(archive):
+    qualify()
+    with tempfile.TemporaryDirectory(prefix='zapret2-original-cli-ci-', dir='/root') as folder:
+        cli = staged_product_cli(folder)
+        return execute_with_root_owned_source(archive, cli)
+
+
+def execute_with_root_owned_source(archive, product_cli):
     qualify()
     guest = load('stage0-opnsense-guest-readonly.py')
     guest.evaluate(guest.observe())
@@ -194,8 +243,25 @@ def execute(archive):
               digest(old.SERVICE), digest('/conf/config.xml'),
               tuple((x.exists(), x.is_symlink()) for x in guard.MARKERS))
     cold = classify(call_locked(archive), 'cold')
+    # This new product-source CLI may be screened outside the installed old
+    # package only in the disposable KVM test; the old _1 has no such CLI.
+    command = [sys.executable, '-B', str(product_cli), 'inspect-predecessor',
+               str(archive), old.VERSION, old.ARCHIVE_SHA]
+    screened = subprocess.run(command, capture_output=True, text=True,
+                              timeout=135, check=False)
+    need(screened.returncode == 0 and
+         screened.stdout.startswith('ZAPRET2_MANAGED='),
+         'REAL_OLD_PREDECESSOR_CLI_READ_ONLY_SCREEN_FAILED:' +
+         str(screened.returncode) + ':' + screened.stderr[-200:])
+    old_report = json.loads(screened.stdout.split('=', 1)[1])
+    need(old_report.get('status') == 'PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN' and
+         old_report.get('predecessor_cold_screened') is True and
+         old_report.get('pkg_invoked') is False and
+         old_report.get('old_owner_qualified') is False and
+         old_report.get('lh08_ac11_accepted') is False,
+         'REAL_OLD_PREDECESSOR_SCREEN_FALSE_ADMISSION')
     assert_unchanged(old, guard, archive, before)
-    busy = busy_negative(archive, prior)
+    busy = busy_negative(archive, prior, product_cli)
     assert_unchanged(old, guard, archive, before)
     created_parent = False
     created_journal = False
@@ -203,6 +269,12 @@ def execute(archive):
         created_parent = unknown.create_disposable_root_if_absent()
         created_journal = unknown.create_owned_corrupt_journal()
         negative = classify(call_locked(archive), 'journal')
+        blocked = subprocess.run(command, capture_output=True, text=True,
+                                 timeout=45, check=False)
+        need(blocked.returncode == 78 and
+             'ZAPRET2_MANAGED=REFUSED:' in blocked.stderr and
+             blocked.stdout == '',
+             'PRODUCT_PREDECESSOR_JOURNAL_NOT_REFUSED_BEFORE_PKG')
         unknown.verify_corrupt_journal()
         assert_unchanged(old, guard, archive, before)
     finally:
@@ -218,7 +290,9 @@ def execute(archive):
     need(guard.snapshot(archive)['status'] == 'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
          'ORIGINAL_COLD_STATE_NOT_RESTORED')
     return {'schema': 1, 'status': 'PASS_PREPKG_FD9_COLD_REVALIDATION_DIAGNOSTIC_ONLY',
-            'cold': cold, 'busy_negative': busy, 'unknown_negative': negative,
+            'cold': cold, 'product_predecessor_readonly_screen': old_report['status'],
+            'product_busy_and_journal_refusal_before_pkg': True,
+            'busy_negative': busy, 'unknown_negative': negative,
             'original_archive_sha256': old.ARCHIVE_SHA,
             'original_package_unchanged': True, 'real_native_pkg_replacement': False,
             'service_status_under_held_fd9': False, 'admission_to_pkg_interval_proved': False,
