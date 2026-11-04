@@ -173,20 +173,30 @@ def main():
     # Only this signed-provenance read-only command is accepted. In particular,
     # unsigned SHA arguments, mutating package operations and arbitrary Python
     # source commands are NOT accepted, even when the caller is root.
-    need(len(sys.argv) == 14 and sys.argv[1] == "--expected-source-commit" and
-         sys.argv[3] == "--signed-provenance" and
-         sys.argv[9] == "inspect-predecessor",
+    need(len(sys.argv) == 17 and sys.argv[1] == "--expected-source-commit" and
+         sys.argv[3] == "--expected-archive-pins" and
+         sys.argv[6] == "--signed-provenance" and
+         sys.argv[12] == "inspect-predecessor",
          "SIGNED_READ_ONLY_PREDECESSOR_COMMAND_REQUIRED")
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          os.uname().machine == "amd64",
          "ROOT_FREEBSD_AMD64_REQUIRED")
-    _, _, expected_commit, _, key_sha, public_key, claims_path, sig_path, \
-        filename, _, incoming, incoming_version, predecessor, predecessor_version = sys.argv
+    _, _, expected_commit, _, expected_incoming_sha, expected_old_sha, _, \
+        key_sha, public_key, claims_path, sig_path, filename, _, \
+        incoming, incoming_version, predecessor, predecessor_version = sys.argv
     need(COMMIT.fullmatch(expected_commit) is not None,
          "INDEPENDENT_SOURCE_COMMIT_REQUIRED")
+    need(SHA.fullmatch(expected_incoming_sha) is not None and
+         SHA.fullmatch(expected_old_sha) is not None and
+         expected_incoming_sha != "0" * 64 and
+         expected_old_sha != "0" * 64,
+         "OPERATOR_ARCHIVE_DIGEST_PINS_REQUIRED")
     value = signed_claims(public_key, key_sha, claims_path, sig_path)
     need(value["source_commit"] == expected_commit,
          "SIGNED_PROVENANCE_SOURCE_COMMIT_NOT_APPROVED")
+    need(hmac.compare_digest(value["incoming_sha256"], expected_incoming_sha) and
+         hmac.compare_digest(value["predecessor_sha256"], expected_old_sha),
+         "SIGNED_PROVENANCE_ARCHIVES_NOT_IN_OPERATOR_RECEIPT")
     need(value["incoming_version"] == incoming_version and
          value["predecessor_version"] == predecessor_version and
          os.path.basename(incoming) == NAME + "-" + incoming_version + ".pkg" and

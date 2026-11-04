@@ -18,6 +18,9 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 mandatory receipt-derived seed and signed archive SHA comparison (_112)](verification/evidence/2026-11-04-v0.6.2_112-stage3-receipt-bound-seed.md) — root-private manual pin receipt is the only admitted input to the SHA-verified RSA verifier; exact old/current signed archives still must match, no production issuer or pkg authorization.
+
+
 - [Stage 3.24 independent manual operator pin receipt (_111)](verification/evidence/2026-11-04-v0.6.2_111-stage3-manual-operator-pin-receipt.md) — explicit tty-only eight-pin `0600` receipt outside package and read-only staged-byte inspection; no proven production signer/trust seed or update gate.
 
 

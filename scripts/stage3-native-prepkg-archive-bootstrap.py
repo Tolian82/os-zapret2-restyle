@@ -188,7 +188,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '111', 'NATIVE_BOOTSTRAP_REVISION_NOT_111')
+    need(m is not None and m.group(1) == '112', 'NATIVE_BOOTSTRAP_REVISION_NOT_112')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -304,117 +304,6 @@ def execute(old_archive):
         # Test-only expectation from the exact-head checkout; operator must
         # authenticate the expected commit separately for any real deployment.
         expected_commit = built['project_sha']
-        launcher = [sys.executable,'-I','-B','-c',trusted_code,
-                    '--verified-verifier',expected_verifier_sha,str(verifier),
-                    '--expected-source-commit',expected_commit,
-                    '--signed-provenance',key_pin,str(public),str(claims),
-                    str(signature),str(standalone)]
-        tail = ['inspect-predecessor',str(incoming),version,
-                str(old_archive),old.VERSION]
-        good = run(launcher + tail)
-        need(good.returncode == 0 and
-             'ZAPRET2_PREPKG_TRUST_SEED=VERIFIED_SHA256:' +
-                expected_verifier_sha in good.stderr and
-             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' +
-                expected_script_sha in good.stderr and
-             good.stdout.startswith('ZAPRET2_PREPKG_STANDALONE='),
-             'SIGNED_EXTERNAL_CLI_CANNOT_SCREEN_OLD:' +
-             str(good.returncode)+':'+good.stderr[-300:])
-        report=json.loads(good.stdout.split('=',1)[1])
-        need(report.get('status')=='PASS_STANDALONE_PREPKG_READ_ONLY_COLD' and
-             report.get('incoming_sha256')==expected and
-             report.get('old_sha256')==old.ARCHIVE_SHA and
-             len(report.get('modules_sha256',{}))==4 and
-             report.get('pkg_invoked') is False and
-             report.get('old_owner_qualified') is False and
-             report.get('supported_mandatory_entrypoint') is False and
-             report.get('lh08_ac11_accepted') is False,
-             'SIGNED_EXTERNAL_CLI_FALSE_AUTHORIZATION')
-        installed_unchanged(old,old_archive,host,baseline)
-        for cmd,reason in (
-            (launcher[:6]+['0'*64]+launcher[7:]+tail,'BAD_VERIFIER_SHA_PIN'),
-            (launcher[:9]+['f'*40]+launcher[10:]+tail,'BAD_EXPECTED_SOURCE_COMMIT'),
-            (launcher[:9]+['bad-commit']+launcher[10:]+tail,'MALFORMED_EXPECTED_SOURCE_COMMIT'),
-            (launcher[:11]+['0'*64]+launcher[12:]+tail,'BAD_PUBLIC_KEY_PIN'),
-            (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
-            (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
-        ):
-            denied=run(cmd,45)
-            need(denied.returncode==78 and 'REFUSED:' in denied.stderr and
-                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr,
-                 'SIGNATURE_NEGATIVE_NOT_REFUSED:'+reason)
-            installed_unchanged(old,old_archive,host,baseline)
-        actual_signature=signature.read_bytes()
-        signature.write_bytes(b'forged-signature')
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
-             'FORGED_SIGNATURE_ACCEPTED')
-        signature.write_bytes(actual_signature)
-        claims.write_bytes(claims.read_bytes().replace(expected.encode(),b'0'*64))
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
-             'UNSIGNED_CLAIMS_CHANGE_ACCEPTED')
-        assertions['incoming_sha256']='0'*64
-        seal()
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and 'REFUSED:' in denied.stderr,
-             'SIGNED_WRONG_ARCHIVE_ACCEPTED')
-        assertions['incoming_sha256']=expected
-        seal()
-        # Valid CI-signature on the wrong source commit must NOT permit
-        # external source execution even with an unchanged signed archive SHA.
-        assertions['source_commit'] = 'f' * 40
-        seal()
-        denied = run(launcher+tail,45)
-        need(denied.returncode == 78 and
-             'SIGNED_PROVENANCE_SOURCE_COMMIT_NOT_APPROVED' in denied.stderr and
-             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr,
-             'SIGNED_UNAPPROVED_SOURCE_COMMIT_ACCEPTED')
-        installed_unchanged(old,old_archive,host,baseline)
-        assertions['source_commit'] = expected_commit
-        seal()
-        # Before the signed verifier may execute: wrong pinned SHA, changed
-        # executable verifier canary, symlink, or writable file must refuse.
-        verifier_canary = private / 'UNTRUSTED_VERIFIER_EXECUTED'
-        verifier.write_bytes(b'from pathlib import Path\nPath(' +
-                repr(str(verifier_canary)).encode() +
-                b').write_text("BAD")\n' + verifier_bytes)
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'VERIFIER_EXPECTED_SHA256_MISMATCH' in denied.stderr and
-             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr and
-             not verifier_canary.exists(), 'UNVERIFIED_VERIFIER_SOURCE_EXECUTED')
-        verifier.write_bytes(verifier_bytes)
-        verifier.chmod(0o666)
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'VERIFIER_PRIVATE_REGULAR_REQUIRED' in denied.stderr,
-             'WORLD_WRITABLE_VERIFIER_ACCEPTED')
-        verifier.chmod(0o600)
-        verifier_link_dir = private/'verifier-symlink'
-        verifier_link_dir.mkdir(mode=0o700)
-        verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
-        verifier_link.symlink_to(verifier)
-        denied=run(launcher[:7]+[str(verifier_link)]+launcher[8:]+tail,45)
-        need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
-             'SYMLINK_VERIFIER_ACCEPTED')
-        installed_unchanged(old,old_archive,host,baseline)
-        canary=private/'UNTRUSTED_SOURCE_EXECUTED'
-        standalone.write_bytes(b'from pathlib import Path\nPath('+
-                repr(str(canary)).encode()+b').write_text("BAD")\n'+source_bytes)
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'EXTERNAL_SOURCE_EXPECTED_SHA256_MISMATCH' in denied.stderr and
-             not canary.exists(),'TAMPERED_EXTERNAL_SOURCE_EXECUTED')
-        standalone.write_bytes(source_bytes)
-        standalone.chmod(0o666)
-        denied=run(launcher+tail,45)
-        need(denied.returncode==78 and
-             'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr,
-             'WORLD_WRITABLE_EXTERNAL_SOURCE_ACCEPTED')
-        standalone.chmod(0o600)
         # A disposable FreeBSD pseudo-TTY exercises *only* the human-approval
         # record mechanics. These CI-supplied digest lines are synthetic and
         # MUST NEVER be reported as real operator/publisher attestation.
@@ -495,6 +384,144 @@ def execute(old_archive):
              'OPERATOR_PIN_SHA256_MISMATCH:public_key_sha256' in denied.stderr,
              'TAMPERED_OPERATOR_PUBLIC_KEY_ACCEPTED')
         key_copy.write_bytes(key_bytes)
+        # The readonly seed receives ONLY paths; all digest/commit expectations
+        # originate from the private manual receipt, never caller argv.
+        launcher = [sys.executable,'-I','-B','-c',trusted_code,
+                    '--operator-receipt',str(receipt),
+                    '--verified-verifier',str(verifier),
+                    '--signed-provenance',str(key_copy),str(claims),
+                    str(signature),str(standalone)]
+        tail = ['inspect-predecessor',str(incoming),version,
+                str(old_archive),old.VERSION]
+        good = run(launcher + tail)
+        need(good.returncode == 0 and
+             'ZAPRET2_PREPKG_TRUST_SEED=RECEIPT_PINS_BOUND_NOT_AUTHENTICATED'
+                 in good.stderr and
+             'ZAPRET2_PREPKG_TRUST_SEED=VERIFIED_SHA256:' +
+                expected_verifier_sha in good.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' +
+                expected_script_sha in good.stderr and
+             good.stdout.startswith('ZAPRET2_PREPKG_STANDALONE='),
+             'SIGNED_EXTERNAL_CLI_CANNOT_SCREEN_OLD:' +
+             str(good.returncode)+':'+good.stderr[-300:])
+        report=json.loads(good.stdout.split('=',1)[1])
+        need(report.get('status')=='PASS_STANDALONE_PREPKG_READ_ONLY_COLD' and
+             report.get('incoming_sha256')==expected and
+             report.get('old_sha256')==old.ARCHIVE_SHA and
+             len(report.get('modules_sha256',{}))==4 and
+             report.get('pkg_invoked') is False and
+             report.get('old_owner_qualified') is False and
+             report.get('supported_mandatory_entrypoint') is False and
+             report.get('lh08_ac11_accepted') is False,
+             'SIGNED_EXTERNAL_CLI_FALSE_AUTHORIZATION')
+        installed_unchanged(old,old_archive,host,baseline)
+        original_receipt = receipt.read_bytes()
+        for field, bad, reason in (
+            ('verifier_sha256', '0'*64, 'VERIFIER_SHA'),
+            ('public_key_sha256', '0'*64, 'PUBLIC_KEY_SHA'),
+            ('source_commit', 'f'*40, 'SOURCE_COMMIT'),
+            ('source_commit', 'bad-commit', 'MALFORMED_COMMIT'),
+            ('incoming_sha256', '0'*64, 'MALFORMED_INCOMING_SHA'),
+            ('predecessor_sha256', '0'*64, 'MALFORMED_OLD_SHA'),
+            ('incoming_sha256', 'c'*64, 'VALID_BUT_UNAPPROVED_INCOMING_SHA'),
+            ('predecessor_sha256', 'c'*64, 'VALID_BUT_UNAPPROVED_OLD_SHA'),
+        ):
+            changed = json.loads(original_receipt)
+            changed[field] = bad
+            receipt.write_bytes(json.dumps(changed,sort_keys=True,
+                                           separators=(',',':')).encode())
+            denied = run(launcher+tail,45)
+            need(denied.returncode == 78 and 'REFUSED:' in denied.stderr and
+                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr and
+                 (reason not in ('VALID_BUT_UNAPPROVED_INCOMING_SHA',
+                                 'VALID_BUT_UNAPPROVED_OLD_SHA') or
+                  'SIGNED_PROVENANCE_ARCHIVES_NOT_IN_OPERATOR_RECEIPT'
+                  in denied.stderr),
+                 'RECEIPT_NEGATIVE_NOT_REFUSED:' + reason)
+            receipt.write_bytes(original_receipt)
+            installed_unchanged(old,old_archive,host,baseline)
+        for cmd,reason in (
+            (launcher[:6]+[str(receipt)+'-wrong']+launcher[7:]+tail,
+             'WRONG_OPERATOR_RECEIPT_PATH'),
+            (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
+            (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
+        ):
+            denied=run(cmd,45)
+            need(denied.returncode==78 and 'REFUSED:' in denied.stderr and
+                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr,
+                 'SIGNATURE_NEGATIVE_NOT_REFUSED:'+reason)
+            installed_unchanged(old,old_archive,host,baseline)
+        actual_signature=signature.read_bytes()
+        signature.write_bytes(b'forged-signature')
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
+             'FORGED_SIGNATURE_ACCEPTED')
+        signature.write_bytes(actual_signature)
+        claims.write_bytes(claims.read_bytes().replace(expected.encode(),b'0'*64))
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
+             'UNSIGNED_CLAIMS_CHANGE_ACCEPTED')
+        assertions['incoming_sha256']='0'*64
+        seal()
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and 'REFUSED:' in denied.stderr,
+             'SIGNED_WRONG_ARCHIVE_ACCEPTED')
+        assertions['incoming_sha256']=expected
+        seal()
+        # Valid CI-signature on the wrong source commit must NOT permit
+        # external source execution even with an unchanged signed archive SHA.
+        assertions['source_commit'] = 'f' * 40
+        seal()
+        denied = run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'SIGNED_PROVENANCE_SOURCE_COMMIT_NOT_APPROVED' in denied.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr,
+             'SIGNED_UNAPPROVED_SOURCE_COMMIT_ACCEPTED')
+        installed_unchanged(old,old_archive,host,baseline)
+        assertions['source_commit'] = expected_commit
+        seal()
+        # Before the signed verifier may execute: wrong pinned SHA, changed
+        # executable verifier canary, symlink, or writable file must refuse.
+        verifier_canary = private / 'UNTRUSTED_VERIFIER_EXECUTED'
+        verifier.write_bytes(b'from pathlib import Path\nPath(' +
+                repr(str(verifier_canary)).encode() +
+                b').write_text("BAD")\n' + verifier_bytes)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'VERIFIER_EXPECTED_SHA256_MISMATCH' in denied.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr and
+             not verifier_canary.exists(), 'UNVERIFIED_VERIFIER_SOURCE_EXECUTED')
+        verifier.write_bytes(verifier_bytes)
+        verifier.chmod(0o666)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'VERIFIER_PRIVATE_REGULAR_REQUIRED' in denied.stderr,
+             'WORLD_WRITABLE_VERIFIER_ACCEPTED')
+        verifier.chmod(0o600)
+        verifier_link_dir = private/'verifier-symlink'
+        verifier_link_dir.mkdir(mode=0o700)
+        verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
+        verifier_link.symlink_to(verifier)
+        denied=run(launcher[:8]+[str(verifier_link)]+launcher[9:]+tail,45)
+        need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
+             'SYMLINK_VERIFIER_ACCEPTED')
+        installed_unchanged(old,old_archive,host,baseline)
+        canary=private/'UNTRUSTED_SOURCE_EXECUTED'
+        standalone.write_bytes(b'from pathlib import Path\nPath('+
+                repr(str(canary)).encode()+b').write_text("BAD")\n'+source_bytes)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'EXTERNAL_SOURCE_EXPECTED_SHA256_MISMATCH' in denied.stderr and
+             not canary.exists(),'TAMPERED_EXTERNAL_SOURCE_EXECUTED')
+        standalone.write_bytes(source_bytes)
+        standalone.chmod(0o666)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr,
+             'WORLD_WRITABLE_EXTERNAL_SOURCE_ACCEPTED')
+        standalone.chmod(0o600)
         installed_unchanged(old,old_archive,host,baseline)
     installed_unchanged(old, old_archive, host, baseline)
     need(guard.snapshot(old_archive)['status'] == 'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
@@ -510,6 +537,8 @@ def execute(old_archive):
             'signed_source_commit_matched_independent_expectation': True,
             'operator_source_commit_authenticated': False,
             'ci_operator_pty_receipt_record_and_inspect_verified': True,
+            'receipt_pins_bound_to_seed_and_signed_archive_claims': True,
+            'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
             'operator_pin_record_is_release_authentication': False,
             'seed_code_from_ci_exact_head_only': True,
