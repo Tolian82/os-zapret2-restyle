@@ -117,6 +117,10 @@ class StandalonePrepkgContracts(unittest.TestCase):
         with patch.object(m, "find_modules", return_value=members), \
              patch.object(m, "read_tar", side_effect=query):
             self.assertEqual(m.source_bytes(Path("/tmp/pkg"), self.version), fake)
+            # Authentic pkg manifest may represent file-entry values without a
+            # SHA string; exact member keys + whole-package SHA are mandatory.
+            manifest["files"][m.ARCHIVE_PREFIX + m.MODULES[0]] = None
+            self.assertEqual(m.source_bytes(Path("/tmp/pkg"), self.version), fake)
             manifest["abi"] = "FreeBSD:16:amd64"
             with self.assertRaisesRegex(m.Refusal, "ABI_UNQUALIFIED"):
                 m.source_bytes(Path("/tmp/pkg"), self.version)
