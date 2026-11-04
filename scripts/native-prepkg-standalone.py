@@ -160,8 +160,11 @@ def source_bytes(archive, version):
     members = find_modules(archive)
     extracted = {}
     for name, member in members.items():
-        need(isinstance(files.get(ARCHIVE_PREFIX + name), str) and
-             bool(files[ARCHIVE_PREFIX + name]),
+        # The official native Mk package contract requires the exact file
+        # key, not a particular optional pkg manifest digest-value encoding.
+        # The *whole* root-owned archive is independently SHA-qualified before
+        # reading these bytes and rechecked after the subprocess completes.
+        need(ARCHIVE_PREFIX + name in files,
              "NATIVE_MANIFEST_MODULE_NOT_DECLARED:" + name)
         data = read_tar(archive, "-xOf", member, MAX_MODULE)
         need(0 < len(data) < MAX_MODULE and
