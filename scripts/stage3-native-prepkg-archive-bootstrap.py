@@ -6,6 +6,7 @@ SHA-qualified incoming official native Mk archive BEFORE any replacement of
 an authentic old 0.6.2_1 installation. This is NOT a deployable updater or
 firmware/Web gateway; no pkg add/upgrade/remove after the old install occurs.
 """
+import concurrent.futures
 import hashlib
 import importlib.util
 import json
@@ -189,7 +190,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '114', 'NATIVE_BOOTSTRAP_REVISION_NOT_114')
+    need(m is not None and m.group(1) == '115', 'NATIVE_BOOTSTRAP_REVISION_NOT_115')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -478,6 +479,89 @@ def execute(old_archive):
              report.get('lh08_ac11_accepted') is False,
              'SIGNED_EXTERNAL_CLI_FALSE_AUTHORIZATION')
         installed_unchanged(old,old_archive,host,baseline)
+        # Only after a real _114 signed readonly inspection: CI-local ledger.
+        # No verified owner authority, protected gateway or pkg consumption.
+        ledger_script = HERE / 'stage3-prepkg-approval-ledger.py'
+        need(ledger_script.is_file() and not ledger_script.is_symlink(),
+             'DISPOSABLE_LOCAL_LEDGER_SOURCE_MISSING')
+        ledger_parent = private / 'ci-local-ledger-tests'
+        ledger_parent.mkdir(mode=0o700)
+        ledger_path = ledger_parent / 'approval-ledger'
+        ledger_path.mkdir(mode=0o700)
+        ledger_env = dict(isolated_env, GITHUB_ACTIONS='true',
+                          ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK='1',
+                          ZAPRET2_STAGE3_PREPKG_ARCHIVE_BOOTSTRAP='1',
+                          ZAPRET2_STAGE3_DISPOSABLE_LEDGER='1')
+        def ledger_run(args):
+            return subprocess.run([sys.executable,'-I','-B',str(ledger_script),
+                                   *args],capture_output=True,text=True,
+                                  cwd='/root',env=ledger_env,timeout=25,
+                                  check=False)
+        init = ledger_run(['initialize',str(ledger_path)])
+        need(init.returncode == 0 and
+             'CI_LEDGER_INITIALIZED_NOT_PRODUCTION' in init.stdout,
+             'DISPOSABLE_LEDGER_INIT_REFUSED:' + init.stderr[-250:])
+        receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        spend_one = ['consume',str(ledger_path),authority_sha,launcher[12],
+                     receipt_sha,'1']
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as workers:
+            competitors = list(workers.map(ledger_run, [spend_one,spend_one]))
+        winners = [x for x in competitors if x.returncode == 0]
+        losers = [x for x in competitors if x.returncode == 78]
+        need(len(winners) == 1 and len(losers) == 1 and
+             'CI_LOCAL_ATOMIC_SPENT_NOT_PRODUCTION_AUTHORITY' in winners[0].stdout and
+             ('LEDGER_SEQUENCE_REPLAY_OR_GAP' in losers[0].stderr or
+              'LEDGER_BUSY_FAIL_CLOSED' in losers[0].stderr),
+             'LOCAL_LEDGER_COMPETING_CONSUMPTIONS_NOT_EXCLUSIVE')
+        replay = ledger_run(spend_one)
+        need(replay.returncode == 78 and
+             'LEDGER_SEQUENCE_REPLAY_OR_GAP' in replay.stderr,
+             'LOCAL_LEDGER_REPLAY_NOT_DENIED')
+        for ordinal in ('1','3'):
+            bad = ledger_run(['consume',str(ledger_path),authority_sha,
+                              'd'*64,'e'*64,ordinal])
+            need(bad.returncode == 78 and
+                 'LEDGER_SEQUENCE_REPLAY_OR_GAP' in bad.stderr,
+                 'LOCAL_LEDGER_MONOTONIC_SEQUENCE_NOT_ENFORCED:' + ordinal)
+        second = ledger_run(['consume',str(ledger_path),authority_sha,
+                             'd'*64,'e'*64,'2'])
+        need(second.returncode == 0,
+             'LOCAL_LEDGER_SECOND_SEQUENCE_REJECTED:' + second.stderr[-250:])
+        for reused_receipt,reused_policy,expected_refusal in (
+            (receipt_sha,'f'*64,'LEDGER_RECEIPT_ALREADY_SPENT'),
+            ('f'*64,launcher[12],'LEDGER_POLICY_ALREADY_SPENT'),
+        ):
+            denied=ledger_run(['consume',str(ledger_path),authority_sha,
+                               reused_policy,reused_receipt,'3'])
+            need(denied.returncode == 78 and expected_refusal in denied.stderr,
+                 'LOCAL_LEDGER_SPENT_IDENTITY_REUSED:' + expected_refusal)
+        inspected = ledger_run(['inspect',str(ledger_path)])
+        need(inspected.returncode == 0 and
+             json.loads(inspected.stdout.split('=',1)[1]).get('spent') == 2 and
+             json.loads(inspected.stdout.split('=',1)[1]).get(
+                 'production_pkg_authorized') is False,
+             'LOCAL_LEDGER_INSPECTION_FALSE_AUTHORIZATION')
+        poison_path = ledger_parent / 'ci-interrupted' / 'approval-ledger'
+        poison_path.parent.mkdir(mode=0o700)
+        poison_path.mkdir(mode=0o700)
+        poison_init = ledger_run(['initialize',str(poison_path)])
+        need(poison_init.returncode == 0,
+             'LOCAL_LEDGER_INTERRUPT_FIXTURE_INIT_FAILED')
+        interrupted_name = poison_path / (
+            'spent-000000000001-' + receipt_sha + '.json')
+        interrupted_fd = os.open(interrupted_name,os.O_WRONLY | os.O_CREAT |
+                                 os.O_EXCL | os.O_NOFOLLOW,0o600)
+        os.close(interrupted_fd)
+        for cmd in (
+            ['inspect',str(poison_path)],
+            ['consume',str(poison_path),authority_sha,
+             launcher[12],receipt_sha,'1'],
+        ):
+            denied=ledger_run(cmd)
+            need(denied.returncode == 78 and
+                 'LEDGER_CORRUPT_JSON' in denied.stderr,
+                 'LOCAL_LEDGER_INTERRUPTED_INTENT_UNSAFELY_REPAIRED')
+        installed_unchanged(old,old_archive,host,baseline)
         original_receipt = receipt.read_bytes()
         for field, bad, reason in (
             ('verifier_sha256', '0'*64, 'VERIFIER_SHA'),
@@ -697,6 +781,11 @@ def execute(old_archive):
             'approval_policy_expiry_and_revocation_negatives_verified': True,
             'approval_policy_authoritative_freshness': False,
             'approval_token_one_use_consumption_implemented': False,
+            'ci_local_one_use_ledger_exclusive_concurrency_verified': True,
+            'ci_local_one_use_ledger_monotonic_replay_refusals_verified': True,
+            'ci_local_one_use_ledger_crash_poison_refusal_verified': True,
+            'ci_local_one_use_ledger_is_owner_authority': False,
+            'ci_local_ledger_has_external_rollback_witness': False,
             'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
