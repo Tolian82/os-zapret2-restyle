@@ -77,10 +77,10 @@ class CheckpointWitnessTests(unittest.TestCase):
         path=sorted(self.journal.glob("spent-*.json"))[sequence-1]
         return path,json.loads(path.read_bytes())
 
-    def seal(self,sequence,**changes):
-        path,record=self.entry(sequence)
+    def seal(self,journal_sequence,**changes):
+        path,record=self.entry(journal_sequence)
         doc={"schema":m.SCHEMA,"repository":m.ledger.REPO,
-             "sequence":sequence,
+             "sequence":journal_sequence,
              "head_sha256":hashlib.sha256(path.read_bytes()).hexdigest(),
              "authority_sha256":record["authority_sha256"],
              "receipt_sha256":record["receipt_sha256"],
