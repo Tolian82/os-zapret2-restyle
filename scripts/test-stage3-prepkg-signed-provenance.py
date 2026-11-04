@@ -49,7 +49,7 @@ def fixture(root, claimed=None, payload=b'print("VERIFIED_PREPKG_ENTRY")\n'):
         'repository': 'Tolian82/os-zapret2-restyle',
         'source_commit': '1'*40,
         'entrypoint_sha256': hashlib.sha256(payload).hexdigest(),
-        'incoming_version': '0.6.2_108',
+        'incoming_version': '0.6.2_110',
         'incoming_sha256': 'a'*64,
         'predecessor_version': '0.6.2_1',
         'predecessor_sha256': 'b'*64,
@@ -91,7 +91,7 @@ class SignedProvenance(unittest.TestCase):
             c['sig'].write_bytes(b'broken-signature')
             with self.assertRaises(SystemExit):self.signed(c)
             c=fixture(d)
-            c['claims'].write_bytes(c['claims'].read_bytes().replace(b'0.6.2_108',b'0.6.2_109'))
+            c['claims'].write_bytes(c['claims'].read_bytes().replace(b'0.6.2_110',b'0.6.2_110'))
             with self.assertRaises(SystemExit):self.signed(c)
             c=fixture(d)
             other=Path(d)/'other'
@@ -121,7 +121,7 @@ class SignedProvenance(unittest.TestCase):
 
     def test_bad_cli_mode_or_unsigned_legacy_rejected_before_read(self):
         for args in ([],['upgrade'],['inspect-predecessor'],
-            ['a'*64,'/root/cli.py','inspect-predecessor','/tmp/n','0.6.2_108','a'*64,
+            ['a'*64,'/root/cli.py','inspect-predecessor','/tmp/n','0.6.2_110','a'*64,
                 '/tmp/o','0.6.2_1','b'*64]):
             p=subprocess.run([sys.executable,'-I','-B','-c',CODE,*args],
                 capture_output=True,text=True,timeout=8)
@@ -135,8 +135,8 @@ class SignedProvenance(unittest.TestCase):
             argv=['-c','--expected-source-commit','1'*40,
                   '--signed-provenance',c['key_sha'],str(c['pub']),
                   str(c['claims']),str(c['sig']),str(c['cli']),
-                  'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_108.pkg',
-                  '0.6.2_108','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
+                  'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_110.pkg',
+                  '0.6.2_110','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
             with patch.object(self.m.sys,'argv',argv), \
                  patch.object(self.m.os,'uname',return_value=types.SimpleNamespace(sysname='FreeBSD',machine='amd64')), \
                  patch.object(self.m.os,'geteuid',return_value=0), \
@@ -152,8 +152,8 @@ class SignedProvenance(unittest.TestCase):
             argv=['-c','--expected-source-commit','1'*40,
                 '--signed-provenance',c['key_sha'],str(c['pub']),
                 str(c['claims']),str(c['sig']),str(c['cli']),
-                'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_108.pkg',
-                '0.6.2_108','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
+                'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_110.pkg',
+                '0.6.2_110','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
             original=list(self.m.sys.argv)
             fake_os=types.SimpleNamespace(sysname='FreeBSD',machine='amd64')
             try:
@@ -165,7 +165,7 @@ class SignedProvenance(unittest.TestCase):
                     self.m.main()
                 self.assertIn('VERIFIED_PREPKG_ENTRY',stdout.getvalue())
                 self.assertIn('VERIFIED_SIGNED_SHA256:',stderr.getvalue())
-                with patch.object(self.m.sys,'argv',list(argv[:10]+['/root/os-zapret2-restyle-0.6.2_109.pkg']+argv[11:])), \
+                with patch.object(self.m.sys,'argv',list(argv[:10]+['/root/os-zapret2-restyle-0.6.2_110.pkg']+argv[11:])), \
                      patch.object(self.m.os,'uname',return_value=fake_os), \
                      patch.object(self.m.os,'geteuid',return_value=0), \
                      self.assertRaises(SystemExit):
