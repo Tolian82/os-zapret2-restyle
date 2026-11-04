@@ -6,6 +6,12 @@
 
 **Canonical policy:** [GH-063–GH-065](GITHUB_PUBLICATION.md). **Local operations and incidents:** [project-specific runbook](verification/github-pr-completion-watchdog.md) and [403 investigation](verification/evidence/2026-11-03-v0.6.2_90-watchdog-delivery-403.md). This manual defines no additional normative `GH-*`/`DOC-*` rules.
 
+## _125: Portable lesson — nested GitHub Actions jobs pagination
+
+[Issue #894](https://github.com/Tolian82/os-zapret2-restyle/issues/894) was discovered during #892: the trusted-main watcher rejected `GET /actions/runs/{id}/jobs` because GitHub returns `{"total_count":N,"jobs":[...]}`, not the `{"workflow_runs":[...]}` envelope of `GET /actions/runs` and not the bare arrays of PR/files/comments endpoints. [Scheduled watchdog #41856709938](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41856709938) **FAILED**, with no guaranteed alert delivery. The reusable solution is explicit **endpoint-aware, bounded** pagination (strict `jobs`/`workflow_runs` keys and list members), not a permissive unwrap of arbitrary dict contents or suppression of errors. [Exact _125 evidence](verification/evidence/2026-11-04-v0.6.2_125-watchdog-paginated-jobs-and-actions-stall.md).
+
+A workflow remains nonterminal when GitHub reports `in_progress`, even when every reported job **step** is SUCCESS. The stall notification uses the existing 30-minute advisory threshold; it never counts a missing/queued/running/failed workflow as READY, never silently merges, and cannot replace owner authorization. Retain the original trusted-main-only scripts and scheduled fallback. Include the two watcher Python file paths in the trusted-main push trigger so this change is actually exercised after deployment; verify a real actionable PR timeline write before claiming an owner received a notification.
+
 ## 1. Why we created it
 
 The development workflow had repeatedly left pull requests open long after their required CI checks had succeeded. A concrete incident was [PR #849](https://github.com/Tolian82/os-zapret2-restyle/pull/849), which remained open after going green until the developer was prompted again. GitHub Actions can finish independently, but an inactive ChatGPT conversation does **not** awaken or resume work in response to it. A GitHub Issue is a task record, **not** a running monitoring service. Hence, the owner requested a GitHub-hosted monitor that operates even while no assistant conversation is active.

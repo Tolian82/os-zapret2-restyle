@@ -302,13 +302,31 @@ class Api:
             raise RuntimeError(classify_http_error(exc)) from None
 
     def pages(self, path):
+        """Bounded GitHub pagination: documented JSON envelope per endpoint.
+
+        Actions runs return {"workflow_runs": [...]}, Actions run jobs return
+        {"jobs": [...]}, while PR/file/comment pages return direct lists.
+        Malformed data must fail closed rather than report a false READY PR.
+        """
+        if path.startswith('actions/runs?'):
+            field = 'workflow_runs'
+        elif re.fullmatch(r'actions/runs/[1-9][0-9]*/jobs', path):
+            field = 'jobs'
+        elif (path.startswith('pulls?') or
+              re.fullmatch(r'pulls/[1-9][0-9]*/files', path) or
+              re.fullmatch(r'issues/[1-9][0-9]*/comments', path)):
+            field = None
+        else:
+            raise ValueError('UNSUPPORTED_PAGINATED_GITHUB_ENDPOINT')
         output = []
         for page in range(1, 11):
             delim = '&' if '?' in path else '?'
             result = self.call(path + delim + 'per_page=100&page=' + str(page))
-            if isinstance(result, dict) and 'workflow_runs' in result:
-                result = result['workflow_runs']
-            if not isinstance(result, list):
+            if field is not None:
+                if not isinstance(result, dict):
+                    raise ValueError('PAGINATED_GITHUB_RESULT_UNEXPECTED')
+                result = result.get(field)
+            if not isinstance(result, list) or any(not isinstance(x, dict) for x in result):
                 raise ValueError('PAGINATED_GITHUB_RESULT_UNEXPECTED')
             output.extend(result)
             if len(result) < 100:
