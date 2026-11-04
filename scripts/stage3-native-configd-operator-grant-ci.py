@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import secrets
 import subprocess
 import time
 
@@ -24,6 +25,7 @@ NAME = "os-zapret2-restyle"
 FILES = ("operator-public.pem", "status-public.pem", "signed-grant.json",
          "signed-grant.sig", "wrong-old.json", "wrong-old.sig",
          "wrong-new.json", "wrong-new.sig", "wrong-head.json", "wrong-head.sig")
+WITNESS_FILES = ("ci-consumed.json", "ci-consumed.sig")
 
 
 class Refusal(Exception):
@@ -33,6 +35,34 @@ class Refusal(Exception):
 def need(ok, why):
     if not ok:
         raise Refusal(why)
+
+
+def consumed_mode():
+    """Source-only CI signed status mechanics, never owner or external witness."""
+    flag=os.environ.get("ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED","")
+    need(flag in ("","1"),"FD9_CI_CONSUMED_MODE_INVALID")
+    if flag:
+        need(os.environ.get("GITHUB_ACTIONS")=="true" and
+             os.environ.get("ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED_CI")=="1" and
+             os.environ.get("ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI")=="1",
+             "FD9_CI_CONSUMED_DISPOSABLE_OPTIN_REQUIRED")
+    return flag=="1"
+
+
+def witness_module():
+    spec=importlib.util.spec_from_file_location(
+        "ci_native_fd9_signed_status",HERE/"stage3-prepkg-signed-status.py")
+    obj=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(obj)
+    return obj
+
+
+def expected_challenge(head, nonce):
+    need(type(nonce) is str and
+         re.fullmatch("[a-f0-9]{32}",nonce) is not None,
+         "FD9_CI_CONSUMED_TRANSFER_NONCE_INVALID")
+    return hashlib.sha256(
+        ("fd9-simulated-consumed|" + head + "|" + nonce).encode()).hexdigest()
 
 
 def policy_module():
@@ -84,11 +114,14 @@ def expected_identity(head, old_sha, new_sha):
     }
 
 
-def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revision):
+def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revision,
+          nonce=None):
     """Create a signed CI grant before the true configd worker can run pkg."""
     root = Path(root_dir)
     exact_private_root(root)
     identity = expected_identity(head, old_sha, new_sha)
+    fake_consumed=consumed_mode()
+    challenge=expected_challenge(head,nonce) if fake_consumed else None
     need(type(revision) is str and revision.isdecimal() and int(revision) > 0,
          "FD9_GRANT_REVISION_INVALID")
     grant = policy_module()
@@ -131,6 +164,20 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
             create(folder, stem + ".json", raw)
             create(folder, stem + ".sig",
                    openssl("dgst", "-sha256", "-sign", operator_secret, data=raw))
+        if fake_consumed:
+            # This is NOT an off-host one-use witness: same CI fixture signs
+            # a precomputed CONSUMED response using a second ephemeral role key.
+            status=witness_module()
+            now=int(time.time())
+            response={"schema":status.SCHEMA,"repository":status.REPO,
+                      "issuer":"CI_SIMULATED_WITNESS_NOT_OWNER_APPROVED",
+                      **identity,"witness_sequence":2,
+                      "challenge_sha256":challenge,"action":"CONSUMED",
+                      "issued_at":now-1,"expires_at":now+110}
+            raw=(json.dumps(response,sort_keys=True,separators=(",",":"))+"\n").encode()
+            create(folder,"ci-consumed.json",raw)
+            create(folder,"ci-consumed.sig",
+                   openssl("dgst","-sha256","-sign",status_secret,data=raw))
     finally:
         # Worker never receives signing private keys. This is CI custody only;
         # root of the runner could still replace authority PEM and expected pin.
@@ -146,7 +193,7 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
 
 
 def verify(root_dir, ticket, head, old_archive, candidate_archive, old_sha, new_sha,
-           revision, fd9_check):
+           revision, fd9_check, nonce=None):
     """Fail closed on signed scope + archive bytes under a *real* old FD9 checker."""
     need(callable(fd9_check), "FD9_GRANT_CHECKER_REQUIRED")
     folder = Path(root_dir) / ROOT_NAME
@@ -193,6 +240,30 @@ def verify(root_dir, ticket, head, old_archive, candidate_archive, old_sha, new_
         else:
             raise Refusal("FD9_GRANT_RESIGNED_FALSE_SCOPE_ACCEPTED:" + stem)
     fd9_check()
+    if consumed_mode():
+        status=witness_module()
+        challenge=expected_challenge(head,nonce)
+        fd9_check()
+        response=status.private_read(str(folder/"ci-consumed.json"),
+                                     status.MAX_RESPONSE)
+        signature=status.private_read(str(folder/"ci-consumed.sig"),
+                                      status.MAX_SIG)
+        key=status.private_read(str(folder/"status-public.pem"),
+                                status.MAX_KEY)
+        check=status.verify_response(
+            response,signature,key,ticket["status_sha256"],
+            challenge,expected["operation_id"],expected["payload_sha256"],
+            expected["checkpoint_sha256"],expected["checkpoint_sequence"],
+            2,int(time.time()))
+        need(check.get("status")=="PASS_CI_SIGNED_RESPONSE_BINDING_ONLY" and
+             check.get("operation_action")=="CONSUMED" and
+             check.get("signature_verified") is True and
+             check.get("witness_key_owner_approved") is False and
+             check.get("independent_remote_witness_deployed") is False and
+             check.get("nonce_one_use_proven") is False and
+             check.get("production_pkg_authorized") is False,
+             "FD9_CI_CONSUMED_RESULT_OR_TRUST_SCOPE_INVALID")
+        fd9_check()
     # This is not a durable reserve or one-use external witness: merely a
     # signed scope check inside original FD9 before an actual pkg dispatcher.
     return {"ci_operator_signature_verified": True,
@@ -208,13 +279,14 @@ def verify(root_dir, ticket, head, old_archive, candidate_archive, old_sha, new_
 def cleanup(root_dir):
     folder = Path(root_dir) / ROOT_NAME
     exact_private_root(folder)
-    need(set(p.name for p in folder.iterdir()) == set(FILES),
+    files=FILES + WITNESS_FILES if consumed_mode() else FILES
+    need(set(p.name for p in folder.iterdir()) == set(files),
          "FD9_GRANT_CLEANUP_FOREIGN_OR_MISSING_FILE")
-    for name in FILES:
+    for name in files:
         p = folder / name
         need(p.is_file() and not p.is_symlink() and p.stat().st_uid == os.geteuid() and
              stat.S_IMODE(p.stat().st_mode) == 0o600,
              "FD9_GRANT_CLEANUP_FILE_CHANGED:" + name)
-    for name in FILES:
+    for name in files:
         (folder / name).unlink()
     folder.rmdir()

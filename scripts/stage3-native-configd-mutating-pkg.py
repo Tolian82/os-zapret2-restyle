@@ -166,7 +166,8 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
     handoff=load('stage3-native-configd-fd9-handoff.py')
     approval=grant_guard.verify(
         handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
-        archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9)
+        archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9,
+        nonce=ticket)
     need(approval['ci_operator_signature_verified'] is True and
          approval['ci_original_fd9_held_during_grant_admission'] is True and
          approval['ci_resigned_false_old_new_head_denied'] is True and
@@ -266,7 +267,8 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         # continuously owned historical FD9 immediately before pkg dispatch.
         second=grant_guard.verify(
             handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
-            archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9)
+            archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9,
+            nonce=ticket)
         need(second==approval,'FD9_SIGNED_OPERATOR_GRANT_DRIFT_BEFORE_PKG')
         if post_final:
             # This second barrier is AFTER successful final signed-grant/SHA

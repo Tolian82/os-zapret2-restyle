@@ -222,6 +222,20 @@ def native_stdin_path_swap_mode():
     return value=='1'
 
 
+def signed_consumed_mode():
+    """CI-only signed simulated consumed proof, not independently trusted."""
+    mode=os.environ.get('ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED','')
+    need(mode in ('','1'),'CI_SIGNED_CONSUMED_MODE_INVALID')
+    if mode:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and native_pkg_mode() and
+             not signed_grant_negative_mode() and not late_signed_grant_mode() and
+             not late_archive_mode() and not post_final_archive_mode() and
+             not native_late_journal_mode() and not native_stdin_path_swap_mode(),
+             'CI_SIGNED_CONSUMED_NOT_DISPOSABLE')
+    return mode=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -275,6 +289,9 @@ def action_bytes(head):
     if native_stdin_path_swap_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP=1 '
                 'ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI=1 ')
+    if signed_consumed_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED=1 '
+                'ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -358,6 +375,7 @@ def worker(head):
     post_final_archive_mode()
     native_stdin_pkg_mode()
     native_stdin_path_swap_mode()
+    signed_consumed_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -513,6 +531,7 @@ def launch(head):
     post_final_archive_mode()
     native_stdin_pkg_mode()
     native_stdin_path_swap_mode()
+    signed_consumed_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,
@@ -603,6 +622,7 @@ def execute(head):
     post_final=post_final_archive_mode()
     stdin_pkg=native_stdin_pkg_mode()
     stdin_path_swap=native_stdin_path_swap_mode()
+    signed_consumed=signed_consumed_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -651,9 +671,11 @@ def execute(head):
     existed=base.LOCK.exists()
     inode=base.LOCK.lstat().st_ino if existed else None
     ROOT.mkdir(mode=0o700)
+    nonce=secrets.token_hex(16)
     issuer=load('stage3-native-configd-operator-grant-ci.py') if pkg_enabled else None
     ci_grant=(issuer.issue(ROOT,head,base.OLD,native_archive,
-                           old.ARCHIVE_SHA,native_archive_sha,native_revision)
+                           old.ARCHIVE_SHA,native_archive_sha,native_revision,
+                           nonce=nonce)
               if pkg_enabled else None)
     if grant_negative:
         # Detached worker must reject changed signed bytes while retaining
@@ -662,7 +684,6 @@ def execute(head):
              'SIGNED_GRANT_NEGATIVE_NOT_ARMED')
     if pkg_enabled:
         base.create_owned(AUTHORITY,json.dumps(ci_grant,sort_keys=True).encode())
-    nonce=secrets.token_hex(16)
     ticket_data={'head':head,'nonce':nonce}
     if pkg_enabled:
         ticket_data.update(package_path=str(native_archive),
@@ -1074,6 +1095,8 @@ def execute(head):
             'ci_stdin_original_path_restored':stdin_original_restored,
             'ci_operator_signed_grant_under_original_fd9':pkg_enabled and not (grant_negative or late_grant or late_archive or post_final),
             'ci_operator_grant_is_owner_approved':False,
+            'ci_simulated_signed_consumed_under_original_fd9':
+                signed_consumed and pkg_enabled,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
