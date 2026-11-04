@@ -22,7 +22,7 @@ spec.loader.exec_module(m)
 class NativeArchiveBootstrapContracts(unittest.TestCase):
     def fixture(self):
         modules = {name:(m.PRODUCT / name).read_bytes() for name in m.MODULES}
-        manifest = {'name':m.NAME, 'version':'0.6.2_116',
+        manifest = {'name':m.NAME, 'version':'0.6.2_117',
                     'abi':'FreeBSD:15:amd64','arch':'freebsd:15:x86:64',
                     'files':{'/' + m.DEST + name:'1$sha' for name in m.MODULES}}
         return modules, manifest
@@ -56,7 +56,7 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
             result = m.staged_source_from_native_archive(
-                Path('/root/os-zapret2-restyle-0.6.2_116.pkg'),'0.6.2_116',
+                Path('/root/os-zapret2-restyle-0.6.2_117.pkg'),'0.6.2_117',
                 sha,folder)
             self.assertEqual(check.call_count,2)
         return result
@@ -139,8 +139,8 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                  patch.object(m,'read_only') as tar:
                 with self.assertRaisesRegex(m.candidate.CandidateRefusal,'SHA_MISMATCH'):
                     m.staged_source_from_native_archive(
-                        Path('/root/os-zapret2-restyle-0.6.2_116.pkg'),
-                        '0.6.2_116','0'*64,Path(tmp))
+                        Path('/root/os-zapret2-restyle-0.6.2_117.pkg'),
+                        '0.6.2_117','0'*64,Path(tmp))
                 tar.assert_not_called()
                 self.assertEqual(os.listdir(tmp),[])
 
@@ -178,6 +178,15 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         self.assertIn("'ci_witness_signer_is_owner_approved': False",source)
         self.assertIn("'ci_witness_latest_sha_authenticated_out_of_band': False",source)
         self.assertIn("'ci_witness_external_independent_storage_proven': False",source)
+        self.assertIn("'ci_same_vm_monotonic_cas_one_winner_verified': True",source)
+        self.assertIn("'ci_same_vm_witness_outage_fails_closed': True",source)
+        self.assertIn("'ci_same_vm_witness_crash_poison_verified': True",source)
+        self.assertIn("'ci_local_ahead_and_tail_rollback_refused': True",source)
+        self.assertIn("'ci_both_stores_root_rollback_counterexample_demonstrated': True",source)
+        self.assertIn("'ci_independent_remote_witness_deployed': False",source)
+        self.assertIn("'ci_cross_store_atomic_commit_proven': False",source)
+        self.assertIn("CI_REMOTE_SIMULATED_CONCURRENT_CAS_UNSAFE",source)
+        self.assertIn("CI_REMOTE_SIMULATED_FULL_ROOT_ROLLBACK_MISCLASSIFIED",source)
         self.assertIn("CI_CHECKPOINT_LATEST_HEAD_ROLLBACK_UNDETECTED",source)
         self.assertIn("CI_CHECKPOINT_UNTRUSTED_OLDER_WITNESS_NOT_CLASSIFIED",source)
         self.assertIn("LOCAL_LEDGER_COMPETING_CONSUMPTIONS_NOT_EXCLUSIVE",source)
