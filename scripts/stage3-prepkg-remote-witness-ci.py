@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+"""Stage 3 CI-only localhost witness with durable SQLite operations and RSA replies.
+
+NOT a production witness: no client authentication, real independent host,
+owner-approved key, trusted clock, external monotonic authority or pkg support.
+The signer and journal belong to the same disposable CI host. All mutating
+server functions require an explicit CI opt-in and bind only to 127.0.0.1.
+"""
+import base64
+import hashlib
+import json
+import os
+import re
+import socket
+import socketserver
+import sqlite3
+import subprocess
+import sys
+import time
+
+SCHEMA = "zapret2-ci-signed-operation-status-v1"
+ISSUER = "CI_SIMULATED_WITNESS_NOT_OWNER_APPROVED"
+REPO = "Tolian82/os-zapret2-restyle"
+SHA = re.compile(r"[0-9a-f]{64}\Z")
+FIELDS = frozenset(("action", "operation_id", "payload_sha256",
+                    "checkpoint_sha256", "checkpoint_sequence",
+                    "challenge_sha256"))
+ACTIONS = ("RESERVE", "CONSUME", "ABORT", "STATUS")
+MAX_REQUEST = 2048
+MAX_ENVELOPE = 8192
+TIMEOUT = 4
+
+
+class Refusal(Exception):
+    pass
+
+
+def need(ok, reason):
+    if not ok:
+        raise Refusal(reason)
+
+
+def unique_json(raw):
+    def unique(pairs):
+        answer = {}
+        for k, v in pairs:
+            need(k not in answer, "REQUEST_DUPLICATE_JSON_KEY")
+            answer[k] = v
+        return answer
+    try:
+        return json.loads(raw, object_pairs_hook=unique,
+                          parse_constant=lambda _: (_ for _ in ()).throw(
+                              Refusal("REQUEST_NONFINITE_NUMBER")))
+    except (UnicodeError, ValueError, TypeError):
+        raise Refusal("REQUEST_INVALID_JSON") from None
+
+
+def inspect(req):
+    need(isinstance(req, dict) and set(req) in (FIELDS, FIELDS | {"drop_after_commit"}),
+         "REQUEST_FIELDS_INVALID")
+    need(isinstance(req["action"], str) and req["action"] in ACTIONS,
+         "REQUEST_ACTION_INVALID")
+    for key in ("operation_id", "payload_sha256", "checkpoint_sha256",
+                "challenge_sha256"):
+        value = req[key]
+        need(isinstance(value, str) and SHA.fullmatch(value) is not None and
+             value != "0" * 64, "REQUEST_SHA_INVALID:" + key)
+    need(type(req["checkpoint_sequence"]) is int and
+         1 <= req["checkpoint_sequence"] <= 1000000,
+         "REQUEST_CHECKPOINT_SEQUENCE_INVALID")
+    need("drop_after_commit" not in req or
+         type(req["drop_after_commit"]) is bool,
+         "REQUEST_DROP_FLAG_INVALID")
+    return req
+
+
+def open_existing(path):
+    need(os.path.isabs(path) and os.path.realpath(path) == path and
+         "\x00" not in path, "WITNESS_DB_ABSOLUTE_REGULAR_REQUIRED")
+    need(os.path.isfile(path) and not os.path.islink(path),
+         "WITNESS_DB_MISSING_OR_UNSAFE")
+    connection = sqlite3.connect("file:" + path + "?mode=rw",
+                                 uri=True, timeout=TIMEOUT,
+                                 isolation_level=None)
+    connection.execute("PRAGMA busy_timeout=4000")
+    connection.execute("PRAGMA synchronous=FULL")
+    return connection
+
+
+def initialize(path):
+    need(os.path.isabs(path) and not os.path.lexists(path),
+         "WITNESS_DB_EXCLUSIVE_INIT_REQUIRED")
+    conn = sqlite3.connect(path, isolation_level=None)
+    try:
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA synchronous=FULL")
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("CREATE TABLE metadata (id INTEGER PRIMARY KEY CHECK(id=1), serial INTEGER NOT NULL)")
+        conn.execute("INSERT INTO metadata VALUES (1,0)")
+        conn.execute("CREATE TABLE challenges (value TEXT PRIMARY KEY)")
+        conn.execute("""CREATE TABLE operations (
+                        op TEXT PRIMARY KEY, payload TEXT NOT NULL,
+                        checkpoint TEXT NOT NULL, cpseq INTEGER NOT NULL,
+                        state TEXT NOT NULL CHECK(state IN ('RESERVED','CONSUMED','ABORTED')),
+                        witness_seq INTEGER NOT NULL)""")
+        conn.execute("""CREATE UNIQUE INDEX active_checkpoint ON operations(checkpoint)
+                        WHERE state != 'ABORTED'""")
+        conn.execute("COMMIT")
+    finally:
+        conn.close()
+    os.chmod(path, 0o600)
+
+
+def transition(path, data):
+    req = inspect(data)
+    con = open_existing(path)
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        # Every request challenge is consumed DURABLY even for read-only status
+        # and exact idempotent re-reads. A lost reply needs a NEW challenge.
+        con.execute("INSERT INTO challenges VALUES (?)", (req["challenge_sha256"],))
+        op = req["operation_id"]
+        old = con.execute("SELECT payload, checkpoint, cpseq, state, witness_seq "
+                          "FROM operations WHERE op=?", (op,)).fetchone()
+        action = req["action"]
+        if action == "STATUS":
+            need(old is not None, "WITNESS_OPERATION_UNKNOWN")
+        if old is not None:
+            need((old[0], old[1], old[2]) ==
+                 (req["payload_sha256"], req["checkpoint_sha256"],
+                  req["checkpoint_sequence"]),
+                 "WITNESS_OPERATION_IDENTITY_CHANGED")
+            if action == "RESERVE":
+                need(old[3] == "RESERVED", "WITNESS_ALREADY_TERMINAL")
+            elif action in ("CONSUME", "ABORT"):
+                need(old[3] in ("RESERVED", "ABORTED" if action == "ABORT" else "CONSUMED"),
+                     "WITNESS_TERMINAL_CONFLICT")
+            if action == "CONSUME" and old[3] == "RESERVED":
+                new_state = "CONSUMED"
+            elif action == "ABORT" and old[3] == "RESERVED":
+                new_state = "ABORTED"
+            else:
+                new_state = None
+            if new_state is not None:
+                serial = max(con.execute("SELECT serial FROM metadata WHERE id=1").fetchone()[0] + 1,
+                             req["checkpoint_sequence"] + 1)
+                con.execute("UPDATE metadata SET serial=? WHERE id=1", (serial,))
+                con.execute("UPDATE operations SET state=?, witness_seq=? WHERE op=?",
+                            (new_state, serial, op))
+        else:
+            need(action == "RESERVE", "WITNESS_RESERVE_REQUIRED")
+            need(con.execute("SELECT count(*) FROM operations WHERE state='RESERVED'").fetchone()[0] == 0,
+                 "WITNESS_OTHER_PENDING_OPERATION")
+            serial = max(con.execute("SELECT serial FROM metadata WHERE id=1").fetchone()[0] + 1,
+                             req["checkpoint_sequence"] + 1)
+            con.execute("UPDATE metadata SET serial=? WHERE id=1", (serial,))
+            con.execute("INSERT INTO operations VALUES (?,?,?,?,?,?)",
+                        (op, req["payload_sha256"], req["checkpoint_sha256"],
+                         req["checkpoint_sequence"], "RESERVED",
+                         serial))
+        row = con.execute("SELECT state, witness_seq FROM operations WHERE op=?", (op,)).fetchone()
+        need(row is not None, "WITNESS_OPERATION_NOT_FOUND_AFTER_TX")
+        con.execute("COMMIT")
+        now = int(time.time())
+        reply = {"schema": SCHEMA, "repository": REPO, "issuer": ISSUER,
+                 "operation_id": op, "payload_sha256": req["payload_sha256"],
+                 "checkpoint_sha256": req["checkpoint_sha256"],
+                 "checkpoint_sequence": req["checkpoint_sequence"],
+                 "witness_sequence": row[1], "challenge_sha256": req["challenge_sha256"],
+                 "action": row[0], "issued_at": now, "expires_at": now + 60}
+        return (json.dumps(reply, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    except Exception:
+        try:
+            con.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+    finally:
+        con.close()
+
+
+def seal(raw, key):
+    try:
+        result = subprocess.run(["/usr/bin/openssl", "dgst", "-sha256",
+                                 "-sign", key], input=raw, capture_output=True,
+                                timeout=TIMEOUT, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise Refusal("WITNESS_RSA_UNAVAILABLE") from None
+    need(result.returncode == 0 and 0 < len(result.stdout) <= 1024,
+         "WITNESS_SIGNING_FAILED")
+    return result.stdout
+
+
+class Handler(socketserver.BaseRequestHandler):
+    def handle(self):
+        self.request.settimeout(TIMEOUT)
+        try:
+            frame = bytearray()
+            while len(frame) <= MAX_REQUEST:
+                byte = self.request.recv(1)
+                if byte == b"\n":
+                    break
+                need(byte, "REQUEST_TRUNCATED")
+                frame.extend(byte)
+            else:
+                raise Refusal("REQUEST_TOO_LARGE")
+            request = inspect(unique_json(bytes(frame).decode("utf-8")))
+            raw = transition(self.server.database, request)
+            if request.get("drop_after_commit", False):
+                return  # Deliberate CI lost-reply injection AFTER SQLite commit.
+            signed = seal(raw, self.server.key)
+            envelope = {"message": base64.b64encode(raw).decode("ascii"),
+                        "signature": base64.b64encode(signed).decode("ascii")}
+            self.request.sendall((json.dumps(envelope, separators=(",", ":")) + "\n").encode())
+        except (Refusal, sqlite3.Error, OSError, ValueError, UnicodeError) as exc:
+            try:
+                self.request.sendall((json.dumps({"refused": type(exc).__name__ + ":" + str(exc)}) + "\n").encode())
+            except OSError:
+                pass
+
+
+class Server(socketserver.ThreadingTCPServer):
+    allow_reuse_address = False
+    daemon_threads = True
+
+
+def request(port, values):
+    need(type(port) is int and 0 < port < 65536, "CLIENT_PORT_INVALID")
+    with socket.create_connection(("127.0.0.1", port), timeout=TIMEOUT) as sock:
+        sock.settimeout(TIMEOUT)
+        sock.sendall((json.dumps(values, separators=(",", ":")) + "\n").encode())
+        chunks = bytearray()
+        while len(chunks) <= MAX_ENVELOPE:
+            part = sock.recv(4096)
+            if not part:
+                break
+            chunks.extend(part)
+            if b"\n" in chunks:
+                break
+        need(chunks and len(chunks) <= MAX_ENVELOPE and chunks.endswith(b"\n"),
+             "CLIENT_REPLY_MISSING_OR_OVERSIZE")
+    answer = unique_json(bytes(chunks).decode())
+    need(isinstance(answer, dict), "CLIENT_ENVELOPE_INVALID")
+    need("refused" not in answer and set(answer) == {"message", "signature"},
+         "CLIENT_REFUSED_OR_BAD_ENVELOPE")
+    try:
+        return (base64.b64decode(answer["message"], validate=True),
+                base64.b64decode(answer["signature"], validate=True))
+    except (ValueError, TypeError):
+        raise Refusal("CLIENT_ENVELOPE_BASE64_INVALID") from None
+
+
+def main(args):
+    try:
+        need(os.environ.get("ZAPRET2_CI_REMOTE_WITNESS_ONLY") == "1",
+             "WITNESS_DISPOSABLE_CI_OPTIN_REQUIRED")
+        need(len(args) in (2, 3), "WITNESS_CLI_INVALID")
+        if len(args) == 2 and args[0] == "init":
+            initialize(args[1])
+            print("CI_WITNESS_DB_INITIALIZED", flush=True)
+        elif len(args) == 3 and args[0] == "serve":
+            path, key = args[1:]
+            need(os.path.exists(key) and os.path.isfile(key), "WITNESS_PRIVATE_SIGNER_MISSING")
+            with open_existing(path):
+                pass
+            with Server(("127.0.0.1", 0), Handler) as service:
+                service.database = path
+                service.key = key
+                print("CI_WITNESS_PORT=" + str(service.server_address[1]), flush=True)
+                service.serve_forever(poll_interval=0.2)
+        else:
+            raise Refusal("WITNESS_CLI_INVALID")
+        return 0
+    except (Refusal, OSError, sqlite3.Error, ValueError) as exc:
+        print("CI_WITNESS_REFUSED:" + str(exc), file=sys.stderr)
+        return 78
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
