@@ -190,7 +190,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '117', 'NATIVE_BOOTSTRAP_REVISION_NOT_117')
+    need(m is not None and m.group(1) == '118', 'NATIVE_BOOTSTRAP_REVISION_NOT_118')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -802,6 +802,119 @@ def execute(old_archive):
                  'REMOTE_WITNESS_' in refused.stderr,
                  'CI_REMOTE_SIMULATED_INTERRUPTED_STATE_RECOVERED_UNSAFELY')
         installed_unchanged(old,old_archive,host,baseline)
+        # _118 CI-only operation token state machine. NOT connected to
+        # supported pkg, real owner authority or independent witness.
+        op_source=HERE/'stage3-prepkg-witness-operation.py'
+        need(op_source.is_file() and not op_source.is_symlink(),
+             'CI_OPERATION_SOURCE_MISSING')
+        op_parent=ledger_parent/'ci-operation-reservation'
+        op_parent.mkdir(mode=0o700)
+        op_store=op_parent/'witness-store'
+        op_store.mkdir(mode=0o700)
+        def operation_run(args):
+            return subprocess.run(
+                [sys.executable,'-I','-B',str(op_source),*args],
+                capture_output=True,text=True,cwd='/root',env=ledger_env,
+                timeout=45,check=False)
+        initialized=operation_run(['initialize',str(op_store)])
+        need(initialized.returncode==0 and
+             'CI_OPERATION_STORE_UNTRUSTED_BOOTSTRAP' in initialized.stdout,
+             'CI_OPERATION_BOOTSTRAP_REFUSED:'+initialized.stderr[-240:])
+        # Signed witness and complete historic ledger already independently
+        # validated by _114/_115/_116/_117 on disposable OPNsense.
+        sign_witness(3)
+        identity_args=[str(remote),str(ledger_path),witness_pub_sha,
+                       str(witness_pub),str(witness_doc),str(witness_sig)]
+        op_a='1'*64
+        op_b='2'*64
+        payload_a='a'*64
+        payload_b='b'*64
+        def op_args(command,op_id=op_a,payload=payload_a,store=op_store,
+                    remote_override=None):
+            return [command,str(store),
+                    *(identity_args if remote_override is None else
+                      [str(remote_override),*identity_args[1:]]),
+                    op_id,payload]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            concurrent_op=list(pool.map(operation_run,[
+                op_args('reserve',op_a,payload_a),
+                op_args('reserve',op_b,payload_b)]))
+        winners=[x for x in concurrent_op if x.returncode==0]
+        losers=[x for x in concurrent_op if x.returncode==78]
+        need(len(winners)==1 and len(losers)==1 and
+             'CI_OPERATION_RESERVE_NOT_PKG_AUTHORIZATION' in winners[0].stdout,
+             'CI_OPERATION_CONCURRENT_RESERVATION_UNSAFE')
+        winning=json.loads(winners[0].stdout.split('=',1)[1])
+        chosen_op=winning['operation_id']
+        chosen_payload=winning['payload_sha256']
+        consumed=operation_run(op_args('consume',chosen_op,chosen_payload))
+        need(consumed.returncode==0 and
+             'CI_OPERATION_CONSUME_NOT_PKG_AUTHORIZATION' in consumed.stdout,
+             'CI_OPERATION_CONSUME_REFUSED:'+consumed.stderr[-240:])
+        # Lost response after a durable CI-only commit: immutable operation
+        # lookup and idempotent same-ID replay without a second event.
+        lookup=operation_run(['status',str(op_store),chosen_op])
+        need(lookup.returncode==0 and
+             json.loads(lookup.stdout.split('=',1)[1]).get(
+                 'status')=='CI_OPERATION_CONSUME_NOT_PKG_AUTHORIZATION',
+             'CI_OPERATION_AMBIGUOUS_COMMIT_NOT_RECOVERABLE')
+        retry=operation_run(op_args('consume',chosen_op,chosen_payload))
+        need(retry.returncode==0 and
+             json.loads(retry.stdout.split('=',1)[1]).get(
+                 'idempotent_replay') is True and
+             len(list(op_store.glob('operation-*.json')))==2,
+             'CI_OPERATION_DUPLICATE_COMMIT_WROTE_SECOND_EVENT')
+        newid=op_b if chosen_op==op_a else op_a
+        newpayload=payload_b if chosen_op==op_a else payload_a
+        denied=operation_run(op_args('reserve',newid,newpayload))
+        need(denied.returncode==78 and
+             'OPERATION_CHECKPOINT_ALREADY_CONSUMED' in denied.stderr,
+             'CI_OPERATION_SPENT_CHECKPOINT_REASSIGNED')
+        aborted=operation_run(op_args('abort',chosen_op,chosen_payload))
+        need(aborted.returncode==78 and
+             'OPERATION_TERMINAL_STATUS_CONFLICT' in aborted.stderr,
+             'CI_OPERATION_CONSUMED_MUST_NOT_ABORT')
+        # Witness absence must reject both new reservations and idempotent
+        # retry after a successful commit: never cached success fallback.
+        unreachable=remote_parent/'unreachable'/'witness-store'
+        retry_unavailable=operation_run(op_args(
+            'consume',chosen_op,chosen_payload,remote_override=unreachable))
+        need(retry_unavailable.returncode==78 and
+             'OPERATION_WITNESS_UNAVAILABLE_OR_SPLIT' in retry_unavailable.stderr,
+             'CI_OPERATION_WITNESS_OUTAGE_RETURNED_CACHED_SUCCESS')
+        # Separate virgin operation ledger verifies witness outage on first
+        # reservation, no partially admitted record.
+        outage_parent=op_parent/'ci-unreachable'
+        outage_parent.mkdir(mode=0o700)
+        outage_store=outage_parent/'witness-store'
+        outage_store.mkdir(mode=0o700)
+        need(operation_run(['initialize',str(outage_store)]).returncode==0,
+             'CI_OPERATION_OUTAGE_FIXTURE_INIT_FAILED')
+        missing=operation_run(op_args('reserve',op_a,payload_a,store=outage_store,
+                                      remote_override=unreachable))
+        need(missing.returncode==78 and
+             'OPERATION_WITNESS_UNAVAILABLE_OR_SPLIT' in missing.stderr and
+             not list(outage_store.glob('operation-*.json')),
+             'CI_OPERATION_UNAVAILABLE_WITNESS_ADMITTED_FIRST_OP')
+        # Poison an exclusive entry in a fresh isolated store: no repair.
+        poison_op_parent=op_parent/'ci-interrupted'
+        poison_op_parent.mkdir(mode=0o700)
+        poison_op=poison_op_parent/'witness-store'
+        poison_op.mkdir(mode=0o700)
+        need(operation_run(['initialize',str(poison_op)]).returncode==0,
+             'CI_OPERATION_POISON_FIXTURE_INIT_FAILED')
+        reserved=operation_run(op_args('reserve',store=poison_op))
+        need(reserved.returncode==0,'CI_OPERATION_POISON_RESERVE_REFUSED')
+        poison_name=poison_op/('operation-000000000002-'+op_a+'.json')
+        poison_fd=os.open(poison_name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|
+                          os.O_NOFOLLOW,0o600)
+        os.close(poison_fd)
+        for args in (op_args('consume',store=poison_op),
+                     ['status',str(poison_op),op_a]):
+            refused=operation_run(args)
+            need(refused.returncode==78 and 'REFUSED:' in refused.stderr,
+                 'CI_OPERATION_POISONED_INTENT_UNSAFELY_RECOVERED')
+        installed_unchanged(old,old_archive,host,baseline)
         poison_path = ledger_parent / 'ci-interrupted' / 'approval-ledger'
         poison_path.parent.mkdir(mode=0o700)
         poison_path.mkdir(mode=0o700)
@@ -1060,6 +1173,14 @@ def execute(old_archive):
             'ci_both_stores_root_rollback_counterexample_demonstrated': True,
             'ci_independent_remote_witness_deployed': False,
             'ci_cross_store_atomic_commit_proven': False,
+            'ci_operation_two_racing_reservations_one_winner': True,
+            'ci_operation_commit_idempotency_and_lost_reply': True,
+            'ci_operation_spent_checkpoint_reuse_refused': True,
+            'ci_operation_witness_outage_and_cached_retry_refused': True,
+            'ci_operation_poisoned_intent_fails_closed': True,
+            'ci_operation_production_owner_approved': False,
+            'ci_operation_remote_trusted_transport_deployed': False,
+            'ci_operation_witness_reserve_consume_atomic': False,
             'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
