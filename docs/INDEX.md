@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.25 _115 CI-only atomic local approval ledger](verification/evidence/2026-11-04-v0.6.2_115-stage3-local-one-use-ledger.md) — true flock/O_EXCL, monotonic sequence, poison on partial crash; no trusted production rollback authority.
+
 - [Stage 3.24 strict hourly signed approval/revocation policy (_114)](verification/evidence/2026-11-04-v0.6.2_114-stage3-short-lived-approval-policy.md) — expected SHA, RSA signature, receipt/authority hash and fail-closed time/denylist; no authoritative latest snapshot or atomic one-use.
 
 - [Stage 3.24 detached RSA operator-approval receipt (_113)](verification/evidence/2026-11-04-v0.6.2_113-stage3-detached-operator-approval.md) — exact signed root-private receipt, separately fingerprint-pinned approval key, no actual owner-approved authority yet.
