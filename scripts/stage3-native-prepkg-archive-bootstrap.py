@@ -190,7 +190,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '116', 'NATIVE_BOOTSTRAP_REVISION_NOT_116')
+    need(m is not None and m.group(1) == '117', 'NATIVE_BOOTSTRAP_REVISION_NOT_117')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -675,6 +675,133 @@ def execute(old_archive):
         need(witness_run(latest_sha).returncode == 0,
              'CI_CHECKPOINT_FINAL_RESTORE_NOT_VERIFIED')
         installed_unchanged(old,old_archive,host,baseline)
+        # _117 separate same-VM witness store: a protocol simulation, NOT
+        # an actual separately administered off-host/owner-trusted service.
+        monotonic_source=HERE/'stage3-prepkg-monotonic-witness.py'
+        need(monotonic_source.is_file() and not monotonic_source.is_symlink(),
+             'CI_MONOTONIC_WITNESS_SOURCE_MISSING')
+        remote_parent=ledger_parent/'ci-simulated-remote'
+        remote_parent.mkdir(mode=0o700)
+        remote=remote_parent/'witness-store'
+        remote.mkdir(mode=0o700)
+        def remote_run(args):
+            return subprocess.run(
+                [sys.executable,'-I','-B',str(monotonic_source),*args],
+                capture_output=True,text=True,cwd='/root',env=ledger_env,
+                timeout=45,check=False)
+        witness_inputs=[str(ledger_path),witness_pub_sha,str(witness_pub)]
+        checkpoint_inputs=[str(witness_doc),str(witness_sig)]
+        latest_sha=sign_witness(2)
+        boot=remote_run(['bootstrap',str(remote),*witness_inputs,
+                         latest_sha,*checkpoint_inputs])
+        need(boot.returncode==0 and
+             'CI_WITNESS_BOOTSTRAP_UNTRUSTED_LOCAL_ONLY' in boot.stdout,
+             'CI_REMOTE_SIMULATED_BOOTSTRAP_REFUSED:'+boot.stderr[-230:])
+        def remote_compare(store=remote):
+            return remote_run(['compare',str(store),*witness_inputs,
+                               *checkpoint_inputs])
+        initial=remote_compare()
+        need(initial.returncode==0 and
+             'CI_WITNESS_CURRENT_LOCAL_MATCH_NOT_OWNER_APPROVAL' in initial.stdout and
+             json.loads(initial.stdout.split('=',1)[1]).get(
+                 'witness_latest_independently_anchored') is False,
+             'CI_REMOTE_SIMULATED_INITIAL_MISMATCH:'+initial.stderr[-230:])
+        third=ledger_run(['consume',str(ledger_path),authority_sha,
+                          'f'*64,'f'*64,'3'])
+        need(third.returncode==0,
+             'CI_REMOTE_SIMULATED_THIRD_LEDGER_SPEND_REFUSED:'+third.stderr[-230:])
+        split=remote_compare()
+        need(split.returncode==78 and
+             'WITNESS_LEDGER_SEQUENCE_OR_HEAD_ROLLBACK' in split.stderr,
+             'CI_REMOTE_SIMULATED_LOCAL_AHEAD_NOT_REFUSED')
+        prior_sha=latest_sha
+        third_sha=sign_witness(3)
+        third_published=['publish',str(remote),*witness_inputs,
+                         third_sha,*checkpoint_inputs,'2',prior_sha]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            competing_remote=list(pool.map(remote_run,
+                                           [third_published,third_published]))
+        remote_winners=[x for x in competing_remote if x.returncode==0]
+        remote_losers=[x for x in competing_remote if x.returncode==78]
+        need(len(remote_winners)==1 and len(remote_losers)==1 and
+             'CI_WITNESS_CAS_PUBLISHED_LOCAL_ONLY' in remote_winners[0].stdout and
+             ('REMOTE_WITNESS_CAS_STALE_OR_CONCURRENT' in remote_losers[0].stderr or
+              'REMOTE_WITNESS_BUSY_FAIL_CLOSED' in remote_losers[0].stderr),
+             'CI_REMOTE_SIMULATED_CONCURRENT_CAS_UNSAFE')
+        current=remote_compare()
+        need(current.returncode==0 and
+             json.loads(current.stdout.split('=',1)[1]).get('sequence')==3 and
+             json.loads(current.stdout.split('=',1)[1]).get(
+                 'cross_store_atomic_transaction_implemented') is False,
+             'CI_REMOTE_SIMULATED_LATEST_CAS_NOT_OBSERVED')
+        # A valid local rollback must fail against an unchanged later
+        # witness store; full root compromise can still roll back BOTH.
+        third_entry=sorted(ledger_path.glob('spent-*.json'))[-1]
+        third_bytes=third_entry.read_bytes()
+        third_entry.unlink()
+        reduced=ledger_run(['inspect',str(ledger_path)])
+        need(reduced.returncode==0 and
+             json.loads(reduced.stdout.split('=',1)[1]).get('spent')==2,
+             'CI_REMOTE_SIMULATED_TAIL_REMOVAL_NOT_SELF_CONSISTENT')
+        sign_witness(2)
+        rejected=remote_compare()
+        need(rejected.returncode==78 and
+             'WITNESS_LATEST_CHECKPOINT_SHA_MISMATCH' in rejected.stderr,
+             'CI_REMOTE_SIMULATED_UNCHANGED_WITNESS_ACCEPTED_TAIL_ROLLBACK')
+        witness_state2=remote/'state-000000000002.json'
+        remote_last_bytes=witness_state2.read_bytes()
+        witness_state2.unlink()
+        # FULL attacker-root rollback of both stores can still pass: this
+        # is a deliberate counterexample to any false external-trust claim.
+        replay=remote_compare()
+        need(replay.returncode==0 and
+             json.loads(replay.stdout.split('=',1)[1]).get('sequence')==2 and
+             json.loads(replay.stdout.split('=',1)[1]).get(
+                 'witness_root_rollback_resistant') is False,
+             'CI_REMOTE_SIMULATED_FULL_ROOT_ROLLBACK_MISCLASSIFIED')
+        for target,raw in ((third_entry,third_bytes),
+                           (witness_state2,remote_last_bytes)):
+            fd_restore=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|
+                               os.O_NOFOLLOW,0o600)
+            try:
+                pos=0
+                while pos<len(raw):
+                    pos+=os.write(fd_restore,raw[pos:])
+                os.fsync(fd_restore)
+            finally:
+                os.close(fd_restore)
+        sign_witness(3)
+        need(remote_compare().returncode==0,
+             'CI_REMOTE_SIMULATED_RESTORED_LATEST_NOT_MATCHED')
+        # No witness service = hard refusal, never local-only fallback.
+        unavailable=remote_parent/'unreachable'/'witness-store'
+        denied=remote_compare(unavailable)
+        need(denied.returncode==78 and 'REFUSED:' in denied.stderr,
+             'CI_REMOTE_SIMULATED_WITNESS_OUTAGE_FELL_BACK_TO_LOCAL')
+        # Crash after exclusive state-name creation poisons the remote
+        # simulator. No automatic delete, replay, override or recovery.
+        poison_remote_parent=remote_parent/'ci-interrupted'
+        poison_remote_parent.mkdir(mode=0o700)
+        poison_remote=poison_remote_parent/'witness-store'
+        poison_remote.mkdir(mode=0o700)
+        poison_boot=remote_run(['bootstrap',str(poison_remote),
+                                *witness_inputs,third_sha,*checkpoint_inputs])
+        need(poison_boot.returncode==0,
+             'CI_REMOTE_SIMULATED_POISON_BOOTSTRAP_FAILED:'+poison_boot.stderr[-220:])
+        poison_name=poison_remote/'state-000000000002.json'
+        poison_fd=os.open(poison_name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|
+                          os.O_NOFOLLOW,0o600)
+        os.close(poison_fd)
+        for cmd in (
+            ['compare',str(poison_remote),*witness_inputs,*checkpoint_inputs],
+            ['publish',str(poison_remote),*witness_inputs,
+             'e'*64,*checkpoint_inputs,'3',third_sha],
+        ):
+            refused=remote_run(cmd)
+            need(refused.returncode==78 and
+                 'REMOTE_WITNESS_' in refused.stderr,
+                 'CI_REMOTE_SIMULATED_INTERRUPTED_STATE_RECOVERED_UNSAFELY')
+        installed_unchanged(old,old_archive,host,baseline)
         poison_path = ledger_parent / 'ci-interrupted' / 'approval-ledger'
         poison_path.parent.mkdir(mode=0o700)
         poison_path.mkdir(mode=0o700)
@@ -926,6 +1053,13 @@ def execute(old_archive):
             'ci_witness_signer_is_owner_approved': False,
             'ci_witness_latest_sha_authenticated_out_of_band': False,
             'ci_witness_external_independent_storage_proven': False,
+            'ci_same_vm_monotonic_cas_one_winner_verified': True,
+            'ci_same_vm_witness_outage_fails_closed': True,
+            'ci_same_vm_witness_crash_poison_verified': True,
+            'ci_local_ahead_and_tail_rollback_refused': True,
+            'ci_both_stores_root_rollback_counterexample_demonstrated': True,
+            'ci_independent_remote_witness_deployed': False,
+            'ci_cross_store_atomic_commit_proven': False,
             'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
