@@ -341,7 +341,7 @@ def execute(old_archive):
         link.symlink_to(standalone)
         denied = run(launcher[:6] + [str(link)] + tail, 45)
         need(denied.returncode == 78 and
-             'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr and
+             'EXTERNAL_SOURCE_OPEN_REFUSED' in denied.stderr and
              'VERIFIED_SHA256:' not in denied.stderr,
              'EXTERNAL_SYMLINK_BOOTSTRAP_NOT_REFUSED')
         standalone.chmod(0o666)
