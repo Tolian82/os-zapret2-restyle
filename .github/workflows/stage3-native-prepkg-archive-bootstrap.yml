@@ -21,6 +21,8 @@ on:
       - scripts/test-stage3-prepkg-witness-operation.py
       - scripts/stage3-prepkg-signed-status.py
       - scripts/test-stage3-prepkg-signed-status.py
+      - scripts/stage3-prepkg-remote-witness-ci.py
+      - scripts/test-stage3-prepkg-remote-witness-ci.py
       - scripts/test-stage3-prepkg-trust-seed.py
       - scripts/stage3-prepkg-verified-eval.py
       - scripts/test-stage3-prepkg-verified-eval.py
@@ -56,7 +58,7 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-approval-ledger.py scripts/test-stage3-prepkg-approval-ledger.py scripts/stage3-prepkg-checkpoint-witness.py scripts/test-stage3-prepkg-checkpoint-witness.py scripts/stage3-prepkg-monotonic-witness.py scripts/test-stage3-prepkg-monotonic-witness.py scripts/stage3-prepkg-witness-operation.py scripts/test-stage3-prepkg-witness-operation.py scripts/stage3-prepkg-signed-status.py scripts/test-stage3-prepkg-signed-status.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-approval-ledger.py scripts/test-stage3-prepkg-approval-ledger.py scripts/stage3-prepkg-checkpoint-witness.py scripts/test-stage3-prepkg-checkpoint-witness.py scripts/stage3-prepkg-monotonic-witness.py scripts/test-stage3-prepkg-monotonic-witness.py scripts/stage3-prepkg-witness-operation.py scripts/test-stage3-prepkg-witness-operation.py scripts/stage3-prepkg-signed-status.py scripts/test-stage3-prepkg-signed-status.py scripts/stage3-prepkg-remote-witness-ci.py scripts/test-stage3-prepkg-remote-witness-ci.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
           python3.13 scripts/test-native-prepkg-standalone.py -v
           python3.13 scripts/test-stage3-prepkg-operator-approval.py -v
@@ -66,6 +68,7 @@ jobs:
           python3.13 scripts/test-stage3-prepkg-monotonic-witness.py -v
           python3.13 scripts/test-stage3-prepkg-witness-operation.py -v
           python3.13 scripts/test-stage3-prepkg-signed-status.py -v
+          python3.13 scripts/test-stage3-prepkg-remote-witness-ci.py -v
           python3.13 scripts/test-stage3-prepkg-verified-eval.py -v
           python3.13 scripts/test-stage3-prepkg-signed-provenance.py -v
       - name: Real official Mk archive pre-pkg source on old 0.6.2_1 disposable OPNsense
@@ -86,3 +89,4 @@ jobs:
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE3_PREPKG_ARCHIVE_BOOTSTRAP=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage3-native-prepkg-archive-bootstrap.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
             /usr/local/bin/python3 scripts/test-stage3-prepkg-signed-status.py -v
+            /usr/local/bin/python3 scripts/test-stage3-prepkg-remote-witness-ci.py -v
