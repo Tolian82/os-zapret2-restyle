@@ -22,7 +22,7 @@ spec.loader.exec_module(m)
 class NativeArchiveBootstrapContracts(unittest.TestCase):
     def fixture(self):
         modules = {name:(m.PRODUCT / name).read_bytes() for name in m.MODULES}
-        manifest = {'name':m.NAME, 'version':'0.6.2_114',
+        manifest = {'name':m.NAME, 'version':'0.6.2_115',
                     'abi':'FreeBSD:15:amd64','arch':'freebsd:15:x86:64',
                     'files':{'/' + m.DEST + name:'1$sha' for name in m.MODULES}}
         return modules, manifest
@@ -56,7 +56,7 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
             result = m.staged_source_from_native_archive(
-                Path('/root/os-zapret2-restyle-0.6.2_114.pkg'),'0.6.2_114',
+                Path('/root/os-zapret2-restyle-0.6.2_115.pkg'),'0.6.2_115',
                 sha,folder)
             self.assertEqual(check.call_count,2)
         return result
@@ -139,8 +139,8 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                  patch.object(m,'read_only') as tar:
                 with self.assertRaisesRegex(m.candidate.CandidateRefusal,'SHA_MISMATCH'):
                     m.staged_source_from_native_archive(
-                        Path('/root/os-zapret2-restyle-0.6.2_114.pkg'),
-                        '0.6.2_114','0'*64,Path(tmp))
+                        Path('/root/os-zapret2-restyle-0.6.2_115.pkg'),
+                        '0.6.2_115','0'*64,Path(tmp))
                 tar.assert_not_called()
                 self.assertEqual(os.listdir(tmp),[])
 
@@ -167,6 +167,13 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         self.assertIn("'approval_policy_expiry_and_revocation_negatives_verified': True",source)
         self.assertIn("'approval_policy_authoritative_freshness': False",source)
         self.assertIn("'approval_token_one_use_consumption_implemented': False",source)
+        self.assertIn("'ci_local_one_use_ledger_exclusive_concurrency_verified': True",source)
+        self.assertIn("'ci_local_one_use_ledger_monotonic_replay_refusals_verified': True",source)
+        self.assertIn("'ci_local_one_use_ledger_crash_poison_refusal_verified': True",source)
+        self.assertIn("'ci_local_one_use_ledger_is_owner_authority': False",source)
+        self.assertIn("'ci_local_ledger_has_external_rollback_witness': False",source)
+        self.assertIn("LOCAL_LEDGER_COMPETING_CONSUMPTIONS_NOT_EXCLUSIVE",source)
+        self.assertIn("LOCAL_LEDGER_INTERRUPTED_INTENT_UNSAFELY_REPAIRED",source)
         self.assertIn("'SIGNED_APPROVAL_POLICY_NEGATIVE_ACCEPTED:' + name",source)
         self.assertIn("'OPERATOR_RECEIPT_REVOKED_IN_POLICY'",source)
         self.assertIn("'OPERATOR_APPROVAL_AUTHORITY_REVOKED_IN_POLICY'",source)
