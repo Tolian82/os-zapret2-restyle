@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.37 `_127`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.38 `_128`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -110,3 +110,7 @@ There is no authenticated external channel for the initial `-c` seed or authorit
 ## _127 original-FD9 late signed-grant drift — CI-only
 
 The _126 native negative altered a signed grant BEFORE worker verification. The _127 disposable native scenario retains authentic original FD9 after a successful initial grant verification, then pauses immediately before its second signature check; the controller changes one signed byte without changing the detached RSA signature. The worker must refuse before native pkg and preserve the genuine installed predecessor snapshot. [Exact scope](../verification/evidence/2026-11-04-v0.6.2_127-stage3-late-signed-grant-drift-no-pkg.md). Same-runner signer and controller are NOT independent owner authorization; no off-host witness, unavoidable supported Web/firmware/pkg gateway or root bypass prevention. **LH-08/AC-11 BLOCKED.**
+
+## _128 native archive drift after first approved grant — only CI proof
+
+[_128 original-FD9 native archive negative](../verification/evidence/2026-11-04-v0.6.2_128-stage3-late-native-archive-drift-no-pkg.md) advances the _127 signed-JSON test by tampering **the actual official Mk successor archive** after the first authentic grant verification and before the last pre-`pkg` recheck. The CI controller must verify original held FD9 and exact worker PID/nonce/head, change precisely one byte of an already SHA-measured owner-only .pkg, then resume the detached worker. The same final grant verifier must refuse the mismatched archive digest before a native pkg call; the old installed owner, Config and IPFW must remain unchanged. This test does not seal the archive against a malicious privileged actor **after** final verification; no open-FD package execution proof, independently enrolled owner key, off-host monotonic witness, supported firmware/Web/pkg entrypoint or safe rollback is supplied. **LH-08/AC-11 BLOCKED.**
