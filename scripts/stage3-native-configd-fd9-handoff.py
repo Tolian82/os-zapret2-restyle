@@ -441,7 +441,15 @@ def worker(head):
                        'ci_stdin_frozen_manifest_verified',
                        'ci_stdin_rebound_sha256',
                        'ci_stdin_original_frozen_inode')
-            swap_result={key:verdict.pop(key) for key in swap_keys}
+            if native_late:
+                # The genuine late-journal *refusal* returns before native
+                # pkg and has no positive stdin evidence. Never demand a
+                # success-only sidecar or turn that safe veto into KeyError.
+                need(not any(key in verdict for key in swap_keys),
+                     'NEGATIVE_NATIVE_OWNER_CARRIED_STDIN_SUCCESS_EVIDENCE')
+                swap_result={}
+            else:
+                swap_result={key:verdict.pop(key) for key in swap_keys}
             if native_stdin_path_swap_mode():
                 need(swap_result['ci_stdin_path_rebound_after_snapshot'] is True and
                      swap_result['ci_stdin_frozen_manifest_verified'] is True and
@@ -455,7 +463,7 @@ def worker(head):
                     'original_fd9_inode':fields['inode'],
                     'nonce_sha256':digest
                 },sort_keys=True).encode())
-            else:
+            elif not native_late:
                 need(swap_result['ci_stdin_path_rebound_after_snapshot'] is False and
                      swap_result['ci_stdin_frozen_manifest_verified'] is False and
                      swap_result['ci_stdin_rebound_sha256'] is None and
