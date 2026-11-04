@@ -147,7 +147,7 @@ class TrustSeedContracts(unittest.TestCase):
                     json.dumps(dict(valid, repository="different/repo")).encode(),
                     json.dumps(dict(valid, public_key_sha256="0" * 64)).encode(),
                     json.dumps(dict(valid, incoming_version="0.6.2_1")).encode(),
-                    json.dumps(valid).rstrip().rstrip(b"}") +
+                    json.dumps(valid).encode().rstrip().rstrip(b"}") +
                         b',"source_commit":"2"}',
                     b"not-json",
                     b" " * 4096,
