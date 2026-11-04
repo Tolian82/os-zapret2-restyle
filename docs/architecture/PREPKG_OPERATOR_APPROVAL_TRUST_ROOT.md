@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.34 `_124`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.36 `_126`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -75,6 +75,12 @@ The _123 operator-signed archive scope is now evaluated inside the **same detach
 
 **No trusted operator or external witness:** the same disposable runner controls the ephemeral key and expected fingerprint, and the grant's client/status role identities are synthetic. A positive signed local `RESERVE` scope is NOT an external monotonic one-use `CONSUMED` authorization. The test configd route does not protect supported firmware/Web/manual root pkg. Original FD9 is proven only in this bounded native path; root bypass, post-check races, crash recovery, true remote authority and real operator approval remain absent. **LH-08/AC-11 BLOCKED.**
 
+## _126 genuine native signed-byte refusal — still NOT owner trust
+
+The _124 CI signed authorization was verified in the real configd detached worker under transferred original FD9 before a genuine native `pkg add -f`. _126 adds the missing real **refusal** counterpart: controller mutates one signed grant field after ephemeral signature issuance, leaves the signature itself unchanged, and requires the guest worker to report the precise signature rejection under the original FD9. The controller must see no `DONE` or successful grant receipt and must independently compare genuine old pkgdb/Config/process/IPFW snapshot; the new native CI job is separate from both _124 positive and late-journal refusal jobs. [Exact _126 source/native evidence](../verification/evidence/2026-11-04-v0.6.2_126-stage3-native-tampered-operator-grant-no-pkg.md).
+
+This tests just the selected CI operator signature decision against byte tampering. **CI still controls both signing authority and expected key fingerprint**; owner has not enrolled an out-of-band anchor or commissioned a separately administered witness. No real protected root pkg execution path, off-host durable monotonic CONSUMED transaction, crash recovery, production routing change or owner authority results from this test. **LH-08/AC-11 BLOCKED.**
+
 ## Minimal independent approval record — future operator responsibility
 
 Record, in a controlled owner-reviewed audit trail *outside CI and incoming archives*: separately verified authority public PEM SHA; verification of its possession/provenance and authorized signers; initial `-c` seed exact SHA/source; helper/verifier SHA; source commit approved for that particular operation; expected native ABI/version/current and old archive SHA; valid-from, planned expiry/revocation, no-downgrade and one-use transaction intention; appropriate human approval. Keep issuer private signing keys offline. No security claim about these fields is justified by typing the hash manually or by replaying a previous valid signature.
@@ -99,4 +105,4 @@ Record, in a controlled owner-reviewed audit trail *outside CI and incoming arch
 
 There is no authenticated external channel for the initial `-c` seed or authority fingerprint, no production signer/approval key, no rotation/replay policy, no unavoidable OPNsense firmware/Web/managed CLI pre-pkg gate, no full old RUNNING/STOPPED PID/FD9/IPFW/Config/hook ownership, no uninterrupted FD9 through actual destructive pkg and no bounded concurrency/cancellation/rollback evidence. Direct privileged `pkg` is a separate explicitly unsupported bypass. Native disposable tests cannot approve the actual owner appliance.
 
-**Next after _124 CI qualification:** owner-controlled production authority and out-of-band seed/source/approval verification design, explicit key-rotation and freshness/refusal contract, then supported pre-pkg gateway with full old-owner and real native pkg transaction negative postconditions. **LH-08/AC-11 BLOCKED**. Published `0.6.2_1.pkg`, four package hooks, owner OPNsense and stable `v0.6.2` remain untouched.
+**Next after _126 CI qualification:** owner-controlled production authority and out-of-band seed/source/approval verification design, explicit key-rotation and freshness/refusal contract, then supported pre-pkg gateway with full old-owner and real native pkg transaction negative postconditions. **LH-08/AC-11 BLOCKED**. Published `0.6.2_1.pkg`, four package hooks, owner OPNsense and stable `v0.6.2` remain untouched.
