@@ -421,8 +421,10 @@ def execute(old_archive):
             ('public_key_sha256', '0'*64, 'PUBLIC_KEY_SHA'),
             ('source_commit', 'f'*40, 'SOURCE_COMMIT'),
             ('source_commit', 'bad-commit', 'MALFORMED_COMMIT'),
-            ('incoming_sha256', '0'*64, 'INCOMING_ARCHIVE_SHA'),
-            ('predecessor_sha256', '0'*64, 'OLD_ARCHIVE_SHA'),
+            ('incoming_sha256', '0'*64, 'MALFORMED_INCOMING_SHA'),
+            ('predecessor_sha256', '0'*64, 'MALFORMED_OLD_SHA'),
+            ('incoming_sha256', 'c'*64, 'VALID_BUT_UNAPPROVED_INCOMING_SHA'),
+            ('predecessor_sha256', 'c'*64, 'VALID_BUT_UNAPPROVED_OLD_SHA'),
         ):
             changed = json.loads(original_receipt)
             changed[field] = bad
@@ -430,7 +432,11 @@ def execute(old_archive):
                                            separators=(',',':')).encode())
             denied = run(launcher+tail,45)
             need(denied.returncode == 78 and 'REFUSED:' in denied.stderr and
-                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr,
+                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr and
+                 (reason not in ('VALID_BUT_UNAPPROVED_INCOMING_SHA',
+                                 'VALID_BUT_UNAPPROVED_OLD_SHA') or
+                  'SIGNED_PROVENANCE_ARCHIVES_NOT_IN_OPERATOR_RECEIPT'
+                  in denied.stderr),
                  'RECEIPT_NEGATIVE_NOT_REFUSED:' + reason)
             receipt.write_bytes(original_receipt)
             installed_unchanged(old,old_archive,host,baseline)
