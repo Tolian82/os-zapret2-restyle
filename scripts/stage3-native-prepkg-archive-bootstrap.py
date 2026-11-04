@@ -174,7 +174,7 @@ def execute(old_archive):
     incoming = ROOT / built['output']
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
-    m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*, revision)
+    m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
     need(m is not None and m.group(1) == '105', 'NATIVE_BOOTSTRAP_REVISION_NOT_105')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
