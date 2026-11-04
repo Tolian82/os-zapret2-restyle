@@ -65,7 +65,10 @@ def regular_root_bytes(path):
         before = os.fstat(fd)
         require(stat.S_ISREG(before.st_mode) and before.st_uid == 0 and
                 before.st_nlink == 1 and not (stat.S_IMODE(before.st_mode) & 0o022),
-                'OLD_OWNED_FILE_UNTRUSTED:' + str(path))
+                'OLD_OWNED_FILE_UNTRUSTED:' + str(path) +
+                ':uid=' + str(before.st_uid) +
+                ':links=' + str(before.st_nlink) +
+                ':mode=' + format(stat.S_IMODE(before.st_mode), '04o'))
         chunks = []
         while True:
             chunk = os.read(fd, 1024 * 1024)
