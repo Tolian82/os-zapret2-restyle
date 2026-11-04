@@ -150,8 +150,16 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         self.assertIn("'native_pkg_mutation_after_old_install': False",source)
         self.assertIn("'lh08_ac11_accepted': False",source)
         for forbidden in ("'pkg', 'add'","'pkg', 'upgrade'","'pkg', 'delete'",
-                          "subprocess.Popen(", "os.system(", "os.execv(", "os.rename("):
+                          "os.system(", "os.execv(", "os.rename("):
             self.assertNotIn(forbidden,source)
+        # Exactly one intentionally bounded Popen is used to attach the
+        # disposable CI-only operator test process to its pseudo-terminal.
+        # It never executes pkg; all production mutations remain prohibited.
+        self.assertEqual(source.count("subprocess.Popen("),1)
+        self.assertIn("master_fd, slave_fd = pty.openpty()",source)
+        self.assertIn("proc = subprocess.Popen(manual, stdin=slave_fd, stdout=slave_fd,",source)
+        self.assertIn("manual = [sys.executable, '-I', '-B', str(approval_tool),",source)
+        self.assertIn("'ci_operator_pty_receipt_record_and_inspect_verified': True",source)
 
 
 if __name__=='__main__':
