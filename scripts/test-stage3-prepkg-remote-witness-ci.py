@@ -44,6 +44,18 @@ class DurableWitnessTests(unittest.TestCase):
                            check=True, timeout=15)
         cls.pub = cls.public.read_bytes()
         cls.keysha = hashlib.sha256(cls.pub).hexdigest()
+        cls.operator_secret = root / "operator-private.pem"
+        cls.operator_public = root / "operator-public.pem"
+        subprocess.run(["/usr/bin/openssl", "genpkey", "-algorithm", "RSA",
+                        "-pkeyopt", "rsa_keygen_bits:2048", "-out",
+                        str(cls.operator_secret)], capture_output=True,
+                       check=True, timeout=15)
+        subprocess.run(["/usr/bin/openssl", "pkey", "-in",
+                        str(cls.operator_secret), "-pubout", "-out",
+                        str(cls.operator_public)], capture_output=True,
+                       check=True, timeout=15)
+        cls.operator_public.chmod(0o600)
+        cls.operator_sha = hashlib.sha256(cls.operator_public.read_bytes()).hexdigest()
         cls.ca_key, cls.ca_cert = root / "ca-key.pem", root / "ca.crt"
         cls.rogue_ca_key, cls.rogue_ca_cert = root / "rogue-ca-key.pem", root / "rogue-ca.crt"
 
@@ -117,22 +129,73 @@ class DurableWitnessTests(unittest.TestCase):
         self.assertEqual(self.db.stat().st_mode & 0o777, 0o600)
         self.server = None
         self.port = None
-        self.start_server()
         self.serial = 0
         self.op = "1" * 64
         self.op2 = "2" * 64
         self.payload = "a" * 64
         self.checkpoint = "b" * 64
+        self.operator_grant = self.root / "operation-grant.json"
+        self.operator_sig = self.root / "operation-grant.sig"
+        now = int(time.time())
+        entries = [
+            {"operation_id": op, "payload_sha256": self.payload,
+             "checkpoint_sha256": cp, "checkpoint_sequence": seq}
+            for op, cp, seq in (
+                (self.op, self.checkpoint, 6),
+                (self.op2, self.checkpoint, 6),
+                (self.op2, "c" * 64, 6),
+                (self.op, self.checkpoint, 10),
+                (self.op2, "c" * 64, 1))
+        ]
+        self.policy = {
+            "schema": "zapret2-ci-operator-operation-grant-v1",
+            "repository": "Tolian82/os-zapret2-restyle",
+            "issuer": "CI_EPHEMERAL_OPERATOR_NOT_OWNER_APPROVED",
+            "sequence": 1, "operator_authority_sha256": self.operator_sha,
+            "status_signer_sha256": self.keysha,
+            "client_leaf_sha256": self.client_sha,
+            "source_commit": "cfd7b0b6263d0a9344ebed2c773db34ee392ddad",
+            "old_pkg_sha256": "d" * 64, "new_pkg_sha256": "e" * 64,
+            "not_before": now - 60, "not_after": now + 600,
+            "actions": ["RESERVE", "CONSUME", "ABORT", "STATUS"],
+            "entries": entries
+        }
+        self.seal_policy()
+        self.start_server()
 
     def tearDown(self):
         self.stop_server()
 
+    def seal_policy(self, private=None):
+        raw = (json.dumps(self.policy, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        self.operator_grant.write_bytes(raw)
+        self.operator_grant.chmod(0o600)
+        result = subprocess.run(
+            ["/usr/bin/openssl", "dgst", "-sha256", "-sign",
+             str(private or self.operator_secret)], input=raw,
+            capture_output=True, check=True, timeout=10)
+        self.operator_sig.write_bytes(result.stdout)
+        self.operator_sig.chmod(0o600)
+
+    def serve_args(self):
+        return [sys.executable, "-u",
+                str(HERE / "stage3-prepkg-remote-witness-ci.py"),
+                "serve", str(self.db), str(self.secret),
+                str(self.ca_cert), str(self.tls_server_cert),
+                str(self.tls_server_key), str(self.client_sha),
+                str(self.operator_grant), str(self.operator_sig),
+                str(self.operator_public), str(self.operator_sha)]
+
+    def expect_refused_start(self, expected):
+        self.stop_server()
+        attempt = subprocess.run(self.serve_args(), env=self.env,
+                                 capture_output=True, timeout=8)
+        self.assertEqual(attempt.returncode, 78, attempt.stderr.decode())
+        self.assertIn(expected.encode(), attempt.stderr)
+        self.assertEqual(self.rows(), ([], 0))
+
     def start_server(self):
-        proc = subprocess.Popen([sys.executable, "-u",
-                                 str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                                 "serve", str(self.db), str(self.secret),
-                                 str(self.ca_cert), str(self.tls_server_cert),
-                                 str(self.tls_server_key), str(self.client_sha)],
+        proc = subprocess.Popen(self.serve_args(),
                                 env=self.env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True)
         self.server = proc
@@ -318,10 +381,7 @@ class DurableWitnessTests(unittest.TestCase):
     def test_corrupted_database_refuses_without_auto_recreation(self):
         self.stop_server()
         self.db.write_bytes(b"not an SQLite journal")
-        attempt = subprocess.run([sys.executable, str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                                  "serve", str(self.db), str(self.secret),
-                                  str(self.ca_cert), str(self.tls_server_cert),
-                                  str(self.tls_server_key), str(self.client_sha)],
+        attempt = subprocess.run(self.serve_args(),
                                  env=self.env, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, timeout=5)
         self.assertEqual(attempt.returncode, 78)
@@ -430,6 +490,104 @@ class DurableWitnessTests(unittest.TestCase):
         with self.assertRaises((ssl.SSLError, OSError, witness.Refusal)):
             self.send(data, **kwargs)
 
+
+    def test_signed_operator_grant_allows_only_exact_preapproved_operations(self):
+        self.refused(self.req("RESERVE", operation="3" * 64))
+        self.refused(self.req("RESERVE", payload="f" * 64))
+        self.refused(self.req("RESERVE", cp="f" * 64))
+        self.refused(self.req("RESERVE", cpseq=7))
+        self.assertEqual(self.rows(), ([], 0))
+        self.assertEqual(self.verified(self.req(), 7)["operation_action"], "RESERVED")
+        self.assertEqual(self.rows()[1], 1)
+
+    def test_signed_operator_grant_action_rights_refuse_before_sqlite(self):
+        self.stop_server()
+        self.policy["actions"] = ["STATUS"]
+        self.seal_policy()
+        self.start_server()
+        self.refused(self.req("RESERVE"))
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_operator_signature_tamper_refuses_before_listening(self):
+        raw = self.operator_grant.read_bytes()
+        self.operator_grant.write_bytes(raw.replace(b'"old_pkg_sha256":"', b'"old_pkg_sha256":"f'))
+        self.operator_grant.chmod(0o600)
+        self.expect_refused_start("GRANT_OPERATOR_SIGNATURE_INVALID")
+
+    def test_operator_detached_signature_substitution_refuses_before_listening(self):
+        self.operator_sig.write_bytes(b"forged-operator")
+        self.operator_sig.chmod(0o600)
+        self.expect_refused_start("GRANT_OPERATOR_SIGNATURE_INVALID")
+
+    def test_operator_signer_expected_fingerprint_wrong_refuses(self):
+        self.operator_sha = "f" * 64
+        self.expect_refused_start("GRANT_OPERATOR_AUTHORITY_FINGERPRINT_MISMATCH")
+
+    def test_operator_signed_wrong_client_leaf_refuses(self):
+        self.policy["client_leaf_sha256"] = "f" * 64
+        self.seal_policy()
+        self.expect_refused_start("GRANT_TRUST_ROLE_BINDING_MISMATCH:client_leaf_sha256")
+
+    def test_operator_signed_wrong_response_key_refuses(self):
+        self.policy["status_signer_sha256"] = "f" * 64
+        self.seal_policy()
+        self.expect_refused_start("GRANT_TRUST_ROLE_BINDING_MISMATCH:status_signer_sha256")
+
+    def test_operator_wrong_repository_or_issuer_refuses_even_if_resigned(self):
+        self.policy["repository"] = "attacker/fake"
+        self.seal_policy()
+        self.expect_refused_start("GRANT_SCHEMA_OR_ISSUER_INVALID")
+
+    def test_operator_expired_or_future_grant_refuses_on_start(self):
+        now = int(time.time())
+        self.policy["not_before"], self.policy["not_after"] = now - 120, now - 60
+        self.seal_policy()
+        self.expect_refused_start("GRANT_EXPIRED_OR_NOT_YET_VALID")
+        self.policy["not_before"], self.policy["not_after"] = now + 120, now + 240
+        self.seal_policy()
+        self.expect_refused_start("GRANT_EXPIRED_OR_NOT_YET_VALID")
+
+    def test_operator_signed_grant_expiring_during_runtime_refuses_before_sqlite(self):
+        self.stop_server()
+        now = int(time.time())
+        self.policy["not_before"], self.policy["not_after"] = now - 30, now + 2
+        self.seal_policy()
+        self.start_server()
+        time.sleep(4)
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_operator_valid_sig_but_duplicate_grant_entry_refuses(self):
+        self.policy["entries"].append(dict(self.policy["entries"][0]))
+        self.seal_policy()
+        self.expect_refused_start("GRANT_DUPLICATE_ENTRY")
+
+    def test_operator_private_file_mode_and_symlink_refuses(self):
+        self.stop_server()
+        self.operator_grant.chmod(0o644)
+        self.expect_refused_start("GRANT_PRIVATE_FILE_UNSAFE")
+        self.operator_grant.chmod(0o600)
+        destination = self.root / "saved-grant.json"
+        self.operator_grant.rename(destination)
+        self.operator_grant.symlink_to(destination)
+        self.expect_refused_start("CI_WITNESS_REFUSED")
+
+    def test_operator_same_key_as_status_signer_refuses_roles(self):
+        self.stop_server()
+        self.public.chmod(0o600)
+        self.operator_public = self.public
+        self.operator_sha = self.keysha
+        self.policy["operator_authority_sha256"] = self.operator_sha
+        self.seal_policy(private=self.secret)
+        self.expect_refused_start("GRANT_OPERATOR_AND_STATUS_SIGNER_MUST_DIFFER")
+
+    def test_operator_old_client_legacy_serve_cannot_bypass_policy(self):
+        args = self.serve_args()[:9]
+        proc = subprocess.run(args, env=self.env, capture_output=True, timeout=8)
+        self.assertEqual(proc.returncode, 78)
+        self.assertIn(b"WITNESS_CLI_INVALID", proc.stderr)
+
+
     def test_authority_not_approved_and_no_pkg_execution_paths(self):
         source = (HERE / "stage3-prepkg-remote-witness-ci.py").read_text()
         for forbidden in ("pkg add", "pkg upgrade", "pkg delete", "os.system(",
@@ -441,10 +599,7 @@ class DurableWitnessTests(unittest.TestCase):
     def test_cli_disallows_execution_without_disposable_opt_in(self):
         env = dict(os.environ)
         env.pop("ZAPRET2_CI_REMOTE_WITNESS_ONLY", None)
-        proc = subprocess.run([sys.executable, str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                               "serve", str(self.db), str(self.secret),
-                               str(self.ca_cert), str(self.tls_server_cert),
-                               str(self.tls_server_key), str(self.client_sha)],
+        proc = subprocess.run(self.serve_args(),
                               env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=5)
         self.assertEqual(proc.returncode, 78)

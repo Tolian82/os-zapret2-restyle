@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.32 _122 CI-only signed operator-grant exact-operation authorization](verification/evidence/2026-11-04-v0.6.2_122-stage3-signed-operator-grant.md) — separate operator signature, no unapproved SQLite action or real pkg grant.
+
 - [Stage 3.31 _121 CI-only mutually authenticated TLS witness transport](verification/evidence/2026-11-04-v0.6.2_121-stage3-ci-mtls-witness-identity.md) — both peer chains and exact TLS leaf SHA pins; no independent owner trust or pkg authorization.
 
 - [Stage 3.30 _120 CI-only separately running SQLite/RSA witness protocol](verification/evidence/2026-11-04-v0.6.2_120-stage3-ci-socket-witness.md) — real loopback process, durable one-use challenge, signed read-back and root-rollback negative; no owner-approved external witness or pkg admission.

@@ -9,6 +9,8 @@ server functions require an explicit CI opt-in and bind only to 127.0.0.1.
 import base64
 import hashlib
 import hmac
+import importlib.util
+from pathlib import Path
 import json
 import os
 import re
@@ -31,6 +33,13 @@ ACTIONS = ("RESERVE", "CONSUME", "ABORT", "STATUS")
 MAX_REQUEST = 2048
 MAX_ENVELOPE = 8192
 TIMEOUT = 4
+
+# Policy is an independent signed CI artifact; never silently skip admission.
+_spec = importlib.util.spec_from_file_location(
+    "stage3_ci_signed_operator_grant",
+    Path(__file__).resolve().parent / "stage3-prepkg-operator-operation-grant-ci.py")
+grant = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(grant)
 
 
 class Refusal(Exception):
@@ -207,6 +216,8 @@ class Handler(socketserver.BaseRequestHandler):
             else:
                 raise Refusal("REQUEST_TOO_LARGE")
             request = inspect(unique_json(bytes(frame).decode("utf-8")))
+            # Signed operator scope is checked before taking a SQLite lock.
+            grant.authorize(self.server.operator_policy, request)
             raw = transition(self.server.database, request)
             if request.get("drop_after_commit", False):
                 return  # Deliberate CI lost-reply injection AFTER SQLite commit.
@@ -214,7 +225,7 @@ class Handler(socketserver.BaseRequestHandler):
             envelope = {"message": base64.b64encode(raw).decode("ascii"),
                         "signature": base64.b64encode(signed).decode("ascii")}
             self.request.sendall((json.dumps(envelope, separators=(",", ":")) + "\n").encode())
-        except (Refusal, sqlite3.Error, OSError, ValueError, UnicodeError) as exc:
+        except (Refusal, grant.Refusal, sqlite3.Error, OSError, ValueError, UnicodeError) as exc:
             try:
                 self.request.sendall((json.dumps({"refused": type(exc).__name__ + ":" + str(exc)}) + "\n").encode())
             except OSError:
@@ -304,27 +315,34 @@ def main(args):
     try:
         need(os.environ.get("ZAPRET2_CI_REMOTE_WITNESS_ONLY") == "1",
              "WITNESS_DISPOSABLE_CI_OPTIN_REQUIRED")
-        need(len(args) in (2, 7), "WITNESS_CLI_INVALID")
+        need(len(args) in (2, 11), "WITNESS_CLI_INVALID")
         if len(args) == 2 and args[0] == "init":
             initialize(args[1])
             print("CI_WITNESS_DB_INITIALIZED", flush=True)
-        elif len(args) == 7 and args[0] == "serve":
-            path, key, ca, certificate, tls_key, client_sha = args[1:]
+        elif len(args) == 11 and args[0] == "serve":
+            (path, key, ca, certificate, tls_key, client_sha,
+             grant_path, grant_sig, operator_pem, operator_key_sha) = args[1:]
             need(isinstance(client_sha, str) and SHA.fullmatch(client_sha) is not None and
                  client_sha != "0" * 64, "WITNESS_CLIENT_CERT_PIN_REQUIRED")
             need(os.path.exists(key) and os.path.isfile(key), "WITNESS_PRIVATE_SIGNER_MISSING")
+            # The signed status key is derived from the actual private key,
+            # never an unauthenticated caller-supplied matching digest.
+            operator_policy = grant.load(
+                grant_path, grant_sig, operator_pem, operator_key_sha,
+                grant.signer_sha(key), client_sha)
             tls = server_tls_context(ca, certificate, tls_key)
             with open_existing(path):
                 pass
             with Server(("127.0.0.1", 0), Handler, tls, client_sha) as service:
                 service.database = path
                 service.key = key
+                service.operator_policy = operator_policy
                 print("CI_WITNESS_PORT=" + str(service.server_address[1]), flush=True)
                 service.serve_forever(poll_interval=0.2)
         else:
             raise Refusal("WITNESS_CLI_INVALID")
         return 0
-    except (Refusal, OSError, ssl.SSLError, sqlite3.Error, ValueError) as exc:
+    except (Refusal, grant.Refusal, OSError, ssl.SSLError, sqlite3.Error, ValueError) as exc:
         print("CI_WITNESS_REFUSED:" + str(exc), file=sys.stderr)
         return 78
 
