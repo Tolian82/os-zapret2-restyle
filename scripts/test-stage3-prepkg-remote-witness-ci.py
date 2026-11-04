@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import socket
 import select
@@ -56,6 +57,12 @@ class DurableWitnessTests(unittest.TestCase):
                        check=True, timeout=15)
         cls.operator_public.chmod(0o600)
         cls.operator_sha = hashlib.sha256(cls.operator_public.read_bytes()).hexdigest()
+        # GitHub's exact checked-out PR head is passed explicitly to both
+        # Ubuntu and disposable OPNsense. The VM may not expose .git or mark
+        # its imported checkout safe for root; a git CLI read is not trust.
+        cls.source_commit = os.environ.get("ZAPRET2_CI_EXPECTED_HEAD_SHA", "")
+        if not re.fullmatch("[0-9a-f]{40}", cls.source_commit):
+            raise RuntimeError("CI_EXACT_HEAD_SHA_EXPLICITLY_REQUIRED")
         cls.ca_key, cls.ca_cert = root / "ca-key.pem", root / "ca.crt"
         cls.rogue_ca_key, cls.rogue_ca_cert = root / "rogue-ca-key.pem", root / "rogue-ca.crt"
 
@@ -134,6 +141,19 @@ class DurableWitnessTests(unittest.TestCase):
         self.op2 = "2" * 64
         self.payload = "a" * 64
         self.checkpoint = "b" * 64
+        self.old_version = "0.6.2_1"  # published old CI fixture identity
+        revision = re.search(r"(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$",
+                             (HERE.parent / "Makefile").read_text())
+        self.assertIsNotNone(revision)
+        self.new_version = (HERE.parent / "VERSION").read_text().strip() + "_" + revision.group(1)
+        self.old_archive = self.root / ("os-zapret2-restyle-" + self.old_version + ".pkg")
+        self.new_archive = self.root / ("os-zapret2-restyle-" + self.new_version + ".pkg")
+        self.old_archive.write_bytes(b"CI-ONLY-SYNTHETIC-OLD-PACKAGE-BYTES-v1")
+        self.new_archive.write_bytes(b"CI-ONLY-SYNTHETIC-NEW-PACKAGE-BYTES-v1")
+        self.old_archive.chmod(0o600)
+        self.new_archive.chmod(0o600)
+        self.old_hash = hashlib.sha256(self.old_archive.read_bytes()).hexdigest()
+        self.new_hash = hashlib.sha256(self.new_archive.read_bytes()).hexdigest()
         self.operator_grant = self.root / "operation-grant.json"
         self.operator_sig = self.root / "operation-grant.sig"
         now = int(time.time())
@@ -154,8 +174,9 @@ class DurableWitnessTests(unittest.TestCase):
             "sequence": 1, "operator_authority_sha256": self.operator_sha,
             "status_signer_sha256": self.keysha,
             "client_leaf_sha256": self.client_sha,
-            "source_commit": "cfd7b0b6263d0a9344ebed2c773db34ee392ddad",
-            "old_pkg_sha256": "d" * 64, "new_pkg_sha256": "e" * 64,
+            "source_commit": self.source_commit,
+            "old_pkg_sha256": self.old_hash, "new_pkg_sha256": self.new_hash,
+            "old_pkg_version": self.old_version, "new_pkg_version": self.new_version,
             "not_before": now - 60, "not_after": now + 600,
             "actions": ["RESERVE", "CONSUME", "ABORT", "STATUS"],
             "entries": entries
@@ -184,7 +205,8 @@ class DurableWitnessTests(unittest.TestCase):
                 str(self.ca_cert), str(self.tls_server_cert),
                 str(self.tls_server_key), str(self.client_sha),
                 str(self.operator_grant), str(self.operator_sig),
-                str(self.operator_public), str(self.operator_sha)]
+                str(self.operator_public), str(self.operator_sha),
+                self.source_commit, str(self.old_archive), str(self.new_archive)]
 
     def expect_refused_start(self, expected):
         self.stop_server()
@@ -586,6 +608,77 @@ class DurableWitnessTests(unittest.TestCase):
         proc = subprocess.run(args, env=self.env, capture_output=True, timeout=8)
         self.assertEqual(proc.returncode, 78)
         self.assertIn(b"WITNESS_CLI_INVALID", proc.stderr)
+
+
+
+    def test_measured_old_archive_tampered_after_start_is_refused(self):
+        self.old_archive.write_bytes(b"CI-ROOT-REPLACED-OLD-ARCHIVE")
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_measured_new_archive_tampered_after_start_is_refused(self):
+        self.new_archive.write_bytes(b"CI-ROOT-REPLACED-INCOMING")
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_measured_new_archive_missing_after_start_is_refused(self):
+        self.new_archive.unlink()
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_measured_old_archive_changed_after_reserve_blocks_consume(self):
+        self.verified(self.req(), 7)
+        original = self.rows()
+        self.old_archive.write_bytes(b"MODIFIED-BETWEEN-RESERVE-AND-CONSUME")
+        self.refused(self.req("CONSUME"))
+        self.assertEqual(self.rows(), original)
+
+    def test_measured_archive_bad_mode_refused_at_start(self):
+        self.old_archive.chmod(0o666)
+        self.expect_refused_start("GRANT_ARCHIVE_FILE_UNSAFE")
+
+    def test_measured_archive_valid_signature_wrong_old_hash_refused(self):
+        self.policy["old_pkg_sha256"] = "f" * 64
+        self.seal_policy()
+        self.expect_refused_start("GRANT_ARCHIVE_BYTES_NOT_SIGNED_DIGEST")
+
+    def test_measured_archive_valid_signature_wrong_new_hash_refused(self):
+        self.policy["new_pkg_sha256"] = "f" * 64
+        self.seal_policy()
+        self.expect_refused_start("GRANT_ARCHIVE_BYTES_NOT_SIGNED_DIGEST")
+
+    def test_signed_grant_different_checkout_commit_refused_at_start(self):
+        self.policy["source_commit"] = "f" * 40
+        self.seal_policy()
+        self.expect_refused_start("GRANT_SOURCE_COMMIT_NOT_EXPECTED")
+
+    def test_signed_grant_different_package_basename_refused(self):
+        self.policy["old_pkg_version"] = "8.8.8_1"
+        self.seal_policy()
+        self.expect_refused_start("GRANT_ARCHIVE_NAME_VERSION_INVALID")
+
+    def test_archive_path_symlink_replacement_after_start_refused(self):
+        target = self.root / "saved-package.pkg"
+        self.old_archive.rename(target)
+        self.old_archive.symlink_to(target)
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_archive_hardlink_duplicate_refused(self):
+        duplicate = self.root / "second-name.pkg"
+        os.link(self.old_archive, duplicate)
+        self.refused(self.req())
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_archive_replaced_with_same_bytes_is_not_false_identity_authority(self):
+        # The test accepts identical content at a new inode at startup:
+        # SHA verification is content, NOT proof that the installed pkgdb owns
+        # these bytes or that the filename cannot be swapped after this check.
+        self.old_archive.unlink()
+        self.old_archive.write_bytes(b"CI-ONLY-SYNTHETIC-OLD-PACKAGE-BYTES-v1")
+        self.old_archive.chmod(0o600)
+        self.assertEqual(self.verified(self.req(), 7)["operation_action"], "RESERVED")
+        self.assertFalse(self.verified(self.req("CONSUME"), 8)["production_pkg_authorized"])
 
 
     def test_authority_not_approved_and_no_pkg_execution_paths(self):

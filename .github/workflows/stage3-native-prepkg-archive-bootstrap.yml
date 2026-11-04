@@ -23,6 +23,7 @@ on:
       - scripts/test-stage3-prepkg-signed-status.py
       - scripts/stage3-prepkg-remote-witness-ci.py
       - scripts/stage3-prepkg-operator-operation-grant-ci.py
+      - scripts/stage3-prepkg-archive-bound-grant-native-ci.py
       - scripts/test-stage3-prepkg-remote-witness-ci.py
       - scripts/test-stage3-prepkg-trust-seed.py
       - scripts/stage3-prepkg-verified-eval.py
@@ -59,7 +60,8 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-approval-ledger.py scripts/test-stage3-prepkg-approval-ledger.py scripts/stage3-prepkg-checkpoint-witness.py scripts/test-stage3-prepkg-checkpoint-witness.py scripts/stage3-prepkg-monotonic-witness.py scripts/test-stage3-prepkg-monotonic-witness.py scripts/stage3-prepkg-witness-operation.py scripts/test-stage3-prepkg-witness-operation.py scripts/stage3-prepkg-signed-status.py scripts/test-stage3-prepkg-signed-status.py scripts/stage3-prepkg-remote-witness-ci.py scripts/stage3-prepkg-operator-operation-grant-ci.py scripts/test-stage3-prepkg-remote-witness-ci.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
+          export ZAPRET2_CI_EXPECTED_HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-approval-ledger.py scripts/test-stage3-prepkg-approval-ledger.py scripts/stage3-prepkg-checkpoint-witness.py scripts/test-stage3-prepkg-checkpoint-witness.py scripts/stage3-prepkg-monotonic-witness.py scripts/test-stage3-prepkg-monotonic-witness.py scripts/stage3-prepkg-witness-operation.py scripts/test-stage3-prepkg-witness-operation.py scripts/stage3-prepkg-signed-status.py scripts/test-stage3-prepkg-signed-status.py scripts/stage3-prepkg-remote-witness-ci.py scripts/stage3-prepkg-operator-operation-grant-ci.py scripts/stage3-prepkg-archive-bound-grant-native-ci.py scripts/test-stage3-prepkg-remote-witness-ci.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
           python3.13 scripts/test-native-prepkg-standalone.py -v
           python3.13 scripts/test-stage3-prepkg-operator-approval.py -v
@@ -84,6 +86,7 @@ jobs:
           mem: 4096
           run: |
             set -eu
+            export ZAPRET2_CI_EXPECTED_HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit lua54

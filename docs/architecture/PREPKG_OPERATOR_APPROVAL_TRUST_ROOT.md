@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.32 `_122`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.33 `_123`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -61,6 +61,14 @@ The _121 mutual TLS client is now **authenticated but not sufficient to authoriz
 
 This is a **cryptographic denial control for test traffic**, not an operator-supplied trust root. The same CI runner owns the private approval key and expected fingerprint, so replacing both grants and pins or rolling back its SQLite filesystem still works. Signed old/new package SHA are declarations only; no actual package artifact hashes or source/owner identity are independently checked. No independent external witness, production key custody, safe key revocation/re-enrollment, nonrollbackable monotonic sequence, or FD9/pkg admission was authorized. **LH-08/AC-11 BLOCKED.**
 
+## _123 native real-archive measurement under a test-only signed grant — NOT owner release trust
+
+`_122` checked the signed old/new package digests **only as declarations**. The CI grant now also binds exact package versions and an external current Git SHA expectation, and `measured_archive` hashes actual regular single-link old/new `.pkg` files under stable metadata. Any signed false SHA, missing/replaced archive, foreign filename/version, source-head mismatch or group-writable/hardlinked archive refuses before witness state changes. An already-running CI witness re-measures both files before each authorized SQLite transition.
+
+On a **genuine disposable OPNsense 26.7 runner**, `stage3-native-prepkg-archive-bootstrap.py` also calls a new isolated helper to measure both the genuinely published old `0.6.2_1.pkg` (release SHA `1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f`) and that exact PR-head official-Mk-built unpublished new archive. It creates an ephemeral signed grant from those measured bytes and requires a correctly re-signed false digest or different source commit to be refused. [Stage 3.33 _123 scope](../verification/evidence/2026-11-04-v0.6.2_123-stage3-measured-native-package-grant.md).
+
+**Still only a measured CI proof:** original released bytes are genuine but **operator trust is not**; the same CI runner signs the approval and chooses the expected key fingerprint, files and clock. Read-only SHA is not a continuous file lock nor authentication of the installed pkgdb. Root can swap byte-identical files or roll back all local journal state. No witness administered off the appliance, no out-of-band approval, no unconditional supported pre-`pkg` admission or crash-consistent pkg transaction follows. **LH-08/AC-11 BLOCKED.**
+
 ## Minimal independent approval record — future operator responsibility
 
 Record, in a controlled owner-reviewed audit trail *outside CI and incoming archives*: separately verified authority public PEM SHA; verification of its possession/provenance and authorized signers; initial `-c` seed exact SHA/source; helper/verifier SHA; source commit approved for that particular operation; expected native ABI/version/current and old archive SHA; valid-from, planned expiry/revocation, no-downgrade and one-use transaction intention; appropriate human approval. Keep issuer private signing keys offline. No security claim about these fields is justified by typing the hash manually or by replaying a previous valid signature.
@@ -85,4 +93,4 @@ Record, in a controlled owner-reviewed audit trail *outside CI and incoming arch
 
 There is no authenticated external channel for the initial `-c` seed or authority fingerprint, no production signer/approval key, no rotation/replay policy, no unavoidable OPNsense firmware/Web/managed CLI pre-pkg gate, no full old RUNNING/STOPPED PID/FD9/IPFW/Config/hook ownership, no uninterrupted FD9 through actual destructive pkg and no bounded concurrency/cancellation/rollback evidence. Direct privileged `pkg` is a separate explicitly unsupported bypass. Native disposable tests cannot approve the actual owner appliance.
 
-**Next after _122 CI qualification:** owner-controlled production authority and out-of-band seed/source/approval verification design, explicit key-rotation and freshness/refusal contract, then supported pre-pkg gateway with full old-owner and real native pkg transaction negative postconditions. **LH-08/AC-11 BLOCKED**. Published `0.6.2_1.pkg`, four package hooks, owner OPNsense and stable `v0.6.2` remain untouched.
+**Next after _123 CI qualification:** owner-controlled production authority and out-of-band seed/source/approval verification design, explicit key-rotation and freshness/refusal contract, then supported pre-pkg gateway with full old-owner and real native pkg transaction negative postconditions. **LH-08/AC-11 BLOCKED**. Published `0.6.2_1.pkg`, four package hooks, owner OPNsense and stable `v0.6.2` remain untouched.
