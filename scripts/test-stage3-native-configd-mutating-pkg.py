@@ -253,7 +253,7 @@ class NativePkgContract(unittest.TestCase):
         armed=controller.index("'frozen_snapshot_complete') is True")
         swapped=controller.index('attack.atomic_rebind(',armed)
         resume=controller.index('RESUME_TEST_ONLY_AFTER_STDIN_SNAPSHOT_PATH_REBIND',swapped)
-        final=controller.index("done.get('ci_stdin_rebound_sha256')",resume)
+        final=controller.index("swap_data.get('ci_stdin_rebound_sha256')",resume)
         restore=controller.index('attack.restore_original_after_verified_pkg(',final)
         self.assertLess(armed,swapped)
         self.assertLess(swapped,resume)
@@ -264,6 +264,21 @@ class NativePkgContract(unittest.TestCase):
         self.assertIn("if stdin_path_swap else",controller)
         self.assertIn("configd-native-stdin-post-snapshot-path-swap:",workflow)
         self.assertIn("ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI=1",workflow)
+
+    def test_path_swap_evidence_is_bounded_sidecar_not_historical_done(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        self.assertIn("SWAP_RESULT=ROOT/'stdin-path-swap-result.json'",controller)
+        self.assertIn("swap_result={key:verdict.pop(key) for key in swap_keys}",controller)
+        self.assertIn('base.create_owned(SWAP_RESULT,json.dumps({',controller)
+        self.assertIn("swap_data.get('sha')==head",controller)
+        self.assertIn("swap_data.get('pid')==ready['pid']",controller)
+        self.assertIn("swap_data.get('original_fd9_inode')==ready['original_fd9_inode']",controller)
+        self.assertIn("swap_data.get('nonce_sha256')==ready['nonce_sha256']",controller)
+        self.assertIn('base.trusted(SWAP_RESULT,1024)',controller)
+        self.assertIn('SWAP_RESULT)\n              if stdin_path_swap else',controller)
+        self.assertIn('TEST_RESULT_UNBOUNDED',(
+            HERE/'stage3-native-configd-detached-fd9.py').read_text())
+        self.assertNotIn("done.get('ci_stdin_rebound_sha256')",controller)
 
     def test_core_configd_worker_and_ci_job_connect_exact_mode(self):
         core=HERE/'stage3-native-configd-fd9-handoff.py'

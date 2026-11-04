@@ -39,6 +39,7 @@ SOCKET=ROOT/'fd9.sock'
 TICKET=ROOT/'ticket'
 PREPKG_READY=ROOT/'native-prepkg-ready'
 PREPKG_RESUME=ROOT/'native-prepkg-resume'
+SWAP_RESULT=ROOT/'stdin-path-swap-result.json'
 READY=ROOT/'ready'
 DONE=ROOT/'done'
 FAILED=ROOT/'failed'
@@ -432,6 +433,34 @@ def worker(head):
                  all(grant_result[k] is False for k in grant_keys[4:]) and
                  verdict['lh08_ac11_accepted'] is False,
                  'CI_SIGNED_PKG_GRANT_REPORT_INCONSISTENT')
+            # Preserve historical 1024-byte DONE size. The four path-swap
+            # witness fields alone would push DONE above its strict cap.
+            # Authenticated, bounded and one-use test evidence lives in a
+            # separate owner-only sidecar bound to the same head/PID/FD9/nonce.
+            swap_keys=('ci_stdin_path_rebound_after_snapshot',
+                       'ci_stdin_frozen_manifest_verified',
+                       'ci_stdin_rebound_sha256',
+                       'ci_stdin_original_frozen_inode')
+            swap_result={key:verdict.pop(key) for key in swap_keys}
+            if native_stdin_path_swap_mode():
+                need(swap_result['ci_stdin_path_rebound_after_snapshot'] is True and
+                     swap_result['ci_stdin_frozen_manifest_verified'] is True and
+                     re.fullmatch('[a-f0-9]{64}',
+                                  swap_result['ci_stdin_rebound_sha256'] or '') is not None and
+                     type(swap_result['ci_stdin_original_frozen_inode']) is int,
+                     'STDIN_SWAP_WORKER_SIDECAR_UNQUALIFIED')
+                base.create_owned(SWAP_RESULT,json.dumps({
+                    **swap_result,'status':'CI_REAL_STDIN_PATH_REBIND_PKG_VERIFIED',
+                    'sha':head,'pid':os.getpid(),
+                    'original_fd9_inode':fields['inode'],
+                    'nonce_sha256':digest
+                },sort_keys=True).encode())
+            else:
+                need(swap_result['ci_stdin_path_rebound_after_snapshot'] is False and
+                     swap_result['ci_stdin_frozen_manifest_verified'] is False and
+                     swap_result['ci_stdin_rebound_sha256'] is None and
+                     swap_result['ci_stdin_original_frozen_inode'] is None,
+                     'STDIN_SWAP_SIDECAR_CREATED_WITHOUT_MODE')
             base.create_owned(AUTH_RESULT,json.dumps({
                 **grant_result,'sha':head,'pid':os.getpid(),
                 'original_fd9_inode':fields['inode'],
@@ -478,7 +507,8 @@ def launch(head):
     native_stdin_path_swap_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
-    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,PREPKG_RESUME):
+    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,
+              PREPKG_RESUME,SWAP_RESULT):
         need(not p.exists() and not p.is_symlink(),
              'ONE_USE_HANDOFF_RESOURCE_ALREADY_PRESENT:'+p.name)
     created,inode=open_original_fd9()
@@ -857,6 +887,19 @@ def execute(head):
             journal.verify_corrupt_journal()
             journal_verified=True
         elif pkg_enabled:
+            swap_data=(json.loads(base.trusted(SWAP_RESULT,1024))
+                       if stdin_path_swap else None)
+            if stdin_path_swap:
+                need(type(swap_data) is dict and
+                     swap_data.get('status')=='CI_REAL_STDIN_PATH_REBIND_PKG_VERIFIED' and
+                     swap_data.get('sha')==head and
+                     swap_data.get('pid')==ready['pid'] and
+                     swap_data.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                     swap_data.get('nonce_sha256')==ready['nonce_sha256'],
+                     'STDIN_SWAP_WORKER_SIDECAR_IDENTITY_MISMATCH')
+            else:
+                need(not SWAP_RESULT.exists() and not SWAP_RESULT.is_symlink(),
+                     'STDIN_SWAP_UNEXPECTED_SIDECAR')
             expected_identity='os-zapret2-restyle|0.6.2_'+native_revision
             need(done.get('status')=='PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9' and
                  done.get('sha')==head and done.get('pid')==ready['pid'] and
@@ -869,12 +912,12 @@ def execute(head):
                  done.get('product_candidate_fd9_rechecked') is True and
                  done.get('ci_pkg_consumed_verified_stdin_bytes') is stdin_pkg and
                  done.get('ci_pkg_stdin_avoids_candidate_path_reopen') is stdin_pkg and
-                 done.get('ci_stdin_path_rebound_after_snapshot') is stdin_path_swap and
-                 done.get('ci_stdin_frozen_manifest_verified') is stdin_path_swap and
                  (not stdin_path_swap or
-                  (swapped_archive is not None and
-                   done.get('ci_stdin_original_frozen_inode')==swapped_archive['original_inode'] and
-                   done.get('ci_stdin_rebound_sha256')==swapped_archive['replacement_sha256'])) and
+                  (swapped_archive is not None and swap_data is not None and
+                   swap_data.get('ci_stdin_path_rebound_after_snapshot') is True and
+                   swap_data.get('ci_stdin_frozen_manifest_verified') is True and
+                   swap_data.get('ci_stdin_original_frozen_inode')==swapped_archive['original_inode'] and
+                   swap_data.get('ci_stdin_rebound_sha256')==swapped_archive['replacement_sha256'])) and
                  done.get('original_fd9_retained_during_actual_pkg') is True and
                  done.get('installed_files_modes_verified') is True and
                  done.get('foreign_config_values_preserved') is True and
@@ -942,7 +985,8 @@ def execute(head):
         if late_archive or post_final:
             need(clean.digest(native_archive)!=native_archive_sha,
                  'ARCHIVE_CORRUPTION_NOT_PERSISTED_BEFORE_NO_PKG')
-    for p in ((TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
+    for p in ((TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME,
+               SWAP_RESULT)
               if stdin_path_swap else
               (TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
               if (late_grant or late_archive or post_final) else
