@@ -100,7 +100,7 @@ def operator_receipt(path):
     need(isinstance(path, str) and path.startswith("/root/") and
          os.path.isabs(path) and os.path.normpath(path) == path and
          os.path.basename(path) == "operator-pins.json" and
-         "\\x00" not in path, "OPERATOR_RECEIPT_PRIVATE_ROOT_REQUIRED")
+         "\x00" not in path, "OPERATOR_RECEIPT_PRIVATE_ROOT_REQUIRED")
     parent = os.path.dirname(path)
     leaf = parent
     while True:
