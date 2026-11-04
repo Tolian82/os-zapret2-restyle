@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 signed pre-pkg provenance via pinned public-key digest (`_108`)](verification/evidence/2026-11-04-v0.6.2_108-stage3-signed-prepkg-provenance.md) — externally signed claims bind exact CLI/old/new package hashes to one source commit; test-only signer and offline OpenSSL negatives; real operator signer, verified code delivery and supported update gate still absent.
+
 - [Stage 3.24 external CLI verify-before-exec digest gate (`_107`)](verification/evidence/2026-11-04-v0.6.2_107-stage3-prepkg-verified-exec.md) — operator trusted Python -c preflight verifies source FD and independently expected SHA before executing pinned memory bytes; native OPNsense source-head test PASS, distribution and mandatory OPNsense paths unimplemented.
 
 - [Stage 3.24 independent no-checkout pre-pkg read-only CLI (`_106`)](verification/evidence/2026-11-04-v0.6.2_106-stage3-standalone-prepkg-entrypoint.md) — standalone root-owned script with independently supplied new/old archive digest, four trusted incoming modules and original FD9; native CI pending, supported distribution/firmware/Web/root bypass unqualified.

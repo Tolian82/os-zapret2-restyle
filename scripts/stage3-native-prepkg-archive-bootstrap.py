@@ -186,7 +186,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '107', 'NATIVE_BOOTSTRAP_REVISION_NOT_107')
+    need(m is not None and m.group(1) == '108', 'NATIVE_BOOTSTRAP_REVISION_NOT_108')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -239,121 +239,125 @@ def execute(old_archive):
             raise Refusal('NATIVE_BOOTSTRAP_WRONG_INCOMING_SHA_ACCEPTED')
         need(not list(empty.iterdir()), 'REFUSED_NATIVE_BOOTSTRAP_WROTE_FILES')
         installed_unchanged(old, old_archive, host, baseline)
-    # Independent pre-pkg entrypoint: copy a standalone root-owned script
-    # into the disposable guest's private /root, deliberately run it without
-    # source checkout in sys.path or cwd. All imported managed modules are
-    # extracted from the incoming native package, never from checkout.
+    # CI-only ephemeral signer: this proves the signed read-only mechanism,
+    # NOT deployment of any operator-authenticated production signing key.
     source = HERE / 'native-prepkg-standalone.py'
     trusted_eval = HERE / 'stage3-prepkg-verified-eval.py'
-    need(source.is_file() and not source.is_symlink() and
-         trusted_eval.is_file() and not trusted_eval.is_symlink(),
-         'PREPKG_EXTERNAL_AND_TRUSTED_EVAL_SOURCES_MISSING')
+    need(source.is_file() and trusted_eval.is_file() and
+         not source.is_symlink() and not trusted_eval.is_symlink(),
+         'PREPKG_TRUSTED_TEST_SOURCES_MISSING')
     source_bytes = source.read_bytes()
-    # CI's exact checked-out head is the independent expected digest for
-    # this test-only copy. A production operator must obtain it from a
-    # separately authenticated channel, NOT the downloaded script/package.
     expected_script_sha = hashlib.sha256(source_bytes).hexdigest()
     trusted_code = trusted_eval.read_text()
-    need('verify_source_bytes(filename, digest)' in trusted_code and
-         'exec(executable,' in trusted_code,
-         'TRUSTED_EVAL_ORIGINAL_CODE_MISSING')
-    with tempfile.TemporaryDirectory(prefix='zapret2-external-verified-prepkg-ci-',
+    need('signed_claims(' in trusted_code and 'exec(executable,' in trusted_code,
+         'TRUSTED_SIGNED_EVAL_CODE_MISSING')
+    with tempfile.TemporaryDirectory(prefix='zapret2-signed-prepkg-ci-',
                                      dir='/root') as standalone_dir:
         private = Path(standalone_dir)
         standalone = private / 'native-prepkg-standalone.py'
         standalone.write_bytes(source_bytes)
         standalone.chmod(0o600)
-        st = standalone.lstat()
-        need(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_nlink == 1 and
-             stat.S_IMODE(st.st_mode) == 0o600 and
-             hashlib.sha256(standalone.read_bytes()).hexdigest() ==
-             expected_script_sha, 'STANDALONE_CI_SOURCE_NOT_EXACT_ROOT_COPY')
-
-        # The verifier is never invoked as a downloaded .py file. Only
-        # trusted operator-reviewed bytes passed as Python -c execute before
-        # independently expected SHA/source checks. Source is compiled from
-        # verified memory, not reopened as an executable path.
-        launcher = [sys.executable, '-I', '-B', '-c', trusted_code,
-                    expected_script_sha, str(standalone)]
-        tail = ['inspect-predecessor', str(incoming), version, expected,
-                str(old_archive), old.VERSION, old.ARCHIVE_SHA]
+        secret = private / 'ci-test-private.pem'
+        public = private / 'ci-test-public.pem'
+        claims = private / 'signed-claims.json'
+        signature = private / 'signed-claims.sig'
         isolated_env = {'PATH':'/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin',
                         'HOME':'/root', 'LANG':'C'}
         def run(argv, timeout=175):
             return subprocess.run(argv, capture_output=True, text=True,
                                   cwd='/root', env=isolated_env, timeout=timeout,
                                   check=False)
-
+        result = run(['/usr/bin/openssl','genpkey','-algorithm','RSA',
+                      '-pkeyopt','rsa_keygen_bits:2048','-out',str(secret)], 35)
+        need(result.returncode == 0, 'EPHEMERAL_TEST_KEYGEN_FAILED')
+        result = run(['/usr/bin/openssl','pkey','-in',str(secret),
+                      '-pubout','-out',str(public)],20)
+        need(result.returncode == 0,'EPHEMERAL_TEST_PUBKEY_EXPORT_FAILED')
+        public.chmod(0o600)
+        assertions = {'schema':'zapret2-prepkg-provenance-v1',
+                      'repository':'Tolian82/os-zapret2-restyle',
+                      'source_commit':built['project_sha'],
+                      'entrypoint_sha256':expected_script_sha,
+                      'incoming_version':version, 'incoming_sha256':expected,
+                      'predecessor_version':old.VERSION,
+                      'predecessor_sha256':old.ARCHIVE_SHA}
+        def seal():
+            claims.write_bytes(json.dumps(assertions,sort_keys=True,
+                                          separators=(',',':')).encode())
+            claims.chmod(0o600)
+            signed = run(['/usr/bin/openssl','dgst','-sha256','-sign',
+                          str(secret),'-out',str(signature),str(claims)], 20)
+            need(signed.returncode == 0,'EPHEMERAL_TEST_SIGN_FAILED')
+            signature.chmod(0o600)
+        seal()
+        key_pin = hashlib.sha256(public.read_bytes()).hexdigest()
+        launcher = [sys.executable,'-I','-B','-c',trusted_code,
+                    '--signed-provenance',key_pin,str(public),str(claims),
+                    str(signature),str(standalone)]
+        tail = ['inspect-predecessor',str(incoming),version,
+                str(old_archive),old.VERSION]
         good = run(launcher + tail)
         need(good.returncode == 0 and
-             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SHA256:' +
-                 expected_script_sha in good.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' +
+                expected_script_sha in good.stderr and
              good.stdout.startswith('ZAPRET2_PREPKG_STANDALONE='),
-             'EXTERNAL_SHA_VERIFIED_CLI_DID_NOT_SCREEN_OLD:' +
-             str(good.returncode) + ':' + good.stderr[-260:])
-        standalone_report = json.loads(good.stdout.split('=', 1)[1])
-        need(standalone_report.get('status') ==
-             'PASS_STANDALONE_PREPKG_READ_ONLY_COLD' and
-             standalone_report.get('incoming_sha256') == expected and
-             standalone_report.get('old_sha256') == old.ARCHIVE_SHA and
-             len(standalone_report.get('modules_sha256', {})) == 4 and
-             standalone_report.get('pkg_invoked') is False and
-             standalone_report.get('old_owner_qualified') is False and
-             standalone_report.get('supported_mandatory_entrypoint') is False and
-             standalone_report.get('web_firmware_root_pkg_protected') is False and
-             standalone_report.get('lh08_ac11_accepted') is False,
-             'EXTERNAL_SHA_VERIFIED_FALSE_ADMISSION')
-        installed_unchanged(old, old_archive, host, baseline)
-        denied_commands = (
-            (launcher[:5] + ['0' * 64] + launcher[6:] + tail,
-             'EXTERNAL_UNTRUSTED_BOOTSTRAP_SHA_REFUSAL_MISSING'),
-            (launcher + tail[:3] + ['0' * 64] + tail[4:],
-             'EXTERNAL_INCOMING_SHA_REFUSAL_MISSING'),
-            (launcher + tail[:-1] + ['0' * 64],
-             'EXTERNAL_OLD_SHA_REFUSAL_MISSING'),
-            (launcher + ['upgrade'] + tail[1:],
-             'EXTERNAL_UNSUPPORTED_UPGRADE_REFUSAL_MISSING'),
-        )
-        for wrong_command, why in denied_commands:
-            denied = run(wrong_command, 45)
-            need(denied.returncode == 78 and
-                 'REFUSED:' in denied.stderr and denied.stdout == '',
-                 why + ':' + str(denied.returncode) + ':' + denied.stderr[-200:])
-            installed_unchanged(old, old_archive, host, baseline)
-
-        # A payload which would write a marker if interpreted must never
-        # execute when its source digest is different from the pinned value.
-        sentinel = private / 'UNTRUSTED_SOURCE_WAS_EXECUTED'
-        poison = private / 'untrusted-native-prepkg.py'
-        poison.write_bytes(b'from pathlib import Path\nPath(' +
-                           repr(str(sentinel)).encode() +
-                           b').write_text("executed")\n' + source_bytes)
-        poison.chmod(0o600)
-        denied = run(launcher[:6] + [str(poison)] + tail, 45)
-        need(denied.returncode == 78 and
+             'SIGNED_EXTERNAL_CLI_CANNOT_SCREEN_OLD:' +
+             str(good.returncode)+':'+good.stderr[-300:])
+        report=json.loads(good.stdout.split('=',1)[1])
+        need(report.get('status')=='PASS_STANDALONE_PREPKG_READ_ONLY_COLD' and
+             report.get('incoming_sha256')==expected and
+             report.get('old_sha256')==old.ARCHIVE_SHA and
+             len(report.get('modules_sha256',{}))==4 and
+             report.get('pkg_invoked') is False and
+             report.get('old_owner_qualified') is False and
+             report.get('supported_mandatory_entrypoint') is False and
+             report.get('lh08_ac11_accepted') is False,
+             'SIGNED_EXTERNAL_CLI_FALSE_AUTHORIZATION')
+        installed_unchanged(old,old_archive,host,baseline)
+        for cmd,reason in (
+            (launcher[:6]+['0'*64]+launcher[7:]+tail,'BAD_PUBLIC_KEY_PIN'),
+            (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
+            (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
+        ):
+            denied=run(cmd,45)
+            need(denied.returncode==78 and 'REFUSED:' in denied.stderr and
+                 'VERIFIED_SIGNED_SHA256:' not in denied.stderr,
+                 'SIGNATURE_NEGATIVE_NOT_REFUSED:'+reason)
+            installed_unchanged(old,old_archive,host,baseline)
+        actual_signature=signature.read_bytes()
+        signature.write_bytes(b'forged-signature')
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
+             'FORGED_SIGNATURE_ACCEPTED')
+        signature.write_bytes(actual_signature)
+        claims.write_bytes(claims.read_bytes().replace(expected.encode(),b'0'*64))
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'SIGNED_PROVENANCE_SIGNATURE_INVALID' in denied.stderr,
+             'UNSIGNED_CLAIMS_CHANGE_ACCEPTED')
+        assertions['incoming_sha256']='0'*64
+        seal()
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and 'REFUSED:' in denied.stderr,
+             'SIGNED_WRONG_ARCHIVE_ACCEPTED')
+        assertions['incoming_sha256']=expected
+        seal()
+        canary=private/'UNTRUSTED_SOURCE_EXECUTED'
+        standalone.write_bytes(b'from pathlib import Path\nPath('+
+                repr(str(canary)).encode()+b').write_text("BAD")\n'+source_bytes)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
              'EXTERNAL_SOURCE_EXPECTED_SHA256_MISMATCH' in denied.stderr and
-             'VERIFIED_SHA256:' not in denied.stderr and
-             not sentinel.exists(), 'TAMPERED_SOURCE_EXECUTED_BEFORE_SHA_VERIFIED')
-        installed_unchanged(old, old_archive, host, baseline)
-
-        # Neither a symlink nor a group/world-writable root copy is eligible.
-        link = private / 'symlink-prepkg.py'
-        link.symlink_to(standalone)
-        denied = run(launcher[:6] + [str(link)] + tail, 45)
-        need(denied.returncode == 78 and
-             'EXTERNAL_SOURCE_OPEN_REFUSED' in denied.stderr and
-             'VERIFIED_SHA256:' not in denied.stderr,
-             'EXTERNAL_SYMLINK_BOOTSTRAP_NOT_REFUSED')
+             not canary.exists(),'TAMPERED_EXTERNAL_SOURCE_EXECUTED')
+        standalone.write_bytes(source_bytes)
         standalone.chmod(0o666)
-        try:
-            denied = run(launcher + tail, 45)
-            need(denied.returncode == 78 and
-                 'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr and
-                 'VERIFIED_SHA256:' not in denied.stderr,
-                 'WORLD_WRITABLE_BOOTSTRAP_NOT_REFUSED')
-        finally:
-            standalone.chmod(0o600)
-        installed_unchanged(old, old_archive, host, baseline)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr,
+             'WORLD_WRITABLE_EXTERNAL_SOURCE_ACCEPTED')
+        standalone.chmod(0o600)
+        installed_unchanged(old,old_archive,host,baseline)
     installed_unchanged(old, old_archive, host, baseline)
     need(guard.snapshot(old_archive)['status'] == 'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
          'OLD_COLD_STATE_NOT_RETAINED')
@@ -364,6 +368,8 @@ def execute(old_archive):
             'source_bytes_equal_verified_incoming_package': True,
             'standalone_no_checkout_pre_pkg_screened': True,
             'external_sha_verified_before_source_exec': True,
+             'ci_ephemeral_signed_provenance_verified': True,
+             'operator_signer_authenticated': False,
             'trusted_eval_code_from_ci_exact_head_only': True,
             'trusted_production_distribution_implemented': False,
             'standalone_diagnostic_root_copy_only': True,
