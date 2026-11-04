@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -54,7 +55,11 @@ def argv():
     return ["-c", "--operator-receipt", "/root/review/operator-pins.json",
             "--operator-authority", "f" * 64,
             "/root/review/operator-approval-authority.pem",
-            "/root/review/operator-pins.sig", "--verified-verifier", "/root/review/stage3-prepkg-verified-eval.py",
+            "/root/review/operator-pins.sig",
+            "--approval-policy", "9" * 64,
+            "/root/review/operator-approval-policy.json",
+            "/root/review/operator-approval-policy.sig",
+            "--verified-verifier", "/root/review/stage3-prepkg-verified-eval.py",
             "--signed-provenance", "/root/review/approved-public.pem",
             "/root/review/claims.json", "/root/review/sig",
             "/root/review/native-prepkg-standalone.py", "inspect-predecessor",
@@ -71,6 +76,8 @@ class TrustSeedContracts(unittest.TestCase):
         self.assertIn("hmac.compare_digest", CODE)
         self.assertIn("exec(compiled,", CODE)
         self.assertIn("RECEIPT_PINS_BOUND_NOT_AUTHENTICATED", CODE)
+        self.assertIn("OPERATOR_RECEIPT_REVOKED_IN_POLICY", CODE)
+        self.assertIn("OPERATOR_APPROVAL_AUTHORITY_REVOKED_IN_POLICY", CODE)
         self.assertIn('["/usr/bin/openssl", "dgst", "-sha256", "-verify", public,', CODE)
         self.assertEqual(CODE.count("subprocess.run("), 1)
         for forbidden in ("pkg add", "pkg upgrade", "os.system(",
@@ -113,7 +120,9 @@ class TrustSeedContracts(unittest.TestCase):
                  self.assertRaises(SystemExit):
                 self.m.operator_receipt(
                     bad, "f"*64, "/root/review/operator-approval-authority.pem",
-                    "/root/review/operator-pins.sig")
+                    "/root/review/operator-pins.sig", "9"*64,
+                    "/root/review/operator-approval-policy.json",
+                    "/root/review/operator-approval-policy.sig")
             opened.assert_not_called()
 
     def test_single_fd_receipt_and_schema_refusals(self):
@@ -141,6 +150,8 @@ class TrustSeedContracts(unittest.TestCase):
             valid = pins()
             with patch.object(self.m, "verify_detached_receipt",
                               return_value=True) as detached, \
+                 patch.object(self.m, "verified_approval_policy",
+                              return_value={"status": "read-only"}) as approved, \
                  patch.object(self.m.os, "lstat", side_effect=lstat), \
                  patch.object(self.m.os, "fstat",
                               side_effect=lambda fd: spoof_root(raw_fstat(fd))), \
@@ -150,8 +161,12 @@ class TrustSeedContracts(unittest.TestCase):
                     self.m.operator_receipt("/root/review/operator-pins.json",
                                             "f"*64,
                                             "/root/review/operator-approval-authority.pem",
-                                            "/root/review/operator-pins.sig"),
+                                            "/root/review/operator-pins.sig",
+                                            "9"*64,
+                                            "/root/review/operator-approval-policy.json",
+                                            "/root/review/operator-approval-policy.sig"),
                     valid)
+                self.assertEqual(approved.call_count, 1)
                 self.assertEqual(detached.call_count, 1)
                 failures = [
                     json.dumps(dict(valid, source_commit="z" * 40)).encode(),
@@ -171,7 +186,9 @@ class TrustSeedContracts(unittest.TestCase):
                             self.m.operator_receipt(
                                 "/root/review/operator-pins.json", "f"*64,
                                 "/root/review/operator-approval-authority.pem",
-                                "/root/review/operator-pins.sig")
+                                "/root/review/operator-pins.sig", "9"*64,
+                                "/root/review/operator-approval-policy.json",
+                                "/root/review/operator-approval-policy.sig")
                         self.assertEqual(exit_code.exception.code, 78)
                 write(json.dumps(valid).encode())
                 record.chmod(0o666)
@@ -179,14 +196,18 @@ class TrustSeedContracts(unittest.TestCase):
                     self.m.operator_receipt(
                         "/root/review/operator-pins.json", "f"*64,
                         "/root/review/operator-approval-authority.pem",
-                        "/root/review/operator-pins.sig")
+                        "/root/review/operator-pins.sig", "9"*64,
+                        "/root/review/operator-approval-policy.json",
+                        "/root/review/operator-approval-policy.sig")
                 record.unlink()
                 record.symlink_to(root / "somewhere")
                 with self.assertRaises(SystemExit):
                     self.m.operator_receipt(
                         "/root/review/operator-pins.json", "f"*64,
                         "/root/review/operator-approval-authority.pem",
-                        "/root/review/operator-pins.sig")
+                        "/root/review/operator-pins.sig", "9"*64,
+                        "/root/review/operator-approval-policy.json",
+                        "/root/review/operator-approval-policy.sig")
 
     def test_real_detached_rsa_and_pinned_separate_authority(self):
         # Independent test-only RSA key, never a production signer. A truly
@@ -274,6 +295,127 @@ class TrustSeedContracts(unittest.TestCase):
             self.m.main()
         verifier.assert_not_called()
 
+
+    def test_signed_policy_current_receipt_and_revocation_negative_matrix(self):
+        now = 1800000000
+        receipt_bytes = json.dumps(pins(), sort_keys=True).encode()
+        receipt_sha = hashlib.sha256(receipt_bytes).hexdigest()
+        authority = "f" * 64
+        expected = {
+            "schema": "zapret2-prepkg-approval-policy-v1",
+            "repository": "Tolian82/os-zapret2-restyle",
+            "authority_sha256": authority,
+            "receipt_sha256": receipt_sha,
+            "sequence": 7, "issued_at": now-10,
+            "not_before": now-10, "not_after": now+3500,
+            "revoked_receipt_sha256": [], "revoked_authority_sha256": [],
+        }
+        verified = []
+        def exercise(policy, when=now, sha_override=None, raw_override=None):
+            raw = json.dumps(policy, sort_keys=True,
+                             separators=(",", ":")).encode() if raw_override is None else raw_override
+            digest = hashlib.sha256(raw).hexdigest()
+            with patch.object(self.m, "authority_file", return_value=raw), \
+                 patch.object(self.m, "verify_detached_receipt",
+                              side_effect=lambda *a, **kw: verified.append(a) or True), \
+                 patch.object(self.m.time, "time", return_value=when):
+                return self.m.verified_approval_policy(
+                    receipt_bytes, authority,
+                    "/root/review/operator-approval-authority.pem",
+                    digest if sha_override is None else sha_override,
+                    "/root/review/operator-approval-policy.json",
+                    "/root/review/operator-approval-policy.sig")
+        self.assertEqual(exercise(expected), expected)
+        self.assertEqual(verified[-1][0],
+                         json.dumps(expected,sort_keys=True,separators=(",",":")).encode())
+        bad = (
+            (dict(expected, revoked_receipt_sha256=[receipt_sha]),
+             "OPERATOR_RECEIPT_REVOKED_IN_POLICY"),
+            (dict(expected, revoked_authority_sha256=[authority]),
+             "OPERATOR_APPROVAL_AUTHORITY_REVOKED_IN_POLICY"),
+            (dict(expected, receipt_sha256="b" * 64),
+             "APPROVAL_POLICY_WRONG_IDENTITY_OR_RECEIPT"),
+            (dict(expected, authority_sha256="b" * 64),
+             "APPROVAL_POLICY_WRONG_IDENTITY_OR_RECEIPT"),
+            (dict(expected, not_after=now-1),
+             "APPROVAL_POLICY_NOT_CURRENT"),
+            (dict(expected, not_before=now+100, issued_at=now+100,
+                  not_after=now+1000),
+             "APPROVAL_POLICY_NOT_CURRENT"),
+            (dict(expected, not_after=now+5000),
+             "APPROVAL_POLICY_UNBOUNDED_OR_INVALID_WINDOW"),
+            (dict(expected, sequence=True),
+             "APPROVAL_POLICY_NONINTEGER:sequence"),
+            (dict(expected, sequence=0),
+             "APPROVAL_POLICY_UNBOUNDED_OR_INVALID_WINDOW"),
+            (dict(expected, revoked_receipt_sha256=[receipt_sha, receipt_sha]),
+             "APPROVAL_POLICY_BAD_REVOKE_LIST:revoked_receipt_sha256"),
+            (dict(expected, revoked_authority_sha256=["bad-hash"]),
+             "APPROVAL_POLICY_BAD_REVOKE_LIST:revoked_authority_sha256"),
+            (dict(expected, schema="wrong-schema"),
+             "APPROVAL_POLICY_WRONG_IDENTITY_OR_RECEIPT"),
+        )
+        for case, reason in bad:
+            with self.subTest(reason=reason), self.assertRaises(SystemExit):
+                exercise(case)
+        with self.assertRaises(SystemExit):
+            exercise(expected, sha_override="0"*64)
+        with self.assertRaises(SystemExit):
+            exercise(expected, sha_override="a"*64)
+        malformed = (
+            b"not-json",
+            json.dumps(expected).encode().rstrip(b"}")+
+                b',"sequence":8}',
+        )
+        for raw in malformed:
+            with self.subTest(raw=raw[:40]), self.assertRaises(SystemExit):
+                exercise(expected,raw_override=raw)
+
+    def test_actual_signed_policy_real_rsa_and_missing_signature(self):
+        # A second standalone signed snapshot is mandatory. This RSA pair
+        # is ephemeral and does not independently authenticate any owner.
+        original_temp = tempfile.TemporaryDirectory
+        with original_temp(prefix="zapret114-policy-") as folder:
+            root = Path(folder)
+            key = root/"key.pem"
+            pub = root/"operator-approval-authority.pem"
+            sig = root/"operator-approval-policy.sig"
+            raw = b'{"schema":"zapret2-prepkg-approval-policy-v1"}\n'
+            snapshot = root/"operator-approval-policy.json"
+            snapshot.write_bytes(raw)
+            for cmd in (
+                ["/usr/bin/openssl", "genpkey", "-algorithm","RSA",
+                 "-pkeyopt","rsa_keygen_bits:2048","-out",str(key)],
+                ["/usr/bin/openssl", "pkey", "-in",str(key),
+                 "-pubout","-out",str(pub)],
+                ["/usr/bin/openssl", "dgst","-sha256","-sign",str(key),
+                 "-out",str(sig),str(snapshot)],
+            ):
+                subprocess.run(cmd,check=True,capture_output=True,timeout=20)
+            digest = hashlib.sha256(pub.read_bytes()).hexdigest()
+            def source(path, filename):
+                if filename.endswith(".pem"):return pub.read_bytes()
+                if filename.endswith(".sig"):return sig.read_bytes()
+                raise AssertionError(filename)
+            def tempdir(*args,**kw):
+                kw["dir"]=folder
+                return original_temp(*args,**kw)
+            with patch.object(self.m,"authority_file",side_effect=source), \
+                 patch.object(self.m.tempfile,"TemporaryDirectory",
+                              side_effect=tempdir):
+                self.assertTrue(self.m.verify_detached_receipt(
+                    raw,digest,str(pub),str(sig),
+                    self.m.POLICY_SIGNATURE_BASENAME))
+                with self.assertRaises(SystemExit):
+                    self.m.verify_detached_receipt(
+                        raw+b"x",digest,str(pub),str(sig),
+                        self.m.POLICY_SIGNATURE_BASENAME)
+                sig.write_bytes(b"forged")
+                with self.assertRaises(SystemExit):
+                    self.m.verify_detached_receipt(
+                        raw,digest,str(pub),str(sig),
+                        self.m.POLICY_SIGNATURE_BASENAME)
+
     def test_verified_verifier_bytes_freeze_and_tamper_refusal(self):
         raw_fstat, raw_lstat = os.fstat, os.lstat
         with tempfile.TemporaryDirectory() as td:
@@ -305,7 +447,7 @@ class TrustSeedContracts(unittest.TestCase):
 
     def test_receipt_target_version_refuses_before_verifier(self):
         args = argv()
-        args[16] = "0.6.2_999"
+        args[20] = "0.6.2_999"
         with patch.object(self.m.sys, "argv", args), \
              patch.object(self.m.os, "geteuid", return_value=0), \
              patch.object(self.m.os, "uname", return_value=types.SimpleNamespace(
@@ -331,8 +473,9 @@ class TrustSeedContracts(unittest.TestCase):
                      return_value=b'import sys; print("VERIFIED_EXEC", sys.argv)\n') as verifier, \
                  contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 self.m.main()
-            receipt.assert_called_once_with(args[2], args[4], args[5], args[6])
-            verifier.assert_called_once_with(args[8], pins()["verifier_sha256"])
+            receipt.assert_called_once_with(args[2], args[4], args[5], args[6],
+                                            args[8], args[9], args[10])
+            verifier.assert_called_once_with(args[12], pins()["verifier_sha256"])
             self.assertIn("VERIFIED_EXEC", stdout.getvalue())
             self.assertIn("--expected-source-commit", stdout.getvalue())
             self.assertIn(pins()["source_commit"], stdout.getvalue())
@@ -342,6 +485,9 @@ class TrustSeedContracts(unittest.TestCase):
             self.assertIn(pins()["public_key_sha256"], stdout.getvalue())
             self.assertNotIn("--operator-receipt", stdout.getvalue())
             self.assertNotIn("--operator-authority", stdout.getvalue())
+            self.assertNotIn("--approval-policy", stdout.getvalue())
+            self.assertIn("SIGNED_POLICY_TIME_AND_REVOCATION_MATCHED_NOT_ONE_USE",
+                          stderr.getvalue())
             self.assertIn("RECEIPT_RSA_VERIFIED_ANCHOR_NOT_OWNER_AUTHENTICATED",
                           stderr.getvalue())
             self.assertNotIn("--verified-verifier", stdout.getvalue())
