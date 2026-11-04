@@ -190,7 +190,10 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '118', 'NATIVE_BOOTSTRAP_REVISION_NOT_118')
+    # The native builder and archived candidate checker verify the actual
+    # version and archive SHA below. Do not pin a moving CI source revision.
+    need(m is not None and re.fullmatch(r'[1-9][0-9]*', m.group(1)) is not None,
+         'NATIVE_BOOTSTRAP_REVISION_INVALID')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
