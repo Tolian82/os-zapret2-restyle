@@ -173,15 +173,20 @@ def main():
     # Only this signed-provenance read-only command is accepted. In particular,
     # unsigned SHA arguments, mutating package operations and arbitrary Python
     # source commands are NOT accepted, even when the caller is root.
-    need(len(sys.argv) == 12 and sys.argv[1] == "--signed-provenance" and
-         sys.argv[7] == "inspect-predecessor",
+    need(len(sys.argv) == 14 and sys.argv[1] == "--expected-source-commit" and
+         sys.argv[3] == "--signed-provenance" and
+         sys.argv[9] == "inspect-predecessor",
          "SIGNED_READ_ONLY_PREDECESSOR_COMMAND_REQUIRED")
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          os.uname().machine == "amd64",
          "ROOT_FREEBSD_AMD64_REQUIRED")
-    _, _, key_sha, public_key, claims_path, sig_path, filename, _, \
-        incoming, incoming_version, predecessor, predecessor_version = sys.argv
+    _, _, expected_commit, _, key_sha, public_key, claims_path, sig_path, \
+        filename, _, incoming, incoming_version, predecessor, predecessor_version = sys.argv
+    need(COMMIT.fullmatch(expected_commit) is not None,
+         "INDEPENDENT_SOURCE_COMMIT_REQUIRED")
     value = signed_claims(public_key, key_sha, claims_path, sig_path)
+    need(value["source_commit"] == expected_commit,
+         "SIGNED_PROVENANCE_SOURCE_COMMIT_NOT_APPROVED")
     need(value["incoming_version"] == incoming_version and
          value["predecessor_version"] == predecessor_version and
          os.path.basename(incoming) == NAME + "-" + incoming_version + ".pkg" and
