@@ -315,13 +315,14 @@ def main(args):
     try:
         need(os.environ.get("ZAPRET2_CI_REMOTE_WITNESS_ONLY") == "1",
              "WITNESS_DISPOSABLE_CI_OPTIN_REQUIRED")
-        need(len(args) in (2, 11), "WITNESS_CLI_INVALID")
+        need(len(args) in (2, 14), "WITNESS_CLI_INVALID")
         if len(args) == 2 and args[0] == "init":
             initialize(args[1])
             print("CI_WITNESS_DB_INITIALIZED", flush=True)
-        elif len(args) == 11 and args[0] == "serve":
+        elif len(args) == 14 and args[0] == "serve":
             (path, key, ca, certificate, tls_key, client_sha,
-             grant_path, grant_sig, operator_pem, operator_key_sha) = args[1:]
+             grant_path, grant_sig, operator_pem, operator_key_sha,
+             source_commit, old_archive, new_archive) = args[1:]
             need(isinstance(client_sha, str) and SHA.fullmatch(client_sha) is not None and
                  client_sha != "0" * 64, "WITNESS_CLIENT_CERT_PIN_REQUIRED")
             need(os.path.exists(key) and os.path.isfile(key), "WITNESS_PRIVATE_SIGNER_MISSING")
@@ -329,7 +330,8 @@ def main(args):
             # never an unauthenticated caller-supplied matching digest.
             operator_policy = grant.load(
                 grant_path, grant_sig, operator_pem, operator_key_sha,
-                grant.signer_sha(key), client_sha)
+                grant.signer_sha(key), client_sha, source_commit,
+                old_archive, new_archive)
             tls = server_tls_context(ca, certificate, tls_key)
             with open_existing(path):
                 pass

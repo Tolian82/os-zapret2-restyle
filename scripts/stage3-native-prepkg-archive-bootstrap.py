@@ -195,6 +195,33 @@ def execute(old_archive):
     need(m is not None and re.fullmatch(r'[1-9][0-9]*', m.group(1)) is not None,
          'NATIVE_BOOTSTRAP_REVISION_INVALID')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
+    # CI-only witness authorization must measure ACTUAL published predecessor
+    # and official-Mk candidate bytes. No generated fake digest is accepted.
+    measured_command = [
+        sys.executable, str(HERE / 'stage3-prepkg-archive-bound-grant-native-ci.py'),
+        str(old_archive), str(incoming), old.ARCHIVE_SHA, expected,
+        built['project_sha']]
+    measured_run = subprocess.run(
+        measured_command, capture_output=True, text=True, check=False, timeout=70)
+    need(measured_run.returncode == 0 and
+         measured_run.stdout.startswith('STAGE3_MEASURED_GRANT='),
+         'CI_NATIVE_REAL_ARCHIVE_OPERATOR_GRANT_REFUSED:' +
+         str(measured_run.returncode) + ':' + measured_run.stderr[-300:])
+    try:
+        measured = json.loads(measured_run.stdout.split('=', 1)[1])
+    except (ValueError, UnicodeError):
+        raise Refusal('CI_NATIVE_REAL_ARCHIVE_GRANT_RESULT_INVALID') from None
+    need(measured.get('status') ==
+         'PASS_NATIVE_REAL_OLD_AND_OFFICIAL_MK_CANDIDATE_SIGNED_GRANT' and
+         measured.get('actual_old_archive_sha256') == old.ARCHIVE_SHA and
+         measured.get('actual_incoming_archive_sha256') == expected and
+         measured.get('source_commit') == built['project_sha'] and
+         measured.get('signed_scope_verified') is True and
+         measured.get('resigned_false_archive_and_head_refused') is True and
+         measured.get('installed_pkg_mutation') is False and
+         measured.get('pkg_invoked_by_this_step') is False and
+         measured.get('lh08_ac11_accepted') is False,
+         'CI_NATIVE_REAL_ARCHIVE_SIGNED_GRANT_FALSE_RESULT')
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
          'GENUINE_OLD_PACKAGE_NOT_INSTALLED')
@@ -1144,6 +1171,10 @@ def execute(old_archive):
     return {'status': 'PASS_ONE_USE_NATIVE_ARCHIVED_SOURCE_PREPKG_READONLY',
             'incoming_version': version, 'incoming_archive_sha256': expected,
             'predecessor_archive_sha256': old.ARCHIVE_SHA,
+            'ci_native_measured_real_old_and_official_mk_grant_pass': True,
+            'ci_native_measured_grant_old_size': measured['old_bytes_measured'],
+            'ci_native_measured_grant_new_size': measured['incoming_bytes_measured'],
+            'ci_operator_owner_approved_for_real_pkg': False,
             'exact_native_product_modules_extracted': len(MODULES),
             'source_bytes_equal_verified_incoming_package': True,
             'standalone_no_checkout_pre_pkg_screened': True,
