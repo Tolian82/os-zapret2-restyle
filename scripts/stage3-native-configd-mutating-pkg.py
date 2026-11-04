@@ -131,6 +131,16 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
              not late_grant and not late_archive and not post_final and
              not late_journal_fault,
              'NATIVE_STDIN_PKG_MODE_NOT_DISPOSABLE')
+    live_witness=os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS')=='1'
+    if live_witness:
+        need(stdin_mode and
+             os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             os.environ.get('ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK')=='1' and
+             os.environ.get('ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED')!='1' and
+             not late_grant and not late_archive and not post_final and
+             not late_journal_fault,
+             'CI_LIVE_WITNESS_NOT_DISPOSABLE_BEFORE_NATIVE_PKG')
     stdin_path_swap=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP')=='1'
     if stdin_path_swap:
         need(stdin_mode and
@@ -167,7 +177,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
     approval=grant_guard.verify(
         handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
         archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9,
-        nonce=ticket)
+        nonce=ticket,live_phase='consume' if live_witness else None)
     need(approval['ci_operator_signature_verified'] is True and
          approval['ci_original_fd9_held_during_grant_admission'] is True and
          approval['ci_resigned_false_old_new_head_denied'] is True and
@@ -268,7 +278,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         second=grant_guard.verify(
             handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
             archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9,
-            nonce=ticket)
+            nonce=ticket,live_phase='status' if live_witness else None)
         need(second==approval,'FD9_SIGNED_OPERATOR_GRANT_DRIFT_BEFORE_PKG')
         if post_final:
             # This second barrier is AFTER successful final signed-grant/SHA

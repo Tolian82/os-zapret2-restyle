@@ -141,7 +141,11 @@ class SignedConsumedFD9(unittest.TestCase):
         self.assertIn("signed_consumed=signed_consumed_mode()",module)
         self.assertIn("ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED_CI=1",workflow)
         self.assertIn("configd-native-signed-consumed-stdin:",workflow)
-        self.assertEqual(worker.count("nonce=ticket)"),2)
+        # Both original-FD9 signed checks still bind the same configd ticket
+        # nonce. A newer optional live-witness phase must not break _132.
+        self.assertEqual(worker.count("nonce=ticket,live_phase="),2)
+        self.assertIn("nonce=ticket,live_phase='consume' if live_witness else None",worker)
+        self.assertIn("nonce=ticket,live_phase='status' if live_witness else None",worker)
         self.assertLess(worker.index("second=grant_guard.verify("),
                         worker.index("delegate.admitted_pkg_dispatch(archive,candidate,env)"))
         self.assertIn("'ci_operator_grant_is_owner_approved':False",module)
