@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.42 _132 CI-signed simulated CONSUMED under genuine original-FD9 native pkg](verification/evidence/2026-11-05-v0.6.2_132-stage3-native-signed-consumed-fd9.md) — true per-request signature/nonce binding tested without external authority; CI status is NOT one-use owner approval.
+
 - [Stage 3.41 _131 real native post-snapshot pathname rebind](verification/evidence/2026-11-04-v0.6.2_131-stage3-real-post-snapshot-path-rebind.md) — CI-only different-inode candidate substitution while real pkg consumes frozen SHA bytes, old FD9 and hook checks, explicit no-production-authority boundary.
 
 - [Stage 3.40 _130 genuine OPNsense pkg stdin from frozen native archive bytes](verification/evidence/2026-11-04-v0.6.2_130-stage3-native-pkg-from-verified-stdin.md) — separate CI-only experiment with original FD9, real target dependencies/historical hooks and installation; not production authority.
