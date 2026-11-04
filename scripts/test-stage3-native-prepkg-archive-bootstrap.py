@@ -86,7 +86,11 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.call(Path(tmp),{'entries':['././' + name for name in canonical]})
             self.assertEqual({p.name for p in Path(tmp).iterdir()},set(m.MODULES))
-        for first in ('/','../','../../'):
+        # This is the real official OPNsense native Mk archive naming.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.call(Path(tmp),{'entries':['/' + name for name in canonical]})
+            self.assertEqual({p.name for p in Path(tmp).iterdir()},set(m.MODULES))
+        for first in ('//','/../','../','../../'):
             with self.subTest(first=first),tempfile.TemporaryDirectory() as tmp:
                 aliases=[first + canonical[0],*canonical[1:]]
                 with self.assertRaisesRegex(m.Refusal,'MISSING_OR_DUPLICATED'):
