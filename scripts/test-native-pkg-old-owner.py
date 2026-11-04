@@ -85,7 +85,7 @@ class PredecessorScreenContracts(unittest.TestCase):
             if argv[1]=='which':
                 return completed((m.NAME+'-'+version+'\n').encode())
             self.fail('unexpected query: '+repr(argv))
-        def read_bytes(path):
+        def read_bytes(path, **_):
             return (b'#!/bin/sh\nold',0o755) if path==m.SERVICE else (b'<config/>',0o600)
         with patch.object(m.os,'geteuid',return_value=0),\
              patch.object(m.os,'uname',return_value=SimpleNamespace(sysname='FreeBSD',machine='amd64')),\
@@ -97,6 +97,8 @@ class PredecessorScreenContracts(unittest.TestCase):
             result=m.inspect_stopped(Path('/root/old.pkg'),version,987)
         self.assertEqual(result['status'],'READ_ONLY_STOPPED_PREDECESSOR_SCREENED')
         self.assertFalse(result['old_owner_qualified'])
+        self.assertTrue(result['config_readonly_snapshot_only'])
+        self.assertFalse(result['config_ownership_authorized'])
         self.assertFalse(result['pkg_invoked'])
         self.assertFalse(result['lh08_ac11_accepted'])
         self.assertEqual(fd9.call_count,2)
@@ -114,7 +116,7 @@ class PredecessorScreenContracts(unittest.TestCase):
              patch.object(m.native_pkg_handoff,'verify_original_lock'),\
              patch.object(m,'read_command',side_effect=query),\
              patch.object(m,'check_four_hooks',return_value=b'service'),\
-             patch.object(m,'regular_root_bytes',side_effect=lambda p:(b'service',0o755) if p==m.SERVICE else (b'config',0o600)),\
+             patch.object(m,'regular_root_bytes',side_effect=lambda p,**kw:(b'service',0o755) if p==m.SERVICE else (b'config',0o600)),\
              patch.object(m,'cold_screen',return_value='COLD'):
             with self.assertRaisesRegex(m.OwnerRefusal,'PKGDB_CHANGED'):
                 m.inspect_stopped(Path('/root/old.pkg'),'0.6.2_1',22)
