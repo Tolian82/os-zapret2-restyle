@@ -18,6 +18,9 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 independently approved source commit versus signed manifest (_110)](verification/evidence/2026-11-04-v0.6.2_110-stage3-independent-commit-pin.md) — signed claims are insufficient without a separately expected source identity; new native signed mismatch negative, no updater or trusted production signer.
+
+
 - [Stage 3.24 verifier trust-seed before Python execution (`_109`)](verification/evidence/2026-11-04-v0.6.2_109-stage3-verifier-trust-seed.md) — root-private SHA-pinned immutable verifier bytes executed only after minimal operator-reviewed seed; local tests PASS, native acceptance pending; no authenticated production seed/key distribution or mandatory updater.
 
 

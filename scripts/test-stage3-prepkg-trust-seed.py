@@ -51,7 +51,7 @@ class TrustSeedContracts(unittest.TestCase):
     def test_actual_c_rejects_unsupported_commands_before_open(self):
         for tail in ([], ['upgrade'], ['--verified-verifier'],
                      ['--verified-verifier', '0' * 64, '/root/verified.py',
-                      'upgrade', *('x' for _ in range(10))]):
+                      'upgrade', *('x' for _ in range(12))]):
             with self.subTest(tail=tail):
                 result = subprocess.run([sys.executable, '-I', '-B', '-c', CODE, *tail],
                                         text=True, capture_output=True, timeout=12)
@@ -67,6 +67,21 @@ class TrustSeedContracts(unittest.TestCase):
                      '/root/not-the-verifier.py', '/root/'):
             with self.subTest(path=path), self.assertRaises(SystemExit):
                 self.m.trusted_root_path(path)
+
+    def test_malformed_source_commit_refused_before_verifier_open(self):
+        base = ['-c', '--verified-verifier', 'a' * 64,
+                '/root/stage3-prepkg-verified-eval.py', '--expected-source-commit',
+                '1' * 40, '--signed-provenance', 'b' * 64,
+                '/root/key.pem', '/root/claims.json', '/root/sig',
+                '/root/native-prepkg-standalone.py', 'inspect-predecessor',
+                '/root/os-zapret2-restyle-0.6.2_110.pkg', '0.6.2_110',
+                '/root/os-zapret2-restyle-0.6.2_1.pkg', '0.6.2_1']
+        mod = self.m
+        for wrong in ('', '1' * 39, '1' * 41, 'Z' * 40, '../' + '1' * 40):
+            with self.subTest(commit=wrong),                  patch.object(mod.sys, 'argv', list(base[:5] + [wrong] + base[6:])),                  patch.object(mod, 'verified_verifier') as loaded,                  self.assertRaises(SystemExit) as refusal:
+                mod.main()
+            self.assertEqual(refusal.exception.code, 78)
+            loaded.assert_not_called()
 
     def test_freeze_single_open_in_memory_and_all_corruption_refused(self):
         raw_fstat, raw_lstat = os.fstat, os.lstat
@@ -97,7 +112,8 @@ class TrustSeedContracts(unittest.TestCase):
 
     def test_valid_main_executes_frozen_verifier_bytes_and_preserves_signed_argv(self):
         args = ['-c', '--verified-verifier', 'a' * 64,
-                '/root/stage3-prepkg-verified-eval.py', '--signed-provenance',
+                '/root/stage3-prepkg-verified-eval.py', '--expected-source-commit',
+                '1' * 40, '--signed-provenance',
                 'b' * 64, '/root/key.pem', '/root/claims.json', '/root/sig',
                 '/root/native-prepkg-standalone.py', 'inspect-predecessor',
                 '/root/os-zapret2-restyle-0.6.2_109.pkg', '0.6.2_109',
@@ -116,6 +132,8 @@ class TrustSeedContracts(unittest.TestCase):
             self.assertIn('VERIFIED_SOURCE', stdout.getvalue())
             self.assertIn('VERIFIED_SHA256:', stderr.getvalue())
             self.assertIn('--signed-provenance', stdout.getvalue())
+            self.assertIn('--expected-source-commit', stdout.getvalue())
+            self.assertIn('1111111111111111111111111111111111111111', stdout.getvalue())
             self.assertIn('inspect-predecessor', stdout.getvalue())
             self.assertNotIn('--verified-verifier', stdout.getvalue())
         finally:

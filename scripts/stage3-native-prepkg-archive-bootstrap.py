@@ -186,7 +186,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '109', 'NATIVE_BOOTSTRAP_REVISION_NOT_109')
+    need(m is not None and m.group(1) == '110', 'NATIVE_BOOTSTRAP_REVISION_NOT_110')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -299,8 +299,12 @@ def execute(old_archive):
             signature.chmod(0o600)
         seal()
         key_pin = hashlib.sha256(public.read_bytes()).hexdigest()
+        # Test-only expectation from the exact-head checkout; operator must
+        # authenticate the expected commit separately for any real deployment.
+        expected_commit = built['project_sha']
         launcher = [sys.executable,'-I','-B','-c',trusted_code,
                     '--verified-verifier',expected_verifier_sha,str(verifier),
+                    '--expected-source-commit',expected_commit,
                     '--signed-provenance',key_pin,str(public),str(claims),
                     str(signature),str(standalone)]
         tail = ['inspect-predecessor',str(incoming),version,
@@ -327,7 +331,9 @@ def execute(old_archive):
         installed_unchanged(old,old_archive,host,baseline)
         for cmd,reason in (
             (launcher[:6]+['0'*64]+launcher[7:]+tail,'BAD_VERIFIER_SHA_PIN'),
-            (launcher[:9]+['0'*64]+launcher[10:]+tail,'BAD_PUBLIC_KEY_PIN'),
+            (launcher[:9]+['f'*40]+launcher[10:]+tail,'BAD_EXPECTED_SOURCE_COMMIT'),
+            (launcher[:9]+['bad-commit']+launcher[10:]+tail,'MALFORMED_EXPECTED_SOURCE_COMMIT'),
+            (launcher[:11]+['0'*64]+launcher[12:]+tail,'BAD_PUBLIC_KEY_PIN'),
             (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
             (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
         ):
@@ -354,6 +360,18 @@ def execute(old_archive):
         need(denied.returncode==78 and 'REFUSED:' in denied.stderr,
              'SIGNED_WRONG_ARCHIVE_ACCEPTED')
         assertions['incoming_sha256']=expected
+        seal()
+        # Valid CI-signature on the wrong source commit must NOT permit
+        # external source execution even with an unchanged signed archive SHA.
+        assertions['source_commit'] = 'f' * 40
+        seal()
+        denied = run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'SIGNED_PROVENANCE_SOURCE_COMMIT_NOT_APPROVED' in denied.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr,
+             'SIGNED_UNAPPROVED_SOURCE_COMMIT_ACCEPTED')
+        installed_unchanged(old,old_archive,host,baseline)
+        assertions['source_commit'] = expected_commit
         seal()
         # Before the signed verifier may execute: wrong pinned SHA, changed
         # executable verifier canary, symlink, or writable file must refuse.
@@ -407,6 +425,8 @@ def execute(old_archive):
             'standalone_no_checkout_pre_pkg_screened': True,
             'external_sha_verified_before_source_exec': True,
             'verifier_sha_verified_before_verifier_exec': True,
+            'signed_source_commit_matched_independent_expectation': True,
+            'operator_source_commit_authenticated': False,
             'seed_code_from_ci_exact_head_only': True,
             'operator_trust_seed_authenticated': False,
              'ci_ephemeral_signed_provenance_verified': True,
