@@ -164,7 +164,7 @@ class StandalonePrepkgContracts(unittest.TestCase):
                  patch.object(m.subprocess, "run", side_effect=proc):
                 result = m.inspect(newer, self.version, self.sha,
                                    old, self.old_version, self.old_sha)
-                self.assertEqual(bound.call_count, 4)
+                # New before extraction, old before screen, new before and\n                # after the worker, old after worker: five exact inode/SHA checks.\n                self.assertEqual(bound.call_count, 5)
                 self.assertEqual(result["status"], "PASS_STANDALONE_PREPKG_READ_ONLY_COLD")
                 self.assertFalse(result["pkg_invoked"])
                 self.assertFalse(result["supported_mandatory_entrypoint"])
