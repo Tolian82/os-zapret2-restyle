@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Stage 3 CI-only localhost witness with durable SQLite operations and RSA replies.
+"""Stage 3 CI-only mTLS localhost witness, durable SQLite and RSA replies.
 
-NOT a production witness: no client authentication, real independent host,
+NOT a production witness: no owner-approved client identity or real independent host,
 owner-approved key, trusted clock, external monotonic authority or pkg support.
 The signer and journal belong to the same disposable CI host. All mutating
 server functions require an explicit CI opt-in and bind only to 127.0.0.1.
 """
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
 import socket
 import socketserver
+import ssl
 import sqlite3
 import subprocess
 import sys
@@ -223,11 +225,59 @@ class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = False
     daemon_threads = True
 
+    def __init__(self, address, handler, tls_context, approved_client_sha):
+        self.tls_context = tls_context
+        self.approved_client_sha = approved_client_sha
+        super().__init__(address, handler)
 
-def request(port, values):
+    def get_request(self):
+        sock, addr = super().get_request()
+        try:
+            sock.settimeout(TIMEOUT)
+            secure = self.tls_context.wrap_socket(sock, server_side=True)
+            identity = hashlib.sha256(secure.getpeercert(binary_form=True)).hexdigest()
+            if not hmac.compare_digest(identity, self.approved_client_sha):
+                secure.close()
+                raise ssl.SSLError("WITNESS_CLIENT_CERT_PIN_MISMATCH")
+            return secure, addr
+        except (ssl.SSLError, OSError):
+            sock.close()
+            raise
+
+
+def server_tls_context(ca_file, certificate, private_key):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.load_verify_locations(cafile=ca_file)
+    context.load_cert_chain(certfile=certificate, keyfile=private_key)
+    context.options |= ssl.OP_NO_COMPRESSION
+    return context
+
+
+def client_tls_context(ca_file, certificate, private_key):
+    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca_file)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.check_hostname = True  # Server certificate must match 127.0.0.1 SAN.
+    context.load_cert_chain(certfile=certificate, keyfile=private_key)
+    context.options |= ssl.OP_NO_COMPRESSION
+    return context
+
+
+def request(port, values, ca_file, client_certificate, client_private_key,
+            expected_server_der_sha):
     need(type(port) is int and 0 < port < 65536, "CLIENT_PORT_INVALID")
-    with socket.create_connection(("127.0.0.1", port), timeout=TIMEOUT) as sock:
+    need(isinstance(expected_server_der_sha, str) and
+         SHA.fullmatch(expected_server_der_sha) is not None and
+         expected_server_der_sha != "0" * 64, "CLIENT_SERVER_CERT_PIN_REQUIRED")
+    context = client_tls_context(ca_file, client_certificate, client_private_key)
+    with socket.create_connection(("127.0.0.1", port), timeout=TIMEOUT) as channel:
+      with context.wrap_socket(channel, server_hostname="127.0.0.1") as sock:
         sock.settimeout(TIMEOUT)
+        server_sha = hashlib.sha256(sock.getpeercert(binary_form=True)).hexdigest()
+        need(hmac.compare_digest(server_sha, expected_server_der_sha),
+             "CLIENT_SERVER_CERT_PIN_MISMATCH")
         sock.sendall((json.dumps(values, separators=(",", ":")) + "\n").encode())
         chunks = bytearray()
         while len(chunks) <= MAX_ENVELOPE:
@@ -254,16 +304,19 @@ def main(args):
     try:
         need(os.environ.get("ZAPRET2_CI_REMOTE_WITNESS_ONLY") == "1",
              "WITNESS_DISPOSABLE_CI_OPTIN_REQUIRED")
-        need(len(args) in (2, 3), "WITNESS_CLI_INVALID")
+        need(len(args) in (2, 7), "WITNESS_CLI_INVALID")
         if len(args) == 2 and args[0] == "init":
             initialize(args[1])
             print("CI_WITNESS_DB_INITIALIZED", flush=True)
-        elif len(args) == 3 and args[0] == "serve":
-            path, key = args[1:]
+        elif len(args) == 7 and args[0] == "serve":
+            path, key, ca, certificate, tls_key, client_sha = args[1:]
+            need(isinstance(client_sha, str) and SHA.fullmatch(client_sha) is not None and
+                 client_sha != "0" * 64, "WITNESS_CLIENT_CERT_PIN_REQUIRED")
             need(os.path.exists(key) and os.path.isfile(key), "WITNESS_PRIVATE_SIGNER_MISSING")
+            tls = server_tls_context(ca, certificate, tls_key)
             with open_existing(path):
                 pass
-            with Server(("127.0.0.1", 0), Handler) as service:
+            with Server(("127.0.0.1", 0), Handler, tls, client_sha) as service:
                 service.database = path
                 service.key = key
                 print("CI_WITNESS_PORT=" + str(service.server_address[1]), flush=True)
@@ -271,7 +324,7 @@ def main(args):
         else:
             raise Refusal("WITNESS_CLI_INVALID")
         return 0
-    except (Refusal, OSError, sqlite3.Error, ValueError) as exc:
+    except (Refusal, OSError, ssl.SSLError, sqlite3.Error, ValueError) as exc:
         print("CI_WITNESS_REFUSED:" + str(exc), file=sys.stderr)
         return 78
 
