@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.27 _117 monotonic witness CAS CI-only](verification/evidence/2026-11-04-v0.6.2_117-stage3-monotonic-cas-witness.md) — second local witness store, strict CAS and fail-closed outage/poison with full root rollback counterexample; NOT an independent real remote witness.
+
 - [Stage 3.26 _116 signed latest ledger checkpoint witness](verification/evidence/2026-11-04-v0.6.2_116-stage3-signed-latest-checkpoint-witness.md) — third independent CI-only RSA signer; pinned latest tail-rollback refusal, explicit old checkpoint/SHA replay counterexample; not production externally anchored.
 
 - [Stage 3.25 _115 CI-only atomic local approval ledger](verification/evidence/2026-11-04-v0.6.2_115-stage3-local-one-use-ledger.md) — true flock/O_EXCL, monotonic sequence, poison on partial crash; no trusted production rollback authority.
