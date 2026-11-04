@@ -179,13 +179,23 @@ def transition(action,store,remote,local,key_sha,key_path,
                  "OPERATION_ID_REUSED_FOR_DIFFERENT_PAYLOAD")
         if action=="RESERVE":
             if old is not None:
+                proof=latest_match(remote,local,key_sha,key_path,snapshot,sig)
+                need(old["checkpoint_sequence"]==proof["sequence"] and
+                     hmac.compare_digest(old["checkpoint_sha256"],
+                                         proof["checkpoint_sha256"]),
+                     "OPERATION_IDEMPOTENT_RETRY_WITNESS_CHANGED")
                 return result(old,True)  # Never writes another reservation.
             need(not any(ev["action"]=="RESERVE" for ev in by_id.values()),
                  "OPERATION_PENDING_ALREADY_EXISTS")
         else:
             need(old is not None,"OPERATION_NOT_RESERVED")
             if old["action"]==action:
-                return result(old,True)  # Lost reply: immutable status lookup.
+                proof=latest_match(remote,local,key_sha,key_path,snapshot,sig)
+                need(old["checkpoint_sequence"]==proof["sequence"] and
+                     hmac.compare_digest(old["checkpoint_sha256"],
+                                         proof["checkpoint_sha256"]),
+                     "OPERATION_IDEMPOTENT_RETRY_WITNESS_CHANGED")
+                return result(old,True)  # Signed latest checked again.
             need(old["action"]=="RESERVE",
                  "OPERATION_TERMINAL_STATUS_CONFLICT")
         # Verify actual latest while own lock held. This does NOT make
