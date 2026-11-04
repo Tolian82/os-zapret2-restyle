@@ -1,4 +1,4 @@
-name: Stage 3 bounded signed policy and revocation before native pre-pkg
+name: Stage 3 isolated atomic approval ledger and native pre-pkg source boundaries
 
 on:
   pull_request:
@@ -11,6 +11,8 @@ on:
       - scripts/stage3-prepkg-operator-approval.py
       - scripts/test-stage3-prepkg-operator-approval.py
       - scripts/stage3-prepkg-trust-seed.py
+      - scripts/stage3-prepkg-approval-ledger.py
+      - scripts/test-stage3-prepkg-approval-ledger.py
       - scripts/test-stage3-prepkg-trust-seed.py
       - scripts/stage3-prepkg-verified-eval.py
       - scripts/test-stage3-prepkg-verified-eval.py
@@ -33,7 +35,7 @@ permissions:
 
 jobs:
   exact-native-archive-bootstrap:
-    name: Verify signed hourly policy revocation and RSA receipt before original FD9 readonly
+    name: Verify CI-only atomic one-use local ledger plus native signed FD9 readonly
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -46,11 +48,12 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-operator-approval.py scripts/test-stage3-prepkg-operator-approval.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-approval-ledger.py scripts/test-stage3-prepkg-approval-ledger.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
           python3.13 scripts/test-native-prepkg-standalone.py -v
           python3.13 scripts/test-stage3-prepkg-operator-approval.py -v
           python3.13 scripts/test-stage3-prepkg-trust-seed.py -v
+          python3.13 scripts/test-stage3-prepkg-approval-ledger.py -v
           python3.13 scripts/test-stage3-prepkg-verified-eval.py -v
           python3.13 scripts/test-stage3-prepkg-signed-provenance.py -v
       - name: Real official Mk archive pre-pkg source on old 0.6.2_1 disposable OPNsense
