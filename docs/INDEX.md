@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.38 _128 authentic native archive changed after initial signed grant](verification/evidence/2026-11-04-v0.6.2_128-stage3-late-native-archive-drift-no-pkg.md) — CI-only final archive SHA refusal under original FD9, no pkg or old-state change; not production authority.
+
 - [Stage 3.37 _127 late signed-grant drift refusal under original FD9](verification/evidence/2026-11-04-v0.6.2_127-stage3-late-signed-grant-drift-no-pkg.md) — CI-only post-first-check mutation before final native pkg signature gate.
 
 - [Stage 3.36 _126 genuine signed-grant tamper refusal under original FD9 before native pkg](verification/evidence/2026-11-04-v0.6.2_126-stage3-native-tampered-operator-grant-no-pkg.md) — real test-only OPNsense no-pkg / old owner unchanged, no production gateway.
