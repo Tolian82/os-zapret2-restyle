@@ -280,6 +280,18 @@ class NativePkgContract(unittest.TestCase):
             HERE/'stage3-native-configd-detached-fd9.py').read_text())
         self.assertNotIn("done.get('ci_stdin_rebound_sha256')",controller)
 
+    def test_late_owner_refusal_never_requires_positive_stdin_sidecar(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        worker=SOURCE.read_text()
+        self.assertIn("'status':'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL'",worker)
+        self.assertIn("if native_late:\n                # The genuine late-journal",controller)
+        self.assertIn("need(not any(key in verdict for key in swap_keys)",controller)
+        self.assertIn("swap_result={}",controller)
+        self.assertIn("elif not native_late:\n                need(swap_result",controller)
+        self.assertIn("if native_stdin_path_swap_mode():\n                need(",controller)
+        self.assertIn("'NEGATIVE_NATIVE_OWNER_CARRIED_STDIN_SUCCESS_EVIDENCE'",controller)
+        self.assertIn("'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL'",controller)
+
     def test_core_configd_worker_and_ci_job_connect_exact_mode(self):
         core=HERE/'stage3-native-configd-fd9-handoff.py'
         workflow=HERE.parent/'.github/workflows/stage2-native-delegated-fd9-handoff.yml'
