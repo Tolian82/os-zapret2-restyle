@@ -564,7 +564,7 @@ def execute(old_archive):
         verifier_link_dir.mkdir(mode=0o700)
         verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
         verifier_link.symlink_to(verifier)
-        denied=run(launcher[:8]+[str(verifier_link)]+launcher[9:]+tail,45)
+        denied=run(launcher[:12]+[str(verifier_link)]+launcher[13:]+tail,45)
         need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
              'SYMLINK_VERIFIER_ACCEPTED')
         installed_unchanged(old,old_archive,host,baseline)
