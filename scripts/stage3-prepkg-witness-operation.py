@@ -132,7 +132,7 @@ def latest_match(remote,local,key_sha,key_path,snapshot,sig):
     # determines the SHA and _116 verifies real signed checkpoint bytes.
     try:
         return monotonic.compare(remote,local,key_sha,key_path,snapshot,sig)
-    except (monotonic.Refusal,ledger.Refusal,checkpoint.Refusal) as exc:
+    except (monotonic.Refusal,ledger.Refusal,checkpoint.Refusal,OSError) as exc:
         raise Refusal("OPERATION_WITNESS_UNAVAILABLE_OR_SPLIT:"+str(exc)) from None
 
 
