@@ -80,7 +80,8 @@ def archive_members(path):
                  e.lstrip('./') == expected]
         need(len(exact) == 1, 'NATIVE_ARCHIVE_SOURCE_MEMBER_MISSING_OR_DUPLICATED:' +
              name + ':matching_count=' + str(len(exact)) +
-             ':suffix_count=' + str(sum(e.endswith('/' + name) for e in entries)))
+             ':suffix_count=' + str(sum(e.endswith('/' + name) for e in entries)) +
+             ':suffix_example=' + repr([e for e in entries if e.endswith('/' + name)][:1]))
         mapping[name] = exact[0]
     return mapping
 
