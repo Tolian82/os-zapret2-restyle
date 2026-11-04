@@ -72,12 +72,15 @@ def archive_members(path):
     mapping = {}
     for name in MODULES:
         expected = DEST + name
-        # The official native Mk driver may emit repeated leading './'.
-        # Match the same installed relative key as the already-proven native
-        # builder, while refusing slash/parent-traversal aliases.
+        # Actual official OPNsense Mk pkg tar -tf uses /usr/local/...,
+        # while other native tar variants may use repeated leading './'.
+        # Accept *only* the exact expected absolute name or qualified relative
+        # name; tar -xOf only reads bytes and never extracts to this path.
+        # Refuse double-slash/parent-traversal aliases.
         exact = [e for e in entries if
-                 not e.startswith('/') and '..' not in Path(e).parts and
-                 e.lstrip('./') == expected]
+                 '..' not in Path(e).parts and
+                 (e == '/' + expected or
+                  (not e.startswith('/') and e.lstrip('./') == expected))]
         need(len(exact) == 1, 'NATIVE_ARCHIVE_SOURCE_MEMBER_MISSING_OR_DUPLICATED:' +
              name + ':matching_count=' + str(len(exact)) +
              ':suffix_count=' + str(sum(e.endswith('/' + name) for e in entries)) +
