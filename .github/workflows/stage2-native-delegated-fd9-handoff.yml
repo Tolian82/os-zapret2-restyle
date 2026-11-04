@@ -492,6 +492,45 @@ jobs:
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE2_LOCKED_COLD_REVALIDATION=1 ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF=1 ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE3_DETACHED_FD9=1 ZAPRET2_STAGE3_ATOMIC_HANDOFF=1 ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER=1 ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage3-native-configd-fd9-handoff.py "${{ github.event.pull_request.head.sha || github.sha }}"
 
+  configd-native-post-final-archive-veto-no-pkg:
+    name: Actual OPNsense refuses archive drift after final signature before pkg
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Verify 24 grant tests and post-final dispatch-side SHA contracts
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage3-native-late-archive-corruption-ci.py scripts/test-stage3-native-late-archive-corruption-ci.py
+          python3.13 scripts/test-stage3-native-late-archive-corruption-ci.py -v
+          python3.13 -m py_compile scripts/stage3-native-configd-fd9-handoff.py scripts/stage3-native-configd-mutating-pkg.py scripts/stage3-native-configd-operator-grant-ci.py scripts/test-stage3-native-configd-operator-grant-ci.py
+          python3.13 scripts/test-stage3-native-configd-operator-grant-ci.py -v
+          python3.13 scripts/test-stage3-native-configd-fd9-handoff.py -v
+          python3.13 scripts/test-stage3-native-configd-mutating-pkg.py -v
+      - name: Actual post-final-grant archive drift refused before pkg on disposable OPNsense
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit lua54
+            /usr/local/bin/pkgconf --exists lua-5.4
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            GITHUB_ACTIONS=true ZAPRET2_STAGE2_LOCKED_COLD_REVALIDATION=1 ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF=1 ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE3_DETACHED_FD9=1 ZAPRET2_STAGE3_ATOMIC_HANDOFF=1 ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER=1 ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage3-native-configd-fd9-handoff.py "${{ github.event.pull_request.head.sha || github.sha }}"
+
   configd-native-late-journal-dispatch:
     name: Real late journal veto before actual native pkg dispatcher
     runs-on: ubuntu-latest

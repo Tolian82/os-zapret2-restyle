@@ -69,6 +69,34 @@ class LateNativeArchiveTests(unittest.TestCase):
                 fixture.corrupt_native_archive(self.path, self.sha, '128')
         self.assertEqual(self.path.read_bytes(), self.payload)
 
+    def test_after_final_requires_distinct_disposable_phase_and_corrupts_one_byte(self):
+        with patch.dict(os.environ, FLAGS, clear=True):
+            with self.assertRaisesRegex(fixture.Refusal,
+                    'CI_LATE_ARCHIVE_TAMPER_NOT_DISPOSABLE'):
+                fixture.corrupt_native_archive(
+                    self.path,self.sha,'128',after_final=True)
+        self.assertEqual(self.path.read_bytes(),self.payload)
+        phase=dict(FLAGS)
+        phase.pop('ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER_CI')
+        phase['ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI']='1'
+        with patch.dict(os.environ,phase,clear=True):
+            attestation=fixture.corrupt_native_archive(
+                self.path,self.sha,'128',after_final=True)
+        self.assertEqual(attestation['status'],
+                         'CI_ARCHIVE_CORRUPTED_AFTER_FINAL_GRANT')
+        self.assertNotEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(),
+                            self.sha)
+        self.assertFalse(attestation['original_fd9_touched'])
+        self.assertFalse(attestation['native_pkg_invoked'])
+
+    def test_invalid_phase_type_refused_without_mutation(self):
+        with patch.dict(os.environ, FLAGS, clear=True):
+            with self.assertRaisesRegex(fixture.Refusal,
+                    'CI_ARCHIVE_TAMPER_PHASE_INVALID'):
+                fixture.corrupt_native_archive(
+                    self.path,self.sha,'128',after_final='true')
+        self.assertEqual(self.path.read_bytes(),self.payload)
+
     def test_foreign_name_and_wrong_revision_denied(self):
         with patch.dict(os.environ, FLAGS, clear=True):
             with self.assertRaisesRegex(fixture.Refusal, 'CI_LATE_ARCHIVE_IDENTITY_INVALID'):

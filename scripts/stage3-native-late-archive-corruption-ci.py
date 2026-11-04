@@ -40,14 +40,18 @@ def stat_identity(st):
     return (st.st_dev, st.st_ino, st.st_size, st.st_mode, st.st_uid, st.st_nlink)
 
 
-def corrupt_native_archive(path, signed_sha256, revision):
+def corrupt_native_archive(path, signed_sha256, revision, *, after_final=False):
     """Flip exactly the first byte after authentic expected archive digest.
 
     Only a disposable CI controller can invoke this helper. The original
     FD9 remains with the detached worker, not this controller.
     """
+    need(type(after_final) is bool, 'CI_ARCHIVE_TAMPER_PHASE_INVALID')
+    phase_flag=('ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI'
+                if after_final else
+                'ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER_CI')
     need(os.environ.get('GITHUB_ACTIONS') == 'true' and
-         os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER_CI') == '1' and
+         os.environ.get(phase_flag) == '1' and
          os.environ.get('ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK') == '1' and
          os.environ.get('ZAPRET2_NATIVE_BUILD_CI') == '1',
          'CI_LATE_ARCHIVE_TAMPER_NOT_DISPOSABLE')
@@ -89,7 +93,9 @@ def corrupt_native_archive(path, signed_sha256, revision):
         modified_sha = digest(fd)
         need(modified_sha != signed_sha256,
              'CI_LATE_ARCHIVE_BYTES_NOT_CORRUPTED')
-        return {'status': 'CI_LATE_ARCHIVE_CORRUPTED_BEFORE_FINAL_GRANT',
+        return {'status': ('CI_ARCHIVE_CORRUPTED_AFTER_FINAL_GRANT'
+                           if after_final else
+                           'CI_LATE_ARCHIVE_CORRUPTED_BEFORE_FINAL_GRANT'),
                 'expected_sha256': signed_sha256,
                 'modified_sha256': modified_sha,
                 'original_fd9_touched': False,
