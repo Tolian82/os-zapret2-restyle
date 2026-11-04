@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.40 _130 genuine OPNsense pkg stdin from frozen native archive bytes](verification/evidence/2026-11-04-v0.6.2_130-stage3-native-pkg-from-verified-stdin.md) — separate CI-only experiment with original FD9, real target dependencies/historical hooks and installation; not production authority.
+
 - [Stage 3.39 _129 post-final signed-grant archive dispatch veto](verification/evidence/2026-11-04-v0.6.2_129-stage3-post-final-grant-archive-dispatch-veto.md) — CI-only real OPNsense original FD9 test for successor archive change after final grant before actual native pkg dispatch; post-recheck pathname race still OPEN.
 
 - [Stage 3.38 _128 authentic native archive changed after initial signed grant](verification/evidence/2026-11-04-v0.6.2_128-stage3-late-native-archive-drift-no-pkg.md) — CI-only final archive SHA refusal under original FD9, no pkg or old-state change; not production authority.

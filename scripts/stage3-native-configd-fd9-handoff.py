@@ -194,6 +194,21 @@ def post_final_archive_mode():
     return value=='1'
 
 
+def native_stdin_pkg_mode():
+    """Genuine one-use pkg-from-verified-stdin under transferred original FD9."""
+    value=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PKG','')
+    need(value in ('','1'),'NATIVE_STDIN_PKG_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and native_pkg_mode() and
+             not signed_grant_negative_mode() and
+             not late_signed_grant_mode() and not late_archive_mode() and
+             not post_final_archive_mode() and
+             not native_late_journal_mode() and not fault_mode(),
+             'NATIVE_STDIN_PKG_NOT_DISPOSABLE')
+    return value=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -241,6 +256,9 @@ def action_bytes(head):
     if post_final_archive_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER=1 '
                 'ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI=1 ')
+    if native_stdin_pkg_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_STDIN_PKG=1 '
+                'ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -322,6 +340,7 @@ def worker(head):
     late_signed_grant_mode()
     late_archive_mode()
     post_final_archive_mode()
+    native_stdin_pkg_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -439,6 +458,7 @@ def launch(head):
     late_signed_grant_mode()
     late_archive_mode()
     post_final_archive_mode()
+    native_stdin_pkg_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,PREPKG_RESUME):
@@ -526,6 +546,7 @@ def execute(head):
     late_grant=late_signed_grant_mode()
     late_archive=late_archive_mode()
     post_final=post_final_archive_mode()
+    stdin_pkg=native_stdin_pkg_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -796,6 +817,8 @@ def execute(head):
                  done.get('installed_native_package_identity')==expected_identity and
                  done.get('exact_native_successor_sha256')==native_archive_sha and
                  done.get('product_candidate_fd9_rechecked') is True and
+                 done.get('ci_pkg_consumed_verified_stdin_bytes') is stdin_pkg and
+                 done.get('ci_pkg_stdin_avoids_candidate_path_reopen') is stdin_pkg and
                  done.get('original_fd9_retained_during_actual_pkg') is True and
                  done.get('installed_files_modes_verified') is True and
                  done.get('foreign_config_values_preserved') is True and
@@ -924,6 +947,7 @@ def execute(head):
             'native_archive_drift_refused_before_pkg':late_archive or post_final,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
             'native_mutating_pkg_under_detached_fd9':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final),
+            'ci_native_pkg_verified_stdin_mode':stdin_pkg and pkg_enabled,
             'ci_operator_signed_grant_under_original_fd9':pkg_enabled and not (grant_negative or late_grant or late_archive or post_final),
             'ci_operator_grant_is_owner_approved':False,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
