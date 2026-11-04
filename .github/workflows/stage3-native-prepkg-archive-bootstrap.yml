@@ -1,4 +1,4 @@
-name: Stage 3 authenticated native archive source before old pkg replacement
+name: Stage 3 standalone no-checkout pre-pkg read-only source gate
 
 on:
   pull_request:
@@ -6,6 +6,8 @@ on:
       - Makefile
       - scripts/stage3-native-prepkg-archive-bootstrap.py
       - scripts/test-stage3-native-prepkg-archive-bootstrap.py
+      - scripts/native-prepkg-standalone.py
+      - scripts/test-native-prepkg-standalone.py
       - scripts/native-opnsense-package.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py
@@ -37,8 +39,9 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
+          python3.13 scripts/test-native-prepkg-standalone.py -v
       - name: Real official Mk archive pre-pkg source on old 0.6.2_1 disposable OPNsense
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
