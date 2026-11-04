@@ -28,9 +28,11 @@ def definitions():
     if not isinstance(tree.body[-1], ast.Try):
         raise AssertionError("trusted -c snippet must call main as last statement")
     tree.body.pop()
-    ns = {"__name__": "_trusted_eval_contracts"}
-    exec(compile(tree, str(VERIFIER), "exec"), ns)
-    return types.SimpleNamespace(**ns)
+    module = types.ModuleType("_trusted_eval_contracts")
+    # Keep one live globals dictionary so mocks replace actual symbols used
+    # by the audited -c function bodies, not a detached namespace copy.
+    exec(compile(tree, str(VERIFIER), "exec"), module.__dict__)
+    return module
 
 
 def fake_root_stat(st):
