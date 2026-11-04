@@ -33,6 +33,8 @@ def load(name):
 base=load('stage3-native-configd-detached-fd9.py')
 ACTION=Path('/usr/local/opnsense/service/conf/actions.d/actions_zapret2_stage3_handoff_ci.conf')
 ROOT=Path('/tmp/zapret2-stage3-fd9-handoff-ci')
+AUTHORITY=ROOT/'operator-grant-roles.json'
+AUTH_RESULT=ROOT/'operator-grant-result.json'
 SOCKET=ROOT/'fd9.sock'
 TICKET=ROOT/'ticket'
 PREPKG_READY=ROOT/'native-prepkg-ready'
@@ -277,19 +279,45 @@ def worker(head):
             # replacement; no controller-side pkg and no production hook edit.
             signed=json.loads(base.trusted(TICKET))
             need(set(signed)=={'head','nonce','package_path','package_sha256',
-                                'revision'} and signed['head']==head and
+                                'revision'} and
+                 signed['head']==head and
                  signed['nonce']==fields['nonce'],
                  'NATIVE_PKG_ROOT_TICKET_CHANGED_AFTER_ACK')
+            # Original configd ticket stays below its historical 500-byte
+            # bound. Signature/role pins live in a separate owner-only file.
+            ci_grant=json.loads(base.trusted(AUTHORITY,950))
+            need(isinstance(ci_grant,dict),
+                 'NATIVE_PKG_OPERATOR_GRANT_ROLE_FILE_UNTRUSTED')
             os.environ['ZAPRET2_STAGE3_NATIVE_PKG_PATH']=signed['package_path']
             transaction=load('stage3-native-configd-mutating-pkg.py')
             try:
                 verdict=transaction.native_transaction(
                     base.OLD,signed['package_sha256'],signed['revision'],fields['inode'],
-                    late_journal_fault=native_late)
+                    late_journal_fault=native_late,
+                    ci_operator_ticket=ci_grant)
             except Exception as exc:
                 # An interrupted real pkg has UNKNOWN state, never PASS.
                 raise base.Refusal('NATIVE_MUTATING_PKG_WORKER_FAILED:'+
                                    type(exc).__name__+':'+str(exc)[:90]) from None
+            # Preserve historical bounded DONE (<=1024 bytes). Authenticated
+            # CI-grant evidence gets its own root-only, exact-identity result.
+            grant_keys=('ci_operator_signature_verified',
+                        'ci_real_old_and_new_archives_measured',
+                        'ci_resigned_false_old_new_head_denied',
+                        'ci_original_fd9_held_during_grant_admission',
+                        'ci_remote_witness_deployed',
+                        'ci_owner_approval_authenticated',
+                        'ci_pkg_one_use_commit_proven')
+            grant_result={key:verdict.pop(key) for key in grant_keys}
+            need(all(grant_result[k] is True for k in grant_keys[:4]) and
+                 all(grant_result[k] is False for k in grant_keys[4:]) and
+                 verdict['lh08_ac11_accepted'] is False,
+                 'CI_SIGNED_PKG_GRANT_REPORT_INCONSISTENT')
+            base.create_owned(AUTH_RESULT,json.dumps({
+                **grant_result,'sha':head,'pid':os.getpid(),
+                'original_fd9_inode':fields['inode'],
+                'nonce_sha256':digest,
+                'lh08_ac11_accepted':False},sort_keys=True).encode())
             base.create_owned(DONE,json.dumps({
                 **verdict,'sha':head,'pid':os.getpid(),
                 'original_fd9_inode':fields['inode'],
@@ -455,6 +483,12 @@ def execute(head):
     existed=base.LOCK.exists()
     inode=base.LOCK.lstat().st_ino if existed else None
     ROOT.mkdir(mode=0o700)
+    issuer=load('stage3-native-configd-operator-grant-ci.py') if pkg_enabled else None
+    ci_grant=(issuer.issue(ROOT,head,base.OLD,native_archive,
+                           old.ARCHIVE_SHA,native_archive_sha,native_revision)
+              if pkg_enabled else None)
+    if pkg_enabled:
+        base.create_owned(AUTHORITY,json.dumps(ci_grant,sort_keys=True).encode())
     nonce=secrets.token_hex(16)
     ticket_data={'head':head,'nonce':nonce}
     if pkg_enabled:
@@ -522,6 +556,21 @@ def execute(head):
                               b'RESUME_TEST_ONLY_AFTER_CORRUPT_JOURNAL')
         done=json.loads(wait_native_pkg_done() if pkg_enabled
                         else base.wait_file(DONE,45))
+        grant_done=json.loads(base.trusted(AUTH_RESULT,1000)) if pkg_enabled else None
+        if pkg_enabled:
+            need(grant_done.get('sha')==head and
+                 grant_done.get('pid')==ready['pid'] and
+                 grant_done.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 grant_done.get('nonce_sha256')==ready['nonce_sha256'] and
+                 grant_done.get('ci_operator_signature_verified') is True and
+                 grant_done.get('ci_real_old_and_new_archives_measured') is True and
+                 grant_done.get('ci_resigned_false_old_new_head_denied') is True and
+                 grant_done.get('ci_original_fd9_held_during_grant_admission') is True and
+                 grant_done.get('ci_remote_witness_deployed') is False and
+                 grant_done.get('ci_owner_approval_authenticated') is False and
+                 grant_done.get('ci_pkg_one_use_commit_proven') is False and
+                 grant_done.get('lh08_ac11_accepted') is False,
+                 'CI_SIGNED_PKG_GRANT_NATIVE_RECEIPT_UNQUALIFIED')
         if native_late:
             need(done.get('status')=='REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL' and
                  done.get('sha')==head and done.get('pid')==ready['pid'] and
@@ -613,6 +662,13 @@ def execute(head):
     need(SOCKET.is_socket() and not SOCKET.is_symlink(),
          'HANDOFF_SOCKET_MISSING_OR_CHANGED')
     SOCKET.unlink()
+    if pkg_enabled:
+        need(base.trusted(AUTH_RESULT,1000) is not None and
+             base.trusted(AUTHORITY,950) is not None,
+             'OPERATOR_GRANT_AUTHORIZATION_EVIDENCE_CHANGED')
+        AUTH_RESULT.unlink()
+        AUTHORITY.unlink()
+        issuer.cleanup(ROOT)
     ROOT.rmdir()
     if not existed:
         fd=os.open(base.LOCK,os.O_RDWR|os.O_NOFOLLOW)
@@ -647,6 +703,8 @@ def execute(head):
             'late_owner_refused_before_pkg':late_journal or native_late,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
             'native_mutating_pkg_under_detached_fd9':pkg_enabled and not native_late,
+            'ci_operator_signed_grant_under_original_fd9':pkg_enabled,
+            'ci_operator_grant_is_owner_approved':False,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,

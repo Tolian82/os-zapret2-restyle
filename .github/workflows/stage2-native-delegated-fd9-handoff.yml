@@ -28,6 +28,9 @@ on:
       - scripts/test-stage3-native-configd-final-gate.py
       - scripts/stage3-native-configd-mutating-pkg.py
       - scripts/test-stage3-native-configd-mutating-pkg.py
+      - scripts/stage3-native-configd-operator-grant-ci.py
+      - scripts/test-stage3-native-configd-operator-grant-ci.py
+      - scripts/stage3-prepkg-operator-operation-grant-ci.py
       - scripts/stage2-prepkg-locked-cold-revalidation.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-native-clean-install.py
@@ -345,6 +348,8 @@ jobs:
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage3-native-configd-fd9-handoff.py scripts/stage3-native-configd-mutating-pkg.py scripts/test-stage3-native-configd-mutating-pkg.py
+          python3.13 -m py_compile scripts/stage3-native-configd-operator-grant-ci.py scripts/test-stage3-native-configd-operator-grant-ci.py scripts/stage3-prepkg-operator-operation-grant-ci.py
+          python3.13 scripts/test-stage3-native-configd-operator-grant-ci.py -v
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py scripts/test-native-pkg-candidate.py
           python3.13 scripts/test-native-pkg-candidate.py -v
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py scripts/test-native-pkg-managed.py
@@ -389,6 +394,8 @@ jobs:
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage3-native-configd-fd9-handoff.py scripts/stage3-native-configd-mutating-pkg.py scripts/test-stage3-native-configd-mutating-pkg.py
+          python3.13 -m py_compile scripts/stage3-native-configd-operator-grant-ci.py scripts/test-stage3-native-configd-operator-grant-ci.py scripts/stage3-prepkg-operator-operation-grant-ci.py
+          python3.13 scripts/test-stage3-native-configd-operator-grant-ci.py -v
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py scripts/test-native-pkg-candidate.py
           python3.13 scripts/test-native-pkg-candidate.py -v
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py scripts/test-native-pkg-managed.py

@@ -91,7 +91,7 @@ def qualify_late_native_refusal(exc, dispatch_reached):
 
 
 def native_transaction(archive,selected_sha,revision,expected_inode,
-                       late_journal_fault=False):
+                       late_journal_fault=False,ci_operator_ticket=None):
     """Keep original FD9 in this detached worker through actual pkg add -f."""
     delegate=load('stage2-native-delegated-fd9-handoff.py')
     stopped=load('stage2-opnsense-real-native-stopped-upgrade.py')
@@ -130,6 +130,18 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
     need(old.installed_manifest_from_json(initial)['version']=='0.6.2_1',
          'GENUINE_OLD_PKGDB_VERSION_CHANGED_BEFORE_PKG')
     config_before=Path('/conf/config.xml').read_bytes()
+    need(isinstance(ci_operator_ticket,dict),
+         'SIGNED_OPERATOR_GRANT_TICKET_REQUIRED_BEFORE_PKG')
+    grant_guard=load('stage3-native-configd-operator-grant-ci.py')
+    handoff=load('stage3-native-configd-fd9-handoff.py')
+    approval=grant_guard.verify(
+        handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+        archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9)
+    need(approval['ci_operator_signature_verified'] is True and
+         approval['ci_original_fd9_held_during_grant_admission'] is True and
+         approval['ci_resigned_false_old_new_head_denied'] is True and
+         approval['ci_owner_approval_authenticated'] is False,
+         'SIGNED_OPERATOR_GRANT_NOT_NATIVE_FD9_QUALIFIED')
     with tempfile.TemporaryDirectory(prefix='stage3-configd-native-fd9-') as folder_str:
         folder=Path(folder_str)
         os.chmod(folder,0o700)
@@ -191,7 +203,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
                  Path('/conf/config.xml').read_bytes()==config_before,
                  'NATIVE_LATE_PKG_REFUSAL_CHANGED_OLD_STATE')
             locked.check_fd9()
-            return {'schema':1,
+            return {'schema':1,**approval,
                     'status':'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL',
                     'real_owner_check_invoked':True,
                     'product_candidate_fd9_rechecked':True,
@@ -202,6 +214,12 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         # Identical final owner admission helper used by existing native _89.
         # NO controller-side gap: this same detached child owns FD9 throughout.
         attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
+        # Re-verify the very same signed scope and real archive bytes under
+        # continuously owned historical FD9 immediately before pkg dispatch.
+        second=grant_guard.verify(
+            handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+            archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9)
+        need(second==approval,'FD9_SIGNED_OPERATOR_GRANT_DRIFT_BEFORE_PKG')
         rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
         locked.check_fd9()
         calls=delegate.count_calls(folder)-first
@@ -227,7 +245,7 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
             config_before,Path('/conf/config.xml').read_bytes())),
             'NATIVE_PKG_CHANGED_FOREIGN_CONFIG')
         locked.check_fd9()
-        return {'schema':1,
+        return {'schema':1,**approval,
                 'status':'PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9',
                 'original_fd9_retained_during_actual_pkg':True,
                 'real_pkg_exit':rc,
