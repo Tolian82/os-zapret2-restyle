@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.40 `_130`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.41 `_131`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -122,3 +122,7 @@ The [_129 native original-FD9 negative](../verification/evidence/2026-11-04-v0.6
 ## _130 original-FD9 verified immutable bytes to pkg stdin — CI only
 
 [_130 exact native experiment](../verification/evidence/2026-11-04-v0.6.2_130-stage3-native-pkg-from-verified-stdin.md) tests whether the genuine FreeBSD 15/OPNsense 26.7 `pkg add -f -` can consume a single SHA-bound in-memory archive after original-FD9 worker's authentic RSA grant and final archive identity inspection. This prevents *the test-managed pkg child* from reopening the mutable candidate pathname. FreeBSD [pkg-add(8)](https://man.freebsd.org/cgi/man.cgi?query=pkg-add&sektion=8) says the stdin stream fails if dependencies are unmet; target-matched dependencies must already be installed. This still does NOT prove the installed product's supported updater, direct-root-pkg bypass, independent operator authorization, off-host one-use witness or crash-safe RUNNING/rollback. No production signing identity, private key or trust root has been provisioned. **LH-08/AC-11 BLOCKED.**
+
+## _131 genuine archive pathname rebind AFTER verified immutable stdin snapshot
+
+[_131 bounded source-only native proof plan](../verification/evidence/2026-11-04-v0.6.2_131-stage3-real-post-snapshot-path-rebind.md) tests an actual disposable OPNsense 26.7 external controller rebinding the original official Mk candidate pathname to a *different inode and SHA* only after worker has accepted a **CI-only** signed grant and SHA-verified immutable frozen snapshot, while the original FD9 remains locked. The real child `pkg add -f -` must install the original frozen manifest/files despite the changed pathname, and the original candidate inode must be restored after full positive acceptance. This does not make the production configd/firmware/Web/CLI root-pkg route protected: no independently owner-approved authority, protected signing key custody, off-host nonrollbackable one-use witness, crash recovery or RUNNING rollback is deployed. **LH-08/AC-11 BLOCKED.**

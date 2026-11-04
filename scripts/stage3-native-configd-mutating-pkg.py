@@ -131,6 +131,12 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
              not late_grant and not late_archive and not post_final and
              not late_journal_fault,
              'NATIVE_STDIN_PKG_MODE_NOT_DISPOSABLE')
+    stdin_path_swap=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP')=='1'
+    if stdin_path_swap:
+        need(stdin_mode and
+             os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true',
+             'NATIVE_STDIN_PATH_SWAP_NOT_DISPOSABLE')
     need(native.REVISION==revision and old.ARCHIVE_SHA==delegate.load(
          'stage3-native-configd-detached-fd9.py').SHA_OLD,
          'NATIVE_SOURCE_REVISION_OR_PUBLISHED_OLD_UNQUALIFIED')
@@ -291,6 +297,30 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
             stream=load('stage3-native-pkg-stdin-ci.py')
             frozen=stream.freeze_exact_candidate(
                 candidate,selected_sha,revision,locked.check_fd9)
+            if stdin_path_swap:
+                # Unlike _129: REAL controller changes the PATH to a
+                # different inode AFTER immutable snapshot but BEFORE pkg.
+                base=load('stage3-native-configd-detached-fd9.py')
+                locked.check_fd9()
+                base.create_owned(handoff.PREPKG_READY,json.dumps({
+                    'sha':os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+                    'pid':os.getpid(),'original_fd9_inode':expected_inode,
+                    'nonce_sha256':hashlib.sha256(ticket.encode()).hexdigest(),
+                    'signed_grant_verified':True,
+                    'frozen_snapshot_sha256':frozen.sha256,
+                    'frozen_snapshot_inode':frozen.inode,
+                    'frozen_snapshot_complete':True,
+                    'native_mutating_pkg_invoked':False
+                },sort_keys=True).encode())
+                need(base.wait_file(handoff.PREPKG_RESUME,55)==
+                     b'RESUME_TEST_ONLY_AFTER_STDIN_SNAPSHOT_PATH_REBIND',
+                     'CI_STDIN_PATH_SWAP_BARRIER_NOT_RELEASED')
+                locked.check_fd9()
+                changed=candidate.lstat()
+                need(stat.S_ISREG(changed.st_mode) and
+                     changed.st_dev==frozen.dev and changed.st_ino!=frozen.inode and
+                     hashlib.sha256(candidate.read_bytes()).hexdigest()!=selected_sha,
+                     'CI_STDIN_CANDIDATE_PATH_NOT_ACTUALLY_REBOUND')
             def verified_stdin_dispatch(_candidate_path, environment):
                 return stream.install_frozen_stdin(
                     frozen,environment,locked.check_fd9)
@@ -303,10 +333,31 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         actual=stopped.load('stage2-opnsense-real-unsafe-owner-replacement.py').installed_identity()
         target=NAME+'|0.6.2_'+revision
         accept_pkg_effect(rc,out,err,actual,target,calls)
-        need(hashlib.sha256(candidate.read_bytes()).hexdigest()==selected_sha,
-             'OFFICIAL_NATIVE_PACKAGE_BYTES_CHANGED_DURING_PKG')
-        manifest,pkgdb=clean.installed_pkg_manifest(candidate)
-        files=clean.verify_installed_files(candidate,manifest)
+        source_for_manifest=candidate
+        observed_rebound_sha=None
+        if stdin_path_swap:
+            # Prove the attacker-controlled pathname stayed corrupt THROUGH
+            # actual pkg. Compare the installed files to immutable bytes,
+            # never to the deliberately substituted candidate pathname.
+            changed=candidate.lstat()
+            observed_rebound_sha=hashlib.sha256(candidate.read_bytes()).hexdigest()
+            need(changed.st_ino!=frozen.inode and
+                 observed_rebound_sha!=selected_sha,
+                 'CI_STDIN_REBOUND_DID_NOT_SURVIVE_REAL_PKG')
+            source_for_manifest=folder/'native-frozen-reference.pkg'
+            fdref=os.open(source_for_manifest,
+                          os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            with os.fdopen(fdref,'wb') as reference:
+                reference.write(frozen.data)
+                reference.flush()
+                os.fsync(reference.fileno())
+            need(hashlib.sha256(source_for_manifest.read_bytes()).hexdigest()==selected_sha,
+                 'CI_STDIN_FROZEN_MANIFEST_SOURCE_CHANGED')
+        else:
+            need(hashlib.sha256(candidate.read_bytes()).hexdigest()==selected_sha,
+                 'OFFICIAL_NATIVE_PACKAGE_BYTES_CHANGED_DURING_PKG')
+        manifest,pkgdb=clean.installed_pkg_manifest(source_for_manifest)
+        files=clean.verify_installed_files(source_for_manifest,manifest)
         need(bool(files) and bool(pkgdb),'INSTALLED_MANIFEST_OR_FILES_UNQUALIFIED')
         new_service=Path('/usr/local')/native.SERVICE
         after=subprocess.run([str(new_service),'status'],env=env,
@@ -332,6 +383,10 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
                 'product_candidate_fd9_rechecked':True,
                 'ci_pkg_consumed_verified_stdin_bytes':stdin_mode,
                 'ci_pkg_stdin_avoids_candidate_path_reopen':stdin_mode,
+                'ci_stdin_path_rebound_after_snapshot':stdin_path_swap,
+                'ci_stdin_frozen_manifest_verified':stdin_path_swap,
+                'ci_stdin_rebound_sha256':observed_rebound_sha,
+                'ci_stdin_original_frozen_inode':frozen.inode if stdin_path_swap else None,
                 'installed_files_modes_verified':True,
                 'new_service_cold_under_transferred_fd9':True,
                 'foreign_config_values_preserved':True,
