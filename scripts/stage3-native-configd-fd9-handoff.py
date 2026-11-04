@@ -39,6 +39,7 @@ SOCKET=ROOT/'fd9.sock'
 TICKET=ROOT/'ticket'
 PREPKG_READY=ROOT/'native-prepkg-ready'
 PREPKG_RESUME=ROOT/'native-prepkg-resume'
+SWAP_RESULT=ROOT/'stdin-path-swap-result.json'
 READY=ROOT/'ready'
 DONE=ROOT/'done'
 FAILED=ROOT/'failed'
@@ -209,6 +210,18 @@ def native_stdin_pkg_mode():
     return value=='1'
 
 
+def native_stdin_path_swap_mode():
+    """One-use genuine OPNsense pathname-rebind AFTER exact frozen bytes."""
+    value=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP','')
+    need(value in ('','1'),'CI_STDIN_PATH_SWAP_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             native_stdin_pkg_mode() and not fault_mode(),
+             'CI_STDIN_PATH_SWAP_NOT_DISPOSABLE')
+    return value=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -259,6 +272,9 @@ def action_bytes(head):
     if native_stdin_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_STDIN_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI=1 ')
+    if native_stdin_path_swap_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP=1 '
+                'ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -341,6 +357,7 @@ def worker(head):
     late_archive_mode()
     post_final_archive_mode()
     native_stdin_pkg_mode()
+    native_stdin_path_swap_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -416,6 +433,42 @@ def worker(head):
                  all(grant_result[k] is False for k in grant_keys[4:]) and
                  verdict['lh08_ac11_accepted'] is False,
                  'CI_SIGNED_PKG_GRANT_REPORT_INCONSISTENT')
+            # Preserve historical 1024-byte DONE size. The four path-swap
+            # witness fields alone would push DONE above its strict cap.
+            # Authenticated, bounded and one-use test evidence lives in a
+            # separate owner-only sidecar bound to the same head/PID/FD9/nonce.
+            swap_keys=('ci_stdin_path_rebound_after_snapshot',
+                       'ci_stdin_frozen_manifest_verified',
+                       'ci_stdin_rebound_sha256',
+                       'ci_stdin_original_frozen_inode')
+            if native_late:
+                # The genuine late-journal *refusal* returns before native
+                # pkg and has no positive stdin evidence. Never demand a
+                # success-only sidecar or turn that safe veto into KeyError.
+                need(not any(key in verdict for key in swap_keys),
+                     'NEGATIVE_NATIVE_OWNER_CARRIED_STDIN_SUCCESS_EVIDENCE')
+                swap_result={}
+            else:
+                swap_result={key:verdict.pop(key) for key in swap_keys}
+            if native_stdin_path_swap_mode():
+                need(swap_result['ci_stdin_path_rebound_after_snapshot'] is True and
+                     swap_result['ci_stdin_frozen_manifest_verified'] is True and
+                     re.fullmatch('[a-f0-9]{64}',
+                                  swap_result['ci_stdin_rebound_sha256'] or '') is not None and
+                     type(swap_result['ci_stdin_original_frozen_inode']) is int,
+                     'STDIN_SWAP_WORKER_SIDECAR_UNQUALIFIED')
+                base.create_owned(SWAP_RESULT,json.dumps({
+                    **swap_result,'status':'CI_REAL_STDIN_PATH_REBIND_PKG_VERIFIED',
+                    'sha':head,'pid':os.getpid(),
+                    'original_fd9_inode':fields['inode'],
+                    'nonce_sha256':digest
+                },sort_keys=True).encode())
+            elif not native_late:
+                need(swap_result['ci_stdin_path_rebound_after_snapshot'] is False and
+                     swap_result['ci_stdin_frozen_manifest_verified'] is False and
+                     swap_result['ci_stdin_rebound_sha256'] is None and
+                     swap_result['ci_stdin_original_frozen_inode'] is None,
+                     'STDIN_SWAP_SIDECAR_CREATED_WITHOUT_MODE')
             base.create_owned(AUTH_RESULT,json.dumps({
                 **grant_result,'sha':head,'pid':os.getpid(),
                 'original_fd9_inode':fields['inode'],
@@ -459,9 +512,11 @@ def launch(head):
     late_archive_mode()
     post_final_archive_mode()
     native_stdin_pkg_mode()
+    native_stdin_path_swap_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
-    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,PREPKG_RESUME):
+    for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,
+              PREPKG_RESUME,SWAP_RESULT):
         need(not p.exists() and not p.is_symlink(),
              'ONE_USE_HANDOFF_RESOURCE_ALREADY_PRESENT:'+p.name)
     created,inode=open_original_fd9()
@@ -547,6 +602,7 @@ def execute(head):
     late_archive=late_archive_mode()
     post_final=post_final_archive_mode()
     stdin_pkg=native_stdin_pkg_mode()
+    stdin_path_swap=native_stdin_path_swap_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -616,6 +672,8 @@ def execute(head):
     base.create_owned(ACTION,action_bytes(head))
     released=False
     journal_verified=False
+    swapped_archive=None
+    stdin_original_restored=False
     journal=None
     journal_parent_created=False
     try:
@@ -726,6 +784,36 @@ def execute(head):
             base.create_owned(
                 PREPKG_RESUME,
                 b'RESUME_TEST_ONLY_AFTER_POST_FINAL_ARCHIVE_BYTE_TAMPER')
+        if stdin_path_swap:
+            # The detached worker has already verified the FINAL signed grant,
+            # native archive gate and immutable SHA-bound byte snapshot.
+            armed=json.loads(base.wait_file(PREPKG_READY,85))
+            need(armed.get('sha')==head and armed.get('pid')==ready['pid'] and
+                 armed.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 armed.get('nonce_sha256')==ready['nonce_sha256'] and
+                 armed.get('signed_grant_verified') is True and
+                 armed.get('frozen_snapshot_complete') is True and
+                 armed.get('frozen_snapshot_sha256')==native_archive_sha and
+                 type(armed.get('frozen_snapshot_inode')) is int and
+                 armed['frozen_snapshot_inode']==native_archive.lstat().st_ino and
+                 armed.get('native_mutating_pkg_invoked') is False,
+                 'CI_STDIN_FROZEN_BARRIER_IDENTITY_UNQUALIFIED')
+            base.check_original_fd9_busy()
+            attack=load('stage3-native-stdin-path-swap-ci.py')
+            swapped_archive=attack.atomic_rebind(
+                native_archive,native_archive_sha,native_revision)
+            need(swapped_archive['status']=='CI_STDIN_PATH_REBOUND_TO_DIFFERENT_INODE' and
+                 swapped_archive['original_inode']==armed['frozen_snapshot_inode'] and
+                 swapped_archive['original_sha256']==native_archive_sha and
+                 swapped_archive['replacement_sha256']!=native_archive_sha and
+                 swapped_archive['original_fd9_touched'] is False and
+                 swapped_archive['native_pkg_invoked'] is False,
+                 'CI_STDIN_ATOMIC_PATH_REBIND_NOT_PROVEN')
+            attack.require_still_rebound(swapped_archive)
+            base.check_original_fd9_busy()
+            base.create_owned(
+                PREPKG_RESUME,
+                b'RESUME_TEST_ONLY_AFTER_STDIN_SNAPSHOT_PATH_REBIND')
         if grant_negative or late_grant or late_archive or post_final:
             try:
                 wait_native_pkg_done()
@@ -807,6 +895,19 @@ def execute(head):
             journal.verify_corrupt_journal()
             journal_verified=True
         elif pkg_enabled:
+            swap_data=(json.loads(base.trusted(SWAP_RESULT,1024))
+                       if stdin_path_swap else None)
+            if stdin_path_swap:
+                need(type(swap_data) is dict and
+                     swap_data.get('status')=='CI_REAL_STDIN_PATH_REBIND_PKG_VERIFIED' and
+                     swap_data.get('sha')==head and
+                     swap_data.get('pid')==ready['pid'] and
+                     swap_data.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                     swap_data.get('nonce_sha256')==ready['nonce_sha256'],
+                     'STDIN_SWAP_WORKER_SIDECAR_IDENTITY_MISMATCH')
+            else:
+                need(not SWAP_RESULT.exists() and not SWAP_RESULT.is_symlink(),
+                     'STDIN_SWAP_UNEXPECTED_SIDECAR')
             expected_identity='os-zapret2-restyle|0.6.2_'+native_revision
             need(done.get('status')=='PASS_TEST_ONLY_CONFIGD_NATIVE_PKG_UNDER_ORIGINAL_FD9' and
                  done.get('sha')==head and done.get('pid')==ready['pid'] and
@@ -819,6 +920,12 @@ def execute(head):
                  done.get('product_candidate_fd9_rechecked') is True and
                  done.get('ci_pkg_consumed_verified_stdin_bytes') is stdin_pkg and
                  done.get('ci_pkg_stdin_avoids_candidate_path_reopen') is stdin_pkg and
+                 (not stdin_path_swap or
+                  (swapped_archive is not None and swap_data is not None and
+                   swap_data.get('ci_stdin_path_rebound_after_snapshot') is True and
+                   swap_data.get('ci_stdin_frozen_manifest_verified') is True and
+                   swap_data.get('ci_stdin_original_frozen_inode')==swapped_archive['original_inode'] and
+                   swap_data.get('ci_stdin_rebound_sha256')==swapped_archive['replacement_sha256'])) and
                  done.get('original_fd9_retained_during_actual_pkg') is True and
                  done.get('installed_files_modes_verified') is True and
                  done.get('foreign_config_values_preserved') is True and
@@ -843,6 +950,18 @@ def execute(head):
                  done.get('nonce_sha256')==ready['nonce_sha256'] and
                  done.get('native_pkg_mutation_invoked') is False,
                  'WORKER_DID_NOT_COMPLETE_CONTINUOUS_FD9_SESSION')
+        if stdin_path_swap:
+            # Real pkg returned, old hooks/files/Config/FD9 passed, and path
+            # STILL points to the attacker inode. Only now restore the exact
+            # original inode so the normal post-configd digest gate stays valid.
+            need(swapped_archive is not None,
+                 'CI_STDIN_PATH_SWAP_REPORT_MISSING_AFTER_PKG')
+            attack.require_still_rebound(swapped_archive)
+            restored=attack.restore_original_after_verified_pkg(swapped_archive)
+            need(restored['status']=='CI_STDIN_ORIGINAL_CANDIDATE_PATH_RESTORED' and
+                 restored['original_sha256']==native_archive_sha,
+                 'CI_STDIN_ORIGINAL_PATH_RESTORATION_UNQUALIFIED')
+            stdin_original_restored=True
     finally:
         if not released and not RELEASE.exists() and not RELEASE.is_symlink():
             base.create_owned(RELEASE,b'RELEASE_TEST_ONLY')
@@ -874,7 +993,10 @@ def execute(head):
         if late_archive or post_final:
             need(clean.digest(native_archive)!=native_archive_sha,
                  'ARCHIVE_CORRUPTION_NOT_PERSISTED_BEFORE_NO_PKG')
-    for p in ((TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
+    for p in ((TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME,
+               SWAP_RESULT)
+              if stdin_path_swap else
+              (TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
               if (late_grant or late_archive or post_final) else
               (TICKET,READY,FAILED,RELEASE,QUERY) if grant_negative else
               (TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
@@ -948,6 +1070,8 @@ def execute(head):
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
             'native_mutating_pkg_under_detached_fd9':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final),
             'ci_native_pkg_verified_stdin_mode':stdin_pkg and pkg_enabled,
+            'ci_stdin_path_swap_after_snapshot':stdin_path_swap,
+            'ci_stdin_original_path_restored':stdin_original_restored,
             'ci_operator_signed_grant_under_original_fd9':pkg_enabled and not (grant_negative or late_grant or late_archive or post_final),
             'ci_operator_grant_is_owner_approved':False,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,

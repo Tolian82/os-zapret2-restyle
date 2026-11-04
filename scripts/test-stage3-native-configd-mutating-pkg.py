@@ -134,7 +134,7 @@ class NativePkgContract(unittest.TestCase):
         for x in ('delegate.admitted_pkg_dispatch(archive,candidate,env)',
                   'locked.check_fd9()', 'pass_fds=(9,)',
                   "'LOCKF_BIN':str(script)", 'native_mutating_pkg_invoked',
-                  'clean.verify_installed_files(candidate,manifest)',
+                  'clean.verify_installed_files(source_for_manifest,manifest)',
                   'stopped.prove_preserved_config(',
                   'GENUINE_HISTORICAL_HOOK_FD9_DELEGATION_NOT_OBSERVED'):
             self.assertIn(x,text)
@@ -182,7 +182,7 @@ class NativePkgContract(unittest.TestCase):
         self.assertLess(snapshot,dispatcher)
         self.assertIn('verified_stdin_dispatch',source)
         self.assertIn('stream.install_frozen_stdin(',source)
-        self.assertIn('clean.verify_installed_files(candidate,manifest)',source)
+        self.assertIn('clean.verify_installed_files(source_for_manifest,manifest)',source)
         self.assertIn('GENUINE_HISTORICAL_HOOK_FD9_DELEGATION_NOT_OBSERVED',source)
         self.assertIn("'ci_pkg_consumed_verified_stdin_bytes':stdin_mode",source)
 
@@ -196,6 +196,101 @@ class NativePkgContract(unittest.TestCase):
         self.assertIn("'final_owner_check_to_pkg_race_closed':False",controller)
         self.assertIn('configd-native-pkg-verified-stdin:',workflow)
         self.assertIn('ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI=1',workflow)
+
+    def test_real_path_swap_mode_requires_stdin_and_disposable_guest(self):
+        controller=HERE/'stage3-native-configd-fd9-handoff.py'
+        spec=importlib.util.spec_from_file_location('isolated_stdin_path_controller',controller)
+        obj=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(obj)
+        with patch.dict(os.environ,{'ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP':'invalid'},clear=True):
+            with self.assertRaisesRegex(Exception,'CI_STDIN_PATH_SWAP_MODE_INVALID'):
+                obj.native_stdin_path_swap_mode()
+        with patch.dict(os.environ,{'ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP':'1'},clear=True):
+            with self.assertRaisesRegex(Exception,'CI_STDIN_PATH_SWAP_NOT_DISPOSABLE'):
+                obj.native_stdin_path_swap_mode()
+        env={
+            'GITHUB_ACTIONS':'true','ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP':'1',
+            'ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI':'1',
+            'ZAPRET2_STAGE3_NATIVE_STDIN_PKG':'1',
+            'ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI':'1',
+            'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG':'1',
+            'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI':'1',
+            'ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK':'1',
+            'ZAPRET2_NATIVE_BUILD_CI':'1',
+            'ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF':'1',
+            'ZAPRET2_STAGE3_READONLY_PKG':'1',
+            'ZAPRET2_STAGE3_READONLY_PKG_CI':'1'}
+        with patch.dict(os.environ,env,clear=True):
+            self.assertTrue(obj.native_stdin_path_swap_mode())
+        env['ZAPRET2_STAGE3_NATIVE_STDIN_PKG']=''
+        with patch.dict(os.environ,env,clear=True):
+            with self.assertRaisesRegex(Exception,'CI_STDIN_PATH_SWAP_NOT_DISPOSABLE'):
+                obj.native_stdin_path_swap_mode()
+
+    def test_stdin_path_swap_barrier_requires_frozen_bytes_before_actual_pkg(self):
+        source=SOURCE.read_text()
+        signed=source.index('second=grant_guard.verify(')
+        snapshot=source.index('frozen=stream.freeze_exact_candidate(',signed)
+        armed=source.index("'frozen_snapshot_complete':True",snapshot)
+        wait=source.index('CI_STDIN_PATH_SWAP_BARRIER_NOT_RELEASED',armed)
+        changed=source.index('CI_STDIN_CANDIDATE_PATH_NOT_ACTUALLY_REBOUND',wait)
+        pkg=source.index('delegate.admitted_pkg_dispatch(',changed)
+        manifest=source.index('clean.installed_pkg_manifest(source_for_manifest)',pkg)
+        self.assertLess(signed,snapshot)
+        self.assertLess(snapshot,armed)
+        self.assertLess(armed,wait)
+        self.assertLess(wait,changed)
+        self.assertLess(changed,pkg)
+        self.assertLess(pkg,manifest)
+        self.assertIn("observed_rebound_sha!=selected_sha",source)
+        self.assertIn("reference.write(frozen.data)",source)
+        self.assertIn("'ci_stdin_frozen_manifest_verified':stdin_path_swap",source)
+        self.assertIn("'lh08_ac11_accepted':False",source)
+
+    def test_controller_rebinds_only_after_authentic_frozen_worker_marker(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        workflow=(HERE.parent/'.github/workflows/stage2-native-delegated-fd9-handoff.yml').read_text()
+        armed=controller.index("'frozen_snapshot_complete') is True")
+        swapped=controller.index('attack.atomic_rebind(',armed)
+        resume=controller.index('RESUME_TEST_ONLY_AFTER_STDIN_SNAPSHOT_PATH_REBIND',swapped)
+        final=controller.index("swap_data.get('ci_stdin_rebound_sha256')",resume)
+        restore=controller.index('attack.restore_original_after_verified_pkg(',final)
+        self.assertLess(armed,swapped)
+        self.assertLess(swapped,resume)
+        self.assertLess(resume,final)
+        self.assertLess(final,restore)
+        self.assertIn("swapped_archive['replacement_sha256']!=native_archive_sha",controller)
+        self.assertIn("'ci_stdin_original_path_restored':stdin_original_restored",controller)
+        self.assertIn("if stdin_path_swap else",controller)
+        self.assertIn("configd-native-stdin-post-snapshot-path-swap:",workflow)
+        self.assertIn("ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP_CI=1",workflow)
+
+    def test_path_swap_evidence_is_bounded_sidecar_not_historical_done(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        self.assertIn("SWAP_RESULT=ROOT/'stdin-path-swap-result.json'",controller)
+        self.assertIn("swap_result={key:verdict.pop(key) for key in swap_keys}",controller)
+        self.assertIn('base.create_owned(SWAP_RESULT,json.dumps({',controller)
+        self.assertIn("swap_data.get('sha')==head",controller)
+        self.assertIn("swap_data.get('pid')==ready['pid']",controller)
+        self.assertIn("swap_data.get('original_fd9_inode')==ready['original_fd9_inode']",controller)
+        self.assertIn("swap_data.get('nonce_sha256')==ready['nonce_sha256']",controller)
+        self.assertIn('base.trusted(SWAP_RESULT,1024)',controller)
+        self.assertIn('SWAP_RESULT)\n              if stdin_path_swap else',controller)
+        self.assertIn('TEST_RESULT_UNBOUNDED',(
+            HERE/'stage3-native-configd-detached-fd9.py').read_text())
+        self.assertNotIn("done.get('ci_stdin_rebound_sha256')",controller)
+
+    def test_late_owner_refusal_never_requires_positive_stdin_sidecar(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        worker=SOURCE.read_text()
+        self.assertIn("'status':'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL'",worker)
+        self.assertIn("if native_late:\n                # The genuine late-journal",controller)
+        self.assertIn("need(not any(key in verdict for key in swap_keys)",controller)
+        self.assertIn("swap_result={}",controller)
+        self.assertIn("elif not native_late:\n                need(swap_result",controller)
+        self.assertIn("if native_stdin_path_swap_mode():\n                need(",controller)
+        self.assertIn("'NEGATIVE_NATIVE_OWNER_CARRIED_STDIN_SUCCESS_EVIDENCE'",controller)
+        self.assertIn("'REFUSED_TEST_ONLY_REAL_NATIVE_DISPATCH_LATE_JOURNAL'",controller)
 
     def test_core_configd_worker_and_ci_job_connect_exact_mode(self):
         core=HERE/'stage3-native-configd-fd9-handoff.py'

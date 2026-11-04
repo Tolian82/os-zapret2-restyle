@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.41 _131 real native post-snapshot pathname rebind](verification/evidence/2026-11-04-v0.6.2_131-stage3-real-post-snapshot-path-rebind.md) — CI-only different-inode candidate substitution while real pkg consumes frozen SHA bytes, old FD9 and hook checks, explicit no-production-authority boundary.
+
 - [Stage 3.40 _130 genuine OPNsense pkg stdin from frozen native archive bytes](verification/evidence/2026-11-04-v0.6.2_130-stage3-native-pkg-from-verified-stdin.md) — separate CI-only experiment with original FD9, real target dependencies/historical hooks and installation; not production authority.
 
 - [Stage 3.39 _129 post-final signed-grant archive dispatch veto](verification/evidence/2026-11-04-v0.6.2_129-stage3-post-final-grant-archive-dispatch-veto.md) — CI-only real OPNsense original FD9 test for successor archive change after final grant before actual native pkg dispatch; post-recheck pathname race still OPEN.
