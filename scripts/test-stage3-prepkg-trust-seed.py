@@ -111,7 +111,9 @@ class TrustSeedContracts(unittest.TestCase):
             with self.subTest(path=bad), \
                  patch.object(self.m.os, "open") as opened, \
                  self.assertRaises(SystemExit):
-                self.m.operator_receipt(bad)
+                self.m.operator_receipt(
+                    bad, "f"*64, "/root/review/operator-approval-authority.pem",
+                    "/root/review/operator-pins.sig")
             opened.assert_not_called()
 
     def test_single_fd_receipt_and_schema_refusals(self):
