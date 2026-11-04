@@ -158,7 +158,7 @@ def assert_unchanged(old, guard, archive, before):
     need(old.run_guest(archive, host)['status'] == 'PASS_READ_ONLY_PROVENANCE',
          'ORIGINAL_INSTALLED_PROVENANCE_CHANGED')
 
-def busy_negative(archive, prior):
+def busy_negative(archive, prior, product_cli):
     with tempfile.TemporaryDirectory(prefix='stage2-busy-fd9-') as folder:
         marker = Path(folder) / 'held'
         proc = None
@@ -170,7 +170,6 @@ def busy_negative(archive, prior):
             prior.wait_held(marker, proc)
             observed = classify(call_locked(archive), 'busy')
             old = load('stage0-installed-predecessor-readonly.py')
-            product_cli = HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py'
             blocked = subprocess.run(
                 [sys.executable, '-B', str(product_cli), 'inspect-predecessor',
                  str(archive), old.VERSION, old.ARCHIVE_SHA],
@@ -184,7 +183,48 @@ def busy_negative(archive, prior):
                 proc.communicate(timeout=8)
     return observed
 
+def staged_product_cli(folder):
+    """Use verified product bytes as trusted root-only *test* code, never a bootstrap.
+
+    GitHub checkout ownership is intentionally not root on KVM. Do not weaken
+    production source-inode trust: construct a private root-owned immutable-byte
+    witness solely inside the disposable native CI guest.
+    """
+    qualify()
+    root = Path(folder)
+    st = root.lstat()
+    need(stat.S_ISDIR(st.st_mode) and st.st_uid == 0 and
+         stat.S_IMODE(st.st_mode) == 0o700 and not root.is_symlink(),
+         'DISPOSABLE_CLI_ROOT_DIRECTORY_UNTRUSTED')
+    source = HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret/backend'
+    for name in ('native_pkg_managed.py', 'native_pkg_old_owner.py',
+                 'native_pkg_candidate.py', 'native_pkg_handoff.py'):
+        origin = source / name
+        need(origin.is_file() and not origin.is_symlink(),
+             'TRACKED_PRODUCT_SOURCE_UNQUALIFIED:' + name)
+        content = origin.read_bytes()
+        target = root / name
+        need(not target.exists() and not target.is_symlink(),
+             'DISPOSABLE_CLI_TARGET_EXISTS:' + name)
+        target.write_bytes(content)
+        target.chmod(0o600)
+        info = target.lstat()
+        need(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and
+             stat.S_IMODE(info.st_mode) == 0o600 and
+             hashlib.sha256(target.read_bytes()).digest() ==
+             hashlib.sha256(content).digest(),
+             'STAGED_CLI_NOT_ROOT_OWNED_OR_BYTES_DIFFER:' + name)
+    return root / 'native_pkg_managed.py'
+
+
 def execute(archive):
+    qualify()
+    with tempfile.TemporaryDirectory(prefix='zapret2-original-cli-ci-', dir='/root') as folder:
+        cli = staged_product_cli(folder)
+        return execute_with_root_owned_source(archive, cli)
+
+
+def execute_with_root_owned_source(archive, product_cli):
     qualify()
     guest = load('stage0-opnsense-guest-readonly.py')
     guest.evaluate(guest.observe())
@@ -205,7 +245,6 @@ def execute(archive):
     cold = classify(call_locked(archive), 'cold')
     # This new product-source CLI may be screened outside the installed old
     # package only in the disposable KVM test; the old _1 has no such CLI.
-    product_cli = HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py'
     command = [sys.executable, '-B', str(product_cli), 'inspect-predecessor',
                str(archive), old.VERSION, old.ARCHIVE_SHA]
     screened = subprocess.run(command, capture_output=True, text=True,
@@ -222,7 +261,7 @@ def execute(archive):
          old_report.get('lh08_ac11_accepted') is False,
          'REAL_OLD_PREDECESSOR_SCREEN_FALSE_ADMISSION')
     assert_unchanged(old, guard, archive, before)
-    busy = busy_negative(archive, prior)
+    busy = busy_negative(archive, prior, product_cli)
     assert_unchanged(old, guard, archive, before)
     created_parent = False
     created_journal = False
