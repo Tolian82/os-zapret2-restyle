@@ -70,17 +70,6 @@ class StandalonePrepkgContracts(unittest.TestCase):
             with self.assertRaises(m.Refusal):
                 m.identity(valid, self.version, self.sha)
 
-    def test_exact_archive_digest_bad_sha_fails_before_tar(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            pkg = Path(tmp) / ("os-zapret2-restyle-" + self.version + ".pkg")
-            pkg.write_bytes(b"real archive bytes")
-            with patch.object(Path, "lstat", fake_root_lstat), \
-                 patch.object(m.os, "fstat", side_effect=lambda fd:
-                              root_stat(os.fstat(fd))):
-                # os.fstat is patched globally through the os module object;
-                # use a saved original to avoid recursive mock invocation.
-                pass
-
     def test_archive_digest_and_symlink_with_no_follow(self):
         real_fstat = os.fstat
         with tempfile.TemporaryDirectory() as tmp:
