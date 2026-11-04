@@ -13,6 +13,7 @@ from pathlib import Path
 import re
 import stat
 import secrets
+import ssl
 import subprocess
 import time
 
@@ -47,6 +48,22 @@ def consumed_mode():
              os.environ.get("ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI")=="1",
              "FD9_CI_CONSUMED_DISPOSABLE_OPTIN_REQUIRED")
     return flag=="1"
+
+
+def live_mode():
+    spec=importlib.util.spec_from_file_location(
+        "ci_native_live_witness_mode",HERE/"stage3-native-live-witness-ci.py")
+    obj=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(obj)
+    return obj.mode()
+
+
+def live_module():
+    spec=importlib.util.spec_from_file_location(
+        "ci_native_live_witness",HERE/"stage3-native-live-witness-ci.py")
+    obj=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(obj)
+    return obj
 
 
 def witness_module():
@@ -100,14 +117,18 @@ def exact_private_root(root):
          "FD9_GRANT_PRIVATE_ROOT_UNTRUSTED")
 
 
-def expected_identity(head, old_sha, new_sha):
+def expected_identity(head, old_sha, new_sha, nonce=None):
     need(type(head) is str and COMMIT.fullmatch(head) is not None and
          all(type(d) is str and SHA.fullmatch(d) is not None and d != "0"*64
              for d in (old_sha, new_sha)),
          "FD9_GRANT_INVALID_EXPECTED_HEAD_OR_PACKAGE_DIGEST")
+    if nonce is not None:
+        need(type(nonce) is str and re.fullmatch("[a-f0-9]{32}",nonce) is not None,
+             "FD9_GRANT_ORIGINAL_TRANSFER_NONCE_INVALID")
+    prefix="fd9-live-operation|" + nonce + "|" if nonce is not None else "fd9-operation|"
     return {
         "operation_id": hashlib.sha256(
-            ("fd9-operation|" + head + "|" + old_sha + "|" + new_sha).encode()).hexdigest(),
+            (prefix + head + "|" + old_sha + "|" + new_sha).encode()).hexdigest(),
         "payload_sha256": new_sha,
         "checkpoint_sha256": old_sha,
         "checkpoint_sequence": 1,
@@ -119,8 +140,10 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
     """Create a signed CI grant before the true configd worker can run pkg."""
     root = Path(root_dir)
     exact_private_root(root)
-    identity = expected_identity(head, old_sha, new_sha)
     fake_consumed=consumed_mode()
+    live=live_mode()
+    identity = expected_identity(head, old_sha, new_sha, nonce if live else None)
+    need(not (fake_consumed and live),"FD9_CI_CONSUMED_LIVE_MODE_CONFLICT")
     challenge=expected_challenge(head,nonce) if fake_consumed else None
     need(type(revision) is str and revision.isdecimal() and int(revision) > 0,
          "FD9_GRANT_REVISION_INVALID")
@@ -141,7 +164,12 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
         authority_sha = hashlib.sha256((folder / "operator-public.pem").read_bytes()).hexdigest()
         status_sha = hashlib.sha256((folder / "status-public.pem").read_bytes()).hexdigest()
         # Deliberately synthetic role digest: NO mTLS session or remote witness.
-        client_sha = hashlib.sha256(("CI_NO_TLS_PEER|" + head).encode()).hexdigest()
+        if live:
+            fixture=live_module().private_root(root)
+            client_sha=hashlib.sha256(ssl.PEM_cert_to_DER_cert(
+                (fixture/"client.crt").read_text())).hexdigest()
+        else:
+            client_sha = hashlib.sha256(("CI_NO_TLS_PEER|" + head).encode()).hexdigest()
         now = int(time.time())
         record = {
             "schema": grant.SCHEMA, "repository": grant.REPO, "issuer": grant.ISSUER,
@@ -153,7 +181,8 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
             "old_pkg_version": "0.6.2_1",
             "new_pkg_version": "0.6.2_" + revision,
             "not_before": now - 30, "not_after": now + 1800,
-            "actions": ["RESERVE"], "entries": [identity],
+            "actions": ["RESERVE", "CONSUME", "STATUS"] if live
+                       else ["RESERVE"], "entries": [identity],
         }
         for stem, change in (("signed-grant", {}),
                              ("wrong-old", {"old_pkg_sha256": "f"*64}),
@@ -178,6 +207,8 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
             create(folder,"ci-consumed.json",raw)
             create(folder,"ci-consumed.sig",
                    openssl("dgst","-sha256","-sign",status_secret,data=raw))
+        if live:
+            live_module().accept_status_signer(root,status_secret)
     finally:
         # Worker never receives signing private keys. This is CI custody only;
         # root of the runner could still replace authority PEM and expected pin.
@@ -193,12 +224,13 @@ def issue(root_dir, head, old_archive, candidate_archive, old_sha, new_sha, revi
 
 
 def verify(root_dir, ticket, head, old_archive, candidate_archive, old_sha, new_sha,
-           revision, fd9_check, nonce=None):
+           revision, fd9_check, nonce=None, live_phase=None):
     """Fail closed on signed scope + archive bytes under a *real* old FD9 checker."""
     need(callable(fd9_check), "FD9_GRANT_CHECKER_REQUIRED")
     folder = Path(root_dir) / ROOT_NAME
     exact_private_root(folder)
-    expected = expected_identity(head, old_sha, new_sha)
+    expected = expected_identity(head, old_sha, new_sha,
+                                 nonce if live_mode() else None)
     need(type(ticket) is dict and set(ticket) == {
         "operator_sha256", "status_sha256", "client_sha256",
         "operation_id", "payload_sha256", "checkpoint_sha256",
@@ -240,6 +272,19 @@ def verify(root_dir, ticket, head, old_archive, candidate_archive, old_sha, new_
         else:
             raise Refusal("FD9_GRANT_RESIGNED_FALSE_SCOPE_ACCEPTED:" + stem)
     fd9_check()
+    if live_mode():
+        need(live_phase in ("consume","status"),
+             "FD9_CI_LIVE_WITNESS_PHASE_REQUIRED")
+        observed=live_module().exchange(
+            root_dir,ticket,head,nonce,fd9_check,live_phase)
+        need(observed.get("ci_live_loopback_witness_consumed") is True and
+             observed.get("ci_external_witness_owner_approved") is False and
+             observed.get("ci_offhost_monotonic_store") is False and
+             observed.get("ci_production_pkg_authorized") is False,
+             "FD9_CI_LIVE_WITNESS_OUTCOME_NOT_QUALIFIED")
+    else:
+        need(live_phase is None,
+             "FD9_CI_LIVE_WITNESS_PHASE_NOT_ENABLED")
     if consumed_mode():
         status=witness_module()
         challenge=expected_challenge(head,nonce)

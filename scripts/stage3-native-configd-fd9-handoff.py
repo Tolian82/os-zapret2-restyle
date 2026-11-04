@@ -236,6 +236,22 @@ def signed_consumed_mode():
     return mode=='1'
 
 
+def live_witness_mode():
+    """CI-only actual mTLS/SQLite process; neither off-host nor owner trusted."""
+    v=os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS','')
+    need(v in ('','1'),'CI_NATIVE_LIVE_WITNESS_MODE_INVALID')
+    if v:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and native_pkg_mode() and
+             native_stdin_pkg_mode() and
+             not signed_consumed_mode() and not signed_grant_negative_mode() and
+             not late_signed_grant_mode() and not late_archive_mode() and
+             not post_final_archive_mode() and not native_late_journal_mode() and
+             not native_stdin_path_swap_mode(),
+             'CI_NATIVE_LIVE_WITNESS_NOT_DISPOSABLE')
+    return v=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -292,6 +308,9 @@ def action_bytes(head):
     if signed_consumed_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED=1 '
                 'ZAPRET2_STAGE3_NATIVE_SIGNED_CONSUMED_CI=1 ')
+    if live_witness_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS=1 '
+                'ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -376,6 +395,7 @@ def worker(head):
     native_stdin_pkg_mode()
     native_stdin_path_swap_mode()
     signed_consumed_mode()
+    live_witness_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -532,6 +552,7 @@ def launch(head):
     native_stdin_pkg_mode()
     native_stdin_path_swap_mode()
     signed_consumed_mode()
+    live_witness_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,
@@ -623,6 +644,7 @@ def execute(head):
     stdin_pkg=native_stdin_pkg_mode()
     stdin_path_swap=native_stdin_path_swap_mode()
     signed_consumed=signed_consumed_mode()
+    live_enabled=live_witness_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -672,11 +694,17 @@ def execute(head):
     inode=base.LOCK.lstat().st_ino if existed else None
     ROOT.mkdir(mode=0o700)
     nonce=secrets.token_hex(16)
+    live=load('stage3-native-live-witness-ci.py') if live_enabled else None
+    live_process=None
+    if live_enabled:
+        live.prepare(ROOT)
     issuer=load('stage3-native-configd-operator-grant-ci.py') if pkg_enabled else None
     ci_grant=(issuer.issue(ROOT,head,base.OLD,native_archive,
                            old.ARCHIVE_SHA,native_archive_sha,native_revision,
                            nonce=nonce)
               if pkg_enabled else None)
+    if live_enabled:
+        live_process=live.start(ROOT,ci_grant,head,base.OLD,native_archive,nonce)
     if grant_negative:
         # Detached worker must reject changed signed bytes while retaining
         # original FD9, before any real native pkg dispatch.
@@ -916,6 +944,13 @@ def execute(head):
             journal.verify_corrupt_journal()
             journal_verified=True
         elif pkg_enabled:
+            if live_enabled:
+                confirmed=live.confirm(ROOT,ci_grant,head,nonce)
+                need(confirmed['ci_real_sqlite_consumed'] is True and
+                     confirmed['ci_status_signer_off_appliance'] is False and
+                     confirmed['ci_owner_approval_authenticated'] is False and
+                     confirmed['ci_challenges_consumed']==3,
+                     'CI_NATIVE_ACTUAL_WITNESS_RESERVE_CONSUME_STATUS_UNQUALIFIED')
             swap_data=(json.loads(base.trusted(SWAP_RESULT,1024))
                        if stdin_path_swap else None)
             if stdin_path_swap:
@@ -997,6 +1032,8 @@ def execute(head):
                      not tuple(parent.iterdir()),
                      'OWNED_JOURNAL_PARENT_CHANGED_NO_DELETE')
                 parent.rmdir()
+        if live_enabled:
+            live.stop(live_process)
         need(base.trusted(ACTION)==action_bytes(head),
              'CANNOT_CLEAN_CHANGED_CONFIGD_ACTION')
         ACTION.unlink()
@@ -1043,6 +1080,8 @@ def execute(head):
             AUTH_RESULT.unlink()
         AUTHORITY.unlink()
         issuer.cleanup(ROOT)
+    if live_enabled:
+        live.cleanup(ROOT)
     ROOT.rmdir()
     if not existed:
         fd=os.open(base.LOCK,os.O_RDWR|os.O_NOFOLLOW)
@@ -1097,6 +1136,8 @@ def execute(head):
             'ci_operator_grant_is_owner_approved':False,
             'ci_simulated_signed_consumed_under_original_fd9':
                 signed_consumed and pkg_enabled,
+            'ci_real_loopback_mtls_sqlite_consumed_under_original_fd9':
+                live_enabled and pkg_enabled,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
