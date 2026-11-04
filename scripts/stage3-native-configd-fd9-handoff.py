@@ -153,6 +153,19 @@ def tamper_signed_grant_for_negative(root):
     return True
 
 
+def late_signed_grant_mode():
+    """Test-only mutation after initial signed grant verification, before pkg."""
+    value=os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER','')
+    need(value in ('','1'),'NATIVE_LATE_GRANT_TAMPER_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and native_pkg_mode() and
+             not signed_grant_negative_mode() and
+             not native_late_journal_mode() and not fault_mode(),
+             'NATIVE_LATE_GRANT_TAMPER_NOT_DISPOSABLE')
+    return value=='1'
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -191,6 +204,9 @@ def action_bytes(head):
     if native_late_journal_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL=1 '
                 'ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL_CI=1 ')
+    if late_signed_grant_mode():
+        extra+=('ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER=1 '
+                'ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -269,6 +285,7 @@ def worker(head):
     late_journal=late_journal_mode()
     pkg_enabled=native_pkg_mode()
     native_late=native_late_journal_mode()
+    late_signed_grant_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -383,6 +400,7 @@ def launch(head):
     late_journal_mode()
     native_pkg_mode()
     native_late_journal_mode()
+    late_signed_grant_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,PREPKG_RESUME):
@@ -467,6 +485,7 @@ def execute(head):
     pkg_enabled=native_pkg_mode()
     native_late=native_late_journal_mode()
     grant_negative=signed_grant_negative_mode()
+    late_grant=late_signed_grant_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -591,7 +610,21 @@ def execute(head):
             journal.verify_corrupt_journal()
             base.create_owned(PREPKG_RESUME,
                               b'RESUME_TEST_ONLY_AFTER_CORRUPT_JOURNAL')
-        if grant_negative:
+        if late_grant:
+            # The same FD9 worker already accepted the original signature.
+            armed=json.loads(base.wait_file(PREPKG_READY,85))
+            need(armed.get('sha')==head and armed.get('pid')==ready['pid'] and
+                 armed.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 armed.get('nonce_sha256')==ready['nonce_sha256'] and
+                 armed.get('initial_signed_grant_verified') is True and
+                 armed.get('native_mutating_pkg_invoked') is False,
+                 'LATE_GRANT_PRE_DISPATCH_BARRIER_UNQUALIFIED')
+            base.check_original_fd9_busy()
+            need(tamper_signed_grant_for_negative(ROOT),
+                 'LATE_GRANT_SIGNED_BYTES_NOT_CHANGED')
+            base.create_owned(PREPKG_RESUME,
+                              b'RESUME_TEST_ONLY_AFTER_LATE_SIGNED_BYTE_TAMPER')
+        if grant_negative or late_grant:
             try:
                 wait_native_pkg_done()
             except base.Refusal as exc:
@@ -602,7 +635,9 @@ def execute(head):
                 need(not DONE.exists() and not DONE.is_symlink() and
                      not AUTH_RESULT.exists() and not AUTH_RESULT.is_symlink(),
                      'TAMPERED_SIGNED_GRANT_RETURNED_ACCEPTED_PKG_RESULT')
-                done={'status':'PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG',
+                done={'status':('PASS_TEST_ONLY_LATE_SIGNED_GRANT_TAMPER_NO_PKG'
+                                if late_grant else
+                                'PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG'),
                       'native_mutating_pkg_invoked':False,
                       'ci_signed_grant_refused_under_fd9':True}
             else:
@@ -611,8 +646,8 @@ def execute(head):
             done=json.loads(wait_native_pkg_done() if pkg_enabled
                             else base.wait_file(DONE,45))
         grant_done=(json.loads(base.trusted(AUTH_RESULT,1000))
-                    if pkg_enabled and not grant_negative else None)
-        if pkg_enabled and not grant_negative:
+                    if pkg_enabled and not (grant_negative or late_grant) else None)
+        if pkg_enabled and not (grant_negative or late_grant):
             need(grant_done.get('sha')==head and
                  grant_done.get('pid')==ready['pid'] and
                  grant_done.get('original_fd9_inode')==ready['original_fd9_inode'] and
@@ -626,8 +661,10 @@ def execute(head):
                  grant_done.get('ci_pkg_one_use_commit_proven') is False and
                  grant_done.get('lh08_ac11_accepted') is False,
                  'CI_SIGNED_PKG_GRANT_NATIVE_RECEIPT_UNQUALIFIED')
-        if grant_negative:
-            need(done.get('status')=='PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG' and
+        if grant_negative or late_grant:
+            need(done.get('status')==(
+                     'PASS_TEST_ONLY_LATE_SIGNED_GRANT_TAMPER_NO_PKG'
+                     if late_grant else 'PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG') and
                  done.get('native_mutating_pkg_invoked') is False and
                  done.get('ci_signed_grant_refused_under_fd9') is True and
                  not AUTH_RESULT.exists() and not DONE.exists() and
@@ -700,7 +737,7 @@ def execute(head):
              'CANNOT_CLEAN_CHANGED_CONFIGD_ACTION')
         ACTION.unlink()
         base.run(['/usr/sbin/service','configd','restart'],45)
-    if pkg_enabled and not native_late and not grant_negative:
+    if pkg_enabled and not (native_late or grant_negative or late_grant):
         need(load('stage2-opnsense-real-unsafe-owner-replacement.py').installed_identity()
              =='os-zapret2-restyle|0.6.2_'+native_revision,
              'POST_CONFIGD_NATIVE_PKG_INSTALLED_IDENTITY_DRIFT')
@@ -710,7 +747,9 @@ def execute(head):
     else:
         need(managed.owner_snapshot(old,guard,base.OLD)==before,
              'HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW')
-    for p in ((TICKET,READY,FAILED,RELEASE,QUERY) if grant_negative else
+    for p in ((TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
+              if late_grant else
+              (TICKET,READY,FAILED,RELEASE,QUERY) if grant_negative else
               (TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
               if native_late else
               (TICKET,READY,DONE,RELEASE,QUERY) if query_enabled else
@@ -727,9 +766,10 @@ def execute(head):
     SOCKET.unlink()
     if pkg_enabled:
         need(base.trusted(AUTHORITY,950) is not None and
-             (grant_negative or base.trusted(AUTH_RESULT,1000) is not None),
+             (grant_negative or late_grant or
+              base.trusted(AUTH_RESULT,1000) is not None),
              'OPERATOR_GRANT_AUTHORIZATION_EVIDENCE_CHANGED')
-        if not grant_negative:
+        if not (grant_negative or late_grant):
             AUTH_RESULT.unlink()
         AUTHORITY.unlink()
         issuer.cleanup(ROOT)
@@ -755,6 +795,8 @@ def execute(head):
         need(base.LOCK.is_file() and base.LOCK.lstat().st_ino==inode,
              'PREEXISTING_ORIGINAL_LOCK_CHANGED')
     return {'schema':1,'status':(
+                'PASS_TEST_ONLY_LATE_SIGNED_GRANT_TAMPER_NO_PKG'
+                if late_grant else
                 'PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG'
                 if grant_negative else
                 'PASS_TEST_ONLY_CONFIGD_NATIVE_LATE_JOURNAL_NO_PKG'
@@ -767,16 +809,17 @@ def execute(head):
                 if query_enabled else
                 'PASS_TEST_ONLY_CONFIGD_SCM_RIGHTS_CONTINUOUS_FD9'),
             'late_owner_refused_before_pkg':late_journal or native_late,
-            'signed_grant_refused_before_pkg':grant_negative,
+            'signed_grant_refused_before_pkg':grant_negative or late_grant,
+            'initial_valid_grant_then_late_signature_refusal':late_grant,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
-            'native_mutating_pkg_under_detached_fd9':pkg_enabled and not native_late and not grant_negative,
-            'ci_operator_signed_grant_under_original_fd9':pkg_enabled and not grant_negative,
+            'native_mutating_pkg_under_detached_fd9':pkg_enabled and not (native_late or grant_negative or late_grant),
+            'ci_operator_signed_grant_under_original_fd9':pkg_enabled and not (grant_negative or late_grant),
             'ci_operator_grant_is_owner_approved':False,
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
-            'old_package_config_process_ipfw_unchanged':not pkg_enabled or native_late or grant_negative,
-            'native_mutating_pkg_invoked':pkg_enabled and not native_late and not grant_negative,
+            'old_package_config_process_ipfw_unchanged':not pkg_enabled or native_late or grant_negative or late_grant,
+            'native_mutating_pkg_invoked':pkg_enabled and not (native_late or grant_negative or late_grant),
             'stock_web_firmware_or_direct_root_pkg_protected':False,
             'final_owner_check_to_pkg_race_closed':False,
             'lh08_ac11_accepted':False,'owner_appliance_modified':False}

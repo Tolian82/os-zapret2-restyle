@@ -185,6 +185,68 @@ class ExactSignedNativeDispatchTests(unittest.TestCase):
         self.assertLess(worker.index("grant_guard.verify("),
                         worker.index("delegate.admitted_pkg_dispatch(archive,candidate,env)"))
 
+    def test_late_tamper_mode_denies_unapproved_and_conflicting_flags(self):
+        handoff=module("stage3-native-configd-fd9-handoff.py","late_grant_mode")
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER":"bad"},clear=True):
+            with self.assertRaisesRegex(Exception,"NATIVE_LATE_GRANT_TAMPER_MODE_INVALID"):
+                handoff.late_signed_grant_mode()
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,"NATIVE_LATE_GRANT_TAMPER_NOT_DISPOSABLE"):
+                handoff.late_signed_grant_mode()
+        env={"ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER":"1",
+             "ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI":"1",
+             "GITHUB_ACTIONS":"true","ZAPRET2_STAGE3_NATIVE_MUTATING_PKG":"1",
+             "ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI":"1",
+             "ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK":"1",
+             "ZAPRET2_NATIVE_BUILD_CI":"1",
+             "ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF":"1",
+             "ZAPRET2_STAGE3_READONLY_PKG":"1",
+             "ZAPRET2_STAGE3_READONLY_PKG_CI":"1"}
+        with mock.patch.dict(os.environ,env,clear=True):
+            self.assertTrue(handoff.late_signed_grant_mode())
+        with mock.patch.dict(os.environ,{
+                **env,"ZAPRET2_STAGE3_NATIVE_GRANT_TAMPER":"1",
+                "ZAPRET2_STAGE3_NATIVE_GRANT_TAMPER_CI":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,"NATIVE_LATE_GRANT_TAMPER_NOT_DISPOSABLE"):
+                handoff.late_signed_grant_mode()
+
+    def test_first_valid_signature_then_late_byte_tamper_denies(self):
+        handoff=module("stage3-native-configd-fd9-handoff.py","late_grant_bytes")
+        self.assertTrue(self.accepted()["ci_operator_signature_verified"])
+        signed=self.root / guard.ROOT_NAME / "signed-grant.json"
+        signature=self.root / guard.ROOT_NAME / "signed-grant.sig"
+        original_signature=signature.read_bytes()
+        def read_owned(path,maxsize=1024):
+            self.assertTrue(path.is_file() and not path.is_symlink())
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+            self.assertLessEqual(path.stat().st_size,maxsize)
+            return path.read_bytes()
+        with mock.patch.object(handoff.base,"trusted",read_owned):
+            self.assertTrue(handoff.tamper_signed_grant_for_negative(self.root))
+        self.assertEqual(signature.read_bytes(),original_signature)
+        self.assertIn(b'"sequence":2',signed.read_bytes())
+        self.assert_scope_refused("GRANT_OPERATOR_SIGNATURE_INVALID",self.accepted)
+
+    def test_native_late_grant_barrier_between_two_checks(self):
+        worker=(HERE/"stage3-native-configd-mutating-pkg.py").read_text()
+        controller=(HERE/"stage3-native-configd-fd9-handoff.py").read_text()
+        workflow=(HERE.parent/".github/workflows/stage2-native-delegated-fd9-handoff.yml").read_text()
+        first=worker.index("approval=grant_guard.verify(")
+        marker=worker.index("initial_signed_grant_verified':True")
+        second=worker.index("second=grant_guard.verify(")
+        dispatch=worker.index("delegate.admitted_pkg_dispatch(archive,candidate,env)",second)
+        self.assertLess(first,marker)
+        self.assertLess(marker,second)
+        self.assertLess(second,dispatch)
+        self.assertIn("LATE_GRANT_PRE_DISPATCH_BARRIER_UNQUALIFIED",controller)
+        self.assertIn("LATE_GRANT_SIGNED_BYTES_NOT_CHANGED",controller)
+        self.assertIn("HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW",controller)
+        self.assertIn("PASS_TEST_ONLY_LATE_SIGNED_GRANT_TAMPER_NO_PKG",controller)
+        self.assertIn("configd-native-late-signed-grant-no-pkg:",workflow)
+        self.assertIn("ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI=1",workflow)
+
     def test_native_worker_requires_grant_before_pkg(self):
         source = (HERE / "stage3-native-configd-mutating-pkg.py").read_text()
         self.assertIn("SIGNED_OPERATOR_GRANT_TICKET_REQUIRED_BEFORE_PKG", source)

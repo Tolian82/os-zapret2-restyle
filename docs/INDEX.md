@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.37 _127 late signed-grant drift refusal under original FD9](verification/evidence/2026-11-04-v0.6.2_127-stage3-late-signed-grant-drift-no-pkg.md) — CI-only post-first-check mutation before final native pkg signature gate.
+
 - [Stage 3.36 _126 genuine signed-grant tamper refusal under original FD9 before native pkg](verification/evidence/2026-11-04-v0.6.2_126-stage3-native-tampered-operator-grant-no-pkg.md) — real test-only OPNsense no-pkg / old owner unchanged, no production gateway.
 
 - [Stage 3.35 _125 PR watchdog exact GitHub jobs pagination and stalled Actions](verification/evidence/2026-11-04-v0.6.2_125-watchdog-paginated-jobs-and-actions-stall.md) — GH-065 bounded pager, fails closed on still-running workflow, no auto-merge.
