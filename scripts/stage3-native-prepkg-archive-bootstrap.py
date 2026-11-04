@@ -190,7 +190,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '115', 'NATIVE_BOOTSTRAP_REVISION_NOT_115')
+    need(m is not None and m.group(1) == '116', 'NATIVE_BOOTSTRAP_REVISION_NOT_116')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -541,6 +541,140 @@ def execute(old_archive):
              json.loads(inspected.stdout.split('=',1)[1]).get(
                  'production_pkg_authorized') is False,
              'LOCAL_LEDGER_INSPECTION_FALSE_AUTHORIZATION')
+        # _116 CI-only independently signed HEAD witness. A third, distinct
+        # ephemeral RSA key is generated inside the same disposable VM.
+        # It is NOT an externally owner-anchored latest digest or signer.
+        witness_tool = HERE / 'stage3-prepkg-checkpoint-witness.py'
+        need(witness_tool.is_file() and not witness_tool.is_symlink(),
+             'CI_CHECKPOINT_WITNESS_SOURCE_MISSING')
+        witness_dir = ledger_parent / 'ci-witness'
+        witness_dir.mkdir(mode=0o700)
+        witness_private = witness_dir / 'ci-witness-private.pem'
+        witness_pub = witness_dir / 'checkpoint-witness-public.pem'
+        witness_doc = witness_dir / 'ledger-checkpoint.json'
+        witness_sig = witness_dir / 'ledger-checkpoint.sig'
+        keygen = run(['/usr/bin/openssl','genpkey','-algorithm','RSA',
+                      '-pkeyopt','rsa_keygen_bits:2048',
+                      '-out',str(witness_private)],35)
+        need(keygen.returncode == 0,'CI_CHECKPOINT_KEYGEN_FAILED')
+        exported=run(['/usr/bin/openssl','pkey','-in',str(witness_private),
+                      '-pubout','-out',str(witness_pub)],20)
+        need(exported.returncode == 0,'CI_CHECKPOINT_PUBKEY_EXPORT_FAILED')
+        witness_pub.chmod(0o600)
+        witness_private.chmod(0o600)
+        witness_pub_sha=hashlib.sha256(witness_pub.read_bytes()).hexdigest()
+        need(witness_pub_sha not in (authority_sha,key_pin),
+             'CI_CHECKPOINT_KEY_MUST_DIFFER_FROM_BOTH_SIGNERS')
+        def sign_witness(sequence, **changes):
+            entries=sorted(ledger_path.glob('spent-*.json'))
+            need(len(entries) >= sequence,'CI_CHECKPOINT_MISSING_ENTRY')
+            raw_entry=entries[sequence-1].read_bytes()
+            record=json.loads(raw_entry)
+            assert_fields={
+                'schema':'zapret2-prepkg-external-ledger-checkpoint-v1',
+                'repository':'Tolian82/os-zapret2-restyle',
+                'sequence':sequence,
+                'head_sha256':hashlib.sha256(raw_entry).hexdigest(),
+                'authority_sha256':record['authority_sha256'],
+                'receipt_sha256':record['receipt_sha256'],
+                'policy_sha256':record['policy_sha256'],
+            }
+            assert_fields.update(changes)
+            raw=(json.dumps(assert_fields,sort_keys=True,
+                            separators=(',',':'))+'\n').encode()
+            witness_doc.write_bytes(raw)
+            witness_doc.chmod(0o600)
+            signed=run(['/usr/bin/openssl','dgst','-sha256','-sign',
+                        str(witness_private),'-out',str(witness_sig),
+                        str(witness_doc)],20)
+            need(signed.returncode == 0,'CI_CHECKPOINT_SIGNING_FAILED')
+            witness_sig.chmod(0o600)
+            return hashlib.sha256(raw).hexdigest()
+        def witness_run(checkpoint_sha, key_sha=witness_pub_sha):
+            return subprocess.run(
+                [sys.executable,'-I','-B',str(witness_tool),'verify',
+                 str(ledger_path),key_sha,str(witness_pub),
+                 checkpoint_sha,str(witness_doc),str(witness_sig)],
+                capture_output=True,text=True,cwd='/root',env=ledger_env,
+                timeout=35,check=False)
+        latest_sha=sign_witness(2)
+        verified=witness_run(latest_sha)
+        need(verified.returncode == 0 and
+             'PASS_CI_LOCAL_SIGNED_CHECKPOINT_MATCH_ONLY' in verified.stdout and
+             json.loads(verified.stdout.split('=',1)[1]).get(
+                 'checkpoint_out_of_band_latest_authenticated') is False,
+             'CI_CHECKPOINT_SIGNATURE_OR_HEAD_NOT_VERIFIED:'+
+             verified.stderr[-260:])
+        # A locally self-consistent chain after tail deletion still fails
+        # against a *separately retained* SHA for the last signed witness.
+        last_entry=sorted(ledger_path.glob('spent-*.json'))[-1]
+        last_bytes=last_entry.read_bytes()
+        last_entry.unlink()
+        reduced=ledger_run(['inspect',str(ledger_path)])
+        need(reduced.returncode == 0 and
+             json.loads(reduced.stdout.split('=',1)[1]).get('spent') == 1,
+             'CI_CHECKPOINT_ROLLED_BACK_CHAIN_NOT_SELF_CONSISTENT')
+        denied=witness_run(latest_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_LEDGER_SEQUENCE_OR_HEAD_ROLLBACK' in denied.stderr,
+             'CI_CHECKPOINT_LATEST_HEAD_ROLLBACK_UNDETECTED')
+        # With *attacker-supplied* earlier signed checkpoint AND earlier SHA,
+        # an attacker who can roll back the ledger can still receive PASS.
+        # This is an intentional negative proof of missing external freshness.
+        old_sha=sign_witness(1)
+        denied=witness_run(latest_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_LATEST_CHECKPOINT_SHA_MISMATCH' in denied.stderr,
+             'CI_CHECKPOINT_PINNED_LATEST_REPLACED_BY_OLD')
+        untrusted_replay=witness_run(old_sha)
+        need(untrusted_replay.returncode == 0 and
+             json.loads(untrusted_replay.stdout.split('=',1)[1]).get(
+                 'root_rollback_resistance_proven') is False,
+             'CI_CHECKPOINT_UNTRUSTED_OLDER_WITNESS_NOT_CLASSIFIED')
+        # Restore the original local CI ledger; no installed pkg bytes change.
+        restored=os.open(last_entry,os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                         os.O_NOFOLLOW,0o600)
+        try:
+            offset=0
+            while offset < len(last_bytes):
+                offset += os.write(restored,last_bytes[offset:])
+            os.fsync(restored)
+        finally:
+            os.close(restored)
+        latest_sha=sign_witness(2)
+        need(witness_run(latest_sha).returncode == 0,
+             'CI_CHECKPOINT_RESTORED_HEAD_NOT_VERIFIED')
+        # Correctly re-signed but wrong final entry identity must fail.
+        wrong_sha=sign_witness(2,receipt_sha256='f'*64)
+        denied=witness_run(wrong_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_LEDGER_LAST_ENTRY_IDENTITY_MISMATCH' in denied.stderr,
+             'CI_CHECKPOINT_SIGNED_WRONG_FINAL_RECEIPT_ACCEPTED')
+        latest_sha=sign_witness(2)
+        original_pub=witness_pub.read_bytes()
+        witness_pub.write_bytes(b'CI-TAMPERED-KEY\n'+original_pub)
+        denied=witness_run(latest_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_PUBLIC_KEY_SHA_MISMATCH' in denied.stderr,
+             'CI_CHECKPOINT_WRONG_SIGNER_ACCEPTED')
+        witness_pub.write_bytes(original_pub)
+        original_sig=witness_sig.read_bytes()
+        witness_sig.write_bytes(b'FORGED')
+        denied=witness_run(latest_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_CHECKPOINT_RSA_SIGNATURE_INVALID' in denied.stderr,
+             'CI_CHECKPOINT_FORGED_SIGNATURE_ACCEPTED')
+        witness_sig.write_bytes(original_sig)
+        original_doc=witness_doc.read_bytes()
+        witness_doc.write_bytes(original_doc+b'TAMPER')
+        denied=witness_run(latest_sha)
+        need(denied.returncode == 78 and
+             'WITNESS_LATEST_CHECKPOINT_SHA_MISMATCH' in denied.stderr,
+             'CI_CHECKPOINT_CHANGED_UNSIGNED_BYTES_ACCEPTED')
+        witness_doc.write_bytes(original_doc)
+        need(witness_run(latest_sha).returncode == 0,
+             'CI_CHECKPOINT_FINAL_RESTORE_NOT_VERIFIED')
+        installed_unchanged(old,old_archive,host,baseline)
         poison_path = ledger_parent / 'ci-interrupted' / 'approval-ledger'
         poison_path.parent.mkdir(mode=0o700)
         poison_path.mkdir(mode=0o700)
@@ -786,6 +920,12 @@ def execute(old_archive):
             'ci_local_one_use_ledger_crash_poison_refusal_verified': True,
             'ci_local_one_use_ledger_is_owner_authority': False,
             'ci_local_ledger_has_external_rollback_witness': False,
+            'ci_ephemeral_rsa_checkpoint_witness_verified': True,
+            'ci_signed_witness_detects_local_valid_chain_rollback': True,
+            'ci_stale_witness_caller_selected_sha_replay_demonstrated': True,
+            'ci_witness_signer_is_owner_approved': False,
+            'ci_witness_latest_sha_authenticated_out_of_band': False,
+            'ci_witness_external_independent_storage_proven': False,
             'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
