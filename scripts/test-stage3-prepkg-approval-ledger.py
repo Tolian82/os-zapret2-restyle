@@ -16,6 +16,7 @@ SOURCE = HERE / "stage3-prepkg-approval-ledger.py"
 spec = importlib.util.spec_from_file_location("stage3_ci_ledger", SOURCE)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
+ORIGINAL_PRIVATE_ROOT = m.private_root
 
 
 @contextlib.contextmanager
@@ -193,12 +194,9 @@ class LocalLedgerTests(unittest.TestCase):
         for path in ("/tmp/approval-ledger", "/root/../tmp/approval-ledger",
                      "/root//approval-ledger", "approval-ledger",
                      "/root/other", "/root/approval-ledger/"):
-            with self.subTest(path=path), \
-                 patch.object(m, "private_root",
-                              wraps=m.private_root) as checker:
-                with self.assertRaises(m.Refusal):
-                    with checker(path):
-                        pass
+            with self.subTest(path=path), self.assertRaises(m.Refusal):
+                with ORIGINAL_PRIVATE_ROOT(path):
+                    pass
 
     def test_explicit_offtarget_nonproduction_source_contract(self):
         source = SOURCE.read_text()
