@@ -1,4 +1,4 @@
-name: Stage 3 receipt-bound seed and signed archive provenance
+name: Stage 3 detached operator receipt authority and signed archive provenance
 
 on:
   pull_request:
@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   exact-native-archive-bootstrap:
-    name: Verify receipt-only hashes through RSA signed archives and original FD9 without pkg
+    name: Verify separately anchored RSA receipt and signed archives with original FD9 without pkg
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
