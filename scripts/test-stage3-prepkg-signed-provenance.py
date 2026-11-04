@@ -91,7 +91,7 @@ class SignedProvenance(unittest.TestCase):
             c['sig'].write_bytes(b'broken-signature')
             with self.assertRaises(SystemExit):self.signed(c)
             c=fixture(d)
-            c['claims'].write_bytes(c['claims'].read_bytes().replace(b'0.6.2_110',b'0.6.2_110'))
+            c['claims'].write_bytes(c['claims'].read_bytes().replace(b'0.6.2_110',b'0.6.2_111'))
             with self.assertRaises(SystemExit):self.signed(c)
             c=fixture(d)
             other=Path(d)/'other'
@@ -165,7 +165,7 @@ class SignedProvenance(unittest.TestCase):
                     self.m.main()
                 self.assertIn('VERIFIED_PREPKG_ENTRY',stdout.getvalue())
                 self.assertIn('VERIFIED_SIGNED_SHA256:',stderr.getvalue())
-                with patch.object(self.m.sys,'argv',list(argv[:10]+['/root/os-zapret2-restyle-0.6.2_110.pkg']+argv[11:])), \
+                with patch.object(self.m.sys,'argv',list(argv[:10]+['/root/os-zapret2-restyle-0.6.2_111.pkg']+argv[11:])), \
                      patch.object(self.m.os,'uname',return_value=fake_os), \
                      patch.object(self.m.os,'geteuid',return_value=0), \
                      self.assertRaises(SystemExit):
