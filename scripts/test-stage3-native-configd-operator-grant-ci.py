@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from unittest import mock
 import tempfile
 import unittest
 
@@ -140,6 +141,49 @@ class ExactSignedNativeDispatchTests(unittest.TestCase):
     def test_signed_grant_cleanup_only_expected_files(self):
         guard.cleanup(self.root)
         self.assertFalse((self.root / guard.ROOT_NAME).exists())
+
+    def test_real_ci_controller_mode_denies_unapproved_flags(self):
+        handoff=module("stage3-native-configd-fd9-handoff.py",
+                       "ci_handoff_negative_mode_contract")
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_GRANT_TAMPER":"wrong"},clear=True):
+            with self.assertRaisesRegex(Exception,"NATIVE_GRANT_TAMPER_MODE_INVALID"):
+                handoff.signed_grant_negative_mode()
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_GRANT_TAMPER":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,"NATIVE_GRANT_TAMPER_NOT_DISPOSABLE"):
+                handoff.signed_grant_negative_mode()
+
+    def test_ci_signed_byte_corruption_retains_original_signature_and_denies(self):
+        handoff=module("stage3-native-configd-fd9-handoff.py",
+                       "ci_handoff_signed_byte_corruption")
+        signed=self.root / guard.ROOT_NAME / "signed-grant.json"
+        signature=self.root / guard.ROOT_NAME / "signed-grant.sig"
+        original_signature=signature.read_bytes()
+        def local_fixture_read(path,maxsize=1024):
+            self.assertTrue(path.is_file() and not path.is_symlink())
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+            self.assertLessEqual(path.stat().st_size,maxsize)
+            return path.read_bytes()
+        with mock.patch.object(handoff.base,"trusted",local_fixture_read):
+            self.assertTrue(handoff.tamper_signed_grant_for_negative(self.root))
+        self.assertEqual(signature.read_bytes(),original_signature)
+        self.assertIn(b'"sequence":2',signed.read_bytes())
+        self.assert_scope_refused("GRANT_OPERATOR_SIGNATURE_INVALID",self.accepted)
+        self.assertGreaterEqual(self.calls,1)
+        self.assertEqual(self.old.read_bytes(),b"test-only-old-archive")
+        self.assertEqual(self.new.read_bytes(),b"test-only-new-archive")
+
+    def test_ci_negative_refusal_ordered_before_real_pkg_and_no_fake_receipt(self):
+        source=(HERE/"stage3-native-configd-fd9-handoff.py").read_text()
+        worker=(HERE/"stage3-native-configd-mutating-pkg.py").read_text()
+        self.assertIn("TAMPERED_SIGNED_GRANT_WRONG_WORKER_REFUSAL",source)
+        self.assertIn("not AUTH_RESULT.exists() and not DONE.exists()",source)
+        self.assertIn("HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW",source)
+        self.assertIn("PASS_TEST_ONLY_SIGNED_GRANT_TAMPER_NO_PKG",source)
+        self.assertIn("signed_grant_negative_mode()",source)
+        self.assertLess(worker.index("grant_guard.verify("),
+                        worker.index("delegate.admitted_pkg_dispatch(archive,candidate,env)"))
 
     def test_native_worker_requires_grant_before_pkg(self):
         source = (HERE / "stage3-native-configd-mutating-pkg.py").read_text()
