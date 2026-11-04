@@ -105,7 +105,7 @@ class OperationTests(unittest.TestCase):
             try:
                 self.call("RESERVE",op,payload)
                 return "PASS"
-            except m.Refusal as exc:
+            except (m.Refusal,m.monotonic.Refusal) as exc:
                 return "REFUSED:"+str(exc)
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             values=list(pool.map(lambda p:submit(*p),
