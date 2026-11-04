@@ -18,6 +18,9 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 independent manual operator pin receipt (_111)](verification/evidence/2026-11-04-v0.6.2_111-stage3-manual-operator-pin-receipt.md) — explicit tty-only eight-pin `0600` receipt outside package and read-only staged-byte inspection; no proven production signer/trust seed or update gate.
+
+
 - [Stage 3.24 independently approved source commit versus signed manifest (_110)](verification/evidence/2026-11-04-v0.6.2_110-stage3-independent-commit-pin.md) — signed claims are insufficient without a separately expected source identity; new native signed mismatch negative, no updater or trusted production signer.
 
 

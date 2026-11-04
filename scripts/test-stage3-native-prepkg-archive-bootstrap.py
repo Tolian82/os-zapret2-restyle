@@ -22,7 +22,7 @@ spec.loader.exec_module(m)
 class NativeArchiveBootstrapContracts(unittest.TestCase):
     def fixture(self):
         modules = {name:(m.PRODUCT / name).read_bytes() for name in m.MODULES}
-        manifest = {'name':m.NAME, 'version':'0.6.2_110',
+        manifest = {'name':m.NAME, 'version':'0.6.2_111',
                     'abi':'FreeBSD:15:amd64','arch':'freebsd:15:x86:64',
                     'files':{'/' + m.DEST + name:'1$sha' for name in m.MODULES}}
         return modules, manifest
@@ -56,7 +56,7 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
             result = m.staged_source_from_native_archive(
-                Path('/root/os-zapret2-restyle-0.6.2_110.pkg'),'0.6.2_110',
+                Path('/root/os-zapret2-restyle-0.6.2_111.pkg'),'0.6.2_111',
                 sha,folder)
             self.assertEqual(check.call_count,2)
         return result
@@ -139,8 +139,8 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                  patch.object(m,'read_only') as tar:
                 with self.assertRaisesRegex(m.candidate.CandidateRefusal,'SHA_MISMATCH'):
                     m.staged_source_from_native_archive(
-                        Path('/root/os-zapret2-restyle-0.6.2_110.pkg'),
-                        '0.6.2_110','0'*64,Path(tmp))
+                        Path('/root/os-zapret2-restyle-0.6.2_111.pkg'),
+                        '0.6.2_111','0'*64,Path(tmp))
                 tar.assert_not_called()
                 self.assertEqual(os.listdir(tmp),[])
 
@@ -150,8 +150,16 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         self.assertIn("'native_pkg_mutation_after_old_install': False",source)
         self.assertIn("'lh08_ac11_accepted': False",source)
         for forbidden in ("'pkg', 'add'","'pkg', 'upgrade'","'pkg', 'delete'",
-                          "subprocess.Popen(", "os.system(", "os.execv(", "os.rename("):
+                          "os.system(", "os.execv(", "os.rename("):
             self.assertNotIn(forbidden,source)
+        # Exactly one intentionally bounded Popen is used to attach the
+        # disposable CI-only operator test process to its pseudo-terminal.
+        # It never executes pkg; all production mutations remain prohibited.
+        self.assertEqual(source.count("subprocess.Popen("),1)
+        self.assertIn("master_fd, slave_fd = pty.openpty()",source)
+        self.assertIn("proc = subprocess.Popen(manual, stdin=slave_fd, stdout=slave_fd,",source)
+        self.assertIn("manual = [sys.executable, '-I', '-B', str(approval_tool),",source)
+        self.assertIn("'ci_operator_pty_receipt_record_and_inspect_verified': True",source)
 
 
 if __name__=='__main__':
