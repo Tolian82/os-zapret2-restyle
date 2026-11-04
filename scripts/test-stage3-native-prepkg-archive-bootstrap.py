@@ -81,6 +81,18 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                     self.call(Path(tmp),{'entries':bad})
                 self.assertEqual(os.listdir(tmp),[])
 
+    def test_native_mk_repeated_relative_prefix_but_no_traversal(self):
+        canonical=[m.DEST + name for name in m.MODULES]
+        with tempfile.TemporaryDirectory() as tmp:
+            self.call(Path(tmp),{'entries':['././' + name for name in canonical]})
+            self.assertEqual({p.name for p in Path(tmp).iterdir()},set(m.MODULES))
+        for first in ('/','../','../../'):
+            with self.subTest(first=first),tempfile.TemporaryDirectory() as tmp:
+                aliases=[first + canonical[0],*canonical[1:]]
+                with self.assertRaisesRegex(m.Refusal,'MISSING_OR_DUPLICATED'):
+                    self.call(Path(tmp),{'entries':aliases})
+                self.assertEqual(list(Path(tmp).iterdir()),[])
+
     def test_manifest_identity_and_source_bytes_must_agree(self):
         modules,manifest=self.fixture()
         wrong=dict(manifest,version='0.6.2_999')
