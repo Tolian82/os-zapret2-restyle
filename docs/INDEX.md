@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 original FD9 read-only predecessor ownership cold screen (`_104`)](verification/evidence/2026-11-04-v0.6.2_104-stage3-read-only-predecessor-cold-owner.md) — verifies old installed native package/hook/service, Config, orphan markers/processes and unloaded IPFW beneath detached original FD9; existing published `_1` lacks CLI, upgrade still prohibited, LH-08/AC-11 BLOCKED.
+
 - [Stage 3.24 installed-source managed FD9 read-only CLI (`_103`)](verification/evidence/2026-11-04-v0.6.2_103-stage3-managed-inspect-only-cli.md) — detached worker, genuine SCM_RIGHTS, candidate inspection and unconditional upgrade refusal; NOT a supported updater; LH-08/AC-11 BLOCKED.
 - [Stage 3.24 product-source native pkg candidate / original FD9 (`_102`)](verification/evidence/2026-11-04-v0.6.2_102-stage3-native-product-candidate-admission.md) — strict read-only opened archive identity/digest and real FD9 recheck for authentic native package positive/late veto; installed upgrade not yet supported, LH-08/AC-11 BLOCKED.
 - [Stage 3.04/3.24 product-source original FD9 transport (`_101`)](verification/evidence/2026-11-04-v0.6.2_101-stage3-installed-fd9-transport-source.md) — new OPNsense backend receiver reused by native configd handoff with exact official Mk archive-byte proof. No installed updater or first-line supported firmware/Web protection; LH-08/AC-11 BLOCKED.

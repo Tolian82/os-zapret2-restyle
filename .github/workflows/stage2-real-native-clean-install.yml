@@ -8,6 +8,8 @@ on:
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/test-stage2-opnsense-real-native-clean-install.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_old_owner.py
+      - scripts/test-native-pkg-old-owner.py
       - scripts/test-native-pkg-managed.py
       - scripts/stage2-packaged-configctl-readonly.py
       - scripts/test-stage2-packaged-configctl-readonly.py
@@ -35,6 +37,8 @@ jobs:
           python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py -v
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py scripts/test-native-pkg-managed.py
           python3.13 scripts/test-native-pkg-managed.py -v
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_old_owner.py scripts/test-native-pkg-old-owner.py
+          python3.13 scripts/test-native-pkg-old-owner.py -v
           python3.13 -m py_compile scripts/stage2-packaged-configctl-readonly.py scripts/test-stage2-packaged-configctl-readonly.py
           python3.13 scripts/test-stage2-packaged-configctl-readonly.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
