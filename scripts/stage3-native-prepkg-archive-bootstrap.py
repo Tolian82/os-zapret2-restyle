@@ -72,8 +72,15 @@ def archive_members(path):
     mapping = {}
     for name in MODULES:
         expected = DEST + name
-        exact = [e for e in entries if e in (expected, './' + expected)]
-        need(len(exact) == 1, 'NATIVE_ARCHIVE_SOURCE_MEMBER_MISSING_OR_DUPLICATED:' + name)
+        # The official native Mk driver may emit repeated leading './'.
+        # Match the same installed relative key as the already-proven native
+        # builder, while refusing slash/parent-traversal aliases.
+        exact = [e for e in entries if
+                 not e.startswith('/') and '..' not in Path(e).parts and
+                 e.lstrip('./') == expected]
+        need(len(exact) == 1, 'NATIVE_ARCHIVE_SOURCE_MEMBER_MISSING_OR_DUPLICATED:' +
+             name + ':matching_count=' + str(len(exact)) +
+             ':suffix_count=' + str(sum(e.endswith('/' + name) for e in entries)))
         mapping[name] = exact[0]
     return mapping
 
