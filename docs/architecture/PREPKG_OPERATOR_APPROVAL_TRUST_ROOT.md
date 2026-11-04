@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.24 `_114`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.25 `_115`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -17,6 +17,12 @@ The initial source-only operator seed now **also requires** `--approval-policy <
 Matching expiry, invalid times, wrong digest/identity or explicit revocation rejects **before** the external verifier executes. Full mechanics and negative tests: [Stage 3.24 _114 short-lived policy evidence](../verification/evidence/2026-11-04-v0.6.2_114-stage3-short-lived-approval-policy.md).
 
 **Do not overstate security:** `sequence` currently has *no persistent trusted high-watermark*; the machine's wall clock is not independently trusted; a stale previously signed and not-yet-expired policy may be replayed by a caller choosing the old matching expected SHA. There is no atomic consumption journal, one-use id, independently witnessed latest revocation, production trust root, authority rotation or trusted distribution. The native fast/OPNsense tests use **test-only self-provided policy digests** and signer. These are preparatory file-semantic/crypto refusal proofs only; no production one-use authorization, revocation freshness, or safe upgrade.
+
+## _115 isolated atomic local one-use primitive — NOT owner authorization
+
+The **test-only** `scripts/stage3-prepkg-approval-ledger.py` creates a private ledger exclusively on a disposable FreeBSD amd64 CI VM after _114's independently executed read-only RSA verification. Under an actual `flock`, only the next contiguous positive `sequence` is accepted; receipt and policy SHA values are locally non-reusable. A complete exclusive-create `spent-...` record and chained predecessor digest are flushed with `fsync` on the record and directory. Unknown or partial records poison the ledger, stopping all future operations without deleting or repairing a failed attempt. The two-concurrent-attempt and simulated crash boundaries are described in [Stage 3.25 _115 acceptance evidence](../verification/evidence/2026-11-04-v0.6.2_115-stage3-local-one-use-ledger.md).
+
+**Major boundary:** this ledger does **not** authenticate the received receipt/policy/issuer SHA, consume an actual production authorization, or grant the right to run `pkg`; its CLI only accepts caller values with 4 disposable-only environment flags. A filesystem-local SHA chain is **not** a root-adversary-proof ledger: its last entry can be removed/rolled back with root. It has no independent external sequence witness, current-snapshot oracle, trusted time or durable owner-approved key provisioning. Never connect it directly to supported update routes without external authorization, monotonic storage and crash-safe original FD9 ownership evidence. The established _114 seed and old-owner inspection remain **read-only**, and the published package, production hooks and user's OPNsense remain unchanged.
 
 ## Minimal independent approval record — future operator responsibility
 
