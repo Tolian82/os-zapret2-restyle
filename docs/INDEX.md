@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.29 _119 CI-only RSA-signed status response and challenge proof](verification/evidence/2026-11-04-v0.6.2_119-stage3-signed-operation-status.md) — 13 executable crypto/negative tests, no remote witness or pkg gate.
+
 - [Stage 3.28 _118 CI-only idempotent witness operation-state model](verification/evidence/2026-11-04-v0.6.2_118-stage3-idempotent-operation-admission.md) — RESERVE/CONSUME/ABORT, immutable exact-ID events, missing commit response and outage refusal; no external signed owner authorization.
 
 - [Stage 3.27 _117 monotonic witness CAS CI-only](verification/evidence/2026-11-04-v0.6.2_117-stage3-monotonic-cas-witness.md) — second local witness store, strict CAS and fail-closed outage/poison with full root rollback counterexample; NOT an independent real remote witness.
