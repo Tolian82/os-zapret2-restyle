@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import socket
 import select
+import ssl
 import sqlite3
 import subprocess
 import sys
@@ -43,6 +44,61 @@ class DurableWitnessTests(unittest.TestCase):
                            check=True, timeout=15)
         cls.pub = cls.public.read_bytes()
         cls.keysha = hashlib.sha256(cls.pub).hexdigest()
+        cls.ca_key, cls.ca_cert = root / "ca-key.pem", root / "ca.crt"
+        cls.rogue_ca_key, cls.rogue_ca_cert = root / "rogue-ca-key.pem", root / "rogue-ca.crt"
+
+        def openssl(*args):
+            subprocess.run(["/usr/bin/openssl", *map(str, args)],
+                           capture_output=True, check=True, timeout=15)
+
+        def ca(key, certificate, common_name):
+            openssl("genpkey", "-algorithm", "RSA", "-pkeyopt",
+                    "rsa_keygen_bits:2048", "-out", key)
+            openssl("req", "-x509", "-new", "-sha256", "-key", key,
+                    "-out", certificate, "-days", "1", "-subj", "/CN=" + common_name,
+                    "-addext", "basicConstraints=critical,CA:TRUE",
+                    "-addext", "keyUsage=critical,keyCertSign,cRLSign")
+
+        ca(cls.ca_key, cls.ca_cert, "CI-Witness-CA")
+        ca(cls.rogue_ca_key, cls.rogue_ca_cert, "CI-Foreign-CA")
+
+        def issue(name, signer_cert, signer_key, usage, san=None):
+            private = root / (name + ".key")
+            request = root / (name + ".csr")
+            certificate = root / (name + ".crt")
+            extensions = root / (name + ".ext")
+            openssl("genpkey", "-algorithm", "RSA", "-pkeyopt",
+                    "rsa_keygen_bits:2048", "-out", private)
+            openssl("req", "-new", "-key", private, "-out", request,
+                    "-subj", "/CN=" + name)
+            extensions.write_text(
+                "basicConstraints=critical,CA:FALSE\n"
+                "keyUsage=digitalSignature,keyEncipherment\n"
+                "extendedKeyUsage=" + usage + "\n" +
+                ("subjectAltName=" + san + "\n" if san is not None else ""))
+            openssl("x509", "-req", "-in", request, "-CA", signer_cert,
+                    "-CAkey", signer_key, "-CAcreateserial", "-out", certificate,
+                    "-days", "1", "-sha256", "-extfile", extensions)
+            return private, certificate
+
+        cls.tls_server_key, cls.tls_server_cert = issue(
+            "ci-server", cls.ca_cert, cls.ca_key, "serverAuth", "IP:127.0.0.1")
+        cls.tls_client_key, cls.tls_client_cert = issue(
+            "ci-client", cls.ca_cert, cls.ca_key, "clientAuth")
+        cls.tls_rogue_key, cls.tls_rogue_cert = issue(
+            "ci-rogue", cls.rogue_ca_cert, cls.rogue_ca_key, "clientAuth")
+        cls.tls_wronghost_key, cls.tls_wronghost_cert = issue(
+            "ci-wronghost", cls.ca_cert, cls.ca_key, "serverAuth",
+            "DNS:wrong.invalid")
+        cls.tls_other_client_key, cls.tls_other_client_cert = issue(
+            "ci-other-client", cls.ca_cert, cls.ca_key, "clientAuth")
+        cls.tls_other_server_key, cls.tls_other_server_cert = issue(
+            "ci-other-server", cls.ca_cert, cls.ca_key, "serverAuth",
+            "IP:127.0.0.1")
+        cls.server_sha = hashlib.sha256(
+            ssl.PEM_cert_to_DER_cert(cls.tls_server_cert.read_text())).hexdigest()
+        cls.client_sha = hashlib.sha256(
+            ssl.PEM_cert_to_DER_cert(cls.tls_client_cert.read_text())).hexdigest()
 
     @classmethod
     def tearDownClass(cls):
@@ -74,7 +130,9 @@ class DurableWitnessTests(unittest.TestCase):
     def start_server(self):
         proc = subprocess.Popen([sys.executable, "-u",
                                  str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                                 "serve", str(self.db), str(self.secret)],
+                                 "serve", str(self.db), str(self.secret),
+                                 str(self.ca_cert), str(self.tls_server_cert),
+                                 str(self.tls_server_key), str(self.client_sha)],
                                 env=self.env, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True)
         self.server = proc
@@ -113,8 +171,11 @@ class DurableWitnessTests(unittest.TestCase):
             answer["drop_after_commit"] = True
         return answer
 
-    def send(self, obj):
-        return witness.request(self.port, obj)
+    def send(self, obj, ca=None, cert=None, key=None, server_sha=None):
+        return witness.request(self.port, obj, str(ca or self.ca_cert),
+                               str(cert or self.tls_client_cert),
+                               str(key or self.tls_client_key),
+                               server_sha or self.server_sha)
 
     def verified(self, data, seq):
         raw, sig = self.send(data)
@@ -258,7 +319,9 @@ class DurableWitnessTests(unittest.TestCase):
         self.stop_server()
         self.db.write_bytes(b"not an SQLite journal")
         attempt = subprocess.run([sys.executable, str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                                  "serve", str(self.db), str(self.secret)],
+                                  "serve", str(self.db), str(self.secret),
+                                  str(self.ca_cert), str(self.tls_server_cert),
+                                  str(self.tls_server_key), str(self.client_sha)],
                                  env=self.env, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, timeout=5)
         self.assertEqual(attempt.returncode, 78)
@@ -280,6 +343,93 @@ class DurableWitnessTests(unittest.TestCase):
         self.assertEqual(replay["operation_action"], "RESERVED")
         self.assertFalse(replay["witness_latest_external_authoritative"])
 
+
+    def test_mtls_wrong_client_ca_refused_before_sqlite_transaction(self):
+        self.refused_mtls(self.req(), ca=self.ca_cert,
+                          cert=self.tls_rogue_cert, key=self.tls_rogue_key)
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_wrong_server_ca_refused_before_sqlite_transaction(self):
+        self.refused_mtls(self.req(), ca=self.rogue_ca_cert)
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_missing_client_certificate_refused_before_sqlite(self):
+        import ssl
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH,
+                                             cafile=str(self.ca_cert))
+        try:
+            with socket.create_connection(("127.0.0.1", self.port), timeout=3) as tcp:
+                with context.wrap_socket(tcp, server_hostname="127.0.0.1") as wire:
+                    wire.settimeout(3)
+                    wire.sendall((json.dumps(self.req()) + "\n").encode())
+                    self.assertEqual(wire.recv(4096), b"")
+        except (ssl.SSLError, OSError):
+            pass  # TLS server may reject before or after client handshake returns.
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_plain_tcp_request_does_not_touch_sqlite(self):
+        with socket.create_connection(("127.0.0.1", self.port), timeout=3) as tcp:
+            tcp.settimeout(3)
+            tcp.sendall((json.dumps(self.req()) + "\n").encode())
+            tcp.shutdown(socket.SHUT_WR)
+            try:
+                tcp.recv(4096)
+            except OSError:
+                pass
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_server_wrong_san_refused(self):
+        self.stop_server()
+        previous = (self.tls_server_cert, self.tls_server_key)
+        self.tls_server_cert, self.tls_server_key = (
+            self.tls_wronghost_cert, self.tls_wronghost_key)
+        try:
+            self.start_server()
+            self.refused_mtls(self.req())
+            self.assertEqual(self.rows(), ([], 0))
+        finally:
+            self.stop_server()
+            self.tls_server_cert, self.tls_server_key = previous
+            self.start_server()
+
+    def test_mtls_client_cert_cannot_be_server_cert(self):
+        # EKU serverAuth is not authorized for the client role.
+        self.refused_mtls(self.req(), cert=self.tls_server_cert,
+                          key=self.tls_server_key)
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_valid_ca_other_client_identity_pin_refused(self):
+        self.refused_mtls(self.req(), cert=self.tls_other_client_cert,
+                          key=self.tls_other_client_key)
+        self.assertEqual(self.rows(), ([], 0))
+
+    def test_mtls_valid_ca_same_hostname_other_server_pin_refused(self):
+        self.stop_server()
+        previous = (self.tls_server_cert, self.tls_server_key)
+        self.tls_server_cert, self.tls_server_key = (
+            self.tls_other_server_cert, self.tls_other_server_key)
+        try:
+            self.start_server()
+            with self.assertRaisesRegex(witness.Refusal,
+                                        "CLIENT_SERVER_CERT_PIN_MISMATCH"):
+                self.send(self.req())
+            self.assertEqual(self.rows(), ([], 0))
+        finally:
+            self.stop_server()
+            self.tls_server_cert, self.tls_server_key = previous
+            self.start_server()
+
+    def test_mtls_missing_server_pin_refused_without_network_mutation(self):
+        with self.assertRaisesRegex(witness.Refusal, "CLIENT_SERVER_CERT_PIN_REQUIRED"):
+            witness.request(self.port, self.req(), str(self.ca_cert),
+                            str(self.tls_client_cert), str(self.tls_client_key), "bad")
+        self.assertEqual(self.rows(), ([], 0))
+
+    def refused_mtls(self, data, **kwargs):
+        import ssl
+        with self.assertRaises((ssl.SSLError, OSError, witness.Refusal)):
+            self.send(data, **kwargs)
+
     def test_authority_not_approved_and_no_pkg_execution_paths(self):
         source = (HERE / "stage3-prepkg-remote-witness-ci.py").read_text()
         for forbidden in ("pkg add", "pkg upgrade", "pkg delete", "os.system(",
@@ -292,7 +442,9 @@ class DurableWitnessTests(unittest.TestCase):
         env = dict(os.environ)
         env.pop("ZAPRET2_CI_REMOTE_WITNESS_ONLY", None)
         proc = subprocess.run([sys.executable, str(HERE / "stage3-prepkg-remote-witness-ci.py"),
-                               "serve", str(self.db), str(self.secret)],
+                               "serve", str(self.db), str(self.secret),
+                               str(self.ca_cert), str(self.tls_server_cert),
+                               str(self.tls_server_key), str(self.client_sha)],
                               env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=5)
         self.assertEqual(proc.returncode, 78)
