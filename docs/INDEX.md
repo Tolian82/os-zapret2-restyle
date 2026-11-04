@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 independent no-checkout pre-pkg read-only CLI (`_106`)](verification/evidence/2026-11-04-v0.6.2_106-stage3-standalone-prepkg-entrypoint.md) — standalone root-owned script with independently supplied new/old archive digest, four trusted incoming modules and original FD9; native CI pending, supported distribution/firmware/Web/root bypass unqualified.
+
 - [Stage 3.24 native incoming-package archive-source pre-pkg read-only bootstrap (`_105`)](verification/evidence/2026-11-04-v0.6.2_105-stage3-native-prepkg-archive-source.md) — authentic old `_1` still installed, exact Mk archive SHA/four modules staged privately before any replacement; diagnostic-only CI, no supported updater or LH-08/AC-11 admission.
 
 - [Stage 3.24 original FD9 read-only predecessor ownership cold screen (`_104`)](verification/evidence/2026-11-04-v0.6.2_104-stage3-read-only-predecessor-cold-owner.md) — verifies old installed native package/hook/service, Config, orphan markers/processes and unloaded IPFW beneath detached original FD9; existing published `_1` lacks CLI, upgrade still prohibited, LH-08/AC-11 BLOCKED.
