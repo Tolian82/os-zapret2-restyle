@@ -74,7 +74,7 @@ def directory(path):
     try:
         original=os.fstat(fd)
         named=os.lstat(path)
-        need(stat.S_ISDIR(original.st_mode) and original.st_uid==0 and
+        need(stat.S_ISDIR(original.st_mode) and ledger.root_owner(original) and
              stat.S_IMODE(original.st_mode)==0o700 and
              (original.st_dev,original.st_ino)==(named.st_dev,named.st_ino),
              "REMOTE_WITNESS_DIRECTORY_RACED")
@@ -92,7 +92,7 @@ def exclusive(fd):
     try:
         st=os.fstat(opened)
         named=os.stat(LOCK,dir_fd=fd,follow_symlinks=False)
-        need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and
+        need(stat.S_ISREG(st.st_mode) and ledger.root_owner(st) and
              st.st_nlink==1 and st.st_size==0 and
              stat.S_IMODE(st.st_mode)==0o600 and
              (st.st_dev,st.st_ino)==(named.st_dev,named.st_ino),
