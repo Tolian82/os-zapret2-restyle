@@ -186,7 +186,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '108', 'NATIVE_BOOTSTRAP_REVISION_NOT_108')
+    need(m is not None and m.group(1) == '109', 'NATIVE_BOOTSTRAP_REVISION_NOT_109')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -243,20 +243,28 @@ def execute(old_archive):
     # NOT deployment of any operator-authenticated production signing key.
     source = HERE / 'native-prepkg-standalone.py'
     trusted_eval = HERE / 'stage3-prepkg-verified-eval.py'
-    need(source.is_file() and trusted_eval.is_file() and
-         not source.is_symlink() and not trusted_eval.is_symlink(),
+    seed = HERE / 'stage3-prepkg-trust-seed.py'
+    need(all(p.is_file() and not p.is_symlink() for p in
+             (source, trusted_eval, seed)),
          'PREPKG_TRUSTED_TEST_SOURCES_MISSING')
     source_bytes = source.read_bytes()
     expected_script_sha = hashlib.sha256(source_bytes).hexdigest()
-    trusted_code = trusted_eval.read_text()
-    need('signed_claims(' in trusted_code and 'exec(executable,' in trusted_code,
-         'TRUSTED_SIGNED_EVAL_CODE_MISSING')
+    verifier_bytes = trusted_eval.read_bytes()
+    expected_verifier_sha = hashlib.sha256(verifier_bytes).hexdigest()
+    trusted_code = seed.read_text()
+    need(b'signed_claims(' in verifier_bytes and
+         b'exec(executable,' in verifier_bytes and
+         'verified_verifier(' in trusted_code and 'exec(compiled,' in trusted_code,
+         'TRUST_SEED_OR_VERIFIER_CODE_MISSING')
     with tempfile.TemporaryDirectory(prefix='zapret2-signed-prepkg-ci-',
                                      dir='/root') as standalone_dir:
         private = Path(standalone_dir)
         standalone = private / 'native-prepkg-standalone.py'
         standalone.write_bytes(source_bytes)
         standalone.chmod(0o600)
+        verifier = private / 'stage3-prepkg-verified-eval.py'
+        verifier.write_bytes(verifier_bytes)
+        verifier.chmod(0o600)
         secret = private / 'ci-test-private.pem'
         public = private / 'ci-test-public.pem'
         claims = private / 'signed-claims.json'
@@ -292,12 +300,15 @@ def execute(old_archive):
         seal()
         key_pin = hashlib.sha256(public.read_bytes()).hexdigest()
         launcher = [sys.executable,'-I','-B','-c',trusted_code,
+                    '--verified-verifier',expected_verifier_sha,str(verifier),
                     '--signed-provenance',key_pin,str(public),str(claims),
                     str(signature),str(standalone)]
         tail = ['inspect-predecessor',str(incoming),version,
                 str(old_archive),old.VERSION]
         good = run(launcher + tail)
         need(good.returncode == 0 and
+             'ZAPRET2_PREPKG_TRUST_SEED=VERIFIED_SHA256:' +
+                expected_verifier_sha in good.stderr and
              'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' +
                 expected_script_sha in good.stderr and
              good.stdout.startswith('ZAPRET2_PREPKG_STANDALONE='),
@@ -315,7 +326,8 @@ def execute(old_archive):
              'SIGNED_EXTERNAL_CLI_FALSE_AUTHORIZATION')
         installed_unchanged(old,old_archive,host,baseline)
         for cmd,reason in (
-            (launcher[:6]+['0'*64]+launcher[7:]+tail,'BAD_PUBLIC_KEY_PIN'),
+            (launcher[:6]+['0'*64]+launcher[7:]+tail,'BAD_VERIFIER_SHA_PIN'),
+            (launcher[:9]+['0'*64]+launcher[10:]+tail,'BAD_PUBLIC_KEY_PIN'),
             (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
             (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
         ):
@@ -343,6 +355,32 @@ def execute(old_archive):
              'SIGNED_WRONG_ARCHIVE_ACCEPTED')
         assertions['incoming_sha256']=expected
         seal()
+        # Before the signed verifier may execute: wrong pinned SHA, changed
+        # executable verifier canary, symlink, or writable file must refuse.
+        verifier_canary = private / 'UNTRUSTED_VERIFIER_EXECUTED'
+        verifier.write_bytes(b'from pathlib import Path\nPath(' +
+                repr(str(verifier_canary)).encode() +
+                b').write_text("BAD")\n' + verifier_bytes)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'VERIFIER_EXPECTED_SHA256_MISMATCH' in denied.stderr and
+             'ZAPRET2_PREPKG_VERIFY_EXEC=VERIFIED_SIGNED_SHA256:' not in denied.stderr and
+             not verifier_canary.exists(), 'UNVERIFIED_VERIFIER_SOURCE_EXECUTED')
+        verifier.write_bytes(verifier_bytes)
+        verifier.chmod(0o666)
+        denied=run(launcher+tail,45)
+        need(denied.returncode==78 and
+             'VERIFIER_PRIVATE_REGULAR_REQUIRED' in denied.stderr,
+             'WORLD_WRITABLE_VERIFIER_ACCEPTED')
+        verifier.chmod(0o600)
+        verifier_link_dir = private/'verifier-symlink'
+        verifier_link_dir.mkdir(mode=0o700)
+        verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
+        verifier_link.symlink_to(verifier)
+        denied=run(launcher[:7]+[str(verifier_link)]+launcher[8:]+tail,45)
+        need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
+             'SYMLINK_VERIFIER_ACCEPTED')
+        installed_unchanged(old,old_archive,host,baseline)
         canary=private/'UNTRUSTED_SOURCE_EXECUTED'
         standalone.write_bytes(b'from pathlib import Path\nPath('+
                 repr(str(canary)).encode()+b').write_text("BAD")\n'+source_bytes)
@@ -368,6 +406,9 @@ def execute(old_archive):
             'source_bytes_equal_verified_incoming_package': True,
             'standalone_no_checkout_pre_pkg_screened': True,
             'external_sha_verified_before_source_exec': True,
+            'verifier_sha_verified_before_verifier_exec': True,
+            'seed_code_from_ci_exact_head_only': True,
+            'operator_trust_seed_authenticated': False,
              'ci_ephemeral_signed_provenance_verified': True,
              'operator_signer_authenticated': False,
             'trusted_eval_code_from_ci_exact_head_only': True,

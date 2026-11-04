@@ -18,6 +18,9 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 verifier trust-seed before Python execution (`_109`)](verification/evidence/2026-11-04-v0.6.2_109-stage3-verifier-trust-seed.md) — root-private SHA-pinned immutable verifier bytes executed only after minimal operator-reviewed seed; local tests PASS, native acceptance pending; no authenticated production seed/key distribution or mandatory updater.
+
+
 - [Stage 3.24 signed pre-pkg provenance via pinned public-key digest (`_108`)](verification/evidence/2026-11-04-v0.6.2_108-stage3-signed-prepkg-provenance.md) — externally signed claims bind exact CLI/old/new package hashes to one source commit; test-only signer and offline OpenSSL negatives; real operator signer, verified code delivery and supported update gate still absent.
 
 - [Stage 3.24 external CLI verify-before-exec digest gate (`_107`)](verification/evidence/2026-11-04-v0.6.2_107-stage3-prepkg-verified-exec.md) — operator trusted Python -c preflight verifies source FD and independently expected SHA before executing pinned memory bytes; native OPNsense source-head test PASS, distribution and mandatory OPNsense paths unimplemented.

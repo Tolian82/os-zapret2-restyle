@@ -1,4 +1,4 @@
-name: Stage 3 signed pre-pkg provenance and verified source before Python execution
+name: Stage 3 pinned verifier seed and signed pre-pkg provenance
 
 on:
   pull_request:
@@ -8,6 +8,8 @@ on:
       - scripts/test-stage3-native-prepkg-archive-bootstrap.py
       - scripts/native-prepkg-standalone.py
       - scripts/test-native-prepkg-standalone.py
+      - scripts/stage3-prepkg-trust-seed.py
+      - scripts/test-stage3-prepkg-trust-seed.py
       - scripts/stage3-prepkg-verified-eval.py
       - scripts/test-stage3-prepkg-verified-eval.py
       - scripts/test-stage3-prepkg-signed-provenance.py
@@ -29,7 +31,7 @@ permissions:
 
 jobs:
   exact-native-archive-bootstrap:
-    name: Check signed source provenance and screen authentic old owner without pkg
+    name: Verify seed-pinned verifier and signed original-FD9 cold scan without pkg
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -42,9 +44,10 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-trust-seed.py scripts/test-stage3-prepkg-trust-seed.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
           python3.13 scripts/test-native-prepkg-standalone.py -v
+          python3.13 scripts/test-stage3-prepkg-trust-seed.py -v
           python3.13 scripts/test-stage3-prepkg-verified-eval.py -v
           python3.13 scripts/test-stage3-prepkg-signed-provenance.py -v
       - name: Real official Mk archive pre-pkg source on old 0.6.2_1 disposable OPNsense
