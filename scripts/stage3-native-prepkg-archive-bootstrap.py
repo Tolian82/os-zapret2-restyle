@@ -10,6 +10,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import pty
+import shutil
 from pathlib import Path
 import re
 import stat
@@ -186,7 +188,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '110', 'NATIVE_BOOTSTRAP_REVISION_NOT_110')
+    need(m is not None and m.group(1) == '111', 'NATIVE_BOOTSTRAP_REVISION_NOT_111')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -413,6 +415,86 @@ def execute(old_archive):
              'EXTERNAL_SOURCE_REGULAR_PRIVATE_ROOT_FILE_REQUIRED' in denied.stderr,
              'WORLD_WRITABLE_EXTERNAL_SOURCE_ACCEPTED')
         standalone.chmod(0o600)
+        # A disposable FreeBSD pseudo-TTY exercises *only* the human-approval
+        # record mechanics. These CI-supplied digest lines are synthetic and
+        # MUST NEVER be reported as real operator/publisher attestation.
+        approval_tool = HERE / 'stage3-prepkg-operator-approval.py'
+        need(approval_tool.is_file() and not approval_tool.is_symlink(),
+             'OPERATOR_APPROVAL_TEST_TOOL_MISSING')
+        reviewed = private / 'ci-operator-reviewed'
+        reviewed.mkdir(mode=0o700)
+        sources = (
+            (seed, reviewed / 'stage3-prepkg-trust-seed.py'),
+            (trusted_eval, reviewed / 'stage3-prepkg-verified-eval.py'),
+            (public, reviewed / 'approved-public.pem'),
+            (incoming, reviewed / (NAME + '-' + version + '.pkg')),
+            (old_archive, reviewed / (NAME + '-' + old.VERSION + '.pkg')),
+        )
+        for source_path, target in sources:
+            shutil.copyfile(source_path, target)
+            target.chmod(0o600)
+        pin_values = [hashlib.sha256(Path(src).read_bytes()).hexdigest()
+                      for src in (seed, trusted_eval, public)]
+        pin_values += [expected_commit, version, expected,
+                       old.VERSION, old.ARCHIVE_SHA]
+        confirm = 'APPROVE ' + expected_commit + ' ' + version
+        receipt = reviewed / 'operator-pins.json'
+        manual = [sys.executable, '-I', '-B', str(approval_tool),
+                  'record', str(receipt)]
+        master_fd, slave_fd = pty.openpty()
+        try:
+            proc = subprocess.Popen(manual, stdin=slave_fd, stdout=slave_fd,
+                                    stderr=subprocess.PIPE, close_fds=True,
+                                    cwd='/root', env=isolated_env)
+            os.close(slave_fd)
+            slave_fd = -1
+            os.write(master_fd, ('\n'.join(pin_values + [confirm]) + '\n').encode())
+            _, manual_err = proc.communicate(timeout=40)
+            need(proc.returncode == 0 and receipt.exists(),
+                 'CI_PTY_MANUAL_PINS_REFUSED:' + manual_err.decode()[-240:])
+        finally:
+            os.close(master_fd)
+            if slave_fd >= 0:
+                os.close(slave_fd)
+        inspected = run([sys.executable, '-I', '-B', str(approval_tool),
+                         'inspect', str(receipt), *(str(x[1]) for x in sources)],
+                        80)
+        need(inspected.returncode == 0 and
+             inspected.stdout.startswith('ZAPRET2_OPERATOR_APPROVAL='),
+             'CI_OPERATOR_PIN_READONLY_INSPECT_REFUSED:' + inspected.stderr[-220:])
+        approved = json.loads(inspected.stdout.split('=', 1)[1])
+        need(approved['status'] == 'PASS_RECORDED_PINS_AND_PRIVATE_BYTES_ONLY' and
+             approved['source_commit'] == expected_commit and
+             all(approved[x] is False for x in (
+                 'operator_source_authenticated', 'signer_authenticated',
+                 'signed_manifest_verified', 'pkg_authorized', 'pkg_invoked',
+                 'old_owner_qualified', 'supported_entrypoint_implemented',
+                 'lh08_ac11_accepted')),
+             'CI_PINS_WRONGLY_CLAIM_PRODUCTION_AUTHORITY')
+        denied = run([sys.executable, '-I', '-B', str(approval_tool),
+                      'record', str(reviewed / 'second-approval' /
+                                    'operator-pins.json')], 20)
+        need(denied.returncode == 78 and
+             'REAL_INTERACTIVE_OPERATOR_TTY_REQUIRED' in denied.stderr,
+             'NONINTERACTIVE_OPERATOR_APPROVAL_ACCEPTED')
+        receipt.chmod(0o644)
+        denied = run([sys.executable, '-I', '-B', str(approval_tool),
+                      'inspect', str(receipt),
+                      *(str(x[1]) for x in sources)], 20)
+        need(denied.returncode == 78 and
+             'OPERATOR_PRIVATE_SOURCE_MODE_OR_SIZE_REFUSED' in denied.stderr,
+             'WORLD_READABLE_OPERATOR_PINS_ACCEPTED')
+        receipt.chmod(0o600)
+        key_copy = reviewed / 'approved-public.pem'
+        key_bytes = key_copy.read_bytes()
+        key_copy.write_bytes(b'MALICIOUS_KEY\n' + key_bytes)
+        denied = run([sys.executable, '-I', '-B', str(approval_tool),
+                      'inspect', str(receipt),
+                      *(str(x[1]) for x in sources)], 20)
+        need(denied.returncode == 78 and
+             'OPERATOR_PIN_SHA256_MISMATCH:public_key_sha256' in denied.stderr,
+             'TAMPERED_OPERATOR_PUBLIC_KEY_ACCEPTED')
+        key_copy.write_bytes(key_bytes)
         installed_unchanged(old,old_archive,host,baseline)
     installed_unchanged(old, old_archive, host, baseline)
     need(guard.snapshot(old_archive)['status'] == 'PASS_COLD_READ_ONLY_SNAPSHOT_ONLY',
@@ -427,6 +509,9 @@ def execute(old_archive):
             'verifier_sha_verified_before_verifier_exec': True,
             'signed_source_commit_matched_independent_expectation': True,
             'operator_source_commit_authenticated': False,
+            'ci_operator_pty_receipt_record_and_inspect_verified': True,
+            'independent_production_issuer_approved': False,
+            'operator_pin_record_is_release_authentication': False,
             'seed_code_from_ci_exact_head_only': True,
             'operator_trust_seed_authenticated': False,
              'ci_ephemeral_signed_provenance_verified': True,
