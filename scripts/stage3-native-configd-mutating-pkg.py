@@ -118,6 +118,12 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
              os.environ.get('GITHUB_ACTIONS')=='true' and not late_grant and
              not late_journal_fault,
              'NATIVE_LATE_ARCHIVE_MODE_NOT_DISPOSABLE')
+    post_final=os.environ.get('ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER')=='1'
+    if post_final:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             not late_grant and not late_archive and not late_journal_fault,
+             'NATIVE_POST_FINAL_ARCHIVE_MODE_NOT_DISPOSABLE')
     need(native.REVISION==revision and old.ARCHIVE_SHA==delegate.load(
          'stage3-native-configd-detached-fd9.py').SHA_OLD,
          'NATIVE_SOURCE_REVISION_OR_PUBLISHED_OLD_UNQUALIFIED')
@@ -249,6 +255,28 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
             handoff.ROOT,ci_operator_ticket,os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
             archive,candidate,old.ARCHIVE_SHA,selected_sha,revision,locked.check_fd9)
         need(second==approval,'FD9_SIGNED_OPERATOR_GRANT_DRIFT_BEFORE_PKG')
+        if post_final:
+            # This second barrier is AFTER successful final signed-grant/SHA
+            # verification. A disposable controller now changes the actual
+            # archive bytes while the same worker continuously retains FD9.
+            # The post-barrier archive gate must veto BEFORE any pkg dispatch.
+            base=load('stage3-native-configd-detached-fd9.py')
+            locked.check_fd9()
+            base.create_owned(handoff.PREPKG_READY,json.dumps({
+                'sha':os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+                'pid':os.getpid(),'original_fd9_inode':expected_inode,
+                'nonce_sha256':hashlib.sha256(ticket.encode()).hexdigest(),
+                'final_signed_grant_verified':True,
+                'native_mutating_pkg_invoked':False
+            },sort_keys=True).encode())
+            need(base.wait_file(handoff.PREPKG_RESUME,55)==
+                 b'RESUME_TEST_ONLY_AFTER_POST_FINAL_ARCHIVE_BYTE_TAMPER',
+                 'POST_FINAL_ARCHIVE_DISPATCH_BARRIER_NOT_RELEASED')
+            locked.check_fd9()
+        # Dispatch-side last archive identity+SHA recheck under original FD9.
+        # This only narrows the path-open TOCTOU; pkg still opens a pathname.
+        # A privileged caller may replace bytes AFTER this check.
+        attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
         rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
         locked.check_fd9()
         calls=delegate.count_calls(folder)-first

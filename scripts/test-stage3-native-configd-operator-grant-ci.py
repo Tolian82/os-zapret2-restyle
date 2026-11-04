@@ -247,6 +247,80 @@ class ExactSignedNativeDispatchTests(unittest.TestCase):
         self.assertIn("configd-native-late-signed-grant-no-pkg:",workflow)
         self.assertIn("ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI=1",workflow)
 
+    def test_post_final_archive_mode_requires_disposable_optin_and_exclusion(self):
+        handoff=module("stage3-native-configd-fd9-handoff.py",
+                       "test_post_final_archive_mode")
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER":"bogus"},clear=True):
+            with self.assertRaisesRegex(Exception,
+                    "NATIVE_POST_FINAL_ARCHIVE_MODE_INVALID"):
+                handoff.post_final_archive_mode()
+        with mock.patch.dict(os.environ,
+                {"ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,
+                    "NATIVE_POST_FINAL_ARCHIVE_NOT_DISPOSABLE"):
+                handoff.post_final_archive_mode()
+        env={"ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER":"1",
+             "ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI":"1",
+             "GITHUB_ACTIONS":"true",
+             "ZAPRET2_STAGE3_NATIVE_MUTATING_PKG":"1",
+             "ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI":"1",
+             "ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK":"1",
+             "ZAPRET2_NATIVE_BUILD_CI":"1",
+             "ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF":"1",
+             "ZAPRET2_STAGE3_READONLY_PKG":"1",
+             "ZAPRET2_STAGE3_READONLY_PKG_CI":"1"}
+        with mock.patch.dict(os.environ,env,clear=True):
+            self.assertTrue(handoff.post_final_archive_mode())
+        with mock.patch.dict(os.environ,{
+                **env,"ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER":"1",
+                "ZAPRET2_STAGE3_NATIVE_LATE_ARCHIVE_TAMPER_CI":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,
+                    "NATIVE_POST_FINAL_ARCHIVE_NOT_DISPOSABLE"):
+                handoff.post_final_archive_mode()
+        with mock.patch.dict(os.environ,{
+                **env,"ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL":"1",
+                "ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL_CI":"1"},clear=True):
+            with self.assertRaisesRegex(Exception,
+                    "NATIVE_POST_FINAL_ARCHIVE_NOT_DISPOSABLE"):
+                handoff.post_final_archive_mode()
+
+    def test_post_final_archive_barrier_after_signature_before_dispatch(self):
+        worker=(HERE/"stage3-native-configd-mutating-pkg.py").read_text()
+        controller=(HERE/"stage3-native-configd-fd9-handoff.py").read_text()
+        workflow=(HERE.parent/".github/workflows/stage2-native-delegated-fd9-handoff.yml").read_text()
+        signed=worker.index("second=grant_guard.verify(")
+        final_ok=worker.index("need(second==approval",signed)
+        barrier=worker.index("'final_signed_grant_verified':True",final_ok)
+        recheck=worker.index("        # Dispatch-side last archive identity+SHA recheck",barrier)
+        dispatch=worker.index("rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)",recheck)
+        self.assertLess(signed,final_ok)
+        self.assertLess(final_ok,barrier)
+        self.assertLess(barrier,recheck)
+        self.assertLess(recheck,dispatch)
+        self.assertIn("attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)\n        rc,out,err",worker)
+        self.assertIn("POST_FINAL_ARCHIVE_BARRIER_IDENTITY_UNQUALIFIED",controller)
+        self.assertIn("POST_FINAL_ARCHIVE_WRONG_WORKER_REFUSAL",controller)
+        self.assertIn("NATIVE_PKG_ARCHIVE_SHA256_MISMATCH",controller)
+        self.assertIn("PASS_TEST_ONLY_POST_FINAL_ARCHIVE_DISPATCH_VETO",controller)
+        self.assertIn("configd-native-post-final-archive-veto-no-pkg:",workflow)
+        self.assertIn("ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI=1",workflow)
+
+    def test_post_final_archive_must_not_report_pkg_or_product_acceptance(self):
+        worker=(HERE/"stage3-native-configd-mutating-pkg.py").read_text()
+        controller=(HERE/"stage3-native-configd-fd9-handoff.py").read_text()
+        self.assertIn("'final_signed_grant_verified':True",worker)
+        self.assertIn("RESUME_TEST_ONLY_AFTER_POST_FINAL_ARCHIVE_BYTE_TAMPER",worker)
+        self.assertIn("not DONE.exists() and not DONE.is_symlink()",controller)
+        self.assertIn("not AUTH_RESULT.exists() and not AUTH_RESULT.is_symlink()",controller)
+        self.assertIn("HANDOFF_CHANGED_ORIGINAL_PKG_CONFIG_PROCESS_IPFW",controller)
+        self.assertIn("base.check_original_fd9_busy()",controller)
+        self.assertIn("'ci_dispatch_side_archive_refused_under_fd9':post_final",controller)
+        self.assertIn("'final_valid_grant_then_dispatch_archive_veto':post_final",controller)
+        self.assertIn("'final_owner_check_to_pkg_race_closed':False",controller)
+        self.assertIn("'lh08_ac11_accepted':False",controller)
+        self.assertIn("'root_pkg_bypass_protected':False",worker)
+
     def test_native_worker_requires_grant_before_pkg(self):
         source = (HERE / "stage3-native-configd-mutating-pkg.py").read_text()
         self.assertIn("SIGNED_OPERATOR_GRANT_TICKET_REQUIRED_BEFORE_PKG", source)
