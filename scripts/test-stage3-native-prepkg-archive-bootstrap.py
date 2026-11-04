@@ -43,7 +43,15 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
 
     def call(self, folder, changes=None, sha='a'*64):
         modules, manifest = self.fixture()
-        with patch.object(m,'qualify'),\
+        # Ubuntu Actions user is not root; mock only UID while retaining
+        # real inode/mode/link properties. The native KVM runs without mocks.
+        original_lstat=Path.lstat
+        def fake_lstat(path,*args,**kwargs):
+            entry=list(original_lstat(path,*args,**kwargs))
+            entry[4]=0
+            return os.stat_result(entry)
+        with patch.object(Path,'lstat',fake_lstat),\
+             patch.object(m,'qualify'),\
              patch.object(m.candidate,'identity'),\
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
