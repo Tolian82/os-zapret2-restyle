@@ -18,6 +18,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -188,7 +189,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '113', 'NATIVE_BOOTSTRAP_REVISION_NOT_113')
+    need(m is not None and m.group(1) == '114', 'NATIVE_BOOTSTRAP_REVISION_NOT_114')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -409,12 +410,43 @@ def execute(old_archive):
             need(signed.returncode == 0, 'CI_OPERATOR_RECEIPT_SIGNING_FAILED')
             approval_sig.chmod(0o600)
         seal_receipt()
+        # Separate, byte-exact SHA-pinned and RSA-signed CI-only approval
+        # policy snapshot. This is NOT a monotonic one-use token database.
+        policy_path = reviewed / 'operator-approval-policy.json'
+        policy_sig = reviewed / 'operator-approval-policy.sig'
+        policy_now = int(time.time())
+        policy_fields = {
+            'schema': 'zapret2-prepkg-approval-policy-v1',
+            'repository': 'Tolian82/os-zapret2-restyle',
+            'authority_sha256': authority_sha,
+            'receipt_sha256': hashlib.sha256(receipt.read_bytes()).hexdigest(),
+            'sequence': 1, 'issued_at': policy_now-5,
+            'not_before': policy_now-5, 'not_after': policy_now+1800,
+            'revoked_receipt_sha256': [],
+            'revoked_authority_sha256': [],
+        }
+        def seal_policy():
+            policy_fields['receipt_sha256'] = hashlib.sha256(
+                receipt.read_bytes()).hexdigest()
+            raw = (json.dumps(policy_fields,sort_keys=True,
+                              separators=(',',':'))+'\n').encode()
+            policy_path.write_bytes(raw)
+            policy_path.chmod(0o600)
+            approved = run(['/usr/bin/openssl','dgst','-sha256','-sign',
+                            str(approval_private),'-out',str(policy_sig),
+                            str(policy_path)], 20)
+            need(approved.returncode == 0,
+                 'CI_APPROVAL_POLICY_RSA_SIGNING_FAILED')
+            policy_sig.chmod(0o600)
+            return hashlib.sha256(raw).hexdigest()
+        policy_sha = seal_policy()
         # The readonly seed receives ONLY paths; all digest/commit expectations
         # originate from the private manual receipt, never caller argv.
         launcher = [sys.executable,'-I','-B','-c',trusted_code,
                     '--operator-receipt',str(receipt),
                     '--operator-authority',authority_sha,str(approval_public),
                     str(approval_sig),
+                    '--approval-policy',policy_sha,str(policy_path),str(policy_sig),
                     '--verified-verifier',str(verifier),
                     '--signed-provenance',str(key_copy),str(claims),
                     str(signature),str(standalone)]
@@ -423,6 +455,8 @@ def execute(old_archive):
         good = run(launcher + tail)
         need(good.returncode == 0 and
              'ZAPRET2_PREPKG_TRUST_SEED=RECEIPT_RSA_VERIFIED_ANCHOR_NOT_OWNER_AUTHENTICATED'
+                 in good.stderr and
+             'ZAPRET2_PREPKG_TRUST_SEED=SIGNED_POLICY_TIME_AND_REVOCATION_MATCHED_NOT_ONE_USE'
                  in good.stderr and
              'ZAPRET2_PREPKG_TRUST_SEED=RECEIPT_PINS_BOUND_NOT_AUTHENTICATED'
                  in good.stderr and
@@ -462,6 +496,10 @@ def execute(old_archive):
             # Both the receipt signature AND the provenance signature are
             # cryptographically valid in these negative cases.
             seal_receipt()
+            # The CI policy issuer *also* reauthorizes this changed receipt
+            # and updates the expected policy SHA. The final mismatch must
+            # still be caught by independent signed provenance/archives.
+            launcher[12] = seal_policy()
             denied = run(launcher+tail,45)
             need(denied.returncode == 78 and 'REFUSED:' in denied.stderr and
                  'VERIFIED_SIGNED_SHA256:' not in denied.stderr and
@@ -472,7 +510,63 @@ def execute(old_archive):
                  'RECEIPT_NEGATIVE_NOT_REFUSED:' + reason)
             receipt.write_bytes(original_receipt)
             seal_receipt()
+            launcher[12] = seal_policy()
             installed_unchanged(old,old_archive,host,baseline)
+        # Both signatures still validate for a policy which is *itself*
+        # explicitly expired, premature, revoked or outside the allowed
+        # duration. The original historical old package must never change.
+        original_policy = dict(policy_fields)
+        for name, change, expected_refusal in (
+            ('expired', {'not_after': policy_now-1},
+             'APPROVAL_POLICY_NOT_CURRENT'),
+            ('future', {'not_before':policy_now+100,
+                        'issued_at':policy_now+100},
+             'APPROVAL_POLICY_NOT_CURRENT'),
+            ('too_long', {'not_after': policy_now+86400},
+             'APPROVAL_POLICY_UNBOUNDED_OR_INVALID_WINDOW'),
+            ('revoked_receipt', {
+                 'revoked_receipt_sha256':[
+                     hashlib.sha256(receipt.read_bytes()).hexdigest()]},
+             'OPERATOR_RECEIPT_REVOKED_IN_POLICY'),
+            ('revoked_authority', {
+                 'revoked_authority_sha256':[authority_sha]},
+             'OPERATOR_APPROVAL_AUTHORITY_REVOKED_IN_POLICY'),
+            ('wrong_authority', {'authority_sha256':'b'*64},
+             'APPROVAL_POLICY_WRONG_IDENTITY_OR_RECEIPT'),
+            ('boolean_sequence', {'sequence': True},
+             'APPROVAL_POLICY_NONINTEGER:sequence'),
+        ):
+            policy_fields.update(change)
+            launcher[12] = seal_policy()
+            denied = run(launcher+tail,45)
+            need(denied.returncode == 78 and
+                 expected_refusal in denied.stderr and
+                 'VERIFIED_SHA256:' not in denied.stderr,
+                 'SIGNED_APPROVAL_POLICY_NEGATIVE_ACCEPTED:' + name)
+            policy_fields.clear()
+            policy_fields.update(original_policy)
+            launcher[12] = seal_policy()
+            installed_unchanged(old,old_archive,host,baseline)
+        # A modified snapshot must reject even before its signature is
+        # checked when its separately expected exact digest no longer agrees.
+        original_policy_bytes=policy_path.read_bytes()
+        original_policy_sig=policy_sig.read_bytes()
+        policy_path.write_bytes(original_policy_bytes+b'ATTACKER')
+        denied=run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'APPROVAL_POLICY_NOT_INDEPENDENTLY_PINNED' in denied.stderr,
+             'MODIFIED_APPROVAL_POLICY_ACCEPTED')
+        # If a caller swaps the expected SHA but not the signature,
+        # the real detached RSA operation must independently reject it.
+        launcher[12]=hashlib.sha256(policy_path.read_bytes()).hexdigest()
+        denied=run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'OPERATOR_RECEIPT_SIGNATURE_INVALID' in denied.stderr and
+             'VERIFIED_SHA256:' not in denied.stderr,
+             'FORGED_APPROVAL_POLICY_SIGNATURE_ACCEPTED')
+        policy_path.write_bytes(original_policy_bytes)
+        policy_sig.write_bytes(original_policy_sig)
+        launcher[12]=seal_policy()
         # Tampering after approval must fail before loading external verifier.
         receipt.write_bytes(original_receipt+b'\nATTACKER')
         denied=run(launcher+tail,45)
@@ -564,7 +658,7 @@ def execute(old_archive):
         verifier_link_dir.mkdir(mode=0o700)
         verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
         verifier_link.symlink_to(verifier)
-        denied=run(launcher[:12]+[str(verifier_link)]+launcher[13:]+tail,45)
+        denied=run(launcher[:16]+[str(verifier_link)]+launcher[17:]+tail,45)
         need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
              'SYMLINK_VERIFIER_ACCEPTED')
         installed_unchanged(old,old_archive,host,baseline)
@@ -599,6 +693,10 @@ def execute(old_archive):
             'ci_operator_pty_receipt_record_and_inspect_verified': True,
             'receipt_pins_bound_to_seed_and_signed_archive_claims': True,
             'ci_ephemeral_detached_approval_signature_verified': True,
+            'ci_ephemeral_signed_bounded_policy_verified': True,
+            'approval_policy_expiry_and_revocation_negatives_verified': True,
+            'approval_policy_authoritative_freshness': False,
+            'approval_token_one_use_consumption_implemented': False,
             'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
