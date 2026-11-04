@@ -226,7 +226,7 @@ class TrustSeedContracts(unittest.TestCase):
                 self.assertTrue(self.m.verify_detached_receipt(
                     message, authority_sha, str(public), str(signed)))
                 for wrong, data in (("changed bytes", message+b" "),
-                                    ("changed claim", message.replace(b"113", b"999"))):
+                                    ("changed claim", message.replace(b"0.6.2_112", b"0.6.2_999"))):
                     with self.subTest(reason=wrong), \
                          self.assertRaises(SystemExit):
                         self.m.verify_detached_receipt(
