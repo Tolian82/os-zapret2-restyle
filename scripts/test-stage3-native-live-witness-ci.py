@@ -42,7 +42,7 @@ class LiveWitnessNativeContract(unittest.TestCase):
         self.addCleanup(self.env.stop)
         self.calls = 0
         self.old = self.root / 'os-zapret2-restyle-0.6.2_1.pkg'
-        self.new = self.root / 'os-zapret2-restyle-0.6.2_133.pkg'
+        self.new = self.root / 'os-zapret2-restyle-0.6.2_134.pkg'
         self.old.write_bytes(b'CI-REAL-OLD-CANDIDATE-PACKAGE-TEST')
         self.new.write_bytes(b'CI-REAL-NEW-NATIVE-PACKAGE-TEST')
         self.old.chmod(0o600)
@@ -63,7 +63,7 @@ class LiveWitnessNativeContract(unittest.TestCase):
         grant = module('stage3-native-configd-operator-grant-ci.py')
         pins = live.prepare(self.root)
         ticket = grant.issue(self.root, HEAD, self.old, self.new,
-                             self.old_sha, self.new_sha, '133', nonce=NONCE)
+                             self.old_sha, self.new_sha, '134', nonce=NONCE)
         self.assertEqual(ticket['client_sha256'], pins['client_sha256'])
         self.assertTrue((self.root / live.ROOT_NAME / 'status.key').exists())
         self.assertFalse((self.root / grant.ROOT_NAME / 'status-private.pem').exists())
@@ -76,10 +76,10 @@ class LiveWitnessNativeContract(unittest.TestCase):
     def assert_real_consumed(self, ticket, recovered=False):
         grant = module('stage3-native-configd-operator-grant-ci.py')
         positive = grant.verify(self.root, ticket, HEAD, self.old, self.new,
-                                self.old_sha, self.new_sha, '133',
+                                self.old_sha, self.new_sha, '134',
                                 self.check_fd9, nonce=NONCE, live_phase='consume')
         final = grant.verify(self.root, ticket, HEAD, self.old, self.new,
-                             self.old_sha, self.new_sha, '133',
+                             self.old_sha, self.new_sha, '134',
                              self.check_fd9, nonce=NONCE, live_phase='status')
         self.assertEqual(positive, final)
         self.assertFalse(final['ci_remote_witness_deployed'])
@@ -106,7 +106,7 @@ class LiveWitnessNativeContract(unittest.TestCase):
         guard = module('stage3-native-configd-operator-grant-ci.py')
         with self.assertRaises(OSError):
             guard.verify(self.root, ticket, HEAD, self.old, self.new,
-                         self.old_sha, self.new_sha, '133',
+                         self.old_sha, self.new_sha, '134',
                          self.check_fd9, nonce=NONCE, live_phase='consume')
         with sqlite3.connect(self.root / live.ROOT_NAME / 'operations.sqlite') as con:
             self.assertEqual(con.execute('SELECT count(*) FROM operations').fetchone()[0], 0)
@@ -117,7 +117,7 @@ class LiveWitnessNativeContract(unittest.TestCase):
         guard = module('stage3-native-configd-operator-grant-ci.py')
         with self.assertRaisesRegex(Exception, 'FD9_GRANT_ROOT_TICKET_ROLE_OR_OPERATION_UNTRUSTED'):
             guard.verify(self.root, ticket, HEAD, self.old, self.new,
-                         self.old_sha, self.new_sha, '133',
+                         self.old_sha, self.new_sha, '134',
                          self.check_fd9, nonce='e'*32, live_phase='consume')
         self.assertEqual(self.calls, 0)
         with sqlite3.connect(self.root / live.ROOT_NAME / 'operations.sqlite') as con:
@@ -141,7 +141,7 @@ class LiveWitnessNativeContract(unittest.TestCase):
         self.assertTrue(result['ci_live_loopback_witness_consumed'])
         guard = module('stage3-native-configd-operator-grant-ci.py')
         guard.verify(self.root, ticket, HEAD, self.old, self.new,
-                     self.old_sha, self.new_sha, '133', self.check_fd9,
+                     self.old_sha, self.new_sha, '134', self.check_fd9,
                      nonce=NONCE, live_phase='status')
         self.assertEqual(live.confirm(self.root, ticket, HEAD, NONCE)
                          ['ci_challenges_consumed'], 4)
@@ -169,6 +169,55 @@ class LiveWitnessNativeContract(unittest.TestCase):
         self.assertFalse(status['ci_offhost_monotonic_store'])
         self.assertFalse(status['ci_external_witness_owner_approved'])
         self.assertFalse(status['ci_production_pkg_authorized'])
+
+    def test_server_restart_keeps_committed_operation_for_fresh_signed_status(self):
+        ticket = self.issue()
+        self.serve(ticket)
+        live.exchange(self.root, ticket, HEAD, NONCE, self.check_fd9, 'consume')
+        with sqlite3.connect(self.root / live.ROOT_NAME / 'operations.sqlite') as con:
+            self.assertEqual(con.execute(
+                "SELECT state, witness_seq FROM operations").fetchall(),
+                [('CONSUMED', ticket['checkpoint_sequence'] + 2)])
+        self.proc = live.restart(self.root, ticket, HEAD, self.old, self.new,
+                                 NONCE, self.proc)
+        guard = module('stage3-native-configd-operator-grant-ci.py')
+        guard.verify(self.root, ticket, HEAD, self.old, self.new,
+                     self.old_sha, self.new_sha, '134', self.check_fd9,
+                     nonce=NONCE, live_phase='status')
+        report = live.confirm(self.root, ticket, HEAD, NONCE)
+        self.assertTrue(report['ci_real_sqlite_consumed'])
+        self.assertEqual(report['ci_challenges_consumed'], 3)
+        with sqlite3.connect(self.root / live.ROOT_NAME / 'operations.sqlite') as con:
+            self.assertEqual(con.execute('SELECT count(*) FROM operations').fetchone()[0], 1)
+
+    def test_server_restart_without_existing_db_refuses_no_listener(self):
+        ticket = self.issue()
+        self.serve(ticket)
+        live.stop(self.proc)
+        (self.root / live.ROOT_NAME / 'operations.sqlite').unlink()
+        with self.assertRaisesRegex(live.Refusal, 'CI_LIVE_WITNESS_RESTART_DB_UNTRUSTED'):
+            live.restart(self.root, ticket, HEAD, self.old, self.new,
+                         NONCE, self.proc)
+        self.assertFalse((self.root / live.ROOT_NAME / 'endpoint.json').exists())
+
+    def test_server_restart_wrong_original_nonce_does_not_stop_live_server(self):
+        ticket = self.issue()
+        self.serve(ticket)
+        with self.assertRaisesRegex(live.Refusal, 'CI_LIVE_WITNESS_ENDPOINT_NOT_BOUND'):
+            live.restart(self.root, ticket, HEAD, self.old, self.new,
+                         'e' * 32, self.proc)
+        self.assertIsNone(self.proc.poll())
+        self.assertEqual(live.endpoint(self.root, HEAD, ticket, NONCE)['head'], HEAD)
+
+    def test_server_restart_rejects_unsafe_db_mode_before_listener(self):
+        ticket = self.issue()
+        self.serve(ticket)
+        live.stop(self.proc)
+        (self.root / live.ROOT_NAME / 'operations.sqlite').chmod(0o644)
+        with self.assertRaisesRegex(live.Refusal, 'CI_LIVE_WITNESS_RESTART_DB_UNTRUSTED'):
+            live.restart(self.root, ticket, HEAD, self.old, self.new,
+                         NONCE, self.proc)
+        self.assertFalse((self.root / live.ROOT_NAME / 'endpoint.json').exists())
 
     def test_mode_refuses_without_disposable_flags(self):
         with mock.patch.dict(os.environ,
