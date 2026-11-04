@@ -1,6 +1,6 @@
 # Pre-pkg operator approval — independent trust-root provisioning contract
 
-**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.36 `_126`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
+**Status:** **DESIGN / NO PRODUCTION TRUST ROOT PROVISIONED.** Source-only Stage 3.37 `_127`, 4 November 2026. This is a preparatory process design; it does not constitute operator authorization, approved cryptographic identity, an OPNsense upgrade recipe or LH-08/AC-11 acceptance. [Normative native packaging TЗ v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [implementation plan v1.4](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) remain binding.
 
 ## Separate roles and bootstrap — nothing may authorize itself
 
@@ -106,3 +106,7 @@ Record, in a controlled owner-reviewed audit trail *outside CI and incoming arch
 There is no authenticated external channel for the initial `-c` seed or authority fingerprint, no production signer/approval key, no rotation/replay policy, no unavoidable OPNsense firmware/Web/managed CLI pre-pkg gate, no full old RUNNING/STOPPED PID/FD9/IPFW/Config/hook ownership, no uninterrupted FD9 through actual destructive pkg and no bounded concurrency/cancellation/rollback evidence. Direct privileged `pkg` is a separate explicitly unsupported bypass. Native disposable tests cannot approve the actual owner appliance.
 
 **Next after _126 CI qualification:** owner-controlled production authority and out-of-band seed/source/approval verification design, explicit key-rotation and freshness/refusal contract, then supported pre-pkg gateway with full old-owner and real native pkg transaction negative postconditions. **LH-08/AC-11 BLOCKED**. Published `0.6.2_1.pkg`, four package hooks, owner OPNsense and stable `v0.6.2` remain untouched.
+
+## _127 original-FD9 late signed-grant drift — CI-only
+
+The _126 native negative altered a signed grant BEFORE worker verification. The _127 disposable native scenario retains authentic original FD9 after a successful initial grant verification, then pauses immediately before its second signature check; the controller changes one signed byte without changing the detached RSA signature. The worker must refuse before native pkg and preserve the genuine installed predecessor snapshot. [Exact scope](../verification/evidence/2026-11-04-v0.6.2_127-stage3-late-signed-grant-drift-no-pkg.md). Same-runner signer and controller are NOT independent owner authorization; no off-host witness, unavoidable supported Web/firmware/pkg gateway or root bypass prevention. **LH-08/AC-11 BLOCKED.**

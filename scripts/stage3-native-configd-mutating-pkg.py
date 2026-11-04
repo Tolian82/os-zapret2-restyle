@@ -107,6 +107,11 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL')=='1' and
              os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_JOURNAL_CI')=='1',
              'NATIVE_LATE_JOURNAL_TEST_OPTIN_REQUIRED')
+    late_grant=os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER')=='1'
+    if late_grant:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LATE_GRANT_TAMPER_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and not late_journal_fault,
+             'NATIVE_LATE_GRANT_MODE_NOT_DISPOSABLE')
     need(native.REVISION==revision and old.ARCHIVE_SHA==delegate.load(
          'stage3-native-configd-detached-fd9.py').SHA_OLD,
          'NATIVE_SOURCE_REVISION_OR_PUBLISHED_OLD_UNQUALIFIED')
@@ -214,6 +219,22 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         # Identical final owner admission helper used by existing native _89.
         # NO controller-side gap: this same detached child owns FD9 throughout.
         attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
+        if late_grant:
+            # Initial RSA verification and genuine old Status passed.
+            # Pause with original FD9 until controller changes signed bytes.
+            base=load('stage3-native-configd-detached-fd9.py')
+            locked.check_fd9()
+            base.create_owned(handoff.PREPKG_READY,json.dumps({
+                'sha':os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+                'pid':os.getpid(),'original_fd9_inode':expected_inode,
+                'nonce_sha256':hashlib.sha256(ticket.encode()).hexdigest(),
+                'initial_signed_grant_verified':True,
+                'native_mutating_pkg_invoked':False
+            },sort_keys=True).encode())
+            need(base.wait_file(handoff.PREPKG_RESUME,55)==
+                 b'RESUME_TEST_ONLY_AFTER_LATE_SIGNED_BYTE_TAMPER',
+                 'LATE_GRANT_TAMPER_BARRIER_NOT_RELEASED')
+            locked.check_fd9()
         # Re-verify the very same signed scope and real archive bytes under
         # continuously owned historical FD9 immediately before pkg dispatch.
         second=grant_guard.verify(
