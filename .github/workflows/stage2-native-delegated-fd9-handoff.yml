@@ -380,7 +380,7 @@ jobs:
             GITHUB_ACTIONS=true ZAPRET2_STAGE2_LOCKED_COLD_REVALIDATION=1 ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF=1 ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE3_DETACHED_FD9=1 ZAPRET2_STAGE3_ATOMIC_HANDOFF=1 ZAPRET2_STAGE3_READONLY_PKG=1 ZAPRET2_STAGE3_READONLY_PKG_CI=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage3-native-configd-fd9-handoff.py "${{ github.event.pull_request.head.sha || github.sha }}"
 
   configd-native-pkg-verified-stdin:
-    name: Genuine original-FD9 pkg add -f - from verified immutable stdin bytes
+    name: Genuine original-FD9 native package from verified immutable stdin stream
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
