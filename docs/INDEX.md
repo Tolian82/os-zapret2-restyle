@@ -18,6 +18,10 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 detached RSA operator-approval receipt (_113)](verification/evidence/2026-11-04-v0.6.2_113-stage3-detached-operator-approval.md) — exact signed root-private receipt, separately fingerprint-pinned approval key, no actual owner-approved authority yet.
+- [Pre-pkg operator authority trust-root provisioning design](architecture/PREPKG_OPERATOR_APPROVAL_TRUST_ROOT.md) — independent two-signer roles, offline approval/replay/rotation prerequisites and mandatory fail-closed safety boundary.
+
+
 - [Stage 3.24 mandatory receipt-derived seed and signed archive SHA comparison (_112)](verification/evidence/2026-11-04-v0.6.2_112-stage3-receipt-bound-seed.md) — root-private manual pin receipt is the only admitted input to the SHA-verified RSA verifier; exact old/current signed archives still must match, no production issuer or pkg authorization.
 
 

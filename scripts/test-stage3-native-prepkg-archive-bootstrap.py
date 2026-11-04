@@ -22,7 +22,7 @@ spec.loader.exec_module(m)
 class NativeArchiveBootstrapContracts(unittest.TestCase):
     def fixture(self):
         modules = {name:(m.PRODUCT / name).read_bytes() for name in m.MODULES}
-        manifest = {'name':m.NAME, 'version':'0.6.2_112',
+        manifest = {'name':m.NAME, 'version':'0.6.2_113',
                     'abi':'FreeBSD:15:amd64','arch':'freebsd:15:x86:64',
                     'files':{'/' + m.DEST + name:'1$sha' for name in m.MODULES}}
         return modules, manifest
@@ -56,7 +56,7 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
             result = m.staged_source_from_native_archive(
-                Path('/root/os-zapret2-restyle-0.6.2_112.pkg'),'0.6.2_112',
+                Path('/root/os-zapret2-restyle-0.6.2_113.pkg'),'0.6.2_113',
                 sha,folder)
             self.assertEqual(check.call_count,2)
         return result
@@ -139,8 +139,8 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                  patch.object(m,'read_only') as tar:
                 with self.assertRaisesRegex(m.candidate.CandidateRefusal,'SHA_MISMATCH'):
                     m.staged_source_from_native_archive(
-                        Path('/root/os-zapret2-restyle-0.6.2_112.pkg'),
-                        '0.6.2_112','0'*64,Path(tmp))
+                        Path('/root/os-zapret2-restyle-0.6.2_113.pkg'),
+                        '0.6.2_113','0'*64,Path(tmp))
                 tar.assert_not_called()
                 self.assertEqual(os.listdir(tmp),[])
 
@@ -162,6 +162,10 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
         self.assertIn("'ci_operator_pty_receipt_record_and_inspect_verified': True",source)
         self.assertIn("'receipt_pins_bound_to_seed_and_signed_archive_claims': True",source)
         self.assertIn("'receipt_operator_issuer_authenticated': False",source)
+        self.assertIn("'ci_ephemeral_detached_approval_signature_verified': True",source)
+        self.assertIn("'operator_authority_approved_out_of_band': False",source)
+        self.assertIn("'OPERATOR_RECEIPT_SIGNATURE_INVALID' in denied.stderr",source)
+        self.assertIn("seal_receipt()",source)
         self.assertIn("'RECEIPT_NEGATIVE_NOT_REFUSED:' + reason",source)
 
 

@@ -188,7 +188,7 @@ def execute(old_archive):
     expected = built['real_native_pkg']['sha256']
     revision = (ROOT / 'Makefile').read_text()
     m = re.search(r'(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$', revision)
-    need(m is not None and m.group(1) == '112', 'NATIVE_BOOTSTRAP_REVISION_NOT_112')
+    need(m is not None and m.group(1) == '113', 'NATIVE_BOOTSTRAP_REVISION_NOT_113')
     version = (ROOT / 'VERSION').read_text().strip() + '_' + m.group(1)
     need(installer.install_and_verify(old_archive)['status'] ==
          'PASS_OPNSENSE_26_7_REAL_PREDECESSOR_INSTALLED_PROVENANCE',
@@ -384,10 +384,37 @@ def execute(old_archive):
              'OPERATOR_PIN_SHA256_MISMATCH:public_key_sha256' in denied.stderr,
              'TAMPERED_OPERATOR_PUBLIC_KEY_ACCEPTED')
         key_copy.write_bytes(key_bytes)
+        # This is a DIFFERENT ephemeral RSA identity from the signed pkg
+        # provenance key, generated solely on a one-use OPNsense CI VM. A
+        # real operator must authenticate its fingerprint out of band.
+        approval_private = reviewed / 'ci-only-operator-authority-private.pem'
+        approval_public = reviewed / 'operator-approval-authority.pem'
+        approval_sig = reviewed / 'operator-pins.sig'
+        keygen = run(['/usr/bin/openssl','genpkey','-algorithm','RSA',
+                      '-pkeyopt','rsa_keygen_bits:2048',
+                      '-out',str(approval_private)], 35)
+        need(keygen.returncode == 0, 'CI_OPERATOR_AUTHORITY_KEYGEN_FAILED')
+        exported = run(['/usr/bin/openssl','pkey','-in',str(approval_private),
+                        '-pubout','-out',str(approval_public)], 20)
+        need(exported.returncode == 0, 'CI_OPERATOR_AUTHORITY_EXPORT_FAILED')
+        approval_public.chmod(0o600)
+        approval_private.chmod(0o600)
+        authority_sha = hashlib.sha256(approval_public.read_bytes()).hexdigest()
+        need(authority_sha != key_pin,
+             'CI_OPERATOR_AUTHORITY_MUST_DIFFER_FROM_CLAIMS_SIGNER')
+        def seal_receipt():
+            signed = run(['/usr/bin/openssl','dgst','-sha256','-sign',
+                          str(approval_private),'-out',str(approval_sig),
+                          str(receipt)], 20)
+            need(signed.returncode == 0, 'CI_OPERATOR_RECEIPT_SIGNING_FAILED')
+            approval_sig.chmod(0o600)
+        seal_receipt()
         # The readonly seed receives ONLY paths; all digest/commit expectations
         # originate from the private manual receipt, never caller argv.
         launcher = [sys.executable,'-I','-B','-c',trusted_code,
                     '--operator-receipt',str(receipt),
+                    '--operator-authority',authority_sha,str(approval_public),
+                    str(approval_sig),
                     '--verified-verifier',str(verifier),
                     '--signed-provenance',str(key_copy),str(claims),
                     str(signature),str(standalone)]
@@ -395,6 +422,8 @@ def execute(old_archive):
                 str(old_archive),old.VERSION]
         good = run(launcher + tail)
         need(good.returncode == 0 and
+             'ZAPRET2_PREPKG_TRUST_SEED=RECEIPT_RSA_VERIFIED_ANCHOR_NOT_OWNER_AUTHENTICATED'
+                 in good.stderr and
              'ZAPRET2_PREPKG_TRUST_SEED=RECEIPT_PINS_BOUND_NOT_AUTHENTICATED'
                  in good.stderr and
              'ZAPRET2_PREPKG_TRUST_SEED=VERIFIED_SHA256:' +
@@ -430,6 +459,9 @@ def execute(old_archive):
             changed[field] = bad
             receipt.write_bytes(json.dumps(changed,sort_keys=True,
                                            separators=(',',':')).encode())
+            # Both the receipt signature AND the provenance signature are
+            # cryptographically valid in these negative cases.
+            seal_receipt()
             denied = run(launcher+tail,45)
             need(denied.returncode == 78 and 'REFUSED:' in denied.stderr and
                  'VERIFIED_SIGNED_SHA256:' not in denied.stderr and
@@ -439,10 +471,38 @@ def execute(old_archive):
                   in denied.stderr),
                  'RECEIPT_NEGATIVE_NOT_REFUSED:' + reason)
             receipt.write_bytes(original_receipt)
+            seal_receipt()
             installed_unchanged(old,old_archive,host,baseline)
+        # Tampering after approval must fail before loading external verifier.
+        receipt.write_bytes(original_receipt+b'\nATTACKER')
+        denied=run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'OPERATOR_RECEIPT_SIGNATURE_INVALID' in denied.stderr and
+             'VERIFIED_SHA256:' not in denied.stderr,
+             'UNSIGNED_CHANGED_OPERATOR_RECEIPT_ACCEPTED')
+        receipt.write_bytes(original_receipt)
+        seal_receipt()
+        original_authority_sig=approval_sig.read_bytes()
+        approval_sig.write_bytes(b'forged-receipt-signature')
+        denied=run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'OPERATOR_RECEIPT_SIGNATURE_INVALID' in denied.stderr and
+             'VERIFIED_SHA256:' not in denied.stderr,
+             'FORGED_OPERATOR_RECEIPT_SIGNATURE_ACCEPTED')
+        approval_sig.write_bytes(original_authority_sig)
+        original_public=approval_public.read_bytes()
+        approval_public.write_bytes(b'FAKE APPROVAL KEY\n'+original_public)
+        denied=run(launcher+tail,45)
+        need(denied.returncode == 78 and
+             'OPERATOR_AUTHORITY_NOT_INDEPENDENTLY_PINNED' in denied.stderr,
+             'WRONG_AUTHORITY_PUBLIC_KEY_ACCEPTED')
+        approval_public.write_bytes(original_public)
+        installed_unchanged(old,old_archive,host,baseline)
         for cmd,reason in (
             (launcher[:6]+[str(receipt)+'-wrong']+launcher[7:]+tail,
              'WRONG_OPERATOR_RECEIPT_PATH'),
+            (launcher[:8]+['0'*64]+launcher[9:]+tail,
+             'WRONG_OPERATOR_APPROVAL_ANCHOR'),
             (launcher+['upgrade']+tail[1:],'MUTATING_COMMAND'),
             (launcher+tail[:1]+[str(incoming)+'-wrong']+tail[2:],'OTHER_ARCHIVE'),
         ):
@@ -504,7 +564,7 @@ def execute(old_archive):
         verifier_link_dir.mkdir(mode=0o700)
         verifier_link = verifier_link_dir/'stage3-prepkg-verified-eval.py'
         verifier_link.symlink_to(verifier)
-        denied=run(launcher[:8]+[str(verifier_link)]+launcher[9:]+tail,45)
+        denied=run(launcher[:12]+[str(verifier_link)]+launcher[13:]+tail,45)
         need(denied.returncode==78 and 'VERIFIER_OPEN_REFUSED' in denied.stderr,
              'SYMLINK_VERIFIER_ACCEPTED')
         installed_unchanged(old,old_archive,host,baseline)
@@ -538,6 +598,8 @@ def execute(old_archive):
             'operator_source_commit_authenticated': False,
             'ci_operator_pty_receipt_record_and_inspect_verified': True,
             'receipt_pins_bound_to_seed_and_signed_archive_claims': True,
+            'ci_ephemeral_detached_approval_signature_verified': True,
+            'operator_authority_approved_out_of_band': False,
             'receipt_operator_issuer_authenticated': False,
             'independent_production_issuer_approved': False,
             'operator_pin_record_is_release_authentication': False,
