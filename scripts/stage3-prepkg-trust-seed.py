@@ -12,6 +12,7 @@ import sys
 PREFIX = "ZAPRET2_PREPKG_TRUST_SEED="
 MAX_BYTES = 256 * 1024
 SHA = re.compile(r"[0-9a-f]{64}\Z")
+COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 
 
 def refuse(why):
@@ -86,10 +87,13 @@ def verified_verifier(path, expected):
 def main():
     # This exact mode is independently validated before external source code
     # executes. Never forward an arbitrary argv to verified Python code.
-    need(len(sys.argv) == 15 and sys.argv[1] == "--verified-verifier" and
-         sys.argv[4] == "--signed-provenance" and
-         sys.argv[10] == "inspect-predecessor",
+    need(len(sys.argv) == 17 and sys.argv[1] == "--verified-verifier" and
+         sys.argv[4] == "--expected-source-commit" and
+         sys.argv[6] == "--signed-provenance" and
+         sys.argv[12] == "inspect-predecessor",
          "SIGNED_READ_ONLY_VERIFIER_COMMAND_REQUIRED")
+    need(COMMIT.fullmatch(sys.argv[5]) is not None,
+         "INDEPENDENT_SOURCE_COMMIT_REQUIRED")
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          os.uname().machine == "amd64", "ROOT_FREEBSD_AMD64_REQUIRED")
     path, digest = sys.argv[3], sys.argv[2]
