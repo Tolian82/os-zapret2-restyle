@@ -1,17 +1,29 @@
-# Trusted operator-reviewed input to Python -I -B -c; NEVER execute this
-# downloaded code as a file without separately authenticating its origin.
-# External pre-execution hash expectation is supplied independently of the
-# target .py. No pkg dispatch, no network, no project/old-plugin imports.
+# Operator-reviewed Python -I -B -c code, never run as an unauthenticated file.
+# Read-only, pre-pkg signed-provenance verification. Both this -c code and the
+# trusted PUBLIC KEY DIGEST must come from an independent authorized channel.
+# A test-only signer/key does not qualify an actual production trust anchor.
 import hashlib
 import hmac
+import json
 import os
 import re
 import stat
+import subprocess
 import sys
+import tempfile
 
 PREFIX = "ZAPRET2_PREPKG_VERIFY_EXEC="
 MAX_BYTES = 256 * 1024
+STAGING_ROOT = "/root"
 SHA = re.compile(r"[0-9a-f]{64}\Z")
+COMMIT = re.compile(r"[0-9a-f]{40}\Z")
+VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+_[1-9][0-9]*\Z")
+SCHEMA = "zapret2-prepkg-provenance-v1"
+REPO = "Tolian82/os-zapret2-restyle"
+NAME = "os-zapret2-restyle"
+EXPECTED_KEYS = frozenset(("schema", "repository", "source_commit",
+    "entrypoint_sha256", "incoming_version", "incoming_sha256",
+    "predecessor_version", "predecessor_sha256"))
 
 
 def refuse(reason):
@@ -25,13 +37,10 @@ def need(ok, reason):
 
 
 def trusted_root_path(path):
-    need(os.path.isabs(path) and
-         os.path.normpath(path) == path and
-         path.startswith("/root/") and
-         path != "/root/" and
-         "\x00" not in path,
+    need(isinstance(path, str) and os.path.isabs(path) and
+         os.path.normpath(path) == path and path.startswith("/root/") and
+         path != "/root/" and "\x00" not in path,
          "EXTERNAL_SOURCE_OUTSIDE_PRIVATE_ROOT")
-    # Every ancestor must be owned by root and not writable by others.
     parent = os.path.dirname(path)
     while True:
         st = os.lstat(parent)
@@ -45,7 +54,7 @@ def trusted_root_path(path):
         parent = next_parent
 
 
-def verify_source_bytes(path, digest):
+def private_root_bytes(path):
     trusted_root_path(path)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -79,36 +88,117 @@ def verify_source_bytes(path, digest):
              (after.st_dev, after.st_ino) ==
              (pathname.st_dev, pathname.st_ino),
              "EXTERNAL_SOURCE_CHANGED_DURING_VERIFICATION")
-        observed = hashlib.sha256(payload).hexdigest()
-        need(hmac.compare_digest(observed, digest),
-             "EXTERNAL_SOURCE_EXPECTED_SHA256_MISMATCH")
-        # Return immutable verified bytes. Nothing opens the filename a second
-        # time for execution, avoiding the verification->execution path race.
         return bytes(payload)
     finally:
         os.close(fd)
 
 
-def main():
-    need(len(sys.argv) >= 4 and sys.argv[3] == "inspect-predecessor" and
-         len(sys.argv) == 10,
-         "ONLY_READ_ONLY_PREDECESSOR_COMMAND_SUPPORTED")
-    digest, filename = sys.argv[1:3]
+def verify_source_bytes(path, digest):
     need(SHA.fullmatch(digest) is not None,
          "EXTERNAL_SOURCE_SHA256_EXPECTATION_REQUIRED")
+    payload = private_root_bytes(path)
+    need(hmac.compare_digest(hashlib.sha256(payload).hexdigest(), digest),
+         "EXTERNAL_SOURCE_EXPECTED_SHA256_MISMATCH")
+    # Execute the frozen, authenticated bytes, never a second pathname open.
+    return bytes(payload)
+
+
+def write_private(directory, basename, payload):
+    path = os.path.join(directory, basename)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                 0o600)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        raise
+    return path
+
+
+def signed_claims(key_path, pinned_key_sha, claims_path, sig_path):
+    need(SHA.fullmatch(pinned_key_sha) is not None,
+         "INDEPENDENT_PUBLIC_KEY_SHA256_REQUIRED")
+    public_key = private_root_bytes(key_path)
+    need(hmac.compare_digest(hashlib.sha256(public_key).hexdigest(),
+                             pinned_key_sha),
+         "PUBLIC_KEY_NOT_INDEPENDENTLY_PINNED")
+    claims = private_root_bytes(claims_path)
+    signature = private_root_bytes(sig_path)
+    # OpenSSL operates ONLY on captured bytes, placed into fresh private paths.
+    # It cannot be tricked into verifying different bytes through path swaps.
+    with tempfile.TemporaryDirectory(prefix="zapret2-signed-prepkg-", dir=STAGING_ROOT) as td:
+        pub = write_private(td, "pub.pem", public_key)
+        sig = write_private(td, "claims.sig", signature)
+        try:
+            p = subprocess.run(["/usr/bin/openssl", "dgst", "-sha256",
+                                "-verify", pub, "-signature", sig],
+                               input=claims, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, timeout=10,
+                               check=False)
+        except (OSError, subprocess.SubprocessError):
+            refuse("SIGNED_PROVENANCE_CRYPTO_UNAVAILABLE")
+        need(p.returncode == 0 and p.stdout.strip() == b"Verified OK",
+             "SIGNED_PROVENANCE_SIGNATURE_INVALID")
+    try:
+        value = json.loads(claims.decode("utf-8"),
+                           object_pairs_hook=_reject_duplicate_keys)
+    except (ValueError, UnicodeError, TypeError):
+        refuse("SIGNED_PROVENANCE_JSON_INVALID")
+    need(isinstance(value, dict) and set(value) == EXPECTED_KEYS and
+         value["schema"] == SCHEMA and value["repository"] == REPO and
+         isinstance(value["source_commit"], str) and
+         COMMIT.fullmatch(value["source_commit"]) is not None and
+         all(isinstance(value[k], str) and SHA.fullmatch(value[k]) is not None
+             for k in ("entrypoint_sha256", "incoming_sha256",
+                       "predecessor_sha256")) and
+         all(isinstance(value[k], str) and VERSION.fullmatch(value[k]) is not None
+             for k in ("incoming_version", "predecessor_version")) and
+         value["incoming_version"] != value["predecessor_version"],
+         "SIGNED_PROVENANCE_CLAIMS_UNQUALIFIED")
+    return value
+
+
+def _reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def main():
+    # Only this signed-provenance read-only command is accepted. In particular,
+    # unsigned SHA arguments, mutating package operations and arbitrary Python
+    # source commands are NOT accepted, even when the caller is root.
+    need(len(sys.argv) == 12 and sys.argv[1] == "--signed-provenance" and
+         sys.argv[7] == "inspect-predecessor",
+         "SIGNED_READ_ONLY_PREDECESSOR_COMMAND_REQUIRED")
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
          os.uname().machine == "amd64",
          "ROOT_FREEBSD_AMD64_REQUIRED")
-    verified = verify_source_bytes(filename, digest)
+    _, _, key_sha, public_key, claims_path, sig_path, filename, _, \
+        incoming, incoming_version, predecessor, predecessor_version = sys.argv
+    value = signed_claims(public_key, key_sha, claims_path, sig_path)
+    need(value["incoming_version"] == incoming_version and
+         value["predecessor_version"] == predecessor_version and
+         os.path.basename(incoming) == NAME + "-" + incoming_version + ".pkg" and
+         os.path.basename(predecessor) == NAME + "-" + predecessor_version + ".pkg" and
+         os.path.basename(filename) == "native-prepkg-standalone.py",
+         "SIGNED_PROVENANCE_INTENDED_TARGET_MISMATCH")
+    verified = verify_source_bytes(filename, value["entrypoint_sha256"])
     try:
         executable = compile(verified, filename, "exec", dont_inherit=True)
     except (SyntaxError, ValueError, TypeError):
         refuse("EXTERNAL_SOURCE_NOT_VALID_PYTHON")
-    # The verified code is now in-memory; never re-open the script for Python
-    # source execution. The candidate still has its own root-inode check.
-    sys.argv = [filename] + sys.argv[3:]
+    sys.argv = [filename, "inspect-predecessor", incoming, incoming_version,
+                value["incoming_sha256"], predecessor, predecessor_version,
+                value["predecessor_sha256"]]
     sys.dont_write_bytecode = True
-    print(PREFIX + "VERIFIED_SHA256:" + digest, file=sys.stderr, flush=True)
+    print(PREFIX + "VERIFIED_SIGNED_SHA256:" + value["entrypoint_sha256"],
+          file=sys.stderr, flush=True)
     exec(executable, {"__name__": "__main__", "__file__": filename,
                       "__package__": None, "__builtins__": __builtins__})
 

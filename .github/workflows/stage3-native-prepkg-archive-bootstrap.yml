@@ -1,4 +1,4 @@
-name: Stage 3 externally pinned pre-pkg source verify before Python execution
+name: Stage 3 signed pre-pkg provenance and verified source before Python execution
 
 on:
   pull_request:
@@ -10,6 +10,7 @@ on:
       - scripts/test-native-prepkg-standalone.py
       - scripts/stage3-prepkg-verified-eval.py
       - scripts/test-stage3-prepkg-verified-eval.py
+      - scripts/test-stage3-prepkg-signed-provenance.py
       - scripts/native-opnsense-package.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_candidate.py
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   exact-native-archive-bootstrap:
-    name: Authenticate incoming Mk archive and screen authentic old owner without pkg
+    name: Check signed source provenance and screen authentic old owner without pkg
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
@@ -41,10 +42,11 @@ jobs:
       - name: Check native archive bootstrap unit, no-pkg and source syntax
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py
+          python3.13 -m py_compile scripts/stage3-native-prepkg-archive-bootstrap.py scripts/test-stage3-native-prepkg-archive-bootstrap.py scripts/native-prepkg-standalone.py scripts/test-native-prepkg-standalone.py scripts/stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-verified-eval.py scripts/test-stage3-prepkg-signed-provenance.py
           python3.13 scripts/test-stage3-native-prepkg-archive-bootstrap.py -v
           python3.13 scripts/test-native-prepkg-standalone.py -v
           python3.13 scripts/test-stage3-prepkg-verified-eval.py -v
+          python3.13 scripts/test-stage3-prepkg-signed-provenance.py -v
       - name: Real official Mk archive pre-pkg source on old 0.6.2_1 disposable OPNsense
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235

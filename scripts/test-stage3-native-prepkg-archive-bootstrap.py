@@ -22,7 +22,7 @@ spec.loader.exec_module(m)
 class NativeArchiveBootstrapContracts(unittest.TestCase):
     def fixture(self):
         modules = {name:(m.PRODUCT / name).read_bytes() for name in m.MODULES}
-        manifest = {'name':m.NAME, 'version':'0.6.2_107',
+        manifest = {'name':m.NAME, 'version':'0.6.2_108',
                     'abi':'FreeBSD:15:amd64','arch':'freebsd:15:x86:64',
                     'files':{'/' + m.DEST + name:'1$sha' for name in m.MODULES}}
         return modules, manifest
@@ -56,7 +56,7 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
              patch.object(m.candidate,'inspect_archive') as check,\
              patch.object(m,'read_only',side_effect=self.tool(modules,manifest,changes)):
             result = m.staged_source_from_native_archive(
-                Path('/root/os-zapret2-restyle-0.6.2_107.pkg'),'0.6.2_107',
+                Path('/root/os-zapret2-restyle-0.6.2_108.pkg'),'0.6.2_108',
                 sha,folder)
             self.assertEqual(check.call_count,2)
         return result
@@ -139,8 +139,8 @@ class NativeArchiveBootstrapContracts(unittest.TestCase):
                  patch.object(m,'read_only') as tar:
                 with self.assertRaisesRegex(m.candidate.CandidateRefusal,'SHA_MISMATCH'):
                     m.staged_source_from_native_archive(
-                        Path('/root/os-zapret2-restyle-0.6.2_107.pkg'),
-                        '0.6.2_107','0'*64,Path(tmp))
+                        Path('/root/os-zapret2-restyle-0.6.2_108.pkg'),
+                        '0.6.2_108','0'*64,Path(tmp))
                 tar.assert_not_called()
                 self.assertEqual(os.listdir(tmp),[])
 
