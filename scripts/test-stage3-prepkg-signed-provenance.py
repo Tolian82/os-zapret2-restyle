@@ -128,10 +128,29 @@ class SignedProvenance(unittest.TestCase):
             self.assertEqual(p.returncode,78)
             self.assertIn('SIGNED_READ_ONLY_PREDECESSOR_COMMAND_REQUIRED',p.stderr)
 
+    def test_signed_but_different_source_commit_is_not_operator_approved(self):
+        with tempfile.TemporaryDirectory(prefix='zapret110-',dir=None) as d:
+            c=fixture(d,{'source_commit':'2'*40})
+            self.assertEqual(self.signed(c)['source_commit'],'2'*40)
+            argv=['-c','--expected-source-commit','1'*40,
+                  '--signed-provenance',c['key_sha'],str(c['pub']),
+                  str(c['claims']),str(c['sig']),str(c['cli']),
+                  'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_108.pkg',
+                  '0.6.2_108','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
+            with patch.object(self.m.sys,'argv',argv), \
+                 patch.object(self.m.os,'uname',return_value=types.SimpleNamespace(sysname='FreeBSD',machine='amd64')), \
+                 patch.object(self.m.os,'geteuid',return_value=0), \
+                 patch.object(self.m,'verify_source_bytes') as executable, \
+                 self.assertRaises(SystemExit) as refused:
+                self.m.main()
+            self.assertEqual(refused.exception.code,78)
+            executable.assert_not_called()
+
     def test_pinned_verified_memory_only_and_bad_target_fails_before_exec(self):
         with tempfile.TemporaryDirectory(prefix='zapret108-',dir=None) as d:
             c=fixture(d)
-            argv=['-c','--signed-provenance',c['key_sha'],str(c['pub']),
+            argv=['-c','--expected-source-commit','1'*40,
+                '--signed-provenance',c['key_sha'],str(c['pub']),
                 str(c['claims']),str(c['sig']),str(c['cli']),
                 'inspect-predecessor','/root/os-zapret2-restyle-0.6.2_108.pkg',
                 '0.6.2_108','/root/os-zapret2-restyle-0.6.2_1.pkg','0.6.2_1']
@@ -146,11 +165,19 @@ class SignedProvenance(unittest.TestCase):
                     self.m.main()
                 self.assertIn('VERIFIED_PREPKG_ENTRY',stdout.getvalue())
                 self.assertIn('VERIFIED_SIGNED_SHA256:',stderr.getvalue())
-                with patch.object(self.m.sys,'argv',list(argv[:8]+['/root/os-zapret2-restyle-0.6.2_109.pkg']+argv[9:])), \
+                with patch.object(self.m.sys,'argv',list(argv[:10]+['/root/os-zapret2-restyle-0.6.2_109.pkg']+argv[11:])), \
                      patch.object(self.m.os,'uname',return_value=fake_os), \
                      patch.object(self.m.os,'geteuid',return_value=0), \
                      self.assertRaises(SystemExit):
                     self.m.main()
+                # Correctly signed claims must still be rejected when the
+                # separately expected operator commit differs from the signer.
+                with patch.object(self.m.sys,'argv',list(argv[:2]+['f'*40]+argv[3:])), \
+                     patch.object(self.m.os,'uname',return_value=fake_os), \
+                     patch.object(self.m.os,'geteuid',return_value=0), \
+                     self.assertRaises(SystemExit) as wrong_commit:
+                    self.m.main()
+                self.assertEqual(wrong_commit.exception.code,78)
                 c['cli'].write_bytes(b'print("MALICIOUS")\n')
                 with patch.object(self.m.sys,'argv',list(argv)), \
                      patch.object(self.m.os,'uname',return_value=fake_os), \
