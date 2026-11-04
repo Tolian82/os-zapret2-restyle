@@ -124,6 +124,13 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
              os.environ.get('GITHUB_ACTIONS')=='true' and
              not late_grant and not late_archive and not late_journal_fault,
              'NATIVE_POST_FINAL_ARCHIVE_MODE_NOT_DISPOSABLE')
+    stdin_mode=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PKG')=='1'
+    if stdin_mode:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             not late_grant and not late_archive and not post_final and
+             not late_journal_fault,
+             'NATIVE_STDIN_PKG_MODE_NOT_DISPOSABLE')
     need(native.REVISION==revision and old.ARCHIVE_SHA==delegate.load(
          'stage3-native-configd-detached-fd9.py').SHA_OLD,
          'NATIVE_SOURCE_REVISION_OR_PUBLISHED_OLD_UNQUALIFIED')
@@ -277,7 +284,20 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
         # This only narrows the path-open TOCTOU; pkg still opens a pathname.
         # A privileged caller may replace bytes AFTER this check.
         attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)
-        rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
+        if stdin_mode:
+            # Test-only verified byte snapshot. The package manager consumes
+            # stdin, not the candidate filename, under inherited original FD9.
+            # No pkg bypass is avoided for unrelated privileged callers.
+            stream=load('stage3-native-pkg-stdin-ci.py')
+            frozen=stream.freeze_exact_candidate(
+                candidate,selected_sha,revision,locked.check_fd9)
+            def verified_stdin_dispatch(_candidate_path, environment):
+                return stream.install_frozen_stdin(
+                    frozen,environment,locked.check_fd9)
+            rc,out,err=delegate.admitted_pkg_dispatch(
+                archive,candidate,env,dispatch=verified_stdin_dispatch)
+        else:
+            rc,out,err=delegate.admitted_pkg_dispatch(archive,candidate,env)
         locked.check_fd9()
         calls=delegate.count_calls(folder)-first
         actual=stopped.load('stage2-opnsense-real-unsafe-owner-replacement.py').installed_identity()
@@ -310,6 +330,8 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
                 'installed_native_package_identity':actual,
                 'exact_native_successor_sha256':selected_sha,
                 'product_candidate_fd9_rechecked':True,
+                'ci_pkg_consumed_verified_stdin_bytes':stdin_mode,
+                'ci_pkg_stdin_avoids_candidate_path_reopen':stdin_mode,
                 'installed_files_modes_verified':True,
                 'new_service_cold_under_transferred_fd9':True,
                 'foreign_config_values_preserved':True,

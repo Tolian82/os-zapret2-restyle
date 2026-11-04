@@ -139,6 +139,64 @@ class NativePkgContract(unittest.TestCase):
                   'GENUINE_HISTORICAL_HOOK_FD9_DELEGATION_NOT_OBSERVED'):
             self.assertIn(x,text)
 
+    def test_stdin_native_positive_only_with_disposable_ci_flags(self):
+        handoff_path=HERE/'stage3-native-configd-fd9-handoff.py'
+        spec=importlib.util.spec_from_file_location('stdin_native_handoff',handoff_path)
+        handoff=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(handoff)
+        with patch.dict(os.environ,{'ZAPRET2_STAGE3_NATIVE_STDIN_PKG':'bad'},clear=True):
+            with self.assertRaisesRegex(Exception,'NATIVE_STDIN_PKG_MODE_INVALID'):
+                handoff.native_stdin_pkg_mode()
+        with patch.dict(os.environ,{'ZAPRET2_STAGE3_NATIVE_STDIN_PKG':'1'},clear=True):
+            with self.assertRaisesRegex(Exception,'NATIVE_STDIN_PKG_NOT_DISPOSABLE'):
+                handoff.native_stdin_pkg_mode()
+        env={
+          'ZAPRET2_STAGE3_NATIVE_STDIN_PKG':'1',
+          'ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI':'1',
+          'GITHUB_ACTIONS':'true',
+          'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG':'1',
+          'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI':'1',
+          'ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK':'1',
+          'ZAPRET2_NATIVE_BUILD_CI':'1',
+          'ZAPRET2_STAGE2_DELEGATED_FD9_HANDOFF':'1',
+          'ZAPRET2_STAGE3_READONLY_PKG':'1',
+          'ZAPRET2_STAGE3_READONLY_PKG_CI':'1'}
+        with patch.dict(os.environ,env,clear=True):
+            self.assertTrue(handoff.native_stdin_pkg_mode())
+        with patch.dict(os.environ,{
+          **env,'ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER':'1',
+          'ZAPRET2_STAGE3_NATIVE_POST_FINAL_ARCHIVE_TAMPER_CI':'1'},clear=True):
+            with self.assertRaisesRegex(Exception,'NATIVE_STDIN_PKG_NOT_DISPOSABLE'):
+                handoff.native_stdin_pkg_mode()
+
+    def test_stdin_snapshot_after_final_grant_before_real_pkg(self):
+        source=SOURCE.read_text()
+        initial=source.index('approval=grant_guard.verify(')
+        final=source.index('second=grant_guard.verify(',initial)
+        recheck=source.index('attest_candidate_fd9(product,candidate,selected_sha,revision,expected_inode)',final)
+        snapshot=source.index('stream.freeze_exact_candidate(',recheck)
+        dispatcher=source.index('delegate.admitted_pkg_dispatch(',snapshot)
+        self.assertLess(initial,final)
+        self.assertLess(final,recheck)
+        self.assertLess(recheck,snapshot)
+        self.assertLess(snapshot,dispatcher)
+        self.assertIn('verified_stdin_dispatch',source)
+        self.assertIn('stream.install_frozen_stdin(',source)
+        self.assertIn('clean.verify_installed_files(candidate,manifest)',source)
+        self.assertIn('GENUINE_HISTORICAL_HOOK_FD9_DELEGATION_NOT_OBSERVED',source)
+        self.assertIn("'ci_pkg_consumed_verified_stdin_bytes':stdin_mode",source)
+
+    def test_stdin_positive_controller_and_native_ci_scoped(self):
+        controller=(HERE/'stage3-native-configd-fd9-handoff.py').read_text()
+        workflow=(HERE.parent/'.github/workflows/stage2-native-delegated-fd9-handoff.yml').read_text()
+        self.assertIn('native_stdin_pkg_mode()',controller)
+        self.assertIn('NATIVE_STDIN_PKG_NOT_DISPOSABLE',controller)
+        self.assertIn("done.get('ci_pkg_consumed_verified_stdin_bytes') is stdin_pkg",controller)
+        self.assertIn("'ci_native_pkg_verified_stdin_mode':stdin_pkg and pkg_enabled",controller)
+        self.assertIn("'final_owner_check_to_pkg_race_closed':False",controller)
+        self.assertIn('configd-native-pkg-verified-stdin:',workflow)
+        self.assertIn('ZAPRET2_STAGE3_NATIVE_STDIN_PKG_CI=1',workflow)
+
     def test_core_configd_worker_and_ci_job_connect_exact_mode(self):
         core=HERE/'stage3-native-configd-fd9-handoff.py'
         workflow=HERE.parent/'.github/workflows/stage2-native-delegated-fd9-handoff.yml'
