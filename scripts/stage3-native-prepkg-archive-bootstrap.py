@@ -325,9 +325,9 @@ def execute(old_archive):
         # execute when its source digest is different from the pinned value.
         sentinel = private / 'UNTRUSTED_SOURCE_WAS_EXECUTED'
         poison = private / 'untrusted-native-prepkg.py'
-        poison.write_bytes(b'from pathlib import Path\\nPath(' +
+        poison.write_bytes(b'from pathlib import Path\nPath(' +
                            repr(str(sentinel)).encode() +
-                           b').write_text("executed")\\n' + source_bytes)
+                           b').write_text("executed")\n' + source_bytes)
         poison.chmod(0o600)
         denied = run(launcher[:6] + [str(poison)] + tail, 45)
         need(denied.returncode == 78 and
