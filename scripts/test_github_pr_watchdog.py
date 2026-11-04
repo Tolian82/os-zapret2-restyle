@@ -116,6 +116,121 @@ class CheckStateTests(unittest.TestCase):
         self.assertFalse(w.already_notified([{'body': body}], SHA, 'CHECK_FAILED'))
 
 
+class GitHubPaginationRegressionTests(unittest.TestCase):
+    """Reproduce trusted-main scheduled watchdog crash from #41856709938."""
+
+    def api(self, callback):
+        api = w.Api('synthetic-unit-token', 'Owner/repo')
+        api.call = callback
+        return api
+
+    def test_jobs_dict_envelope_for_real_run_id(self):
+        requested = []
+        def call(path):
+            requested.append(path)
+            return {'total_count': 2, 'jobs': [
+                {'id': 126680021235, 'status': 'completed', 'conclusion': 'success'},
+                {'id': 126680021503, 'status': 'in_progress', 'conclusion': None}]}
+        result = self.api(call).pages('actions/runs/41860323142/jobs')
+        self.assertEqual(len(result), 2)
+        self.assertEqual(requested, [
+            'actions/runs/41860323142/jobs?per_page=100&page=1'])
+
+    def test_workflow_runs_dict_and_direct_lists_still_accepted(self):
+        api = self.api(lambda path: (
+            {'total_count': 1, 'workflow_runs': [{'id': 13}]}
+            if path.startswith('actions/runs?') else [{'number': 42}]))
+        self.assertEqual(api.pages('actions/runs?event=pull_request&head_sha=' + SHA),
+                         [{'id': 13}])
+        self.assertEqual(api.pages('pulls?state=open&base=main'), [{'number': 42}])
+        self.assertEqual(api.pages('pulls/42/files'), [{'number': 42}])
+        self.assertEqual(api.pages('issues/42/comments'), [{'number': 42}])
+
+    def test_jobs_two_pages_and_total_limit(self):
+        calls = []
+        def multi(path):
+            calls.append(path)
+            return {'total_count': 101, 'jobs': [
+                {'id': i} for i in (range(100) if path.endswith('&page=1') else [100])]}
+        self.assertEqual(len(self.api(multi).pages('actions/runs/13/jobs')), 101)
+        self.assertEqual(len(calls), 2)
+        with self.assertRaisesRegex(RuntimeError, 'GITHUB_PAGINATION_LIMIT_REACHED'):
+            self.api(lambda _: {'jobs': [{'id': 1}] * 100}).pages(
+                'actions/runs/13/jobs')
+
+    def test_jobs_malformed_responses_refused_before_any_ready(self):
+        for response in (
+                {'workflow_runs': [{'id': 1}]}, {'message': 'denied'},
+                [], {'jobs': 'not-an-array'}, {'jobs': [False]},
+                {'jobs': [{'id': 1}, 'not-a-job']}):
+            with self.subTest(response=response):
+                with self.assertRaisesRegex(ValueError,
+                                            'PAGINATED_GITHUB_RESULT_UNEXPECTED'):
+                    self.api(lambda _: response).pages('actions/runs/13/jobs')
+
+    def test_unsupported_endpoint_never_reaches_network(self):
+        def forbidden(_):
+            raise AssertionError('Unexpected API request')
+        for path in ('actions/runs/0/jobs', 'issues/42', 'actions/runs/13/logs'):
+            with self.subTest(path=path), self.assertRaisesRegex(
+                    ValueError, 'UNSUPPORTED_PAGINATED_GITHUB_ENDPOINT'):
+                self.api(forbidden).pages(path)
+
+    def test_all_steps_success_but_job_and_run_in_progress_not_ready(self):
+        api = self.api(lambda _: {'total_count': 1, 'jobs': [{
+            'id': 126681291809, 'status': 'in_progress', 'conclusion': None,
+            'started_at': '2026-11-03T10:55:00Z',
+            'steps': [{'name': 'Complete job', 'status': 'completed',
+                       'conclusion': 'success',
+                       'completed_at': '2026-11-03T11:01:00Z'}]}]})
+        old = make_run(status='in_progress', conclusion=None,
+                       rid=13, at='2026-11-03T10:55:00Z')
+        last = w.newest_job_progress(api, old)
+        self.assertEqual(last, '2026-11-03T11:01:00Z')
+        state, _ = w.classify(make_pr(), ['CI'], [old], NOW, {13: last})
+        self.assertEqual(state, 'CHECK_STALLED')
+        self.assertNotEqual(state, 'READY_FOR_OWNER_REVIEW')
+
+    def test_failed_job_envelope_adds_details_and_posts_open_pr_comment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            yml = root / '.github/workflows'
+            yml.mkdir(parents=True)
+            (yml / 'ci.yml').write_text('name: CI\non:\n  pull_request:\n')
+            pr = make_pr()
+            alerts = []
+            paths = []
+            fail = make_run(conclusion='failure', rid=13)
+            def fake(path, payload=None, method=None):
+                paths.append(path)
+                if path.startswith('pulls?'):
+                    return [pr]
+                if path == 'pulls/42':
+                    return pr
+                if path.startswith('pulls/42/files?'):
+                    return [{'filename': 'Makefile'}]
+                if path.startswith('actions/runs?'):
+                    return {'total_count': 1, 'workflow_runs': [fail]}
+                if path.startswith('actions/runs/13/jobs?'):
+                    return {'total_count': 1, 'jobs': [{
+                        'conclusion': 'failure',
+                        'html_url': 'https://github.com/Owner/repo/actions/jobs/13',
+                        'steps': [{'name': 'exact CI failure', 'conclusion': 'failure'}]}]}
+                if path.startswith('issues/42/comments?'):
+                    return []
+                if path == 'issues/42/comments' and method == 'POST':
+                    alerts.append(payload['body'])
+                    return {'id': 1}
+                raise AssertionError(path)
+            api = self.api(fake)
+            w.run_once(api, root)
+            self.assertEqual(len(alerts), 1)
+            self.assertIn('CHECK_FAILED', alerts[0])
+            self.assertIn('exact CI failure', alerts[0])
+            self.assertNotIn('READY_FOR_OWNER_REVIEW', alerts[0])
+            self.assertTrue(any('/jobs?' in path for path in paths))
+
+
 class SecurityTests(unittest.TestCase):
     def test_no_pr_code_execution_or_merge(self):
         text = Path(w.__file__).read_text()
