@@ -18,6 +18,8 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.24 external CLI verify-before-exec digest gate (`_107`)](verification/evidence/2026-11-04-v0.6.2_107-stage3-prepkg-verified-exec.md) — operator trusted Python -c preflight verifies source FD and independently expected SHA before executing pinned memory bytes; native OPNsense source-head test PASS, distribution and mandatory OPNsense paths unimplemented.
+
 - [Stage 3.24 independent no-checkout pre-pkg read-only CLI (`_106`)](verification/evidence/2026-11-04-v0.6.2_106-stage3-standalone-prepkg-entrypoint.md) — standalone root-owned script with independently supplied new/old archive digest, four trusted incoming modules and original FD9; native CI pending, supported distribution/firmware/Web/root bypass unqualified.
 
 - [Stage 3.24 native incoming-package archive-source pre-pkg read-only bootstrap (`_105`)](verification/evidence/2026-11-04-v0.6.2_105-stage3-native-prepkg-archive-source.md) — authentic old `_1` still installed, exact Mk archive SHA/four modules staged privately before any replacement; diagnostic-only CI, no supported updater or LH-08/AC-11 admission.
