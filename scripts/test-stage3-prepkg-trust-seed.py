@@ -52,7 +52,9 @@ def pins():
 
 def argv():
     return ["-c", "--operator-receipt", "/root/review/operator-pins.json",
-            "--verified-verifier", "/root/review/stage3-prepkg-verified-eval.py",
+            "--operator-authority", "f" * 64,
+            "/root/review/operator-approval-authority.pem",
+            "/root/review/operator-pins.sig", "--verified-verifier", "/root/review/stage3-prepkg-verified-eval.py",
             "--signed-provenance", "/root/review/approved-public.pem",
             "/root/review/claims.json", "/root/review/sig",
             "/root/review/native-prepkg-standalone.py", "inspect-predecessor",
@@ -69,7 +71,9 @@ class TrustSeedContracts(unittest.TestCase):
         self.assertIn("hmac.compare_digest", CODE)
         self.assertIn("exec(compiled,", CODE)
         self.assertIn("RECEIPT_PINS_BOUND_NOT_AUTHENTICATED", CODE)
-        for forbidden in ("subprocess", "pkg add", "pkg upgrade", "os.system(",
+        self.assertIn('["/usr/bin/openssl", "dgst", "-sha256", "-verify", public,', CODE)
+        self.assertEqual(CODE.count("subprocess.run("), 1)
+        for forbidden in ("pkg add", "pkg upgrade", "os.system(",
                           "os.execv(", "operator_source_authenticated=True"):
             self.assertNotIn(forbidden, CODE)
 
@@ -133,14 +137,20 @@ class TrustSeedContracts(unittest.TestCase):
                 record.write_bytes(data)
                 record.chmod(0o600)
             valid = pins()
-            with patch.object(self.m.os, "lstat", side_effect=lstat), \
+            with patch.object(self.m, "verify_detached_receipt",
+                              return_value=True) as detached, \
+                 patch.object(self.m.os, "lstat", side_effect=lstat), \
                  patch.object(self.m.os, "fstat",
                               side_effect=lambda fd: spoof_root(raw_fstat(fd))), \
                  patch.object(self.m.os, "open", side_effect=openfile):
                 write(json.dumps(valid).encode())
                 self.assertEqual(
-                    self.m.operator_receipt("/root/review/operator-pins.json"),
+                    self.m.operator_receipt("/root/review/operator-pins.json",
+                                            "f"*64,
+                                            "/root/review/operator-approval-authority.pem",
+                                            "/root/review/operator-pins.sig"),
                     valid)
+                self.assertEqual(detached.call_count, 1)
                 failures = [
                     json.dumps(dict(valid, source_commit="z" * 40)).encode(),
                     json.dumps(dict(valid, trust_status="AUTHENTICATED")).encode(),
@@ -157,16 +167,110 @@ class TrustSeedContracts(unittest.TestCase):
                         write(data)
                         with self.assertRaises(SystemExit) as exit_code:
                             self.m.operator_receipt(
-                                "/root/review/operator-pins.json")
+                                "/root/review/operator-pins.json", "f"*64,
+                                "/root/review/operator-approval-authority.pem",
+                                "/root/review/operator-pins.sig")
                         self.assertEqual(exit_code.exception.code, 78)
                 write(json.dumps(valid).encode())
                 record.chmod(0o666)
                 with self.assertRaises(SystemExit):
-                    self.m.operator_receipt("/root/review/operator-pins.json")
+                    self.m.operator_receipt(
+                        "/root/review/operator-pins.json", "f"*64,
+                        "/root/review/operator-approval-authority.pem",
+                        "/root/review/operator-pins.sig")
                 record.unlink()
                 record.symlink_to(root / "somewhere")
                 with self.assertRaises(SystemExit):
-                    self.m.operator_receipt("/root/review/operator-pins.json")
+                    self.m.operator_receipt(
+                        "/root/review/operator-pins.json", "f"*64,
+                        "/root/review/operator-approval-authority.pem",
+                        "/root/review/operator-pins.sig")
+
+    def test_real_detached_rsa_and_pinned_separate_authority(self):
+        # Independent test-only RSA key, never a production signer. A truly
+        # signed receipt is needed before the verifier source can execute.
+        original_temp = tempfile.TemporaryDirectory
+        with original_temp(prefix="zapret113-rsa-") as td:
+            root = Path(td)
+            private = root / "ci-only-private.pem"
+            public = root / "operator-approval-authority.pem"
+            signed = root / "operator-pins.sig"
+            message = json.dumps(pins(), sort_keys=True,
+                                 separators=(",", ":")).encode()
+            payload = root / "receipt.json"
+            payload.write_bytes(message)
+            subprocess.run(["/usr/bin/openssl", "genpkey", "-algorithm", "RSA",
+                            "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(private)],
+                           capture_output=True, check=True, timeout=15)
+            subprocess.run(["/usr/bin/openssl", "pkey", "-in", str(private),
+                            "-pubout", "-out", str(public)],
+                           capture_output=True, check=True, timeout=15)
+            subprocess.run(["/usr/bin/openssl", "dgst", "-sha256",
+                            "-sign", str(private), "-out", str(signed),
+                            str(payload)], capture_output=True,
+                           check=True, timeout=15)
+            authority_sha = hashlib.sha256(public.read_bytes()).hexdigest()
+
+            def key_bytes(path, expected_basename):
+                self.assertIn(expected_basename,
+                              ("operator-approval-authority.pem", "operator-pins.sig"))
+                return (public if expected_basename.endswith(".pem") else signed).read_bytes()
+
+            def temp_root(*args, **kwargs):
+                kwargs["dir"] = td
+                return original_temp(*args, **kwargs)
+
+            with patch.object(self.m, "authority_file", side_effect=key_bytes), \
+                 patch.object(self.m.tempfile, "TemporaryDirectory",
+                              side_effect=temp_root):
+                self.assertTrue(self.m.verify_detached_receipt(
+                    message, authority_sha, str(public), str(signed)))
+                for wrong, data in (("changed bytes", message+b" "),
+                                    ("changed claim", message.replace(b"113", b"999"))):
+                    with self.subTest(reason=wrong), \
+                         self.assertRaises(SystemExit):
+                        self.m.verify_detached_receipt(
+                            data, authority_sha, str(public), str(signed))
+                with self.assertRaises(SystemExit):
+                    self.m.verify_detached_receipt(
+                        message, "0" * 64, str(public), str(signed))
+                with self.assertRaises(SystemExit):
+                    self.m.verify_detached_receipt(
+                        message, "f" * 64, str(public), str(signed))
+                tampered = signed.read_bytes()
+                signed.write_bytes(b"bad detached signature")
+                with self.assertRaises(SystemExit):
+                    self.m.verify_detached_receipt(
+                        message, authority_sha, str(public), str(signed))
+                signed.write_bytes(tampered)
+                self.assertTrue(self.m.verify_detached_receipt(
+                    message, authority_sha, str(public), str(signed)))
+
+    def test_operator_authority_path_traversal_rejected(self):
+        for path in ("/tmp/operator-approval-authority.pem",
+                     "/root/../tmp/operator-approval-authority.pem",
+                     "/root/review/../operator-approval-authority.pem",
+                     "/root/review/other.pem",
+                     "/root//operator-approval-authority.pem",
+                     "/root/operator-pins.sig/"):
+            with self.subTest(path=path), \
+                 self.assertRaises(SystemExit):
+                self.m.authority_file(path, "operator-approval-authority.pem")
+
+    def test_malformed_or_identical_operator_and_provenance_authority_refused(self):
+        args = argv()
+        data = pins()
+        data["public_key_sha256"] = args[4]
+        with patch.object(self.m.sys, "argv", args), \
+             patch.object(self.m.os, "geteuid", return_value=0), \
+             patch.object(self.m.os, "uname",
+                          return_value=types.SimpleNamespace(sysname="FreeBSD",
+                                                             machine="amd64")), \
+             patch.object(self.m, "operator_receipt", return_value=data), \
+             patch.object(self.m, "verified_verifier") as verifier, \
+             self.assertRaises(SystemExit):
+            self.m.main()
+        verifier.assert_not_called()
 
     def test_verified_verifier_bytes_freeze_and_tamper_refusal(self):
         raw_fstat, raw_lstat = os.fstat, os.lstat
@@ -199,7 +303,7 @@ class TrustSeedContracts(unittest.TestCase):
 
     def test_receipt_target_version_refuses_before_verifier(self):
         args = argv()
-        args[12] = "0.6.2_999"
+        args[16] = "0.6.2_999"
         with patch.object(self.m.sys, "argv", args), \
              patch.object(self.m.os, "geteuid", return_value=0), \
              patch.object(self.m.os, "uname", return_value=types.SimpleNamespace(
@@ -225,8 +329,8 @@ class TrustSeedContracts(unittest.TestCase):
                      return_value=b'import sys; print("VERIFIED_EXEC", sys.argv)\n') as verifier, \
                  contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 self.m.main()
-            receipt.assert_called_once_with(args[2])
-            verifier.assert_called_once_with(args[4], pins()["verifier_sha256"])
+            receipt.assert_called_once_with(args[2], args[4], args[5], args[6])
+            verifier.assert_called_once_with(args[8], pins()["verifier_sha256"])
             self.assertIn("VERIFIED_EXEC", stdout.getvalue())
             self.assertIn("--expected-source-commit", stdout.getvalue())
             self.assertIn(pins()["source_commit"], stdout.getvalue())
@@ -235,6 +339,9 @@ class TrustSeedContracts(unittest.TestCase):
             self.assertIn(pins()["predecessor_sha256"], stdout.getvalue())
             self.assertIn(pins()["public_key_sha256"], stdout.getvalue())
             self.assertNotIn("--operator-receipt", stdout.getvalue())
+            self.assertNotIn("--operator-authority", stdout.getvalue())
+            self.assertIn("RECEIPT_RSA_VERIFIED_ANCHOR_NOT_OWNER_AUTHENTICATED",
+                          stderr.getvalue())
             self.assertNotIn("--verified-verifier", stdout.getvalue())
             self.assertIn("RECEIPT_PINS_BOUND_NOT_AUTHENTICATED", stderr.getvalue())
         finally:
