@@ -19,7 +19,7 @@ REPOSITORY = "Tolian82/os-zapret2-restyle"
 NAME = "os-zapret2-restyle"
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
-VERSION = re.compile(r"0\.6\.2_[1-9][0-9]*\Z")
+VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+_[1-9][0-9]*\Z")
 PIN_FIELDS = ("seed_sha256", "verifier_sha256", "public_key_sha256",
               "source_commit", "incoming_version", "incoming_sha256",
               "predecessor_version", "predecessor_sha256")
