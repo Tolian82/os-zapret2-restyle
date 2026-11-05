@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
-Текущий этап — **`v0.6.2_136`**; `VERSION=0.6.2`, `PLUGIN_REVISION=136`, package candidate: `os-zapret2-restyle-0.6.2_136.pkg` (**SOURCE-ONLY; NOT BUILT / NOT PUBLISHED**).
+Текущий этап — **`v0.6.2_137`**; `VERSION=0.6.2`, `PLUGIN_REVISION=137`, package candidate: `os-zapret2-restyle-0.6.2_137.pkg` (**SOURCE-ONLY; NOT BUILT / NOT PUBLISHED**).
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
@@ -10,7 +10,7 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 
 Владелец утвердил возврат к обычному нативному плагину OPNsense: [ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md). Отменены внешние SQLite-свидетели, RSA-подписи разрешений, криптографические одноразовые операции, собственные управляющие шлюзы перед `pkg`, предупреждения для root и предположение о гарантированном veto в `+PRE_INSTALL`. Исторический реальный опыт `_74` показал, что отказ хука может не остановить `pkg add -f`, но **не** создаёт требования внешней инфраструктуры доверия.
 
-Первый следующий рабочий шаг после документационного `_136`: удалить из активной разработки неиспользуемые экспериментальные `native_pkg_*.py`, `stage3-prepkg-*`, approval-only CI и связанные тесты; сохранить действительно нужную проверку обычного pkg/hooks/FD9/ABI в stage0/stage2. **После удаления выполнить сверку всей активной технической документации и README с действующим ТЗ**, устранив противоречия и висячие ссылки.
+В исходной ревизии `_137` удалены неиспользуемые экспериментальные `native_pkg_*.py`, `stage3-prepkg-*`, связанные Stage 3 тесты и approval-only CI. В проверке чистой установки Stage 2 удалена зависимость от экспериментального managed CLI; проверка реального `pkg`, hooks, установленных файлов, Status и Config сохранена. Действующая техническая документация и ссылки пересмотрены после удаления. Завершение подтверждается только проверками точного PR head; установленная нативная сборка пока не принята.
 
 ## Что фактически уже есть в source
 
@@ -20,7 +20,7 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 - Долг работы: довести native package до полноценной установки и квалификации; перенести реальные shell/PHP/configd/hooks Python-вызовы с фиксированной `python3.13` на единый поддерживаемый контракт.
 - `src/opnsense/scripts/OPNsense/Zapret/setup.sh` ещё временно включает общий FreeBSD repo и устанавливает системные зависимости; это надо убрать в пользу штатного OPNsense `pkg`.
 - Четыре существующих `pkg/+...` hooks требуют обычной проверенной установки, RUNNING/STOPPED обновления, переустановки и удаления. Никакого менеджера авторизации pkg не создаём.
-- Отменённые experiment-only backend/CLI/test/CI файлы **пока присутствуют в main** и будут удалены следующим отдельным изменением. Они не являются требованиям к производственному runtime.
+- Экспериментальные pkg-approval backend/CLI/tests/CI удалены из `_137` source-кандидата; действующий `main` получает изменение только после exact-head CI и merge. Исторические записи не служат runtime-зависимостями.
 
 ## IPFW/PF — окончательные решения
 
@@ -33,7 +33,7 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 
 ## Выпуск, границы доказательств и приёмка
 
-**Опубликовано:** полноценный стабильный [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), неизменный пакет `0.6.2_1.pkg`. Ветка `_136` — только исходная/документальная ревизия, на устройстве владельца ничего не менялось.
+**Опубликовано:** полноценный стабильный [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), неизменный пакет `0.6.2_1.pkg`. `_137` — только новая исходная ревизия с удалением отменённой инфраструктуры, на устройстве владельца ничего не менялось.
 
 **Подтверждено:** ранее принятые функции текущего выпуска имеют свои независимые CI/installed доказательства, не переписываются и не проходят заново отменённые лабораторные кампании. IPv6 на IPv4-only owner stand был явно waived; непроверенные WAN/Voice media не называем PASS.
 

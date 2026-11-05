@@ -268,9 +268,8 @@ def installed_pkg_manifest(archive):
 
 def verify_installed_files(archive, manifest):
     files = manifest.get("files")
-    need(isinstance(files, dict) and
-         "/usr/local/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_handoff.py" in files,
-         "NATIVE_PACKAGE_SHARED_FD9_TRANSPORT_FILE_MISSING")
+    need(isinstance(files, dict) and bool(files),
+         "NATIVE_PACKAGE_INSTALLED_MANIFEST_MISSING")
     tar_names = required(["tar", "-tf", str(archive)], "TAR_LIST_FAILED").splitlines()
     checked = 0
     for name in files:
@@ -327,92 +326,6 @@ def cold_status():
             "installed_runtime_started": False}
 
 
-def verify_installed_managed_cli(archive, expected_sha):
-    """Run the actual installed inspection-only CLI and prove no pkg side effects."""
-    path = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py")
-    source = native.ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_managed.py"
-    need(path.is_file() and not path.is_symlink() and
-         path.read_bytes() == source.read_bytes(),
-         "INSTALLED_MANAGED_CLI_BYTES_UNQUALIFIED")
-    original_pkgdb = required(["pkg", "info", "-R", "--raw-format", "json", NAME],
-                              "INSTALLED_MANAGED_CLI_PKGDB_MISSING")
-    config_before = Path("/conf/config.xml").read_bytes()
-    cli = [sys.executable, "-B", str(path)]
-    exact = cli + ["inspect-candidate", str(archive), VERSION, expected_sha]
-    response = run(exact, timeout=135)
-    need(response.returncode == 0 and
-         response.stdout.startswith("ZAPRET2_MANAGED="),
-         "INSTALLED_MANAGED_CLI_READ_ONLY_POSITIVE_UNQUALIFIED:" +
-         str(response.returncode) + ":" + response.stderr[-160:])
-    try:
-        result = json.loads(response.stdout.split("ZAPRET2_MANAGED=", 1)[1])
-    except ValueError:
-        raise Refusal("INSTALLED_MANAGED_CLI_RESPONSE_NOT_JSON") from None
-    need(result.get("status") == "PASS_MANAGED_READ_ONLY_INSPECTION" and
-         result.get("archive_sha256") == expected_sha and
-         type(result.get("worker_pid")) is int and result["worker_pid"] > 1 and
-         type(result.get("original_fd9_inode")) is int and
-         result["original_fd9_inode"] > 0 and
-         result.get("pkg_invoked") is False and
-         result.get("old_owner_qualified") is False and
-         result.get("lh08_ac11_accepted") is False,
-         "INSTALLED_MANAGED_INSPECT_FALSE_PKG_AUTHORIZATION")
-    invalid = run(cli + ["inspect-candidate", str(archive), VERSION, "0" * 64],
-                  timeout=30)
-    need(invalid.returncode == 78 and
-         "ZAPRET2_MANAGED=REFUSED:" in invalid.stderr,
-         "INSTALLED_MANAGED_WRONG_SHA_NOT_REFUSED")
-    forbidden = run(cli + ["upgrade", str(archive), VERSION, expected_sha],
-                    timeout=20)
-    need(forbidden.returncode == 78 and
-         "UPGRADE_NOT_IMPLEMENTED_NO_PKG" in forbidden.stderr,
-         "INSTALLED_MANAGED_UNSAFE_UPGRADE_COMMAND_ACCEPTED")
-    fd = os.open("/var/run/zapret2-lifecycle.lock",
-                 os.O_RDWR | os.O_NOFOLLOW)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        busy = run(exact, timeout=25)
-        need(busy.returncode == 78 and
-             "ORIGINAL_FD9_BUSY_BEFORE_INSPECTION" in busy.stderr,
-             "INSTALLED_MANAGED_BUSY_FD9_NOT_REFUSED")
-    finally:
-        os.close(fd)
-    predecessor = run(cli + ["inspect-predecessor", str(archive), VERSION, expected_sha],
-                      timeout=135)
-    need(predecessor.returncode == 0 and
-         predecessor.stdout.startswith("ZAPRET2_MANAGED="),
-         "INSTALLED_MANAGED_PREDECESSOR_COLD_SCREEN_UNQUALIFIED:" +
-         str(predecessor.returncode) + ":" + predecessor.stderr[-160:])
-    try:
-        old_state = json.loads(predecessor.stdout.split("ZAPRET2_MANAGED=", 1)[1])
-    except ValueError:
-        raise Refusal("INSTALLED_MANAGED_PREDECESSOR_NOT_JSON") from None
-    need(old_state.get("status") == "PASS_MANAGED_READ_ONLY_PREDECESSOR_SCREEN" and
-         old_state.get("predecessor_cold_screened") is True and
-         old_state.get("old_owner_qualified") is False and
-         old_state.get("pkg_invoked") is False and
-         old_state.get("lh08_ac11_accepted") is False,
-         "INSTALLED_MANAGED_PREDECESSOR_FALSE_ADMISSION")
-    need(required(["pkg", "info", "-R", "--raw-format", "json", NAME],
-                  "MANAGED_POST_INSPECT_PKGDB_MISSING") == original_pkgdb and
-         Path("/conf/config.xml").read_bytes() == config_before and
-         digest(archive) == expected_sha and
-         path.read_bytes() == source.read_bytes(),
-         "MANAGED_INSPECTION_MUTATED_PKGDB_CONFIG_OR_CANDIDATE")
-    return {"status": "PASS_INSTALLED_MANAGED_READ_ONLY_CLI",
-            "real_detached_worker_pid": result["worker_pid"],
-            "original_fd9_continuous": True,
-            "actual_installed_script_exercised": True,
-            "wrong_digest_refused": True,
-            "busy_original_fd9_refused": True,
-            "upgrade_command_refused_before_pkg": True,
-            "installed_predecessor_cold_screened_read_only": True,
-            "pkgdb_and_config_unchanged": True,
-            "pkg_invoked_by_managed_cli": False,
-            "old_owner_qualified": False,
-            "lh08_ac11_accepted": False}
-
-
 def execute():
     config_before = preflight()
     package = native.build()
@@ -437,7 +350,6 @@ def execute():
     manifest, pkgdb = installed_pkg_manifest(path)
     files = verify_installed_files(path, manifest)
     service = cold_status()
-    managed = verify_installed_managed_cli(path, require_sha)
     config_after = Path("/conf/config.xml").read_bytes()
     registration = verify_official_first_install_registration(config_before,
                                                               config_after)
@@ -455,7 +367,6 @@ def execute():
             "native_dependencies": pkgdb["deps"],
             "installed_payload": files,
             "service": service,
-            "installed_managed_inspection": managed,
             "opnsense_config_registry": registration,
             "installed_elf_sha256": digest(
                 Path("/usr/local") / native.BINARY),
