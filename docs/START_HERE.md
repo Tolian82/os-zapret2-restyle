@@ -2,7 +2,7 @@
 
 [PROJECT_STATE.md](PROJECT_STATE.md) · [DOCUMENTATION_RULES.md](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES.md](PROJECT_PRINCIPLES.md) · [CHAT_RULES.md](CHAT_RULES.md) · [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) · [ROADMAP.md](ROADMAP.md) · [INDEX.md](INDEX.md).
 
-**Current handoff identity:** `v0.6.2_137`; `VERSION=0.6.2`, `PLUGIN_REVISION=137`. Source cleanup candidate only: **not a published or installed package**. Binding authority remains [native OPNsense TЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [concrete completion plan v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md).
+**Current handoff identity:** `v0.6.2_137`. `VERSION=0.6.2`, `PLUGIN_REVISION=137`. Source cleanup candidate only: **not a published or installed package**. Binding authority remains [native OPNsense TЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [concrete completion plan v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md).
 
 **Just changed in source:** the cancelled Stage 3 pkg-approval / mTLS-SQLite-witness / operator-grant / original-FD9 managed-updater experiment and its tests/workflows were removed. The four experimental packaged `backend/native_pkg_*.py` modules were removed. The surviving real OPNsense Stage 2 clean-install check verifies native pkg, installed files, hooks, service Status and Config registration without requiring the cancelled managed inspector. Existing `scripts/build-pkg.sh` and `scripts/native-opnsense-package.py`, regular Stage 0/2 native pkg/ABI/service tests and production Strategies/Voice/Exclude/Lab were retained. This is source work; exact-head CI and native installed acceptance must be reported separately.
 
