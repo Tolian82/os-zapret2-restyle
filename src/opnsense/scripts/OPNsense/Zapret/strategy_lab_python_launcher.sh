@@ -64,4 +64,3 @@ esac
 [ -x "${SCRIPT_DIR}/python_runtime.sh" ] ||
     runtime_error "shared Python policy launcher is unavailable"
 ZAPRET_PYTHON_BIN="${PYTHON_BIN}" exec "${SCRIPT_DIR}/python_runtime.sh" "${PYTHON_ENTRY}" "$@"
-
