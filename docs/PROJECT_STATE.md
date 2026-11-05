@@ -2,6 +2,10 @@
 
 Текущий этап — **`v0.6.2_136`**; `VERSION=0.6.2`, `PLUGIN_REVISION=136`, package candidate: `os-zapret2-restyle-0.6.2_136.pkg` (**SOURCE-ONLY; NOT BUILT / NOT PUBLISHED**).
 
+**State-line scope: `v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
+
+Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md), [v0.2.x archive](history/archive/v0.2.x.md), [v0.3.x archive](history/archive/v0.3.x.md), [v0.4.x archive](history/archive/v0.4.x.md). Historical detail for the current line: [v0.6.x ledger](history/current/v0.6.x.md).
+
 ## Текущий приоритет и границы работ (5 ноября 2026)
 
 Владелец утвердил возврат к обычному нативному плагину OPNsense: [ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md). Отменены внешние SQLite-свидетели, RSA-подписи разрешений, криптографические одноразовые операции, собственные управляющие шлюзы перед `pkg`, предупреждения для root и предположение о гарантированном veto в `+PRE_INSTALL`. Исторический реальный опыт `_74` показал, что отказ хука может не остановить `pkg add -f`, но **не** создаёт требования внешней инфраструктуры доверия.
