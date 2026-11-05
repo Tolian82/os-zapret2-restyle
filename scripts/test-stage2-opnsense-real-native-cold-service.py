@@ -88,6 +88,48 @@ class ColdServiceContracts(unittest.TestCase):
             with self.assertRaisesRegex(mod.Refusal, 'OPTIN_REQUIRED'):
                 mod.preflight()
 
+    def test_exact_source_sha_uses_existing_explicit_git_safe_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            installed = root / 'installed/zapret_service.sh'
+            installed.parent.mkdir(parents=True)
+            installed.write_bytes(b'#!/bin/sh\nexit 0\n')
+            source = root / 'src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh'
+            source.parent.mkdir(parents=True)
+            source.write_bytes(installed.read_bytes())
+            python = root / 'installed/python_runtime.sh'
+            python.write_bytes(b'#!/bin/sh\nexit 0\n')
+            config = root / 'config.xml'
+            config.write_bytes(b'<opnsense/>')
+            (root / 'VERSION').write_text('0.6.2\n')
+            (root / 'Makefile').write_text('PLUGIN_REVISION=    142\n')
+            sha = 'a' * 40
+            def fake_stdout(argv, reason):
+                if argv[0] == 'opnsense-version':
+                    return '26.7'
+                if argv[0] == 'pkg':
+                    return 'FreeBSD:15:amd64' if 'config' in argv else '0.6.2_142'
+                if argv[0] == 'sysctl':
+                    return 'kvm'
+                if argv[0] == 'git':
+                    self.assertEqual(argv, ['git', '-c', 'safe.directory=' + str(root),
+                                            '-C', str(root), 'rev-parse', 'HEAD'])
+                    return sha
+                self.fail('unexpected preflight command ' + repr(argv))
+            with patch.multiple(mod, ROOT=root, SERVICE=installed, PYTHON=python,
+                                CONFIG=config, ENGINE=root / 'missing-engine',
+                                MARKERS=[root / 'missing-marker']), \
+                 patch.dict(os.environ, {'GITHUB_ACTIONS': 'true',
+                                         'ZAPRET2_NATIVE_BUILD_CI': '1',
+                                         mod.OPTIN: '1',
+                                         'ZAPRET2_NATIVE_PROJECT_SHA': sha}), \
+                 patch.object(mod.os, 'geteuid', return_value=0), \
+                 patch.object(mod.os, 'uname',
+                              return_value=SimpleNamespace(sysname='FreeBSD', machine='amd64')), \
+                 patch.object(mod, 'stdout', side_effect=fake_stdout), \
+                 patch.object(mod, 'run', return_value=SimpleNamespace(returncode=0)):
+                mod.preflight()
+
     def test_package_source_revision_comes_from_makefile(self):
         with tempfile.TemporaryDirectory() as root, patch.object(mod, 'ROOT', Path(root)):
             (Path(root) / 'VERSION').write_text('0.6.2\n')
