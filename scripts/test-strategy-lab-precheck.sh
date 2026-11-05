@@ -17,6 +17,9 @@ fail()
 }
 
 MOCK_BIN="${TMP_ROOT}/bin"
+# Match the genuine zapret_service.sh process identity during the brief
+# pre-exec window before the asynchronous shim becomes a Python worker.
+MOCK_SERVICE="${MOCK_BIN}/zapret_service.sh"
 RUN_DIR="${TMP_ROOT}/run"
 LOG_DIR="${TMP_ROOT}/log"
 STATE_FILE="${TMP_ROOT}/service.state"
@@ -47,7 +50,7 @@ printf '%s\n' "${pid}" > "${pid_file}"
 exit 0
 MOCK
 
-cat > "${MOCK_BIN}/service" <<'MOCK'
+cat > "${MOCK_SERVICE}" <<'MOCK'
 #!/bin/sh
 state=$(cat "${MOCK_STATE_FILE}")
 case "${1:-}" in
@@ -141,6 +144,12 @@ exit "${MOCK_NC_STATUS:-1}"
 MOCK
 
 chmod +x "${MOCK_BIN}"/*
+# The real launcher can poll while the initial process still has the shim
+# argv. A fixture called simply "service" looks foreign to the native PID
+# census and can spuriously trigger RESTORE_FAILED under runner contention.
+printf '%s\n' "${MOCK_SERVICE} strategy-lab job.fixture" |
+    grep -Eq 'zapret_service\.sh.*strategy-lab' ||
+    fail "mock service identity does not match native Strategy Lab owner"
 
 launcher()
 {
@@ -154,7 +163,7 @@ launcher()
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
     PROBE_RUNNER="${PROBE_RUNNER}" \
-    TRANSACTION_SCRIPT="${MOCK_BIN}/service" \
+    TRANSACTION_SCRIPT="${MOCK_SERVICE}" \
     DAEMON_BIN="${MOCK_BIN}/daemon" \
     LOCKF_BIN="${MOCK_BIN}/lockf" \
     STRATEGY_LAB_TIMEOUT_BIN="$(command -v timeout)" \

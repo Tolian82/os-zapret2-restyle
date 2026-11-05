@@ -921,6 +921,9 @@ jobs:
       - name: Test native cold installed service refusal and mutation negatives
         run: python3.13 scripts/test-stage2-opnsense-real-native-cold-service.py
 
+      - name: Test installed real active service lifecycle refusal and rollback contracts
+        run: python3.13 scripts/test-stage2-opnsense-real-native-active-service.py
+
       - name: Test native firmware uninstall registration and config retention
         run: python3.13 scripts/test-stage2-opnsense-real-native-remove.py
 

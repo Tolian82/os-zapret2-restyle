@@ -9,6 +9,8 @@ on:
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/test-stage2-opnsense-real-native-running-upgrade.py
+      - scripts/stage2-opnsense-real-native-active-service.py
+      - scripts/test-stage2-opnsense-real-native-active-service.py
       - .github/workflows/stage2-real-native-running-upgrade.yml
   workflow_dispatch:
     inputs:
@@ -38,6 +40,8 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile scripts/stage2-opnsense-real-native-running-upgrade.py scripts/test-stage2-opnsense-real-native-running-upgrade.py
           python3.13 scripts/test-stage2-opnsense-real-native-running-upgrade.py -v
+          python3.13 -m py_compile scripts/stage2-opnsense-real-native-active-service.py scripts/test-stage2-opnsense-real-native-active-service.py
+          python3.13 scripts/test-stage2-opnsense-real-native-active-service.py -v
           python3.13 -m py_compile scripts/stage0-real-pkg-scheduler.py scripts/test-stage0-real-pkg-scheduler.py
           python3.13 scripts/test-stage0-real-pkg-scheduler.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
@@ -63,3 +67,6 @@ jobs:
             /usr/local/bin/python3 scripts/stage0-real-pkg-scheduler.py --archive /tmp/os-zapret2-restyle-0.6.2_1.pkg --json /tmp/stage2-opnsense-pkg-scheduler.json
             /usr/local/bin/python3 -c "import json; d=json.load(open('/tmp/stage2-opnsense-pkg-scheduler.json', encoding='utf-8')); assert d['status']=='PASS_FREEBSD15_1_PKG_SCHEDULER'; assert d['forced_add_order']==['old:pre-install','old:post-install','new:pre-install','new:post-install']; assert d['synthetic_tracer_scripts_not_real_hook_bodies'] is True; assert d['opnsense_pkg_lifecycle_verified'] is False; print('STAGE2_OPNSENSE_PKG_SCHEDULER='+json.dumps({'native_opnsense_pkg_fixture_phase_order':d['forced_add_order'],'production_hooks_executed':False,'stage2_23_original_hook_lifecycle_verified':False},sort_keys=True))"
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
+            # Reuse the SAME guest: genuine engine remains running after the
+            # native pkg replacement; no new WAN or independent test owner.
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-active-service.py
