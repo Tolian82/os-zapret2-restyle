@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Attest and reconcile Lua/BIN only inside the native upstream setup transaction.
 
 No Config or Git tag mutation. Unowned file deletion needs an independently

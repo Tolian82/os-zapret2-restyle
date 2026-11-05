@@ -3,6 +3,7 @@ set -eu
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-saved.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
+PYTHON_RUNTIME="${PYTHON_RUNTIME:-/nonexistent/isolated-python-runtime-fixture}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_recover_saved_service()$/,/^}$/p' "$SOURCE" > "$ROOT/recover.sh"
 sh -n "$ROOT/recover.sh" || fail "source syntax"
@@ -88,13 +89,13 @@ from pathlib import Path
 import sys
 p=Path(sys.argv[1])
 s=p.read_text()
-old='    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-saved "$_shared_saved_id" || return 70'
+old='    "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-saved "$_shared_saved_id" || return 70'
 assert old in s
 s=s.replace(old,'    echo finish-saved >> "$LOG"; [ "$FINISH" = 0 ] || return 70')
 # The real executable is a fixed FreeBSD dependency; the Linux fault-test
 # replaces its final invocation and therefore bypasses only that presence
 # check, never the pre-save owner, kernel or Config guards.
-presence='    [ -x /usr/local/bin/python3.13 ] || return 70'
+presence='    [ -x "${PYTHON_RUNTIME}" ] || return 70'
 assert presence in s
 s=s.replace(presence,'    : # root Python CLI is mocked below')
 p.write_text(s)

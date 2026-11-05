@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Non-executing *source-shape* evidence for Lua exports used by native argv.
 
 Read only the files already validated by the upstream-only direct-reference

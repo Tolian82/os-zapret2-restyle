@@ -1,12 +1,14 @@
 name: Stage 0 official OPNsense Mk source package proof
 
+# Historical partial Mk witness still assumes the old _58 source/dependency
+# snapshot. Keep it for explicit maintenance/replay, not as a current-service
+# gate: the real native Stage 2 Mk build and installed pkg workflows now cover
+# changes to zapret_service.sh and the actual package. No replacement builder.
 on:
   pull_request:
     paths:
-      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
       - scripts/stage0-opnsense-official-mk-source-package.py
       - scripts/test-stage0-opnsense-official-mk-source-package.py
-      - .github/workflows/stage0-opnsense-official-mk-source-package.yml
   workflow_dispatch:
 
 permissions:

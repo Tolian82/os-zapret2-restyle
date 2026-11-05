@@ -4,6 +4,7 @@ set -eu
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-activated.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
+PYTHON_RUNTIME="${PYTHON_RUNTIME:-/nonexistent/isolated-python-runtime-fixture}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_recover_activated_cold_service()$/,/^}$/p' "$SOURCE" > "$ROOT/recover.sh"
 sh -n "$ROOT/recover.sh" || fail "production recovery syntax"
@@ -14,14 +15,14 @@ from pathlib import Path
 import re, sys
 p = Path(sys.argv[1])
 s = p.read_text()
-a = '    [ -x /usr/local/bin/python3.13 ] || return 70'
+a = '    [ -x "${PYTHON_RUNTIME}" ] || return 70'
 assert s.count(a) == 1
 s = s.replace(a, '    : # mocked native interpreter')
-old_context = ('        _shared_cold_context=$(/usr/local/bin/python3.13 \\\n'
+old_context = ('        _shared_cold_context=$("${PYTHON_RUNTIME}" \\\n'
                '            "${BACKEND_DIR}/shared_apply_operation.py" remove-prepared-context) || return 69')
 assert s.count(old_context) == 1
 s = s.replace(old_context, '        _shared_cold_context=$(mock_context) || return 69')
-prefix = '        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
+prefix = '        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for cli, replacement in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old"',
      'finish_mock remove-saved'),

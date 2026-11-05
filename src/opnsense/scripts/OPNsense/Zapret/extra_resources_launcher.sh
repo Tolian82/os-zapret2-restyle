@@ -13,7 +13,7 @@ PID_FILE="${PID_FILE:-${RUN_DIR}/extra-resources.pid}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/extra-resources.log}"
 LOCK_FILE="${LOCK_FILE:-${RUN_DIR}/setup.lock}"
 STATUS="${STATUS:-/var/db/zapret2-restyle/extra-resources/status.json}"
-PYTHON_BIN="${PYTHON_BIN:-/usr/local/bin/python3.13}"
+PYTHON_BIN="${PYTHON_BIN:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}"
 
 pid_live()
 {

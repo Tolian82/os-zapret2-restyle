@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Read-only, point-in-time origin classification of a partial upstream checkout.
 
 This is diagnostic evidence, NOT permission to reset a dirty Git worktree.

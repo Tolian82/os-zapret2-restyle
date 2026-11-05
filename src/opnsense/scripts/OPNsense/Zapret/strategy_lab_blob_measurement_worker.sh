@@ -4,7 +4,11 @@ set -eu
 umask 022
 
 SCRIPT_DIR="${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}"
-PYTHON_BIN="${STRATEGY_LAB_PYTHON_BIN:-/usr/local/bin/python3.13}"
+PYTHON_BIN="${PYTHON_RUNTIME:-${SCRIPT_DIR}/python_runtime.sh}"
+if [ -n "${STRATEGY_LAB_PYTHON_BIN:-}" ]; then
+    ZAPRET_PYTHON_BIN="${STRATEGY_LAB_PYTHON_BIN}"
+    export ZAPRET_PYTHON_BIN
+fi
 PYTHON_ENTRY="${SCRIPT_DIR}/strategy_lab_python.py"
 SERVICE_SCRIPT="${STRATEGY_LAB_SERVICE_SCRIPT:-${SCRIPT_DIR}/zapret_service.sh}"
 ADAPTER="${STRATEGY_LAB_BLOB_MEASUREMENT_ADAPTER:-${SCRIPT_DIR}/strategy_lab_model_b_adapter.sh}"
@@ -19,7 +23,7 @@ TRIALS="${2:-9}"
     echo "ERROR: BLOB measurement lifecycle descriptor is unavailable" >&2
     exit 77
 }
-[ -x "${PYTHON_BIN}" ] || { echo "ERROR: python313 is unavailable" >&2; exit 1; }
+[ -x "${PYTHON_BIN}" ] || { echo "ERROR: qualified Python runtime is unavailable" >&2; exit 1; }
 [ -r "${PYTHON_ENTRY}" ] || { echo "ERROR: Strategy Lab Python entry is unavailable" >&2; exit 1; }
 [ -r "${SERVICE_SCRIPT}" ] || { echo "ERROR: Zapret service script is unavailable" >&2; exit 1; }
 [ -r "${ADAPTER}" ] || { echo "ERROR: BLOB measurement adapter is unavailable" >&2; exit 1; }

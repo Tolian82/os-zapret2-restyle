@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Native locked saved-Strategies *input* for prospective upstream-only compilation.
 
 Import-only, no public CLI or service/configd operation. The future native

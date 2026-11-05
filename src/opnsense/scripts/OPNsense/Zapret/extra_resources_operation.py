@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Privileged Additional Resources worker entered only under setup.lock -> FD9.
 
 Uses the existing native service's inherited FD9 Strategy Lab stop/start

@@ -22,7 +22,7 @@ PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 FIND_BIN="${FIND_BIN:-/usr/bin/find}"
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
-EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
+EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}"
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 
 set -eu

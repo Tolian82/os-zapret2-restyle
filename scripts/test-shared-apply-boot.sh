@@ -3,6 +3,15 @@ set -eu
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-boot.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
+# Extracted lifecycle functions do not source the production header.
+# Mock only the read-only qualified-Python preflight; the real launcher and
+# inherited FD9 are checked in their own native contract test.
+PYTHON_RUNTIME="${ROOT}/python-preflight-fixture"
+cat > "${PYTHON_RUNTIME}" <<'MOCKPY'
+#!/bin/sh
+[ "$#" -eq 1 ] && [ "$1" = --check ]
+MOCKPY
+chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
@@ -399,7 +408,7 @@ python3 - "$ROOT/pristine.sh" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
-old='    [ -x /usr/local/bin/python3.13 ] || return 69\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69'
+old='    [ -x "${PYTHON_RUNTIME}" ] || return 69\n    "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n        recover-activating "$_shared_pristine_id" "$_shared_pristine_old" || return 69'
 assert old in s, "production root CLI boundary missing"
 s=s.replace(old,'    echo terminal-restore >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 69')
 p.write_text(s)
@@ -497,10 +506,10 @@ from pathlib import Path
 import sys
 p=Path(sys.argv[1])
 s=p.read_text()
-presence='    [ -x /usr/local/bin/python3.13 ] || return 70'
+presence='    [ -x "${PYTHON_RUNTIME}" ] || return 70'
 assert s.count(presence)==1, "production root CLI presence gate missing"
 s=s.replace(presence, '    : # fixed FreeBSD root interpreter mocked')
-prefix = '        /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
+prefix = '        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n            '
 for suffix, phase in (
     ('finish-remove-saved "$_shared_cold_id" "$_shared_cold_old" || return 70',
      'remove-saved'),
@@ -617,7 +626,7 @@ python3 - "$ROOT/parked.sh" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
-old='    [ -x /usr/local/bin/python3.13 ] || return 70\n    /usr/local/bin/python3.13 "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activating "$_parked_id" "$_parked_old" || return 70'
+old='    [ -x "${PYTHON_RUNTIME}" ] || return 70\n    "${PYTHON_RUNTIME}" "${BACKEND_DIR}/shared_apply_operation.py" \\\n        finish-activating "$_parked_id" "$_parked_old" || return 70'
 assert old in s, "parked recovery CLI phase gate missing"
 s=s.replace(old,'    echo finish-activating-parked >> "$LOG"; [ "$TERMINAL_OK" = 0 ] || return 70')
 p.write_text(s)
