@@ -106,7 +106,7 @@ def test_contracts():
         assert str(error) == 'INSTALLED_ACTION_REFUSED:php:rc=69'
     else:
         raise AssertionError('private PHP source leaked or action accepted')
-    assert safe_fixture_diagnostic('DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=serialize:type=RuntimeException\n') == 'serialize:RuntimeException'
+    assert safe_fixture_diagnostic('DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=native-xml:type=RuntimeException\n') == 'native-xml:RuntimeException'
     assert safe_fixture_diagnostic('SECRET_PRIVATE_PHP_PROGRAM') == 'unclassified'
     assert safe_fixture_diagnostic('DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=save:type=TypeError\nsecret') == 'unclassified'
     print('PASS: native shared Voice loopback/journal/error-redaction contracts')
@@ -126,7 +126,7 @@ def safe_fixture_diagnostic(stderr):
     # text, user data, command argv, arbitrary tag names or Config.
     match = re.fullmatch(
         r'DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage='
-        r'(?:model|read|off|edit|set|serialize|save):type='
+        r'(?:model|read|off|native-xml|save):type='
         r'(?:RuntimeException|TypeError|Error|Other)\n?', stderr)
     return stderr.split('stage=', 1)[1].strip().replace(':type=', ':') if match else 'unclassified'
 
@@ -152,18 +152,28 @@ try {
             throw new \RuntimeException('Fixture requires all Voice OFF');
         }
     }
-    $stage = 'edit';
-    $nodes['hostlist']['telegramips'] = '192.0.2.42/32';
-    $nodes['voice']['telegram']['args'] = "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
-    $stage = 'set';
-    $model->setNodes($nodes);
-    // The isolated lo0 test interface is not an end-user selectable WAN.
-    // Match the accepted _145 native synthetic MVC canonicalization: the
-    // installed serializer runs, but UI InterfaceField validation is not a
-    // requirement for the deliberately isolated testing fixture.
-    $stage = 'serialize';
-    if (!$model->serializeToConfig(false, true)) {
-        throw new \RuntimeException('Fixture model validation refused');
+    // The synthetic lo0 interface is not a normal GUI InterfaceField.
+    // The installed MVC model has already serialized its defaults above.
+    // Update ONLY the two exact OFF draft XML leaves using OPNsense's own
+    // Config::object() + Config::save(), as in accepted native removal CI.
+    // No production Apply, engine or IPFW is touched by this setup step.
+    $stage = 'native-xml';
+    $root = $config->object();
+    if (!isset($root->OPNsense->Zapret->hostlist) ||
+        !isset($root->OPNsense->Zapret->voice->telegram)) {
+        throw new \RuntimeException('Missing synthetic model XML scope');
+    }
+    $zapret = $root->OPNsense->Zapret;
+    if (isset($zapret->hostlist->telegramips)) {
+        $zapret->hostlist->telegramips = '192.0.2.42/32';
+    } else {
+        $zapret->hostlist->addChild('telegramips', '192.0.2.42/32');
+    }
+    $args = "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
+    if (isset($zapret->voice->telegram->args)) {
+        $zapret->voice->telegram->args = $args;
+    } else {
+        $zapret->voice->telegram->addChild('args', $args);
     }
     $stage = 'save';
     $config->save(['description'=>'Disposable scoped Voice OFF fixture']);
