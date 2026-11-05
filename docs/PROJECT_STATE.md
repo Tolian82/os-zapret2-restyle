@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
-Текущий этап — **`v0.6.2_148`**; `VERSION=0.6.2`, `PLUGIN_REVISION=148`, package candidate: `os-zapret2-restyle-0.6.2_148.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
+Текущий этап — **`v0.6.2_149`**; `VERSION=0.6.2`, `PLUGIN_REVISION=149`, package candidate: `os-zapret2-restyle-0.6.2_149.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
@@ -41,4 +41,4 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 
 **Навигация:** [START_HERE](START_HERE.md) · [ROADMAP](ROADMAP.md) · [ТЗ](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) · [план](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) · [исторический ledger](history/current/v0.6.x.md) · [релиз](releases/v0.6.2.md).
 
-**Текущая `_148`:** нативная Mk-сборка одного пакета, SHA-256 до/после настоящего clean pkg add, установленный pkgdb/ABI/hooks/files и побайтовая проверка того же архива после копирования в CI. Оставшаяся full-function acceptance и публикация отдельно.
+**Принята `_148`:** [PR #918](https://github.com/Tolian82/os-zapret2-restyle/pull/918) merged 21/21 exact-head PASS, postmerge main CI/Release trigger PASS, real native package clean pkg add and same-copyback SHA-256 `d8ddf8776d400488a72c67efed90ead552259bd549b66cd8ff76a728f3cdecce` ([Stage 5 #42091933021](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42091933021)). Только Actions artifact, без публикации. **Текущая `_149`:** тот же SHA-контракт распространяется на реальное обновление RUNNING и полный общий Voice + HTTPS Apply одного архива. Full Exclude/Lab/Extra приёмка остаётся отдельно.

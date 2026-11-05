@@ -28,4 +28,4 @@
 
 **Принята `_147` ([PR #917](https://github.com/Tolian82/os-zapret2-restyle/pull/917), 18/18 exact-head и postmerge main CI/Release trigger PASS):** настоящий аутентифицированный HTTPS Voice Apply через существующую страницу/API на одноразовой OPNsense прошёл [guest run #42082770896](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42082770896); токен, единый FD9/Config/IPFW и восстановление всех native настроек проверены. Полная exact-head CI/слияние обязательны. Browser click, Voice media и финальный SHA — отдельные границы.
 
-**Текущая `_148`:** первый шаг FIFTH task: один настоящий OPNsense Mk-пакет с SHA-256, pkgdb/ABI/hooks/files и идентичным архивом после копирования из одноразовой VM. Полная приёмка на том же SHA и публикация ещё впереди.
+**Принята `_148`:** 21/21 exact-head, postmerge main Stage 5/CI/Release trigger PASS, один установленный Mk-архив `0.6.2_148` со SHA-256 `d8ddf8776d400488a72c67efed90ead552259bd549b66cd8ff76a728f3cdecce` после clean pkg add/copyback. **Текущая `_149`:** один Mk-архив через RUNNING upgrade и общий Voice/HTTPS Apply, строгий SHA и пакеты файлов после live операций. Exclude/Lab/Extra — далее; публикации нет.
