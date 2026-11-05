@@ -51,8 +51,12 @@ class Inputs(html.parser.HTMLParser):
         if tag != 'input':
             return
         item = dict(attrs)
-        if item.get('name') in ('__csrf_magic', 'csrf_magic'):
-            self.values[item['name']] = item.get('value', '')
+        # OPNsense generates a random, per-session CSRF field NAME, not a
+        # static __csrf_magic input. Match the exact stock base64url shape.
+        name, value = item.get('name', ''), item.get('value', '')
+        if item.get('type') == 'hidden' and re.fullmatch(r'[A-Za-z0-9_-]{16,64}', name) and \
+                re.fullmatch(r'[A-Za-z0-9_-]{16,64}', value):
+            self.values[name] = value
 
 
 def form_fields(model, snapshot, *, port):
@@ -118,7 +122,12 @@ def test_contracts():
         pass
     else:
         raise AssertionError('foreign IPSET permitted')
-    print('PASS: exact Voice HTTP five-service form, stale token and scope negatives')
+    parser = Inputs()
+    parser.feed('<form method="post"><input type="hidden" name="abcdefghijklmnopqrstuv" '
+                'value="0123456789abcdefghij-_" />'
+                '<input type="hidden" name="cookie_test" value="1" /></form>')
+    assert parser.values == {'abcdefghijklmnopqrstuv': '0123456789abcdefghij-_'}
+    print('PASS: Voice HTTP form, dynamic OPNsense CSRF, token and scope negatives')
 
 
 class GuestHttps:
@@ -128,6 +137,7 @@ class GuestHttps:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
+        self.csrf_token = None
         self.client = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
             urllib.request.HTTPSHandler(context=ctx))
@@ -137,10 +147,14 @@ class GuestHttps:
              '?' not in path and '#' not in path,
              'UNTRUSTED_GUI_HTTP_PATH')
         body = urllib.parse.urlencode(payload).encode('utf-8') if payload is not None else None
+        headers = {'User-Agent': 'Zapret2-disposable-native-web-acceptance',
+                   'Referer': ORIGIN + '/ui/zapret/voice',
+                   'Accept': 'application/json, text/html'}
+        if method == 'POST' and path.startswith('/api/'):
+            need(self.csrf_token is not None, 'AUTHENTICATED_GUI_CSRF_MISSING')
+            headers['X-CSRFToken'] = self.csrf_token
         req = urllib.request.Request(ORIGIN + path, data=body, method=method,
-                                     headers={'User-Agent': 'Zapret2-disposable-native-web-acceptance',
-                                              'Referer': ORIGIN + '/ui/zapret/voice',
-                                              'Accept': 'application/json, text/html'})
+                                     headers=headers)
         try:
             with self.client.open(req, timeout=30 if path != '/api/zapret/voice/apply' else 640) as res:
                 code, data, final = res.status, res.read(2 * 1024 * 1024), res.geturl()
@@ -168,8 +182,7 @@ def login(http):
     parser = Inputs()
     parser.feed(page)
     payload = dict(parser.values)
-    need(payload.get('__csrf_magic') or payload.get('csrf_magic'),
-         'DISPOSABLE_GUI_LOGIN_CSRF_MISSING')
+    need(len(payload) == 1, 'DISPOSABLE_GUI_LOGIN_CSRF_MISSING_OR_AMBIGUOUS')
     # The standard root login is used solely on this disposable QEMU guest.
     # Never read or print user credentials or modify any real appliance user.
     payload.update({'usernamefld': 'root', 'passwordfld': 'opnsense', 'login': '1'})
@@ -177,6 +190,11 @@ def login(http):
     page = http.request('GET', '/ui/zapret/voice')
     need('frm_VoiceSettings' in page and 'voiceApply' in page,
          'INSTALLED_GUI_LOGIN_OR_VOICE_PAGE_UNAVAILABLE')
+    # MVC page embeds the token that its jQuery AJAX calls send in the
+    # X-CSRFToken header. It can change after login/session rotation.
+    tokens = re.findall(r'X-CSRFToken\",\s*\"([A-Za-z0-9_-]{16,64})\"', page)
+    need(len(set(tokens)) == 1, 'INSTALLED_GUI_AJAX_CSRF_MISSING_OR_AMBIGUOUS')
+    http.csrf_token = tokens[0]
     return True
 
 
