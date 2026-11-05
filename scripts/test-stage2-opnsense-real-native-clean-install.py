@@ -95,6 +95,32 @@ class RealInstallContracts(unittest.TestCase):
             with self.assertRaisesRegex(mod.Refusal, "NOT_STOPPED"):
                 mod.cold_status()
 
+    def test_disposable_installed_python_down_cold_contract(self):
+        # Source-level unit fixture; the real guest runs this same sequence
+        # against the genuinely installed executable and immutable Config.
+        result = lambda rc, stdout="", stderr="": type(
+            "Result", (), {"returncode": rc, "stdout": stdout,
+                           "stderr": stderr})()
+        responses = [
+            result(1, "zapret is not running\n"),
+            result(0, "zapret is not running (stopped)\n"),
+            result(1, "zapret is not running\n"),
+            result(69, "", "ERROR: qualified Python runtime unavailable"),
+        ]
+        with patch.object(mod, "run", side_effect=responses) as run, \
+             patch.object(Path, "read_bytes", return_value=b"unchanged"), \
+             patch.object(mod, "PRESERVED", ()):
+            summary = mod.python_down_installed_cold_status()
+        self.assertEqual(summary["native_python_down_cold_stop"],
+                         "IDEMPOTENT")
+        self.assertFalse(summary["native_python_down_running_owner_tested"])
+        self.assertFalse(summary["native_python_down_shared_owner_tested"])
+        self.assertEqual([call.args[0][-1] for call in run.call_args_list],
+                         ["status", "stop", "status", "start"])
+        for call in run.call_args_list:
+            self.assertEqual(call.kwargs["env"]["PYTHON_RUNTIME"],
+                             "/nonexistent/zapret2-qualified-python-test")
+
     def test_config_diagnostic_reports_only_safe_section_names(self):
         old = (b"<opnsense><OPNsense><Zapret><password>secret-one</password>"
                b"</Zapret></OPNsense></opnsense>")

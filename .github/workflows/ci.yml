@@ -837,6 +837,9 @@ jobs:
       - name: Test single qualified native Python launcher and FD9 exec
         run: ZAPRET_TEST_PYTHON=python3.13 sh scripts/test-qualified-python-runtime.sh
 
+      - name: Test Python-down native service Status Stop under FD9
+        run: sh scripts/test-native-python-down-service.sh
+
       - name: Test Strategy Lab Python foundation
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
 

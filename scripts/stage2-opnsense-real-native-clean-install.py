@@ -51,10 +51,10 @@ def need(value, reason):
         raise Refusal(reason)
 
 
-def run(args, timeout=120):
+def run(args, timeout=120, env=None):
     try:
         return subprocess.run(args, check=False, capture_output=True,
-                              text=True, timeout=timeout)
+                              text=True, timeout=timeout, env=env)
     except (OSError, subprocess.SubprocessError):
         raise Refusal("TARGET_COMMAND_UNAVAILABLE_OR_TIMEOUT:" + args[0]) from None
 
@@ -326,6 +326,41 @@ def cold_status():
             "installed_runtime_started": False}
 
 
+def python_down_installed_cold_status():
+    """Only isolated OPNsense: no engine, no shared owner, deliberately broken
+    Python launcher. Full RUNNING native owner acceptance is a separate gate."""
+    service = Path("/usr/local") / native.SERVICE
+    environment = dict(os.environ)
+    environment["PYTHON_RUNTIME"] = "/nonexistent/zapret2-qualified-python-test"
+    before_config = Path("/conf/config.xml").read_bytes()
+    for action, expected_code, expected_output in (
+        ("status", 1, "zapret is not running"),
+        ("stop", 0, "zapret is not running (stopped)"),
+        ("status", 1, "zapret is not running"),
+    ):
+        result = run([str(service), action], timeout=25, env=environment)
+        need(result.returncode == expected_code and
+             result.stdout.strip() == expected_output,
+             "NATIVE_PYTHON_DOWN_COLD_" + action.upper() + "_FAILED:" +
+             str(result.returncode) + ":" + (result.stdout + result.stderr)[-180:])
+    start = run([str(service), "start"], timeout=25, env=environment)
+    need(start.returncode == 69 and
+         "python" in start.stderr.lower() and not start.stdout.strip(),
+         "NATIVE_PYTHON_DOWN_START_DID_NOT_REFUSE_BEFORE_MUTATION:" +
+         str(start.returncode) + ":" + (start.stdout + start.stderr)[-180:])
+    need(Path("/conf/config.xml").read_bytes() == before_config,
+         "NATIVE_PYTHON_DOWN_START_CHANGED_CONFIG")
+    for name in PRESERVED:
+        x = Path(name)
+        need(not x.exists() and not x.is_symlink(),
+             "NATIVE_PYTHON_DOWN_COLD_CREATED_OWNER:" + name)
+    return {"native_python_down_cold_status": "STOPPED",
+            "native_python_down_cold_stop": "IDEMPOTENT",
+            "native_python_down_cold_start": "REFUSED_BEFORE_MUTATION",
+            "native_python_down_running_owner_tested": False,
+            "native_python_down_shared_owner_tested": False}
+
+
 def execute():
     config_before = preflight()
     package = native.build()
@@ -350,6 +385,7 @@ def execute():
     manifest, pkgdb = installed_pkg_manifest(path)
     files = verify_installed_files(path, manifest)
     service = cold_status()
+    python_down = python_down_installed_cold_status()
     config_after = Path("/conf/config.xml").read_bytes()
     registration = verify_official_first_install_registration(config_before,
                                                               config_after)
@@ -367,6 +403,7 @@ def execute():
             "native_dependencies": pkgdb["deps"],
             "installed_payload": files,
             "service": service,
+            "python_down_installed_cold": python_down,
             "opnsense_config_registry": registration,
             "installed_elf_sha256": digest(
                 Path("/usr/local") / native.BINARY),

@@ -25,7 +25,7 @@ General project-development principles are canonical only in [`PROJECT_PRINCIPLE
 
 **IPFW номера правил (не сетевые порты):** обычный Zapret2/Strategies `19000–19010`, Strategy Lab `19100–19131`. Уже реализованная безопасная холодная загрузка IPFW не переписывается без дефекта.
 
-**Исполнение:** `_137` принят и слит: отменённые pkg-approval source/CI удалены, 15/15 exact-head CI PASS, реальная сборка и чистая установка официального Mk-пакета на одноразовой OPNsense 26.7 PASS. `_138` принят: native `PLUGIN_DEPENDS`, без повторных pkg-install/FreeBSD repo writes, 15/15 exact-head PASS и postmerge main CI PASS. `_139` — единый проверяемый generic-Python launcher с реальными callers, shell/PHP/configd/hooks/Strategy Lab/Voice/Extra Resources и регрессиями; до acceptance требуются exact-head CI, Python-independent Stop/Status и финальный `.pkg` SHA.
+**Исполнение:** `_137` принят и слит: отменённые pkg-approval source/CI удалены, 15/15 exact-head CI PASS, реальная сборка и чистая установка официального Mk-пакета на одноразовой OPNsense 26.7 PASS. `_138` принят: native `PLUGIN_DEPENDS`, без повторных pkg-install/FreeBSD repo writes, 15/15 exact-head PASS и postmerge main CI PASS. `_139` принят в PR #909: generic Python для реальных callers, 15/15 exact-head CI PASS и main CI SUCCESS. `_140` проверяет ограниченный обычный native Stop/Status без Python под FD9 и реальный холодный installed Start-refusal. Активный shared-owner Stop, полный lifecycle hooks и финальный SHA ещё не приняты.
 
 Ниже сохранены ранее принятые функциональные требования к IPv4/IPv6/Exclude. Они не являются текущим новым этапом разработки и не отменяют ограничение на повторные испытания.
 
