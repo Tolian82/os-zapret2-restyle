@@ -156,7 +156,7 @@ def accept_status_signer(root, secret):
     return target
 
 
-def start(root, ticket, head, old_archive, candidate_archive, nonce):
+def start(root, ticket, head, old_archive, candidate_archive, nonce, resume=False):
     """Start actual mutually authenticated SQLite witness in another process."""
     folder = private_root(root)
     need(mode() and COMMIT.fullmatch(head) is not None and
@@ -164,7 +164,27 @@ def start(root, ticket, head, old_archive, candidate_archive, nonce):
          'CI_LIVE_WITNESS_START_SCOPE_INVALID')
     witness = load('stage3-prepkg-remote-witness-ci.py')
     database = folder / 'operations.sqlite'
-    witness.initialize(str(database))
+    need(type(resume) is bool, 'CI_LIVE_WITNESS_RESTART_FLAG_INVALID')
+    if resume:
+        # A test witness can die after SQLite COMMIT. Never initialize/reset it.
+        need(database.exists() and not database.is_symlink(),
+             'CI_LIVE_WITNESS_RESTART_DB_UNTRUSTED')
+        st = database.lstat()
+        need(stat.S_ISREG(st.st_mode) and st.st_uid == os.geteuid() and
+             st.st_nlink == 1 and stat.S_IMODE(st.st_mode) == 0o600,
+             'CI_LIVE_WITNESS_RESTART_DB_UNTRUSTED')
+        con = witness.open_existing(str(database))
+        try:
+            need(con.execute('PRAGMA quick_check').fetchone() == ('ok',),
+                 'CI_LIVE_WITNESS_RESTART_DB_CORRUPT')
+            rows = con.execute('SELECT id, serial FROM metadata').fetchall()
+            need(len(rows) == 1 and rows[0][0] == 1 and
+                 type(rows[0][1]) is int and rows[0][1] >= 0,
+                 'CI_LIVE_WITNESS_RESTART_DB_METADATA_INVALID')
+        finally:
+            con.close()
+    else:
+        witness.initialize(str(database))
     grantroot = Path(root) / 'ci-operator-grant'
     cert_sha = hashlib.sha256(
         ssl.PEM_cert_to_DER_cert((folder / 'server.crt').read_text())).hexdigest()
@@ -233,6 +253,23 @@ def endpoint(root, head, ticket, nonce):
          SHA.fullmatch(value['server_sha256']) is not None,
          'CI_LIVE_WITNESS_ENDPOINT_NOT_BOUND')
     return value
+
+
+def restart(root, ticket, head, old_archive, candidate_archive, nonce, proc):
+    """Test-only witness recovery without erasing committed SQLite state.
+
+    Callers still require a fresh signed STATUS under the inherited FD9.
+    A failed replacement leaves no endpoint and no bypass.
+    """
+    need(mode() and isinstance(proc, subprocess.Popen),
+         'CI_LIVE_WITNESS_RESTART_DISPOSABLE_PROC_REQUIRED')
+    folder = private_root(root)
+    endpoint(root, head, ticket, nonce)
+    stop(proc)
+    owned_bytes(folder / 'endpoint.json')
+    (folder / 'endpoint.json').unlink()
+    return start(root, ticket, head, old_archive, candidate_archive, nonce,
+                 resume=True)
 
 
 def make_request(action, expected, head, nonce, drop=False):
