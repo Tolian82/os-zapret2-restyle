@@ -86,6 +86,44 @@ def native_unmanaged_xml(raw):
     return ET.tostring(model, encoding='utf-8')
 
 
+def unknown_xml_diff_summary(before_raw, after_raw):
+    # Report only XML *tag names* and the change type, never Config values,
+    # attribute contents, credentials, or arbitrary XML text. This diagnostic
+    # does not replace the strict original unknown-field preservation check.
+    def flatten(raw):
+        model = ET.fromstring(native_unmanaged_xml(raw))
+        result = {}
+        def visit(node, path):
+            result[path] = (node.text or '').strip(), tuple(sorted(node.attrib.items()))
+            names = {}
+            for child in node:
+                n = names.get(child.tag, 0)
+                names[child.tag] = n + 1
+                visit(child, path + '/' + child.tag + '[' + str(n) + ']')
+        visit(model, 'Zapret')
+        return result
+    before = flatten(before_raw)
+    after = flatten(after_raw)
+    changed = []
+    for path in sorted(before.keys() | after.keys()):
+        if path not in before:
+            kind = 'added'
+        elif path not in after:
+            kind = 'removed'
+        elif before[path][0] != after[path][0]:
+            kind = 'text'
+        elif before[path][1] != after[path][1]:
+            kind = 'attributes'
+        else:
+            continue
+        # An unknown XML tag might be user-selected. Output only ASCII tag
+        # names with a strict length cap, never embedded values.
+        if not re.fullmatch(r'[A-Za-z0-9_\-/\[\]]{1,120}', path):
+            path = 'unclassified'
+        changed.append(path + ':' + kind)
+    return ','.join(changed[:8]) if changed else 'xml-representation-only'
+
+
 def attest_complete_native_model(before, after):
     need(isinstance(before, dict) and isinstance(after, dict) and
          before == after, 'GUI_RESTORE_ALL_NATIVE_MODEL_FIELDS_CHANGED')
@@ -193,6 +231,8 @@ def test_contracts():
     unknown_original = extra_original.replace(b'</Zapret>', b'<unknown><mode>off</mode></unknown></Zapret>')
     unknown_changed = unknown_original.replace(b'<mode>off', b'<mode>on')
     assert native_unmanaged_xml(unknown_original) != native_unmanaged_xml(unknown_changed)
+    assert 'unknown[0]/mode[0]:text' in unknown_xml_diff_summary(unknown_original, unknown_changed)
+    assert unknown_xml_diff_summary(extra_original, extra_voice) == 'xml-representation-only'
     attest_complete_native_model({'strategylab': {'enablequic': '0'}},
                                  {'strategylab': {'enablequic': '0'}})
     try:
@@ -344,9 +384,10 @@ def execute():
     need(final_load.get('snapshot') == before['snapshot'],
          'GUI_RESTORE_MODEL_SNAPSHOT_DIFFERS_FROM_BASELINE')
     attest_complete_native_model(before['zapret'], final_load.get('zapret'))
-    need(native_unmanaged_xml(active.CONFIG.read_bytes()) ==
-         native_unmanaged_xml(original),
-         'GUI_RESTORE_UNKNOWN_ZAPRET_XML_FIELDS_CHANGED')
+    final_saved = active.CONFIG.read_bytes()
+    need(native_unmanaged_xml(final_saved) == native_unmanaged_xml(original),
+         'GUI_RESTORE_UNKNOWN_ZAPRET_XML_FIELDS_CHANGED:' +
+         unknown_xml_diff_summary(original, final_saved))
     # OPNsense's native model serialization may rewrite XML representation
     # while preserving all five model groups (full getNodes equality),
     # unknown plugin fields and every unrelated Config field.
