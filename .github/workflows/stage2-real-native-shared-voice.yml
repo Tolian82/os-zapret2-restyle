@@ -43,7 +43,8 @@ jobs:
           copyback: false
           cpu: 2
           mem: 4096
-          prepare: |
+          disable-cache: true
+          run: |
             set -eu
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
             pkg update -f
@@ -51,6 +52,4 @@ jobs:
             /usr/local/bin/pkgconf --exists lua-5.4
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
-          run: |
-            set -eu
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_COMMON_VOICE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-shared-voice.py run
