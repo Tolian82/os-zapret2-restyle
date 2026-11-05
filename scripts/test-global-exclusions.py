@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,7 +12,12 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+SOURCE_BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
+INSTALLED_BACKEND = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
+USE_INSTALLED = os.environ.get("ZAPRET2_STAGE5_INSTALLED_EXCLUDE") == "1"
+if USE_INSTALLED and os.environ.get("GITHUB_ACTIONS") != "true":
+    raise SystemExit("REFUSED: installed Exclude regressions require disposable GitHub CI")
+BACKEND = INSTALLED_BACKEND if USE_INSTALLED else SOURCE_BACKEND
 sys.path.insert(0, str(BACKEND))
 
 from global_exclusions import ExclusionError, compose, audit, segments
@@ -161,6 +167,34 @@ class GlobalExclusionTests(unittest.TestCase):
                                     capture_output=True, text=True)
             self.assertEqual(result.returncode, expected, result.stderr)
         self.assertIn("--ipset-exclude=" + self.ip_ref, argv_file.read_text())
+
+
+    def test_installed_cli_invalid_apply_is_nonmutating(self):
+        # Exercise the real file-modifying CLI, not only compose() in memory.
+        # Each failure has its own private directory and potential witness.
+        invalid = (
+            ("--filter-tcp=443\n--filter-l7=tls\n--ipset-ip=0.0.0.0/0\n",
+             "full-family"),
+            ("--filter-tcp=443\n--filter-l7=tls\n--ipset-exclude-ip=::/0\n",
+             "full-family"),
+            ("--name=voice-telegram\n--filter-udp=3478\n--filter-l7=stun\n"
+             "--hostlist-exclude-domains=forbidden.example\n",
+             "hostlist exclusions forbidden"),
+        )
+        for index, (raw, diagnostic) in enumerate(invalid):
+            with self.subTest(index=index):
+                folder = self.root / ("invalid-" + str(index))
+                folder.mkdir()
+                argv = folder / "dvtws.args"
+                argv.write_text(raw, encoding="utf-8")
+                before = argv.read_bytes()
+                command = [sys.executable, str(BACKEND / "global_exclusions.py"),
+                           "apply", str(argv), *[str(arg) for arg in self.kw]]
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(diagnostic, result.stderr)
+                self.assertEqual(argv.read_bytes(), before)
+                self.assertFalse((folder / "dvtws.args.global-policy.json").exists())
 
 
 if __name__ == "__main__":
