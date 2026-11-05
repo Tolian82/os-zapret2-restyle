@@ -16,7 +16,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 - `Makefile` uses `.include "../../Mk/plugins.mk"` and `PLUGIN_DEPENDS`.
 - `scripts/build-pkg.sh` (19 lines) delegates to `scripts/native-opnsense-package.py`. This is **already written** and has native CI coverage; complete it rather than start a second package engine.
 - `compatibility.json`, the `zapret` service, GUI, Strategies, Voice, Exclude, Lab and Extra Resources are present.
-- Merged `_138` [PR #908](https://github.com/Tolian82/os-zapret2-restyle/pull/908) proved native dependency ownership/no stock repo writes with 15/15 exact-head CI PASS and postmerge main CI PASS. Merged `_139` [PR #909](https://github.com/Tolian82/os-zapret2-restyle/pull/909) passes 15/15 exact-head workflows, real Mk package build/clean install and postmerge main CI. `_140` source candidate addresses Python-down verified ordinary native Stop/Status; active shared owner remains explicitly open.
+- Merged `_138` [PR #908](https://github.com/Tolian82/os-zapret2-restyle/pull/908) proved native dependency ownership/no stock repo writes with 15/15 exact-head CI PASS and postmerge main CI PASS. Merged `_139` [PR #909](https://github.com/Tolian82/os-zapret2-restyle/pull/909) passes 15/15 exact-head workflows, real Mk package build/clean install and postmerge main CI. `_140` [PR #910](https://github.com/Tolian82/os-zapret2-restyle/pull/910) merged with 15/15 exact-head native PASS and postmerge main CI. `_141` extends the disposable native installed guest to actual `pkg delete` + official firmware `register.php remove` with Config retention; active shared-owner Python-down Stop remains explicitly open.
 - The cancelled experimental `backend/native_pkg_*`, standalone pre-pkg, Stage 3 external approval/FD9 tools/tests and workflows were removed in source revision `_137`. Historical evidence remains historical; source/native CI outcomes require separate verification.
 - Unmerged branch `work/v0.6.2_136-offguest-host-checkpoint-ci` is abandoned. **Do not merge or develop it.**
 
@@ -48,7 +48,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 
 ## THIRD task — system dependencies and one Python contract
 
-**Completed `_138`:** setup dependency provisioning belongs to native OPNsense `pkg`, no FreeBSD repo mutating operation; source/native tests passed and merged. **Completed `_139`:** validated generic Python entrypoint and real callers accepted in native CI. **Current `_140`:** bounded Python-down ordinary Strategies Stop under original FD9, no shared journal/Voice/pending transaction, verified native RUNNING/STOPPED and post-stop check. Test real installed cold Status/Stop/Start-refusal. **Remaining:** live shared owner Python-down Stop, full lifecycle hooks, final package SHA; do not reopen Stage 3.
+**Completed `_138`:** setup dependency provisioning belongs to native OPNsense `pkg`, no FreeBSD repo mutating operation; source/native tests passed and merged. **Completed `_139`:** validated generic Python entrypoint and real callers accepted in native CI. **Completed `_140`:** bounded Python-down ordinary Strategies Stop/Status under FD9 with installed cold Status/Stop/Start refusal (15/15 exact-head CI PASS). **Current `_141`:** real disposable package deletion under native pkg hooks and OPNsense `register.php remove`, preserving configuration and shared system dependencies. **Remaining:** active shared owner Python-down teardown, full service/boot/Firmware GUI lifecycle, final package SHA; no Stage 3 revival.
 
 **Files:** `setup.sh`, `setup_launcher.sh`/`setup_transaction.sh`, backend shell/Python, Strategy Lab, Voice, Extra Resources, PHP APIs, `actions_zapret.conf` and hooks.
 
@@ -60,7 +60,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 
 ## FOURTH task — normal native service and four lifecycle hooks
 
-**Current `_140` slice (source-only, pending CI):** enable only verified ordinary Strategies Python-down Stop/Status under original FD9, reject shared/Voice/ambiguous ownership; add isolated negative matrix and genuine installed cold status-stop-start refusal. The shared journal, seal and IPFW adapter still require Python; actively RUNNING shared-owner teardown remains open. Existing real hooks and native package test routes stay enabled.
+**Accepted `_140`:** verified ordinary Strategies Stop/Status without Python under FD9, installed cold Status/Stop/Start-refusal PASS. **Current `_141` slice (source-only pending CI):** after real native clean install and packaged configctl, exercise real `pkg delete -y` with original installed four-hook bodies, verify package file/pkgdb removal and no restart markers, then OPNsense official `register.php remove` and retained Config. Do **not** run global `pkg autoremove`; do not claim active running-owner/UI click/boot acceptance. Shared journal, seal and IPFW adapter remain Python dependent.
 
 **Files:** `pkg/+PRE_INSTALL`, `pkg/+POST_INSTALL`, `pkg/+PRE_DEINSTALL`, `pkg/+POST_DEINSTALL`, `zapret_service.sh`, `actions_zapret.conf`, `zapret.inc` and rc.syshooks.
 

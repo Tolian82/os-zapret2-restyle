@@ -918,6 +918,9 @@ jobs:
       - name: Test package lifecycle service refresh
         run: sh scripts/test-package-lifecycle-restart.sh
 
+      - name: Test native firmware uninstall registration and config retention
+        run: python3.13 scripts/test-stage2-opnsense-real-native-remove.py
+
       - name: Test native package hook archive-refusal contracts
         run: python3.13 scripts/test-native-package-hook-regression-contracts.py
 
