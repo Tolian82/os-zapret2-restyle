@@ -8,6 +8,7 @@ browser click or WAN/Voice media acceptance.
 import hashlib
 import html.parser
 import http.cookiejar
+import ipaddress
 import importlib.util
 import json
 import os
@@ -33,6 +34,16 @@ class Refusal(RuntimeError):
 def need(ok, reason):
     if not ok:
         raise Refusal(reason)
+
+
+def exact_disposable_target(value):
+    # Native IPSET may render an IPv4 /32 as either a CIDR or a host.
+    # Require the SAME precise documentation address, never a larger range.
+    try:
+        return isinstance(value, str) and ipaddress.ip_network(
+            value, strict=False) == ipaddress.ip_network('192.0.2.42/32')
+    except ValueError:
+        return False
 
 
 def module(name):
@@ -85,7 +96,7 @@ def form_fields(model, snapshot, *, port):
                         str(model['hostlist'][name + 'ips']))))
     need(len(result) == 16 and result[-1][0] == 'zapret[hostlist][customips]',
          'VOICE_FORM_FIELD_SET_CHANGED')
-    need(dict(result)['zapret[hostlist][telegramips]'] == '192.0.2.42/32',
+    need(exact_disposable_target(dict(result)['zapret[hostlist][telegramips]']),
          'NOT_EXACT_TEST_ONLY_TELEGRAM_IPSET')
     return result
 
@@ -122,6 +133,10 @@ def test_contracts():
         pass
     else:
         raise AssertionError('foreign IPSET permitted')
+    assert exact_disposable_target('192.0.2.42')
+    assert exact_disposable_target('192.0.2.42/32')
+    assert not exact_disposable_target('192.0.2.40/29')
+    assert not exact_disposable_target('0.0.0.0/0')
     parser = Inputs()
     parser.feed('<form method="post"><input type="hidden" name="abcdefghijklmnopqrstuv" '
                 'value="0123456789abcdefghij-_" />'
@@ -207,7 +222,7 @@ def assert_saved_only_voice(active, boot, original, *, expected_port):
     args = root.findtext('./OPNsense/Zapret/voice/telegram/args') or ''
     need(root.findtext('./OPNsense/Zapret/voice/telegram/enabled') == '1' and
          '--filter-udp=' + expected_port in args and
-         root.findtext('./OPNsense/Zapret/hostlist/telegramips') == '192.0.2.42/32',
+         exact_disposable_target(root.findtext('./OPNsense/Zapret/hostlist/telegramips')),
          'GUI_APPLY_SAVED_WRONG_VOICE_PROFILE')
     return now
 
