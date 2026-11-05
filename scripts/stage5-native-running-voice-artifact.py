@@ -76,6 +76,9 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "unknown_plugin_xml_preserved",
          "installed_exclude_backend_suites",
          "installed_exclude_preserves_native_owner",
+         "installed_strategy_lab_idle_and_invalid_refused",
+         "installed_extra_resources_offline_suites",
+         "installed_lab_extra_preserves_native_owner",
          "loopback_only",
          "copyback_sha_required")) and
          data.get("published") is False and
@@ -141,6 +144,9 @@ def cross_receipt_binding(clean, live):
          live.get("authenticated_https_voice_apply_and_restore") is True and
          live.get("installed_exclude_backend_suites") is True and
          live.get("installed_exclude_preserves_native_owner") is True and
+         live.get("installed_strategy_lab_idle_and_invalid_refused") is True and
+         live.get("installed_extra_resources_offline_suites") is True and
+         live.get("installed_lab_extra_preserves_native_owner") is True and
          clean.get("owner_appliance_modified") is False and
          live.get("owner_device_changed") is False,
          "STAGE5_CROSS_BOTH_INSTALLATION_SCOPES_NOT_PROVEN")
@@ -246,7 +252,25 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_EXCLUDE_BACKEND_UNQUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXCLUDE")
-    need(sha256(PACKAGE) == archive_sha, "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_VOICE")
+    lab_extra = load("stage5-installed-lab-resources.py")
+    lab_extra_report = lab_extra.execute()
+    lab_status = lab_extra_report.get("installed_strategy_lab", {})
+    suites = lab_extra_report.get("installed_extra_suites", {})
+    need(lab_extra_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_LAB_STATUS_EXTRA_OFFLINE" and
+         lab_status.get("idle_status_queries") == 2 and
+         lab_status.get("invalid_job_refused") is True and
+         lab_status.get("invalid_target_refused") is True and
+         lab_status.get("missing_job_refused") is True and
+         lab_status.get("no_lab_job_launched") is True and
+         suites.get("test-extra-resources-preflight.py", 0) >= 8 and
+         suites.get("test-extra-resources-inventory-cache.py", 0) >= 8 and
+         lab_extra_report.get("native_config_fd9_and_ipfw_unchanged") is True and
+         lab_extra_report.get("strategy_lab_real_search_tested") is False and
+         lab_extra_report.get("extra_resources_real_install_or_remove_tested") is False,
+         "STAGE5_RUNNING_INSTALLED_LAB_EXTRA_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_LAB_EXTRA")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -286,6 +310,9 @@ def execute(old_archive, *, prebuilt_clean=False):
         "unknown_plugin_xml_preserved": True,
         "installed_exclude_backend_suites": True,
         "installed_exclude_preserves_native_owner": True,
+        "installed_strategy_lab_idle_and_invalid_refused": True,
+        "installed_extra_resources_offline_suites": True,
+        "installed_lab_extra_preserves_native_owner": True,
         "loopback_only": True, "copyback_sha_required": True,
         "published": False, "owner_device_changed": False,
         "all_feature_suites_qualified": False,
@@ -361,7 +388,11 @@ def self_test():
                     "stale_snapshot_refused", "native_config_model_restored",
                     "unknown_plugin_xml_preserved",
                     "installed_exclude_backend_suites",
-                    "installed_exclude_preserves_native_owner", "loopback_only",
+                    "installed_exclude_preserves_native_owner",
+                    "installed_strategy_lab_idle_and_invalid_refused",
+                    "installed_extra_resources_offline_suites",
+                    "installed_lab_extra_preserves_native_owner",
+                    "loopback_only",
                     "copyback_sha_required")
             for key in keys:
                 fixture[key] = True

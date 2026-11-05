@@ -13,7 +13,11 @@ from contextlib import ExitStack
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret"))
+INSTALLED_MODE = os.environ.get("ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES") == "1"
+if INSTALLED_MODE and os.environ.get("GITHUB_ACTIONS") != "true":
+    raise SystemExit("REFUSED: installed Extra Resources inventory requires disposable GitHub CI")
+SOURCE = Path("/usr/local/opnsense/scripts/OPNsense/Zapret") if INSTALLED_MODE else ROOT / "src/opnsense/scripts/OPNsense/Zapret"
+sys.path.insert(0, str(SOURCE))
 from extra_resources_inventory_cache import (
     InventoryCacheError, generate, invalidate, publish, read_cached, refresh,
 )

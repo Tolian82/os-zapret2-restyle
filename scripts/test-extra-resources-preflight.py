@@ -6,13 +6,19 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tarfile
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PATH = ROOT / "src/opnsense/scripts/OPNsense/Zapret/extra_resources_preflight.py"
+INSTALLED_MODE = os.environ.get("ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES") == "1"
+if INSTALLED_MODE and os.environ.get("GITHUB_ACTIONS") != "true":
+    raise SystemExit("REFUSED: installed Extra Resources preflight requires disposable GitHub CI")
+PATH = (Path("/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_preflight.py")
+        if INSTALLED_MODE else
+        ROOT / "src/opnsense/scripts/OPNsense/Zapret/extra_resources_preflight.py")
 spec = importlib.util.spec_from_file_location("extra_resources_preflight", PATH)
 assert spec and spec.loader
 extra = importlib.util.module_from_spec(spec)
