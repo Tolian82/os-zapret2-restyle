@@ -2,7 +2,7 @@
 
 Текущий этап — **`v0.6.2_136`**; `VERSION=0.6.2`, `PLUGIN_REVISION=136`, package candidate: `os-zapret2-restyle-0.6.2_136.pkg` (**SOURCE-ONLY; NOT BUILT / NOT PUBLISHED**).
 
-**State-line scope: `v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
+State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
 Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md), [v0.2.x archive](history/archive/v0.2.x.md), [v0.3.x archive](history/archive/v0.3.x.md), [v0.4.x archive](history/archive/v0.4.x.md). Historical detail for the current line: [v0.6.x ledger](history/current/v0.6.x.md).
 
