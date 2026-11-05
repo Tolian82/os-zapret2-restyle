@@ -291,10 +291,14 @@ def execute():
          'GUI_RESTORE_APPLY_UNCONFIRMED')
     assert_saved_only_voice(active, boot, altered, expected_port='3478')
     final = common.witness(active, engine_sha, running=True)
-    need(final['id'] != current['id'] and final['pid'] != current['pid'] and
-         final['rules'] == baseline['rules'] and
-         config_without_revision(active.CONFIG.read_bytes()) == config_without_revision(original),
-         'GUI_RESTORE_DID_NOT_RECOVER_EXACT_ORIGINAL_OWNER_CONFIG')
+    need(final['id'] != current['id'], 'GUI_RESTORE_SHARED_COMMIT_ID_NOT_ADVANCED')
+    need(final['pid'] != current['pid'], 'GUI_RESTORE_REAL_ENGINE_PID_NOT_ADVANCED')
+    need(final['rules'] == baseline['rules'], 'GUI_RESTORE_SCOPED_IPFW_RULES_CHANGED')
+    final_load = http.api('GET', '/api/zapret/voice/load')
+    need(final_load.get('snapshot') == before['snapshot'],
+         'GUI_RESTORE_MODEL_SNAPSHOT_DIFFERS_FROM_BASELINE')
+    need(config_without_revision(active.CONFIG.read_bytes()) == config_without_revision(original),
+         'GUI_RESTORE_FULL_CONFIG_DIFFERS_EXCLUDING_REVISION')
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_AUTHENTICATED_VOICE_HTTP_APPLY',
             'installed_web_page_loaded': True, 'authenticated_native_http_api': True,
             'stale_snapshot_refused_before_mutation': True,
