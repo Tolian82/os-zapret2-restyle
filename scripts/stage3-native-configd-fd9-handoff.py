@@ -252,6 +252,18 @@ def live_witness_mode():
     return v=='1'
 
 
+def live_witness_restart_mode():
+    """Only two original-FD9 native CI rendezvous cases; never a product option."""
+    value=os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_RESTART','')
+    need(value in ('','resume','outage'),'CI_LIVE_RESTART_MODE_INVALID')
+    if value:
+        need(os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_RESTART_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             live_witness_mode() and not fault_mode(),
+             'CI_LIVE_RESTART_DISPOSABLE_LIVE_FD9_REQUIRED')
+    return value
+
+
 def readonly_pkg_query(head,fields):
     """Actual installed native pkg read query while inherited historical FD9 lives."""
     need(os.fstat(9).st_ino==fields['inode'],
@@ -311,6 +323,10 @@ def action_bytes(head):
     if live_witness_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS=1 '
                 'ZAPRET2_STAGE3_NATIVE_LIVE_WITNESS_CI=1 ')
+    live_restart=live_witness_restart_mode()
+    if live_restart:
+        extra+=('ZAPRET2_STAGE3_NATIVE_LIVE_RESTART='+live_restart+' '
+                'ZAPRET2_STAGE3_NATIVE_LIVE_RESTART_CI=1 ')
     if native_pkg_mode():
         extra+=('ZAPRET2_STAGE3_NATIVE_MUTATING_PKG=1 '
                 'ZAPRET2_STAGE3_NATIVE_MUTATING_PKG_CI=1 '
@@ -396,6 +412,7 @@ def worker(head):
     native_stdin_path_swap_mode()
     signed_consumed_mode()
     live_witness_mode()
+    live_witness_restart_mode()
     need(ROOT.is_dir() and not ROOT.is_symlink() and
          ROOT.stat().st_uid==0 and stat.S_IMODE(ROOT.stat().st_mode)==0o700,
          'ROOT_HANDOFF_DIRECTORY_UNTRUSTED')
@@ -553,6 +570,7 @@ def launch(head):
     native_stdin_path_swap_mode()
     signed_consumed_mode()
     live_witness_mode()
+    live_witness_restart_mode()
     need(base.trusted(ACTION)==action_bytes(head),'CONFIGD_ACTION_CHANGED')
     nonce=ticket(head)
     for p in (SOCKET,PIDFILE,READY,RELEASE,DONE,FAILED,QUERY,PREPKG_READY,
@@ -645,6 +663,7 @@ def execute(head):
     stdin_path_swap=native_stdin_path_swap_mode()
     signed_consumed=signed_consumed_mode()
     live_enabled=live_witness_mode()
+    live_restart=live_witness_restart_mode()
     guest=load('stage0-opnsense-guest-readonly.py')
     installer=load('stage0-opnsense-installed-predecessor.py')
     old=load('stage0-installed-predecessor-readonly.py')
@@ -863,7 +882,60 @@ def execute(head):
             base.create_owned(
                 PREPKG_RESUME,
                 b'RESUME_TEST_ONLY_AFTER_STDIN_SNAPSHOT_PATH_REBIND')
-        if grant_negative or late_grant or late_archive or post_final:
+        if live_restart:
+            # The detached worker has COMMITTED its real operation, but has
+            # not yet requested final signed STATUS or invoked native pkg.
+            armed=json.loads(base.wait_file(PREPKG_READY,85))
+            need(armed.get('sha')==head and armed.get('pid')==ready['pid'] and
+                 armed.get('original_fd9_inode')==ready['original_fd9_inode'] and
+                 armed.get('nonce_sha256')==ready['nonce_sha256'] and
+                 armed.get('ci_live_consumed_before_status') is True and
+                 armed.get('native_mutating_pkg_invoked') is False,
+                 'CI_LIVE_RESTART_ORIGINAL_FD9_BARRIER_UNQUALIFIED')
+            need(wait_ready(head,nonce)==ready,
+                 'CI_LIVE_RESTART_WORKER_IDENTITY_DRIFT')
+            base.check_original_fd9_busy()
+            checkpoint=live.confirm(ROOT,ci_grant,head,nonce,
+                                    expected_challenges=(2,))
+            need(checkpoint['ci_challenges_consumed']==2 and
+                 checkpoint['ci_real_sqlite_consumed'] is True,
+                 'CI_LIVE_RESTART_SQLITE_NOT_DURABLY_CONSUMED')
+            old_witness_pid=live_process.pid
+            if live_restart=='resume':
+                live_process=live.restart(ROOT,ci_grant,head,base.OLD,
+                                          native_archive,nonce,live_process)
+                need(live_process.pid!=old_witness_pid and
+                     live_process.poll() is None and
+                     live.confirm(ROOT,ci_grant,head,nonce,
+                                  expected_challenges=(2,))==checkpoint,
+                     'CI_LIVE_RESTART_NEW_PROCESS_LOST_SQLITE_CONSUMPTION')
+            else:
+                # Entire endpoint remains pinned, but its owner is gone.
+                # A fresh STATUS must refuse and may never fall back to _132.
+                live.stop(live_process)
+                need(live_process.poll() is not None,
+                     'CI_LIVE_OUTAGE_WITNESS_PROCESS_STILL_RUNNING')
+            base.check_original_fd9_busy()
+            base.create_owned(
+                PREPKG_RESUME,
+                (b'RESUME_CI_AFTER_DURABLE_WITNESS_PROCESS_RESTART'
+                 if live_restart=='resume'
+                 else b'RESUME_CI_WITH_WITNESS_OFFLINE_EXPECT_NO_PKG'))
+        if live_restart=='outage':
+            try:
+                wait_native_pkg_done(90)
+            except base.Refusal as exc:
+                reason=str(exc)
+                need('NATIVE_PKG_WORKER_FAILED_NO_SUCCESS:' in reason and
+                     'ConnectionRefusedError' in reason and
+                     not DONE.exists() and not DONE.is_symlink() and
+                     not AUTH_RESULT.exists() and not AUTH_RESULT.is_symlink(),
+                     'CI_LIVE_OUTAGE_NOT_A_SPECIFIC_PRE_PKG_STATUS_REFUSAL:'+reason[:100])
+                done={'status':'PASS_TEST_ONLY_LIVE_STATUS_OUTAGE_NO_PKG',
+                      'native_mutating_pkg_invoked':False}
+            else:
+                raise base.Refusal('CI_LIVE_OUTAGE_INCORRECTLY_REACHED_NATIVE_PKG')
+        elif grant_negative or late_grant or late_archive or post_final:
             try:
                 wait_native_pkg_done()
             except base.Refusal as exc:
@@ -899,8 +971,8 @@ def execute(head):
             done=json.loads(wait_native_pkg_done() if pkg_enabled
                             else base.wait_file(DONE,45))
         grant_done=(json.loads(base.trusted(AUTH_RESULT,1000))
-                    if pkg_enabled and not (grant_negative or late_grant or late_archive or post_final) else None)
-        if pkg_enabled and not (grant_negative or late_grant or late_archive or post_final):
+                    if pkg_enabled and not (grant_negative or late_grant or late_archive or post_final or live_restart=='outage') else None)
+        if pkg_enabled and not (grant_negative or late_grant or late_archive or post_final or live_restart=='outage'):
             need(grant_done.get('sha')==head and
                  grant_done.get('pid')==ready['pid'] and
                  grant_done.get('original_fd9_inode')==ready['original_fd9_inode'] and
@@ -914,7 +986,15 @@ def execute(head):
                  grant_done.get('ci_pkg_one_use_commit_proven') is False and
                  grant_done.get('lh08_ac11_accepted') is False,
                  'CI_SIGNED_PKG_GRANT_NATIVE_RECEIPT_UNQUALIFIED')
-        if grant_negative or late_grant or late_archive or post_final:
+        if live_restart=='outage':
+            need(done.get('status')=='PASS_TEST_ONLY_LIVE_STATUS_OUTAGE_NO_PKG' and
+                 done.get('native_mutating_pkg_invoked') is False and
+                 live.confirm(ROOT,ci_grant,head,nonce,
+                              expected_challenges=(2,))['ci_challenges_consumed']==2 and
+                 ready['original_fd9_inode']>0 and
+                 not AUTH_RESULT.exists() and not DONE.exists(),
+                 'CI_LIVE_OUTAGE_PKG_OR_SQLITE_STATE_CHANGED')
+        elif grant_negative or late_grant or late_archive or post_final:
             need(done.get('status')==(
                      'PASS_TEST_ONLY_POST_FINAL_ARCHIVE_DISPATCH_VETO'
                      if post_final else
@@ -1038,7 +1118,7 @@ def execute(head):
              'CANNOT_CLEAN_CHANGED_CONFIGD_ACTION')
         ACTION.unlink()
         base.run(['/usr/sbin/service','configd','restart'],45)
-    if pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final):
+    if pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final or live_restart=='outage'):
         need(load('stage2-opnsense-real-unsafe-owner-replacement.py').installed_identity()
              =='os-zapret2-restyle|0.6.2_'+native_revision,
              'POST_CONFIGD_NATIVE_PKG_INSTALLED_IDENTITY_DRIFT')
@@ -1051,7 +1131,11 @@ def execute(head):
         if late_archive or post_final:
             need(clean.digest(native_archive)!=native_archive_sha,
                  'ARCHIVE_CORRUPTION_NOT_PERSISTED_BEFORE_NO_PKG')
-    for p in ((TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME,
+    for p in ((TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
+              if live_restart=='outage' else
+              (TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
+              if live_restart=='resume' else
+              (TICKET,READY,DONE,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME,
                SWAP_RESULT)
               if stdin_path_swap else
               (TICKET,READY,FAILED,RELEASE,QUERY,PREPKG_READY,PREPKG_RESUME)
@@ -1074,9 +1158,11 @@ def execute(head):
     if pkg_enabled:
         need(base.trusted(AUTHORITY,950) is not None and
              (grant_negative or late_grant or late_archive or post_final or
+              live_restart=='outage' or
               base.trusted(AUTH_RESULT,1000) is not None),
              'OPERATOR_GRANT_AUTHORIZATION_EVIDENCE_CHANGED')
-        if not (grant_negative or late_grant or late_archive or post_final):
+        if not (grant_negative or late_grant or late_archive or post_final or
+                live_restart=='outage'):
             AUTH_RESULT.unlink()
         AUTHORITY.unlink()
         issuer.cleanup(ROOT)
@@ -1104,6 +1190,8 @@ def execute(head):
         need(base.LOCK.is_file() and base.LOCK.lstat().st_ino==inode,
              'PREEXISTING_ORIGINAL_LOCK_CHANGED')
     return {'schema':1,'status':(
+                'PASS_TEST_ONLY_LIVE_STATUS_OUTAGE_NO_PKG'
+                if live_restart=='outage' else
                 'PASS_TEST_ONLY_POST_FINAL_ARCHIVE_DISPATCH_VETO'
                 if post_final else
                 'PASS_TEST_ONLY_LATE_ARCHIVE_DRIFT_NO_PKG'
@@ -1128,7 +1216,7 @@ def execute(head):
             'final_valid_grant_then_dispatch_archive_veto':post_final,
             'native_archive_drift_refused_before_pkg':late_archive or post_final,
             'native_pkg_read_only_query_under_detached_fd9':query_enabled,
-            'native_mutating_pkg_under_detached_fd9':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final),
+            'native_mutating_pkg_under_detached_fd9':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final or live_restart=='outage'),
             'ci_native_pkg_verified_stdin_mode':stdin_pkg and pkg_enabled,
             'ci_stdin_path_swap_after_snapshot':stdin_path_swap,
             'ci_stdin_original_path_restored':stdin_original_restored,
@@ -1137,12 +1225,16 @@ def execute(head):
             'ci_simulated_signed_consumed_under_original_fd9':
                 signed_consumed and pkg_enabled,
             'ci_real_loopback_mtls_sqlite_consumed_under_original_fd9':
-                live_enabled and pkg_enabled,
+                live_enabled and pkg_enabled and live_restart!='outage',
+            'ci_live_witness_restarted_while_original_fd9_held':
+                live_restart=='resume',
+            'ci_live_witness_status_outage_refused_pkg':
+                live_restart=='outage',
             'native_successor_sha256':native_archive_sha if pkg_enabled else None,
             'configd_to_detached_fd9_handoff_without_unlock_gap':True,
             'worker_survives_configd_restart_with_same_pid':True,
-            'old_package_config_process_ipfw_unchanged':not pkg_enabled or native_late or grant_negative or late_grant or late_archive or post_final,
-            'native_mutating_pkg_invoked':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final),
+            'old_package_config_process_ipfw_unchanged':not pkg_enabled or native_late or grant_negative or late_grant or late_archive or post_final or live_restart=='outage',
+            'native_mutating_pkg_invoked':pkg_enabled and not (native_late or grant_negative or late_grant or late_archive or post_final or live_restart=='outage'),
             'stock_web_firmware_or_direct_root_pkg_protected':False,
             'final_owner_check_to_pkg_race_closed':False,
             'lh08_ac11_accepted':False,'owner_appliance_modified':False}

@@ -360,8 +360,15 @@ def exchange(root, ticket, head, nonce, fd9_check, phase, drop_consume=False):
             'ci_production_pkg_authorized': False}
 
 
-def confirm(root, ticket, head, nonce):
-    """Controller's independent sqlite read-back after genuine native pkg."""
+def confirm(root, ticket, head, nonce, expected_challenges=(3, 4)):
+    """Read durable SQLite under original nonce scope, before or after STATUS.
+
+    Only the exact pre-STATUS two-challenge rendezvous and the normal final
+    three/four-challenge result are legal. No counter reset or fake success.
+    """
+    need(type(expected_challenges) is tuple and
+         expected_challenges in ((2,), (3, 4)),
+         'CI_LIVE_WITNESS_CHALLENGE_PHASE_NOT_ADMITTED')
     folder = private_root(root)
     endpoint(root, head, ticket, nonce)
     database = folder / 'operations.sqlite'
@@ -382,7 +389,7 @@ def confirm(root, ticket, head, nonce):
           ticket['checkpoint_sha256'], ticket['checkpoint_sequence'],
           'CONSUMED', serial) and
          serial == ticket['checkpoint_sequence'] + 2 and
-         challenges in (3, 4),
+         challenges in expected_challenges,
          'CI_LIVE_WITNESS_ACTUAL_SQLITE_CONSUMPTION_NOT_PROVEN')
     return {'ci_real_sqlite_consumed': True, 'ci_challenges_consumed': challenges,
             'ci_status_signer_off_appliance': False,

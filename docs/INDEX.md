@@ -18,6 +18,7 @@
 
 ## Level 2 — current full v0.6.2 release and dual-stack capabilities
 
+- [Stage 3.45 _135 native original-FD9 witness CONSUME-to-STATUS restart/outage](verification/evidence/2026-11-05-v0.6.2_135-stage3-native-witness-restart-under-original-fd9.md) — two new real disposable guest cases; no owner-enrolled off-host monotonic authority.
 - [Stage 3.44 _134 CI witness restart retaining committed SQLite one-use state](verification/evidence/2026-11-05-v0.6.2_134-stage3-ci-witness-sqlite-restart.md) — fresh signed STATUS after process restart is test-local proof; native mid-operation restart and independent owner trust remain unqualified.
 - [Stage 3.43 _133 actual mTLS SQLite RESERVE→CONSUME→signed STATUS under original FD9](verification/evidence/2026-11-05-v0.6.2_133-stage3-live-mtls-sqlite-under-original-fd9.md) — distinct-process test-loopback witness, not externally trusted one-use owner authorization.
 
