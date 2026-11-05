@@ -64,15 +64,17 @@ def config_without_revision(raw):
     return ET.tostring(root, encoding='utf-8')
 
 
-def native_model_extra_fields(raw):
-    # The native snapshot covers every general/strategy/voice/hostlist field.
-    # Retain independent proof for any other Zapret XML subtree and attrs.
+def native_unmanaged_xml(raw):
+    # Full installed getNodes() equality below checks ALL FIVE native model
+    # groups, including Strategy Lab. Independently preserve any unknown
+    # plugin XML fields outside those groups; the MVC version is metadata.
     root = ET.fromstring(raw)
     models = root.findall('./OPNsense/Zapret')
     need(len(models) == 1, 'NATIVE_ZAPRET_XML_MODEL_AMBIGUOUS')
     model = models[0]
+    model.attrib.pop('version', None)
     for child in list(model):
-        if child.tag in ('general', 'strategy', 'voice', 'hostlist'):
+        if child.tag in ('general', 'strategy', 'voice', 'hostlist', 'strategylab'):
             model.remove(child)
     def normalize(node):
         if not (node.text or '').strip():
@@ -82,6 +84,11 @@ def native_model_extra_fields(raw):
             normalize(member)
     normalize(model)
     return ET.tostring(model, encoding='utf-8')
+
+
+def attest_complete_native_model(before, after):
+    need(isinstance(before, dict) and isinstance(after, dict) and
+         before == after, 'GUI_RESTORE_ALL_NATIVE_MODEL_FIELDS_CHANGED')
 
 
 def module(name):
@@ -179,8 +186,22 @@ def test_contracts():
     extra_original = b'<opnsense><OPNsense><Zapret version="2"><voice>1</voice><strategylab><enablequic>0</enablequic></strategylab></Zapret></OPNsense></opnsense>'
     extra_voice = extra_original.replace(b'<voice>1', b'<voice>0')
     extra_changed = extra_original.replace(b'<enablequic>0', b'<enablequic>1')
-    assert native_model_extra_fields(extra_original) == native_model_extra_fields(extra_voice)
-    assert native_model_extra_fields(extra_original) != native_model_extra_fields(extra_changed)
+    assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(extra_voice)
+    assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(extra_changed)
+    extra_version = extra_original.replace(b'version="2"', b'version="3"')
+    assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(extra_version)
+    unknown_original = extra_original.replace(b'</Zapret>', b'<unknown><mode>off</mode></unknown></Zapret>')
+    unknown_changed = unknown_original.replace(b'<mode>off', b'<mode>on')
+    assert native_unmanaged_xml(unknown_original) != native_unmanaged_xml(unknown_changed)
+    attest_complete_native_model({'strategylab': {'enablequic': '0'}},
+                                 {'strategylab': {'enablequic': '0'}})
+    try:
+        attest_complete_native_model({'strategylab': {'enablequic': '0'}},
+                                     {'strategylab': {'enablequic': '1'}})
+    except Refusal:
+        pass
+    else:
+        raise AssertionError('Strategy Lab mutation escaped native-model guard')
     assert exact_disposable_target('192.0.2.42')
     assert exact_disposable_target('192.0.2.42/32')
     assert not exact_disposable_target('192.0.2.40/29')
@@ -322,12 +343,13 @@ def execute():
     final_load = http.api('GET', '/api/zapret/voice/load')
     need(final_load.get('snapshot') == before['snapshot'],
          'GUI_RESTORE_MODEL_SNAPSHOT_DIFFERS_FROM_BASELINE')
-    need(native_model_extra_fields(active.CONFIG.read_bytes()) ==
-         native_model_extra_fields(original),
-         'GUI_RESTORE_NATIVE_EXTRA_MODEL_FIELDS_CHANGED')
+    attest_complete_native_model(before['zapret'], final_load.get('zapret'))
+    need(native_unmanaged_xml(active.CONFIG.read_bytes()) ==
+         native_unmanaged_xml(original),
+         'GUI_RESTORE_UNKNOWN_ZAPRET_XML_FIELDS_CHANGED')
     # OPNsense's native model serialization may rewrite XML representation
-    # while preserving every model field (proven by the authoritative
-    # snapshot), all extra plugin groups and every unrelated Config field.
+    # while preserving all five model groups (full getNodes equality),
+    # unknown plugin fields and every unrelated Config field.
     # Record this difference openly; it is not byte-for-byte restoration.
     raw_same_except_revision = (
         config_without_revision(active.CONFIG.read_bytes()) ==
@@ -337,7 +359,8 @@ def execute():
             'stale_snapshot_refused_before_mutation': True,
             'gui_apply_and_restore_committed_under_shared_fd9': True,
             'native_voice_model_snapshot_restored': True,
-            'extra_plugin_xml_fields_unchanged': True,
+            'all_native_model_fields_restored': True,
+            'unknown_plugin_xml_fields_unchanged': True,
             'full_xml_same_except_revision': raw_same_except_revision,
             'same_shared_engine_owner': True,
             'loopback_only': True, 'browser_button_click_tested': False,
