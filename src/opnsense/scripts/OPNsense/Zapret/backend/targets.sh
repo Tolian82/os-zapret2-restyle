@@ -104,7 +104,9 @@ targets_normalize_hostlist()
 
 targets_python_bin()
 {
-    local python_bin="${PYTHON_RUNTIME:-${BACKEND_DIR%/backend}/python_runtime.sh}"
+    local compiler_dir="${BACKEND_DIR:-${BACKEND:-}}"
+    [ -n "${compiler_dir}" ] || { common_error "managed targets backend directory is missing"; return 1; }
+    local python_bin="${PYTHON_RUNTIME:-${compiler_dir%/backend}/python_runtime.sh}"
     if [ ! -x "${python_bin}" ]; then
         common_error "qualified Python runtime is required for managed IPv4/IPv6 targets"
         return 1

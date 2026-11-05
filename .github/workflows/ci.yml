@@ -1113,6 +1113,9 @@ jobs:
           usesh: true
           prepare: pkg install -y python313 git luajit pkgconf jq curl
           run: |
+            # The isolated FreeBSD test runs source, not an installed OPNsense package.
+            # Bind the canonical source policy explicitly; never use this fallback on appliance.
+            export ZAPRET_PYTHON_POLICY="$PWD/compatibility.json"
             freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
             /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-process-continuity.py scripts/test-freebsd15-native-tls-process-identity.py
             process_witness_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_PROCESS_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-process-continuity.py 2>&1)" || {
