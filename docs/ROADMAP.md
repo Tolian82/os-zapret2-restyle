@@ -26,4 +26,4 @@
 
 **Актуальная точка входа:** [START_HERE](START_HERE.md) · [PROJECT_STATE](PROJECT_STATE.md) · [план по файлам](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) · [история](history/current/v0.6.x.md). Новые Stage 3.xx для гипотетических угроз не создавать.
 
-**Текущая `_147`:** проверка реального аутентифицированного HTTP Voice Apply через существующую страницу/API на одноразовой OPNsense; токен, единый FD9/Config/IPFW и возврат конфигурации. Browser click, Voice media и финальный SHA — отдельные границы.
+**Текущая `_147`:** настоящий аутентифицированный HTTPS Voice Apply через существующую страницу/API на одноразовой OPNsense прошёл [guest run #42082770896](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42082770896); токен, единый FD9/Config/IPFW и восстановление всех native настроек проверены. Полная exact-head CI/слияние обязательны. Browser click, Voice media и финальный SHA — отдельные границы.
