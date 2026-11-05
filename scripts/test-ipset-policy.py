@@ -3,13 +3,19 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
 
-MODULE = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py"
+SOURCE = Path(__file__).resolve().parent.parent / "src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py"
+INSTALLED = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py")
+USE_INSTALLED = os.environ.get("ZAPRET2_STAGE5_INSTALLED_EXCLUDE") == "1"
+if USE_INSTALLED and os.environ.get("GITHUB_ACTIONS") != "true":
+    raise SystemExit("REFUSED: installed IPSET regressions require disposable GitHub CI")
+MODULE = INSTALLED if USE_INSTALLED else SOURCE
 spec = importlib.util.spec_from_file_location("ipset_policy", MODULE)
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)

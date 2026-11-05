@@ -74,6 +74,8 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "stale_snapshot_refused",
          "native_config_model_restored",
          "unknown_plugin_xml_preserved",
+         "installed_exclude_backend_suites",
+         "installed_exclude_preserves_native_owner",
          "loopback_only",
          "copyback_sha_required")) and
          data.get("published") is False and
@@ -137,6 +139,8 @@ def cross_receipt_binding(clean, live):
          live.get("exact_old_running_to_native_pkg_replacement") is True and
          live.get("pkgdb_and_all_installed_file_bytes_verified") is True and
          live.get("authenticated_https_voice_apply_and_restore") is True and
+         live.get("installed_exclude_backend_suites") is True and
+         live.get("installed_exclude_preserves_native_owner") is True and
          clean.get("owner_appliance_modified") is False and
          live.get("owner_device_changed") is False,
          "STAGE5_CROSS_BOTH_INSTALLATION_SCOPES_NOT_PROVEN")
@@ -231,6 +235,17 @@ def execute(old_archive, *, prebuilt_clean=False):
          https_report.get("unknown_plugin_xml_fields_unchanged") is True and
          https_report.get("loopback_only") is True,
          "STAGE5_RUNNING_REAL_HTTPS_VOICE_RECEIPT_REFUSED")
+    exclude = load("stage5-installed-exclude.py")
+    exclude_report = exclude.execute()
+    need(exclude_report.get("status") == "PASS_STAGE5_INSTALLED_EXCLUDE_OFFLINE_BACKEND" and
+         exclude_report.get("installed_global_exclusions_cli") is True and
+         exclude_report.get("installed_dualstack_ipset_policy") is True and
+         exclude_report.get("invalid_apply_argv_and_witness_unchanged") is True and
+         exclude_report.get("native_config_fd9_and_ipfw_unchanged") is True and
+         exclude_report.get("real_wan_or_ipv6_packets_tested") is False,
+         "STAGE5_RUNNING_INSTALLED_EXCLUDE_BACKEND_UNQUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXCLUDE")
     need(sha256(PACKAGE) == archive_sha, "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_VOICE")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
@@ -269,6 +284,8 @@ def execute(old_archive, *, prebuilt_clean=False):
         "stale_snapshot_refused": True,
         "native_config_model_restored": True,
         "unknown_plugin_xml_preserved": True,
+        "installed_exclude_backend_suites": True,
+        "installed_exclude_preserves_native_owner": True,
         "loopback_only": True, "copyback_sha_required": True,
         "published": False, "owner_device_changed": False,
         "all_feature_suites_qualified": False,
@@ -342,7 +359,9 @@ def self_test():
                     "stop_start_reuses_sealed_journal",
                     "authenticated_https_voice_apply_and_restore",
                     "stale_snapshot_refused", "native_config_model_restored",
-                    "unknown_plugin_xml_preserved", "loopback_only",
+                    "unknown_plugin_xml_preserved",
+                    "installed_exclude_backend_suites",
+                    "installed_exclude_preserves_native_owner", "loopback_only",
                     "copyback_sha_required")
             for key in keys:
                 fixture[key] = True
@@ -389,6 +408,7 @@ def self_test():
                 ("shared_voice_original_fd9", False),
                 ("authenticated_https_voice_apply_and_restore", False),
                 ("unknown_plugin_xml_preserved", False),
+                ("installed_exclude_backend_suites", False),
             ):
                 changed = dict(fixture)
                 changed[key] = value
