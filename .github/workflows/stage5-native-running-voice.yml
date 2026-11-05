@@ -12,6 +12,9 @@ on:
       - scripts/stage2-opnsense-real-native-voice-http.py
       - scripts/stage5-native-running-voice-artifact.py
       - scripts/stage5-installed-exclude.py
+      - scripts/stage5-installed-lab-resources.py
+      - scripts/test-extra-resources-preflight.py
+      - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
       - .github/workflows/stage5-native-running-voice.yml
@@ -26,6 +29,9 @@ on:
       - scripts/stage2-opnsense-real-native-voice-http.py
       - scripts/stage5-native-running-voice-artifact.py
       - scripts/stage5-installed-exclude.py
+      - scripts/stage5-installed-lab-resources.py
+      - scripts/test-extra-resources-preflight.py
+      - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
       - .github/workflows/stage5-native-running-voice.yml
@@ -49,9 +55,10 @@ jobs:
       - name: Offline exact-source / package SHA and live-witness negatives
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage2-opnsense-real-native-voice-http.py scripts/stage5-installed-exclude.py
+          python3.13 -m py_compile scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage2-opnsense-real-native-voice-http.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
           python3.13 scripts/stage5-installed-exclude.py --self-test
+          python3.13 scripts/stage5-installed-lab-resources.py --self-test
           python3.13 scripts/stage2-opnsense-real-native-shared-voice.py --self-test
           python3.13 scripts/stage2-opnsense-real-native-voice-http.py --self-test
       - name: Real old RUNNING to one native pkg, original FD9/Voice and HTTPS Apply
@@ -70,7 +77,7 @@ jobs:
             pkg install -y git ca_root_nss jq gmake pkgconf luajit lua54
             /usr/local/bin/pkgconf --exists lua-5.4
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
-            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_COMMON_VOICE=1 ZAPRET2_STAGE2_REAL_VOICE_HTTP=1 ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT=1 ZAPRET2_STAGE5_INSTALLED_EXCLUDE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-running-voice-artifact.py run /tmp/os-zapret2-restyle-0.6.2_1.pkg
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_COMMON_VOICE=1 ZAPRET2_STAGE2_REAL_VOICE_HTTP=1 ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT=1 ZAPRET2_STAGE5_INSTALLED_EXCLUDE=1 ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-running-voice-artifact.py run /tmp/os-zapret2-restyle-0.6.2_1.pkg
       - name: Validate byte-identical installed archive and receipt after VM copyback
         run: |
           set -eu
