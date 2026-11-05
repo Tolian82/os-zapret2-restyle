@@ -914,6 +914,9 @@ jobs:
       - name: Test setup release selection
         run: sh scripts/test-setup-release-selection.sh
 
+      - name: Test native OPNsense dependency ownership and no stock repo mutation
+        run: sh scripts/test-setup-native-dependencies.sh
+
       - name: Test extra-resources read-only preflight
         run: python3.13 scripts/test-extra-resources-preflight.py
 
