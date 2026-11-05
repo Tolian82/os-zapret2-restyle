@@ -98,7 +98,24 @@ def preflight():
          os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1",
          "EXPLICIT_DISPOSABLE_FIRMWARE_REMOVE_OPTIN_REQUIRED")
-    native.gate()
+    # The native.gate() predicate is intentionally restricted to the EMPTY
+    # pre-install guest. This test runs AFTER actual pkg add, so reuse its
+    # qualified target and exact git-head checks, plus the real installed
+    # package identity, without weakening the clean-install gate.
+    need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
+         os.uname().machine == "amd64",
+         "POSTINSTALL_REMOVE_NOT_FREEBSD_AMD64_ROOT")
+    need(clean.required(["opnsense-version", "-a"], "OPNSENSE_VERSION_UNAVAILABLE")
+         == "26.7", "POSTINSTALL_REMOVE_WRONG_OPNSENSE_ABI")
+    need(clean.required(["pkg", "config", "ABI"], "PKG_ABI_UNAVAILABLE")
+         == "FreeBSD:15:amd64", "POSTINSTALL_REMOVE_WRONG_PKG_ABI")
+    need(clean.required(["sysctl", "-n", "kern.vm_guest"],
+                        "VM_IDENTITY_UNAVAILABLE").lower()
+         not in ("", "none", "unknown"),
+         "POSTINSTALL_REMOVE_REQUIRES_VIRTUAL_GUEST")
+    need(native.git_head() == os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA"),
+         "POSTINSTALL_REMOVE_EXACT_SOURCE_SHA_MISMATCH")
+    native.qualified_target()
     need(native.REVISION == revision_from_makefile(), "REVISION_NOT_CURRENT")
     installed = clean.run(["pkg", "info", "-e", NAME], timeout=20)
     need(installed.returncode == 0, "NATIVE_PACKAGE_NOT_INSTALLED")
