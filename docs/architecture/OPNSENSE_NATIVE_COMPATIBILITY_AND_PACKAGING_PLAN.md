@@ -60,7 +60,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 
 ## FOURTH task — normal native service and four lifecycle hooks
 
-**Accepted `_140`:** verified ordinary Strategies Stop/Status without Python under FD9, installed cold Status/Stop/Start-refusal PASS. **Current `_141` slice (source-only pending CI):** after real native clean install and packaged configctl, exercise real `pkg delete -y` with original installed four-hook bodies, verify package file/pkgdb removal and no restart markers, then OPNsense official `register.php remove` and retained Config. Do **not** run global `pkg autoremove`; do not claim active running-owner/UI click/boot acceptance. Shared journal, seal and IPFW adapter remain Python dependent.
+**Accepted `_140`:** verified ordinary Strategies Stop/Status without Python under FD9, installed cold Status/Stop/Start-refusal PASS. **Current `_141` slice (source-only pending CI):** after real native clean install and packaged configctl, exercise real `pkg delete -y` with original installed four-hook bodies, verify package file/pkgdb removal and no restart markers, then OPNsense official `register.php remove` and retained **nonempty** saved Zapret Config seeded only in disposable CI by the official PHP Config API. Do **not** run global `pkg autoremove`; do not claim active running-owner/UI click/boot acceptance. Shared journal, seal and IPFW adapter remain Python dependent.
 
 **Files:** `pkg/+PRE_INSTALL`, `pkg/+POST_INSTALL`, `pkg/+PRE_DEINSTALL`, `pkg/+POST_DEINSTALL`, `zapret_service.sh`, `actions_zapret.conf`, `zapret.inc` and rc.syshooks.
 

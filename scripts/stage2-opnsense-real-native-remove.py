@@ -34,6 +34,7 @@ VERSION = clean.VERSION
 OPTIN = "ZAPRET2_STAGE2_REAL_FIRMWARE_REMOVE"
 REGISTRATION = "/usr/local/opnsense/scripts/firmware/register.php"
 CONFIG = Path("/conf/config.xml")
+SAVED_CONFIG_SENTINEL = "native-removal-141-retained-by-opnsense"
 FILE_ROOT = Path("/usr/local")
 
 
@@ -81,7 +82,7 @@ def check_official_unregistration(before, after):
     need((original_saved is None) == (after_saved is None),
          "FIRMWARE_REMOVE_SAVED_CONFIG_PRESENCE_CHANGED")
     if original_saved is not None:
-        need(ET.tostring(original_saved) == ET.tostring(after_saved),
+        need(normalized(original_saved) == normalized(after_saved),
              "FIRMWARE_REMOVE_SAVED_CONFIG_MODIFIED")
     before_root.find("system/firmware/plugins").text = ",".join(after_names)
     need(normalized(before_root) == normalized(after_root),
@@ -91,6 +92,41 @@ def check_official_unregistration(before, after):
             "other_config_preserved_semantically": True,
             "saved_zapret_config_present": original_saved is not None,
             "saved_zapret_config_retained_when_present": True}
+
+
+def seed_saved_config_for_disposable_guest():
+    """Put nonempty saved Zapret settings in THIS guest via official Config API.
+
+    This is a CI fixture only and is never an installed hook or production
+    operation. Refuse rather than overwrite any existing Zapret configuration.
+    """
+    original = xml_root(CONFIG.read_bytes())
+    need(original.find("OPNsense/Zapret") is None,
+         "DISPOSABLE_GUEST_ZAPRET_CONFIG_ALREADY_PRESENT")
+    php = r"""
+require_once("config.inc");
+require_once("script/load_phalcon.php");
+$cfg = \OPNsense\Core\Config::getInstance()->object();
+if (!isset($cfg->OPNsense)) {
+    $cfg->addChild("OPNsense");
+}
+if (isset($cfg->OPNsense->Zapret)) {
+    exit(73);
+}
+$zapret = $cfg->OPNsense->addChild("Zapret");
+$zapret->addChild("enabled", "0");
+$zapret->addChild("nativeRemovalRetention", "native-removal-141-retained-by-opnsense");
+\OPNsense\Core\Config::getInstance()->save();
+"""
+    result = clean.run(["/usr/local/bin/php", "-r", php], timeout=30)
+    need(result.returncode == 0,
+         "DISPOSABLE_SAVED_CONFIG_SEED_FAILED:" + str(result.returncode) +
+         ":" + result.stderr[-260:])
+    saved = xml_root(CONFIG.read_bytes()).find("OPNsense/Zapret")
+    need(saved is not None and saved.findtext("enabled") == "0" and
+         saved.findtext("nativeRemovalRetention") == SAVED_CONFIG_SENTINEL,
+         "DISPOSABLE_SAVED_CONFIG_NOT_PERSISTED")
+    return True
 
 
 def preflight():
@@ -131,6 +167,7 @@ def preflight():
     clean.cold_status()
     need(CONFIG.is_file() and not CONFIG.is_symlink(),
          "FIRMWARE_REMOVE_CONFIG_NOT_TRUSTED")
+    seed_saved_config_for_disposable_guest()
     before = CONFIG.read_bytes()
     need(NAME in plugin_list(xml_root(before)),
          "PACKAGE_NOT_REGISTERED_IN_FIRMWARE")
@@ -174,6 +211,9 @@ def remove():
          ":" + register.stderr[-260:])
     after = CONFIG.read_bytes()
     retained = check_official_unregistration(before, after)
+    need(retained["saved_zapret_config_present"] and
+         retained["saved_zapret_config_retained_when_present"],
+         "NATIVE_REMOVAL_DID_NOT_PROVE_POPULATED_CONFIG_RETENTION")
     return {"schema": 1, "status": "PASS_REAL_NATIVE_PKG_DELETE_AND_FIRMWARE_REMOVE",
             "tested_exact_project_sha": os.environ["ZAPRET2_NATIVE_PROJECT_SHA"],
             "package": NAME + "-" + VERSION,
