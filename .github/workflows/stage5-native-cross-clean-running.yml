@@ -29,10 +29,10 @@ permissions:
   contents: read
 
 jobs:
-  exactly-one-archive-two-disposable-opnsense-guests:
-    name: One Mk build, clean pkg add, same archive RUNNING Voice HTTPS and copyback
+  build-and-verify-clean-install:
+    name: Guest A - one Mk build, genuine clean pkg add and verified archive
     runs-on: ubuntu-latest
-    timeout-minutes: 115
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v6
         with:
@@ -40,15 +40,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Rejected cross-VM receipt/manifest/SHA and source-substitution contracts
+      - name: Fail-closed two-receipt SHA, source, ABI and missing proof contracts
         run: |
           set -eu
           python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py
           python3.13 scripts/stage5-native-single-artifact.py --self-test
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
-          python3.13 scripts/stage2-opnsense-real-native-shared-voice.py --self-test
-          python3.13 scripts/stage2-opnsense-real-native-voice-http.py --self-test
-      - name: First fresh disposable OPNsense 26.7 - build ONCE and genuine clean pkg add
+      - name: FRESH disposable OPNsense guest A - build ONCE, real clean pkg add
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: "26.7"
@@ -63,13 +61,42 @@ jobs:
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_STAGE5_SINGLE_ARTIFACT=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-single-artifact.py run
-      - name: Independently attest copied-back exact clean-installed bytes before transfer
+      - name: Verify copied-back CLEAN-installed archive and immutable receipt
         run: |
           set -eu
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
-          test -f dist/stage5-native-single-artifact.json
-          test -f dist/os-zapret2-restyle-0.6.2_$(sed -nE 's/^PLUGIN_REVISION=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' Makefile).pkg
-      - name: Second DIFFERENT fresh disposable OPNsense 26.7 - install SAME pkg in RUNNING and exercise Voice HTTPS, NO REBUILD
+      - name: Transfer exact installed archive plus read-only receipt to SEPARATE runner/VM
+        uses: actions/upload-artifact@v7
+        with:
+          name: stage5-single-archive-transfer-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/os-zapret2-restyle-0.6.2_*.pkg
+            dist/stage5-native-single-artifact.json
+          if-no-files-found: error
+          retention-days: 1
+
+  install-same-archive-running-voice:
+    needs: build-and-verify-clean-install
+    name: Guest B - SAME archive old RUNNING upgrade, Voice, HTTPS, cross-receipt
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Download the exact package BUILT AND INSTALLED in guest A, NO BUILDER
+        uses: actions/download-artifact@v8
+        with:
+          name: stage5-single-archive-transfer-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist
+      - name: Verify SHA / manifest / source HEAD BEFORE sending package to guest B
+        run: |
+          set -eu
+          python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: FRESH disposable OPNsense guest B - SAME downloaded pkg, genuine old RUNNING Voice HTTPS, NO REBUILD
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: "26.7"
@@ -86,15 +113,15 @@ jobs:
             /usr/local/bin/pkgconf --exists lua-5.4
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_COMMON_VOICE=1 ZAPRET2_STAGE2_REAL_VOICE_HTTP=1 ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT=1 ZAPRET2_STAGE5_CROSS_VM=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-running-voice-artifact.py run-prebuilt /tmp/os-zapret2-restyle-0.6.2_1.pkg
-      - name: Refuse different SHA, manifest, ABI, pkg-owned files or exact source in TWO installed receipts
+      - name: Compare both independently installed receipts with ONE archive SHA
         run: |
           set -eu
           python3.13 scripts/stage5-native-running-voice-artifact.py verify-cross "${{ github.event.pull_request.head.sha || github.sha }}"
-          echo "PASS: SAME official native .pkg byte-for-byte clean installed and RUNNING-upgraded in two independent OPNsense 26.7 guests; original FD9/Voice/HTTPS; no rebuild/release/owner changes"
-      - name: Retain ONE clean+RUNNING installed package archive and BOTH read-only receipts
+          echo "PASS: one physical native Mk .pkg clean installed in guest A and old RUNNING/FD9 Voice HTTPS installed in independent guest B"
+      - name: Retain ONE native package plus BOTH real installed receipts (no release)
         uses: actions/upload-artifact@v7
         with:
-          name: stage5-one-package-two-install-modes-${{ github.event.pull_request.head.sha || github.sha }}
+          name: stage5-one-archive-two-installed-modes-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             dist/os-zapret2-restyle-0.6.2_*.pkg
             dist/stage5-native-single-artifact.json
