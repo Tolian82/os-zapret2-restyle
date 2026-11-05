@@ -113,7 +113,14 @@ def unknown_xml_diff_summary(before_raw, after_raw):
         elif before[path][0] != after[path][0]:
             kind = 'text'
         elif before[path][1] != after[path][1]:
-            kind = 'attributes'
+            previous_attrs = dict(before[path][1])
+            latest_attrs = dict(after[path][1])
+            names = sorted(key for key in previous_attrs.keys() | latest_attrs.keys()
+                           if previous_attrs.get(key) != latest_attrs.get(key))
+            # Names only, never Config attribute values.
+            safe_names = [key if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_-]{0,47}', key)
+                          else 'unclassified' for key in names[:6]]
+            kind = 'attributes(' + ','.join(safe_names) + ')'
         else:
             continue
         # An unknown XML tag might be user-selected. Output only ASCII tag
@@ -233,6 +240,9 @@ def test_contracts():
     assert native_unmanaged_xml(unknown_original) != native_unmanaged_xml(unknown_changed)
     assert 'unknown[0]/mode[0]:text' in unknown_xml_diff_summary(unknown_original, unknown_changed)
     assert unknown_xml_diff_summary(extra_original, extra_voice) == 'xml-representation-only'
+    attrs_before = extra_original.replace(b'<Zapret version="2">', b'<Zapret version="2" fixed="1">')
+    attrs_after = attrs_before.replace(b'fixed="1"', b'fixed="2"')
+    assert unknown_xml_diff_summary(attrs_before, attrs_after) == 'Zapret:attributes(fixed)'
     attest_complete_native_model({'strategylab': {'enablequic': '0'}},
                                  {'strategylab': {'enablequic': '0'}})
     try:
