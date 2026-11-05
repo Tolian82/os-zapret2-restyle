@@ -141,6 +141,15 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
              not late_grant and not late_archive and not post_final and
              not late_journal_fault,
              'CI_LIVE_WITNESS_NOT_DISPOSABLE_BEFORE_NATIVE_PKG')
+    live_restart=os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_RESTART','')
+    need(live_restart in ('','resume','outage'),
+         'CI_NATIVE_LIVE_RESTART_MODE_INVALID')
+    if live_restart:
+        need(live_witness and stdin_mode and
+             os.environ.get('ZAPRET2_STAGE3_NATIVE_LIVE_RESTART_CI')=='1' and
+             os.environ.get('GITHUB_ACTIONS')=='true' and
+             os.environ.get('ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK')=='1',
+             'CI_NATIVE_LIVE_RESTART_NOT_DISPOSABLE_OR_UNTRUSTED')
     stdin_path_swap=os.environ.get('ZAPRET2_STAGE3_NATIVE_STDIN_PATH_SWAP')=='1'
     if stdin_path_swap:
         need(stdin_mode and
@@ -272,6 +281,25 @@ def native_transaction(archive,selected_sha,revision,expected_inode,
                   if late_archive else
                   b'RESUME_TEST_ONLY_AFTER_LATE_SIGNED_BYTE_TAMPER'),
                  'LATE_FINAL_GRANT_OR_ARCHIVE_BARRIER_NOT_RELEASED')
+            locked.check_fd9()
+        if live_restart:
+            # The real separately running SQLite witness has already COMMITTED
+            # RESERVE and CONSUME, verified with mTLS and the status RSA role.
+            # Pause precisely BEFORE the next fresh signed STATUS or pkg.
+            base=load('stage3-native-configd-detached-fd9.py')
+            locked.check_fd9()
+            base.create_owned(handoff.PREPKG_READY,json.dumps({
+                'sha':os.environ['ZAPRET2_NATIVE_PROJECT_SHA'],
+                'pid':os.getpid(),'original_fd9_inode':expected_inode,
+                'nonce_sha256':hashlib.sha256(ticket.encode()).hexdigest(),
+                'ci_live_consumed_before_status':True,
+                'native_mutating_pkg_invoked':False
+            },sort_keys=True).encode())
+            need(base.wait_file(handoff.PREPKG_RESUME,85)==
+                 (b'RESUME_CI_AFTER_DURABLE_WITNESS_PROCESS_RESTART'
+                  if live_restart=='resume' else
+                  b'RESUME_CI_WITH_WITNESS_OFFLINE_EXPECT_NO_PKG'),
+                 'CI_NATIVE_LIVE_RESTART_BARRIER_NOT_AUTHORIZED')
             locked.check_fd9()
         # Re-verify the very same signed scope and real archive bytes under
         # continuously owned historical FD9 immediately before pkg dispatch.
