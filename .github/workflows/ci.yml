@@ -936,7 +936,7 @@ jobs:
       - name: Test real native Voice HTTP form and token negative contracts
         run: python3.13 scripts/stage2-opnsense-real-native-voice-http.py --self-test
 
-      - name: Test one installed RUNNING Voice archive SHA binding and tamper refusal
+      - name: Test identical archive SHA across two installed modes and tamper-refusal contracts
         run: python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
 
       - name: Test native firmware uninstall registration and config retention
