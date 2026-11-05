@@ -5,6 +5,8 @@
 **Baseline:** `main` `a20c310aa181a8ed6b0b586c07b87d98d94cc2ec` / `v0.6.2_135`; documentation-only scope reset is `v0.6.2_136`. Published stable `0.6.2_1.pkg` and owner device unchanged.
 **Document version:** v1.5 is editorial, independent of plugin/package versions. v1.4 and Stage 3.xx experiments are historical evidence, **not** current release gates.
 
+**Stage 0 audit status: CLOSED** — historical source/target audit completed; not a new implementation task. **Stage 1 status: SOURCE/NATIVE-CI ACCEPTED** — the existing compatibility policy remains valid; this does not mean the final native installed package is accepted.
+
 ## Working rule — good and fast, not perfection at any cost
 
 Inspect real current entrypoints and tests before writing. Fix confirmed failures against this TЗ by the smallest complete change. Reuse the native package builder and accepted functional tests. Remove checks for cancelled requirements instead of rebuilding their implementation. No new independent risk/research project without owner approval.
