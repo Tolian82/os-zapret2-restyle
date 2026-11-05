@@ -67,12 +67,14 @@ def config_without_revision(raw):
 def native_unmanaged_xml(raw):
     # Full installed getNodes() equality below checks ALL FIVE native model
     # groups, including Strategy Lab. Independently preserve any unknown
-    # plugin XML fields outside those groups; the MVC version is metadata.
+    # plugin XML fields outside those groups. Native MVC metadata attributes
+    # version and persisted_at can change during a successful Config::save.
     root = ET.fromstring(raw)
     models = root.findall('./OPNsense/Zapret')
     need(len(models) == 1, 'NATIVE_ZAPRET_XML_MODEL_AMBIGUOUS')
     model = models[0]
     model.attrib.pop('version', None)
+    model.attrib.pop('persisted_at', None)
     for child in list(model):
         if child.tag in ('general', 'strategy', 'voice', 'hostlist', 'strategylab'):
             model.remove(child)
@@ -235,6 +237,10 @@ def test_contracts():
     assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(extra_changed)
     extra_version = extra_original.replace(b'version="2"', b'version="3"')
     assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(extra_version)
+    persisted_before = extra_original.replace(b'<Zapret version="2">', b'<Zapret version="2" persisted_at="101">')
+    persisted_after = persisted_before.replace(b'persisted_at="101"', b'persisted_at="202"')
+    assert native_unmanaged_xml(persisted_before) == native_unmanaged_xml(persisted_after)
+    assert native_unmanaged_xml(extra_original) == native_unmanaged_xml(persisted_after)
     unknown_original = extra_original.replace(b'</Zapret>', b'<unknown><mode>off</mode></unknown></Zapret>')
     unknown_changed = unknown_original.replace(b'<mode>off', b'<mode>on')
     assert native_unmanaged_xml(unknown_original) != native_unmanaged_xml(unknown_changed)
