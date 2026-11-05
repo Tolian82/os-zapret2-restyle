@@ -73,7 +73,8 @@ def preflight():
          not in ('', 'none', 'unknown'), 'NOT_DISPOSABLE_GUEST')
     source_sha = os.environ.get('ZAPRET2_NATIVE_PROJECT_SHA', '')
     need(bool(re.fullmatch(r'[0-9a-f]{40}', source_sha)) and
-         stdout(['git', 'rev-parse', 'HEAD'], 'SOURCE_SHA_UNAVAILABLE') == source_sha,
+         stdout(['git', '-c', 'safe.directory=' + str(ROOT), '-C', str(ROOT),
+                 'rev-parse', 'HEAD'], 'SOURCE_SHA_UNAVAILABLE') == source_sha,
          'EXACT_PROJECT_SOURCE_SHA_MISMATCH')
     need(stdout(['pkg', 'query', '%v', PACKAGE], 'INSTALLED_PKG_UNAVAILABLE') ==
          installed_revision(), 'INSTALLED_PKG_REVISION_MISMATCH')
