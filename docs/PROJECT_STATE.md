@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
-Текущий этап — **`v0.6.2_140`**; `VERSION=0.6.2`, `PLUGIN_REVISION=140`, package candidate: `os-zapret2-restyle-0.6.2_139.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
+Текущий этап — **`v0.6.2_140`**; `VERSION=0.6.2`, `PLUGIN_REVISION=140`, package candidate: `os-zapret2-restyle-0.6.2_140.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
