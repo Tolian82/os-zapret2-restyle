@@ -46,6 +46,24 @@ def exact_disposable_target(value):
         return False
 
 
+def config_without_revision(raw):
+    # OPNsense Config::save legitimately advances root revision metadata on
+    # each successful GUI Apply; require every other XML value to survive.
+    root = ET.fromstring(raw)
+    need(root.tag == 'opnsense' and len(root.findall('revision')) <= 1,
+         'INVALID_NATIVE_CONFIG_REVISION_SHAPE')
+    for revision in root.findall('revision'):
+        root.remove(revision)
+    def normalize(node):
+        if not (node.text or '').strip():
+            node.text = None
+        node.tail = None
+        for child in node:
+            normalize(child)
+    normalize(root)
+    return ET.tostring(root, encoding='utf-8')
+
+
 def module(name):
     spec = importlib.util.spec_from_file_location(name.replace('-', '_').replace('.', '_'), HERE / name)
     obj = importlib.util.module_from_spec(spec)
@@ -133,6 +151,11 @@ def test_contracts():
         pass
     else:
         raise AssertionError('foreign IPSET permitted')
+    baseline_xml = b'<opnsense><revision>1</revision><OPNsense><Zapret><voice>1</voice></Zapret></OPNsense></opnsense>'
+    same_xml = b'<opnsense><revision>2</revision><OPNsense><Zapret><voice>1</voice></Zapret></OPNsense></opnsense>'
+    drift_xml = same_xml.replace(b'<voice>1', b'<voice>0')
+    assert config_without_revision(baseline_xml) == config_without_revision(same_xml)
+    assert config_without_revision(baseline_xml) != config_without_revision(drift_xml)
     assert exact_disposable_target('192.0.2.42')
     assert exact_disposable_target('192.0.2.42/32')
     assert not exact_disposable_target('192.0.2.40/29')
@@ -269,13 +292,14 @@ def execute():
     assert_saved_only_voice(active, boot, altered, expected_port='3478')
     final = common.witness(active, engine_sha, running=True)
     need(final['id'] != current['id'] and final['pid'] != current['pid'] and
-         final['rules'] == baseline['rules'] and active.CONFIG.read_bytes() == original,
+         final['rules'] == baseline['rules'] and
+         config_without_revision(active.CONFIG.read_bytes()) == config_without_revision(original),
          'GUI_RESTORE_DID_NOT_RECOVER_EXACT_ORIGINAL_OWNER_CONFIG')
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_AUTHENTICATED_VOICE_HTTP_APPLY',
             'installed_web_page_loaded': True, 'authenticated_native_http_api': True,
             'stale_snapshot_refused_before_mutation': True,
             'gui_apply_and_restore_committed_under_shared_fd9': True,
-            'original_config_bytes_restored': True, 'same_shared_engine_owner': True,
+            'original_config_semantics_restored_except_revision': True, 'same_shared_engine_owner': True,
             'loopback_only': True, 'browser_button_click_tested': False,
             'voice_media_tested': False, 'owner_appliance_modified': False}
 
