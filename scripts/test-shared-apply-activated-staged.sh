@@ -4,6 +4,7 @@ set -eu
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-activated.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
+PYTHON_RUNTIME="${PYTHON_RUNTIME:-/nonexistent/isolated-python-runtime-fixture}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_recover_activated_cold_service()$/,/^}$/p' "$SOURCE" > "$ROOT/recover.sh"
 sh -n "$ROOT/recover.sh" || fail "production recovery syntax"
