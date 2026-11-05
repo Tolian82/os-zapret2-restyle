@@ -93,13 +93,28 @@ def test_contracts():
             pass
         else:
             raise AssertionError('foreign/nonterminal common owner accepted')
-    print('PASS: native shared Voice loopback scope and journal negative contracts')
+    # Regression: a failed installed PHP -r command must never disclose its
+    # source code or a future user field through public CI exception text.
+    class FailingCommand:
+        def cmd(self, args, timeout):
+            from types import SimpleNamespace
+            return SimpleNamespace(returncode=69, stdout='', stderr='secret')
+    try:
+        invoke(FailingCommand(), '/usr/local/bin/php', '-r',
+               'SECRET_PRIVATE_PHP_PROGRAM')
+    except Refusal as error:
+        assert str(error) == 'INSTALLED_ACTION_REFUSED:php:rc=69'
+    else:
+        raise AssertionError('private PHP source leaked or action accepted')
+    print('PASS: native shared Voice loopback/journal/error-redaction contracts')
 
 
 def invoke(active, *args, timeout=300):
     response = active.cmd(list(args), timeout=timeout)
+    # Arguments can contain a complete private PHP program or user payload.
+    # Report only the fixed executable name and exit code, never argv contents.
     need(response.returncode == 0, 'INSTALLED_ACTION_REFUSED:' +
-         str(args[-1]) + ':rc=' + str(response.returncode))
+         Path(str(args[0])).name + ':rc=' + str(response.returncode))
     return response.stdout
 
 
@@ -124,8 +139,11 @@ try {
     $nodes['hostlist']['telegramips'] = '192.0.2.42/32';
     $nodes['voice']['telegram']['args'] = "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
     $model->setNodes($nodes);
-    if (count($model->performValidation(false)) !== 0 ||
-        !$model->serializeToConfig(false, true)) {
+    // The isolated lo0 test interface is not an end-user selectable WAN.
+    // Match the accepted _145 native synthetic MVC canonicalization: the
+    // installed serializer runs, but UI InterfaceField validation is not a
+    // requirement for the deliberately isolated testing fixture.
+    if (!$model->serializeToConfig(false, true)) {
         throw new \RuntimeException('Fixture model validation refused');
     }
     $config->save(['description'=>'Disposable scoped Voice OFF fixture']);
