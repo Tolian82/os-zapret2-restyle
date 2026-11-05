@@ -3,7 +3,7 @@
 **Status:** owner-approved native integration scope reset, 5 November 2026. The official Mk builder exists; final package installation, Python, dependencies and service lifecycle remain open.
 **Approval:** 5 November 2026. External pkg approval and additional IPFW/PF mechanisms are cancelled.
 **Project:** `Tolian82/os-zapret2-restyle`.
-**Next implementation deliverable:** remove cancelled authorization experiments and reconcile active technical documentation; finish the existing native builder, dependencies/Python, service/hooks and final installed acceptance. No appliance mutation/publication authorized.
+**Implementation boundary:** `_137` removes the cancelled authorization experiments and reconciles active technical documentation. Next: finish the existing native builder, dependencies/Python, service/hooks and final installed acceptance. No appliance mutation/publication authorized.
 
 This document supersedes v1.4 in place. Previous requirements remain only in Git history and are not active product gates.
 

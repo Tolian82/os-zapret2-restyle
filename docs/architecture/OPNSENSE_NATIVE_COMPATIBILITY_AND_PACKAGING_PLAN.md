@@ -17,12 +17,12 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 - `scripts/build-pkg.sh` (19 lines) delegates to `scripts/native-opnsense-package.py`. This is **already written** and has native CI coverage; complete it rather than start a second package engine.
 - `compatibility.json`, the `zapret` service, GUI, Strategies, Voice, Exclude, Lab and Extra Resources are present.
 - `setup.sh` still enables a stock FreeBSD repository and installs some system dependencies outside the target OPNsense `pkg` graph. Runtime and hooks still contain hard-coded `python3.13`.
-- Experimental `backend/native_pkg_{candidate,handoff,managed,old_owner}.py`, `scripts/native-prepkg-standalone.py`, `scripts/stage3-prepkg-*`, external-approval/FD9 test programs and workflows remain to be deleted.
+- The cancelled experimental `backend/native_pkg_*`, standalone pre-pkg, Stage 3 external approval/FD9 tools/tests and workflows were removed in source revision `_137`. Historical evidence remains historical; source/native CI outcomes require separate verification.
 - Unmerged branch `work/v0.6.2_136-offguest-host-checkpoint-ci` is abandoned. **Do not merge or develop it.**
 
-## FIRST executable task after the docs-only _136 — remove obsolete authorization code
+## FIRST work package — obsolete authorization cleanup (_137 source candidate)
 
-**Branch:** start a new `_137` task from verified post-doc `main`. Do not reuse the abandoned experimental `_136` branch.
+**Branch:** `work/v0.6.2_137-drop-cancelled-pkg-approval` from verified post-doc main `e883af146d375bcefb8243c1dd10b53355d0d4d8`; source changes must pass exact-head CI before the exit is accepted. Do not reuse the abandoned `_136` branch.
 
 1. Check actual callers of the four `src/opnsense/scripts/OPNsense/Zapret/backend/native_pkg_*.py` modules. Remove them if only used by the cancelled `pkg` inspection/admission experiment. Do not alter ordinary `dvtws2` runtime/GUI/Strategy Lab/Voice behavior.
 2. Remove `scripts/native-prepkg-standalone.py` and cancelled `scripts/stage3-prepkg-*`, their `test-*` and related approval-only `stage3-native-configd-*`/witness tools. Check imports/callers before deletion, without conducting a new audit campaign.

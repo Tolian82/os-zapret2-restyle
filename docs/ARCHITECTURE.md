@@ -8,7 +8,7 @@ The owner approved one shared model, full-runtime generator and Apply/lifecycle 
 
 [ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) требуют одного нативного пакета OPNsense через `Mk/plugins.mk`, штатных зависимостей `pkg`, квалифицированного Python и управления `configd`/rc/четырьмя hooks. Существующие `scripts/build-pkg.sh` и `scripts/native-opnsense-package.py` являются базой, не объектами повторного переписывания.
 
-**Отменённая архитектура:** отдельный сервер/SQLite-свидетель/подписанные разрешения, root-`pkg` interceptor, самостоятельный шлюз обновления, новые исследования IPFW/PF. Связанные файлы экспериментов остаются в исходниках лишь до первого cleanup PR, не являются производственным runtime или релизным барьером.
+**Отменённая архитектура:** отдельный сервер/SQLite-свидетель/подписанные разрешения, root-`pkg` interceptor, самостоятельный шлюз обновления, новые исследования IPFW/PF. Связанные экспериментальные pkg-approval файлы удалены в исходном кандидате `_137`; они не являются производственным runtime или релизным барьером. Старые свидетельства остаются историей, а не текущим контрактом.
 
 **Номера правил IPFW (не порты):** основной Zapret2/Strategies `19000–19010`; Strategy Lab `19100–19131`. Новые проверки чужих правил, динамический allocator, мониторинг shaper flush и механизм восстановления не разрабатываются. Существующая холодная загрузка IPFW и `pfctl -d; pfctl -e` сохраняются без изменений. OPNsense-only `sync_fw_hooks.py`/ `pfilctl` не вводятся; перенос на pfSense — будущая отдельная задача.
 
