@@ -15,7 +15,7 @@ def _qualified_python():
         # The source-only test checkout has no installed package. This relative
         # path cannot resolve inside the installed OPNsense package layout.
         if not policy_file.is_file():
-            candidate = Path(__file__).resolve().parents[5] / "compatibility.json"
+            candidate = Path(__file__).resolve().parents[6] / "compatibility.json"
             if candidate.is_file():
                 policy_file = candidate
 
