@@ -15,13 +15,12 @@ LOCK_FILE="${RUN_DIR}/setup.lock"
 RELEASE_LOCK_FILE="${RELEASE_LOCK_FILE:-${RUN_DIR}/releases.lock}"
 CONFIGCTL="/usr/local/sbin/configctl"
 SERVICE_SCRIPT="/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-FREEBSD_REPO_OVERRIDE="/usr/local/etc/pkg/repos/FreeBSD.conf"
-FREEBSD_REPO_BACKUP="${STATE_DIR}/FreeBSD.conf.backup"
+FREEBSD_REPO_OVERRIDE="${FREEBSD_REPO_OVERRIDE:-/usr/local/etc/pkg/repos/FreeBSD.conf}"
+FREEBSD_REPO_BACKUP="${FREEBSD_REPO_BACKUP:-${STATE_DIR}/FreeBSD.conf.backup}"
 FETCH_BIN="${FETCH_BIN:-/usr/bin/fetch}"
 PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 FIND_BIN="${FIND_BIN:-/usr/bin/find}"
-ENABLED_FREEBSD_REPO=0
 EXTRA_GUARD="${EXTRA_GUARD:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/bin/python3.13}"
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
@@ -59,22 +58,10 @@ status_write()
     printf '%s\n' "$1" > "${SETUP_STATUS}"
 }
 
-restore_freebsd_repo()
-{
-    if [ "${ENABLED_FREEBSD_REPO}" = "1" ] && [ -f "${FREEBSD_REPO_BACKUP}" ]; then
-        cp "${FREEBSD_REPO_BACKUP}" "${FREEBSD_REPO_OVERRIDE}"
-        rm -f "${FREEBSD_REPO_BACKUP}"
-        ENABLED_FREEBSD_REPO=0
-        echo "Restored FreeBSD pkg repository configuration."
-    fi
-}
-
 finish()
 {
     _status="$1"
     trap - EXIT INT TERM HUP
-
-    restore_freebsd_repo || true
 
     if [ "${_status}" -ne 0 ] && [ -f "${SETUP_STATUS}" ]; then
         _phase=""
@@ -279,46 +266,43 @@ wait_for_outer_pkg()
     sleep 3
 }
 
-install_dep()
+# Native system dependencies are installed by OPNsense pkg via Makefile
+# PLUGIN_DEPENDS. Older setup-side FreeBSD repo edits are not repeated.
+verify_stock_freebsd_repository()
 {
-    for _name in "$@"; do
-        if pkg info -q "${_name}"; then
-            echo "Dependency already installed: ${_name}"
-            return 0
-        fi
-    done
-
-    for _name in "$@"; do
-        if pkg install -y "${_name}"; then
-            echo "Installed dependency: ${_name}"
-            return 0
-        fi
-    done
-
-    echo "ERROR: could not install dependency (tried: $*)" >&2
-    return 1
-}
-
-enable_freebsd_repo_temporarily()
-{
-    if [ -f "${FREEBSD_REPO_BACKUP}" ]; then
-        echo "Restoring repository configuration left by an interrupted setup."
-        cp "${FREEBSD_REPO_BACKUP}" "${FREEBSD_REPO_OVERRIDE}"
-        rm -f "${FREEBSD_REPO_BACKUP}"
+    if [ -e "${FREEBSD_REPO_BACKUP}" ] || [ -L "${FREEBSD_REPO_BACKUP}" ]; then
+        echo "ERROR: legacy FreeBSD repository backup remains at ${FREEBSD_REPO_BACKUP}; inspect it and ${FREEBSD_REPO_OVERRIDE} manually before setup (nothing was modified)" >&2
+        return 69
     fi
-
-    if [ -f "${FREEBSD_REPO_OVERRIDE}" ] &&
-        grep -q 'enabled:[[:space:]]*no' "${FREEBSD_REPO_OVERRIDE}"; then
-        cp "${FREEBSD_REPO_OVERRIDE}" "${FREEBSD_REPO_BACKUP}"
-        ENABLED_FREEBSD_REPO=1
-        cat > "${FREEBSD_REPO_OVERRIDE}" <<'REPO_EOF'
-FreeBSD-ports: { enabled: yes }
-REPO_EOF
-        echo "Temporarily enabled the FreeBSD package repository."
+    if [ -r "${FREEBSD_REPO_OVERRIDE}" ] &&
+       grep -v '^[[:space:]]*#' "${FREEBSD_REPO_OVERRIDE}" |
+       grep -Eq 'enabled:[[:space:]]*yes([[:space:],}]|$)'; then
+        echo "ERROR: stock FreeBSD repository is enabled in ${FREEBSD_REPO_OVERRIDE}; review/disable it manually and use the qualified OPNsense repository (nothing was modified)" >&2
+        return 69
     fi
 }
 
-# Must run even without installed.json: unowned files exist independently.
+verify_native_dependencies()
+{
+    command -v pkg >/dev/null 2>&1 || {
+        echo "ERROR: system pkg command is unavailable; install this plugin through OPNsense firmware/pkg" >&2
+        return 69
+    }
+    # Presence checks only: this script never installs/upgrades system packages.
+    for _native_dep in gmake pkgconf luajit git jq ca_root_nss; do
+        if ! pkg info -q "${_native_dep}" >/dev/null 2>&1; then
+            echo "ERROR: missing OPNsense package ${_native_dep} required by zapret2-restyle PLUGIN_DEPENDS; repair/install through the official OPNsense package repository" >&2
+            return 69
+        fi
+    done
+    for _native_tool in gmake pkgconf luajit git jq; do
+        if ! command -v "${_native_tool}" >/dev/null 2>&1; then
+            echo "ERROR: installed OPNsense dependency ${_native_tool} has no executable in PATH; repair the native plugin dependencies before setup" >&2
+            return 69
+        fi
+    done
+}
+
 all_resources_upstream_guard()
 {
     [ -x "${EXTRA_PYTHON}" ] && [ -r "${EXTRA_GUARD}" ] || {
@@ -344,6 +328,11 @@ extra_resources_upstream_guard()
 install_runtime()
 {
     _zapret_ref="$1"
+
+    # Preflight before any status write, runtime checkout or service mutation.
+    wait_for_outer_pkg || return $?
+    verify_stock_freebsd_repository || return $?
+    verify_native_dependencies || return $?
 
     [ -x "${SERVICE_SCRIPT}" ] || {
         status_write "failed"
@@ -380,20 +369,10 @@ install_runtime()
     echo "=== os-zapret2-restyle runtime installation ==="
     echo "Selected bol-van/zapret2 release: ${_zapret_ref}"
 
-    wait_for_outer_pkg
-    enable_freebsd_repo_temporarily
     trap 'finish $?' EXIT
     trap 'finish 130' INT
     trap 'finish 143' TERM
     trap 'finish 129' HUP
-
-    pkg update -q
-    install_dep pkgconf
-    install_dep luajit
-    install_dep git-lite git
-    install_dep jq
-
-    restore_freebsd_repo
 
     if [ -d "${ZAPRET_DIR}/.git" ]; then
         echo "Checking out bol-van/zapret2 ${_zapret_ref}..."

@@ -16,7 +16,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 - `Makefile` uses `.include "../../Mk/plugins.mk"` and `PLUGIN_DEPENDS`.
 - `scripts/build-pkg.sh` (19 lines) delegates to `scripts/native-opnsense-package.py`. This is **already written** and has native CI coverage; complete it rather than start a second package engine.
 - `compatibility.json`, the `zapret` service, GUI, Strategies, Voice, Exclude, Lab and Extra Resources are present.
-- `setup.sh` still enables a stock FreeBSD repository and installs some system dependencies outside the target OPNsense `pkg` graph. Runtime and hooks still contain hard-coded `python3.13`.
+- Source `_138` removes setup-side stock FreeBSD repository enable/restore and independent `pkg update/install` of mandatory system packages, replacing them with read-only checks for installed OPNsense dependencies and legacy repo residue. Runtime and hooks still have hard-coded `python3.13`; Python unification is the **next** scoped work package.
 - The cancelled experimental `backend/native_pkg_*`, standalone pre-pkg, Stage 3 external approval/FD9 tools/tests and workflows were removed in source revision `_137`. Historical evidence remains historical; source/native CI outcomes require separate verification.
 - Unmerged branch `work/v0.6.2_136-offguest-host-checkpoint-ci` is abandoned. **Do not merge or develop it.**
 
@@ -42,9 +42,13 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 3. Install the resulting real `.pkg` on a disposable OPNsense 26.7 via `pkg` and test registration. Retire artificial source-only build restrictions only when the native path is actually ready.
 4. No custom manifest or second packaging engine.
 
-**Exit:** one source SHA produces a real native installed package with correct manifest, dependencies, files and hooks.
+**Observed in `_137`:** official Mk native build and genuine disposable OPNsense 26.7 clean `pkg` install, files/manifest/dependencies/four hooks/Config checks passed (PR #907 exact-head CI and postmerge main CI). This validates the existing builder for its tested source, not the final release SHA or owner device.
+
+**Exit:** one source SHA produces a real native installed package with correct manifest, dependencies, files and hooks. For the tested `_137` build this is qualified; repeat for the final candidate.
 
 ## THIRD task — system dependencies and one Python contract
+
+**In-progress `_138`:** setup system-dependency ownership only. Delete redundant `pkg update/install` and FreeBSD.conf toggle; fail clearly for missing installed OPNsense packages/tools and ambiguous legacy repo configuration without touching it. Add negative read-only tests and native CI. **Python minor-path unification is not claimed or included in `_138`.**
 
 **Files:** `setup.sh`, `setup_launcher.sh`/`setup_transaction.sh`, backend shell/Python, Strategy Lab, Voice, Extra Resources, PHP APIs, `actions_zapret.conf` and hooks.
 
