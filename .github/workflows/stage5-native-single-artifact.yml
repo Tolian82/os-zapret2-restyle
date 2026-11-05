@@ -1,0 +1,83 @@
+name: Stage 5 single native package SHA and installed payload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Makefile
+      - VERSION
+      - compatibility.json
+      - scripts/build-pkg.sh
+      - scripts/native-opnsense-package.py
+      - scripts/stage2-opnsense-real-native-clean-install.py
+      - scripts/stage5-native-single-artifact.py
+      - .github/workflows/stage5-native-single-artifact.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - Makefile
+      - VERSION
+      - compatibility.json
+      - scripts/build-pkg.sh
+      - scripts/native-opnsense-package.py
+      - scripts/stage2-opnsense-real-native-clean-install.py
+      - scripts/stage5-native-single-artifact.py
+      - .github/workflows/stage5-native-single-artifact.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sha-bound-single-native-package:
+    name: One built archive SHA verified across genuine pkg add and copyback
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Offline tamper-refusal, source-head and SHA binding contracts
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage2-opnsense-real-native-clean-install.py
+          python3.13 scripts/stage5-native-single-artifact.py --self-test
+      - name: Build once, install THAT archive and capture receipt on disposable OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_STAGE5_SINGLE_ARTIFACT=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-single-artifact.py run
+      - name: Verify SAME archive bytes and native receipt after copying back
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+          version=$(tr -d '\r\n' < VERSION)
+          revision=$(sed -nE 's/^PLUGIN_REVISION=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' Makefile)
+          test "$version" = 0.6.2
+          [[ "$revision" =~ ^[1-9][0-9]*$ ]]
+          test -f "dist/os-zapret2-restyle-${version}_${revision}.pkg"
+          sha256sum "dist/os-zapret2-restyle-${version}_${revision}.pkg"
+          echo 'PASS: EXACT already-installed native .pkg copyback is SHA-bound; no release, Pages, full-lifecycle acceptance or owner device change'
+      - name: Preserve ONE verified native archive and read-only installed receipt
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-installed-single-artifact-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            dist/os-zapret2-restyle-*.pkg
+            dist/stage5-native-single-artifact.json
+          if-no-files-found: error
+          retention-days: 7
