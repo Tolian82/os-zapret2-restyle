@@ -23,7 +23,7 @@
 |---|---|
 | **Latest full Web/pkg release** | [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) — verified FreeBSD 15 `0.6.2_1.pkg`, `SHA256SUMS` and successful GitHub Pages pkg repository deployment. |
 | **Latest owner-installed testing package** | [v0.6.1_30](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.1_30) — 18/18 read-only appliance checks passed, including running service, eight global Exclude bindings and no stale Lab firewall rules. |
-| **Current development candidate** | `v0.6.2_136` source-only scope/documentation revision; **no `0.6.2_136.pkg` is published**. The current stable artifact remains `v0.6.2` / `0.6.2_1.pkg`. |
+| **Current development candidate** | `v0.6.2_142` source-only native cold-lifecycle acceptance candidate; **no `0.6.2_142.pkg` is published**. The current stable artifact remains `v0.6.2` / `0.6.2_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
