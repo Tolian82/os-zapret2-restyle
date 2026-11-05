@@ -1,5 +1,18 @@
 # os-zapret2-restyle
 
+## 2026-11-05 — Cancel pkg approval infrastructure; finish native OPNsense integration
+
+**Owner-approved decision:** Standard OPNsense `pkg`, official `Mk/plugins.mk`, `PLUGIN_DEPENDS`, native configd/rc/hooks, a unified Python policy, maintainability and a working plugin are the purpose of the project. The prior separate SQLite approval witness, external authorization server, one-use cryptographic grants, RSA signatures, root warnings/interceptors, managed pre-pkg gateway, FD9-spanning package-approval system and universal PRE_INSTALL veto obligation are **cancelled**, not postponed. Real `_74` pkg hook behavior remains a historical technical finding, not authority to construct a distributed trust subsystem.
+
+**IPFW/PF owner decisions:** Only document fixed IPFW **rule numbers**, ordinary Zapret2 `19000–19010` and Strategy Lab `19100–19131`. No new collision checks, audits of foreign rules, number allocations, automatic shaper-flush tracking/restoration or IPFW code refactor in the current scope. Preserve existing cold-IPFW startup and `pfctl -d; pfctl -e`; no OPNsense-only `sync_fw_hooks.py`/`pfilctl` transition. Future pfSense port is separate.
+
+**Execution:** [Current TЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [completion plan v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md). First remove cancelled experimental code/tests/CI while retaining genuine stage0/stage2 normal package evidence. **After deletion, review all active technical documentation/README and update contradictions and dangling links**. Then finish the already-existing native builder, pkg dependencies, Python and service/hooks, and validate a final installable package.
+
+**Reason:** Prior work overextended the approved project scope and diverted effort from essential natively integrated product functionality. The accepted criterion is correct behavior with the minimum justifiable implementation and verification effort.
+
+**Status:** Active and binding; it supersedes conflicting v1.4 approval-gateway obligations and subsequent Stage 3.xx witness proposals. Git history is sufficient for discarded experiments; no new preservation track.
+
+
 ==================================================
 DOCUMENT ROLE
 ==================================================

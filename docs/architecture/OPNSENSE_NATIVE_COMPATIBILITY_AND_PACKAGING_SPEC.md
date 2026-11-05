@@ -1,13 +1,13 @@
-# Native OPNsense Packaging and Unified External Compatibility — Technical Specification v1.4
+# Native OPNsense Packaging and Unified External Compatibility — Technical Specification v1.5
 
-**Status:** OWNER-APPROVED intended contract. Stage 0 CLOSED; Stage 1 accepted; Stage 2 underway. LH-08 upgrade atomicity remains BLOCKED / NOT IMPLEMENTED.
-**Approval:** 2 November 2026; owner-approved v1.4 native-package admission requirements after reproducible OPNsense pkg hook-veto failure. Previous v1.3 was approved 1 November 2026.
+**Status:** owner-approved native integration scope reset, 5 November 2026. The official Mk builder exists; final package installation, Python, dependencies and service lifecycle remain open.
+**Approval:** 5 November 2026. External pkg approval and additional IPFW/PF mechanisms are cancelled.
 **Project:** `Tolian82/os-zapret2-restyle`.
-**Next implementation deliverable:** Stage 2.23 identify an actually enforceable admission barrier before native pkg replacement; Stage 3 implement the barrier and coordinated hook hardening; Stage 4 prove safety with native package negative tests. Documentation approval does not authorize package publication or owner-appliance mutation.
+**Next implementation deliverable:** remove cancelled authorization experiments and reconcile active technical documentation; finish the existing native builder, dependencies/Python, service/hooks and final installed acceptance. No appliance mutation/publication authorized.
 
-This file is revised in place from v1.3 to v1.4; v1.0–v1.3 history remains accessible in Git, with no second active specification. Revision history belongs in the [current-line ledger](../history/current/v0.6.x.md).
+This document supersedes v1.4 in place. Previous requirements remain only in Git history and are not active product gates.
 
-**Independent document revision:** `v1.4` identifies only the editorial revision of this technical specification. It is **not** the GitHub project/source version, `VERSION`, `PLUGIN_REVISION`, package revision, tag or release version. Advancing any GitHub/plugin version does not automatically advance the specification revision; editing or approving the specification does not automatically change the plugin version or publish a release. The specification revision changes only when its own content/requirements are deliberately revised.
+**Independent document revision:** `v1.5` identifies only the editorial revision of this technical specification. It is **not** the GitHub project/source version, `VERSION`, `PLUGIN_REVISION`, package revision, tag or release version. Advancing any GitHub/plugin version does not automatically advance the specification revision; editing or approving the specification does not automatically change the plugin version or publish a release. The specification revision changes only when its own content/requirements are deliberately revised.
 
 ## 1. Purpose and boundaries
 
@@ -15,7 +15,7 @@ Use the **official OPNsense plugin build system**, FreeBSD `pkg` dependency mana
 
 This is a NEW approved technical specification. Former [issue #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732) and closed/unmerged [PR #740](https://github.com/Tolian82/os-zapret2-restyle/pull/740) were cancelled **inside the previous dual-stack work**, not silently reactivated here. Do not change prior dual-stack acceptance or reopening rules.
 
-**Not in scope:** unrelated rewrites of Strategies, Strategy Lab, Voice, Targets, HOSTLIST/IPSET, Exclude, engine-version management or speculative pfSense adaptation. **Narrow exception:** native-package admission, lifecycle FD9/process/IPFW ownership and bounded transaction recovery explicitly required by LH-01–LH-08 are in scope. This is not permission for a broad runtime refactor.
+**Not in scope:** unrelated functional rewrites; proprietary pkg authorization or managed privileged updater; new IPFW collision/ownership scans, dynamic allocation, shaper-flush monitoring or recovery; OPNsense-only pfilctl conversion; immediate pfSense port. Preserve portability for future pfSense without inventing new abstractions.
 
 **Dependency-provisioning boundary:** auditing and replacing the system-dependency acquisition block in `setup.sh` is explicitly in scope. Keep the existing choice of Zapret2 release, engine source acquisition, compilation and lifecycle/transaction behavior. The engine-version exclusion above does not preserve independent dependency decisions or temporary activation of a stock FreeBSD system-package repository on the appliance. Section 6 governs the replacement.
 
@@ -130,7 +130,7 @@ Require the real `pkg`, BSD Make and the tools used by the selected official bui
 
 Stage root `Makefile`, `VERSION`, `pkg-descr`, `src/opnsense/`, `src/etc/` and all four `pkg/+...` hooks from one identified project commit. Preserve required installed file content, paths, executable modes, permissions, symlink and sample/shadow semantics. Never stage developer host configuration, downloaded engine trees, secrets, scratch archives or unrelated material.
 
-The reference for executable permissions is actual installed-package behavior. Stage 0.13 found `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` tracked as **Git `100644`** and the old bespoke builder setting `.sh` files executable during staging. **Stage 2 must change this direct service entrypoint to Git `100755`** before official native packaging, and verify all other directly invoked script modes. Compare exact Git modes → native `.pkg` entries → actual installed modes and exercise direct configd/hook/rc calls. Never rely on blanket staging `chmod` or syntax checks as executable-delivery proof. Preserve other required symlink/sample/permissions; see LH-05 (§8).
+The reference for executable permissions is actual installed-package behavior. Stage 0.13 found `src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh` tracked as **Git `100644`** and the old bespoke builder setting `.sh` files executable during staging. **Stage 2 already changed this direct service entrypoint to Git `100755`** before official native packaging, and verify all other directly invoked script modes. Compare exact Git modes → native `.pkg` entries → actual installed modes and exercise direct configd/hook/rc calls. Never rely on blanket staging `chmod` or syntax checks as executable-delivery proof. Preserve other required symlink/sample/permissions; see LH-05 (§8).
 
 Keep current signed FreeBSD `latest` private `curl-impersonate` retrieval and existing capability/provenance checks. Stage its binary and private launcher scripts under their established packaged `libexec/zapret2-restyle` destination. Do not turn a bundled private build artifact into a mandatory installed system package merely for convenience.
 
@@ -186,58 +186,31 @@ The real caller tests must exercise FD9 inheritance, signals, process ownership,
 
 A simple shebang rewrite is insufficient if a PHP, configd or shell caller still contains a versioned path; verify **real** caller-to-callee contracts.
 
-## 8. Installed package lifecycle and four manual hooks
+## 8. Standard native package lifecycle and the existing four hooks
 
-Official `Mk/plugins.mk` provides `scripts-manual`. Keep `pkg/+PRE_INSTALL`, `+POST_INSTALL`, `+PRE_DEINSTALL` and `+POST_DEINSTALL` as full authoritative manual package scripts; verify generated scripts are not unexpectedly appended/replaced by auto hooks.
+Use only the official `Mk/plugins.mk` / FreeBSD `pkg` path with `pkg/+PRE_INSTALL`, `+POST_INSTALL`, `+PRE_DEINSTALL`, `+POST_DEINSTALL`. Keep hooks focused on normal registration, configd/service, settings preservation and bounded cleanup. Incoming PRE_INSTALL cannot assume new package files already exist. Observe real `pkg` scheduling without claiming universal rollback or pre-install veto.
 
-During a package replacement, incoming `+PRE_INSTALL` can run **before new files or the new installed manifest exist**, interacting with the previously installed service/old hooks. No new pre-install dependence on an unavailable launcher/JSON/runtime file. Test actual `pkg` ordering.
-
-Keep configd watcher/action registration, template updates, lifecycle lock/FD9, foreign/incomplete IPFW refusal, service RUNNING/STOPPED state, safe interrupted-operation recovery, transaction atomicity, restoration and extra-resources operations. No speculative old-version transition branches under DEV-050; immediate current-operation rollback and cleanup remain mandatory.
-
-Select the exact currently supported installed package as the replacement baseline in the implementation plan. Verify replacement in both RUNNING and STOPPED states with configuration retained; this is a bounded current-package transition, not a compatibility matrix for arbitrary historical packages. If a deliberate current-format setup/Apply is required, state that consequence explicitly instead of adding a legacy product path.
-
-### Stage 0.13 audit and real native negative proof promoted to lifecycle requirements (LH-01–LH-08)
-
-The [exact-HEAD Stage 0.13 audit](../verification/evidence/2026-11-01-v0.6.2_16-stage0-hook-lifecycle.md) is **source evidence**, not installed acceptance. The following are future native build **requirements**, not mandatory preservation of every old implementation detail.
-
-| ID | Mandatory native contract / acceptance |
+| ID | Native lifecycle requirement |
 |---|---|
-| **LH-01 — phase/owner refusal** | Incoming `pkg/+PRE_INSTALL` must inspect the **previously installed** service, process/IPFW ownership and available files before Stop. No dependence on not-yet-installed launcher, JSON, manifest or dependencies. Unknown/incomplete/foreign state or missing/nonexecutable old service does not prove stopped; refuse unverified Stop. Verify real pkg order including fresh install and RUNNING/STOPPED replacement. |
-| **LH-02 — old PRE_DEINSTALL/FD9** | Incoming PRE_INSTALL currently offers conditional FD9-aware read, but old `pkg/+PRE_DEINSTALL` **has no independent FD9 retry**. Qualify the exact supported installed predecessor's actual hook and service, preserve **one inherited FD9 owner**, and forbid recursive lock acquisition. With old Status=2, busy lock, cold journal, absent Python or unknown owner, allow safe verified-only behavior or refuse package replacement with a recovery diagnostic. Incoming code cannot rewrite the already installed old hook. |
-| **LH-03 — missing Python Stop/Status** | On absent/broken/incompatible Python, refuse Python-dependent Start/Apply before mutation while retaining interpreter-independent **truthful Status** and bounded Stop only for verifiably plugin-owned engine/process/IPFW state. Preserve FD9 and signal ownership; foreign, partially owned or ambiguous state must remain untouched. Test real target owned vs foreign negative conditions. |
-| **LH-04 — safe configd worker update** | `pkg/+POST_INSTALL` must activate updated `configctl zapret` actions, verify the selected worker belongs to the existing watcher and confirm readiness. Existing worker `SIGTERM` is **an observation, not a mandated implementation**. Never signal stale/reused PIDs, unrelated worker, watcher parent or global Web GUI; fail closed on identity ambiguity. Test correct update, stale/reused/multiple workers, missing watcher and readiness failure. |
-| **LH-05 — Git/native/installed executable mode** | Change direct `zapret_service.sh` Git mode from `100644` to `100755` at Stage 2; audit all other direct hook/configd/rc entrypoints and require actual native `.pkg` and installed executable modes, with direct-call tests. No blanket staging `chmod` substitute. |
-| **LH-06 — marker/rollback safety** | All four authoritative manual package hooks preserve verified RUNNING/STOPPED, Config, restart-marker ownership and interrupted retry/rollback. Restore only a proven previously running plugin; do not turn STOPPED into RUNNING or claim success after failed Stop/Start/Status/register/template. `+POST_DEINSTALL` must not restart global services. Test forced reinstall and injected failure cases. |
-| **LH-07 — real target package evidence** | Official `scripts-manual` must carry four hooks intact. Observe actual incoming PRE_INSTALL / old PRE_DEINSTALL / old POST_DEINSTALL / new POST_INSTALL *pkg execution order* on qualified isolated OPNsense and bind old/new identities, FD9/process/signals, permissions and negatives to **one native package SHA-256**. Mocked hooks, static source and generic FreeBSD CI are not installed evidence; mark unverified cases NOT VERIFIED. |
-| **LH-08 — effective native pre-pkg admission** | Every **supported** OPNsense firmware/Web/plugin-managed/CLI upgrade or forced replacement must reject unknown/foreign/incomplete/locked/racing old ownership **before destructive pkg entry** with actual old package identity/files, Config, markers, process/IPFW state unchanged. Admission must be serialized across the check/use interval through one FD9/ownership contract (or independently proven equivalent). Incoming/old hook failures, including PRE_INSTALL, and a pkg return code are NOT reliable vetoes. Keep four hooks as independent defense, but never use them as the sole transaction barrier. Qualify direct root pkg as a distinct bypass; if no unavoidable enforcement is available, document it as unsupported/manual-risk rather than claiming it safe. Require bounded interruption and real native negative postconditions. |
+| LH-01 | Fresh installation and package replacement use native `pkg`; hooks cannot depend on incoming files that do not yet exist. |
+| LH-02 | Use the existing `zapret` service and normal lifecycle/FD9 locking for actual Start/Stop/Apply; test RUNNING and STOPPED replacement without a separate package-update manager. |
+| LH-03 | Python-dependent operations require a qualified interpreter and return clear failure on its absence; preserve correct existing Python-independent Status/Stop where feasible. |
+| LH-04 | Updated `configd` actions work through the existing OPNsense watcher without signalling unrelated processes or restarting the whole Web GUI. |
+| LH-05 | Direct entrypoints (including `zapret_service.sh`) have valid Git, native archive and installed executable modes; `100755` service mode has already been corrected in source. |
+| LH-06 | Standard install/update/reinstall/remove handle their own service settings and normal cleanup, without a custom system-package transaction or guarantee of universal rollback. |
+| LH-07 | Test the actual four installed package hooks, settings retention, ordinary interruption and errors on a disposable target; separate source, installed, owner and publication evidence. |
+| **LH-08** | **Root and stock firmware/Web/pkg remain native administrator operations.** No additional root warning, direct-pkg interceptor, separately running authorization server, SQLite witness, one-use cryptographic permissions, RSA grant, operator approval receipt, managed pre-pkg gateway or FD9-serialized pkg replacement. Native `pkg` semantics are authoritative. The reproduced `_74` incident means a failed PRE_INSTALL may not veto `pkg add -f`; it does **not** authorize or require a parallel trust infrastructure. |
 
-**Stage allocation:** Stage 2 qualifies LH-01/LH-05–LH-08 behavior and an actually enforceable pre-pkg barrier; Stage 3 implements LH-02–LH-04/LH-06/LH-08 serialized admission, coordinated hooks, worker safety and rollback; Stage 4 exercises **all LH-01–LH-08** on one exact final package SHA-256. Direct root pkg is not presumed protected. Stage 0 STOP and Stage 1 block are unaffected.
+### IPFW/PF scope set by the owner
 
-### LH-08: confirmed native pkg hook-veto bypass and admission design boundary
+- Fixed **IPFW rule numbers**, not network or divert ports: **19000–19010** for ordinary Zapret2/Strategies and **19100–19131** for Strategy Lab. Document both in README and current technical documentation.
+- No new per-number collision checks, foreign-rule inventory, dynamic number allocator, ownership database, rule-manager refactor, shaper-flush listener, automatic restoration or extra standalone tests for those hypothetical scenarios.
+- Retain the already existing safe cold-IPFW module-loading behavior, checked only as part of normal installed service acceptance.
+- Keep existing `pfctl -d; pfctl -e` unchanged. No OPNsense-only `sync_fw_hooks.py` / `pfilctl` migration. Future pfSense port is a separate task.
 
-**Exact reproduced failure (2 November 2026):** On disposable real OPNsense 26.7, the published SHA-qualified predecessor `0.6.2_1` was installed and STOPPED. A test-owned orphaned rule `19000 divert 989 tcp ... 65431 out via lo0` made the **actual previously installed service** return `Status=2`. Real incoming `+PRE_INSTALL` printed its incomplete-lifecycle refusal. Nevertheless actual `pkg add -f` exited **0**, installed `os-zapret2-restyle|0.6.2_74`, and changed the **bytes** of `/conf/config.xml`. The test rule survived replacement and was then safely removed by the disposable experiment. Exact hashes, witness, scope and failed alternatives: [incident evidence](../verification/evidence/2026-11-02-v0.6.2_74-stage2-real-unsafe-owner-native-pkg.md), [real target CI #41515449795](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/41515449795). No owner appliance or stable package was touched; changed bytes do **not** prove which individual Config settings changed.
+### Old FreeBSD repository overrides
 
-**Classification:** the CI test PASSED as a **reproduction of the safety defect**. It FAILED the product criterion of a true transaction abort. The separate [`_73` real pkg scheduler experiment](../verification/evidence/2026-11-02-v0.6.2_73-stage2-opnsense-native-pkg-scheduler.md) also demonstrated that forced replacement may skip **old PRE_DEINSTALL and POST_DEINSTALL**. An incoming hook cannot change an already installed old hook. A warning, nonzero hook exit or even a favorable pkg exit code does **not** prove that files remained untouched.
-
-**Mandatory design and proof boundary (LH-08):**
-
-1. **Discover supported entrypoints:** inspect actual OPNsense firmware/Web, managed CLI, reinstall/remove and native pkg invocation paths. Prove the pre-pkg gate is on each *supported* path, before any file-replacing phase. Do not invent a universal pkg veto callback.
-2. **Verify old ownership before mutation:** exact installed pkgdb identity and critical file hashes/modes; original service, FD9/journal/restart markers, Config, engine/supervisor, PID start-time/group and IPFW rule/table ownership. An absent/broken Python, unknown/foreign/orphaned owner or busy lock is not evidence that the service is safely stopped.
-3. **Eliminate TOCTOU:** keep verified ownership over the whole critical admission-to-pkg interval, through a single non-recursive FD9/serialization contract or independently demonstrated equivalent. Reject concurrent Apply/Start/Stop/upgrade, stale PID, interrupted operation or changing snapshots, without harming foreign processes/rules.
-4. **Keep all hooks as second-line defense:** revise `+PRE_INSTALL` only after the real admission mechanism has been selected; retain phase-aware behavior in the other three hooks. The original historical PRE_DEINSTALL may never run; an inadmissible operation must never proceed to POST_INSTALL Config/register/configd/restore side effects.
-5. **Prove no-mutation refusal:** for **every rejected supported path**, compare before/after actual pkgdb version, installed package file bytes/modes, Config byte and pertinent semantic snapshots, restart markers, FD9/process state and owned/foreign IPFW. A failing hook alone is not a PASS. After failures/interruption, only owner-proven bounded recovery is allowed; never report success after changing unknown resources.
-6. **Treat direct privileged pkg separately:** root may call `pkg add -f` outside a managed entrypoint. Test this bypass and state the unsupported/manual-recovery risk unless an unavoidable guard is *actually proved*. If the regular supported OPNsense update path cannot be stopped before mutation, LH-08 remains BLOCKED; a disclaimer is not a substitute for safety.
-7. **Final target qualification:** replay exactly the `_74` orphaned lo0 divert case, busy FD9, RUNNING/STOPPED, unknown owner, Python loss, PID reuse, concurrent and interrupted transactions, forced reinstall and relevant firmware GUI path on a disposable **real native OPNsense**. Tie the results to **one final installed package SHA-256** and distinguish investigative hazard reproduction from safety acceptance.
-
-**Execution order:** Stage 2.23 proves which gate can truly block pkg; Stage 3.04/3.24 implements it and integrates the four hooks; Stage 4.07/4.15 verifies actual protected refusal and rollback. Rewriting PRE_INSTALL alone is not completion.
-
-### 8.1. Bounded recovery boundary for residual old FreeBSD repository overrides
-
-The former `setup.sh` could leave a temporary plugin-created override at `/usr/local/etc/pkg/repos/FreeBSD.conf` and a backup in the plugin state directory after interruption. While removing that old repository-mutation code, provide a bounded **read-only detection** of such residue; never assume a user's current repository file is owned by the plugin.
-
-Only when the temporary content, matching valid backup and absence of subsequent foreign edits are all **unambiguously verified** may a scoped recovery atomically restore the exact backed-up content, retaining the backup on failure. If provenance, backup integrity or current ownership is ambiguous, do not overwrite, normalize or remove the user's file or backup; emit actionable manual recovery guidance and refuse unsafe dependency provisioning. Never automatically enable stock FreeBSD system repositories.
-
-This is an explicitly bounded safety/cleanup responsibility for the current environment, not a permanent old-version migration framework or a general `pkg` repository editor.
+Remove the stock FreeBSD repository toggle from `setup.sh`. Do not overwrite an ambiguous existing administrator `FreeBSD.conf` or backup. Provide concise diagnostics/manual remediation; do not invent a repository recovery framework.
 
 ## 9. OPNsense ABI, FreeBSD ABI and repository publication
 
@@ -269,92 +242,54 @@ Required groups:
 
 Versions in historical records, golden fixtures, explicitly reproducible CI environments, GitHub Actions tags, immutable upstream resource SHA and demonstrated safety locks are permitted **only as classified, tested exceptions**. No broad exclusions that conceal live production version locks. Audit all files, **do not rewrite all files**.
 
-## 11. Mandatory CI and regression gates
+## 11. Targeted verification
 
-- **CI-01 Full-tree coverage:** scan active production/build/CI sources; classify every literal external version, executable and ABI; use narrow documented allowlists.
-- **CI-02 Matrix:** validate schema and positive supported combination; negative invalid/missing matrix, unsupported OPNsense product ABI/FreeBSD ABI/Python, inconsistent capabilities and unsupported architecture.
-- **CI-03 Python:** test actual shell, PHP, configd, package-hook, shebang and Python-child paths; preserve args, stdout/stderr, exit status, timeouts, FD9, process ownership and signals; reject absent/unsupported interpreter, wrong link and missing module before the applicable mutation boundary. With a verified owned native engine running, simulate unavailable Python and prove safe Stop/owned cleanup, truthful Status and foreign-resource refusal.
-- **CI-04 Native build:** verify target-repository/environment bootstrap before Make evaluation, genuine upstream `Mk/plugins.mk`, exact upstream revision, single standard `make package` path and correct product/source identity; reject fallback ABI values as qualification evidence.
-- **CI-05 Package metadata:** inspect the **real built `.pkg`** for version, name, ABI and real `pkg`-derived name/version/origin with target-repository provenance; reject fake `version: "0"`. Bind artifact results to package SHA-256 and verify identical published Release/Pages bytes when publication is authorized.
-- **CI-06 Package contents and private ELF compatibility:** enforce LH-05 source Git `100755` → native `.pkg` → installed executable mode; compare old/new necessary files, rc/configd/templates, four manual hooks, private `curl-impersonate` resources and OPNsense annotations. Verify private ELF/loader architecture, required dynamic libraries and actual target OPNsense providers; locally exercise relevant capabilities through the packaged launcher. Revalidate whenever private binary bytes change. Exercise direct entrypoints from packaged files; source modes alone are insufficient. Metadata changes need not be byte-identical.
-- **CI-07 Regression:** cover **LH-01–LH-08** with actual pkg hook order, old FD9 and Python-loss Stop/Status, safe configd worker identity/PID reuse, exact Git/native/installed executable modes, RUNNING/STOPPED marker/rollback and final package SHA-256. Preserve GUI/API, Start/Stop/Restart/Status, Strategies Apply, Strategy Lab, Voice/IPSet/Exclude, setup/removal, IPFW owner and restoration paths, plus owned-only old FreeBSD.conf recovery/refusal without modifying foreign settings; use bounded scenarios and existing coverage.
-- **CI-08 Negative injection:** deliberately insert a forbidden hard-coded Python version, wrong ABI, fake dependency version or divergent matrix in an isolated test; each corresponding guard must refuse it.
-- **CI-09 Evidence honesty:** separately report source checks, isolated FreeBSD/native package checks and actual owner-installed OPNsense evidence. Unexecuted/waived IPv6/WAN/Voice scenarios are not `PASS` and do not automatically reopen prior accepted scope.
-- **CI-10 Real native transaction refusal:** re-run the exact _74 hazard against the protected supported entrypoint with before/after pkgdb, file hashes, Config, markers and FD9/process/IPFW; add busy-lock/concurrent/forced/interrupted and direct-root-bypass qualification. A green hazard-reproduction check is NOT a safe-upgrade PASS.
+- Official native builder: `scripts/build-pkg.sh` already delegates to `scripts/native-opnsense-package.py` using `Mk/plugins.mk` / `make package`. Qualify real OPNsense repositories/ABI, manifest/dependencies, modes, four hooks and bundled private `curl-impersonate` ELF; do not start a second builder.
+- Package-managed dependencies: `setup.sh` must not toggle a stock FreeBSD repository or reinstall dependencies owned by OPNsense `pkg`.
+- Unified Python: test changed real shell, PHP, configd, backend, Lab, Voice, Extra Resources and hook call paths; preserve actual inputs, outputs, deadlines and errors.
+- On a disposable OPNsense 26.7 target test fresh install, Start/Stop/Restart/Status/Apply, RUNNING/STOPPED upgrade from `0.6.2_1`, forced reinstall, settings retention, removal and ordinary bounded failures.
+- Run only relevant Strategies, Lab, Voice, Exclude and Extra Resources regressions. Already existing cold-IPFW initialization is checked by normal service Start, not a new shaper/foreign-IPFW study.
+- Remove cancelled SQLite/approval-only CI when the corresponding tools are deleted. Retain stage0/stage2 tests that really verify normal pkg, hooks, ABI, dependencies and service even if their filenames mention FD9.
+- Final proof is tied to one actual native package SHA-256. Source-only CI does not prove installed behavior or a new stable release.
 
-Use DEV-051 and GH-062: run fast relevant checks on real generated/consumed artifacts **before** long CI or a product PR. Preserve ordinary project documentation, link-integrity and governance checks.
+## 12. Five-step completion route
 
-### 11.1. Bounded implementation acceptance scenarios
-
-Before implementation, the per-file plan assigns these scenarios their exact inputs, expected outcomes and evidence level. Reuse applicable tests; do not create a new open-ended acceptance campaign.
-
-| Scenario | Required observation |
-|---|---|
-| Clean target installation | The native-built package installs in an isolated supported OPNsense environment using only declared target requirements; required files are executable, manual hooks/register/configd integration work and Python has the verified provider/link |
-| Current-package replacement | Replace the supported baseline in RUNNING and STOPPED modes **through the admitted entrypoint**, with continuous owner serialization, preserved Config and correctly restored state |
-| **LH-08 negative replacement** | With Status=2 from orphaned divert, busy FD9 or unknown/foreign/concurrent owner, the supported entrypoint must refuse **before pkg mutation** and prove identical before/after pkgdb, package files, Config, markers and resources; test root bypass separately |
-| Changed entrypoints | Exercise each changed caller category and affected user operation through its real installed/consumed path, including cancellation and cleanup where launch behavior changes |
-| Incompatibility refusal | Missing/wrong interpreter or link, invalid/missing policy and incompatible platform are rejected at the earliest valid boundary; verify no premature mutation and truthful same-operation recovery for later failures |
-| Python-loss native Stop/Status | With verified plugin-owned `dvtws2` running but Python unavailable, safe native Stop cleans only owned resources, Status reports the actual/degraded state and foreign/ambiguous resources remain untouched |
-| Private target ELF compatibility | Qualified target OPNsense resolves packaged `curl-impersonate` ELF/loader, dynamic libraries and providers and runs the private launcher/local Chrome/ECH/QUIC capabilities; missing providers fail closed |
-| Interrupted old repository override | Verified plugin override plus matching untouched backup permits only atomic exact restoration; ambiguous or foreign `FreeBSD.conf` and backup must be left untouched with actionable refusal |
-
-Automate source and isolated-environment checks wherever possible. Any genuinely necessary owner-appliance observations are one consolidated, reviewed batch rather than repeated piecemeal console requests. Report unavailable checks as unverified. Previously accepted or waived WAN/IPv6/Voice-media investigations are not reopened by this specification.
-
-## 12. Ordered implementation stages — separately authorized
-
-| Stage | Work | Required exit evidence |
+| Step | Concrete deliverable | Exit condition |
 |---|---|---|
-| 0. Exact baseline | current SHA; all-file/version/entrypoint audit; dependencies by purpose and execution location; old package manifest/files/permissions, old FreeBSD.conf override/backup and bundled ELF/library inventory; exception list and finite acceptance scenarios | reproducible path/line map and baseline |
-| 1. Policy | JSON schema/source, policy validator, positive/negative tests | single consistent authoritative matrix |
-| 2. Minimal native packaging | qualify the LH-08 native pre-pkg admission boundary before hook rewrite; qualify target-environment bootstrap; official temporary tree and evaluated `PLUGIN_PYTHON`; native deps/manual hooks, private ELF/library target compatibility, executable modes, ABI/repository alignment; retain current functional behavior while proving this build boundary | a real native-built candidate `.pkg` with verified inputs, manifest, hooks, target-compatible private binary and installed modes before broad Python caller changes |
-| 3. Python integration | implement LH-08 serialized admission and coordinated defensive hooks; shared interpreter contract across all real entrypoints, remove duplicated decisions, integrate appliance dependency provisioning and bounded old FreeBSD.conf residue handling; preserve Python-independent native Stop/Status where safe, FD9/process/signal ownership | consumer-level tests including Python-loss Stop/Status, repository ownership refusal, native rebuild and unchanged required runtime behavior |
-| 4. CI/acceptance | verify LH-08 real protected unsafe-owner refusal, rollback and root-bypass classification; cross-tree guards, final artifact and target binary checks, safe Stop with missing Python, old repository residue/refusal, focused regressions and the bounded target-platform scenarios | applicable gates evidenced for the final package SHA-256 without false PASS |
+| 0. Reset | Remove cancelled pkg approval source/tests/workflows; **after removal, audit and reconcile the entire active technical documentation/README and CI references**. | No active dependency on the rejected architecture; relevant CI green and docs consistent with v1.5. |
+| 1. Package | Finish the **existing** official Mk native builder, correcting only real build/install blockers. | Real `.pkg` installs in disposable OPNsense. |
+| 2. Dependencies/Python | Native OPNsense pkg dependencies, setup FreeBSD-repo cleanup, unified qualified interpreter in real consumers. | Target install supplies dependencies and changed functions work. |
+| 3. Service/hooks | Existing configd/rc, four hooks, RUNNING/STOPPED update, ordinary reinstall/remove and Config retention. | Native lifecycle functional in disposable guest. |
+| 4. CI/acceptance | One native CI/testing/release build path, bounded full-function tests and one final package SHA. | AC-01–AC-11 genuinely checked; any owner-device changes or publication separately approved. |
 
-Implementation stages must be split into minimal, testable increments and follow current project PR/version governance. Documentation acceptance does not authorize the implementation.
+No further speculative Stage 3.xx or PF/IPFW research subprojects. Small changes, real verification, minimal effort.
 
-Stage 2 is an isolated qualification step, not a permanent second packaging engine or an automatic publication. Complete the switch to the single native build path and retire superseded production packaging code in the same logical packaging scope; broad Python-call migration follows the demonstrated native-package boundary.
-
-## 13. Binding final acceptance criteria
+## 13. Final acceptance criteria
 
 | ID | Required result |
 |---|---|
-| AC-01 | All production Python entrypoints use one validated interpreter contract preserving FD9, process identity, signals, streams and failure semantics, without making safe native Stop or truthful Status depend on unavailable Python |
-| AC-02 | No independent minor-version Python executable or path in feature code |
-| AC-03 | `pkg` owns system dependencies from the qualified target OPNsense repositories; appliance-side build tools have explicit provision and the resulting `+MANIFEST` contains actual name/version/origin |
-| AC-04 | One matrix defines qualified OPNsense product ABI, FreeBSD package ABI, CPU architecture and Python policy, with admitted patch updates distinguished from new unsupported branches |
-| AC-05 | Official, provenance-attested `Mk/plugins.mk` / `make package` builds every package type after verified environment bootstrap |
-| AC-06 | GUI, configd, service, Strategies, Strategy Lab, Voice, installation/removal and relevant recovery behavior are retained through the bounded acceptance scenarios including Python-loss Stop/Status and owned old repository cleanup/refusal |
-| AC-07 | Product/package names, `zapret` service key, `VERSION`, `PLUGIN_REVISION` and separate Zapret2 engine version policy are unchanged |
-| AC-08 | All required installed files, effective executable permissions, four manual hooks, target-compatible bundled ELF/shared-library providers and native state/rollback safety invariants are retained |
-| AC-09 | CI rejects reintroduced fragmented version policy and inconsistent package/compatibility artifacts; package results identify exact SHA-256 and authorized Release/Pages publication uses identical verified bytes |
-| AC-10 | Documentation and evidence accurately distinguish intended scope, source implementation, CI/package proof and owner-installed acceptance |
-| **AC-11** | **Effective pre-pkg transaction safety:** all supported upgrade/reinstall entrypoints refuse unsafe, foreign, incomplete, FD9-busy or racing old owner **before** native pkg replacement with unchanged package bytes/identity, Config, markers, processes and IPFW; qualified interruption/recovery and explicit honest root-bypass limits. A failed +PRE_INSTALL alone does not meet this criterion |
+| AC-01 | One qualified Python invocation contract across real consumers, with appropriate working Status/Stop under Python failure. |
+| AC-02 | No scattered hard-coded production Python minor-version executable paths. |
+| AC-03 | Real system dependencies are owned by target OPNsense `pkg`; `setup.sh` no longer enables stock FreeBSD repositories. |
+| AC-04 | The existing single compatibility matrix covers supported OPNsense/FreeBSD ABI, CPU and Python without duplicating installed versions. |
+| AC-05 | All package types use official `Mk/plugins.mk` / `make package` through the existing single builder. |
+| AC-06 | GUI, configd, service, Strategies, Voice, Lab, Exclude and Extra Resources retain accepted behavior. |
+| AC-07 | Preserve product names, `zapret` namespace, `VERSION`/`PLUGIN_REVISION` and separate upstream engine manager. |
+| AC-08 | Installed file modes, hooks, private ELF and normal service work; documented IPFW rule ranges and existing PF behavior unchanged. |
+| AC-09 | CI checks actual package/ABI/Python regressions and the final package SHA. |
+| AC-10 | **All active** TЗ, plan, README, architecture, requirements, state, roadmap/index and CI instructions agree; old experimental history does not block release. |
+| **AC-11** | Native `pkg` install/update/reinstall/remove and service lifecycle tested with retained settings where appropriate; **no universal PRE_INSTALL veto or independent package-approval system**. |
 
-All **AC-01–AC-11** and **LH-01–LH-08** are required for engineering completion, not for this documentation PR. AC-11 remains BLOCKED by the reproduced _74 native experiment until a protected entrypoint passes its negative tests.
+## 14. Reporting
 
-## 14. Required final implementation report
+Record source/upstream SHAs, supported target ABI, actual dependencies, native package SHA-256, test results and legitimate limitations. Never infer owner-installed PASS from source CI.
 
-Report exact source/upstream SHA, matrix schema/hash, final package SHA-256, full-tree exceptions and touched files, dependency purpose/execution location/provisioning owner, target-repository/environment bootstrap evidence, `pkg query` metadata and extracted `+MANIFEST`, private artifact hashes and target ELF/dynamic-library provenance, FreeBSD/OPNsense ABI, old/new package content/mode comparisons, Python-loss safe Stop/Status and bounded repository override/backup restoration-or-refusal evidence, actual fast checks, CI links and the bounded target/owner-appliance evidence. List skipped/unverified cases explicitly; do not attach earlier artifact results to unverified rebuilt bytes.
+## 15. Excluded architecture
 
-Publication authority follows [CHAT-015–CHAT-017 and CHAT-027](../CHAT_RULES.md), [GH-034–GH-040 and GH-060–GH-061](../GITHUB_PUBLICATION.md). An owner command to make a patch/package already includes the applicable testing-package delivery and its documentation tail when a package candidate is involved; do not request a second publication permission. Full stable release promotion requires explicit release authority. This documentation-only revision authorizes neither implementation nor package delivery; an explicit build/CI-only instruction may also stop at that requested boundary.
+No external approval server, SQLite authorization journal, one-use crypto permissions, root `pkg` warnings/interception, managed privileged package gateway, universal pre-pkg refusal, new IPFW allocator/collision surveys, shaper flush monitoring or `pfilctl` migration.
 
-## 15. Explicit prohibitions
+## 16. Official references
 
-Do not create a new package/dependency manager, custom Python version manager, altered OPNsense build-system fork, parallel package builder, speculative platform adapters, legacy product fallbacks, or an indiscriminate production code rewrite. No service rename; no change to engine version ownership.
-
-The approved specification is the normative specialist contract for this **new** scope. Its publication is **documentation only**. The separately approved per-file plan v1.4 is current; Stage 0 audit closed, Stage 1 qualified, and installed/owner native transaction safety (LH-08) remains unproven. Further implementation/delivery follows the approved plan and applicable publication rules; its testing-package authority is interpreted under section 14 without duplicate confirmation, while stable promotion remains separately owner-controlled.
-
-## 16. Official reference implementation
-
-- [OPNsense defaults and native Python variables](https://github.com/opnsense/plugins/blob/stable/26.7/Mk/defaults.mk).
-- [OPNsense native plugin builder](https://github.com/opnsense/plugins/blob/stable/26.7/Mk/plugins.mk).
-- [Official HAProxy plugin](https://github.com/opnsense/plugins/blob/stable/26.7/net/haproxy/Makefile).
-- [Official ACME plugin](https://github.com/opnsense/plugins/blob/stable/26.7/security/acme-client/Makefile).
-- [Official ddclient plugin](https://github.com/opnsense/plugins/blob/stable/26.7/dns/ddclient/Makefile).
-- [OPNsense system package and repository policy](https://docs.opnsense.org/manual/software_included.html).
-- [OPNsense ports generic Python provider](https://github.com/opnsense/ports/blob/a484faf5039260edc4a24a6a29005d0e8ff62966/lang/python3/Makefile) — inspected reference only; actual target package/link identity is verified for each qualified build environment.
-
-**Approved architecture:** project source → isolated complete official OPNsense tree → native `PLUGIN_PYTHON`, `Mk/plugins.mk` and FreeBSD `pkg` → exact package/metadata → unified compatibility matrix and Python execution contract → CI and evidence-based acceptance.
-
-General canonical rules remain in [PROJECT_PRINCIPLES.md](../PROJECT_PRINCIPLES.md); current priority/handoff remain in [ROADMAP.md](../ROADMAP.md) and [START_HERE.md](../START_HERE.md).
+- [OPNsense official plugins](https://github.com/opnsense/plugins/tree/stable/26.7), including `Mk/plugins.mk`.
+- [OPNsense nginx](https://github.com/opnsense/plugins/tree/stable/26.7/www/nginx).
+- [OPNsense IPFW template](https://github.com/opnsense/core/blob/stable/26.7/src/opnsense/service/templates/OPNsense/IPFW/ipfw.conf).

@@ -17,7 +17,19 @@ The zapret2 engine remains an external runtime component managed by this plugin.
 
 General project-development principles are canonical only in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) (`DEV-*`). This file defines product-specific requirements and does not duplicate that general rule book.
 
-## Current first-priority requirements — IPv4/IPv6 and global Exclude IPSet (2026-10-28)
+## Текущий приоритет — закончить нативный плагин OPNsense (5 ноября 2026)
+
+Утверждено [ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [конкретный план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md). Основные требования: штатные `pkg`/ `Mk/plugins.mk`, целевые зависимости OPNsense, единый квалифицированный Python, нативный `configd`/rc/GUI/сервис/hooks и установленный конечный пакет.
+
+**Отменены:** собственная авторизация обновлений `pkg`, внешний SQLite-свидетель, криптографические grant, предупреждения и перехватчики прямого root-`pkg`, обязательный универсальный PRE_INSTALL-veto, новые проверки/распределение чужих IPFW-правил, шейпер-flush monitoring и переход на OPNsense-only `pfilctl`. Существующий `pfctl -d; pfctl -e` остаётся.
+
+**IPFW номера правил (не сетевые порты):** обычный Zapret2/Strategies `19000–19010`, Strategy Lab `19100–19131`. Уже реализованная безопасная холодная загрузка IPFW не переписывается без дефекта.
+
+**Начало исполнения:** удалить отменённые pkg-approval source/CI, сохранить нужные тесты обычных pkg/FD9/hooks/ABI, **после удаления проверить активную техническую документацию и README на противоречия**. Затем довести имеющийся native builder до установки, устранить дублирование зависимостей и Python, проверить сервис/hooks и конечный пакет.
+
+Ниже сохранены ранее принятые функциональные требования к IPv4/IPv6/Exclude. Они не являются текущим новым этапом разработки и не отменяют ограничение на повторные испытания.
+
+## Ранее принятые функциональные требования — IPv4/IPv6 and global Exclude IPSet (2026-10-28)
 
 **Implemented in source and native CI; bounded owner-installed acceptance now available:** [Technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) (DS-01–DS-26; acceptance A01–A26) and [staged implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md). Both documents have precedence for this **new** work over older IPv4-only *future* language elsewhere in this historical requirements file; they do **not** retroactively change descriptions of currently installed IPv4-only behavior.
 
