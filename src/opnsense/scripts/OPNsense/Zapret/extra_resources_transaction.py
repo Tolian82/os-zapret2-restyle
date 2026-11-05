@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Durable, fail-closed managed Lua/BIN publication, independent of service wiring.
 
 A caller MUST serialize setup.lock -> existing lifecycle FD9 and supply a

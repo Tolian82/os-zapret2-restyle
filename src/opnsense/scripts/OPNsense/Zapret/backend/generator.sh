@@ -214,14 +214,11 @@ generator_apply_final_exclusions()
 {
     _generator_policy_action="$1"
     shift
-    _generator_policy_python="/usr/local/bin/python3.13"
-    if [ ! -x "${_generator_policy_python}" ]; then
-        _generator_policy_python=$(command -v python3.13 2>/dev/null) ||
-            _generator_policy_python=$(command -v python3 2>/dev/null) || {
-                common_error "Python 3 runtime for native profile policy is unavailable"
-                return 1
-            }
-    fi
+    _generator_policy_python="${PYTHON_RUNTIME:-${BACKEND_DIR%/backend}/python_runtime.sh}"
+    [ -x "${_generator_policy_python}" ] || {
+        common_error "qualified Python runtime for native profile policy is unavailable"
+        return 1
+    }
     [ -r "${BACKEND_DIR}/global_exclusions.py" ] || {
         common_error "native global Exclude IPSet profile policy is missing"
         return 1

@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Original setup.lock -> native FD9 read-only saved Strategies input preview.
 
 This is an INPUT ATTESTATION only, NOT a compatibility preflight or remove

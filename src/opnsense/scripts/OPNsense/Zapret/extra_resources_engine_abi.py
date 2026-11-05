@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Read-only ABI fingerprint of the INSTALLED dvtws2 ELF; never execute it.
 
 This is *not* a Lua or engine preflight. The installed engine can link a

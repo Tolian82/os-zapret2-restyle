@@ -104,23 +104,10 @@ targets_normalize_hostlist()
 
 targets_python_bin()
 {
-    # The installed OPNsense package pins Python 3.13. Source-only tests
-    # may use a test interpreter, but not the installed appliance.
-    local python_bin=/usr/local/bin/python3.13
+    local python_bin="${PYTHON_RUNTIME:-${BACKEND_DIR%/backend}/python_runtime.sh}"
     if [ ! -x "${python_bin}" ]; then
-        case "${BACKEND_DIR:-}" in
-            /usr/local/opnsense/scripts/OPNsense/Zapret/backend)
-                common_error "pinned Python 3.13 is required for managed IPv4/IPv6 targets"
-                return 1
-                ;;
-            *)
-                python_bin=$(command -v python3.13 2>/dev/null) ||
-                    python_bin=$(command -v python3 2>/dev/null) || {
-                        common_error "Python is required for IPSET compilation"
-                        return 1
-                    }
-                ;;
-        esac
+        common_error "qualified Python runtime is required for managed IPv4/IPv6 targets"
+        return 1
     fi
     printf '%s\n' "${python_bin}"
 }

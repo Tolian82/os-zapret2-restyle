@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Cached, provenance-aware inventory for the Strategies full-help panel.
 
 Refresh ONLY after a native resource/upstream transaction. The GUI read command

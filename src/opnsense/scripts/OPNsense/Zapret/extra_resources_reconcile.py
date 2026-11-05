@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Exact Lua/BIN reconciliation planner for the installed Zapret2 Git HEAD.
 
 Read-only. Caller serializes with setup.lock and the native FD9 lifecycle.

@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Fail-closed Lua/BIN file-reference witness for an ORIGINAL native candidate.
 
 Operate on *compiled* dvtws.args, NEVER browser XML or a duplicate Strategies

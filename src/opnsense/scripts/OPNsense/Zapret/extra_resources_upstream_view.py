@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Isolated upstream-only Lua/BIN view for prospective native compilation.
 
 Stage 2 foundation ONLY. Building the view is not a Strategies/Voice

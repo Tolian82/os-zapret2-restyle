@@ -89,7 +89,7 @@ STRATEGY_LAB_PYTHON_BIN="${TEST_ROOT}/python312" "${LAUNCHER}" --self-test >"${T
 status=$?
 set -e
 [ "${status}" -eq 70 ] || fail "unsupported Python returned ${status}, expected 70"
-grep -Fq 'unsupported interpreter version 3.12; expected 3.13' "${TEST_ROOT}/version.err" ||
+grep -Fq 'interpreter did not validate policy: 3.12' "${TEST_ROOT}/version.err" ||
     fail 'unsupported Python error is not deterministic'
 
 grep -Fq 'STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"' "${SERVICE}" ||
@@ -97,6 +97,26 @@ grep -Fq 'STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab
 ! grep -Fq 'strategy_lab_python_launcher.sh' "${SERVICE}" ||
     fail 'Python launcher must remain outside the production worker call path before the stage-machine cutover'
 
+# The real test interpreter must refuse an unqualified supported branch.
+"${PYTHON_BIN}" - "${ROOT_DIR}/compatibility.json" "${TEST_ROOT}/incompatible-policy.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+data["supported_platforms"][0]["python"]["supported"] = ["3.12"]
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    json.dump(data, f)
+PY
+set +e
+ZAPRET_PYTHON_POLICY="${TEST_ROOT}/incompatible-policy.json" \
+STRATEGY_LAB_PYTHON_BIN="${PYTHON_BIN}" "${LAUNCHER}" --self-test >"${TEST_ROOT}/policy.out" 2>"${TEST_ROOT}/policy.err"
+status=$?
+set -e
+[ "${status}" -eq 70 ] || fail "unsupported manifest Python returned ${status}"
+grep -Fq 'unsupported interpreter version 3.13; qualified branches: 3.12' "${TEST_ROOT}/policy.err" ||
+    fail "launcher did not enforce the compatibility manifest"
+
+sh -n "${ZAPRET_DIR}/python_runtime.sh"
 sh -n "${LAUNCHER}"
 sh -n "$0"
 echo 'PASS: Strategy Lab Python 3.13 foundation, state module imports, compatibility delegation, and unchanged production worker path'

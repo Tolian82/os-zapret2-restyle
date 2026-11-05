@@ -22,7 +22,8 @@ fi
 MOCK
 chmod 700 "$TMP/fakepython"
 sed -n '/^extra_resources_native_recover_prepared_service()$/,/^}$/p' "$SRC" > "$TMP/extracted"
-sed "s@/usr/local/bin/python3.13@$TMP/fakepython@g" "$TMP/extracted" > "$TMP/native.sh"
+PYTHON_RUNTIME="$TMP/fakepython"
+cp "$TMP/extracted" "$TMP/native.sh"
 sh -n "$TMP/native.sh" || fail syntax
 . "$TMP/native.sh"
 LOG="$TMP/log"

@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.13
+#!/usr/local/bin/python3
 """Read-only immutable-revision preflight for manually installed Zapret2 extras.
 
 No files are installed by this program. This is the first safety increment

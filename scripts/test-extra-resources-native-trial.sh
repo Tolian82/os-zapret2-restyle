@@ -21,7 +21,8 @@ SH
 chmod 700 "$TMP/fakepython"
 sed -n '/^extra_resources_native_trial_abort_service()$/,/^}$/p' "$SOURCE" > "$TMP/native.sh"
 sed -n '/^extra_resources_native_trial_service()$/,/^}$/p' "$SOURCE" >> "$TMP/native.sh"
-sed "s@/usr/local/bin/python3.13@$TMP/fakepython@g" "$TMP/native.sh" > "$TMP/native-test.sh"
+PYTHON_RUNTIME="$TMP/fakepython"
+cp "$TMP/native.sh" "$TMP/native-test.sh"
 sh -n "$TMP/native-test.sh" || fail "actual native trial body syntax"
 . "$TMP/native-test.sh"
 EXTRA_RESOURCES_SETUP_LOCK_OWNER=1

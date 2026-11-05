@@ -16,7 +16,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 - `Makefile` uses `.include "../../Mk/plugins.mk"` and `PLUGIN_DEPENDS`.
 - `scripts/build-pkg.sh` (19 lines) delegates to `scripts/native-opnsense-package.py`. This is **already written** and has native CI coverage; complete it rather than start a second package engine.
 - `compatibility.json`, the `zapret` service, GUI, Strategies, Voice, Exclude, Lab and Extra Resources are present.
-- Source `_138` removes setup-side stock FreeBSD repository enable/restore and independent `pkg update/install` of mandatory system packages, replacing them with read-only checks for installed OPNsense dependencies and legacy repo residue. Runtime and hooks still have hard-coded `python3.13`; Python unification is the **next** scoped work package.
+- Merged `_138` [PR #908](https://github.com/Tolian82/os-zapret2-restyle/pull/908) proved native dependency ownership/no stock repo writes with 15/15 exact-head CI PASS and postmerge main CI PASS. Source candidate `_139` replaces direct production minor paths with one policy-checked generic Python exec wrapper, documented PRE_INSTALL timing exception and test fixtures. Native installed validation plus Python-independent Stop/Status still required.
 - The cancelled experimental `backend/native_pkg_*`, standalone pre-pkg, Stage 3 external approval/FD9 tools/tests and workflows were removed in source revision `_137`. Historical evidence remains historical; source/native CI outcomes require separate verification.
 - Unmerged branch `work/v0.6.2_136-offguest-host-checkpoint-ci` is abandoned. **Do not merge or develop it.**
 
@@ -48,7 +48,7 @@ Inspect real current entrypoints and tests before writing. Fix confirmed failure
 
 ## THIRD task — system dependencies and one Python contract
 
-**In-progress `_138`:** setup system-dependency ownership only. Delete redundant `pkg update/install` and FreeBSD.conf toggle; fail clearly for missing installed OPNsense packages/tools and ambiguous legacy repo configuration without touching it. Add negative read-only tests and native CI. **Python minor-path unification is not claimed or included in `_138`.**
+**Completed `_138`:** setup dependency provisioning belongs to native OPNsense `pkg`, no FreeBSD repo mutating operation; source/native tests passed and merged. **In-progress `_139`:** migrate actual Python caller paths to the generic `/usr/local/bin/python3` resolved by one small `python_runtime.sh`, validating installed `compatibility.json` before Python-dependent execution. Keep incoming PRE_INSTALL independent of uninstalled package resources. **Not yet accepted:** real installed source candidate, early pre-mutation refusal for every Start/Apply route, Python-independent safe Stop/Status, final sha; no new Stage 3 infrastructure.
 
 **Files:** `setup.sh`, `setup_launcher.sh`/`setup_transaction.sh`, backend shell/Python, Strategy Lab, Voice, Extra Resources, PHP APIs, `actions_zapret.conf` and hooks.
 
