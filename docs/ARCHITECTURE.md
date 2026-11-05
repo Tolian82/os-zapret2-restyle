@@ -4,6 +4,14 @@
 
 The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [v0.5.2 implementation plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) owns the proposed code changes and controls. Stage `v0.5.2_1` was opened without release; the owner has now instructed execution of the detailed plan. Existing frontend/backend behavior is unchanged by that version transition. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
 
+## Текущая нативная архитектура — утверждённое направление (5 ноября 2026)
+
+[ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) требуют одного нативного пакета OPNsense через `Mk/plugins.mk`, штатных зависимостей `pkg`, квалифицированного Python и управления `configd`/rc/четырьмя hooks. Существующие `scripts/build-pkg.sh` и `scripts/native-opnsense-package.py` являются базой, не объектами повторного переписывания.
+
+**Отменённая архитектура:** отдельный сервер/SQLite-свидетель/подписанные разрешения, root-`pkg` interceptor, самостоятельный шлюз обновления, новые исследования IPFW/PF. Связанные файлы экспериментов остаются в исходниках лишь до первого cleanup PR, не являются производственным runtime или релизным барьером.
+
+**Номера правил IPFW (не порты):** основной Zapret2/Strategies `19000–19010`; Strategy Lab `19100–19131`. Новые проверки чужих правил, динамический allocator, мониторинг shaper flush и механизм восстановления не разрабатываются. Существующая холодная загрузка IPFW и `pfctl -d; pfctl -e` сохраняются без изменений. OPNsense-only `sync_fw_hooks.py`/ `pfilctl` не вводятся; перенос на pfSense — будущая отдельная задача.
+
 ## Document role
 
 Question answered:
