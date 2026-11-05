@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
-Текущий этап — **`v0.6.2_146`**; `VERSION=0.6.2`, `PLUGIN_REVISION=146`, package candidate: `os-zapret2-restyle-0.6.2_146.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
+Текущий этап — **`v0.6.2_147`**; `VERSION=0.6.2`, `PLUGIN_REVISION=147`, package candidate: `os-zapret2-restyle-0.6.2_147.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
@@ -33,7 +33,7 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 
 ## Выпуск, границы доказательств и приёмка
 
-**Опубликовано:** полноценный стабильный [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), неизменный пакет `0.6.2_1.pkg`. `_137` слит в исходный `main` и квалифицировал реальные CI build/install; `_138` слит в `main`; `_139` слит в main, `_140` слит в исходный main; `_141`–`_145` — принятые неопубликованные исходные ревизии; `_146` — исходный кандидат с подтверждённым реальным установленным общим Voice/Strategies на одноразовой OPNsense, без новой публикации. На устройстве владельца ничего не менялось.
+**Опубликовано:** полноценный стабильный [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2), неизменный пакет `0.6.2_1.pkg`. `_137` слит в исходный `main` и квалифицировал реальные CI build/install; `_138` слит в `main`; `_139` слит в main, `_140` слит в исходный main; `_141`–`_145` — принятые неопубликованные исходные ревизии; `_146` принят ([PR #916](https://github.com/Tolian82/os-zapret2-restyle/pull/916), 17/17 exact-head и postmerge CI/Release trigger PASS): установленный общий Voice/Strategies на одноразовой OPNsense. `_147` — исходный кандидат HTTPS Voice Apply с проверкой токена и возвратом настроек; реальный браузерный клик, WAN и финальный пакет не приняты. Новой публикации нет. На устройстве владельца ничего не менялось.
 
 **Подтверждено:** ранее принятые функции текущего выпуска имеют свои независимые CI/installed доказательства, не переписываются и не проходят заново отменённые лабораторные кампании. IPv6 на IPv4-only owner stand был явно waived; непроверенные WAN/Voice media не называем PASS.
 

@@ -933,6 +933,9 @@ jobs:
       - name: Test installed shared Strategies and Voice owner negative contracts
         run: python3.13 scripts/stage2-opnsense-real-native-shared-voice.py --self-test
 
+      - name: Test real native Voice HTTP form and token negative contracts
+        run: python3.13 scripts/stage2-opnsense-real-native-voice-http.py --self-test
+
       - name: Test native firmware uninstall registration and config retention
         run: python3.13 scripts/test-stage2-opnsense-real-native-remove.py
 

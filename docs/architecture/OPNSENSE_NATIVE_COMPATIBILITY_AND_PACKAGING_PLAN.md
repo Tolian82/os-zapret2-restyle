@@ -70,6 +70,8 @@ Test actual fresh installation, Start/Stop/Restart/Status/Apply, boot integratio
 
 **Exit:** standard service and lifecycle works correctly on isolated target, no independent package authorization infrastructure.
 
+**Current `_147` (source-only, pending genuine CI):** the installed HTTPS Voice-page/API on disposable OPNsense 26.7 is exercised through a cookie-authenticated localhost session after the accepted `_146` real common owner. The exact five-profile AJAX form and current Config snapshot must refuse stale submissions before mutation; authenticated Apply modifies only Telegram's test STUN UDP 3478→3479, then reverses to 3478. Verify shared original-FD9 journal, one dvtws2, scoped lo0 IPFW and Config restoration. This is an actual HTTP API user path, not a physical browser click. No WAN/Voice media or owner appliance mutation, production changes, or release publication.
+
 ## FIFTH task — CI consistency and final acceptance
 
 Make `ci.yml`, testing/release and Pages delivery use one native package builder. Run relevant installed regressions for Strategies, Voice, Exclude, Lab, Extra Resources and service. Bind results to the exact **final native package SHA-256**. Record previous IPv6/WAN/Voice-media waivers as NOT TESTED where applicable; do not reopen closed campaigns or claim PASS without observations.
