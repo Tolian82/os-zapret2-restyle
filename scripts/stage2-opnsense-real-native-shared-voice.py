@@ -106,6 +106,9 @@ def test_contracts():
         assert str(error) == 'INSTALLED_ACTION_REFUSED:php:rc=69'
     else:
         raise AssertionError('private PHP source leaked or action accepted')
+    assert safe_fixture_diagnostic('DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=serialize:type=RuntimeException\n') == 'serialize:RuntimeException'
+    assert safe_fixture_diagnostic('SECRET_PRIVATE_PHP_PROGRAM') == 'unclassified'
+    assert safe_fixture_diagnostic('DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=save:type=TypeError\nsecret') == 'unclassified'
     print('PASS: native shared Voice loopback/journal/error-redaction contracts')
 
 
@@ -118,6 +121,16 @@ def invoke(active, *args, timeout=300):
     return response.stdout
 
 
+def safe_fixture_diagnostic(stderr):
+    # Only an exact fixed diagnostic may be emitted; never echo PHP exception
+    # text, user data, command argv, arbitrary tag names or Config.
+    match = re.fullmatch(
+        r'DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage='
+        r'(?:model|read|off|edit|set|serialize|save):type='
+        r'(?:RuntimeException|TypeError|Error|Other)\n?', stderr)
+    return stderr.split('stage=', 1)[1].strip().replace(':type=', ':') if match else 'unclassified'
+
+
 def prepare_fixture(active, boot):
     need(not JOURNAL.exists() and not JOURNAL.is_symlink(),
          'FOREIGN_SHARED_OWNER_EXISTS_BEFORE_VOICE_TEST')
@@ -128,33 +141,47 @@ def prepare_fixture(active, boot):
     php = r'''require_once('script/load_phalcon.php');
 $config = \OPNsense\Core\Config::getInstance();
 $config->lock();
+$stage = 'model';
 try {
     $model = new \OPNsense\Zapret\Zapret();
+    $stage = 'read';
     $nodes = $model->getNodes();
+    $stage = 'off';
     foreach (['telegram','discord','x','sip','custom'] as $name) {
         if (($nodes['voice'][$name]['enabled'] ?? '0') !== '0') {
             throw new \RuntimeException('Fixture requires all Voice OFF');
         }
     }
+    $stage = 'edit';
     $nodes['hostlist']['telegramips'] = '192.0.2.42/32';
     $nodes['voice']['telegram']['args'] = "--filter-udp=3478\n--filter-l7=stun\n--payload=stun\n--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2";
+    $stage = 'set';
     $model->setNodes($nodes);
     // The isolated lo0 test interface is not an end-user selectable WAN.
     // Match the accepted _145 native synthetic MVC canonicalization: the
     // installed serializer runs, but UI InterfaceField validation is not a
     // requirement for the deliberately isolated testing fixture.
+    $stage = 'serialize';
     if (!$model->serializeToConfig(false, true)) {
         throw new \RuntimeException('Fixture model validation refused');
     }
+    $stage = 'save';
     $config->save(['description'=>'Disposable scoped Voice OFF fixture']);
 } catch (\Throwable $error) {
-    fwrite(STDERR, "DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED\n");
+    $class = get_class($error);
+    if (!in_array($class, ['RuntimeException', 'TypeError', 'Error'], true)) {
+        $class = 'Other';
+    }
+    fwrite(STDERR, "DISPOSABLE_NATIVE_VOICE_FIXTURE_REFUSED:stage=$stage:type=$class\n");
     exit(69);
 } finally {
     $config->unlock();
 }
 '''
-    invoke(active, '/usr/local/bin/php', '-r', php, timeout=60)
+    response = active.cmd(['/usr/local/bin/php', '-r', php], timeout=60)
+    need(response.returncode == 0,
+         'INSTALLED_VOICE_OFF_FIXTURE_PHP_REFUSED:rc=' +
+         str(response.returncode) + ':' + safe_fixture_diagnostic(response.stderr))
     saved = active.CONFIG.read_bytes()
     need(boot.config_except_model(saved) == foreign and
          boot.protected_model_values(saved) == strategies,
