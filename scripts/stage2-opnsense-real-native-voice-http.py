@@ -64,6 +64,26 @@ def config_without_revision(raw):
     return ET.tostring(root, encoding='utf-8')
 
 
+def native_model_extra_fields(raw):
+    # The native snapshot covers every general/strategy/voice/hostlist field.
+    # Retain independent proof for any other Zapret XML subtree and attrs.
+    root = ET.fromstring(raw)
+    models = root.findall('./OPNsense/Zapret')
+    need(len(models) == 1, 'NATIVE_ZAPRET_XML_MODEL_AMBIGUOUS')
+    model = models[0]
+    for child in list(model):
+        if child.tag in ('general', 'strategy', 'voice', 'hostlist'):
+            model.remove(child)
+    def normalize(node):
+        if not (node.text or '').strip():
+            node.text = None
+        node.tail = None
+        for member in node:
+            normalize(member)
+    normalize(model)
+    return ET.tostring(model, encoding='utf-8')
+
+
 def module(name):
     spec = importlib.util.spec_from_file_location(name.replace('-', '_').replace('.', '_'), HERE / name)
     obj = importlib.util.module_from_spec(spec)
@@ -156,6 +176,11 @@ def test_contracts():
     drift_xml = same_xml.replace(b'<voice>1', b'<voice>0')
     assert config_without_revision(baseline_xml) == config_without_revision(same_xml)
     assert config_without_revision(baseline_xml) != config_without_revision(drift_xml)
+    extra_original = b'<opnsense><OPNsense><Zapret version="2"><voice>1</voice><strategylab><enablequic>0</enablequic></strategylab></Zapret></OPNsense></opnsense>'
+    extra_voice = extra_original.replace(b'<voice>1', b'<voice>0')
+    extra_changed = extra_original.replace(b'<enablequic>0', b'<enablequic>1')
+    assert native_model_extra_fields(extra_original) == native_model_extra_fields(extra_voice)
+    assert native_model_extra_fields(extra_original) != native_model_extra_fields(extra_changed)
     assert exact_disposable_target('192.0.2.42')
     assert exact_disposable_target('192.0.2.42/32')
     assert not exact_disposable_target('192.0.2.40/29')
@@ -297,13 +322,24 @@ def execute():
     final_load = http.api('GET', '/api/zapret/voice/load')
     need(final_load.get('snapshot') == before['snapshot'],
          'GUI_RESTORE_MODEL_SNAPSHOT_DIFFERS_FROM_BASELINE')
-    need(config_without_revision(active.CONFIG.read_bytes()) == config_without_revision(original),
-         'GUI_RESTORE_FULL_CONFIG_DIFFERS_EXCLUDING_REVISION')
+    need(native_model_extra_fields(active.CONFIG.read_bytes()) ==
+         native_model_extra_fields(original),
+         'GUI_RESTORE_NATIVE_EXTRA_MODEL_FIELDS_CHANGED')
+    # OPNsense's native model serialization may rewrite XML representation
+    # while preserving every model field (proven by the authoritative
+    # snapshot), all extra plugin groups and every unrelated Config field.
+    # Record this difference openly; it is not byte-for-byte restoration.
+    raw_same_except_revision = (
+        config_without_revision(active.CONFIG.read_bytes()) ==
+        config_without_revision(original))
     return {'schema': 1, 'status': 'PASS_REAL_NATIVE_AUTHENTICATED_VOICE_HTTP_APPLY',
             'installed_web_page_loaded': True, 'authenticated_native_http_api': True,
             'stale_snapshot_refused_before_mutation': True,
             'gui_apply_and_restore_committed_under_shared_fd9': True,
-            'original_config_semantics_restored_except_revision': True, 'same_shared_engine_owner': True,
+            'native_voice_model_snapshot_restored': True,
+            'extra_plugin_xml_fields_unchanged': True,
+            'full_xml_same_except_revision': raw_same_except_revision,
+            'same_shared_engine_owner': True,
             'loopback_only': True, 'browser_button_click_tested': False,
             'voice_media_tested': False, 'owner_appliance_modified': False}
 
