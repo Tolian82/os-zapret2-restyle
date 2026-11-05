@@ -2350,6 +2350,53 @@ shared_apply_has_record_service()
     [ -e /var/db/zapret2/shared-apply ] ||
     [ -L /var/db/zapret2/shared-apply ]
 }
+# Emergency STOP only for an independently verified *ordinary Strategies*
+# owner, if the qualified interpreter or its policy is unavailable. Never
+# classify a shared Apply journal (even a symlink), Voice release or an
+# unfinished resource transaction as legacy. The original FD9 is held by
+# service_with_lifecycle_lock throughout these checks and Stop.
+stop_legacy_without_python_service()
+{
+    if shared_apply_has_record_service ||
+       [ -e "${ACTIVE_DIR}/voice-plan.json" ] ||
+       [ -L "${ACTIVE_DIR}/voice-plan.json" ]; then
+        echo "ERROR: shared/Voice ownership requires qualified Python; refusing unverified Stop" >&2
+        return 69
+    fi
+    extra_resources_block_pending_start_service || return 69
+
+    _pythonless_legacy_status=$(orchestrator_native_status \
+        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}")
+    _pythonless_legacy_rc=$?
+    case "${_pythonless_legacy_rc}" in
+        1)
+            # No owned process or intercepting rules: an idempotent no-op,
+            # never an unconditional IPFW delete.
+            echo "zapret is not running (stopped)"
+            return 0
+            ;;
+        0) ;;
+        *)
+            echo "ERROR: incomplete/unknown legacy owner; no Python-down Stop performed" >&2
+            return 69
+            ;;
+    esac
+
+    # The existing native shell owner still verifies expected dvtws2 and
+    # supervisor PIDs; its ordinary Stop manages only the normal rule range.
+    stop_service || return 70
+    _pythonless_legacy_after=$(orchestrator_native_status \
+        "${CHILD_PIDFILE}" "${SUPERVISOR_MONITOR_PIDFILE}" \
+        "${RULE_BASE}" "${RULE_MAX}" "${ACTIVE_DIR}")
+    _pythonless_legacy_after_rc=$?
+    if [ "${_pythonless_legacy_after_rc}" -ne 1 ]; then
+        echo "ERROR: Python-down Stop did not verify complete native shutdown" >&2
+        return 70
+    fi
+    return 0
+}
+
 service_with_lifecycle_lock()
 {
     _service_lock_timeout="$1"
@@ -2372,6 +2419,15 @@ service_with_lifecycle_lock()
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
+        # A verified ordinary Strategies owner is shell-controlled. If
+        # Python is broken, allow ONLY its bounded native Stop; all unknown
+        # common/Voice ownership remains blocked, and Restart/Apply still
+        # fail before any Config or IPFW mutation.
+        if [ "${1:-}" = stop ] &&
+           ! "${PYTHON_RUNTIME}" --check >/dev/null 2>&1; then
+            stop_legacy_without_python_service
+            return $?
+        fi
         # Do not permit ANY legacy lifecycle action to overwrite the
         # evidence of an interrupted Voice cutover. Status/inspection remain
         # available, and no journal is created during normal operation.
