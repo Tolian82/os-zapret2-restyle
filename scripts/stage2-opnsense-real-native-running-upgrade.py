@@ -145,11 +145,20 @@ def verify_running_successor(engine_sha, prior_processes, prior_rules):
             "restart_markers_consumed": True, **drained}
 
 
-def execute(archive):
+def execute(archive, *, prebuilt_native_report=None):
     require_disposable()
     clean.plugin_absent()
     stopped.check_old_archive(archive)
-    native_build = native.build()  # official native Mk source-built before old install
+    if prebuilt_native_report is None:
+        native_build = native.build()  # original isolated native Mk build
+    else:
+        # Stage 5 MUST reuse the single already built archive: this optional
+        # test-only route does not introduce another builder or change pkg.
+        need(os.environ.get("ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT") == "1",
+             "PREBUILT_ARCHIVE_REQUIRES_DISPOSABLE_STAGE5_OPTIN")
+        need(isinstance(prebuilt_native_report, dict),
+             "PREBUILT_REPORT_SHAPE_UNQUALIFIED")
+        native_build = prebuilt_native_report
     need(native_build["status"] == "PASS_OFFICIAL_NATIVE_BUILD_SOURCE_ONLY" and
          native_build["project_sha"] == os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA"),
          "CURRENT_OFFICIAL_NATIVE_BUILD_UNQUALIFIED")
