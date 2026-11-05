@@ -1,6 +1,17 @@
 name: Stage 5 single native package SHA and installed payload
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - Makefile
+      - VERSION
+      - compatibility.json
+      - scripts/build-pkg.sh
+      - scripts/native-opnsense-package.py
+      - scripts/stage2-opnsense-real-native-clean-install.py
+      - scripts/stage5-native-single-artifact.py
+      - .github/workflows/stage5-native-single-artifact.yml
   pull_request:
     branches: [main]
     paths:
