@@ -1,0 +1,81 @@
+name: Stage 2 real installed OPNsense shutdown and boot syshook lifecycle
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/stage2-opnsense-real-native-running-upgrade.py
+      - scripts/stage2-opnsense-real-native-active-service.py
+      - scripts/stage2-opnsense-real-native-boot-syshook.py
+      - scripts/test-stage2-opnsense-real-native-boot-syshook.py
+      - .github/workflows/stage2-real-native-boot-syshook.yml
+  workflow_dispatch:
+    inputs:
+      fast_only:
+        description: Run only off-target safety/boot-contract tests
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  actual-native-boot:
+    name: Real clean shutdown and new OPNsense kernel with installed native dvtws2
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Compile and run 21 boot witness negative contracts
+        run: |
+          python3.13 -m py_compile scripts/stage2-opnsense-real-native-boot-syshook.py scripts/test-stage2-opnsense-real-native-boot-syshook.py
+          python3.13 scripts/test-stage2-opnsense-real-native-boot-syshook.py -v
+      - name: Prepare genuine installed active engine, CLEAN shutdown, reboot and attest actual syshooks
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.fast_only != true) }}
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          cpu: 2
+          mem: 4096
+          # This specifically shuts down the prepared VM cleanly and boots
+          # another QEMU kernel; disable-cache MUST NOT be true.
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit lua54
+            /usr/local/bin/pkgconf --exists lua-5.4
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            # Accepted historical RUNNING -> real native installed successor;
+            # creates a single ordinary Strategies dvtws2 on lo0 TCP 65431.
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
+            # Install only passive test-owned observers AFTER genuine 20-zapret
+            # hooks. Do NOT issue a manual stop/start between prepare and run.
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_BOOT_SYSHOOK=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-boot-syshook.py prepare
+          run: |
+            set -eu
+            # SSH can be reachable before all system start hooks finish.
+            # Poll only for a passive witness emitted by the actual NEW boot.
+            polls=0
+            until [ -f /root/stage2-zapret-native-real-boot/start.done ] || [ "$polls" -ge 90 ]; do
+              sleep 2
+              polls=$((polls + 1))
+            done
+            echo "NATIVE_BOOT_WITNESS_POLLS=$polls"
+            if [ -f /root/stage2-zapret-native-real-boot/start.status ]; then
+              echo "=== OBSERVED BOOT START STATUS ==="
+              cat /root/stage2-zapret-native-real-boot/start.status
+            fi
+            if [ -f /root/stage2-zapret-native-real-boot/stop.status ]; then
+              echo "=== OBSERVED SHUTDOWN STOP STATUS ==="
+              cat /root/stage2-zapret-native-real-boot/stop.status
+            fi
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_BOOT_SYSHOOK=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-boot-syshook.py verify
