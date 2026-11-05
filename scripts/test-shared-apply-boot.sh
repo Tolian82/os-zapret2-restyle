@@ -3,7 +3,15 @@ set -eu
 ROOT=$(mktemp -d "${TMPDIR:-/tmp}/shared-boot.XXXXXXXX") || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
-PYTHON_RUNTIME="${PYTHON_RUNTIME:-/nonexistent/isolated-python-runtime-fixture}"
+# Extracted lifecycle functions do not source the production header.
+# Mock only the read-only qualified-Python preflight; the real launcher and
+# inherited FD9 are checked in their own native contract test.
+PYTHON_RUNTIME="${ROOT}/python-preflight-fixture"
+cat > "${PYTHON_RUNTIME}" <<'MOCKPY'
+#!/bin/sh
+[ "$#" -eq 1 ] && [ "$1" = --check ]
+MOCKPY
+chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
