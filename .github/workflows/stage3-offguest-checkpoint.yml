@@ -1,0 +1,82 @@
+name: Stage 3 off-guest host witness checkpoint network boundary (CI only)
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/stage3-offguest-checkpoint-ci.py
+      - scripts/test-stage3-offguest-checkpoint-ci.py
+      - .github/workflows/stage3-offguest-checkpoint.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offguest-host-checkpoint:
+    name: Ubuntu-owned signing key and SQLite; real OPNsense reads signed checkpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Fast portable signed host checkpoint and negative source tests
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage3-offguest-checkpoint-ci.py scripts/test-stage3-offguest-checkpoint-ci.py
+          python3.13 scripts/test-stage3-offguest-checkpoint-ci.py -v
+      - name: Launch disposable host-only signing key and SQLite OUTSIDE copied workspace
+        run: |
+          set -eu
+          umask 077
+          private="$(mktemp -d "${RUNNER_TEMP}/zapret2-offguest-XXXXXX")"
+          public="${GITHUB_WORKSPACE}/.ci-offguest-public"
+          mkdir -m 700 "$public"
+          echo "CI_OFFGUEST_PRIVATE=$private" >> "$GITHUB_ENV"
+          echo "CI_OFFGUEST_PUBLIC=$public" >> "$GITHUB_ENV"
+          env -u RUNNER_TRACKING_ID GITHUB_ACTIONS=true ZAPRET2_STAGE3_OFFGUEST_CI=1 nohup python3.13 scripts/stage3-offguest-checkpoint-ci.py serve "$private" "$public" "${{ github.event.pull_request.head.sha || github.sha }}" > "${RUNNER_TEMP}/zapret2-offguest-host.log" 2>&1 &
+          pid=$!
+          echo "CI_OFFGUEST_PID=$pid" >> "$GITHUB_ENV"
+          for i in $(seq 1 80); do
+            if [ -s "$public/endpoint.json" ]; then break; fi
+            if ! kill -0 "$pid" 2>/dev/null; then tail -n 30 "${RUNNER_TEMP}/zapret2-offguest-host.log"; exit 1; fi
+            sleep 0.25
+          done
+          test -s "$public/endpoint.json"
+          test -s "$public/server.crt"
+          test -s "$public/status-public.pem"
+          test ! -e "$public/status.key"
+          test ! -e "$public/tls.key"
+          test ! -e "$public/checkpoint.sqlite"
+      - name: Real disposable OPNsense guest verifies host-only RSA signed checkpoint over QEMU NAT
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            # Public-only fixture copied by tar. Private host key and SQLite
+            # deliberately reside outside GITHUB_WORKSPACE and are not synced.
+            chown -R 0:0 .ci-offguest-public
+            chmod 700 .ci-offguest-public
+            chmod 600 .ci-offguest-public/*
+            test ! -e .ci-offguest-public/status.key
+            test ! -e .ci-offguest-public/tls.key
+            test ! -e .ci-offguest-public/checkpoint.sqlite
+            GITHUB_ACTIONS=true ZAPRET2_STAGE3_OFFGUEST_CI=1 /usr/local/bin/python3 scripts/stage3-offguest-checkpoint-ci.py client .ci-offguest-public "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Prove host-only SQLite and keys unchanged and exactly two consumed STATUS challenges
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE3_OFFGUEST_CI=1 python3.13 scripts/stage3-offguest-checkpoint-ci.py audit "$CI_OFFGUEST_PRIVATE" "$CI_OFFGUEST_PUBLIC" "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: Tear down only disposable runner-owned witness
+        if: always()
+        run: |
+          if [ -n "${CI_OFFGUEST_PID:-}" ]; then kill "$CI_OFFGUEST_PID" 2>/dev/null || true; fi
+          if [ -n "${CI_OFFGUEST_PRIVATE:-}" ] && [ -d "$CI_OFFGUEST_PRIVATE" ]; then rm -rf -- "$CI_OFFGUEST_PRIVATE"; fi
+          if [ -n "${CI_OFFGUEST_PUBLIC:-}" ] && [ -d "$CI_OFFGUEST_PUBLIC" ]; then rm -rf -- "$CI_OFFGUEST_PUBLIC"; fi
