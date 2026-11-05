@@ -23,7 +23,7 @@
 |---|---|
 | **Latest full Web/pkg release** | [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) — verified FreeBSD 15 `0.6.2_1.pkg`, `SHA256SUMS` and successful GitHub Pages pkg repository deployment. |
 | **Latest owner-installed testing package** | [v0.6.1_30](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.1_30) — 18/18 read-only appliance checks passed, including running service, eight global Exclude bindings and no stale Lab firewall rules. |
-| **Current development candidate** | `v0.6.2_143` source-only running-native-service acceptance candidate; **no `0.6.2_143.pkg` is published**. The current stable artifact remains `v0.6.2` / `0.6.2_1.pkg`. |
+| **Current development candidate** | `v0.6.2_144` source-only installed-native-configctl acceptance candidate; **no `0.6.2_144.pkg` is published**. The current stable artifact remains `v0.6.2` / `0.6.2_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -352,7 +352,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-The current verified stable publication is **[v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2)** with `0.6.2_1.pkg`, checksum and FreeBSD15 Pages/pkg workflow completed. `v0.6.2_143` is the current unpublished source-only candidate for installed native service lifecycle; it is not another published package. Owner-installed evidence comes from `v0.6.1_30`; the owner has not yet confirmed `0.6.2_1` Web upgrade, real IPv6 WAN or Voice MEDIA/CALL. [Release preparation](docs/releases/v0.6.2.md) · [Current handoff](docs/START_HERE.md).
+The current verified stable publication is **[v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2)** with `0.6.2_1.pkg`, checksum and FreeBSD15 Pages/pkg workflow completed. `v0.6.2_144` is the current unpublished source-only candidate for installed configctl lifecycle; it is not another published package. Owner-installed evidence comes from `v0.6.1_30`; the owner has not yet confirmed `0.6.2_1` Web upgrade, real IPv6 WAN or Voice MEDIA/CALL. [Release preparation](docs/releases/v0.6.2.md) · [Current handoff](docs/START_HERE.md).
 
 Useful entry points:
 

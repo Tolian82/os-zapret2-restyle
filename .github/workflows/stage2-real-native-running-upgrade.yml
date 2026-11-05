@@ -11,6 +11,8 @@ on:
       - scripts/test-stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage2-opnsense-real-native-active-service.py
       - scripts/test-stage2-opnsense-real-native-active-service.py
+      - scripts/stage2-opnsense-real-native-active-configctl.py
+      - scripts/test-stage2-opnsense-real-native-active-configctl.py
       - .github/workflows/stage2-real-native-running-upgrade.yml
   workflow_dispatch:
     inputs:
@@ -42,6 +44,8 @@ jobs:
           python3.13 scripts/test-stage2-opnsense-real-native-running-upgrade.py -v
           python3.13 -m py_compile scripts/stage2-opnsense-real-native-active-service.py scripts/test-stage2-opnsense-real-native-active-service.py
           python3.13 scripts/test-stage2-opnsense-real-native-active-service.py -v
+          python3.13 -m py_compile scripts/stage2-opnsense-real-native-active-configctl.py scripts/test-stage2-opnsense-real-native-active-configctl.py
+          python3.13 scripts/test-stage2-opnsense-real-native-active-configctl.py -v
           python3.13 -m py_compile scripts/stage0-real-pkg-scheduler.py scripts/test-stage0-real-pkg-scheduler.py
           python3.13 scripts/test-stage0-real-pkg-scheduler.py -v
           python3.13 scripts/test-native-opnsense-package.py -v
@@ -70,3 +74,6 @@ jobs:
             # Reuse the SAME guest: genuine engine remains running after the
             # native pkg replacement; no new WAN or independent test owner.
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-active-service.py
+            # Real packaged configctl uses the SAME installed service and
+            # test-only lo0 profile; the preceding direct lifecycle ends STOPPED.
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_ACTIVE_CONFIGCTL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-active-configctl.py

@@ -924,6 +924,9 @@ jobs:
       - name: Test installed real active service lifecycle refusal and rollback contracts
         run: python3.13 scripts/test-stage2-opnsense-real-native-active-service.py
 
+      - name: Test installed real configctl active lifecycle contracts
+        run: python3.13 scripts/test-stage2-opnsense-real-native-active-configctl.py
+
       - name: Test native firmware uninstall registration and config retention
         run: python3.13 scripts/test-stage2-opnsense-real-native-remove.py
 
