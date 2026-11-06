@@ -144,6 +144,19 @@ def direct_ipv4_tcp(ip):
         return type(exc).__name__ + ":errno=" + str(exc.errno)
 
 
+def select_scoped_pf_counters(output):
+    """PF verbose output prefixes rule lines with @NN; preserve nearby counters."""
+    rows = output.splitlines()
+    selected = []
+    for i, line in enumerate(rows):
+        if IP not in line:
+            continue
+        if not re.match(r"^\s*(?:@\d+\s+)?(?:pass|block)\s", line):
+            continue
+        selected.append(" ".join(rows[i:i + 4])[:600])
+    return selected[:12]
+
+
 def scoped_pf_rule_counters():
     """Read-only selected PF rule/counter headers; no full config or packet data."""
     try:
@@ -151,15 +164,7 @@ def scoped_pf_rule_counters():
                            text=True, check=False, timeout=8)
         if p.returncode != 0:
             return ["pfctl_return_code=" + str(p.returncode)]
-        lines = p.stdout.splitlines()
-        selected = []
-        for i, line in enumerate(lines):
-            if "192.168.122.10" in line and (
-                line.lstrip().startswith("pass ") or
-                line.lstrip().startswith("block ")
-            ):
-                selected.append(" ".join(lines[i:i + 4])[:600])
-        return selected[:12]
+        return select_scoped_pf_counters(p.stdout)
     except (OSError, subprocess.TimeoutExpired):
         return ["pfctl_unavailable"]
 
@@ -251,6 +256,12 @@ def self_test():
     assert ipv4_dns is not None and direct_ipv4_tcp is not None
     assert resolver_nameservers is not None
     assert scoped_pf_rule_counters is not None
+    assert len(select_scoped_pf_counters(
+        "@6 block drop in log inet from 192.168.122.10 to any\n"
+        "  [ Evaluations: 10 Packets: 2 Bytes: 128 ]\n"
+        "@18 pass in quick inet proto tcp from 192.168.122.10 to any port = https\n"
+        "  [ Evaluations: 10 Packets: 1 Bytes: 64 ]\n"
+    )) == 2
     print("PASS_STAGE5_CI_NATIVE_PF_EGRESS_NEGATIVE_SCOPE_AND_SHAPE")
 
 
