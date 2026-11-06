@@ -339,7 +339,9 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_POST_VOICE_INSTALLED_FILES_CHANGED")
     active = load("stage2-opnsense-real-native-active-service.py")
     engine_sha = active.guest_preflight()
-    state = common.witness(active, engine_sha, running=True)
+    # The last successful native Apply is Strategies Exclude, not Voice.
+    # Keep the strict page-scoped committed FD9 journal witness.
+    state = common.witness(active, engine_sha, running=True, page='strategies')
     need(isinstance(state.get("pid"), int) and state["pid"] > 1 and
          len(state.get("rules", [])) == 2,
          "STAGE5_RUNNING_COMMON_FINAL_ENGINE_OR_IPFW_INVALID")
