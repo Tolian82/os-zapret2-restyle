@@ -84,6 +84,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_extra_resources_offline_suites",
          "installed_lab_extra_preserves_native_owner",
          "installed_lab_mocked_job_e2e",
+         "installed_real_strategy_lab_positive_job",
          "installed_resource_transaction_regressions",
          "installed_functional_owner_preserved",
          "installed_authenticated_lab_extra_http_status",
@@ -101,6 +102,10 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          type(data.get("extra_install_owned_count")) is int and
          0 < data["extra_install_owned_count"] <= 73,
          "STAGE5_RUNNING_EXTRA_INSTALL_PIN_AND_CONTENT_NOT_ATTESTED")
+    need(data.get("real_strategy_lab_outcome") == "TARGET_ACCESSIBLE" and
+         data.get("real_lab_control_tls_ipv4_used") is True and
+         data.get("strategy_lab_dpi_bypass_proven") is False,
+         "STAGE5_RUNNING_REAL_LAB_OUTCOME_OR_SCOPE_UNQUALIFIED")
     need(data.get("extra_roundtrip_resource_count") == 73 and
          isinstance(data.get("extra_roundtrip_local_plan_sha256"), str) and
          re.fullmatch(r"[a-f0-9]{64}", data["extra_roundtrip_local_plan_sha256"]),
@@ -172,6 +177,10 @@ def cross_receipt_binding(clean, live):
          live.get("installed_extra_resources_offline_suites") is True and
          live.get("installed_lab_extra_preserves_native_owner") is True and
          live.get("installed_lab_mocked_job_e2e") is True and
+         live.get("installed_real_strategy_lab_positive_job") is True and
+         live.get("real_strategy_lab_outcome") == "TARGET_ACCESSIBLE" and
+         live.get("real_lab_control_tls_ipv4_used") is True and
+         live.get("strategy_lab_dpi_bypass_proven") is False and
          live.get("installed_resource_transaction_regressions") is True and
          live.get("installed_functional_owner_preserved") is True and
          live.get("installed_authenticated_lab_extra_http_status") is True and
@@ -420,6 +429,26 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_NATIVE_REAL_EXTRA_ROUNDTRIP_NOT_QUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXTRA_ROUNDTRIP")
+    # Separate from mocked Lab E2E: one genuine installed worker + real
+    # network Stage 30 and local TCP443 Stage 40 through stock HTTPS/configd.
+    lab_real = load("stage5-installed-lab-real-http.py")
+    real_lab_report = lab_real.execute()
+    need(real_lab_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_REAL_LAB_TARGET_ACCESSIBLE_AND_RESTORE" and
+         real_lab_report.get("job_terminal_outcome") == "TARGET_ACCESSIBLE" and
+         all(real_lab_report.get(x) is True for x in (
+             "authenticated_stock_https_csrf_start_status_result",
+             "real_shipped_worker_control_tls_ipv4_available",
+             "real_local_tcp443_baseline_passed",
+             "job_completed_and_original_fd9_restored",
+             "saved_native_config_and_ipfw_unchanged",
+             "real_external_control_site_contacted")) and
+         real_lab_report.get("real_strategy_search_or_dpi_bypass_proven") is False and
+         real_lab_report.get("physical_browser_click_tested") is False and
+         real_lab_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_REAL_INSTALLED_LAB_POSITIVE_JOB_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_REAL_STRATEGY_LAB")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -474,6 +503,10 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_extra_resources_offline_suites": True,
         "installed_lab_extra_preserves_native_owner": True,
         "installed_lab_mocked_job_e2e": True,
+        "installed_real_strategy_lab_positive_job": True,
+        "real_strategy_lab_outcome": "TARGET_ACCESSIBLE",
+        "real_lab_control_tls_ipv4_used": True,
+        "strategy_lab_dpi_bypass_proven": False,
         "installed_resource_transaction_regressions": True,
         "installed_functional_owner_preserved": True,
         "installed_authenticated_lab_extra_http_status": True,
@@ -543,6 +576,9 @@ def self_test():
                 "extra_install_source_commit": load("stage5-installed-extra-install-http.py").SOURCE_REVISION,
                 "extra_install_catalog_content_sha256": "d" * 64,
                 "extra_install_owned_count": 73,
+                "real_strategy_lab_outcome": "TARGET_ACCESSIBLE",
+                "real_lab_control_tls_ipv4_used": True,
+                "strategy_lab_dpi_bypass_proven": False,
                 "extra_roundtrip_resource_count": 73,
                 "extra_roundtrip_local_plan_sha256": "e" * 64,
                 "all_feature_suites_qualified": False,
@@ -567,6 +603,7 @@ def self_test():
                     "installed_extra_resources_offline_suites",
                     "installed_lab_extra_preserves_native_owner",
                     "installed_lab_mocked_job_e2e",
+                    "installed_real_strategy_lab_positive_job",
                     "installed_resource_transaction_regressions",
                     "installed_functional_owner_preserved",
                     "installed_authenticated_lab_extra_http_status",
@@ -629,6 +666,8 @@ def self_test():
                 ("extra_roundtrip_resource_count", 0),
                 ("extra_roundtrip_local_plan_sha256", "bad"),
                 ("installed_lab_mocked_job_e2e", False),
+                ("installed_real_strategy_lab_positive_job", False),
+                ("real_lab_control_tls_ipv4_used", False),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
             ):
