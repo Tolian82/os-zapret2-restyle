@@ -126,6 +126,13 @@ def job_readonly_diagnostics(job):
                     "available", "unavailable") else "unknown"
             if isinstance(baseline, dict):
                 result["baseline_all_accessible"] = baseline.get("all_accessible")
+                endpoints = baseline.get("endpoints")
+                if isinstance(endpoints, list):
+                    result["baseline_endpoint_facts"] = [
+                        {"status": item.get("status"),
+                         "transport": item.get("transport"),
+                         "exit_code": item.get("exit_code")}
+                        for item in endpoints[:2] if isinstance(item, dict)]
     except (OSError, ValueError, KeyError, TypeError):
         result["job_file"] = "unreadable"
     try:
@@ -173,7 +180,13 @@ def poll(web, job):
             states.append(state)
         if state in ("completed", "error"):
             result = web.api("POST", LAB + "result", {"job_id": job})
-            return qualified_terminal(result, job), states
+            try:
+                return qualified_terminal(result, job), states
+            except Refusal:
+                print("STAGE5_REAL_LAB_TERMINAL_DIAGNOSTICS=" +
+                      json.dumps(job_readonly_diagnostics(job), sort_keys=True),
+                      file=sys.stderr, flush=True)
+                raise
         time.sleep(1)
     raise Refusal("LAB_POSITIVE_REAL_JOB_DEADLINE_EXCEEDED")
 
