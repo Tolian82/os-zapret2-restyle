@@ -15,6 +15,7 @@ on:
       - scripts/stage5-installed-functional.py
       - scripts/stage5-installed-auth-web.py
       - scripts/stage5-installed-exclude-http-apply.py
+      - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-strategy-lab-e2e.sh
       - scripts/test-extra-resources-preflight.py
@@ -37,6 +38,7 @@ on:
       - scripts/stage5-installed-functional.py
       - scripts/stage5-installed-auth-web.py
       - scripts/stage5-installed-exclude-http-apply.py
+      - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-strategy-lab-e2e.sh
       - scripts/test-extra-resources-preflight.py
@@ -65,7 +67,7 @@ jobs:
       - name: Fail-closed two-receipt SHA, source, ABI and missing proof contracts
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py
+          python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py scripts/stage2-opnsense-real-native-shared-voice.py
           python3.13 scripts/stage5-native-single-artifact.py --self-test
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
           python3.13 scripts/stage5-installed-exclude.py --self-test
@@ -73,6 +75,7 @@ jobs:
           python3.13 scripts/stage5-installed-functional.py --self-test
           python3.13 scripts/stage5-installed-auth-web.py --self-test
           python3.13 scripts/stage5-installed-exclude-http-apply.py --self-test
+          python3.13 scripts/stage2-opnsense-real-native-shared-voice.py --self-test
       - name: FRESH disposable OPNsense guest A - build ONCE, real clean pkg add
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
