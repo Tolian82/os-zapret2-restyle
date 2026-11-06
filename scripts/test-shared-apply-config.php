@@ -89,6 +89,64 @@ must($merged['strategy']['trafficargs']==='--filter-tcp=80' &&
     $merged['hostlist']['mode']===$optionModel['hostlist']['mode'],
     'edited Strategy must preserve unchanged selected-option and Voice fields');
 
+// A real WAN/interface dropdown change arrives as a scalar POST but live
+// native getNodes() still has the previously selected interface options.
+// Reproduce the published stable GUI failure before making any Config write.
+$wanEdit=$unchangedForm;
+$wanEdit['general']['waninterface']='WAN2';
+$wanPlan=SettingsApply::prepareStrategies(
+    $optionModel,$wanEdit,'91.108.0.0/16'
+);
+must($wanPlan['changed_fields']===['general.waninterface'],
+    'changed native WAN dropdown not detected as one genuine edit');
+$wanMerged=SettingsApply::mergeForCommit($optionModel,$wanPlan,'strategies');
+must($wanMerged['general']['waninterface']==='WAN2' &&
+     $wanMerged['hostlist']['mode']===$optionModel['hostlist']['mode'] &&
+     $wanMerged['strategy']===$optionModel['strategy'],
+    'changed native WAN dropdown failed scoped Config preflight');
+
+// An optional InterfaceField with no saved WAN exposes the empty option
+// as selected=1. Its first genuine selection must also reach native Config.
+$emptyWanModel=$optionModel;
+$emptyWanModel['general']['waninterface']=[
+    ''=>['value'=>'None','selected'=>1],
+    'WAN'=>['value'=>'WAN','selected'=>0],
+    'WAN2'=>['value'=>'WAN2','selected'=>0],
+];
+$firstWanEdit=$unchangedForm;
+$firstWanEdit['general']['waninterface']='WAN';
+$firstWanPlan=SettingsApply::prepareStrategies(
+    $emptyWanModel,$firstWanEdit,'91.108.0.0/16'
+);
+must($firstWanPlan['changed_fields']===['general.waninterface'],
+    'first WAN selection from empty native option not detected');
+$firstWanMerged=SettingsApply::mergeForCommit(
+    $emptyWanModel,$firstWanPlan,'strategies'
+);
+must($firstWanMerged['general']['waninterface']==='WAN' &&
+     $firstWanMerged['hostlist']['mode']===$emptyWanModel['hostlist']['mode'],
+    'first WAN selection from empty native Config refused');
+
+// OptionField mode uses the same native selected-option representation.
+$modeEdit=$unchangedForm;
+$modeEdit['hostlist']['mode']='auto';
+$modePlan=SettingsApply::prepareStrategies(
+    $optionModel,$modeEdit,'91.108.0.0/16'
+);
+must($modePlan['changed_fields']===['hostlist.mode'],
+    'changed native list mode not detected as one genuine edit');
+$modeMerged=SettingsApply::mergeForCommit($optionModel,$modePlan,'strategies');
+must($modeMerged['hostlist']['mode']==='auto' &&
+     $modeMerged['general']['waninterface']===$optionModel['general']['waninterface'],
+    'changed native list mode lost unchanged WAN selection');
+
+// A forged changed-field map cannot turn an unchanged value into a write.
+$fakeWanChange=$wanPlan;
+$fakeWanChange['candidate']['general']['waninterface']='WAN';
+denies(fn()=>SettingsApply::mergeForCommit(
+    $optionModel,$fakeWanChange,'strategies'
+));
+
 $savedCandidate=$plan['candidate'];
 $savedRow=Worker::saved($plan,$savedCandidate);
 must($savedRow['result']==='committed' && $savedRow['enabled']==='1',
