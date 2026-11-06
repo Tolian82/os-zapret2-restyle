@@ -96,11 +96,74 @@ def qualified_terminal(value, job):
     return value
 
 
+def job_readonly_diagnostics(job):
+    """Minimal safe facts from real native status; never publish job payloads."""
+    result = {"job": job}
+    work = Path("/var/run/zapret2-restyle/strategy-lab")
+    if not JOB_PATTERN.fullmatch(job):
+        return {"diagnostic": "invalid_job_id"}
+    path = work / "jobs" / job / "status.json"
+    try:
+        if path.is_file() and not path.is_symlink() and path.stat().st_size < 1024 * 1024:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for name in ("state", "outcome", "current_stage", "initial_service_state"):
+                value = data.get(name)
+                if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{0,36}", value):
+                    result[name] = value
+            stages = data.get("stages")
+            if isinstance(stages, list):
+                result["stage_status"] = {
+                    row["number"]: row["status"]
+                    for row in stages if isinstance(row, dict)
+                    and row.get("number") in ("20", "30", "40", "50", "90", "99")
+                    and row.get("status") in ("PASS", "FAIL", "PENDING", "RUNNING",
+                                              "SKIPPED", "TIMEOUT")
+                }
+            network = data.get("network", {})
+            baseline = data.get("baseline", {})
+            if isinstance(network, dict):
+                result["control_ipv4"] = network.get("ipv4") if network.get("ipv4") in (
+                    "available", "unavailable") else "unknown"
+            if isinstance(baseline, dict):
+                result["baseline_all_accessible"] = baseline.get("all_accessible")
+    except (OSError, ValueError, KeyError, TypeError):
+        result["job_file"] = "unreadable"
+    try:
+        pointer = work / "active.job"
+        if pointer.is_file() and not pointer.is_symlink():
+            result["active_job_same"] = pointer.read_text(encoding="utf-8").strip() == job
+    except (OSError, UnicodeError):
+        result["active_job_same"] = "unavailable"
+    try:
+        with socket.create_connection((TARGET, 443), timeout=2):
+            result["loopback_tcp_443"] = "connected"
+    except OSError as exc:
+        result["loopback_tcp_443"] = type(exc).__name__
+    return result
+
+
 def poll(web, job):
+    poll._http_failures = 0
     states = []
     deadline = time.monotonic() + TIME_LIMIT
     while time.monotonic() < deadline:
-        item = web.api("POST", LAB + "status", {"job_id": job})
+        try:
+            item = web.api("POST", LAB + "status", {"job_id": job})
+        except (RuntimeError, OSError) as exc:
+            print("STAGE5_REAL_LAB_HTTP_STATUS_DIAGNOSTICS=" +
+                  json.dumps({"http_exception": type(exc).__name__,
+                              "native": job_readonly_diagnostics(job)}, sort_keys=True),
+                  file=sys.stderr, flush=True)
+            # A transient local HTTPS disconnect during native Stop/Start
+            # does not count as status success. Poll only the real HTTPS API.
+            # Persistent transport failure remains a strict refusal.
+            failures = getattr(poll, "_http_failures", 0) + 1
+            poll._http_failures = failures
+            if failures >= 3:
+                raise Refusal("LAB_POSITIVE_AUTHENTICATED_STATUS_TRANSPORT_FAILED") from None
+            time.sleep(2)
+            continue
+        poll._http_failures = 0
         need(isinstance(item, dict) and item.get("job_id") == job,
              "LAB_POSITIVE_STATUS_JOB_ID_MISMATCH")
         state = item.get("state")
@@ -160,6 +223,7 @@ def self_test():
                    for x in ("00", "10", "20", "30", "40", "50", "90", "99")],
     }
     assert qualified_terminal(sample, job) == sample
+    assert job_readonly_diagnostics("../../../bad") == {"diagnostic": "invalid_job_id"}
     for broken in (
         {**sample, "outcome": "SUCCESS"},
         {**sample, "network": {"ipv4": "unavailable"}},
