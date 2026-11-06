@@ -11,6 +11,7 @@ on:
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-voice-http.py
       - scripts/stage5-native-running-voice-artifact.py
+      - scripts/stage5-native-pf-egress-fixture.py
       - scripts/stage5-installed-exclude.py
       - scripts/stage5-installed-lab-resources.py
       - scripts/stage5-installed-functional.py
@@ -18,7 +19,7 @@ on:
       - scripts/stage5-installed-exclude-http-apply.py
       - scripts/stage5-installed-extra-remove-http.py
       - scripts/stage5-installed-extra-install-http.py
-      - scripts/stage5-installed-extra-roundtrip-http.py
+      - scripts/stage5-installed-extra-roundtrip-http.py scripts/stage5-native-pf-egress-fixture.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-strategy-lab-e2e.sh
       - scripts/test-extra-resources-preflight.py
@@ -36,6 +37,7 @@ on:
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-voice-http.py
       - scripts/stage5-native-running-voice-artifact.py
+      - scripts/stage5-native-pf-egress-fixture.py
       - scripts/stage5-installed-exclude.py
       - scripts/stage5-installed-lab-resources.py
       - scripts/stage5-installed-functional.py
@@ -73,6 +75,7 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage2-opnsense-real-native-voice-http.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py scripts/stage2-opnsense-real-native-shared-voice.py scripts/stage5-installed-extra-remove-http.py scripts/stage5-installed-extra-install-http.py scripts/stage5-installed-extra-roundtrip-http.py
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
+          python3.13 scripts/stage5-native-pf-egress-fixture.py --self-test
           python3.13 scripts/stage5-installed-exclude.py --self-test
           python3.13 scripts/stage5-installed-lab-resources.py --self-test
           python3.13 scripts/stage5-installed-functional.py --self-test
@@ -97,6 +100,7 @@ jobs:
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit lua54
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT=1 /usr/local/bin/python3 scripts/stage5-native-pf-egress-fixture.py
             /usr/local/bin/pkgconf --exists lua-5.4
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_STAGE2_REAL_ACTIVE_SERVICE=1 ZAPRET2_STAGE2_REAL_COMMON_VOICE=1 ZAPRET2_STAGE2_REAL_VOICE_HTTP=1 ZAPRET2_STAGE5_RUNNING_VOICE_ARTIFACT=1 ZAPRET2_STAGE5_INSTALLED_EXCLUDE=1 ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES=1 ZAPRET2_STAGE5_INSTALLED_FUNCTIONS=1 ZAPRET2_STAGE5_AUTHENTICATED_WEB_READONLY=1 ZAPRET2_STAGE5_AUTHENTICATED_EXCLUDE_APPLY=1 ZAPRET2_STAGE5_AUTHENTICATED_EXTRA_REMOVE=1 ZAPRET2_STAGE5_AUTHENTICATED_EXTRA_INSTALL=1 ZAPRET2_STAGE5_AUTHENTICATED_EXTRA_ROUNDTRIP=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-running-voice-artifact.py run /tmp/os-zapret2-restyle-0.6.2_1.pkg
