@@ -134,8 +134,11 @@ final class SettingsApply
                 $planned = $planned[$part];
                 $before = $before[$part];
             }
-            if (!is_string($planned) || !is_string($before) ||
-                self::sameText($before, $planned)) {
+            // A changed native InterfaceField/OptionField has an option
+            // dictionary on the live model but a scalar from the GUI.
+            // Compare selected values without broadening form ownership.
+            if (!is_string($planned) ||
+                self::sameText(VoiceModelValues::text($before), $planned)) {
                 throw new \InvalidArgumentException('Changed map contains unchanged field');
             }
             $entry = &$submitted;
