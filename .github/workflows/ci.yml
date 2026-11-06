@@ -376,26 +376,87 @@ jobs:
             --markdown "${RUNNER_TEMP}/stage0-configd-callpath.md"
       - name: Inspect public OPNsense 26.7 candidate names and pinned official source contracts
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/stage0-public-opnsense"
           cd "${RUNNER_TEMP}/stage0-public-opnsense"
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/plist' -o core-plist
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/src/etc/pkg/repos/OPNsense.conf.shadow.in' -o official-repo-main.conf.in
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://raw.githubusercontent.com/opnsense/core/ac08367416c1d66dea87df0ef0de24c315b5d5bc/src/etc/pkg/repos/OPNsense-aux.conf.shadow.in' -o official-repo-aux.conf.in
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/defaults.mk' -o defaults.mk
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://raw.githubusercontent.com/opnsense/plugins/79a5f88b7b27a706c10511ea5587c9d0e0dbdced/Mk/plugins.mk' -o plugins.mk
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' -o public-packages.html
-          python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
-            --archive-html public-packages.html --core-plist core-plist \
-            --defaults-mk defaults.mk --plugins-mk plugins.mk \
-            --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"
+          # The five immutable official files are fetched through GitHub's
+          # authenticated Contents API: no raw.githubusercontent.com redirect.
+          # Pin both the commit and the known Git blob SHA; verify API metadata,
+          # decoded byte length and the actual blob before any source analysis.
+          # Never replace the independent official repository/mirror checks.
+          fetch_pinned_github_blob() {
+            local repo="$1" revision="$2" source="$3" expected_blob="$4" destination="$5"
+            local metadata
+            metadata="$(mktemp)"
+            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+              --connect-timeout 10 --max-time 40 \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/contents/${source}?ref=${revision}" \
+              -o "${metadata}"
+            jq --exit-status --arg path "${source}" --arg expected "${expected_blob}" '
+              .type == "file" and .path == $path and .encoding == "base64" and
+              (.sha == $expected) and
+              (.size | type == "number") and (.size > 0 and .size <= 4194304) and
+              (.content | type == "string")
+            ' "${metadata}" >/dev/null
+            jq --raw-output '.content' "${metadata}" | base64 --decode > "${destination}"
+            if [ "$(git hash-object "${destination}")" != "${expected_blob}" ] ||
+               [ "$(wc -c < "${destination}" | tr -d '[:space:]')" != "$(jq -r '.size' "${metadata}")" ]; then
+              echo "ERROR: pinned official OPNsense Git blob bytes/size mismatch: ${source}" >&2
+              return 1
+            fi
+            printf 'Verified pinned official source: %s %s %s\n' "${repo}" "${revision}" "${expected_blob}"
+            rm -f "${metadata}"
+          }
+          core_ref=ac08367416c1d66dea87df0ef0de24c315b5d5bc
+          plugins_ref=79a5f88b7b27a706c10511ea5587c9d0e0dbdced
+          fetch_pinned_github_blob opnsense/core "${core_ref}" plist \
+            4f828c1e0c61772073dc28bc1e18fb68c0874c11 core-plist
+          fetch_pinned_github_blob opnsense/core "${core_ref}" \
+            src/etc/pkg/repos/OPNsense.conf.shadow.in \
+            7089c7bdaa3916f07d004f44453c24b6060e8c9d official-repo-main.conf.in
+          fetch_pinned_github_blob opnsense/core "${core_ref}" \
+            src/etc/pkg/repos/OPNsense-aux.conf.shadow.in \
+            0de1663f869164c74a3317699c292aaacd87b055 official-repo-aux.conf.in
+          fetch_pinned_github_blob opnsense/plugins "${plugins_ref}" Mk/defaults.mk \
+            a5cde8b77de5ff3e08372f521a40ba6f2d52a127 defaults.mk
+          fetch_pinned_github_blob opnsense/plugins "${plugins_ref}" Mk/plugins.mk \
+            bab88694c006deb8dc582ca9067e5681121d1407 plugins.mk
+          # The public directory listing is an UNSIGNED candidate inventory,
+          # never installed/package origin proof. Prefer the official OPNsense
+          # package service; if that mirror times out, try other public mirrors
+          # but accept ONLY a listing that passes the unchanged strict parser
+          # (correct FreeBSD 15/26.7 path, >=50 filenames, required packages,
+          # and the five independent pinned upstream source/ABI contracts).
+          official_listing_verified=false
+          for public_mirror in \
+            'https://pkg.opnsense.org/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.telepoint.bg/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.wdc1.us.leaseweb.net/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/'
+          do
+            echo "Fetching unsigned directory listing from ${public_mirror}"
+            if curl --fail --location --silent --show-error --retry 1 --retry-delay 1 \
+                 --connect-timeout 8 --max-time 25 --max-filesize 2097152 \
+                 "${public_mirror}" -o public-packages.html &&
+               python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
+                 --archive-html public-packages.html --core-plist core-plist \
+                 --defaults-mk defaults.mk --plugins-mk plugins.mk \
+                 --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"; then
+              official_listing_verified=true
+              echo "Accepted validated unsigned OPNsense package listing: ${public_mirror}"
+              break
+            fi
+          done
+          [ "${official_listing_verified}" = true ] || {
+            echo 'ERROR: no validated public OPNsense 26.7 package listing from official mirrors' >&2
+            exit 1
+          }
           python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-repo-trust-source.py" \
             --main-repo official-repo-main.conf.in --aux-repo official-repo-aux.conf.in \
             --json "${RUNNER_TEMP}/stage0-official-repo-trust-source.json"
