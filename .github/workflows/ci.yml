@@ -427,12 +427,36 @@ jobs:
             a5cde8b77de5ff3e08372f521a40ba6f2d52a127 defaults.mk
           fetch_pinned_github_blob opnsense/plugins "${plugins_ref}" Mk/plugins.mk \
             bab88694c006deb8dc582ca9067e5681121d1407 plugins.mk
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --max-time 90 \
-            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' -o public-packages.html
-          python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
-            --archive-html public-packages.html --core-plist core-plist \
-            --defaults-mk defaults.mk --plugins-mk plugins.mk \
-            --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"
+          # The public directory listing is an UNSIGNED candidate inventory,
+          # never installed/package origin proof. Prefer the official OPNsense
+          # package service; if that mirror times out, try other public mirrors
+          # but accept ONLY a listing that passes the unchanged strict parser
+          # (correct FreeBSD 15/26.7 path, >=50 filenames, required packages,
+          # and the five independent pinned upstream source/ABI contracts).
+          official_listing_verified=false
+          for public_mirror in \
+            'https://pkg.opnsense.org/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.telepoint.bg/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.wdc1.us.leaseweb.net/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/'
+          do
+            echo "Fetching unsigned directory listing from ${public_mirror}"
+            if curl --fail --location --silent --show-error --retry 1 --retry-delay 1 \
+                 --connect-timeout 8 --max-time 25 --max-filesize 2097152 \
+                 "${public_mirror}" -o public-packages.html &&
+               python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
+                 --archive-html public-packages.html --core-plist core-plist \
+                 --defaults-mk defaults.mk --plugins-mk plugins.mk \
+                 --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"; then
+              official_listing_verified=true
+              echo "Accepted validated unsigned OPNsense package listing: ${public_mirror}"
+              break
+            fi
+          done
+          [ "${official_listing_verified}" = true ] || {
+            echo 'ERROR: no validated public OPNsense 26.7 package listing from official mirrors' >&2
+            exit 1
+          }
           python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-repo-trust-source.py" \
             --main-repo official-repo-main.conf.in --aux-repo official-repo-aux.conf.in \
             --json "${RUNNER_TEMP}/stage0-official-repo-trust-source.json"
