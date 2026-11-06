@@ -144,6 +144,26 @@ def direct_ipv4_tcp(ip):
         return type(exc).__name__ + ":errno=" + str(exc.errno)
 
 
+def scoped_pf_rule_counters():
+    """Read-only selected PF rule/counter headers; no full config or packet data."""
+    try:
+        p = subprocess.run(["/sbin/pfctl", "-vvsr"], capture_output=True,
+                           text=True, check=False, timeout=8)
+        if p.returncode != 0:
+            return ["pfctl_return_code=" + str(p.returncode)]
+        lines = p.stdout.splitlines()
+        selected = []
+        for i, line in enumerate(lines):
+            if "192.168.122.10" in line and (
+                line.lstrip().startswith("pass ") or
+                line.lstrip().startswith("block ")
+            ):
+                selected.append(" ".join(lines[i:i + 4])[:600])
+        return selected[:12]
+    except (OSError, subprocess.TimeoutExpired):
+        return ["pfctl_unavailable"]
+
+
 def execute():
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD",
          "CI_PF_NOT_FREEBSD_ROOT")
@@ -179,6 +199,14 @@ def execute():
             with socket.create_connection((host, 443), timeout=8):
                 pass
         except OSError as exc:
+            diag = {
+                "hostname": host, "dns_before_reload": baseline[host],
+                "dns_after_reload": post[host],
+                "raw_ipv4_tcp": direct_ipv4_tcp(post[host]["ipv4"][0]),
+                "native_pf_rule_counters": scoped_pf_rule_counters(),
+            }
+            print("STAGE5_CI_PF_TCP_DIAGNOSTICS=" +
+                  json.dumps(diag, sort_keys=True), file=sys.stderr, flush=True)
             raise Refusal("CI_PF_NETWORK_UNAVAILABLE:" + host +
                           ":errno=" + str(exc.errno) +
                           ":class=" + type(exc).__name__) from None
@@ -222,6 +250,7 @@ def self_test():
     assert "serializeToConfig()" in PHP and "config->save" in PHP
     assert ipv4_dns is not None and direct_ipv4_tcp is not None
     assert resolver_nameservers is not None
+    assert scoped_pf_rule_counters is not None
     print("PASS_STAGE5_CI_NATIVE_PF_EGRESS_NEGATIVE_SCOPE_AND_SHAPE")
 
 
