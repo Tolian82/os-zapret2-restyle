@@ -3,8 +3,8 @@
 
 A stock single-vtnet0 VM can acquire an unscoped antispoof host block after
 Apply. This test-only fixture uses OPNsense Config/MVC Filter and official
-filter reload; pinned host TCP/UDP 53/443, including the loopback-arrival
-check, are verified. No pfctl edits, PF disable or production code changes.
+filter reload; pinned host TCP/UDP 53/443 with native per-rule disable
+reply-to are verified. No pfctl edits, PF disable or product changes.
 """
 import json
 import os
@@ -35,23 +35,21 @@ try {
         }
     }
     foreach (['443','53'] as $port) {
-        foreach (['in','out'] as $direction) {
         $rule = $model->rules->rule->add();
         $rule->enabled = '1';
         $rule->action = 'pass';
         $rule->quick = '1';
-        $rule->direction = $direction;
+        $rule->direction = 'out';
         $rule->ipprotocol = 'inet';
         $rule->protocol = 'TCP/UDP';
-        // The host can enter PF via lo0 before outbound vtnet0.
-        // OPNsense InterfaceField excludes lo0: float only the exact CI
-        // source and two destination ports for the inbound direction.
-        $rule->interface = $direction === 'out' ? $iface : '';
+        $rule->interface = $iface;
+        // Per-rule native 26.7 option: avoid auto reply-to on the WAN-typed
+        // single-NIC guest, which created states without receiving replies.
+        $rule->disablereplyto = '1';
         $rule->source_net = '192.168.122.10';
         $rule->destination_net = 'any';
         $rule->destination_port = $port;
-        $rule->description = 'ZAPRET2-CI-STAGE5-EGRESS-' . $port . '-' . $direction;
-        }
+        $rule->description = 'ZAPRET2-CI-STAGE5-EGRESS-' . $port . '-out';
     }
     if (!$model->serializeToConfig()) {
         throw new \RuntimeException('MODEL_SERIALIZE_REFUSED');
@@ -101,15 +99,17 @@ def validate_scope(env, nic, routes, identity):
 
 
 def verify_pf_rules(rules):
-    for direction in ("in", "out"):
-        prefix = ("pass out quick on vtnet0 " if direction == "out"
-                  else "pass in quick ")
-        rows = [x for x in rules.splitlines()
-                if x.startswith(prefix) and IP in x]
-        need(any(re.search(r"\b(443|https)\b", x) for x in rows),
-             "CI_PF_NO_NATIVE_443_" + direction.upper())
-        need(any(re.search(r"\b(53|domain)\b", x) for x in rows),
-             "CI_PF_NO_NATIVE_53_" + direction.upper())
+    rows = [x for x in rules.splitlines()
+            if x.startswith("pass out quick on vtnet0 ") and IP in x]
+    need(any(re.search(r"\b(443|https)\b", x) for x in rows),
+         "CI_PF_NO_NATIVE_443_OUT")
+    need(any(re.search(r"\b(53|domain)\b", x) for x in rows),
+         "CI_PF_NO_NATIVE_53_OUT")
+    need(all("reply-to" not in x for x in rows),
+         "CI_PF_NATIVE_OUTBOUND_UNWANTED_REPLY_TO")
+    need(not any(x.startswith("pass in quick ") and IP in x
+                 for x in rules.splitlines()),
+         "CI_PF_UNNECESSARY_FLOATING_INBOUND_RULE")
 
 
 def ipv4_dns(host):
@@ -242,16 +242,22 @@ def self_test():
     verify_pf_rules("pass out quick on vtnet0 inet proto tcp "
                     "from 192.168.122.10 to any port = https\n"
                     "pass out quick on vtnet0 inet proto udp "
-                    "from 192.168.122.10 to any port = domain\n"
-                    "pass in quick inet proto tcp from 192.168.122.10 "
-                    "to any port = https\n"
-                    "pass in quick inet proto udp from 192.168.122.10 "
-                    "to any port = domain\n")
+                    "from 192.168.122.10 to any port = domain\n")
     try:
         verify_pf_rules("block drop in log inet from 192.168.122.10 to any")
         raise AssertionError("missing native rules accepted")
     except Refusal:
         pass
+    try:
+        verify_pf_rules("pass out quick on vtnet0 reply-to "
+                        "(vtnet0 192.168.122.2) inet proto tcp "
+                        "from 192.168.122.10 to any port = https\n"
+                        "pass out quick on vtnet0 inet proto udp "
+                        "from 192.168.122.10 to any port = domain\n")
+        raise AssertionError("reply-to rule accepted")
+    except Refusal:
+        pass
+    assert "disablereplyto" in PHP
     assert "serializeToConfig()" in PHP and "config->save" in PHP
     assert ipv4_dns is not None and direct_ipv4_tcp is not None
     assert resolver_nameservers is not None
