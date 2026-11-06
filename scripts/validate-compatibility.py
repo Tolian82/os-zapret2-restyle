@@ -38,7 +38,7 @@ def validate_private_curl_source(lock):
                 "FLOATING_PRIVATE_CURL_CANNOT_CLAIM_A_PIN")
     else:
         require(isinstance(lock["version"], str) and
-                re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._,+~-]{0,127}",
+                re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}",
                              lock["version"]) is not None,
                 "PRIVATE_CURL_PIN_VERSION_INVALID")
         for key in ("source_pkg_sha256", "elf_sha256"):

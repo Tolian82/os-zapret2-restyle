@@ -5,10 +5,11 @@ on:
     paths:
       - scripts/stage2-opnsense-native-private-source.py
       - scripts/test-stage2-opnsense-native-private-source.py
-      - scripts/build-curl-impersonate.sh
+      # Historical _59-only fixture: changes to the current private builder are
+      # qualified by stage2-native-production-build and Stage 5, not this
+      # immutable earlier source-revision witness.
       - scripts/check-curl-impersonate.sh
       - scripts/run-curl-impersonate.sh
-      - .github/workflows/stage2-opnsense-native-private-source.yml
   workflow_dispatch:
 
 permissions:

@@ -22,13 +22,13 @@
   "required_capabilities": [],
   "exceptions": [],
   "private_curl_impersonate": {
-    "selection": "exploratory",
+    "selection": "pinned",
     "repository": "FreeBSD",
     "repository_url": "pkg+https://pkg.FreeBSD.org/${ABI}/latest",
     "abi": "FreeBSD:15:amd64",
-    "version": null,
-    "source_pkg_sha256": null,
-    "elf_sha256": null,
-    "chrome_profile": null
+    "version": "2.2.3_1~2$uenpqenr",
+    "source_pkg_sha256": "dff85d57cb4ca1a6625deb6acd09d2f831b12f1ceca65d5c771aa8d2535428fb",
+    "elf_sha256": "e4af7ba05b6ad8dd997aefeae3a9c15a08be2700534d043cd93c7987f97c451f",
+    "chrome_profile": "chrome150"
   }
 }

@@ -120,7 +120,7 @@ jobs:
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             sh scripts/compatibility-bootstrap.sh
-            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}" sh scripts/build-pkg.sh
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_RELEASE_CANDIDATE=1 ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.sha }}" sh scripts/build-pkg.sh
 
       - name: Recover already-published package for verification
         if: steps.publication.outputs.already_published == 'true'
