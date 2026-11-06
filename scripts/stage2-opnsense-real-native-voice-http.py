@@ -296,7 +296,7 @@ class GuestHttps:
         req = urllib.request.Request(ORIGIN + path, data=body, method=method,
                                      headers=headers)
         try:
-            with self.client.open(req, timeout=30 if path != '/api/zapret/voice/apply' else 640) as res:
+            with self.client.open(req, timeout=640 if path in ('/api/zapret/voice/apply', '/api/zapret/settings/apply') else 30) as res:
                 code, data, final = res.status, res.read(2 * 1024 * 1024), res.geturl()
         except urllib.error.HTTPError as e:
             raise Refusal('GUI_HTTP_REJECTED_' + str(e.code) + ':' + path) from None
