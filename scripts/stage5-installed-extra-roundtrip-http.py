@@ -17,6 +17,7 @@ import re
 import socket
 import subprocess
 import sys
+from urllib.request import getproxies
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path("/usr/local/etc/zapret2")
@@ -87,6 +88,23 @@ def failed_fetch_network_diagnostics():
         result["ipfw_relevant"] = lines[:24]
     except (OSError, subprocess.TimeoutExpired) as exc:
         result["ipfw_error"] = type(exc).__name__ + ":" + str(exc)[:120]
+    # These are diagnostic keys ONLY. Never print proxy URLs, credentials,
+    # headers, or environment values into a public CI artifact.
+    result["urllib_proxy_schemes"] = sorted(str(k) for k in getproxies())[:12]
+    result["proxy_env_variable_names"] = sorted(
+        k for k in os.environ if k.lower().endswith("_proxy"))[:12]
+    for label, args in (
+        ("pf_info", ["/sbin/pfctl", "-s", "info"]),
+        ("pf_rules", ["/sbin/pfctl", "-sr"]),
+        ("ipv4_routes", ["/usr/bin/netstat", "-rn", "-f", "inet"]),
+    ):
+        try:
+            p = subprocess.run(args, capture_output=True, text=True,
+                               timeout=5, check=False)
+            result[label] = {"rc": p.returncode,
+                             "lines": p.stdout.splitlines()[:16]}
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result[label] = type(exc).__name__ + ":" + str(exc)[:120]
     for host in ("api.github.com", "codeload.github.com"):
         try:
             # TCP handshake only: no catalog GET, no test fetch, no service mutation.
