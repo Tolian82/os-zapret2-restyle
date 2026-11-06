@@ -584,7 +584,6 @@ def self_test():
                 "real_strategy_lab_outcome": "TARGET_ACCESSIBLE",
                 "real_lab_control_tls_ipv4_used": True,
                 "real_lab_external_certified_https_target_tested": True,
-        "real_lab_external_certified_https_target_tested": True,
                 "strategy_lab_dpi_bypass_proven": False,
                 "extra_roundtrip_resource_count": 73,
                 "extra_roundtrip_local_plan_sha256": "e" * 64,
