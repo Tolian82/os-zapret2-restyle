@@ -48,7 +48,7 @@ The audited ugorur [build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/
 
 Lexiforest's audited [quick start](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/docs/quick_start.rst) and [curl.patch](https://github.com/lexiforest/curl-impersonate/blob/5e62540e0553f45b7ffcc9742ed9cb22b92172cc/patches/curl.patch) show that the executable name does not implicitly select a browser profile, and explicit HTTP/TLS flags may override profile defaults. HTTP3 capability and Chrome-like HTTP3 fingerprinting are separate properties. A Chrome profile can negotiate TLS 1.2/1.3; Standard must use default negotiation, whereas forcing TLS 1.2 is an Extended-only branch.
 
-**Snapshot SHAs are audit references, not build pins.** For every new build use the currently available official FreeBSD `latest` package according to ugorur's acquisition method; it need not match lexiforest's most recent GitHub Release. Do not reject or choose a package based on a predetermined upstream version or Chrome version. The build artifact remains identifiable by its final package digest. If FreeBSD `latest` metadata uses a newer 15.x OSVERSION than the 15.0 build host, `IGNORE_OSVERSION=yes` is allowed solely for repository catalog/fetch operations; executing the binary successfully on target FreeBSD remains mandatory. Never use that override for plugin installation.
+**Historical Stage-1 snapshot (superseded for release candidates by the owner's 6 November 2026 decision):** original per-build retrieval used the current official FreeBSD `latest` package without pinning, independently of lexiforest's GitHub release. Exploratory development builds may still use this route, but the final testing/stable release candidate must select and verify one locked signed source package and private ELF SHA-256 in the central compatibility manifest; see [current BH-01 contract](../REQUIREMENTS.md) and [native packaging TЗ §5.2](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md). Do not pin a Chrome version merely as a browser-profile assumption. If FreeBSD `latest` metadata requires `IGNORE_OSVERSION=yes`, this remains permitted only for catalog/fetch, never plugin installation; target runtime compatibility remains mandatory.
 
 ### Actual code integration points
 
@@ -76,8 +76,8 @@ Replacing only `request.curl_request()` is insufficient: Model C constructs comm
 ### Client acquisition and installation
 
 - Private executable location: `/usr/local/libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate`. Never replace `/usr/local/bin/curl`.
-- In **each new build**, fetch the available prebuilt `curl-impersonate` package from the official signed FreeBSD `latest` repository using the approach of [ugorur/build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/main/scripts/build-curl-h3.sh). The upstream project reference is [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate). Installing the plugin must not download or compile the client.
-- Do not pin upstream release, Git commit, package version, or Chrome version. From the fetched binary select **one supported Chrome profile** centrally; every check within a particular installed plugin uses that same profile. Deciding how to discover the supported profile is a Stage 1 implementation task, not a new product decision.
+- For exploratory development builds, fetch the available prebuilt `curl-impersonate` package from official signed FreeBSD `latest`, following [ugorur/build-curl-h3.sh](https://github.com/ugorur/os-zapret2/blob/main/scripts/build-curl-h3.sh); **for release-candidate qualification, consume the exact manifest-locked signed package and verify its package/ELF SHA-256**. The upstream project reference is [lexiforest/curl-impersonate](https://github.com/lexiforest/curl-impersonate). Installing the plugin must not download or compile the client.
+- Do not pin a browser/Chrome release as a blanket runtime assumption. Exploratory builds may float; **release candidates must pin the selected FreeBSD source package and ELF bytes**, not an arbitrary upstream Git tag. Select one actually supported Chrome profile centrally and keep it stable within each installed plugin.
 - Bundle the binary and necessary licenses. Record enough to identify the **produced plugin package** (e.g., ABI and SHA-256); a diagnostic upstream version may be logged, but no upstream version is a selection gate.
 - Check required executable/profile/CA/capabilities **before stopping the regular service**. Use the existing FreeBSD/OPNsense trusted CA store, do not add `-k`, do not mutate system client/proxy settings. Report missing prerequisites as technical errors. No Firefox or ordinary curl fallback.
 
@@ -138,7 +138,7 @@ One parser must serve the real installed Model C, fixed-IPv4 overrides and other
 **Observable outcome:** The plugin package contains a runnable private curl-impersonate with one supported Chrome profile.
 
 1. Add a small build helper modeled on ugorur and invoke it in `scripts/build-pkg.sh` before creating the plist.
-2. For **each new package build**, obtain the current signed FreeBSD `latest` package for the target ABI; extract binary, required files and licenses. No upstream version pin, source compilation, system curl replacement or install-time download.
+2. For exploratory builds, obtain the current signed FreeBSD `latest` package for the target ABI; for release candidates consume a preselected exact signed FreeBSD source package with locked package and ELF digests. Extract binary, required files and licenses; no source compilation, system curl replacement or install-time download.
 3. Choose one Chrome profile supported by the fetched binary; determine usable CA and TLS/QUIC capabilities; never gate on a specific upstream version number.
 4. Add bounded client readiness checks before stopping the service. Keep production probe migration for Stage 2.
 
@@ -230,7 +230,7 @@ There are 13 initial variants before filtering duplicates/resource-incompatible 
 
 | ID | Scenario and expected behavior | Required evidence | Stage / requirements |
 | --- | --- | --- | --- |
-| V1 | Private current FreeBSD `latest` client, no version pin, one Chrome profile/CA, actual TLS/QUIC | Actual intended-target handshake on FreeBSD, binary/license contents, final package SHA-256 | 1 / BH-01, BH-02 |
+| V1 | Historical Stage-1: private signed FreeBSD `latest` client and one Chrome profile/CA; current release-candidate gate additionally locks source package/ELF SHA-256 | Actual intended-target handshake on FreeBSD, binary/license contents and final package SHA-256; new RC lock qualified separately | 1 / BH-01, BH-02 |
 | V2 | Direct HTTPS accepts verified TLS handshake **OR** genuine HTTP response (H1/H2, TLS 1.2); no QUIC afterward | Production entrypoint and controlled endpoints, one installed direct run | 2 / BH-03, BH-04 |
 | V3 | Failed direct check → Model C → 3/3 successful attempts → exact replay → recommendation | Automated production-path test and one reproducible attributed installed run | 2, 6 / BH-05, BH-08 |
 | V4 | Pinned IPv4 with Host/SNI, correct remote IP/source port and certificate | Mismatch-negative tests and an installed pinned target | 2, 3 / BH-05, BH-06 |

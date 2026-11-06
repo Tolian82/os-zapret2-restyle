@@ -87,7 +87,7 @@
 
 ## Published stable v0.5.7 (historical release)
 
-- [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response), FreeBSD `latest` without pin.
+- [Strategy Lab target requirements](REQUIREMENTS.md) — `BH-01`–`BH-12`, three independent positive signals (target TLS handshake, target QUIC handshake or genuine HTTP response); historical exploratory FreeBSD `latest` acquisition, with a separate mandatory pinned source/ELF gate for release candidates.
 - [Detailed English Chrome TLS/QUIC/HTTP plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) — implementation stages 1–6, integration points and acceptance evidence; Stages 1–6 accepted by owner within bounded installed `_17` evidence, the earlier `v0.5.7_1` full release was published with two focused GUI fixes.
 - [Состояние реализации](PROJECT_STATE.md) и [единственный следующий шаг](START_HERE.md).
 

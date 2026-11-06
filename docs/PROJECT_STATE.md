@@ -1,6 +1,6 @@
 # os-zapret2-restyle — текущее состояние v0.6.x
 
-Текущий этап — **`v0.6.2_158`**; `VERSION=0.6.2`, `PLUGIN_REVISION=158`, package candidate: `os-zapret2-restyle-0.6.2_158.pkg` (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**).
+Текущий этап — **`v0.6.2_159`**; `VERSION=0.6.2`, `PLUGIN_REVISION=159`, документационный кандидат (**SOURCE-ONLY; NOT PUBLISHED/OWNER-INSTALLED**). Последний подтверждённый `main` до этого изменения — `_158`; опубликованный stable по-прежнему `0.6.2_1.pkg`.
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive` (owner-facing archive pointers follow).
 
@@ -37,7 +37,7 @@ Previously completed version lines: [v0.1.x archive](history/archive/v0.1.x.md),
 
 **Подтверждено:** ранее принятые функции текущего выпуска имеют свои независимые CI/installed доказательства, не переписываются и не проходят заново отменённые лабораторные кампании. IPv6 на IPv4-only owner stand был явно waived; непроверенные WAN/Voice media не называем PASS.
 
-**Нужно до готовности:** закрепить существующий Mk-билдер за финальным SHA, завершить штатные зависимости и Python, сервис/configd/hooks, выполнить ограниченную финальную нативную приёмку **одного** конечного пакета и зафиксировать точный SHA-256. Отдельное разрешение обязательно для публикации или изменений на устройстве владельца.
+**Нужно до готовности:** завершить оставшуюся нативную приёмку и **до квалификации релизного кандидата** закрепить точный подписанный пакет FreeBSD `curl-impersonate` и SHA-256 извлечённого ELF в `compatibility.json`. Сейчас скрипт сборки использует плавающий `latest`; утверждённый lock **ещё не реализован**. SHA конечного `.pkg` остаётся отдельной величиной: два гостя обязаны использовать один физический архив; SHA плана Additional Resources Remove рассчитывается локально по состоянию установки и не является SHA пакета. Не исключаем ELF из проверки целостности. Публикация и изменения на устройстве владельца требуют отдельного разрешения.
 
 **Навигация:** [START_HERE](START_HERE.md) · [ROADMAP](ROADMAP.md) · [ТЗ](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) · [план](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) · [исторический ledger](history/current/v0.6.x.md) · [релиз](releases/v0.6.2.md).
 

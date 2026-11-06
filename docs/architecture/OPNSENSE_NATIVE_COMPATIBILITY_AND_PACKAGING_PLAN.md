@@ -91,6 +91,16 @@ Test actual fresh installation, Start/Stop/Restart/Status/Apply, boot integratio
 
 ## FIFTH task — CI consistency and final acceptance
 
+**Approved 6 November 2026 — private curl-impersonate supply-chain lock before release-candidate qualification (not yet implemented):**
+
+1. Select one actual official signed FreeBSD `curl-impersonate` package compatible with the qualified FreeBSD 15 amd64 OPNsense target; record package version/source coordinates, its exact SHA-256 and the extracted ELF SHA-256 in the single `compatibility.json` compatibility-policy source. A floating `latest` fetch remains allowed only for exploratory pre-release development.
+2. Modify the **existing** `scripts/build-curl-impersonate.sh` / `scripts/native-opnsense-package.py` build path and related verification to consume and check that fixed source, without creating another builder or installing system FreeBSD packages on OPNsense. Missing/mismatched package, binary or qualified ABI/dependencies must fail closed.
+3. Verify signed source provenance, private ELF and licensing bytes, qualified target libraries/ABI, chosen supported Chrome profile, HTTPS/HTTP3/QUIC, CA and ECH-off behavior. Never drop the ELF from integrity checks; an intentional update of the lock requires new native qualification.
+4. Produce one official Mk release-candidate `.pkg`, record three separate identities (plugin archive SHA-256, source FreeBSD package SHA-256, private ELF SHA-256), and transfer **the same physical archive** unchanged between clean/STOPPED and old RUNNING/Voice/HTTPS/Extra guests. A second independently built archive is not a substitute for this gate, even if its source commit matches.
+5. Keep Additional Resources Remove confirmation bound to the *current installation's* separately recomputed plan SHA. Do not infer a plan-SHA defect from `EXTRA_REMOVE_UNEXPECTED_INSTALLED_PLAN_OR_COUNTS` without first checking HTTP response shape/status and counts. No broad SHA exceptions, new package-approval subsystem, or release authorization is introduced.
+
+**Completion condition:** manifest-driven pinned selection, negative tamper/drift checks, exact archive transfer and applicable disposable OPNsense native acceptance have observable PASS evidence. Until implemented, this is an **open release-candidate gate**, not an assertion about currently passing development builds. Publication and owner-appliance changes remain separately authorized.
+
 Make `ci.yml`, testing/release and Pages delivery use one native package builder. Run relevant installed regressions for Strategies, Voice, Exclude, Lab, Extra Resources and service. Bind results to the exact **final native package SHA-256**. Record previous IPv6/WAN/Voice-media waivers as NOT TESTED where applicable; do not reopen closed campaigns or claim PASS without observations.
 
 **Exit:** one qualified installable candidate, all applicable AC-01–AC-11 evidenced, and a short factual completion report. Owner separately authorizes any testing/stable publication or installation on their appliance.
