@@ -291,7 +291,7 @@ def self_test():
                            changed.get("current", current),
                            changed.get("kernel", "boot2"))
             raise AssertionError("Unsafe voice reboot evidence accepted")
-        except Refusal:
+        except (Refusal, common.Refusal):
             pass
     assert b"configctl zapret start" not in hook_bytes("start")
     assert b"configctl zapret stop" not in hook_bytes("stop")
@@ -310,6 +310,6 @@ if __name__ == "__main__":
             print("STAGE5_REAL_VOICE_REBOOT=" + json.dumps(verify(), sort_keys=True))
         else:
             raise Refusal("VOICE_REBOOT_RUN_PREPARE_VERIFY_OR_SELF_TEST")
-    except (Refusal, OSError, ValueError, KeyError, TypeError) as exc:
+    except (Refusal, common.Refusal, OSError, ValueError, KeyError, TypeError) as exc:
         print("STAGE5_REAL_VOICE_REBOOT=REFUSED:" + str(exc), file=sys.stderr)
         sys.exit(2)
