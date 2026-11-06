@@ -89,8 +89,10 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_functional_owner_preserved",
          "installed_authenticated_lab_extra_http_status",
          "installed_authenticated_web_owner_preserved",
-         "loopback_only",
          "copyback_sha_required")) and
+         data.get("loopback_only") is False and
+         data.get("real_wan_tested") is True and
+         data.get("real_wan_dpi_bypass_tested") is False and
          data.get("published") is False and
          data.get("owner_device_changed") is False and
          data.get("all_feature_suites_qualified") is False,
@@ -183,6 +185,9 @@ def cross_receipt_binding(clean, live):
          live.get("real_lab_control_tls_ipv4_used") is True and
          live.get("real_lab_external_certified_https_target_tested") is True and
          live.get("strategy_lab_dpi_bypass_proven") is False and
+         live.get("loopback_only") is False and
+         live.get("real_wan_tested") is True and
+         live.get("real_wan_dpi_bypass_tested") is False and
          live.get("installed_resource_transaction_regressions") is True and
          live.get("installed_functional_owner_preserved") is True and
          live.get("installed_authenticated_lab_extra_http_status") is True and
@@ -516,13 +521,14 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_functional_owner_preserved": True,
         "installed_authenticated_lab_extra_http_status": True,
         "installed_authenticated_web_owner_preserved": True,
-        "loopback_only": True, "copyback_sha_required": True,
+        "loopback_only": False, "copyback_sha_required": True,
         "published": False, "owner_device_changed": False,
         "all_feature_suites_qualified": False,
         "prebuilt_clean_install_same_archive": bool(prebuilt_clean),
         "browser_button_click_tested": False,
         "voice_media_tested": False,
-        "real_wan_tested": False,
+        "real_wan_tested": True,
+        "real_wan_dpi_bypass_tested": False,
     }
     receipt_check(report, PACKAGE, built["project_sha"])
     RECEIPT.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n",
@@ -614,10 +620,14 @@ def self_test():
                     "installed_functional_owner_preserved",
                     "installed_authenticated_lab_extra_http_status",
                     "installed_authenticated_web_owner_preserved",
-                    "loopback_only",
                     "copyback_sha_required")
             for key in keys:
                 fixture[key] = True
+            # Stage 30 AND the actual Stage 40 target both use real
+            # public HTTPS; only GUI and other Voice fixtures are loopback.
+            fixture["loopback_only"] = False
+            fixture["real_wan_tested"] = True
+            fixture["real_wan_dpi_bypass_tested"] = False
             assert receipt_check(fixture, PACKAGE, "a" * 40, verify_manifest=False) == fixture["archive_sha256"]
             sample_clean = {
                 "schema": 1, "status": "PASS_STAGE5_ONE_NATIVE_PACKAGE_CLEAN_INSTALL_SHA_BOUND",
@@ -675,6 +685,9 @@ def self_test():
                 ("installed_real_strategy_lab_positive_job", False),
                 ("real_lab_control_tls_ipv4_used", False),
                 ("real_lab_external_certified_https_target_tested", False),
+                ("loopback_only", True),
+                ("real_wan_tested", False),
+                ("real_wan_dpi_bypass_tested", True),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
             ):
