@@ -123,6 +123,34 @@ class NativeBuilderTests(unittest.TestCase):
         self.assertEqual(set(mod.HOOKS.values()),
                          {"pre-install","post-install","pre-deinstall","post-deinstall"})
 
+    def test_signed_source_and_elf_pin_refuses_drift(self):
+        lock = {"selection": "pinned", "abi": "FreeBSD:15:amd64",
+                "version": "2.2.2", "source_pkg_sha256": "a" * 64,
+                "elf_sha256": "b" * 64, "chrome_profile": "chrome145"}
+        observed = {"latest_version_diagnostic": "2.2.2",
+                    "signed_freebsd_latest_package_sha256": "a" * 64,
+                    "private_binary_sha256": "b" * 64,
+                    "profile": "chrome145"}
+        platform = {"freebsd_pkg_abi": "FreeBSD:15:amd64"}
+        self.assertTrue(mod.verified_private_source(lock, observed, platform))
+        for field, wrong, refusal in (
+                ("latest_version_diagnostic", "2.2.3", "VERSION_MISMATCH"),
+                ("signed_freebsd_latest_package_sha256", "c" * 64,
+                 "SOURCE_PACKAGE_SHA256_MISMATCH"),
+                ("private_binary_sha256", "d" * 64, "ELF_SHA256_MISMATCH"),
+                ("profile", "chrome146", "CHROME_PROFILE_MISMATCH")):
+            with self.subTest(field=field):
+                changed = dict(observed, **{field: wrong})
+                with self.assertRaisesRegex(mod.Refusal, refusal):
+                    mod.verified_private_source(lock, changed, platform)
+        with self.assertRaisesRegex(mod.Refusal, "TARGET_ABI_MISMATCH"):
+            mod.verified_private_source(
+                lock, observed, {"freebsd_pkg_abi": "FreeBSD:16:amd64"})
+        with patch.dict(os.environ, {"ZAPRET2_NATIVE_RELEASE_CANDIDATE": "1"}):
+            with self.assertRaisesRegex(mod.Refusal, "RELEASE_REQUIRES_EXACT_PIN"):
+                mod.verified_private_source(
+                    dict(lock, selection="exploratory"), observed, platform)
+
     def test_single_official_native_build_and_dist(self):
         source = (HERE / "native-opnsense-package.py").read_text()
         for snippet in ('private.old.clone_official(Path(scratch))',
