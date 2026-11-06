@@ -19,13 +19,14 @@
 ## Level 2 — активное ТЗ и нативная интеграция (5 ноября 2026)
 
 - [ТЗ: OPNsense native packaging and unified compatibility v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) — утверждённые требования к штатным pkg, зависимостям, Python и сервису, зафиксированные номера IPFW.
-- [Конкретный план завершения v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) — `_137` удаляет отменённые pkg-approval tools/CI и сверяет действующую техдокументацию; следующий пакет работ — нативная сборка.
+- [Конкретный план завершения v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) — действующий штатный pkg/configd/сервис и нативные тесты Stage 5; `_137` cleanup уже завершён, новые механизмы внешнего допуска отменены.
 - [START_HERE](START_HERE.md), [PROJECT_STATE](PROJECT_STATE.md), [ROADMAP](ROADMAP.md) — единая текущая задача, факты и последовательность работ.
 - [ARCHITECTURE](ARCHITECTURE.md), [REQUIREMENTS](REQUIREMENTS.md), [README](../README.md) — действующие архитектура и требования.
 - [Опубликованный v0.6.2](releases/v0.6.2.md) — действующий стабильный `0.6.2_1.pkg`; [v0.6.x ledger](history/current/v0.6.x.md) — прошлые экспериментальные результаты, **не** release gates.
+- [Stage 5 — финальная матрица AC-01–AC-11](verification/STAGE5_FINAL_ACCEPTANCE_MATRIX.md) — отдельные статусы PASS/PARTIAL/NOT TESTED, реальные native SHA, оставшиеся браузер/WAN/IPv6/media и owner approval; НЕ разрешение на публикацию.
 - [PR completion watchdog](GITHUB_PR_COMPLETION_WATCHDOG.md) — независимая GitHub-проверка CI/PR, **не** авторизация пакетов.
 
-**Отменены и исключены из активной навигации:** SQLite-свидетели и approval-gateway, криптографические одноразовые разрешения, внешний сервер подтверждений, OPNsense-specific pfilctl, IPFW shaper-flush мониторинг и новые IPFW collision/foreign-rule audits. Исходники/CI отменённых экспериментов удалены из исходного кандидата `_137`; полное слияние зависит от проверок. История остаётся доступной через Git и архивные записи.
+**Отменены и исключены из активной навигации:** SQLite-свидетели и approval-gateway, криптографические одноразовые разрешения, внешний сервер подтверждений, OPNsense-specific pfilctl, IPFW shaper-flush мониторинг и новые IPFW collision/foreign-rule audits. Код/CI отменённой архитектуры вычищены в историческом `_137` и слиты после нативных проверок; исторические доказательства остаются в Git и архиве.
 
 ## Level 2 — current v0.6.x full release
 
