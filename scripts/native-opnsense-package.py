@@ -340,6 +340,25 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
             "compatibility_qualified_abi": platform["freebsd_pkg_abi"]}
 
 
+def verified_private_source(lock, bundle, platform):
+    """Fail closed before packaging, preserving target ELF/ldd/smoke gates."""
+    need(lock["abi"] == platform["freebsd_pkg_abi"],
+         "PRIVATE_CURL_PIN_TARGET_ABI_MISMATCH")
+    if lock["selection"] == "exploratory":
+        need(os.environ.get("ZAPRET2_NATIVE_RELEASE_CANDIDATE") != "1",
+             "PRIVATE_CURL_RELEASE_REQUIRES_EXACT_PIN")
+        return False
+    fields = (("version", "latest_version_diagnostic", "VERSION"),
+              ("source_pkg_sha256", "signed_freebsd_latest_package_sha256",
+               "SOURCE_PACKAGE_SHA256"),
+              ("elf_sha256", "private_binary_sha256", "ELF_SHA256"),
+              ("chrome_profile", "profile", "CHROME_PROFILE"))
+    for wanted, observed, label in fields:
+        need(bundle[observed] == lock[wanted],
+             "PRIVATE_CURL_PIN_" + label + "_MISMATCH")
+    return True
+
+
 def build():
     gate()
     sha = git_head()
@@ -351,7 +370,30 @@ def build():
         platform = qualified_target(py)
         policy_sha = stage_policy(plugin)
         variables = native_make_variables(plugin, sha, py, installed, platform)
-        private_dir, bundle = private.prepare_private(plugin, Path(scratch))
+        lock = validated_policy()["private_curl_impersonate"]
+        previous_version = os.environ.get("ZAPRET2_CURL_PIN_VERSION")
+        if lock["selection"] == "pinned":
+            os.environ["ZAPRET2_CURL_PIN_VERSION"] = lock["version"]
+        else:
+            os.environ.pop("ZAPRET2_CURL_PIN_VERSION", None)
+        try:
+            private_dir, bundle = private.prepare_private(plugin, Path(scratch))
+        finally:
+            if previous_version is None:
+                os.environ.pop("ZAPRET2_CURL_PIN_VERSION", None)
+            else:
+                os.environ["ZAPRET2_CURL_PIN_VERSION"] = previous_version
+        private_pin_verified = verified_private_source(lock, bundle, platform)
+        # Observable discovery only, not approval for a floating release.
+        print("NATIVE_CURL_SOURCE_EVIDENCE=" + json.dumps({
+            "selection": lock["selection"],
+            "version": bundle["latest_version_diagnostic"],
+            "source_pkg_sha256": bundle["signed_freebsd_latest_package_sha256"],
+            "elf_sha256": bundle["private_binary_sha256"],
+            "chrome_profile": bundle["profile"],
+            "abi": lock["abi"],
+            "verified_release_pin": private_pin_verified
+        }, sort_keys=True), flush=True)
         command(["make", "-C", str(plugin), "PLUGIN_HASH=" + sha,
                  "PLUGIN_WWW=" + PROJECT_URL, "package"], timeout=370)
         pkg = plugin / "work" / "pkg" / (NAME + "-" + VERSION + "_" + REVISION + ".pkg")
@@ -377,6 +419,8 @@ def build():
             "private_elf_sha256": bundle["private_binary_sha256"],
             "private_chrome_profile": bundle["profile"],
             "private_target_libraries": bundle["target_ldd_libraries"],
+            "private_release_source_lock_verified": private_pin_verified,
+            "private_source_version": bundle["latest_version_diagnostic"],
             "real_native_pkg": evidence,
             "tracked_stage_source": staged_source,
             "output": "dist/" + NAME + "-" + VERSION + "_" + REVISION + ".pkg",

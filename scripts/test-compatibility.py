@@ -125,6 +125,34 @@ class CompatibilityTests(unittest.TestCase):
                 x, "27.1", "FreeBSD:16:amd64", "amd64", "3.13.16"
             )["status"], "PASS_QUALIFIED_POLICY_TUPLE_ONLY")
 
+    def test_curl_source_pin_schema_and_negatives(self):
+        x = self.edited()
+        self.assertEqual(m.validate_private_curl_source(
+            x["private_curl_impersonate"])["selection"], "pinned")
+        x["private_curl_impersonate"].update(
+            selection="exploratory", version=None, source_pkg_sha256=None,
+            elf_sha256=None, chrome_profile=None)
+        self.assertEqual(m.validate_private_curl_source(
+            x["private_curl_impersonate"])["selection"], "exploratory")
+        x["private_curl_impersonate"]["source_pkg_sha256"] = "a" * 64
+        self.invalid(x, "FLOATING_PRIVATE_CURL_CANNOT_CLAIM_A_PIN")
+        x = self.edited()
+        pin = x["private_curl_impersonate"]
+        pin.update(selection="pinned", version="2.2.2",
+                   source_pkg_sha256="a" * 64, elf_sha256="b" * 64,
+                   chrome_profile="chrome145")
+        self.assertEqual(len(m.validate(x)), 1)
+        for name, bad, reason in (
+                ("version", "../unsafe", "PIN_VERSION_INVALID"),
+                ("source_pkg_sha256", "f" * 63, "PIN_HASH_INVALID"),
+                ("elf_sha256", "x" * 64, "PIN_HASH_INVALID"),
+                ("chrome_profile", "firefox", "PIN_CHROME_PROFILE_INVALID"),
+                ("repository_url", "https://untrusted/", "SOURCE_REPOSITORY")):
+            with self.subTest(name=name):
+                changed = copy.deepcopy(x)
+                changed["private_curl_impersonate"][name] = bad
+                self.invalid(changed, reason)
+
     def test_missing_capability_refused(self):
         x = self.edited()
         x["required_capabilities"] = ["owned-ipfw"]

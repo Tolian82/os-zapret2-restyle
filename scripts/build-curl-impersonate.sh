@@ -1,10 +1,20 @@
 #!/bin/sh
-# Bundle the current signed FreeBSD latest curl-impersonate package privately.
+# Bundle signed FreeBSD curl privately; pinned release inputs must match.
 set -eu
 
 DEST=${1:?usage: build-curl-impersonate.sh DEST}
 command -v pkg >/dev/null 2>&1 || { echo 'ERROR: pkg is required' >&2; exit 1; }
 command -v sha256 >/dev/null 2>&1 || { echo 'ERROR: sha256 is required' >&2; exit 1; }
+# Qualified native builder passes this exact version from compatibility.json.
+# Exploratory historical callers may omit it, but cannot publish a release.
+PINNED_VERSION=${ZAPRET2_CURL_PIN_VERSION:-}
+if [ -n "${PINNED_VERSION}" ]; then
+    printf '%s\n' "${PINNED_VERSION}" |
+        LC_ALL=C grep -Eq '^[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}$' || {
+        echo 'ERROR: invalid curl pin version' >&2
+        exit 1
+    }
+fi
 
 TMP=$(mktemp -d /tmp/restyle-curl-impersonate.XXXXXX)
 trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
@@ -24,6 +34,21 @@ CONFIG
 # Permit OSVERSION drift only for signed catalog access and package fetch;
 # the fetched binary must still actually run on the 15.0 appliance/CI.
 IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" update -f -r FreeBSD
+# Signed repository metadata carries the semantic version. FreeBSD archive
+# names may append a repository-specific ~N$build suffix: do not mistake
+# that filename suffix for the pkg version. SHA-256 still pins exact bytes.
+CATALOG_VERSION=$(IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" \
+    rquery -r FreeBSD '%v' curl-impersonate)
+printf '%s\n' "${CATALOG_VERSION}" |
+    LC_ALL=C grep -Eq '^[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}$' || {
+    echo 'ERROR: curl-impersonate signed catalog version invalid or missing' >&2
+    exit 1
+}
+if [ -n "${PINNED_VERSION}" ] &&
+   [ "${CATALOG_VERSION}" != "${PINNED_VERSION}" ]; then
+    echo "ERROR: pinned curl-impersonate ${PINNED_VERSION} unavailable (got ${CATALOG_VERSION})" >&2
+    exit 1
+fi
 IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" fetch -y -r FreeBSD -o "${TMP}/packages" curl-impersonate
 
 PKG_FILE=$(find "${TMP}/packages" -type f -name 'curl-impersonate-*.pkg' | head -n 1)
@@ -50,8 +75,9 @@ PROFILE=$(find "${ROOT}/bin" -type f -name 'curl_chrome[0-9]*' |
 LICENSE_DIR=$(find "${ROOT}/share/licenses" -mindepth 1 -maxdepth 1 -type d -name 'curl-impersonate-*' | head -n 1)
 [ -n "${LICENSE_DIR}" ] || { echo 'ERROR: curl-impersonate licenses are missing' >&2; exit 1; }
 
-# Version is diagnostic information only; no version is a selection criterion.
-VERSION=$(basename "${PKG_FILE}" .pkg | sed 's/^curl-impersonate-//')
+# The signed pkg catalogue, not the archive filename's build suffix, owns
+# semantic version. Exact fetched archive identity is separately SHA-pinned.
+VERSION="${CATALOG_VERSION}"
 ABI=$(pkg config abi)
 VERSION_OUT=$("${BIN}" -V)
 printf '%s\n' "${VERSION_OUT}" | grep -q 'HTTP3' || {
@@ -72,5 +98,5 @@ printf '%s\n' "${VERSION}" > "${DEST}/UPSTREAM_VERSION"
 printf '%s\n' "${ABI}" > "${DEST}/FREEBSD_ABI"
 sha256 -q "${PKG_FILE}" > "${DEST}/SOURCE_PKG_SHA256"
 sha256 -q "${DEST}/bin/curl-impersonate" > "${DEST}/BINARY_SHA256"
-echo "==> curl-impersonate from signed FreeBSD latest: profile=${PROFILE} (version recorded, not pinned)"
+echo "==> signed FreeBSD curl-impersonate: version=${VERSION}, profile=${PROFILE}, pinned=$([ -n "${PINNED_VERSION}" ] && echo yes || echo no)"
 echo "==> source pkg SHA256: $(cat "${DEST}/SOURCE_PKG_SHA256")"

@@ -14,11 +14,42 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT = ROOT / "compatibility.json"
 TOP = {"schema_version", "target_product", "supported_platforms",
-       "required_capabilities", "exceptions"}
+       "required_capabilities", "exceptions", "private_curl_impersonate"}
 PLATFORM = {"opnsense_product_abi", "freebsd_pkg_abi", "architecture",
             "python", "qualification"}
 PYTHON = {"policy", "entrypoint", "supported"}
 QUALIFICATION = {"scope", "evidence"}
+PRIVATE_CURL = {"selection", "repository", "repository_url", "abi",
+                "version", "source_pkg_sha256", "elf_sha256", "chrome_profile"}
+
+
+def validate_private_curl_source(lock):
+    """Validate exact signed-source/ELF identity; no implicit fallback."""
+    exact(lock, PRIVATE_CURL, "INVALID_PRIVATE_CURL_FIELDS")
+    require(lock["repository"] == "FreeBSD" and
+            lock["repository_url"] == "pkg+https://pkg.FreeBSD.org/${ABI}/latest" and
+            lock["abi"] == "FreeBSD:15:amd64",
+            "UNQUALIFIED_PRIVATE_CURL_SOURCE_REPOSITORY_OR_ABI")
+    require(lock["selection"] in ("exploratory", "pinned"),
+            "UNQUALIFIED_PRIVATE_CURL_SELECTION")
+    names = ("version", "source_pkg_sha256", "elf_sha256", "chrome_profile")
+    if lock["selection"] == "exploratory":
+        require(all(lock[k] is None for k in names),
+                "FLOATING_PRIVATE_CURL_CANNOT_CLAIM_A_PIN")
+    else:
+        require(isinstance(lock["version"], str) and
+                re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}",
+                             lock["version"]) is not None,
+                "PRIVATE_CURL_PIN_VERSION_INVALID")
+        for key in ("source_pkg_sha256", "elf_sha256"):
+            require(isinstance(lock[key], str) and
+                    re.fullmatch(r"[a-f0-9]{64}", lock[key]) is not None,
+                    "PRIVATE_CURL_PIN_HASH_INVALID:" + key)
+        require(isinstance(lock["chrome_profile"], str) and
+                re.fullmatch(r"chrome[0-9]+", lock["chrome_profile"]) is not None,
+                "PRIVATE_CURL_PIN_CHROME_PROFILE_INVALID")
+    return lock
+
 
 
 class Refusal(ValueError):
@@ -68,6 +99,7 @@ def validate(policy, root=ROOT):
             all(isinstance(x, str) and
                 re.fullmatch(r"[a-z][a-z0-9-]{1,63}", x) for x in required),
             "INVALID_REQUIRED_CAPABILITIES")
+    validate_private_curl_source(policy["private_curl_impersonate"])
     # Stage 1 does not define scoped exception semantics; do not admit an
     # arbitrary exception or silently let one widen compatibility.
     require(policy["exceptions"] == [], "UNQUALIFIED_EXCEPTION_POLICY")
