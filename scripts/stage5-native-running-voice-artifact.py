@@ -79,6 +79,9 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_strategy_lab_idle_and_invalid_refused",
          "installed_extra_resources_offline_suites",
          "installed_lab_extra_preserves_native_owner",
+         "installed_lab_mocked_job_e2e",
+         "installed_resource_transaction_regressions",
+         "installed_functional_owner_preserved",
          "loopback_only",
          "copyback_sha_required")) and
          data.get("published") is False and
@@ -147,6 +150,9 @@ def cross_receipt_binding(clean, live):
          live.get("installed_strategy_lab_idle_and_invalid_refused") is True and
          live.get("installed_extra_resources_offline_suites") is True and
          live.get("installed_lab_extra_preserves_native_owner") is True and
+         live.get("installed_lab_mocked_job_e2e") is True and
+         live.get("installed_resource_transaction_regressions") is True and
+         live.get("installed_functional_owner_preserved") is True and
          clean.get("owner_appliance_modified") is False and
          live.get("owner_device_changed") is False,
          "STAGE5_CROSS_BOTH_INSTALLATION_SCOPES_NOT_PROVEN")
@@ -271,6 +277,20 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_LAB_EXTRA_NOT_QUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_LAB_EXTRA")
+    functional = load("stage5-installed-functional.py")
+    functional_report = functional.execute()
+    need(functional_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_LAB_MOCKED_JOB_RESOURCE_TRANSACTION" and
+         functional_report.get("installed_lab_mocked_job_scenarios", 0) >= 8 and
+         functional_report.get("installed_resource_transaction_cases", 0) >= 35 and
+         functional_report.get("real_config_shared_fd9_engine_ipfw_unchanged") is True and
+         functional_report.get("service_and_probes_mocked_in_private_job_harness") is True and
+         functional_report.get("actual_lab_network_probe_tested") is False and
+         functional_report.get("actual_extra_install_remove_tested") is False and
+         functional_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_INSTALLED_FUNCTIONAL_TESTS_UNQUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_FUNCTIONAL_FIXTURES")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -313,6 +333,9 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_strategy_lab_idle_and_invalid_refused": True,
         "installed_extra_resources_offline_suites": True,
         "installed_lab_extra_preserves_native_owner": True,
+        "installed_lab_mocked_job_e2e": True,
+        "installed_resource_transaction_regressions": True,
+        "installed_functional_owner_preserved": True,
         "loopback_only": True, "copyback_sha_required": True,
         "published": False, "owner_device_changed": False,
         "all_feature_suites_qualified": False,
@@ -392,6 +415,9 @@ def self_test():
                     "installed_strategy_lab_idle_and_invalid_refused",
                     "installed_extra_resources_offline_suites",
                     "installed_lab_extra_preserves_native_owner",
+                    "installed_lab_mocked_job_e2e",
+                    "installed_resource_transaction_regressions",
+                    "installed_functional_owner_preserved",
                     "loopback_only",
                     "copyback_sha_required")
             for key in keys:
@@ -440,6 +466,8 @@ def self_test():
                 ("authenticated_https_voice_apply_and_restore", False),
                 ("unknown_plugin_xml_preserved", False),
                 ("installed_exclude_backend_suites", False),
+                ("installed_lab_mocked_job_e2e", False),
+                ("installed_resource_transaction_regressions", False),
             ):
                 changed = dict(fixture)
                 changed[key] = value

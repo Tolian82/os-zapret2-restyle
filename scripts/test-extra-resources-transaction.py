@@ -14,7 +14,11 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src/opnsense/scripts/OPNsense/Zapret"
+INSTALLED_MODE = os.environ.get("ZAPRET2_STAGE5_INSTALLED_FUNCTIONS") == "1"
+if INSTALLED_MODE and os.environ.get("GITHUB_ACTIONS") != "true":
+    raise SystemExit("REFUSED: installed resource transaction tests require disposable GitHub CI")
+SRC = (Path("/usr/local/opnsense/scripts/OPNsense/Zapret")
+       if INSTALLED_MODE else ROOT / "src/opnsense/scripts/OPNsense/Zapret")
 sys.path.insert(0, str(SRC))
 spec = importlib.util.spec_from_file_location("extra_resources_transaction", SRC / "extra_resources_transaction.py")
 assert spec and spec.loader
