@@ -14,6 +14,8 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
+import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
@@ -70,6 +72,30 @@ def names_from_cache(row):
             if entry["origin"] == "other":
                 names.add(root + entry["name"])
     return names
+
+
+def failed_fetch_network_diagnostics():
+    """Read-only CI evidence AFTER failed repeat; never retry a mutation."""
+    result = {}
+    try:
+        proc = subprocess.run(["/sbin/ipfw", "-a", "list"], capture_output=True,
+                              text=True, timeout=8, check=False)
+        lines = [line.strip() for line in proc.stdout.splitlines()
+                 if any(word in line.lower() for word in
+                        ("divert", "deny", "reject", "unreach"))]
+        result["ipfw_rc"] = proc.returncode
+        result["ipfw_relevant"] = lines[:24]
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        result["ipfw_error"] = type(exc).__name__ + ":" + str(exc)[:120]
+    for host in ("api.github.com", "codeload.github.com"):
+        try:
+            # TCP handshake only: no catalog GET, no test fetch, no service mutation.
+            with socket.create_connection((host, 443), timeout=4):
+                result[host] = "tcp_443_connected"
+        except OSError as exc:
+            result[host] = type(exc).__name__ + ":" + str(exc)[:120]
+    print("STAGE5_EXTRA_REPEAT_FAILED_FETCH_NETWORK_DIAGNOSTICS=" +
+          json.dumps(result, sort_keys=True), file=sys.stderr, flush=True)
 
 
 def self_test():
@@ -190,6 +216,7 @@ def execute(initial_install):
         # do not retry an uncertain resource mutation or reclassify as PASS.
         row = web.api("POST", BASE + "resourcesStatus", {})
         detail = str(row.get("detail", ""))[:240].replace("\n", " ").replace("\r", " ")
+        failed_fetch_network_diagnostics()
         raise Refusal("EXTRA_ROUNDTRIP_REPEAT_INSTALL_TERMINAL_FAILED:" +
                       str(row.get("phase", "unknown")) + ":" + detail) from exc
     need(completed.get("operation") == repeated["operation"] and
