@@ -3,7 +3,8 @@
 
 A stock single-vtnet0 VM can acquire an unscoped antispoof host block after
 Apply. This test-only fixture uses OPNsense Config/MVC Filter and official
-filter reload; no pfctl edits, no PF disable, and no plugin code changes.
+filter reload; pinned host TCP/UDP 53/443, including the loopback-arrival
+check, are verified. No pfctl edits, PF disable or production code changes.
 """
 import json
 import os
@@ -34,18 +35,23 @@ try {
         }
     }
     foreach (['443','53'] as $port) {
+        foreach (['in','out'] as $direction) {
         $rule = $model->rules->rule->add();
         $rule->enabled = '1';
         $rule->action = 'pass';
         $rule->quick = '1';
-        $rule->direction = 'out';
+        $rule->direction = $direction;
         $rule->ipprotocol = 'inet';
         $rule->protocol = 'TCP/UDP';
-        $rule->interface = $iface;
+        // The host can enter PF via lo0 before outbound vtnet0.
+        // OPNsense InterfaceField excludes lo0: float only the exact CI
+        // source and two destination ports for the inbound direction.
+        $rule->interface = $direction === 'out' ? $iface : '';
         $rule->source_net = '192.168.122.10';
         $rule->destination_net = 'any';
         $rule->destination_port = $port;
-        $rule->description = 'ZAPRET2-CI-STAGE5-EGRESS-' . $port;
+        $rule->description = 'ZAPRET2-CI-STAGE5-EGRESS-' . $port . '-' . $direction;
+        }
     }
     if (!$model->serializeToConfig()) {
         throw new \RuntimeException('MODEL_SERIALIZE_REFUSED');
@@ -95,12 +101,15 @@ def validate_scope(env, nic, routes, identity):
 
 
 def verify_pf_rules(rules):
-    rows = [x for x in rules.splitlines()
-            if x.startswith("pass out quick on vtnet0 ") and IP in x]
-    need(any(re.search(r"\b(443|https)\b", x) for x in rows),
-         "CI_PF_NO_NATIVE_443_RULE")
-    need(any(re.search(r"\b(53|domain)\b", x) for x in rows),
-         "CI_PF_NO_NATIVE_53_RULE")
+    for direction in ("in", "out"):
+        prefix = ("pass out quick on vtnet0 " if direction == "out"
+                  else "pass in quick ")
+        rows = [x for x in rules.splitlines()
+                if x.startswith(prefix) and IP in x]
+        need(any(re.search(r"\b(443|https)\b", x) for x in rows),
+             "CI_PF_NO_NATIVE_443_" + direction.upper())
+        need(any(re.search(r"\b(53|domain)\b", x) for x in rows),
+             "CI_PF_NO_NATIVE_53_" + direction.upper())
 
 
 def execute():
@@ -121,8 +130,10 @@ def execute():
         try:
             with socket.create_connection((host, 443), timeout=8):
                 pass
-        except OSError:
-            raise Refusal("CI_PF_NETWORK_UNAVAILABLE:" + host) from None
+        except OSError as exc:
+            raise Refusal("CI_PF_NETWORK_UNAVAILABLE:" + host +
+                          ":errno=" + str(exc.errno) +
+                          ":class=" + type(exc).__name__) from None
     print("STAGE5_CI_NATIVE_PF_EGRESS=" + json.dumps({
         "status": "PASS_DISPOSABLE_STOCK_PF_SCOPED_EGRESS",
         "host": IP, "ports": [53, 443], "native_filter": True,
@@ -150,7 +161,11 @@ def self_test():
     verify_pf_rules("pass out quick on vtnet0 inet proto tcp "
                     "from 192.168.122.10 to any port = https\n"
                     "pass out quick on vtnet0 inet proto udp "
-                    "from 192.168.122.10 to any port = domain\n")
+                    "from 192.168.122.10 to any port = domain\n"
+                    "pass in quick inet proto tcp from 192.168.122.10 "
+                    "to any port = https\n"
+                    "pass in quick inet proto udp from 192.168.122.10 "
+                    "to any port = domain\n")
     try:
         verify_pf_rules("block drop in log inet from 192.168.122.10 to any")
         raise AssertionError("missing native rules accepted")
