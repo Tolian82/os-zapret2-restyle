@@ -105,6 +105,28 @@ must($wanMerged['general']['waninterface']==='WAN2' &&
      $wanMerged['strategy']===$optionModel['strategy'],
     'changed native WAN dropdown failed scoped Config preflight');
 
+// An optional InterfaceField with no saved WAN exposes the empty option
+// as selected=1. Its first genuine selection must also reach native Config.
+$emptyWanModel=$optionModel;
+$emptyWanModel['general']['waninterface']=[
+    ''=>['value'=>'None','selected'=>1],
+    'WAN'=>['value'=>'WAN','selected'=>0],
+    'WAN2'=>['value'=>'WAN2','selected'=>0],
+];
+$firstWanEdit=$unchangedForm;
+$firstWanEdit['general']['waninterface']='WAN';
+$firstWanPlan=SettingsApply::prepareStrategies(
+    $emptyWanModel,$firstWanEdit,'91.108.0.0/16'
+);
+must($firstWanPlan['changed_fields']===['general.waninterface'],
+    'first WAN selection from empty native option not detected');
+$firstWanMerged=SettingsApply::mergeForCommit(
+    $emptyWanModel,$firstWanPlan,'strategies'
+);
+must($firstWanMerged['general']['waninterface']==='WAN' &&
+     $firstWanMerged['hostlist']['mode']===$emptyWanModel['hostlist']['mode'],
+    'first WAN selection from empty native Config refused');
+
 // OptionField mode uses the same native selected-option representation.
 $modeEdit=$unchangedForm;
 $modeEdit['hostlist']['mode']='auto';
