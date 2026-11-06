@@ -78,6 +78,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_exclude_preserves_native_owner",
          "installed_authenticated_exclude_apply_restore",
          "installed_native_authenticated_extra_remove",
+         "installed_native_authenticated_extra_roundtrip",
          "installed_native_authenticated_extra_install",
          "installed_strategy_lab_idle_and_invalid_refused",
          "installed_extra_resources_offline_suites",
@@ -100,6 +101,10 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          type(data.get("extra_install_owned_count")) is int and
          0 < data["extra_install_owned_count"] <= 73,
          "STAGE5_RUNNING_EXTRA_INSTALL_PIN_AND_CONTENT_NOT_ATTESTED")
+    need(data.get("extra_roundtrip_resource_count") == 73 and
+         isinstance(data.get("extra_roundtrip_local_plan_sha256"), str) and
+         re.fullmatch(r"[a-f0-9]{64}", data["extra_roundtrip_local_plan_sha256"]),
+         "STAGE5_RUNNING_EXTRA_ROUNDTRIP_LOCAL_PLAN_NOT_ATTESTED")
     need(path == PACKAGE and path.is_file() and not path.is_symlink() and
          stat.S_ISREG(path.lstat().st_mode) and path.lstat().st_nlink == 1,
          "STAGE5_RUNNING_PACKAGE_PATH_UNQUALIFIED")
@@ -161,6 +166,7 @@ def cross_receipt_binding(clean, live):
          live.get("installed_exclude_preserves_native_owner") is True and
          live.get("installed_authenticated_exclude_apply_restore") is True and
          live.get("installed_native_authenticated_extra_remove") is True and
+         live.get("installed_native_authenticated_extra_roundtrip") is True and
          live.get("installed_native_authenticated_extra_install") is True and
          live.get("installed_strategy_lab_idle_and_invalid_refused") is True and
          live.get("installed_extra_resources_offline_suites") is True and
@@ -386,6 +392,34 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_NATIVE_REAL_EXTRA_INSTALL_UNQUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXTRA_INSTALL")
+    extra_roundtrip = load("stage5-installed-extra-roundtrip-http.py")
+    roundtrip_report = extra_roundtrip.execute(install_report)
+    need(roundtrip_report.get("status") ==
+         "PASS_STAGE5_REAL_REPEAT_INSTALL_AND_ALL_73_REMOVE" and
+         roundtrip_report.get("source_commit") == extra_install.SOURCE_REVISION and
+         roundtrip_report.get("catalog_content_sha256") ==
+         install_report["catalog_content_sha256"] and
+         roundtrip_report.get("resource_count") == 73 and
+         roundtrip_report.get("lua_count") == 19 and
+         roundtrip_report.get("bin_count") == 54 and
+         isinstance(roundtrip_report.get("extra_local_plan_sha256"), str) and
+         re.fullmatch(r"[a-f0-9]{64}", roundtrip_report["extra_local_plan_sha256"]) and
+         all(roundtrip_report.get(flag) is True for flag in (
+             "repeat_real_https_install_completed",
+             "repeat_no_change_catalog_bytes_preserved",
+             "repeat_native_stop_start_rotated_pid_same_fd9",
+             "fresh_local_remove_plan_matched_native_https",
+             "bad_confirmation_and_stale_local_sha_refused",
+             "real_positive_remove_73_correlated_terminal",
+             "real_remove_committed_new_shared_owner",
+             "native_config_and_ipfw_preserved",
+             "all_extra_files_removed_upstream_intact",
+             "installed_metadata_and_inventory_cache_cleared")) and
+         roundtrip_report.get("physical_browser_click_tested") is False and
+         roundtrip_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_NATIVE_REAL_EXTRA_ROUNDTRIP_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXTRA_ROUNDTRIP")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -429,6 +463,9 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_exclude_preserves_native_owner": True,
         "installed_authenticated_exclude_apply_restore": True,
         "installed_native_authenticated_extra_remove": True,
+        "installed_native_authenticated_extra_roundtrip": True,
+        "extra_roundtrip_resource_count": roundtrip_report["resource_count"],
+        "extra_roundtrip_local_plan_sha256": roundtrip_report["extra_local_plan_sha256"],
         "installed_native_authenticated_extra_install": True,
         "extra_install_source_commit": install_report["source_commit"],
         "extra_install_catalog_content_sha256": install_report["catalog_content_sha256"],
@@ -506,6 +543,8 @@ def self_test():
                 "extra_install_source_commit": load("stage5-installed-extra-install-http.py").SOURCE_REVISION,
                 "extra_install_catalog_content_sha256": "d" * 64,
                 "extra_install_owned_count": 73,
+                "extra_roundtrip_resource_count": 73,
+                "extra_roundtrip_local_plan_sha256": "e" * 64,
                 "all_feature_suites_qualified": False,
             }
             keys = ("exact_old_running_to_native_pkg_replacement",
@@ -522,6 +561,7 @@ def self_test():
                     "installed_exclude_preserves_native_owner",
                     "installed_authenticated_exclude_apply_restore",
                     "installed_native_authenticated_extra_remove",
+                    "installed_native_authenticated_extra_roundtrip",
                     "installed_native_authenticated_extra_install",
                     "installed_strategy_lab_idle_and_invalid_refused",
                     "installed_extra_resources_offline_suites",
@@ -581,10 +621,13 @@ def self_test():
                 ("installed_exclude_backend_suites", False),
                 ("installed_authenticated_exclude_apply_restore", False),
                 ("installed_native_authenticated_extra_remove", False),
+                ("installed_native_authenticated_extra_roundtrip", False),
                 ("installed_native_authenticated_extra_install", False),
                 ("extra_install_source_commit", "f" * 40),
                 ("extra_install_catalog_content_sha256", "bad"),
                 ("extra_install_owned_count", 0),
+                ("extra_roundtrip_resource_count", 0),
+                ("extra_roundtrip_local_plan_sha256", "bad"),
                 ("installed_lab_mocked_job_e2e", False),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
