@@ -11,6 +11,7 @@ import os
 from stage2_source_revision import revision_from_makefile
 from pathlib import Path
 import re
+import shutil
 import stat
 import sys
 import tempfile
@@ -145,6 +146,79 @@ def verify_running_successor(engine_sha, prior_processes, prior_rules):
             "restart_markers_consumed": True, **drained}
 
 
+
+def stage_full_upstream_for_native_remove(upstream, runtime):
+    """Complete only the disposable RUNNING fixture with the ALREADY pinned Git HEAD.
+
+    The ordinary historical-upgrade fixture deliberately copies only a
+    minimal subset of upstream for a lo0 engine test. The actual native
+    Additional Resources Remove planner correctly REQUIRES a complete local
+    Git checkout and tracked Lua/BIN for the real HEAD. Reuse the very same
+    previously fetched and attested source tree. No new network operation,
+    no production setup behavior or authorization changes.
+    """
+    need(os.environ.get("ZAPRET2_STAGE5_AUTHENTICATED_EXTRA_REMOVE") == "1" and
+         os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get(OPTIN) == "1",
+         "REAL_REMOVE_FIXTURE_WITHOUT_EXPLICIT_DISPOSABLE_OPTIN")
+    pin = "221d7dff24bfec0cd5ac0a5070b8acef2008af3d"
+    need(upstream.is_dir() and not upstream.is_symlink() and
+         runtime.is_dir() and not runtime.is_symlink() and
+         (upstream / ".git").is_dir() and not (upstream / ".git").is_symlink() and
+         not (runtime / ".git").exists() and not (runtime / ".git").is_symlink(),
+         "REAL_REMOVE_FIXTURE_NOT_A_FRESH_GIT_HEAD")
+    git = "/usr/local/bin/git"
+    source_head = genuine.command(git, "-C", str(upstream), "rev-parse",
+                                  "--verify", "HEAD^{commit}")
+    need(source_head.returncode == 0 and source_head.stdout.strip() == pin,
+         "REAL_REMOVE_UPSTREAM_PIN_DIFFERENT_FROM_ENGINE")
+    src_lua = upstream / "lua"
+    dst_lua = runtime / "lua"
+    need(src_lua.is_dir() and not src_lua.is_symlink() and
+         dst_lua.is_dir() and not dst_lua.is_symlink(),
+         "REAL_REMOVE_UPSTREAM_LUA_DIRECTORIES_UNSAFE")
+    upstream_lua = sorted(x for x in src_lua.iterdir() if x.suffix == ".lua")
+    need(len(upstream_lua) >= 3 and
+         all(p.is_file() and not p.is_symlink() for p in upstream_lua),
+         "REAL_REMOVE_UPSTREAM_LUA_SET_UNQUALIFIED")
+    for src in upstream_lua:
+        dst = dst_lua / src.name
+        need(not dst.is_symlink() and (not dst.exists() or
+             (dst.is_file() and dst.read_bytes() == src.read_bytes())),
+             "REAL_REMOVE_STAGED_LUA_CONFLICT:" + src.name)
+        if not dst.exists():
+            shutil.copy2(src, dst)
+        need(dst.is_file() and not dst.is_symlink() and
+             dst.read_bytes() == src.read_bytes(),
+             "REAL_REMOVE_STAGED_UPSTREAM_LUA_NOT_BYTE_IDENTICAL")
+    src_fake = upstream / "files/fake"
+    dst_fake = runtime / "files/fake"
+    need(src_fake.is_dir() and dst_fake.is_dir() and
+         not src_fake.is_symlink() and not dst_fake.is_symlink(),
+         "REAL_REMOVE_UPSTREAM_FAKE_SET_UNAVAILABLE")
+    source_blobs = sorted(p.name for p in src_fake.iterdir())
+    runtime_blobs = sorted(p.name for p in dst_fake.iterdir())
+    need(bool(source_blobs) and source_blobs == runtime_blobs and
+         all((src_fake / name).is_file() and
+             not (src_fake / name).is_symlink() and
+             (dst_fake / name).is_file() and
+             not (dst_fake / name).is_symlink() and
+             (src_fake / name).read_bytes() == (dst_fake / name).read_bytes()
+             for name in source_blobs),
+         "REAL_REMOVE_UPSTREAM_FAKE_BLOB_BYTES_CHANGED")
+    # Copy only Git provenance from the already fetched pinned checkout.
+    # Do not git checkout/reset the installed runtime: it owns the preserved
+    # test-only native OPNsense Config-generated hostlists and engine.
+    shutil.copytree(upstream / ".git", runtime / ".git", symlinks=False)
+    head = genuine.command(git, "-C", str(runtime), "rev-parse",
+                           "--verify", "HEAD^{commit}")
+    top = genuine.command(git, "-C", str(runtime), "rev-parse",
+                          "--show-toplevel")
+    need(head.returncode == 0 and head.stdout.strip() == pin and
+         top.returncode == 0 and top.stdout.strip() == str(runtime.resolve()),
+         "REAL_REMOVE_INSTALLED_GIT_HEAD_NOT_PINNED_AFTER_COPY")
+    return True
+
 def execute(archive, *, prebuilt_native_report=None):
     require_disposable()
     clean.plugin_absent()
@@ -187,6 +261,9 @@ def execute(archive, *, prebuilt_native_report=None):
         upstream = stopped.load("stage0-opnsense-upstream-engine-build.py")
         upstream.build(Path(temp))
         engine_sha = genuine.stage_engine(Path(temp) / "upstream")
+        if os.environ.get("ZAPRET2_STAGE5_AUTHENTICATED_EXTRA_REMOVE") == "1":
+            stage_full_upstream_for_native_remove(
+                Path(temp) / "upstream", genuine.RUNTIME)
         genuine.RUNTIME.chmod(0o755)
         generated = ET.tostring(genuine.insert_test_model(xml), encoding="utf-8")
         genuine.write_config(generated, mode, owner=(uid, gid))
