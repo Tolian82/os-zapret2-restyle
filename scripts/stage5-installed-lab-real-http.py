@@ -3,8 +3,10 @@
 
 Only on a CI-disposable OPNsense 26.7 guest already running the verified
 Strategies/Voice FD9 owner. Uses the unmodified shipped launcher/worker/probes,
-including the genuine external Stage-30 yandex.ru TLS control; localhost is
-ONLY the user-chosen target. TARGET_ACCESSIBLE is a successful job lifecycle
+including the genuine external Stage-30 yandex.ru TLS control. The **same**
+verified public host is the test target for a strict Stage-40 TLS baseline:
+a bare 127.0.0.1 target is invalid for packaged strict TLS (curl exit 60).
+TARGET_ACCESSIBLE is a successful job lifecycle
 and explicitly NOT evidence that any DPI bypass succeeded.
 """
 from __future__ import annotations
@@ -20,7 +22,7 @@ import time
 
 HERE = Path(__file__).resolve().parent
 FLAG = "ZAPRET2_STAGE5_REAL_LAB_POSITIVE"
-TARGET = "127.0.0.1"
+TARGET = "yandex.ru"
 LAB = "/api/zapret/strategy_lab/"
 STATUS = "PASS_STAGE5_INSTALLED_REAL_LAB_TARGET_ACCESSIBLE_AND_RESTORE"
 JOB_PATTERN = re.compile(r"job\.[A-Za-z0-9]{4,40}\Z")
@@ -69,7 +71,7 @@ def qualified_terminal(value, job):
          value.get("outcome") == "TARGET_ACCESSIBLE" and
          value.get("current_stage") == "99" and
          value.get("initial_service_state") == "RUNNING" and
-         value.get("target") == TARGET and value.get("target_type") == "ip" and
+         value.get("target") == TARGET and value.get("target_type") == "domain" and
          value.get("mode") == "standard" and
          value.get("ipv6_enabled") is False,
          "LAB_POSITIVE_UNQUALIFIED_COMPLETED_RESULT")
@@ -84,15 +86,22 @@ def qualified_terminal(value, job):
          "LAB_POSITIVE_REAL_EXTERNAL_CONTROL_NOT_AVAILABLE")
     need(isinstance(baseline, dict) and
          baseline.get("target") == TARGET and
-         baseline.get("target_type") == "ip" and
+         baseline.get("target_type") == "domain" and
+         baseline.get("dns_a") == "PASS" and
          baseline.get("all_accessible") is True and
          isinstance(baseline.get("endpoints"), list) and
          len(baseline["endpoints"]) == 1 and
          baseline["endpoints"][0].get("endpoint") == TARGET and
          baseline["endpoints"][0].get("status") == "PASS" and
-         baseline["endpoints"][0].get("transport") == "tcp-443" and
-         baseline["endpoints"][0].get("exit_code") == 0,
-         "LAB_POSITIVE_REAL_LOOPBACK_TCP_BASELINE_NOT_ATTESTED")
+         baseline["endpoints"][0].get("transport") == "https-ipv4" and
+         baseline["endpoints"][0].get("exit_code") == 0 and
+         isinstance(baseline["endpoints"][0].get("reachability"), dict) and
+         baseline["endpoints"][0]["reachability"].get("accessible") is True and
+         baseline["endpoints"][0]["reachability"].get("tls_verified") is True and
+         baseline["endpoints"][0]["reachability"].get("ssl_verify_result") == 0 and
+         baseline["endpoints"][0]["reachability"].get(
+             "certificate_verification_failed") is False,
+         "LAB_POSITIVE_REAL_PUBLIC_TLS_CERTIFIED_BASELINE_NOT_ATTESTED")
     return value
 
 
@@ -143,9 +152,9 @@ def job_readonly_diagnostics(job):
         result["active_job_same"] = "unavailable"
     try:
         with socket.create_connection((TARGET, 443), timeout=2):
-            result["loopback_tcp_443"] = "connected"
+            result["external_target_tcp_443"] = "connected"
     except OSError as exc:
-        result["loopback_tcp_443"] = type(exc).__name__
+        result["external_target_tcp_443"] = type(exc).__name__
     return result
 
 
@@ -227,11 +236,14 @@ def self_test():
         "status": "ok", "job_id": job, "state": "completed",
         "outcome": "TARGET_ACCESSIBLE", "current_stage": "99",
         "initial_service_state": "RUNNING", "target": TARGET,
-        "target_type": "ip", "mode": "standard", "ipv6_enabled": False,
+        "target_type": "domain", "mode": "standard", "ipv6_enabled": False,
         "network": {"ipv4": "available"},
-        "baseline": {"target": TARGET, "target_type": "ip", "all_accessible": True,
+        "baseline": {"target": TARGET, "target_type": "domain", "dns_a": "PASS", "all_accessible": True,
                      "endpoints": [{"endpoint": TARGET, "status": "PASS",
-                                    "transport": "tcp-443", "exit_code": 0}]},
+                                    "transport": "https-ipv4", "exit_code": 0,
+                                    "reachability": {"accessible": True, "tls_verified": True,
+                                                     "ssl_verify_result": 0,
+                                                     "certificate_verification_failed": False}}]},
         "stages": [{"number": x, "status": ("SKIPPED" if x == "50" else "PASS")}
                    for x in ("00", "10", "20", "30", "40", "50", "90", "99")],
     }
@@ -241,6 +253,11 @@ def self_test():
         {**sample, "outcome": "SUCCESS"},
         {**sample, "network": {"ipv4": "unavailable"}},
         {**sample, "baseline": {**sample["baseline"], "all_accessible": False}},
+        {**sample, "baseline": {**sample["baseline"], "endpoints": [{
+            **sample["baseline"]["endpoints"][0], "exit_code": 60,
+            "reachability": {"accessible": True, "tls_verified": False,
+                             "ssl_verify_result": 60,
+                             "certificate_verification_failed": True}}]}},
         {**sample, "stages": [{**x, "status": "FAIL"} if x["number"] == "90" else x
                               for x in sample["stages"]]},
     ):
@@ -307,11 +324,13 @@ def execute():
         "schema": 1, "status": STATUS, "job_terminal_outcome": "TARGET_ACCESSIBLE",
         "authenticated_stock_https_csrf_start_status_result": True,
         "real_shipped_worker_control_tls_ipv4_available": True,
-        "real_local_tcp443_baseline_passed": True,
+        "real_external_tls_verified_baseline_passed": True,
         "job_completed_and_original_fd9_restored": True,
         "saved_native_config_and_ipfw_unchanged": True,
         "real_strategy_search_or_dpi_bypass_proven": False,
         "real_external_control_site_contacted": True,
+        "real_external_target_same_control_site": True,
+        "real_wan_dpi_bypass_proven": False,
         "physical_browser_click_tested": False, "owner_appliance_modified": False,
     }
     print("STAGE5_REAL_INSTALLED_LAB_JOB=" + json.dumps(report, sort_keys=True))
