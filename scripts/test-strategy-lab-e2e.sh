@@ -3,14 +3,28 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+# In Stage 5, test the pkg-owned executable orchestration, not a staged copy.
+# The fixture/test scripts still come from ROOT_DIR; all job/probe state is
+# directed to a private temporary directory and external probes are mocked.
+if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ]; then
+    [ "${GITHUB_ACTIONS:-}" = true ] ||
+        { echo 'REFUSED: installed Lab E2E requires disposable GitHub CI' >&2; exit 2; }
+    SCRIPT_DIR=/usr/local/opnsense/scripts/OPNsense/Zapret
+else
+    SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
+fi
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 LAUNCHER="${SCRIPT_DIR}/strategy_lab_launcher.sh"
 WORKER="${SCRIPT_DIR}/strategy_lab_worker.sh"
 PROBE_RUNNER="${SCRIPT_DIR}/strategy_lab_probe_runner.sh"
 CIRCULAR_LAUNCHER="${SCRIPT_DIR}/strategy_lab_circular_launcher.sh"
-CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php"
-ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
+if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ]; then
+    CONTROLLER=/usr/local/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php
+    ACTIONS=/usr/local/opnsense/service/conf/actions.d/actions_zapret.conf
+else
+    CONTROLLER="${ROOT_DIR}/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php"
+    ACTIONS="${ROOT_DIR}/src/opnsense/service/conf/actions.d/actions_zapret.conf"
+fi
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-e2e.XXXXXX")
 
 cleanup()
@@ -529,18 +543,29 @@ grep -Fq 'public function statusAction(): array' "${CONTROLLER}" || fail 'API st
 grep -Fq 'public function cancelAction(): array' "${CONTROLLER}" || fail 'API cancel action is missing'
 grep -Fq 'public function resultAction(): array' "${CONTROLLER}" || fail 'API result action is missing'
 
-printf "E2E phase=delegated-active-cancel\n"
-sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh" >/dev/null
-printf "E2E phase=delegated-time-budget\n"
-sh "${ROOT_DIR}/scripts/test-strategy-lab-time-budget.sh" >/dev/null
-printf "E2E phase=delegated-semantic-restoration\n"
-sh "${ROOT_DIR}/scripts/test-strategy-lab-semantic-restoration.sh" >/dev/null
-printf "E2E phase=delegated-candidate-runtime\n"
-sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh" >/dev/null
+# The delegated source-only contracts are executed by the standard Linux
+# CI corrective matrix. They use Linux-native utilities (e.g. stat -c) and
+# source-path fixtures, so must not be misrepresented as installed FreeBSD
+# entrypoint evidence. All eight real installed launcher/worker fixture jobs
+# and the installed private circular flow above remain mandatory.
+if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" != 1 ]; then
+    printf "E2E phase=delegated-active-cancel\n"
+    sh "${ROOT_DIR}/scripts/test-strategy-lab-active-cancel.sh" >/dev/null
+    printf "E2E phase=delegated-time-budget\n"
+    sh "${ROOT_DIR}/scripts/test-strategy-lab-time-budget.sh" >/dev/null
+    printf "E2E phase=delegated-semantic-restoration\n"
+    sh "${ROOT_DIR}/scripts/test-strategy-lab-semantic-restoration.sh" >/dev/null
+    printf "E2E phase=delegated-candidate-runtime\n"
+    sh "${ROOT_DIR}/scripts/test-strategy-lab-candidate-runtime.sh" >/dev/null
+fi
 
 sh -n "${LAUNCHER}"
 sh -n "${WORKER}"
 sh -n "${CIRCULAR_LAUNCHER}"
 sh -n "${MODULE_DIR}/query.sh"
 
-echo 'PASS: Strategy Lab API/configd facade, launcher, lifecycle, worker stages, result recovery, and private circular flow integrate end to end'
+if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ]; then
+    echo 'PASS: installed Strategy Lab mock-backed job lifecycle, errors, restoration and private circular flow'
+else
+    echo 'PASS: Strategy Lab API/configd facade, launcher, lifecycle, worker stages, result recovery, and private circular flow integrate end to end'
+fi
