@@ -77,6 +77,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_exclude_backend_suites",
          "installed_exclude_preserves_native_owner",
          "installed_authenticated_exclude_apply_restore",
+         "installed_native_authenticated_extra_remove",
          "installed_strategy_lab_idle_and_invalid_refused",
          "installed_extra_resources_offline_suites",
          "installed_lab_extra_preserves_native_owner",
@@ -151,6 +152,7 @@ def cross_receipt_binding(clean, live):
          live.get("installed_exclude_backend_suites") is True and
          live.get("installed_exclude_preserves_native_owner") is True and
          live.get("installed_authenticated_exclude_apply_restore") is True and
+         live.get("installed_native_authenticated_extra_remove") is True and
          live.get("installed_strategy_lab_idle_and_invalid_refused") is True and
          live.get("installed_extra_resources_offline_suites") is True and
          live.get("installed_lab_extra_preserves_native_owner") is True and
@@ -330,6 +332,28 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_EXCLUDE_HTTPS_APPLY_NOT_QUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXCLUDE_HTTPS")
+    extra_remove = load("stage5-installed-extra-remove-http.py")
+    remove_report = extra_remove.execute()
+    need(remove_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_EXTRA_AUTHENTICATED_REMOVE_AND_NATIVE_TRIAL" and
+         all(remove_report.get(field) is True for field in (
+             "stock_authenticated_general_page_and_csrf",
+             "read_only_noop_plan_and_refusal",
+             "exact_local_git_head_and_single_test_file",
+             "typed_confirmation_and_stale_digest_refused",
+             "native_confirmed_remove_worker_completed",
+             "correlated_operation_status_not_installed",
+             "removed_only_test_file_upstream_bytes_intact",
+             "native_saved_config_unchanged",
+             "real_shared_strategies_fd9_owner_restarted",
+             "native_lo0_ipfw_rules_preserved")) and
+         remove_report.get("outside_network_access_used") is False and
+         remove_report.get("additional_resources_install_tested") is False and
+         remove_report.get("physical_browser_click_tested") is False and
+         remove_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_NATIVE_AUTHENTICATED_EXTRA_REMOVE_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXTRA_REMOVE")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -372,6 +396,7 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_exclude_backend_suites": True,
         "installed_exclude_preserves_native_owner": True,
         "installed_authenticated_exclude_apply_restore": True,
+        "installed_native_authenticated_extra_remove": True,
         "installed_strategy_lab_idle_and_invalid_refused": True,
         "installed_extra_resources_offline_suites": True,
         "installed_lab_extra_preserves_native_owner": True,
@@ -457,6 +482,7 @@ def self_test():
                     "installed_exclude_backend_suites",
                     "installed_exclude_preserves_native_owner",
                     "installed_authenticated_exclude_apply_restore",
+                    "installed_native_authenticated_extra_remove",
                     "installed_strategy_lab_idle_and_invalid_refused",
                     "installed_extra_resources_offline_suites",
                     "installed_lab_extra_preserves_native_owner",
@@ -514,6 +540,7 @@ def self_test():
                 ("unknown_plugin_xml_preserved", False),
                 ("installed_exclude_backend_suites", False),
                 ("installed_authenticated_exclude_apply_restore", False),
+                ("installed_native_authenticated_extra_remove", False),
                 ("installed_lab_mocked_job_e2e", False),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
