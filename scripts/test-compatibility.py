@@ -128,6 +128,11 @@ class CompatibilityTests(unittest.TestCase):
     def test_curl_source_pin_schema_and_negatives(self):
         x = self.edited()
         self.assertEqual(m.validate_private_curl_source(
+            x["private_curl_impersonate"])["selection"], "pinned")
+        x["private_curl_impersonate"].update(
+            selection="exploratory", version=None, source_pkg_sha256=None,
+            elf_sha256=None, chrome_profile=None)
+        self.assertEqual(m.validate_private_curl_source(
             x["private_curl_impersonate"])["selection"], "exploratory")
         x["private_curl_impersonate"]["source_pkg_sha256"] = "a" * 64
         self.invalid(x, "FLOATING_PRIVATE_CURL_CANNOT_CLAIM_A_PIN")
