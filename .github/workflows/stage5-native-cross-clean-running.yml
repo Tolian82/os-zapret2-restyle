@@ -18,7 +18,7 @@ on:
       - scripts/stage5-installed-exclude-http-apply.py
       - scripts/stage5-installed-extra-remove-http.py
       - scripts/stage5-installed-extra-install-http.py
-      - scripts/stage5-installed-extra-roundtrip-http.py scripts/stage5-native-pf-egress-fixture.py
+      - scripts/stage5-installed-extra-roundtrip-http.py
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-strategy-lab-e2e.sh
@@ -75,7 +75,7 @@ jobs:
       - name: Fail-closed two-receipt SHA, source, ABI and missing proof contracts
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py scripts/stage2-opnsense-real-native-shared-voice.py scripts/stage5-installed-extra-remove-http.py scripts/stage5-installed-extra-install-http.py scripts/stage5-installed-extra-roundtrip-http.py
+          python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py scripts/stage2-opnsense-real-native-shared-voice.py scripts/stage5-installed-extra-remove-http.py scripts/stage5-installed-extra-install-http.py scripts/stage5-installed-extra-roundtrip-http.py scripts/stage5-native-pf-egress-fixture.py
           python3.13 scripts/stage5-native-single-artifact.py --self-test
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
           python3.13 scripts/stage5-native-pf-egress-fixture.py --self-test
