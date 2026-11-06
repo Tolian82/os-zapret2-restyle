@@ -82,6 +82,8 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "installed_lab_mocked_job_e2e",
          "installed_resource_transaction_regressions",
          "installed_functional_owner_preserved",
+         "installed_authenticated_lab_extra_http_status",
+         "installed_authenticated_web_owner_preserved",
          "loopback_only",
          "copyback_sha_required")) and
          data.get("published") is False and
@@ -153,6 +155,8 @@ def cross_receipt_binding(clean, live):
          live.get("installed_lab_mocked_job_e2e") is True and
          live.get("installed_resource_transaction_regressions") is True and
          live.get("installed_functional_owner_preserved") is True and
+         live.get("installed_authenticated_lab_extra_http_status") is True and
+         live.get("installed_authenticated_web_owner_preserved") is True and
          clean.get("owner_appliance_modified") is False and
          live.get("owner_device_changed") is False,
          "STAGE5_CROSS_BOTH_INSTALLATION_SCOPES_NOT_PROVEN")
@@ -291,6 +295,23 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_FUNCTIONAL_TESTS_UNQUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_FUNCTIONAL_FIXTURES")
+    auth_web = load("stage5-installed-auth-web.py")
+    auth_report = auth_web.execute()
+    need(auth_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_AUTHENTICATED_LAB_EXTRA_HTTP_READONLY" and
+         auth_report.get("installed_general_and_diagnostics_pages_served") is True and
+         auth_report.get("stock_cookie_csrf_authenticated_https") is True and
+         auth_report.get("installed_lab_http_idle_status") is True and
+         auth_report.get("installed_lab_http_invalid_start_cancel_result_refused") is True and
+         auth_report.get("installed_extra_http_status_and_inventory_endpoint") is True and
+         auth_report.get("saved_config_original_fd9_engine_ipfw_unchanged") is True and
+         auth_report.get("real_lab_probe_or_job_started") is False and
+         auth_report.get("extra_resources_install_remove_tested") is False and
+         auth_report.get("physical_browser_button_click_tested") is False and
+         auth_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_INSTALLED_AUTH_WEB_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_AUTH_HTTP")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -336,6 +357,8 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_lab_mocked_job_e2e": True,
         "installed_resource_transaction_regressions": True,
         "installed_functional_owner_preserved": True,
+        "installed_authenticated_lab_extra_http_status": True,
+        "installed_authenticated_web_owner_preserved": True,
         "loopback_only": True, "copyback_sha_required": True,
         "published": False, "owner_device_changed": False,
         "all_feature_suites_qualified": False,
@@ -418,6 +441,8 @@ def self_test():
                     "installed_lab_mocked_job_e2e",
                     "installed_resource_transaction_regressions",
                     "installed_functional_owner_preserved",
+                    "installed_authenticated_lab_extra_http_status",
+                    "installed_authenticated_web_owner_preserved",
                     "loopback_only",
                     "copyback_sha_required")
             for key in keys:
@@ -468,6 +493,7 @@ def self_test():
                 ("installed_exclude_backend_suites", False),
                 ("installed_lab_mocked_job_e2e", False),
                 ("installed_resource_transaction_regressions", False),
+                ("installed_authenticated_lab_extra_http_status", False),
             ):
                 changed = dict(fixture)
                 changed[key] = value
