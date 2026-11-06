@@ -76,6 +76,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "unknown_plugin_xml_preserved",
          "installed_exclude_backend_suites",
          "installed_exclude_preserves_native_owner",
+         "installed_authenticated_exclude_apply_restore",
          "installed_strategy_lab_idle_and_invalid_refused",
          "installed_extra_resources_offline_suites",
          "installed_lab_extra_preserves_native_owner",
@@ -149,6 +150,7 @@ def cross_receipt_binding(clean, live):
          live.get("authenticated_https_voice_apply_and_restore") is True and
          live.get("installed_exclude_backend_suites") is True and
          live.get("installed_exclude_preserves_native_owner") is True and
+         live.get("installed_authenticated_exclude_apply_restore") is True and
          live.get("installed_strategy_lab_idle_and_invalid_refused") is True and
          live.get("installed_extra_resources_offline_suites") is True and
          live.get("installed_lab_extra_preserves_native_owner") is True and
@@ -312,6 +314,22 @@ def execute(old_archive, *, prebuilt_clean=False):
          "STAGE5_RUNNING_INSTALLED_AUTH_WEB_NOT_QUALIFIED")
     need(sha256(PACKAGE) == archive_sha,
          "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_AUTH_HTTP")
+    exclude_https = load("stage5-installed-exclude-http-apply.py")
+    exclude_https_report = exclude_https.execute()
+    need(exclude_https_report.get("status") ==
+         "PASS_STAGE5_INSTALLED_EXCLUDE_AUTHENTICATED_HTTPS_APPLY_RESTORE" and
+         exclude_https_report.get("stock_cookie_csrf_authenticated_https") is True and
+         exclude_https_report.get("installed_strategies_api_positive_exclude_apply") is True and
+         exclude_https_report.get("real_invalid_full_family_refused_before_mutation") is True and
+         exclude_https_report.get("native_exclude_domains_and_ipset_applied") is True and
+         exclude_https_report.get("native_exclude_domains_and_ipset_restored") is True and
+         exclude_https_report.get("real_fd9_dvtws2_restarted_twice") is True and
+         exclude_https_report.get("native_config_other_model_and_ipfw_preserved") is True and
+         exclude_https_report.get("real_wan_ipv6_packets_tested") is False and
+         exclude_https_report.get("owner_appliance_modified") is False,
+         "STAGE5_RUNNING_INSTALLED_EXCLUDE_HTTPS_APPLY_NOT_QUALIFIED")
+    need(sha256(PACKAGE) == archive_sha,
+         "STAGE5_RUNNING_ARCHIVE_CHANGED_DURING_EXCLUDE_HTTPS")
     # Recheck every on-disk package-owned file AFTER live service/Voice cycles.
     manifest, installed = running.clean.installed_pkg_manifest(PACKAGE)
     after = running.clean.verify_installed_files(PACKAGE, manifest)
@@ -351,6 +369,7 @@ def execute(old_archive, *, prebuilt_clean=False):
         "unknown_plugin_xml_preserved": True,
         "installed_exclude_backend_suites": True,
         "installed_exclude_preserves_native_owner": True,
+        "installed_authenticated_exclude_apply_restore": True,
         "installed_strategy_lab_idle_and_invalid_refused": True,
         "installed_extra_resources_offline_suites": True,
         "installed_lab_extra_preserves_native_owner": True,
@@ -435,6 +454,7 @@ def self_test():
                     "unknown_plugin_xml_preserved",
                     "installed_exclude_backend_suites",
                     "installed_exclude_preserves_native_owner",
+                    "installed_authenticated_exclude_apply_restore",
                     "installed_strategy_lab_idle_and_invalid_refused",
                     "installed_extra_resources_offline_suites",
                     "installed_lab_extra_preserves_native_owner",
@@ -491,6 +511,7 @@ def self_test():
                 ("authenticated_https_voice_apply_and_restore", False),
                 ("unknown_plugin_xml_preserved", False),
                 ("installed_exclude_backend_suites", False),
+                ("installed_authenticated_exclude_apply_restore", False),
                 ("installed_lab_mocked_job_e2e", False),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
