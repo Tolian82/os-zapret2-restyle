@@ -112,12 +112,48 @@ def verify_pf_rules(rules):
              "CI_PF_NO_NATIVE_53_" + direction.upper())
 
 
+def ipv4_dns(host):
+    """Read-only resolver observation; never substitute IPs for worker DNS."""
+    try:
+        rows = socket.getaddrinfo(host, 443, socket.AF_INET, socket.SOCK_STREAM)
+        ips = sorted({row[4][0] for row in rows})
+        return {"status": "resolved", "ipv4": ips[:5]}
+    except OSError as exc:
+        return {"status": "failure", "error_class": type(exc).__name__,
+                "error_number": exc.errno}
+
+
+def resolver_nameservers():
+    # Report only numeric resolver addresses; no search domains or tokens.
+    try:
+        lines = Path("/etc/resolv.conf").read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError):
+        return ["unavailable"]
+    return [part[1] for line in lines[:40]
+            if (part := line.strip().split()) and len(part) == 2
+            and part[0] == "nameserver" and
+            re.fullmatch(r"[0-9a-fA-F:.]+", part[1])][:6]
+
+
+def direct_ipv4_tcp(ip):
+    """Diagnostic only: DOES NOT satisfy worker DNS/HTTPS acceptance."""
+    try:
+        with socket.create_connection((ip, 443), timeout=5):
+            return "tcp_connected"
+    except OSError as exc:
+        return type(exc).__name__ + ":errno=" + str(exc.errno)
+
+
 def execute():
     need(os.geteuid() == 0 and os.uname().sysname == "FreeBSD",
          "CI_PF_NOT_FREEBSD_ROOT")
     identity = cmd([sys.executable, str(HERE / "stage0-opnsense-guest-readonly.py")])
     validate_scope(os.environ, cmd(["/sbin/ifconfig", "vtnet0"]),
                    cmd(["/usr/bin/netstat", "-rn", "-f", "inet"]), identity)
+    baseline = {host: ipv4_dns(host)
+                for host in ("api.github.com", "codeload.github.com")}
+    need(all(row["status"] == "resolved" and row["ipv4"]
+             for row in baseline.values()), "CI_PF_PRE_RELOAD_DNS_BASELINE_UNAVAILABLE")
     need("PASS_DISPOSABLE_PF_MODEL_SAVED" in
          cmd(["/usr/local/bin/php", "-r", PHP], timeout=90),
          "CI_PF_MODEL_NOT_SAVED")
@@ -125,8 +161,20 @@ def execute():
     need(cmd(["/sbin/pfctl", "-s", "info"]).startswith("Status: Enabled"),
          "CI_PF_NOT_ENABLED")
     verify_pf_rules(cmd(["/sbin/pfctl", "-sr"]))
-    # Real TCP handshakes, not catalog fetch shortcuts or forged Install results.
-    for host in ("api.github.com", "codeload.github.com"):
+    # DNS + TCP are both mandatory. Direct pre-resolved-IP TCP is only a
+    # bounded diagnostic when native DNS fails, NEVER an Install substitute.
+    post = {host: ipv4_dns(host) for host in baseline}
+    if any(row["status"] != "resolved" or not row["ipv4"]
+           for row in post.values()):
+        diag = {"dns_before_reload": baseline, "dns_after_reload": post,
+                "numeric_resolvers": resolver_nameservers(),
+                "tcp_pre_resolved": {
+                    host: direct_ipv4_tcp(row["ipv4"][0])
+                    for host, row in baseline.items()}}
+        print("STAGE5_CI_PF_DNS_DIAGNOSTICS=" + json.dumps(diag, sort_keys=True),
+              file=sys.stderr, flush=True)
+        raise Refusal("CI_PF_POST_RELOAD_DNS_UNAVAILABLE")
+    for host in post:
         try:
             with socket.create_connection((host, 443), timeout=8):
                 pass
@@ -172,6 +220,8 @@ def self_test():
     except Refusal:
         pass
     assert "serializeToConfig()" in PHP and "config->save" in PHP
+    assert ipv4_dns is not None and direct_ipv4_tcp is not None
+    assert resolver_nameservers is not None
     print("PASS_STAGE5_CI_NATIVE_PF_EGRESS_NEGATIVE_SCOPE_AND_SHAPE")
 
 
