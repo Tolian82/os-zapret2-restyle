@@ -104,6 +104,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          "STAGE5_RUNNING_EXTRA_INSTALL_PIN_AND_CONTENT_NOT_ATTESTED")
     need(data.get("real_strategy_lab_outcome") == "TARGET_ACCESSIBLE" and
          data.get("real_lab_control_tls_ipv4_used") is True and
+         data.get("real_lab_external_certified_https_target_tested") is True and
          data.get("strategy_lab_dpi_bypass_proven") is False,
          "STAGE5_RUNNING_REAL_LAB_OUTCOME_OR_SCOPE_UNQUALIFIED")
     need(data.get("extra_roundtrip_resource_count") == 73 and
@@ -180,6 +181,7 @@ def cross_receipt_binding(clean, live):
          live.get("installed_real_strategy_lab_positive_job") is True and
          live.get("real_strategy_lab_outcome") == "TARGET_ACCESSIBLE" and
          live.get("real_lab_control_tls_ipv4_used") is True and
+         live.get("real_lab_external_certified_https_target_tested") is True and
          live.get("strategy_lab_dpi_bypass_proven") is False and
          live.get("installed_resource_transaction_regressions") is True and
          live.get("installed_functional_owner_preserved") is True and
@@ -439,10 +441,12 @@ def execute(old_archive, *, prebuilt_clean=False):
          all(real_lab_report.get(x) is True for x in (
              "authenticated_stock_https_csrf_start_status_result",
              "real_shipped_worker_control_tls_ipv4_available",
-             "real_local_tcp443_baseline_passed",
+             "real_external_tls_verified_baseline_passed",
              "job_completed_and_original_fd9_restored",
              "saved_native_config_and_ipfw_unchanged",
-             "real_external_control_site_contacted")) and
+             "real_external_control_site_contacted",
+             "real_external_target_same_control_site")) and
+         real_lab_report.get("real_wan_dpi_bypass_proven") is False and
          real_lab_report.get("real_strategy_search_or_dpi_bypass_proven") is False and
          real_lab_report.get("physical_browser_click_tested") is False and
          real_lab_report.get("owner_appliance_modified") is False,
@@ -506,6 +510,7 @@ def execute(old_archive, *, prebuilt_clean=False):
         "installed_real_strategy_lab_positive_job": True,
         "real_strategy_lab_outcome": "TARGET_ACCESSIBLE",
         "real_lab_control_tls_ipv4_used": True,
+        "real_lab_external_certified_https_target_tested": True,
         "strategy_lab_dpi_bypass_proven": False,
         "installed_resource_transaction_regressions": True,
         "installed_functional_owner_preserved": True,
@@ -578,6 +583,8 @@ def self_test():
                 "extra_install_owned_count": 73,
                 "real_strategy_lab_outcome": "TARGET_ACCESSIBLE",
                 "real_lab_control_tls_ipv4_used": True,
+                "real_lab_external_certified_https_target_tested": True,
+        "real_lab_external_certified_https_target_tested": True,
                 "strategy_lab_dpi_bypass_proven": False,
                 "extra_roundtrip_resource_count": 73,
                 "extra_roundtrip_local_plan_sha256": "e" * 64,
@@ -668,6 +675,7 @@ def self_test():
                 ("installed_lab_mocked_job_e2e", False),
                 ("installed_real_strategy_lab_positive_job", False),
                 ("real_lab_control_tls_ipv4_used", False),
+                ("real_lab_external_certified_https_target_tested", False),
                 ("installed_resource_transaction_regressions", False),
                 ("installed_authenticated_lab_extra_http_status", False),
             ):
