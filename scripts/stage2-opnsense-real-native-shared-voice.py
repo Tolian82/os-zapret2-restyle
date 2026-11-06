@@ -53,11 +53,12 @@ def checked_rules(lines):
     return matches
 
 
-def checked_journal(raw):
+def checked_journal(raw, *, page='voice'):
+    need(page in ('voice', 'strategies'), 'NATIVE_COMMON_UNQUALIFIED_JOURNAL_PAGE')
     need(isinstance(raw, dict) and raw.get('schema') == 1 and
          raw.get('phase') == 'committed' and
          isinstance(raw.get('detail'), dict) and
-         raw['detail'].get('page') == 'voice' and
+         raw['detail'].get('page') == page and
          re.fullmatch(r'[a-f0-9]{32}', str(raw['detail'].get('id', ''))),
          'NATIVE_COMMON_JOURNAL_NOT_COMMITTED_VOICE')
     return raw['detail']['id']
@@ -72,6 +73,15 @@ def test_contracts():
     sample = {'schema': 1, 'phase': 'committed',
               'detail': {'page': 'voice', 'id': 'a' * 32}}
     assert checked_journal(sample) == 'a' * 32
+    strategies = {'schema': 1, 'phase': 'committed',
+                  'detail': {'page': 'strategies', 'id': 'b' * 32}}
+    assert checked_journal(strategies, page='strategies') == 'b' * 32
+    try:
+        checked_journal(sample, page='strategies')
+    except Refusal:
+        pass
+    else:
+        raise AssertionError('Voice journal accepted as Strategies')
     negatives = [base[:1], base + [base[0]],
                  [base[0].replace('lo0', 'vtnet1'), base[1]],
                  [base[0].replace('table(zapret2_voice_telegram)', 'any'), base[1]],
@@ -206,7 +216,7 @@ try {
     return saved, foreign, strategies
 
 
-def witness(active, engine_sha, *, running):
+def witness(active, engine_sha, *, running, page='voice'):
     status = active.action('status')
     need((status.returncode == 0 and 'zapret is running' in status.stdout)
          if running else status.returncode == 1 and
@@ -221,7 +231,7 @@ def witness(active, engine_sha, *, running):
     need(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and
          st.st_mode & 0o077 == 0 and st.st_size < 8192,
          'COMMON_JOURNAL_FILE_NOT_SECURE')
-    owner = checked_journal(json.loads(JOURNAL.read_text()))
+    owner = checked_journal(json.loads(JOURNAL.read_text()), page=page)
     need(hashlib.sha256(active.ENGINE.read_bytes()).hexdigest() == engine_sha,
          'PINNED_NATIVE_ENGINE_CHANGED')
     if not running:
