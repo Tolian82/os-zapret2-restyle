@@ -132,6 +132,16 @@ def physical_archive():
     return archive
 
 
+def pkgdb_manifest_sha():
+    # pkg's own RAW installed manifest includes the retained native package
+    # script metadata; it must remain byte-identical through real kernel boot.
+    result = active.cmd(["/usr/local/sbin/pkg", "info", "-R",
+                         active.PACKAGE], timeout=30)
+    need(result.returncode == 0 and result.stdout.strip(),
+         "VOICE_REBOOT_INSTALLED_PKGDB_RAW_MANIFEST_UNAVAILABLE")
+    return sha(result.stdout.encode("utf-8"))
+
+
 def package_integrity():
     # Stock pkgdb checks installed file SHA, without edits or relinks.
     response = active.cmd(["/usr/local/sbin/pkg", "check", "-s",
@@ -159,6 +169,7 @@ def prepare():
          current["pid"] != ordinary["pid"],
          "VOICE_REBOOT_COMMON_APPLY_CHANGED_FOREIGN_CONFIG_OR_OWNER")
     package_integrity()
+    package_db_sha = pkgdb_manifest_sha()
     archive_sha = sha(physical_archive().read_bytes())
     for phase, path in boot.PRODUCT.items():
         need(path.read_bytes() ==
@@ -170,6 +181,7 @@ def prepare():
         "pkg_version": active.qualified_revision(),
         "engine_sha": engine_sha,
         "physical_native_package_sha256": archive_sha,
+        "native_pkgdb_raw_manifest_sha256": package_db_sha,
         "initial_boot": now,
         "old_pid": current["pid"],
         "old_rules": current["rules"],
@@ -231,6 +243,8 @@ def verify():
     need(foreign_rules(all_rules()) == record["foreign_rules"],
          "VOICE_REBOOT_UNRELATED_IPFW_RULE_CHANGED")
     package_integrity()
+    need(pkgdb_manifest_sha() == record["native_pkgdb_raw_manifest_sha256"],
+         "VOICE_REBOOT_PKGDB_SCRIPT_METADATA_CHANGED")
     for phase, hook in HOOKS.items():
         need(boot.regular_bytes(hook, 0o755) == hook_bytes(phase),
              "VOICE_REBOOT_OBSERVER_REPLACED_BY_FOREIGN_CONTENT")
@@ -251,6 +265,7 @@ def verify():
         "original_four_hooks_and_pkgdb_verified": True,
         "physical_native_archive_sha256": record["physical_native_package_sha256"],
         "same_physical_archive_before_and_after_kernel": True,
+        "same_native_pkgdb_script_manifest_before_and_after_kernel": True,
         "test_observers_removed": True,
         "voice_media_tested": False, "browser_click_tested": False,
         "unexpected_power_loss_tested": False, "owner_appliance_modified": False,
