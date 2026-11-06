@@ -83,7 +83,7 @@
   only the attested cold-kernel case; CI/owner-live result still pending.
 
 - [Approved Additional Resources implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md) — external catalog Stage 1 verified; plugin Stage 2 read-only immutable-revision source preflight and isolated transaction/rollback engine added in source through v0.5.7_9 with source-wired native Stop→Start, shared upstream preservation guard, fail-closed direct-install/pending-rollback protection and bilingual manual Settings-page GUI; installed GUI acceptance still pending.
-- [Additional Resources normative specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — manual GUI, transaction/restart and fully dynamic new-Job candidate generation; not yet implemented in the plugin.
+- [Additional Resources normative specification](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md) — owner-approved manual GUI, transactional backend and dynamic new-Job candidate generation are implemented in source; complete installed positive Install and physical browser acceptance remain separate gates.
 
 ## Published stable v0.5.7 (historical release)
 
