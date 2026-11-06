@@ -151,6 +151,14 @@ class NativeBuilderTests(unittest.TestCase):
                 mod.verified_private_source(
                     dict(lock, selection="exploratory"), observed, platform)
 
+    def test_signed_catalog_semantic_version_not_archive_filename(self):
+        shell = (HERE / "build-curl-impersonate.sh").read_text()
+        self.assertIn("rquery -r FreeBSD '%v' curl-impersonate", shell)
+        self.assertIn('VERSION="${CATALOG_VERSION}"', shell)
+        self.assertNotIn('VERSION=$(basename', shell)
+        self.assertIn('sha256 -q "${PKG_FILE}"', shell)
+        self.assertIn('sha256 -q "${DEST}/bin/curl-impersonate"', shell)
+
     def test_single_official_native_build_and_dist(self):
         source = (HERE / "native-opnsense-package.py").read_text()
         for snippet in ('private.old.clone_official(Path(scratch))',

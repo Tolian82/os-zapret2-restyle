@@ -34,14 +34,20 @@ CONFIG
 # Permit OSVERSION drift only for signed catalog access and package fetch;
 # the fetched binary must still actually run on the 15.0 appliance/CI.
 IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" update -f -r FreeBSD
-# Reject signed-catalog drift; this does not change the system repository.
-if [ -n "${PINNED_VERSION}" ]; then
-    AVAILABLE_VERSION=$(IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" \
-        rquery -r FreeBSD '%v' curl-impersonate)
-    [ "${AVAILABLE_VERSION}" = "${PINNED_VERSION}" ] || {
-        echo "ERROR: pinned curl-impersonate ${PINNED_VERSION} unavailable (got ${AVAILABLE_VERSION})" >&2
-        exit 1
-    }
+# Signed repository metadata carries the semantic version. FreeBSD archive
+# names may append a repository-specific ~N$build suffix: do not mistake
+# that filename suffix for the pkg version. SHA-256 still pins exact bytes.
+CATALOG_VERSION=$(IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" \
+    rquery -r FreeBSD '%v' curl-impersonate)
+printf '%s\n' "${CATALOG_VERSION}" |
+    LC_ALL=C grep -Eq '^[0-9A-Za-z][0-9A-Za-z._,+~$-]{0,127}$' || {
+    echo 'ERROR: curl-impersonate signed catalog version invalid or missing' >&2
+    exit 1
+}
+if [ -n "${PINNED_VERSION}" ] &&
+   [ "${CATALOG_VERSION}" != "${PINNED_VERSION}" ]; then
+    echo "ERROR: pinned curl-impersonate ${PINNED_VERSION} unavailable (got ${CATALOG_VERSION})" >&2
+    exit 1
 fi
 IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" fetch -y -r FreeBSD -o "${TMP}/packages" curl-impersonate
 
@@ -69,12 +75,9 @@ PROFILE=$(find "${ROOT}/bin" -type f -name 'curl_chrome[0-9]*' |
 LICENSE_DIR=$(find "${ROOT}/share/licenses" -mindepth 1 -maxdepth 1 -type d -name 'curl-impersonate-*' | head -n 1)
 [ -n "${LICENSE_DIR}" ] || { echo 'ERROR: curl-impersonate licenses are missing' >&2; exit 1; }
 
-# Version is diagnostic information only; no version is a selection criterion.
-VERSION=$(basename "${PKG_FILE}" .pkg | sed 's/^curl-impersonate-//')
-[ -z "${PINNED_VERSION}" ] || [ "${VERSION}" = "${PINNED_VERSION}" ] || {
-    echo 'ERROR: fetched curl-impersonate version differs from pin' >&2
-    exit 1
-}
+# The signed pkg catalogue, not the archive filename's build suffix, owns
+# semantic version. Exact fetched archive identity is separately SHA-pinned.
+VERSION="${CATALOG_VERSION}"
 ABI=$(pkg config abi)
 VERSION_OUT=$("${BIN}" -V)
 printf '%s\n' "${VERSION_OUT}" | grep -q 'HTTP3' || {
