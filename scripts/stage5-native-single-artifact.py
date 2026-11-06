@@ -74,6 +74,10 @@ def check_record(record, package, source_sha, *, manifest=True):
          record.get("all_installed_package_files_equal") is True and
          record.get("four_original_hooks_equal") is True and
          record.get("native_service_cold_qualified") is True and
+         record.get("same_archive_stopped_force_reinstall") is True and
+         record.get("same_archive_reinstall_config_preserved") is True and
+         record.get("same_archive_reinstall_pkgdb_hooks_equal") is True and
+         record.get("same_archive_reinstall_payload_and_cold_equal") is True and
          record.get("owner_appliance_modified") is False and
          record.get("publication_approved") is False and
          record.get("final_lifecycle_matrix_qualified") is False,
@@ -115,6 +119,62 @@ def check_record(record, package, source_sha, *, manifest=True):
     return sha
 
 
+
+def prove_same_archive_stopped_reinstall(clean, first):
+    """Qualify genuine STOPPED stock pkg add -f on the exact native archive.
+
+    Called only after clean.execute() has verified the disposable OPNsense
+    guest, checked-out project SHA and real clean Mk package installation.
+    """
+    need(os.environ.get("ZAPRET2_STAGE5_SAME_ARCHIVE_FORCE_REINSTALL") == "1",
+         "STAGE5_SAME_ARCHIVE_FORCE_REINSTALL_DISPOSABLE_OPTIN_REQUIRED")
+    need(ARCHIVE.is_file() and not ARCHIVE.is_symlink(),
+         "STAGE5_REINSTALL_ORIGINAL_ARCHIVE_MISSING")
+    sha = digest(ARCHIVE.read_bytes())
+    need(sha == first["source_only_package_sha256"],
+         "STAGE5_REINSTALL_PRE_ARCHIVE_SHA_DIFFERENT")
+    before_xml = Path("/conf/config.xml").read_bytes()
+    before_manifest, _ = clean.installed_pkg_manifest(ARCHIVE)
+
+    spec = importlib.util.spec_from_file_location(
+        "stage5_native_same_archive_reinstall",
+        HERE / "stage2-opnsense-real-native-force-reinstall.py")
+    force = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(force)
+    need(force.REVISION == REVISION and force.clean.REVISION == REVISION and
+         force.stopped.REVISION == REVISION,
+         "STAGE5_REINSTALL_SOURCE_REVISION_MISMATCH")
+    force.assert_cold()
+    operation = force.force_same_version(ARCHIVE)  # stock pkg add -f, scripts on
+    need(operation.get("genuine_pkg_add_force") is True and
+         operation.get("postinstall_message_observed") is True,
+         "STAGE5_REINSTALL_STOCK_PKG_OPERATION_NOT_PROVEN")
+    after_manifest, _ = clean.installed_pkg_manifest(ARCHIVE)
+    need(after_manifest == before_manifest and
+         set(after_manifest.get("scripts", {})) ==
+         {"pre-install", "post-install", "pre-deinstall", "post-deinstall"},
+         "STAGE5_REINSTALL_PKGDB_MANIFEST_OR_HOOKS_DIFFERENT")
+    files = clean.verify_installed_files(ARCHIVE, after_manifest)
+    need(files.get("exact_installed_package_file_count") ==
+         first["installed_payload"]["exact_installed_package_file_count"] and
+         files.get("files_owned_by_real_pkgdb") is True,
+         "STAGE5_REINSTALL_INSTALLED_PAYLOAD_DIFFERENT")
+    force.assert_cold()
+    config = force.stopped.prove_preserved_config(
+        before_xml, Path("/conf/config.xml").read_bytes())
+    need(config.get("all_non_registry_config_preserved") is True and
+         config.get("plugin_name_registered") is True,
+         "STAGE5_REINSTALL_SAVED_CONFIG_DIFFERENT")
+    need(digest(ARCHIVE.read_bytes()) == sha,
+         "STAGE5_REINSTALL_ARCHIVE_BYTES_CHANGED")
+    return {
+        "same_archive_stopped_force_reinstall": True,
+        "same_archive_reinstall_config_preserved": True,
+        "same_archive_reinstall_pkgdb_hooks_equal": True,
+        "same_archive_reinstall_payload_and_cold_equal": True,
+    }
+
+
 def installed_run():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_STAGE5_SINGLE_ARTIFACT") == "1" and
@@ -137,6 +197,7 @@ def installed_run():
          "STAGE5_GENUINE_CLEAN_INSTALL_RECEIPT_REFUSED")
     need(not RECEIPT.exists() and not RECEIPT.is_symlink(),
          "STAGE5_RECEIPT_ALREADY_PRESENT")
+    reinstall = prove_same_archive_stopped_reinstall(clean, result)
     artifact_sha = result["source_only_package_sha256"]
     manifest, manifest_sha = read_manifest(ARCHIVE)
     receipt = {
@@ -159,6 +220,7 @@ def installed_run():
         "all_installed_package_files_equal": True,
         "four_original_hooks_equal": True,
         "native_service_cold_qualified": True,
+        **reinstall,
         "owner_appliance_modified": False,
         "publication_approved": False,
         "final_lifecycle_matrix_qualified": False,
@@ -206,6 +268,10 @@ def self_test():
                 "genuine_clean_pkg_add": True, "pkgdb_manifest_equal": True,
                 "all_installed_package_files_equal": True,
                 "four_original_hooks_equal": True, "native_service_cold_qualified": True,
+                "same_archive_stopped_force_reinstall": True,
+                "same_archive_reinstall_config_preserved": True,
+                "same_archive_reinstall_pkgdb_hooks_equal": True,
+                "same_archive_reinstall_payload_and_cold_equal": True,
                 "owner_appliance_modified": False, "publication_approved": False,
                 "final_lifecycle_matrix_qualified": False,
             }
@@ -213,6 +279,10 @@ def self_test():
             for field, bad in (("archive_sha256", "0" * 64),
                                ("archive_bytes", 1),
                                ("genuine_clean_pkg_add", False),
+                               ("same_archive_stopped_force_reinstall", False),
+                               ("same_archive_reinstall_config_preserved", False),
+                               ("same_archive_reinstall_pkgdb_hooks_equal", False),
+                               ("same_archive_reinstall_payload_and_cold_equal", False),
                                ("publication_approved", True),
                                ("final_lifecycle_matrix_qualified", True),
                                ("identity", "foreign-plugin"),
@@ -233,7 +303,18 @@ def self_test():
                 raise AssertionError("foreign head accepted")
         finally:
             ARCHIVE = original
-    print("PASS: native single archive digest, head, installed scope and tamper negatives")
+    saved = os.environ.pop("ZAPRET2_STAGE5_SAME_ARCHIVE_FORCE_REINSTALL", None)
+    try:
+        try:
+            prove_same_archive_stopped_reinstall(None, {})
+        except Refusal as exc:
+            assert "DISPOSABLE_OPTIN_REQUIRED" in str(exc)
+        else:
+            raise AssertionError("native reinstall allowed without opt-in")
+    finally:
+        if saved is not None:
+            os.environ["ZAPRET2_STAGE5_SAME_ARCHIVE_FORCE_REINSTALL"] = saved
+    print("PASS: native single archive digest, head, reinstall and tamper negatives")
     return 0
 
 
