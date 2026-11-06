@@ -107,7 +107,10 @@ def qualify_reboot(record, stop, start, after, current_boot):
          stop["pid"] == "ABSENT" and not boot.rule_lines(stop["ipfw"]) and
          common.TARGET not in stop["table"],
          "VOICE_REBOOT_SHUTDOWN_LEFT_OWNED_RUNTIME")
-    need(start["status"].strip() == "zapret is running as pid " + start["pid"] and
+    # The genuine stock configctl status is exactly "zapret is running".
+    # The passive syshook separately records the pidfile; a forged text
+    # suffix must not stand in for the independently verified real process.
+    need(start["status"].strip() == "zapret is running" and
          start["pid"].isdecimal() and int(start["pid"]) > 1 and
          int(start["pid"]) != record["old_pid"] and
          int(start["pid"]) == after["pid"],
@@ -285,13 +288,16 @@ def self_test():
     stop = {"bootid": "boot1", "status": "zapret is not running",
             "pid": "ABSENT", "ipfw": "65535 allow ip from any to any",
             "table": "", "table.rc": "1"}
-    start = {"bootid": "boot2", "status": "zapret is running as pid 200",
+    start = {"bootid": "boot2", "status": "zapret is running",
              "pid": "200", "ipfw": "\n".join(rules + record["foreign_rules"]),
              "table": "192.0.2.42/32 0", "table.rc": "0"}
     current = {"pid": 200, "id": "a" * 32, "rules": rules}
     assert qualify_reboot(record, stop, start, current, "boot2")
     for changed in (
         {"record": {**record, "old_pid": 200}},
+        {"start": {**start, "status": "zapret is running as pid 200"}},
+        {"start": {**start, "status": "zapret is not running"}},
+        {"start": {**start, "pid": "201"}},
         {"start": {**start, "ipfw": start["ipfw"].replace("lo0", "vtnet0")}},
         {"start": {**start, "ipfw": start["ipfw"].replace("19001 ", "19002 ")}},
         {"start": {**start, "table": ""}},
