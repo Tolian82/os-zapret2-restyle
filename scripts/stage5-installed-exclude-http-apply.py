@@ -192,7 +192,7 @@ def execute():
          "EXCLUDE_HTTPS_POSITIVE_MODEL_NOT_PERSISTED")
     unchanged_other_model(before, changed)
     saved_fields(active.CONFIG.read_bytes(), domains=TEST_DOMAIN, ipset=TEST_IPSET)
-    new = common.witness(active, engine_sha, running=True)
+    new = common.witness(active, engine_sha, running=True, page='strategies')
     need(new["id"] != baseline["id"] and new["pid"] != baseline["pid"] and
          new["rules"] == baseline["rules"],
          "EXCLUDE_HTTPS_POSITIVE_COMMON_FD9_OR_SCOPED_IPFW_INVALID")
@@ -206,7 +206,7 @@ def execute():
     final_model = read_model(web)
     voice.attest_complete_native_model(before, final_model)
     saved_fields(active.CONFIG.read_bytes(), domains="", ipset="")
-    final = common.witness(active, engine_sha, running=True)
+    final = common.witness(active, engine_sha, running=True, page='strategies')
     need(final["id"] != new["id"] and final["pid"] != new["pid"] and
          final["rules"] == baseline["rules"],
          "EXCLUDE_HTTPS_RESTORED_NATIVE_OWNER_OR_IPFW_INVALID")
