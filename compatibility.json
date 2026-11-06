@@ -9,7 +9,9 @@
       "python": {
         "policy": "opnsense-PLUGIN_PYTHON",
         "entrypoint": "/usr/local/bin/python3",
-        "supported": ["3.13"]
+        "supported": [
+          "3.13"
+        ]
       },
       "qualification": {
         "scope": "isolated-native-build-and-pkg-install-only",
@@ -18,5 +20,15 @@
     }
   ],
   "required_capabilities": [],
-  "exceptions": []
+  "exceptions": [],
+  "private_curl_impersonate": {
+    "selection": "exploratory",
+    "repository": "FreeBSD",
+    "repository_url": "pkg+https://pkg.FreeBSD.org/${ABI}/latest",
+    "abi": "FreeBSD:15:amd64",
+    "version": null,
+    "source_pkg_sha256": null,
+    "elf_sha256": null,
+    "chrome_profile": null
+  }
 }
