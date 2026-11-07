@@ -1061,6 +1061,9 @@ jobs:
       - name: Test GUI runtime management
         run: sh scripts/test-gui-runtime-management.sh
 
+      - name: Test native OPNsense WAN without primary IPv4
+        run: python3.13 scripts/test-wan-assigned-device-resolution.py
+
       - name: Test native Voice Transmission form contract
         run: python3.13 scripts/test-voice-gui-contract.py
 

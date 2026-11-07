@@ -70,10 +70,39 @@ config_resolve_interface()
             '.[$logical][0].device // empty'
     )
 
-    [ -n "${_config_dev}" ] || {
-        common_error "could not resolve logical interface '${_config_iface}'"
-        return 1
-    }
+    # pluginctl -4 reports the *primary IPv4 address* of an assignment.
+    # An assigned tunnel may have no IPv4 address yet, while its kernel
+    # interface exists (e.g. opt0 -> ovpnc1/tunX). The assigned kernel
+    # device is an independent native config field; query it read-only
+    # instead of treating a missing IPv4 address as a missing interface.
+    # Retain the original IPv4 mapping as the first choice for unchanged
+    # WAN/LAN behaviour, and fail closed if neither provides a live device.
+    if [ -z "${_config_dev}" ]; then
+        case "${_config_iface}" in
+            wan|lan) _config_assigned=1 ;;
+            opt[0-9]*)
+                _config_suffix="${_config_iface#opt}"
+                case "${_config_suffix}" in
+                    ""|*[!0-9]*) _config_assigned=0 ;;
+                    *) _config_assigned=1 ;;
+                esac
+                ;;
+            *) _config_assigned=0 ;;
+        esac
+        if [ "${_config_assigned}" -eq 1 ]; then
+            _config_dev=$(
+                /usr/local/sbin/pluginctl -g "interfaces.${_config_iface}.if" 2>/dev/null
+            ) || _config_dev=""
+        fi
+    fi
+    # The returned value is used only as an ifconfig/IPFW interface name.
+    # Refuse whitespace, shell/meta characters, empty and forged results.
+    case "${_config_dev}" in
+        ""|*[!A-Za-z0-9_.:-]*)
+            common_error "could not resolve logical interface '${_config_iface}'"
+            return 1
+            ;;
+    esac
 
     ifconfig "${_config_dev}" >/dev/null 2>&1 || {
         common_error "resolved device '${_config_dev}' for '${_config_iface}' does not exist"
