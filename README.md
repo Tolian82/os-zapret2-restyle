@@ -23,7 +23,7 @@
 |---|---|
 | **Latest full Web/pkg release** | [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) — verified FreeBSD 15 `0.6.2_1.pkg`, `SHA256SUMS` and successful GitHub Pages pkg repository deployment. |
 | **Latest owner-installed testing package** | [v0.6.1_30](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.1_30) — 18/18 read-only appliance checks passed, including running service, eight global Exclude bindings and no stale Lab firewall rules. |
-| **Current development candidate** | `v0.6.2_173` — unpublished documentation-only reconciliation of the accepted `_172` exact-main A/B/C native result. [PR #946](https://github.com/Tolian82/os-zapret2-restyle/pull/946) merged; [one archive across three guests](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42312642147) passed with SHA-256 `024524a2c8f725e16631f4e629a1cd5ed7c2a1084ca621f66fc0cebd9d6924a6`. The published stable remains `v0.6.2` / `0.6.2_1.pkg`; `_173.pkg` is not published. |
+| **Current development candidate** | `v0.6.2_174` — unpublished test-only real Chromium WAN selection → **lower** Apply → F5 acceptance on disposable native OPNsense; [Issue #893](https://github.com/Tolian82/os-zapret2-restyle/issues/893) remains OPEN until the installed browser/API/Config receipt passes. `_173` [PR #947](https://github.com/Tolian82/os-zapret2-restyle/pull/947) is merged and exact-main A/B/C passed. Stable remains `v0.6.2 / 0.6.2_1.pkg`; `_174.pkg` is not published. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
