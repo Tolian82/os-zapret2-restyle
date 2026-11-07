@@ -1,0 +1,109 @@
+name: Stage 5 real Chromium WAN lower Apply persistence on native OPNsense
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - VERSION
+      - scripts/stage5-browser-wan.py
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+      - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
+      - src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml
+      - .github/workflows/stage5-native-browser-wan.yml
+  push:
+    branches: [main]
+    paths:
+      - Makefile
+      - VERSION
+      - scripts/stage5-browser-wan.py
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+      - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
+      - src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml
+      - .github/workflows/stage5-native-browser-wan.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  genuine-installed-browser-wan:
+    name: Real Chromium UI WAN / LOWER Apply / F5 on disposable OPNsense 26.7
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Offline exact-source GUI selectors and actual Chromium harness
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage5-browser-wan.py
+          python3.13 -m pip install playwright
+          python3.13 -m playwright install --with-deps chromium
+          python3.13 scripts/stage5-browser-wan.py --self-test
+      - name: Generate one disposable runner-only SSH key, not a repo credential
+        run: |
+          set -eu
+          install -d -m 0700 "$RUNNER_TEMP/zapret2-browser-ssh"
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/zapret2-browser-ssh/key"
+          install -d -m 0700 dist
+          cp "$RUNNER_TEMP/zapret2-browser-ssh/key.pub" stage5-browser-wan-ci.pub
+      - name: Native OPNsense 26.7 - real installed predecessor → Mk successor, scoped lo0
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: true
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          nat: |
+            "32222": "22"
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
+            # Issue #893 reports a STOPPED service. Stop the exact disposable
+            # lo0 owner using stock configd before changing WAN in a browser.
+            # Never test a live lo0->WAN migration as a preference-save check.
+            /usr/local/sbin/configctl zapret stop
+            /usr/local/sbin/configctl zapret status | grep -F 'zapret is not running'
+            test -s stage5-browser-wan-ci.pub
+            grep -Eq '^ssh-ed25519 [A-Za-z0-9+/=]+' stage5-browser-wan-ci.pub
+            install -d -m 0700 /root/.ssh
+            cat stage5-browser-wan-ci.pub >> /root/.ssh/authorized_keys
+            chmod 0600 /root/.ssh/authorized_keys
+            # The QEMU guest is disposable; this key never enters the plugin.
+      - name: Chromium through authenticated loopback-only SSH tunnel; real lower Apply
+        env:
+          ZAPRET2_STAGE5_BROWSER_WAN: '1'
+        run: |
+          set -eu
+          test -s "$RUNNER_TEMP/zapret2-browser-ssh/key"
+          ssh -fN -i "$RUNNER_TEMP/zapret2-browser-ssh/key" -p 32222 \
+            -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=20 \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="$RUNNER_TEMP/zapret2-browser-ssh/known_hosts" \
+            -L 127.0.0.1:18443:127.0.0.1:443 root@127.0.0.1
+          curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
+          python3.13 scripts/stage5-browser-wan.py --browser
+      - name: Independent native Config verification after Chromium F5
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/stage5-browser-wan.py --native-confirm
+      - name: Save redacted real-browser receipt (no credentials or Config XML)
+        uses: actions/upload-artifact@v7
+        with:
+          name: stage5-real-browser-wan-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/stage5-browser-wan-result.json
+          if-no-files-found: error
+          retention-days: 7
