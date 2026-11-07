@@ -55,7 +55,14 @@ def scan(sources):
 
 SOURCE_EXTENSIONS = frozenset({
     ".py", ".sh", ".php", ".lua", ".xml", ".inc",
-    ".conf", ".json", ".js", ".mk", ".pl",
+    ".conf", ".json", ".js", ".mk", ".pl", ".bash",
+    ".c", ".h", ".cc", ".cpp", ".hpp", ".go", ".rs", ".ts", ".tsx",
+})
+BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp",
+    ".so", ".a", ".o", ".bin", ".dat", ".pyc",
+    ".woff", ".woff2", ".ttf", ".otf", ".pdf",
+    ".zip", ".pkg", ".gz", ".xz", ".bz2", ".zst",
 })
 
 
@@ -72,7 +79,8 @@ def classify_path(path):
                 (re.match(r"^stage[0-9]+-", name) and path not in PRODUCTION)):
             return "fixture"
         return "production"
-    if len(p.parts) == 1 and p.suffix.lower() in SOURCE_EXTENSIONS:
+    if len(p.parts) == 1 and (p.suffix.lower() in SOURCE_EXTENSIONS or
+                              not p.suffix and path not in ("Makefile", "VERSION", "LICENSE")):
         return "unclassified"
     return "other"
 
@@ -94,7 +102,7 @@ def scan_changed(changed):
         if category == "unclassified":
             raise Refusal("UNCLASSIFIED_NEW_EXECUTION_PATH:" + path)
         if (category != "production" or
-                PurePosixPath(path).suffix.lower() not in SOURCE_EXTENSIONS):
+                PurePosixPath(path).suffix.lower() in BINARY_SUFFIXES):
             continue
         for code, pattern in DISALLOWED.items():
             if pattern.search(added_content):
@@ -138,7 +146,7 @@ def changed_contents(base, head):
         if category == "unclassified":
             raise Refusal("UNCLASSIFIED_NEW_EXECUTION_PATH:" + path)
         if (category != "production" or
-                PurePosixPath(path).suffix.lower() not in SOURCE_EXTENSIONS):
+                PurePosixPath(path).suffix.lower() in BINARY_SUFFIXES):
             continue
         previous = git_text(base, path, missing_ok=True)
         current = git_text(head, path)
