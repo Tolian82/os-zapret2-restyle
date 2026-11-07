@@ -64,9 +64,21 @@ def real_browser():
             actual = response.value
             need(actual.status == 200, 'LOWER_APPLY_HTTP_' + str(actual.status))
             payload = actual.json()
-            need(isinstance(payload, dict) and payload.get('result') == 'saved' and
-                 payload.get('status') == 'ok', 'LOWER_APPLY_NOT_COMMITTED:' +
-                 str(payload.get('result')) + ':' + str(payload.get('requires_review')))
+            if not (isinstance(payload, dict) and payload.get('result') == 'saved' and
+                    payload.get('status') == 'ok'):
+                # Disposable guest only: emit bounded, redacted control-plane
+                # diagnostics, never the candidate, XML, form data or credentials.
+                message = payload.get('message', '') if isinstance(payload, dict) else ''
+                message = message if isinstance(message, str) else ''
+                safe_message = (message[:180] if re.fullmatch(
+                    r"[A-Za-z0-9 .,:_()/'\-]{1,180}", message) else 'REDACTED_OR_EMPTY')
+                validations = payload.get('validations', {}) if isinstance(payload, dict) else {}
+                fields = sorted(key for key in validations if isinstance(key, str) and
+                                re.fullmatch(r'[A-Za-z0-9.]{1,100}', key)) if isinstance(validations, dict) else []
+                raise Refusal('LOWER_APPLY_NOT_COMMITTED:wan=' + target +
+                    ':result=' + str(payload.get('result') if isinstance(payload, dict) else 'not-object') +
+                    ':review=' + str(payload.get('requires_review') if isinstance(payload, dict) else '?') +
+                    ':message=' + safe_message + ':validation_fields=' + ','.join(fields))
             # Real F5 and completion of the native form's GET, not a mock reload.
             with page.expect_response(lambda r: '/api/zapret/settings/get' in r.url and r.status == 200, timeout=45000):
                 page.reload(wait_until='domcontentloaded', timeout=45000)
