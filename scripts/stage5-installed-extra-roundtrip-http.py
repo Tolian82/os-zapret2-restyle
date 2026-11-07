@@ -75,9 +75,66 @@ def names_from_cache(row):
     return names
 
 
-def failed_fetch_network_diagnostics():
+
+def summarize_scoped_egress_rules(rules):
+    """Read-only summary of disposable guest PF, no external rule manipulation."""
+    lines = rules.splitlines()
+    scoped = [x.strip() for x in lines
+              if "192.168.122.10" in x and
+              (x.lstrip().startswith("pass ") or x.lstrip().startswith("block "))]
+    allow = [x for x in scoped
+             if x.startswith("pass out quick on vtnet0 ")
+             and re.search(r"\b(?:443|https)\b", x)]
+    dns = [x for x in scoped
+           if x.startswith("pass out quick on vtnet0 ")
+           and re.search(r"\b(?:53|domain)\b", x)]
+    return {
+        "rules_sha256": hashlib.sha256(rules.encode("utf-8")).hexdigest(),
+        "stock_scoped_https_pass_count": len(allow),
+        "stock_scoped_dns_pass_count": len(dns),
+        "stock_scoped_pass_unwanted_reply_to": any("reply-to" in x for x in allow),
+        "scoped_block_directions": sorted(set(
+            "out" if re.search(r"\bblock(?: drop)? out\b", x) else
+            "in" if re.search(r"\bblock(?: drop)? in\b", x) else "other"
+            for x in scoped if x.startswith("block "))),
+    }
+
+
+def pf_readonly_egress_snapshot():
+    """No network traffic or firewall writes; collect evidence near repeat Install."""
+    out = {}
+    try:
+        p = subprocess.run(["/sbin/pfctl", "-sr"], capture_output=True,
+                           text=True, timeout=8, check=False)
+        out["pfctl_rules_rc"] = p.returncode
+        if p.returncode == 0:
+            out.update(summarize_scoped_egress_rules(p.stdout))
+        v = subprocess.run(["/sbin/pfctl", "-vvsr"], capture_output=True,
+                           text=True, timeout=8, check=False)
+        out["pfctl_counters_rc"] = v.returncode
+        if v.returncode == 0:
+            rows = v.stdout.splitlines()
+            selected = []
+            for i, row in enumerate(rows):
+                if "192.168.122.10" not in row:
+                    continue
+                if not re.match(r"^\s*(?:@\d+\s+)?(?:pass|block)\s", row):
+                    continue
+                selected.append(" ".join(rows[i:i + 4])[:450])
+            out["scoped_rule_counters"] = selected[:12]
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        out["pfctl_error"] = type(exc).__name__ + ":" + str(exc)[:90]
+    return out
+
+
+def failed_fetch_network_diagnostics(before=None):
     """Read-only CI evidence AFTER failed repeat; never retry a mutation."""
-    result = {}
+    result = {"pf_egress_before_repeat": before,
+              "pf_egress_after_failure": pf_readonly_egress_snapshot()}
+    if isinstance(before, dict) and "rules_sha256" in before:
+        after = result["pf_egress_after_failure"]
+        result["pf_rule_hash_changed_during_repeat"] = (
+            after.get("rules_sha256") != before["rules_sha256"])
     try:
         proc = subprocess.run(["/sbin/ipfw", "-a", "list"], capture_output=True,
                               text=True, timeout=8, check=False)
@@ -107,11 +164,19 @@ def failed_fetch_network_diagnostics():
             result[label] = type(exc).__name__ + ":" + str(exc)[:120]
     for host in ("api.github.com", "codeload.github.com"):
         try:
-            # TCP handshake only: no catalog GET, no test fetch, no service mutation.
-            with socket.create_connection((host, 443), timeout=4):
-                result[host] = "tcp_443_connected"
+            rows = socket.getaddrinfo(host, 443, socket.AF_INET,
+                                      socket.SOCK_STREAM)
+            ipv4 = sorted({row[4][0] for row in rows})
+            result[host + "_ipv4_dns"] = "resolved" if ipv4 else "empty"
+            if ipv4:
+                # Forced IPv4 isolates native PF/IP routing from IPv6 preference.
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(4)
+                    sock.connect((ipv4[0], 443))
+                result[host + "_ipv4_tcp"] = "connected"
         except OSError as exc:
-            result[host] = type(exc).__name__ + ":" + str(exc)[:120]
+            result[host + "_ipv4_tcp"] = (
+                type(exc).__name__ + ":errno=" + str(exc.errno))
     print("STAGE5_EXTRA_REPEAT_FAILED_FETCH_NETWORK_DIAGNOSTICS=" +
           json.dumps(result, sort_keys=True), file=sys.stderr, flush=True)
 
@@ -139,6 +204,20 @@ def self_test():
     fake = {"status": "ok", "lua": [{"origin": "other", "name": "s.lua"}],
             "bin": [{"origin": "upstream", "name": "u.bin"}]}
     need(names_from_cache(fake) == {"lua/s.lua"}, "EXTRA_ROUNDTRIP_CACHE_SELFTEST")
+    sample = ("block drop in log inet from 192.168.122.10 to any\n"
+              "pass out quick on vtnet0 inet proto tcp from "
+              "192.168.122.10 to any port = https\n"
+              "pass out quick on vtnet0 inet proto udp from "
+              "192.168.122.10 to any port = domain\n")
+    inspected = summarize_scoped_egress_rules(sample)
+    need(inspected["stock_scoped_https_pass_count"] == 1 and
+         inspected["stock_scoped_dns_pass_count"] == 1 and
+         inspected["scoped_block_directions"] == ["in"] and
+         not inspected["stock_scoped_pass_unwanted_reply_to"],
+         "EXTRA_ROUNDTRIP_SCOPED_PF_DIAGNOSTIC_PARSER_INVALID")
+    need(summarize_scoped_egress_rules(sample.replace("pass out quick", "block out"))[
+         "stock_scoped_https_pass_count"] == 0,
+         "EXTRA_ROUNDTRIP_SCOPED_PF_DENY_MISCLASSIFIED")
     print("PASS_STAGE5_EXTRA_REPEAT_INSTALL_REMOVE_SHAPE_NEGATIVES=1")
     return 0
 
@@ -222,6 +301,12 @@ def execute(initial_install):
 
     # Exactly one stock POST for the repeated, UNCHANGED content. A new
     # operation must run even though the disk content will not change.
+    # Before the second HTTPS operation: passive native PF snapshot. This
+    # proves whether a service restart actually changed the stock CI rules.
+    # Do not probe external hosts or reload PF before attempting Install.
+    pf_before_repeat = pf_readonly_egress_snapshot()
+    print("STAGE5_EXTRA_REPEAT_PF_PRE=" +
+          json.dumps(pf_before_repeat, sort_keys=True), flush=True)
     repeated = web.api("POST", BASE + "resourcesInstall", {})
     need(repeated.get("status") == "ok" and repeated.get("started") is True and
          re.fullmatch(r"[a-f0-9]{32}", str(repeated.get("operation", ""))) and
@@ -234,9 +319,12 @@ def execute(initial_install):
         # do not retry an uncertain resource mutation or reclassify as PASS.
         row = web.api("POST", BASE + "resourcesStatus", {})
         detail = str(row.get("detail", ""))[:240].replace("\n", " ").replace("\r", " ")
-        failed_fetch_network_diagnostics()
+        failed_fetch_network_diagnostics(pf_before_repeat)
         raise Refusal("EXTRA_ROUNDTRIP_REPEAT_INSTALL_TERMINAL_FAILED:" +
                       str(row.get("phase", "unknown")) + ":" + detail) from exc
+    pf_after_repeat = pf_readonly_egress_snapshot()
+    print("STAGE5_EXTRA_REPEAT_PF_POST=" +
+          json.dumps(pf_after_repeat, sort_keys=True), flush=True)
     need(completed.get("operation") == repeated["operation"] and
          completed.get("revision") == original.SOURCE_REVISION,
          "EXTRA_ROUNDTRIP_REPEAT_INSTALL_NOT_CORRELATED")

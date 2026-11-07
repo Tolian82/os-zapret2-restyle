@@ -211,13 +211,39 @@ def execute():
          "EXTRA_INSTALL_CATALOG_COLLISION_OR_FOREIGN_RESOURCE")
     reviewed_sha = catalog_content_sha(payloads)
 
+    # Passive PF state BEFORE the first actual Install. The first archive
+    # verification already fetched from GitHub successfully; a post-dispatch
+    # Errno 13 may therefore indicate a changed native guest filter/owner.
+    # This reads PF only, never reloads it or repeats an uncertain operation.
+    scoped_diag = module("stage5-installed-extra-roundtrip-http.py")
+    preinstall_pf = scoped_diag.pf_readonly_egress_snapshot()
+    print("STAGE5_EXTRA_INITIAL_PF_PRE=" +
+          json.dumps(preinstall_pf, sort_keys=True), flush=True)
     # Exactly ONE production API POST. No retries after uncertain acceptance.
     started = web.api("POST", SERVICE_BASE + "resourcesInstall", {})
     need(started.get("status") == "ok" and started.get("started") is True and
          isinstance(started.get("operation"), str) and
          re.fullmatch(r"[a-f0-9]{32}", started["operation"]) is not None,
          "EXTRA_INSTALL_NATIVE_START_NOT_CONFIRMED")
-    terminal = poll_terminal(web, started["operation"])
+    try:
+        terminal = poll_terminal(web, started["operation"])
+    except Refusal:
+        # Retain the original failure. Never change production or convert
+        # an unverified install to PASS. Read-only network evidence only.
+        try:
+            last = web.api("POST", SERVICE_BASE + "resourcesStatus", {})
+            print("STAGE5_EXTRA_INITIAL_TERMINAL_DETAIL=" +
+                  json.dumps({"phase": str(last.get("phase", "unknown")),
+                              "detail": str(last.get("detail", ""))[:240]},
+                             sort_keys=True), file=sys.stderr, flush=True)
+        except Exception as exc:
+            print("STAGE5_EXTRA_INITIAL_STATUS_UNAVAILABLE=" +
+                  type(exc).__name__, file=sys.stderr, flush=True)
+        scoped_diag.failed_fetch_network_diagnostics(preinstall_pf)
+        raise
+    print("STAGE5_EXTRA_INITIAL_PF_POST=" +
+          json.dumps(scoped_diag.pf_readonly_egress_snapshot(),
+                     sort_keys=True), flush=True)
     need(terminal.get("operation") == started["operation"] and
          terminal.get("revision") == SOURCE_REVISION,
          "EXTRA_INSTALL_NATIVE_TERMINAL_DIFFERENT_OPERATION")
