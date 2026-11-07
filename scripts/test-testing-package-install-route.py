@@ -19,7 +19,7 @@ need("python${PLUGIN_PYTHON} gmake pkgconf luajit git jq ca_root_nss" in make,
 template = (ROOT / "scripts/install-testing-package.sh.in").read_text()
 need(template.count("@PACKAGE_VERSION@") == 1 and
      template.count("@PACKAGE_SHA256@") == 1, "template placeholders")
-need("pkg install -r OPNsense $DEPS" in template and
+need("pkg install -r OPNsense $MISSING" in template and
      'pkg add -f "$PKG"' in template and
      "pkg add -M" not in template and "pfctl" not in template,
      "must use official dependency solver then normal pkg add")
@@ -40,7 +40,7 @@ digest = "a" * 64
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     installer = root / "installer.sh"
-    installer.write_text(template.replace("@PACKAGE_VERSION@", "0.6.2_181")
+    installer.write_text(template.replace("@PACKAGE_VERSION@", "0.6.2_185")
                          .replace("@PACKAGE_SHA256@", digest))
     subprocess.run(["sh", "-n", str(installer)], check=True)
     bins = root / "bin"
@@ -51,9 +51,19 @@ with tempfile.TemporaryDirectory() as tmp:
 printf 'pkg %s\n' "$*" >> "$MOCK_TRACE"
 case "$1" in
  config) echo FreeBSD:15:amd64 ;;
+ query)
+    [ "$3" = os-zapret2-restyle ] && { echo 0.6.2_185; exit 0; }
+    case " ${MOCK_PRESENT:-} " in
+       *" $3 "*) case " ${MOCK_OLD:-} " in
+                    *" $3 "*) echo 0.5 ;;
+                    *) echo 1.0 ;;
+                   esac ;;
+       *) exit 1 ;;
+    esac ;;
+ version) [ "$2" = -t ] || exit 2
+          [ "$3" = 0.5 ] && echo '<' || echo '=' ;;
  install) [ "${MOCK_DEP_FAIL:-0}" != 1 ] ;;
  add) exit 0 ;;
- query) echo 0.6.2_181 ;;
  check) exit 0 ;;
  *) exit 2 ;;
 esac
@@ -66,24 +76,43 @@ printf bytes > "$p"
 """,
         "sha256": "#!/bin/sh\necho " + digest + "\n",
         "tar": "#!/bin/sh\necho '{}'\n",
-        "php": "#!/bin/sh\necho 'git gmake pkgconf luajit jq ca_root_nss python313'\n",
+        "php": """#!/bin/sh
+case "$2" in
+ *PHP_EOL*) printf 'git 1.0\njq 1.0\npython313 1.0\n' ;;
+ *) echo 'git jq python313' ;;
+esac
+""",
     }
     for name, source in mocks.items():
         path = bins / name
         path.write_text(source)
         path.chmod(0o755)
     trace = root / "trace"
-    for failure in ("0", "1"):
+    scenarios = (
+        # All installed: no pkg install, no auto/manual changes.
+        ("all-satisfied", "git jq python313", "", "0", None),
+        # Only missing dependency must reach official repo.
+        ("one-missing", "git jq", "", "0", "python313"),
+        # Only outdated dependency and missing dependency need resolution.
+        ("outdated", "git jq", "jq", "0", "jq python313"),
+        # Refusal is before pkg add.
+        ("dependency-failure", "git jq", "", "1", "python313"),
+    )
+    for label, present, old, failure, expected in scenarios:
         trace.write_text("")
         env = dict(os.environ, PATH=str(bins) + ":" + os.environ["PATH"],
-                   MOCK_TRACE=str(trace), MOCK_DEP_FAIL=failure)
+                   MOCK_TRACE=str(trace), MOCK_DEP_FAIL=failure,
+                   MOCK_PRESENT=present, MOCK_OLD=old)
         run = subprocess.run(["sh", str(installer)], capture_output=True,
                              text=True, env=env)
         record = trace.read_text()
         need((run.returncode == 0) == (failure == "0"),
-             "dependency failure not fail-closed")
-        need("pkg install -r OPNsense git gmake pkgconf luajit jq ca_root_nss python313" in record,
-             "manifest packages not resolved through OPNsense")
-        need(('pkg add -f' in record) == (failure == "0"),
-             "pkg add called despite failure")
-print("PASS: one-script native OPNsense install and missing-dependency refusal")
+             label + ": expected result")
+        expected_install = ("pkg install -r OPNsense " + expected) if expected else None
+        need((expected_install in record) if expected_install else
+             ("pkg install " not in record),
+             label + ": wrong dependency transaction")
+        need(("pkg add -f" in record) == (failure == "0"),
+             label + ": pkg add/abort order")
+        need("pkg set " not in record, label + ": automatic flag mutated")
+print("PASS: native OPNsense installer preserves automatic dependencies and fails closed")

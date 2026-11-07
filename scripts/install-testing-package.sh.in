@@ -68,21 +68,54 @@ DEPS=$(php -r '
 ' "$MANIFEST" "$PACKAGE_VERSION") || fail 'native package identity or dependency manifest is invalid'
 [ -n "$DEPS" ] || fail 'empty native dependency plan'
 
-# Use only the official OPNsense repo and normal interactive pkg transaction.
-# No post-install package changes, disabled dependency checks, foreign repos or
-# automatic confirmation of potentially destructive package replacements.
-printf 'Resolving declared dependencies from official OPNsense repository: %s\n' "$DEPS"
-set -f
-# Dependencies are validated safe names above; word splitting is intentional.
-# shellcheck disable=SC2086
-if [ -n "${ZAPRET2_CI_LOCAL_ARCHIVE:-}" ] && [ "${GITHUB_ACTIONS:-}" = true ] &&
-   [ "${ZAPRET2_STAGE5_CROSS_VM:-}" = 1 ]; then
-    # Unattended confirmation only for the isolated, unchanged-archive guest.
-    pkg install -y -r OPNsense $DEPS ||
-        fail 'CI official native dependency installation failed'
+# Already installed and adequate dependencies must not be passed explicitly
+# to pkg install: doing so can change their automatic/manual pkgdb flag.
+# Read required versions from the same SHA-pinned native manifest. pkg version
+# -t performs FreeBSD package-version ordering (not lexicographic ordering).
+REQUIREMENTS="$WORK/requirements"
+php -r '
+  $m = json_decode(file_get_contents($argv[1]), true);
+  if (!is_array($m) || !is_array($m["deps"] ?? null)) exit(2);
+  foreach ($m["deps"] as $name => $meta) {
+    $version = $meta["version"] ?? null;
+    if (!is_string($name) || !preg_match("/^[a-zA-Z0-9_+.-]+$/D", $name)
+        || !is_string($version) || !preg_match("/^[a-zA-Z0-9_+.,:-]+$/D", $version)) exit(3);
+    echo $name, " ", $version, PHP_EOL;
+  }
+' "$MANIFEST" > "$REQUIREMENTS" || fail 'invalid native dependency versions'
+[ -s "$REQUIREMENTS" ] || fail 'empty native dependency requirements'
+MISSING=''
+while read -r dep required; do
+    [ -n "$dep" ] && [ -n "$required" ] ||
+        fail 'malformed native dependency requirement'
+    installed=$(pkg query '%v' "$dep" 2>/dev/null) || installed=''
+    if [ -n "$installed" ]; then
+        comparison=$(pkg version -t "$installed" "$required") ||
+            fail "cannot compare installed dependency $dep"
+        case "$comparison" in
+          '='|'>') continue ;;
+          '<') ;;
+          *) fail "unknown pkg version comparison for $dep" ;;
+        esac
+    fi
+    MISSING="${MISSING:+$MISSING }$dep"
+done < "$REQUIREMENTS"
+
+if [ -n "$MISSING" ]; then
+    printf 'Resolving missing/outdated dependencies from official OPNsense repository: %s\n' "$MISSING"
+    set -f
+    # Names were strictly validated from the SHA-pinned native manifest.
+    # shellcheck disable=SC2086
+    if [ -n "${ZAPRET2_CI_LOCAL_ARCHIVE:-}" ] && [ "${GITHUB_ACTIONS:-}" = true ] &&
+       [ "${ZAPRET2_STAGE5_CROSS_VM:-}" = 1 ]; then
+        pkg install -y -r OPNsense $MISSING ||
+            fail 'CI official native dependency installation failed'
+    else
+        pkg install -r OPNsense $MISSING ||
+            fail 'native dependency installation aborted or failed; plugin unchanged'
+    fi
 else
-    pkg install -r OPNsense $DEPS ||
-        fail 'native dependency installation aborted or failed; plugin unchanged'
+    printf 'All declared native dependencies are already installed; preserving automatic flags.\n'
 fi
 
 printf 'Installing verified local plugin archive with normal pkg scripts...\n'
