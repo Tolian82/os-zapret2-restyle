@@ -53,6 +53,13 @@ def real_browser():
             need(page.locator('#zapretReleaseApply').count() == 1 and
                  page.locator('#reconfigureAct').count() == 1,
                  'TWO_NATIVE_APPLY_BUTTONS_NOT_DISTINGUISHABLE')
+            # The public bug report is for a STOPPED service. First prove
+            # WAN preference persistence independently of a live lo0 -> WAN
+            # engine/IPFW migration, which is a distinct lifecycle scenario.
+            enabled = page.locator('input[type="checkbox"][id="zapret.general.enabled"],input[type="checkbox"][id="zapret_general_enabled"]')
+            need(enabled.count() == 1, 'NATIVE_ENABLED_CHECKBOX_MISSING')
+            enabled.uncheck()
+            need(not enabled.is_checked(), 'DISPOSABLE_STOPPED_FORM_NOT_DISABLED')
             field = page.locator(SELECT)
             target = choose(field_options(page), field.input_value())
             field.select_option(value=target)
@@ -84,13 +91,17 @@ def real_browser():
                 page.reload(wait_until='domcontentloaded', timeout=45000)
             page.wait_for_function('v=>document.querySelector("select[id=\\"zapret.general.waninterface\\"],select[id=\\"zapret_general_waninterface\\"]")?.value===v', arg=target, timeout=45000)
             need(page.locator(SELECT).input_value() == target, 'WAN_LOST_AFTER_F5')
+            need(not page.locator('input[type="checkbox"][id="zapret.general.enabled"],input[type="checkbox"][id="zapret_general_enabled"]').is_checked(),
+                 'STOPPED_ENABLED_FLAG_NOT_PERSISTED_AFTER_F5')
             context.close()
         finally:
             browser.close()
     return {'status': 'PASS_REAL_NATIVE_CHROMIUM_LOWER_WAN_APPLY_F5',
             'selected_wan': target, 'real_browser_click': True,
             'confirmed_saved_response': True, 'f5_persisted': True,
-            'wan_dpi_bypass_tested': False, 'owner_appliance_modified': False}
+            'wan_dpi_bypass_tested': False,
+            'stopped_disabled_wan_persistence_only': True,
+            'active_wan_switch_tested': False, 'owner_appliance_modified': False}
 
 def native_confirm():
     need(sys.platform.startswith('freebsd') and os.geteuid() == 0 and
@@ -103,8 +114,12 @@ def native_confirm():
          record.get('real_browser_click') is True and
          record.get('f5_persisted') is True, 'BROWSER_NOT_ATTESTED')
     wan = ET.parse('/conf/config.xml').getroot().findtext('./OPNsense/Zapret/general/waninterface')
-    need(wan == record['selected_wan'], 'REAL_NATIVE_CONFIG_AND_BROWSER_WAN_DISAGREE')
-    print('PASS_STAGE5_REAL_BROWSER_AND_NATIVE_CONFIG_WAN=' + wan)
+    enabled = ET.parse('/conf/config.xml').getroot().findtext('./OPNsense/Zapret/general/enabled')
+    need(wan == record['selected_wan'] and enabled == '0' and
+         record.get('stopped_disabled_wan_persistence_only') is True and
+         record.get('active_wan_switch_tested') is False,
+         'REAL_NATIVE_STOPPED_CONFIG_AND_BROWSER_WAN_DISAGREE')
+    print('PASS_STAGE5_REAL_BROWSER_STOPPED_AND_NATIVE_CONFIG_WAN=' + wan)
 
 def self_test():
     from playwright.sync_api import sync_playwright
@@ -120,9 +135,12 @@ def self_test():
         browser = pw.chromium.launch(headless=True, **args)
         try:
             page = browser.new_page()
-            page.set_content('<form id="frm_GeneralSettings"><select id="zapret.general.waninterface"><option value="lo0">lo0</option><option value="vtnet0">WAN</option></select></form><span id="frm_GeneralSettings"></span><button id="reconfigureAct" onclick="window.clicked=1">Apply</button>')
+            page.set_content('<form id="frm_GeneralSettings"><input type="checkbox" id="zapret.general.enabled" checked><select id="zapret.general.waninterface"><option value="lo0">lo0</option><option value="vtnet0">WAN</option></select></form><span id="frm_GeneralSettings"></span><button id="reconfigureAct" onclick="window.clicked=1">Apply</button>')
             need(page.locator('#frm_GeneralSettings').count() == 2, 'DUPLICATE_NATIVE_ID_FIXTURE_INVALID')
             page.locator('form#frm_GeneralSettings').wait_for(timeout=3000)
+            page.locator('input[type="checkbox"][id="zapret.general.enabled"]').uncheck()
+            need(not page.locator('input[type="checkbox"][id="zapret.general.enabled"]').is_checked(),
+                 'OFFLINE_STOPPED_CHECKBOX_NOT_CHANGED')
             page.locator(SELECT).select_option(choose(field_options(page),'lo0'))
             page.locator('#reconfigureAct').click()
             need(page.evaluate('window.clicked') == 1 and page.locator(SELECT).input_value() == 'vtnet0', 'OFFLINE_BROWSER_CLICK_FAILED')
