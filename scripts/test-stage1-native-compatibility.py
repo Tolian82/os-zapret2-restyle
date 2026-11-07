@@ -137,7 +137,13 @@ class Stage1NativePolicyTests(unittest.TestCase):
              'ABI = "FreeBSD:16:amd64"\n', "DUPLICATE_FREEBSD_ABI"),
             ("scripts/new-production-tool.sh",
              "exec /usr/local/bin/python3.14\n", "VERSIONED_PYTHON_EXECUTABLE"),
+            ("src/opnsense/new_feature.c",
+             'ABI = "FreeBSD:16:amd64"\n', "DUPLICATE_FREEBSD_ABI"),
+            ("src/opnsense/extensionless_launcher",
+             "exec /usr/local/bin/python3.14\n", "VERSIONED_PYTHON_EXECUTABLE"),
             ("new_top_level.py", "print('new')\n",
+             "UNCLASSIFIED_NEW_EXECUTION_PATH"),
+            ("new_extensionless_script", "print('new')\n",
              "UNCLASSIFIED_NEW_EXECUTION_PATH"),
         )
         for name, source, error in cases:
@@ -146,6 +152,7 @@ class Stage1NativePolicyTests(unittest.TestCase):
         self.assertEqual(guard.scan_changed({
             "scripts/test-exact-version-fixture.py":
             'EXPECTED = "FreeBSD:16:amd64"\n',
+            "src/opnsense/static-image.png": "binary fixture",
         }), [])
 
     def test_changed_line_guard_does_not_rewrite_untouched_legacy_fixture(self):
