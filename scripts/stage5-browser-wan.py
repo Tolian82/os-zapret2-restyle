@@ -49,7 +49,7 @@ def real_browser():
                 page.locator('input[name="passwordfld"]').press('Enter')
             with page.expect_response(lambda r: '/api/zapret/settings/get' in r.url and r.status == 200, timeout=45000):
                 page.goto(origin + '/ui/zapret', wait_until='domcontentloaded', timeout=45000)
-            page.locator('#frm_GeneralSettings').wait_for(timeout=45000)
+            page.locator('form#frm_GeneralSettings').wait_for(timeout=45000)
             need(page.locator('#zapretReleaseApply').count() == 1 and
                  page.locator('#reconfigureAct').count() == 1,
                  'TWO_NATIVE_APPLY_BUTTONS_NOT_DISTINGUISHABLE')
@@ -108,7 +108,9 @@ def self_test():
         browser = pw.chromium.launch(headless=True, **args)
         try:
             page = browser.new_page()
-            page.set_content('<select id="zapret.general.waninterface"><option value="lo0">lo0</option><option value="vtnet0">WAN</option></select><button id="reconfigureAct" onclick="window.clicked=1">Apply</button>')
+            page.set_content('<form id="frm_GeneralSettings"><select id="zapret.general.waninterface"><option value="lo0">lo0</option><option value="vtnet0">WAN</option></select></form><span id="frm_GeneralSettings"></span><button id="reconfigureAct" onclick="window.clicked=1">Apply</button>')
+            need(page.locator('#frm_GeneralSettings').count() == 2, 'DUPLICATE_NATIVE_ID_FIXTURE_INVALID')
+            page.locator('form#frm_GeneralSettings').wait_for(timeout=3000)
             page.locator(SELECT).select_option(choose(field_options(page),'lo0'))
             page.locator('#reconfigureAct').click()
             need(page.evaluate('window.clicked') == 1 and page.locator(SELECT).input_value() == 'vtnet0', 'OFFLINE_BROWSER_CLICK_FAILED')
