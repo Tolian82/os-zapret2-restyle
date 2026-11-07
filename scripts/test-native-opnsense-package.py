@@ -4,7 +4,7 @@ import importlib.util
 import os
 from pathlib import Path
 import unittest
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 import tempfile
 from unittest.mock import patch
 
@@ -18,6 +18,8 @@ spec.loader.exec_module(mod)
 class NativeBuilderTests(unittest.TestCase):
     def test_revision_and_exact_target(self):
         self.assertEqual(mod.REVISION, revision_from_makefile())
+        self.assertEqual(mod.VERSION, version_from_file())
+        self.assertIn('VERSION = version_from_file()', (HERE / 'native-opnsense-package.py').read_text())
         self.assertEqual(mod.private.old.REVISION, revision_from_makefile())
         self.assertEqual(mod.provider.mk.REVISION, revision_from_makefile())
         self.assertEqual(mod.validated_policy()["supported_platforms"][0]["freebsd_pkg_abi"], "FreeBSD:15:amd64")
