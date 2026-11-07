@@ -352,7 +352,10 @@ jobs:
               echo 'ERROR: prerequisite plan contains error or destructive change' >&2
               exit 1
             fi
-            pkg -o REPO_AUTOUPDATE=false install -y git ca_root_nss jq gmake pkgconf luajit
+            # Allow native pkg to refresh the OPNsense repo after its own
+            # automatic 2.3 -> 2.8 upgrade (repository schema changes).
+            # REPO_AUTOUPDATE=false here caused a false dependency failure.
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
             pkg info -q git
             # With actual native dependencies installed, the stock local
             # package route already used by our successful A/B/C fixtures
