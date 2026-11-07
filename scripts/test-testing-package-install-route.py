@@ -1,66 +1,89 @@
 #!/usr/bin/env python3
-"""Guard the real owner package instruction against dependency-blind pkg add.
-
-The native guest-D check separately exercises this route using the SAME
-already-built archive and a fresh OPNsense appliance without preinstalled git.
-"""
+"""Fast non-root smoke for SHA-bound testing installer; no OPNsense mutation."""
+import os
 from pathlib import Path
+import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def need(ok, detail):
-    if not ok:
-        raise SystemExit("FAIL: testing package install route: " + detail)
+def need(value, label):
+    if not value:
+        raise SystemExit("FAIL: installer regression: " + label)
 
-
-chat = (ROOT / "docs/CHAT_RULES.md").read_text()
-rule = chat.split("CHAT-027.", 1)[1].split("\n\n", 1)[0]
-need("pkg install git ca_root_nss jq gmake pkgconf luajit" in rule,
-     "CHAT-027 must provision official prerequisite packages")
-need("pkg add -f /root/os-zapret2-restyle-<actual-version>.pkg" in rule,
-     "CHAT-027 must use native local archive installer after prerequisites")
-need("Do NOT use `pkg install -f /path/to/archive.pkg`" in rule,
-     "CHAT-027 must warn of observed native pkg solver crash")
-
-publication = (ROOT / "docs/GITHUB_PUBLICATION.md").read_text()
-rule = publication.split("GH-060.", 1)[1].split("\n\n", 1)[0]
-need("(`fetch`, `pkg install git ca_root_nss jq gmake pkgconf luajit`, `pkg add -f`, `pkg info -x`)" in rule,
-     "GH-060 must provision native deps before local pkg add")
-
-readme = (ROOT / "README.md").read_text()
-need("## Installing a testing package from a downloaded `.pkg`" in readme,
-     "README lacks standalone archive instructions")
-need("pkg install -n git ca_root_nss jq gmake pkgconf luajit" in readme and
-     "pkg add -f /path/to/" in readme,
-     "README missing approved dependency plan then local pkg route")
-need("segfaulted" in readme, "README hides observed OPNsense solver crash")
 
 make = (ROOT / "Makefile").read_text()
 need("python${PLUGIN_PYTHON} gmake pkgconf luajit git jq ca_root_nss" in make,
-     "required runtime Git dependency was silently dropped")
+     "real native deps were dropped")
+template = (ROOT / "scripts/install-testing-package.sh.in").read_text()
+need(template.count("@PACKAGE_VERSION@") == 1 and
+     template.count("@PACKAGE_SHA256@") == 1, "template placeholders")
+need("pkg install -r OPNsense $DEPS" in template and
+     'pkg add -f "$PKG"' in template and
+     "pkg add -M" not in template and "pfctl" not in template,
+     "must use official dependency solver then normal pkg add")
+workflow = (ROOT / ".github/workflows/publish-prerelease.yml").read_text()
+for value in ("Generate exact-SHA native installer",
+              'gh release create "${TAG}" "dist/${ASSET}" "dist/${INSTALLER}"',
+              "PUBLISHED_INSTALLER_CHANGED", "--arg installer"):
+    need(value in workflow, "publisher missing: " + value)
+chat = (ROOT / "docs/CHAT_RULES.md").read_text().split("CHAT-027.", 1)[1]
+need("sh /root/install-os-zapret2-restyle-<actual-version>.sh" in chat,
+     "owner instruction still requires manual dependency list")
+gh = (ROOT / "docs/GITHUB_PUBLICATION.md").read_text().split("GH-060.", 1)[1]
+need("companion SHA-pinned" in gh, "GH-060 not updated")
+need("## Installing a testing package without manually managing dependencies"
+     in (ROOT / "README.md").read_text(), "README not reconciled")
 
-workflow = (ROOT / ".github/workflows/stage5-native-cross-clean-running.yml").read_text()
-job = workflow.split("\n  install-same-archive-without-preinstalled-git:", 1)
-need(len(job) == 2, "missing fresh native guest D regression")
-guest = job[1]
-for marker in (
-    "needs: build-and-verify-clean-install",
-    "actions/download-artifact@v8",
-    "stage5-native-single-artifact.py verify",
-    "if pkg info -q git",
-    "pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit",
-    "pkg install -y git ca_root_nss jq gmake pkgconf luajit",
-    "automatic 2.3 -> 2.8 upgrade",
-    'plan_rc=$?',
-    '0|1) ;;',
-    'pkg -o REPO_AUTOUPDATE=false add -f "$package"',
-    "pkg info -q git",
-    "pkg query '%R' git",
-    'sha256 -q "$package"',
-):
-    need(marker in guest, "guest D lacks " + marker)
-need("REPO_AUTOUPDATE=false install -y" not in guest and
-     "install -n -f" not in guest and "pkg add -M" not in guest,
-     "guest D reintroduced crash-prone solver route or bypassed pkg safety")
-print("PASS: canonical owner route and fresh OPNsense missing-git installation regression")
+digest = "a" * 64
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    installer = root / "installer.sh"
+    installer.write_text(template.replace("@PACKAGE_VERSION@", "0.6.2_181")
+                         .replace("@PACKAGE_SHA256@", digest))
+    subprocess.run(["sh", "-n", str(installer)], check=True)
+    bins = root / "bin"
+    bins.mkdir()
+    mocks = {
+        "opnsense-version": "#!/bin/sh\necho 26.7\n",
+        "pkg": """#!/bin/sh
+printf 'pkg %s\n' "$*" >> "$MOCK_TRACE"
+case "$1" in
+ config) echo FreeBSD:15:amd64 ;;
+ install) [ "${MOCK_DEP_FAIL:-0}" != 1 ] ;;
+ add) exit 0 ;;
+ query) echo 0.6.2_181 ;;
+ check) exit 0 ;;
+ *) exit 2 ;;
+esac
+""",
+        "fetch": """#!/bin/sh
+while [ "$#" -gt 0 ]; do
+ case "$1" in -o) p=$2; shift 2 ;; *) shift ;; esac
+done
+printf bytes > "$p"
+""",
+        "sha256": "#!/bin/sh\necho " + digest + "\n",
+        "tar": "#!/bin/sh\necho '{}'\n",
+        "php": "#!/bin/sh\necho 'git gmake pkgconf luajit jq ca_root_nss python313'\n",
+    }
+    for name, source in mocks.items():
+        path = bins / name
+        path.write_text(source)
+        path.chmod(0o755)
+    trace = root / "trace"
+    for failure in ("0", "1"):
+        trace.write_text("")
+        env = dict(os.environ, PATH=str(bins) + ":" + os.environ["PATH"],
+                   MOCK_TRACE=str(trace), MOCK_DEP_FAIL=failure)
+        run = subprocess.run(["sh", str(installer)], capture_output=True,
+                             text=True, env=env)
+        record = trace.read_text()
+        need((run.returncode == 0) == (failure == "0"),
+             "dependency failure not fail-closed")
+        need("pkg install -r OPNsense git gmake pkgconf luajit jq ca_root_nss python313" in record,
+             "manifest packages not resolved through OPNsense")
+        need(('pkg add -f' in record) == (failure == "0"),
+             "pkg add called despite failure")
+print("PASS: one-script native OPNsense install and missing-dependency refusal")
