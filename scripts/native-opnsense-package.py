@@ -16,11 +16,11 @@ import stat
 import subprocess
 import sys
 import tempfile
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
-VERSION = "0.6.2"
+VERSION = version_from_file()
 REVISION = revision_from_makefile()
 NAME = "os-zapret2-restyle"
 POLICY_DEST = "share/zapret2-restyle/compatibility.json"
