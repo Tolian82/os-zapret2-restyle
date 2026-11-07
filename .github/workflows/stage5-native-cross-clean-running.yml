@@ -286,7 +286,7 @@ jobs:
 
   install-same-archive-without-preinstalled-git:
     needs: build-and-verify-clean-install
-    name: Guest D - SAME archive, stock pkg install resolves missing git
+    name: Guest D - SAME archive, native dependencies then stock pkg add
     runs-on: ubuntu-latest
     timeout-minutes: 65
     steps:
@@ -327,21 +327,25 @@ jobs:
             package="$1"
             before=$(sha256 -q "$package")
             tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "git" in d["deps"], "native package lacks git dependency"'
-            # Read-only solver preview must select the missing provider from
-            # enabled stock OPNsense repositories; never turn on FreeBSD-ports.
-            pkg -o REPO_AUTOUPDATE=false install -n -f "$package" > /tmp/zapret2-pkg-plan.log 2>&1 || {
+            # The direct-local-file "pkg install -n -f <archive>" crashed
+            # with SIGSEGV on the genuine OPNsense 26.7 guest. Avoid that
+            # unproven route; let pkg solve official REPOSITORY packages.
+            pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit > /tmp/zapret2-pkg-plan.log 2>&1 || {
               cat /tmp/zapret2-pkg-plan.log
-              echo 'ERROR: native pkg install could not resolve missing dependencies' >&2
+              echo 'ERROR: native OPNsense repository cannot resolve prerequisite packages' >&2
               exit 1
             }
             cat /tmp/zapret2-pkg-plan.log
             grep -Eiq '(^|[^[:alnum:]])git([^[:alnum:]]|$)' /tmp/zapret2-pkg-plan.log || {
-              echo 'ERROR: missing git was not in pkg solver plan' >&2
+              echo 'ERROR: missing git was not in prerequisite plan' >&2
               exit 1
             }
-            # Unlike stock pkg add, pkg install obtains remote dependencies.
-            pkg -o REPO_AUTOUPDATE=false install -y -f "$package"
+            pkg -o REPO_AUTOUPDATE=false install -y git ca_root_nss jq gmake pkgconf luajit
             pkg info -q git
+            # With actual native dependencies installed, the stock local
+            # package route already used by our successful A/B/C fixtures
+            # must now work with unchanged package bytes and normal hooks.
+            pkg -o REPO_AUTOUPDATE=false add -f "$package"
             git --version
             [ "$(pkg query '%R' git)" = OPNsense ] || {
               echo 'ERROR: git did not come from the official OPNsense repository' >&2
@@ -357,4 +361,4 @@ jobs:
               echo 'ERROR: downloaded guest A archive mutated' >&2
               exit 1
             }
-            echo 'PASS: missing git resolved by official OPNsense pkg install, same archive SHA, installed package and dependencies'
+            echo 'PASS: fresh guest used official OPNsense prerequisite install and original pkg add, same archive SHA and installed files'
