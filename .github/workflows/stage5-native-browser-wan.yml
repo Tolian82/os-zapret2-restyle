@@ -71,6 +71,11 @@ jobs:
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
+            # Issue #893 reports a STOPPED service. Stop the exact disposable
+            # lo0 owner using stock configd before changing WAN in a browser.
+            # Never test a live lo0->WAN migration as a preference-save check.
+            /usr/local/sbin/configctl zapret stop
+            /usr/local/sbin/configctl zapret status | grep -F 'zapret is not running'
             test -s stage5-browser-wan-ci.pub
             grep -Eq '^ssh-ed25519 [A-Za-z0-9+/=]+' stage5-browser-wan-ci.pub
             install -d -m 0700 /root/.ssh
