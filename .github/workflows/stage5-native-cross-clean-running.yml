@@ -286,7 +286,7 @@ jobs:
 
   install-same-archive-without-preinstalled-git:
     needs: build-and-verify-clean-install
-    name: Guest D - SAME archive, native dependencies then stock pkg add
+    name: Guest D - SAME archive, one-script native install without git
     runs-on: ubuntu-latest
     timeout-minutes: 65
     steps:
@@ -327,40 +327,19 @@ jobs:
             package="$1"
             before=$(sha256 -q "$package")
             tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "git" in d["deps"], "native package lacks git dependency"'
-            # The direct-local-archive dependency solver preview crashed
-            # with SIGSEGV on the genuine OPNsense 26.7 guest. Avoid that
-            # unproven route; let pkg solve official REPOSITORY packages.
-            # OPNsense 26.7 preview produced the expected plan but exited 1.
-            # Only tolerate rc 0 or 1 with an exact, non-destructive official
-            # package plan. Require the subsequent REAL install to succeed.
-            plan_rc=0
-            pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit > /tmp/zapret2-pkg-plan.log 2>&1 || plan_rc=$?
-            cat /tmp/zapret2-pkg-plan.log
-            case "$plan_rc" in
-              0|1) ;;
-              *) echo "ERROR: prerequisite preview failed unexpectedly: rc=$plan_rc" >&2; exit 1 ;;
-            esac
-            grep -Eq '^New packages to be INSTALLED:' /tmp/zapret2-pkg-plan.log || {
-              echo 'ERROR: no native prerequisite plan found' >&2
-              exit 1
-            }
-            grep -Eq '^[[:space:]]+git: [^[:space:]]+ \[OPNsense\]$' /tmp/zapret2-pkg-plan.log || {
-              echo 'ERROR: official native git provider was not selected' >&2
-              exit 1
-            }
-            if grep -Eq '^(pkg:|ERROR:|Error:|[[:space:]]*Segmentation fault|Packages to be (REMOVED|DOWNGRADED):|Installed packages to be (REMOVED|DOWNGRADED):)' /tmp/zapret2-pkg-plan.log; then
-              echo 'ERROR: prerequisite plan contains error or destructive change' >&2
-              exit 1
-            fi
-            # Allow native pkg to refresh the OPNsense repo after its own
-            # automatic 2.3 -> 2.8 upgrade (repository schema changes).
-            # REPO_AUTOUPDATE=false here caused a false dependency failure.
-            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            # Publish candidate does not yet exist. Render its exact, SHA-pinned
+            # companion installer and feed the SAME original Guest A archive
+            # through the CI-only local path. No preinstalled git or manual
+            # package bootstrap: the installer itself resolves all dependencies.
+            expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
+            sed -e "s/@PACKAGE_VERSION@/0.6.2_${expected}/" \
+                -e "s/@PACKAGE_SHA256@/${before}/" \
+                scripts/install-testing-package.sh.in > /tmp/zapret2-testing-installer.sh
+            sh -n /tmp/zapret2-testing-installer.sh
+            GITHUB_ACTIONS=true ZAPRET2_STAGE5_CROSS_VM=1 \
+              ZAPRET2_CI_LOCAL_ARCHIVE="$package" \
+              sh /tmp/zapret2-testing-installer.sh
             pkg info -q git
-            # With actual native dependencies installed, the stock local
-            # package route already used by our successful A/B/C fixtures
-            # must now work with unchanged package bytes and normal hooks.
-            pkg -o REPO_AUTOUPDATE=false add -f "$package"
             git --version
             [ "$(pkg query '%R' git)" = OPNsense ] || {
               echo 'ERROR: git did not come from the official OPNsense repository' >&2
@@ -376,4 +355,4 @@ jobs:
               echo 'ERROR: downloaded guest A archive mutated' >&2
               exit 1
             }
-            echo 'PASS: fresh guest used official OPNsense prerequisite install and original pkg add, same archive SHA and installed files'
+            echo 'PASS: fresh no-git guest ran SHA-bound installer against SAME archive, official dependencies, native hooks'
