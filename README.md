@@ -23,7 +23,7 @@
 |---|---|
 | **Latest full Web/pkg release** | [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) — verified FreeBSD 15 `0.6.2_1.pkg`, `SHA256SUMS` and successful GitHub Pages pkg repository deployment. |
 | **Latest owner-installed testing package** | [v0.6.1_30](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.1_30) — 18/18 read-only appliance checks passed, including running service, eight global Exclude bindings and no stale Lab firewall rules. |
-| **Current development candidate** | Source `v0.6.2_177` is a **documentation-only publication record, not an installed or published `_177.pkg`**. The last permanent testing package is **[`os-zapret2-restyle-0.6.2_176.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2_176/os-zapret2-restyle-0.6.2_176.pkg)**, published as immutable [prerelease v0.6.2_176](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_176) from exact candidate-defining merged source `c11858efaa42355ccd12492dc51829cd7e0270df`; SHA-256 `5f01919f5fd04d0b695e6b321bffeb7111b74870b4ac132098c46c008a476400`, FreeBSD:15:amd64, official OPNsense 26.7 Mk. Stable `v0.6.2/0.6.2_1.pkg` and owner's appliance unchanged. Native browser STOPPED WAN and A/B/C/reboot evidence remain separate from untested owner-live blocked-DPI, IPv6 and Voice media. |
+| **Current development candidate** | Source `v0.6.2_178` is an **installation-instruction/CI regression candidate, not an installed or published `_178.pkg`**. The last permanent testing package is **[`os-zapret2-restyle-0.6.2_176.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2_176/os-zapret2-restyle-0.6.2_176.pkg)**, published as immutable [prerelease v0.6.2_176](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_176) from exact candidate-defining merged source `c11858efaa42355ccd12492dc51829cd7e0270df`; SHA-256 `5f01919f5fd04d0b695e6b321bffeb7111b74870b4ac132098c46c008a476400`, FreeBSD:15:amd64, official OPNsense 26.7 Mk. Stable `v0.6.2/0.6.2_1.pkg` and owner's appliance unchanged. Native browser STOPPED WAN and A/B/C/reboot evidence remain separate from untested owner-live blocked-DPI, IPv6 and Voice media. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -220,6 +220,10 @@ pkg update -f
 Then open **System → Firmware → Plugins** and install **`os-zapret2-restyle`**.
 
 The repository is transported over HTTPS and uses the project-approved unsigned pkg configuration `signature_type: "none"`.
+
+## Installing a testing package from a downloaded `.pkg`
+
+For a standalone downloaded testing archive, use **`pkg install -f /path/to/os-zapret2-restyle-<version>.pkg`**, not `pkg add -f`. `pkg install` resolves declared dependencies such as `git` from the configured official OPNsense repository; `pkg add` only searches the archive directory when a dependency is missing. Preview the proposed changes with `pkg install -n -f /path/to/os-zapret2-restyle-<version>.pkg` first, especially on an appliance already running the plugin. Preserve normal package hooks and check `pkg info -x os-zapret2-restyle` afterwards. If the official repository cannot supply a dependency, stop and diagnose repository availability rather than using `-M` or enabling a stock FreeBSD package repository. This testing-package path does not promote the stable repository.
 
 ## First setup
 
