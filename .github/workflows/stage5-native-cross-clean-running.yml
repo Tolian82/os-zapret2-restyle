@@ -283,3 +283,78 @@ jobs:
             dist/stage5-native-same-archive-reboot.json
           if-no-files-found: error
           retention-days: 7
+
+  install-same-archive-without-preinstalled-git:
+    needs: build-and-verify-clean-install
+    name: Guest D - SAME archive, stock pkg install resolves missing git
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Download and check the exact guest A archive, NO REBUILD
+        uses: actions/download-artifact@v8
+        with:
+          name: stage5-single-archive-transfer-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist
+      - name: Require exact archive identity before guest D
+        run: |
+          set -eu
+          python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+      - name: FRESH disposable OPNsense guest D - no preinstalled git or dependency bootstrap
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            if pkg info -q git >/dev/null 2>&1; then
+              echo 'ERROR: guest D already has git: missing-dependency scenario not exercised' >&2
+              exit 1
+            fi
+            set -- dist/os-zapret2-restyle-0.6.2_*.pkg
+            [ "$#" -eq 1 ] && [ -f "$1" ] || { echo 'ERROR: exactly one original guest A .pkg required' >&2; exit 1; }
+            package="$1"
+            before=$(sha256 -q "$package")
+            tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "git" in d["deps"], "native package lacks git dependency"'
+            # Read-only solver preview must select the missing provider from
+            # enabled stock OPNsense repositories; never turn on FreeBSD-ports.
+            pkg -o REPO_AUTOUPDATE=false install -n -f "$package" > /tmp/zapret2-pkg-plan.log 2>&1 || {
+              cat /tmp/zapret2-pkg-plan.log
+              echo 'ERROR: native pkg install could not resolve missing dependencies' >&2
+              exit 1
+            }
+            cat /tmp/zapret2-pkg-plan.log
+            grep -Eiq '(^|[^[:alnum:]])git([^[:alnum:]]|$)' /tmp/zapret2-pkg-plan.log || {
+              echo 'ERROR: missing git was not in pkg solver plan' >&2
+              exit 1
+            }
+            # Unlike stock pkg add, pkg install obtains remote dependencies.
+            pkg -o REPO_AUTOUPDATE=false install -y -f "$package"
+            pkg info -q git
+            git --version
+            [ "$(pkg query '%R' git)" = OPNsense ] || {
+              echo 'ERROR: git did not come from the official OPNsense repository' >&2
+              exit 1
+            }
+            expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
+            [ "$(pkg query '%v' os-zapret2-restyle)" = "0.6.2_${expected}" ] || {
+              echo 'ERROR: local native package version was not installed' >&2
+              exit 1
+            }
+            pkg check -d os-zapret2-restyle
+            [ "$(sha256 -q "$package")" = "$before" ] || {
+              echo 'ERROR: downloaded guest A archive mutated' >&2
+              exit 1
+            }
+            echo 'PASS: missing git resolved by official OPNsense pkg install, same archive SHA, installed package and dependencies'
