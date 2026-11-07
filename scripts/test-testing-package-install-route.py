@@ -50,13 +50,17 @@ for marker in (
     "stage5-native-single-artifact.py verify",
     "if pkg info -q git",
     "pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit",
-    "pkg -o REPO_AUTOUPDATE=false install -y git ca_root_nss jq gmake pkgconf luajit",
+    "pkg install -y git ca_root_nss jq gmake pkgconf luajit",
+    "automatic 2.3 -> 2.8 upgrade",
+    'plan_rc=$?',
+    '0|1) ;;',
     'pkg -o REPO_AUTOUPDATE=false add -f "$package"',
     "pkg info -q git",
     "pkg query '%R' git",
     'sha256 -q "$package"',
 ):
     need(marker in guest, "guest D lacks " + marker)
-need("install -n -f" not in guest and "pkg add -M" not in guest,
+need("REPO_AUTOUPDATE=false install -y" not in guest and
+     "install -n -f" not in guest and "pkg add -M" not in guest,
      "guest D reintroduced crash-prone solver route or bypassed pkg safety")
 print("PASS: canonical owner route and fresh OPNsense missing-git installation regression")
