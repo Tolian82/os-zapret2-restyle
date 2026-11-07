@@ -438,6 +438,22 @@ run_job()
         actual_outcome=$(printf '%s\n' "${result}" | jq -r '.outcome // "<missing>"')
         actual_stage=$(printf '%s\n' "${result}" | jq -r '.current_stage // "<missing>"')
         printf '%s\n' "${result}" >&2
+        # Read-only mock-harness diagnostic: never classify an unverified
+        # restore as ERROR or SUCCESS. Stage 5 was intermittently returning
+        # RESTORE_FAILED for internal_error, so preserve the exact job trail.
+        if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ] &&
+           [ "${scenario}" = internal_error ]; then
+            printf 'LAB_MOCK_INTERNAL_ERROR_STATE=%s RESTORE_MARKER=%s\n' \
+                "$(cat "${STATE_FILE}" 2>/dev/null || echo unknown)" \
+                "$([ ! -e "${RESTORED_FILE}" ] || echo present)"
+            if [ -f "${RUN_DIR}/jobs/${job}/events.ndjson" ]; then
+                jq -c '{stage:(.stage // .number),status:(.status // "unknown")}' \
+                    "${RUN_DIR}/jobs/${job}/events.ndjson" >&2 || true
+            fi
+            if [ -f "${LOG_DIR}/${job}.log" ]; then
+                tail -n 15 "${LOG_DIR}/${job}.log" >&2
+            fi
+        fi
         fail "unexpected terminal result for ${scenario}/${mode}: expected ${expected_state}/${expected_outcome}/99, got ${actual_state}/${actual_outcome}/${actual_stage}"
     fi
     recovered=$(api_call strategy_lab_status -)
