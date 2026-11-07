@@ -330,16 +330,52 @@ jobs:
             # The direct-local-archive dependency solver preview crashed
             # with SIGSEGV on the genuine OPNsense 26.7 guest. Avoid that
             # unproven route; let pkg solve official REPOSITORY packages.
-            pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit > /tmp/zapret2-pkg-plan.log 2>&1 || {
-              cat /tmp/zapret2-pkg-plan.log
-              echo 'ERROR: native OPNsense repository cannot resolve prerequisite packages' >&2
-              exit 1
-            }
+            # On the genuine guest the dry-run printed a valid stock OPNsense
+            # install plan but returned rc=1. A preview is not an installation
+            # witness: verify its contents and then require REAL pkg install
+            # to succeed. Do not use "|| true", accept signals, or skip errors.
+            plan_rc=0
+            pkg -o REPO_AUTOUPDATE=false install -n git ca_root_nss jq gmake pkgconf luajit > /tmp/zapret2-pkg-plan.log 2>&1 || plan_rc=$?
             cat /tmp/zapret2-pkg-plan.log
-            grep -Eiq '(^|[^[:alnum:]])git([^[:alnum:]]|$)' /tmp/zapret2-pkg-plan.log || {
-              echo 'ERROR: missing git was not in prerequisite plan' >&2
+            case "$plan_rc" in
+              0|1) ;;
+              *) echo "ERROR: OPNsense prerequisite preview failed unexpectedly: rc=$plan_rc" >&2; exit 1 ;;
+            esac
+            grep -Eq '^New packages to be INSTALLED:' /tmp/zapret2-pkg-plan.log || {
+              echo 'ERROR: no usable OPNsense prerequisite install plan' >&2
               exit 1
             }
+            grep -Eq '^[[:space:]]+git: [^[:space:]]+ \\[OPNsense\\]
+            pkg -o REPO_AUTOUPDATE=false install -y git ca_root_nss jq gmake pkgconf luajit
+            pkg info -q git
+            # With actual native dependencies installed, the stock local
+            # package route already used by our successful A/B/C fixtures
+            # must now work with unchanged package bytes and normal hooks.
+            pkg -o REPO_AUTOUPDATE=false add -f "$package"
+            git --version
+            [ "$(pkg query '%R' git)" = OPNsense ] || {
+              echo 'ERROR: git did not come from the official OPNsense repository' >&2
+              exit 1
+            }
+            expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
+            [ "$(pkg query '%v' os-zapret2-restyle)" = "0.6.2_${expected}" ] || {
+              echo 'ERROR: local native package version was not installed' >&2
+              exit 1
+            }
+            pkg check -d os-zapret2-restyle
+            [ "$(sha256 -q "$package")" = "$before" ] || {
+              echo 'ERROR: downloaded guest A archive mutated' >&2
+              exit 1
+            }
+            echo 'PASS: fresh guest used official OPNsense prerequisite install and original pkg add, same archive SHA and installed files'
+ /tmp/zapret2-pkg-plan.log || {
+              echo 'ERROR: native git provider was not selected from OPNsense' >&2
+              exit 1
+            }
+            if grep -Eq '^(pkg:|ERROR:|Error:|[[:space:]]*Segmentation fault|Packages to be (REMOVED|DOWNGRADED):|Installed packages to be (REMOVED|DOWNGRADED):)' /tmp/zapret2-pkg-plan.log; then
+              echo 'ERROR: prerequisite plan contains an error or destructive package change' >&2
+              exit 1
+            fi
             pkg -o REPO_AUTOUPDATE=false install -y git ca_root_nss jq gmake pkgconf luajit
             pkg info -q git
             # With actual native dependencies installed, the stock local
