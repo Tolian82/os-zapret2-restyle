@@ -127,6 +127,69 @@ class Stage1NativePolicyTests(unittest.TestCase):
                     guard.Refusal, code):
                 guard.scan(changed)
 
+    def test_new_production_paths_reject_duplicate_compatibility_policy(self):
+        self.assertEqual(guard.scan_changed({
+            "src/opnsense/scripts/new_feature.py": "print('supported')\n",
+            "scripts/new-production-tool.sh": 'exec /usr/local/bin/python3 "$@"\n',
+        }), ["scripts/new-production-tool.sh", "src/opnsense/scripts/new_feature.py"])
+        cases = (
+            ("src/opnsense/scripts/new_feature.py",
+             'ABI = "FreeBSD:16:amd64"\n', "DUPLICATE_FREEBSD_ABI"),
+            ("scripts/new-production-tool.sh",
+             "exec /usr/local/bin/python3.14\n", "VERSIONED_PYTHON_EXECUTABLE"),
+            ("src/opnsense/new_feature.c",
+             'ABI = "FreeBSD:16:amd64"\n', "DUPLICATE_FREEBSD_ABI"),
+            ("src/opnsense/extensionless_launcher",
+             "exec /usr/local/bin/python3.14\n", "VERSIONED_PYTHON_EXECUTABLE"),
+            ("new_top_level.py", "print('new')\n",
+             "UNCLASSIFIED_NEW_EXECUTION_PATH"),
+            ("new_extensionless_script", "print('new')\n",
+             "UNCLASSIFIED_NEW_EXECUTION_PATH"),
+        )
+        for name, source, error in cases:
+            with self.subTest(path=name), self.assertRaisesRegex(guard.Refusal, error):
+                guard.scan_changed({name: source})
+        self.assertEqual(guard.scan_changed({
+            "scripts/test-exact-version-fixture.py":
+            'EXPECTED = "FreeBSD:16:amd64"\n',
+            "src/opnsense/static-image.png": "binary fixture",
+        }), [])
+
+    def test_changed_line_guard_does_not_rewrite_untouched_legacy_fixture(self):
+        before = 'ABI = "FreeBSD:15:amd64"\nold = True\n'
+        after = before + 'enabled = True\n'
+        added = guard.introduced_lines(before, after)
+        self.assertEqual(added, 'enabled = True\n')
+        self.assertEqual(guard.scan_changed({"src/opnsense/new_module.py": added}),
+                         ["src/opnsense/new_module.py"])
+
+    def test_real_git_diff_discovers_new_production_file(self):
+        import subprocess
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            def git(*args):
+                proc = subprocess.run(["git", *args], cwd=root, check=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                return proc.stdout.decode().strip()
+            git("init", "-q")
+            (root / "README.md").write_text("baseline\n")
+            git("add", "README.md")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "baseline")
+            base = git("rev-parse", "HEAD")
+            production = root / "src/opnsense/scripts/new_feature.py"
+            production.parent.mkdir(parents=True)
+            production.write_text('ABI = "FreeBSD:16:amd64"\n')
+            git("add", "src/opnsense/scripts/new_feature.py")
+            git("-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "introduce")
+            head = git("rev-parse", "HEAD")
+            with patch.object(guard, "ROOT", root):
+                changed = guard.changed_contents(base, head)
+            self.assertEqual(list(changed), ["src/opnsense/scripts/new_feature.py"])
+            with self.assertRaisesRegex(guard.Refusal, "DUPLICATE_FREEBSD_ABI"):
+                guard.scan_changed(changed)
+
     def test_python_independent_probe_no_missing_installed_manifest(self):
         sh = (HERE / "compatibility-bootstrap.sh").read_text()
         self.assertTrue(sh.startswith("#!/bin/sh"))

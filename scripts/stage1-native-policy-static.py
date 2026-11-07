@@ -4,8 +4,11 @@
 Historical Stage 0 witnesses, OPNsense fixtures, CI guest release locks and
 runtime Python migration debt are intentionally NOT claimed to be migrated.
 """
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import argparse
+import difflib
 import re
+import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,12 +52,124 @@ def scan(sources):
             "historical_fixture_exceptions": True}
 
 
-def main():
+
+SOURCE_EXTENSIONS = frozenset({
+    ".py", ".sh", ".php", ".lua", ".xml", ".inc",
+    ".conf", ".json", ".js", ".mk", ".pl", ".bash",
+    ".c", ".h", ".cc", ".cpp", ".hpp", ".go", ".rs", ".ts", ".tsx",
+})
+BINARY_SUFFIXES = frozenset({
+    ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp",
+    ".so", ".a", ".o", ".bin", ".dat", ".pyc",
+    ".woff", ".woff2", ".ttf", ".otf", ".pdf",
+    ".zip", ".pkg", ".gz", ".xz", ".bz2", ".zst",
+})
+
+
+def classify_path(path):
+    """Classify actual changed paths, not a second product-file inventory."""
+    p = PurePosixPath(path)
+    if not path or any(part in ("..", ".", "") for part in p.parts):
+        raise Refusal("UNQUALIFIED_CHANGED_PATH:" + path)
+    if path.startswith(("src/", "pkg/")):
+        return "production"
+    if path.startswith("scripts/"):
+        name = p.name
+        if (name.startswith("test-") or
+                (re.match(r"^stage[0-9]+-", name) and path not in PRODUCTION)):
+            return "fixture"
+        return "production"
+    if len(p.parts) == 1 and (p.suffix.lower() in SOURCE_EXTENSIONS or
+                              not p.suffix and path not in ("Makefile", "VERSION", "LICENSE")):
+        return "unclassified"
+    return "other"
+
+
+def introduced_lines(old, new):
+    before = old.splitlines(keepends=True)
+    after = new.splitlines(keepends=True)
+    delta = difflib.SequenceMatcher(None, before, after, autojunk=False)
+    return "".join("".join(after[j1:j2])
+                   for tag, i1, i2, j1, j2 in delta.get_opcodes()
+                   if tag in ("insert", "replace"))
+
+
+def scan_changed(changed):
+    """Validate introduced production lines; preserve historical fixture identities."""
+    checked = []
+    for path, added_content in sorted(changed.items()):
+        category = classify_path(path)
+        if category == "unclassified":
+            raise Refusal("UNCLASSIFIED_NEW_EXECUTION_PATH:" + path)
+        if (category != "production" or
+                PurePosixPath(path).suffix.lower() in BINARY_SUFFIXES):
+            continue
+        for code, pattern in DISALLOWED.items():
+            if pattern.search(added_content):
+                raise Refusal(code + ":" + path)
+        checked.append(path)
+    return checked
+
+
+def git_text(revision, path, *, missing_ok=False):
+    proc = subprocess.run(
+        ["git", "show", revision + ":" + path],
+        cwd=ROOT, capture_output=True, check=False, timeout=30)
+    if proc.returncode:
+        if missing_ok:
+            return ""
+        raise Refusal("CHANGED_GIT_BLOB_UNAVAILABLE:" + path)
     try:
-        print(scan({p: (ROOT / p).read_text(encoding="utf-8")
-                    for p in PRODUCTION}))
-    except (Refusal, OSError) as e:
-        print("STAGE1_POLICY_STATIC=REFUSED:" + str(e), file=sys.stderr)
+        return proc.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Refusal("CHANGED_SOURCE_NOT_UTF8:" + path) from None
+
+
+def changed_contents(base, head):
+    """Read the exact Git diff, including previously unknown production paths."""
+    for label, sha in (("base", base), ("head", head)):
+        if not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise Refusal("UNQUALIFIED_GIT_" + label.upper())
+    diff = subprocess.run(
+        ["git", "diff", "--name-only", "-z", "--diff-filter=ACMR",
+         "--no-ext-diff", base, head, "--"],
+        cwd=ROOT, capture_output=True, check=False, timeout=30)
+    if diff.returncode:
+        raise Refusal("CHANGED_GIT_DIFF_FAILED")
+    result = {}
+    try:
+        paths = [p.decode("utf-8") for p in diff.stdout.rstrip(b"\0").split(b"\0") if p]
+    except UnicodeDecodeError:
+        raise Refusal("CHANGED_GIT_PATH_NOT_UTF8") from None
+    for path in paths:
+        category = classify_path(path)
+        if category == "unclassified":
+            raise Refusal("UNCLASSIFIED_NEW_EXECUTION_PATH:" + path)
+        if (category != "production" or
+                PurePosixPath(path).suffix.lower() in BINARY_SUFFIXES):
+            continue
+        previous = git_text(base, path, missing_ok=True)
+        current = git_text(head, path)
+        result[path] = introduced_lines(previous, current)
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-sha")
+    parser.add_argument("--head-sha")
+    args = parser.parse_args()
+    try:
+        source = {p: (ROOT / p).read_text(encoding="utf-8") for p in PRODUCTION}
+        report = scan(source)
+        if bool(args.base_sha) != bool(args.head_sha):
+            raise Refusal("CHANGED_SOURCE_REQUIRES_BASE_AND_HEAD")
+        if args.base_sha:
+            report["introduced_production_paths_checked"] = scan_changed(
+                changed_contents(args.base_sha, args.head_sha))
+        print(report)
+    except (Refusal, OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        print("STAGE1_POLICY_STATIC=REFUSED:" + str(exc), file=sys.stderr)
         return 2
     return 0
 
