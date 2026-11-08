@@ -1,0 +1,54 @@
+name: G01 real native standalone destructive purge on disposable OPNsense
+
+on:
+  pull_request:
+    paths:
+      - scripts/purge-os-zapret2-restyle.sh
+      - scripts/test-purge-os-zapret2-restyle.py
+      - scripts/stage2-opnsense-real-native-purge.py
+      - .github/workflows/g01-native-disposable-purge.yml
+  workflow_dispatch:
+    inputs:
+      dry_source_only:
+        description: Run only offline safety checks; do not create OPNsense guest
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  g01-safety-and-native:
+    name: Native full purge after real clean pkg install (disposable OPNsense ONLY)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Mandatory fast safety tests before allocating disposable VM
+        run: |
+          set -eu
+          sh -n scripts/purge-os-zapret2-restyle.sh
+          python3.13 -m py_compile scripts/test-purge-os-zapret2-restyle.py scripts/stage2-opnsense-real-native-purge.py
+          python3.13 scripts/test-purge-os-zapret2-restyle.py -v
+      - name: Isolated FreeBSD 15 / OPNsense 26.7 genuine pkg install then full destructive G01 purge
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_source_only != true) }}
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-purge.py
