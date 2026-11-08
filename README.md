@@ -23,13 +23,15 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_1` — native OPNsense 26.7 / FreeBSD 15 amd64 packaging, source-derived version, guarded dependency/lifecycle and exact-source CI. The final release archive gets its **own** SHA-256 from publication, never from a historical Actions artifact. |
+| **Current development candidate** | `v0.6.3_2` — proposed lifecycle-recovery TЗ and documentation only; NO corresponding `.pkg` has been built, published or owner-tested. The installed full release remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
 | **License** | MIT |
 
 `os-zapret2-restyle` integrates the [bol-van/zapret2](https://github.com/bol-van/zapret2) native `dvtws2` engine with OPNsense: transactional Traffic Strategies, automatic Strategy Lab testing, upstream runtime management and a configurable Voice Transmission page. The plugin and upstream Zapret2 engine have separate installation/update lifecycles.
+
+**Known published `v0.6.3_1` clean-install defects (8 November 2026):** owner-live clean GUI install exposed [first upstream GUI installation](https://github.com/Tolian82/os-zapret2-restyle/issues/970), [stale Services menu after normal uninstall](https://github.com/Tolian82/os-zapret2-restyle/issues/971), [ineffective Start/Strategies Apply](https://github.com/Tolian82/os-zapret2-restyle/issues/972), and [blocked-target Laboratory Stage-60 internal error](https://github.com/Tolian82/os-zapret2-restyle/issues/973). These remain **OPEN**. The [owner-approved lifecycle TЗ v1.1](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) and [G01–G11 staged implementation plan](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) require first an optional standalone destructive purge tool, then fixes and exact native/live verification; neither script nor fixes is shipped. The **new approved** default uses ten YouTube domains and TCP+QUIC actions supported in upstream source; real installed-native testing is pending. Source-only documentation candidate `v0.6.3_2` does not replace published `0.6.3_1.pkg`.
 
 **Verification limits:** The owner installed immutable testing `v0.6.2_188` and verified both Standard and Extended Strategy Lab jobs through Stage 99 with 3/3 stable candidate replays and restored `RUNNING→RUNNING` service. Native disposable OPNsense 26.7 tests cover clean install, old RUNNING/Voice replacement, shared FD9/service, reboot, scoped IPFW, authenticated HTTPS and resource transactions. These results do **not** prove DPI bypass on a blocked ISP route, installed IPv6 WAN packets, successful Telegram/Discord voice media, arbitrary ISP/QUIC behavior, abrupt power loss or a physical owner Web firmware-upgrade click. IPv6 on the owner's stand was waived, not passed. The intermittent disposable Guest B investigation [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) remains open; a recurring `RESTORE_FAILED` in a required release-candidate check is blocking.
 
@@ -252,34 +254,48 @@ Starting with source candidate `v0.6.2_181`, each testing prerelease ships **two
 
 The plugin package and the upstream bol-van/zapret2 runtime intentionally have separate lifecycles.
 
-## Example Traffic Strategy
+## Approved first-install YouTube defaults (future fix, not yet shipped)
 
-```text
---filter-tcp=80
-<HOSTLIST:user>
---filter-l7=http
+On an **actually clean** first setup, the next implementation must show exactly these ten entries in **YouTube Domains**, without automatically enabling traffic interception:
+
+~~~text
+youtube.com
+googlevideo.com
+yt.be
+youtu.be
+ytimg.com
+youtubei.googleapis.com
+youtube.googleapis.com
+youtube-nocookie.com
+ggpht.com
+ssl.gstatic.com
+~~~
+
+**Traffic Strategy** must be exactly:
+
+~~~text
+--filter-tcp=80,443
+--filter-l7=http,tls
+<HOSTLIST:youtube>
+--blob=http_iana_org
+--out-range=-d10
 --payload=http_req
 --lua-desync=fake:blob=http_iana_org:tcp_md5
 --lua-desync=multisplit:pos=method+2
-
---new
-
---filter-tcp=443
-<HOSTLIST:youtube>
---filter-l7=tls
---blob=tls7
---out-range=-d8
 --payload=tls_client_hello
---lua-desync=multisplit:pos=2,midsld-2:seqovl=1:seqovl_pattern=tls7
+--lua-desync=multisplit:pos=midsld:seqovl=1
 
 --new
 
---filter-tcp=443
-<IPSET:telegram>
---filter-l7=mtproto,unknown
---payload=mtproto_initial,unknown
---lua-desync=fake:blob=stun:repeats=6
-```
+--filter-udp=443
+--filter-l7=quic
+<HOSTLIST:youtube>
+--out-range=-d10
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=5
+~~~
+
+These profiles use upstream `http_iana_org.bin` (resolved from the plugin shorthand `--blob=http_iana_org`) and built-in `fake_default_quic`, with **no optional Lua/BIN resources**. The default is deliberately different from the historical `tls7` example, which depended on a missing file. The ten-line list and exact two-profile strategy are an **approved future default**, not a claim that the published `v0.6.3_1` already pre-populates the fields or that blocked YouTube access has been verified.
 
 ### Managed domain targets
 

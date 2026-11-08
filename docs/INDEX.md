@@ -16,6 +16,12 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
+## Level 2 — активное ТЗ по полной чистой установке (8 ноября 2026)
+
+- [Восстановление полного жизненного цикла после чистой установки — ТЗ v1.1](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) — новое утверждённое пользовательское поведение; первая задача: безопасный автономный purge-скрипт, затем исправления GUI/uninstall/bootstrap/WAN/пустых стратегий/Strategy Lab. Реализация пока открыта.
+- [Поэтапный план восстановления G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) — единственная текущая последовательность реализации: сначала безопасный full-purge, затем обычный GUI uninstall, первая runtime-install, утверждённые 10 доменов + TCP/QUIC, WAN/empty/Voice, RU/EN GUI/Lab, real native/owner-live acceptance. Результаты не подтверждены созданием документа.
+- [Дефекты опубликованного v0.6.3_1](https://github.com/Tolian82/os-zapret2-restyle/issues/970) — #970–#973, подтверждённые owner-live; исходный стабильный пакет неизменен.
+
 ## Level 2 — активное ТЗ и нативная интеграция (5 ноября 2026)
 
 - [ТЗ: OPNsense native packaging and unified compatibility v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) — утверждённые требования к штатным pkg, зависимостям, Python и сервису, зафиксированные номера IPFW.
