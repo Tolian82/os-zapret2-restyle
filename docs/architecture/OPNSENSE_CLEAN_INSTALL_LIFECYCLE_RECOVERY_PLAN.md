@@ -138,9 +138,9 @@
 | Этап | Gate | Статус на дату создания плана | Первый требуемый свидетель |
 |---|---|---|---|
 | 01 — полный purge | G01 | **INSTALLED-CI PASS** [native #42505329364](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364); **OWNER-LIVE/GUI NOT TESTED** | Actual package installed, post-uninstall residuals and RUNNING lo0/dvtws2, owned IPFW, Config backup/dry-run verified |
-| 02 — обычное GUI удаление | G02 | **IN_PROGRESS SOURCE** — actual installed CI/OWNER-LIVE PENDING | POST_DEINSTALL firmware unregister + 3600s MenuSystem cache invalidation, preserve Config/upstream/Extra, same-archive reinstall |
-| 03 — первый GUI setup | G03 | BLOCKED BY G02 | First install v1.0.7 without previous runtime |
-| 04 — defaults TCP+QUIC | G04 | BLOCKED BY G03 | Ten domains and exact two profiles, installed binary dry-run |
+| 02 — обычное GUI удаление | G02 | **INSTALLED-CI PASS** [PR #979](https://github.com/Tolian82/os-zapret2-restyle/pull/979); **OWNER-LIVE PENDING** | POST_DEINSTALL firmware unregister + 3600s MenuSystem cache invalidation, preserve Config/upstream/Extra, same-archive reinstall |
+| 03 — первый GUI setup | G03 | **INSTALLED-CI PASS** [PR #980](https://github.com/Tolian82/os-zapret2-restyle/pull/980); **OWNER GUI PENDING** | First install v1.0.7 without previous runtime |
+| 04 — defaults TCP+QUIC | G04 | **LC-05 native Config INSTALLED-CI PASS** [PR #982](https://github.com/Tolian82/os-zapret2-restyle/pull/982), [real OPNsense #42522906720](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42522906720); **A06 TCP/QUIC real engine/Start IN PROGRESS; OWNER GUI NOT TESTED** | Ten domains and exact two profiles, installed binary dry-run |
 | 05 — независимое сохранение WAN | G05 | BLOCKED BY G04 | WAN saved with service OFF / empty strategy |
 | 06 — empty + Voice-only | G06 | BLOCKED BY G05 | Actual FreeBSD dvtws2 experiment + shared Voice |
 | 07 — Start/Apply/status i18n | G07 | BLOCKED BY G06 | Native AJAX/PID/FD9 + RU/EN states |
@@ -149,4 +149,4 @@
 | 10 — native regression + GitHub testing package | G10 | BLOCKED BY G09 | A01–A22 source/installed CI, same archive SHA, verified testing publication |
 | 11 — owner-live acceptance and docs | G11 | BLOCKED BY G10 | Exact published testing package tested in GUI; stable only by separate authorization |
 
-**Следующая инженерная задача после завершения G01 native CI:** G02 — обычный GUI uninstall и удаление устаревшего Services → Zapret меню при сохранении настроек. Owner-live G01/GUI остаётся NOT TESTED до проверки на реальном устройстве/отдельном тестовом пакете. План последовательно уточняется **только** по результатам завершённых измеряемых этапов или новых решений владельца; принятая цель не меняется молча.
+**Следующая инженерная задача после PR #982:** завершить **G04/A06** — настоящий native parser → hostlist/blob resolution → dvtws2 dry-run → scoped lo0 Start/Stop на OPNsense 26.7 с утверждённой сохранённой TCP/QUIC стратегией, не подменяя этот результат source-only. G01/G02/G03 и LC-05-Config G04 имеют INSTALLED-CI PASS; owner-browser для всех остаётся NOT TESTED до G11. План последовательно уточняется **только** по результатам завершённых измеряемых этапов или новых решений владельца; принятая цель не меняется молча.

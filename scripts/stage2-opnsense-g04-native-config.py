@@ -165,6 +165,22 @@ def main():
             first["enabled"] in ("0", 0, False),
             "G04_FRESH_GUI_MODEL_DID_NOT_READ_SAVED_INITIAL_CONFIG")
 
+    # Extend the same disposable native G04 guest: real upstream v1.0.7,
+    # exact saved TCP+QUIC runtime generation, installed dvtws2 --dry-run
+    # and scoped lo0 Start/Stop before the saved-empty reinstall case.
+    # A failed A06 witness MUST fail this candidate rather than disappear
+    # behind a source-only configuration PASS.
+    protocol = run(
+        ["/usr/local/bin/python3",
+         str(ROOT / "scripts/stage2-opnsense-g04-native-runtime.py")],
+        timeout=570)
+    require(protocol.returncode == 0 and
+            "PASS_G04_REAL_TCP_QUIC_DVTWS_DRYRUN_AND_LO0_START_STOP" in
+            protocol.stdout,
+            "G04_NATIVE_PROTOCOL_ACCEPTANCE_REFUSED:rc=" +
+            str(protocol.returncode) + ":" +
+            (protocol.stdout + protocol.stderr)[-650:])
+
     clear_as_user_save()
     edited = get_saved_model()
     require(edited["traffic"] == "" and edited["youtube"] == "",
