@@ -1,4 +1,4 @@
-name: G04 native Config plus exact TCP-QUIC runtime
+name: G04 native Config, exact TCP-QUIC and authenticated HTTPS Apply
 
 on:
   pull_request:
@@ -40,17 +40,18 @@ jobs:
           sh -n scripts/test-package-lifecycle-restart.sh
           sh scripts/test-package-lifecycle-restart.sh
           python3.13 -m py_compile scripts/stage2-opnsense-real-native-clean-install.py scripts/stage2-opnsense-g04-native-config.py scripts/stage2-opnsense-g04-native-runtime.py
+          python3.13 scripts/stage2-opnsense-g04-native-runtime.py --self-test
           python3.13 scripts/test-stage2-opnsense-real-native-clean-install.py
   native-g04:
     needs: fast-g04
-    name: Real OPNsense 26.7 native Config, TCP-QUIC dvtws2, reinstall
+    name: Real OPNsense 26.7 Config and authenticated first TCP-QUIC Apply
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Genuine pkg, saved Config, exact upstream TCP-QUIC Start/Stop, saved-empty reinstall
+      - name: Genuine pkg, stopped-first HTTPS Strategies Apply, real TCP-QUIC, reinstall
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: "26.7"
