@@ -1239,10 +1239,12 @@ shared_apply_wan_save_service()
         shared_apply_run_service strategies "$_wan_encoded"
         return $?
     fi
+    # STOPPED is an expected nonzero result. Retain it even when a source-
+    # mounted test (or another CLI invoker) has inherited shell errexit.
+    _wan_status_rc=0
     _wan_status=$(orchestrator_native_status \
         "$CHILD_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" \
-        "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR" 2>/dev/null)
-    _wan_status_rc=$?
+        "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR" 2>/dev/null) || _wan_status_rc=$?
     case "$_wan_status_rc" in
         0)
             shared_apply_run_service strategies "$_wan_encoded"
@@ -1303,8 +1305,10 @@ shared_apply_wan_save_service()
     fi
     # Reuse SharedConfigCommit::persist() from the existing native PHP worker.
     # It revalidates the generation + one field under the standard Config lock.
-    _wan_receipt=$(/usr/local/bin/php "${SCRIPT_DIR}/shared_apply_wan.php" commit "$_wan_encoded")
-    _wan_rc=$?
+    # Native 69 is a known model refusal; 70 or an invalid receipt requires
+    # review. Never discard that distinction through inherited shell errexit.
+    _wan_rc=0
+    _wan_receipt=$(/usr/local/bin/php "${SCRIPT_DIR}/shared_apply_wan.php" commit "$_wan_encoded") || _wan_rc=$?
     case "$_wan_rc" in
         0)
             case "$_wan_receipt" in wan-saved=*) ;; *) return 70 ;; esac
