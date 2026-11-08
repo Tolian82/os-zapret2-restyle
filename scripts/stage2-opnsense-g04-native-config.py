@@ -147,9 +147,11 @@ def main():
     require(os.uname().sysname == "FreeBSD" and os.geteuid() == 0 and
             Path("/usr/local/opnsense").is_dir(),
             "G04_NOT_ROOT_OPNSENSE_GUEST")
-    require(PACKAGE.is_file() and not PACKAGE.is_symlink(),
-            "G04_INSTALLED_ARCHIVE_MISSING")
+    # Source checkout does not carry a prebuilt package. Qualified Mk
+    # creates the physical archive during verify_native_pkg_and_first_config.
     original_archive = verify_native_pkg_and_first_config()
+    require(PACKAGE.is_file() and not PACKAGE.is_symlink(),
+            "G04_BUILT_PHYSICAL_ARCHIVE_MISSING")
 
     # Stage2 preceding witness has already verified exact native first values,
     # firmware registration and the full unrelated Config preservation.
