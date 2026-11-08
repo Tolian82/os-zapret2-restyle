@@ -233,6 +233,65 @@ class PurgeFastTest(unittest.TestCase):
         with self.fake_run(fake):
             self.assertEqual([6543], module["processes"]())
 
+    def test_freebsd_native_four_process_running_owner_is_valid(self):
+        # Exact PID ancestry observed on disposable OPNsense 26.7:
+        # daemon 3877 -> dvtws2 4038, supervisor 46369 -> sh 47909.
+        from unittest import mock
+        expected = {
+            "/var/run/dvtws2.pid": "4038",
+            "/var/run/zapret2-supervisor-daemon.pid": "46369",
+            "/var/run/zapret2-supervisor-monitor.pid": "47909",
+        }
+        binary = "/usr/local/etc/zapret2/binaries/my/dvtws2"
+        def fake_run(argv, **kwargs):
+            self.assertEqual(["/bin/ps", "-p"], argv[:2])
+            self.assertEqual(["-ww", "-o", "ppid=", "-o", "command="], argv[3:])
+            return types.SimpleNamespace(stdout=(
+                " 3877 " + binary + " --filter-tcp=65431\n"
+                if argv[2] == "4038" else
+                " 1 daemon: dvtws2 (FreeBSD daemon wrapper)\n"
+                if argv[2] == "3877" else ""))
+        original = module["safe_tree"]
+        module["safe_tree"] = lambda p: str(p) in expected
+        try:
+            with mock.patch.object(
+                Path, "read_text", autospec=True,
+                side_effect=lambda path, **kw: expected[str(path)]
+            ), self.fake_run(fake_run):
+                module["attest_processes"](True, "running",
+                                            [3877, 4038, 46369, 47909])
+                with self.assertRaises(module["Refusal"]):
+                    module["attest_processes"](True, "running",
+                                                [3877, 4038, 46369, 47909, 9000])
+                with self.assertRaises(module["Refusal"]):
+                    module["attest_processes"](True, "stopped", [3877])
+        finally:
+            module["safe_tree"] = original
+
+    def test_native_daemon_parent_spoofing_is_refused(self):
+        binary = "/usr/local/etc/zapret2/binaries/my/dvtws2"
+        test_cases = (
+            (" 3877 /usr/local/bin/other --x\n",
+             " 1 daemon: " + binary + " --x\n"),
+            (" 3877 " + binary + " --x\n",
+             " 1 daemon: /usr/local/bin/other --x\n"),
+            (" 3877 " + binary + " --x\n",
+             " 1 daemon: " + binary + "-foreign --x\n"),
+            (" 3877 " + binary + " --x\n",
+             " 1 daemon: adversary_dvtws2 --x\n"),
+            (" 3877 " + binary + " --x\n",
+             " 200 daemon: " + binary + " --x\n"),
+            (" 1 " + binary + " --x\n",
+             " 1 daemon: " + binary + " --x\n"),
+        )
+        for child, parent in test_cases:
+            def fake_run(argv, **kwargs):
+                return types.SimpleNamespace(
+                    stdout=child if argv[2] == "4038" else parent)
+            with self.subTest(child=child, parent=parent), self.fake_run(fake_run):
+                with self.assertRaises(module["Refusal"]):
+                    module["verified_engine_daemon_parent"](4038)
+
     def test_foreign_rule_in_our_numbers_is_refused(self):
         def fake(argv, **kwargs):
             if argv[0].endswith("kldstat"):

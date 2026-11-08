@@ -233,6 +233,34 @@ def processes():
     return found
 
 
+def verified_engine_daemon_parent(engine_pid):
+    """Attest FreeBSD daemon -f parent of the native, PID-file-owned dvtws2.
+
+    FreeBSD daemon -f remains a direct parent of dvtws2. Only this exact
+    supervisor process may supplement the three native owner PID-files.
+    """
+    binary = "/usr/local/etc/zapret2/binaries/my/dvtws2"
+    child = run(["/bin/ps", "-p", str(engine_pid), "-ww",
+                 "-o", "ppid=", "-o", "command="], timeout=15)
+    match = re.fullmatch(r"\s*(\d+)\s+" + re.escape(binary) +
+                         r"(?:\s+.*)?\s*", child.stdout)
+    if match is None:
+        raise Refusal("engine child process command/parent mismatch")
+    parent = int(match[1])
+    if parent <= 1 or parent == engine_pid:
+        raise Refusal("invalid dvtws2 daemon parent")
+    daemon = run(["/bin/ps", "-p", str(parent), "-ww",
+                  "-o", "ppid=", "-o", "command="], timeout=15)
+    # FreeBSD daemon(8) publishes its own short process title, commonly
+    # 'daemon: dvtws2 (...)'; it need not repeat the child's absolute path.
+    # The child was independently verified above by exact binary and PPID.
+    # Demand init parentage and an exact basename token, not a lookalike.
+    if re.fullmatch(r"\s*1\s+daemon:\s+.*(?<![A-Za-z0-9_-])dvtws2"
+                    r"(?![A-Za-z0-9_-]).*\s*", daemon.stdout) is None:
+        raise Refusal("unverified native dvtws2 daemon parent")
+    return parent
+
+
 def attest_processes(installed, status, candidates):
     """Reject an untracked process BEFORE pkg delete can change any state."""
     if candidates and status != "running":
@@ -245,6 +273,7 @@ def attest_processes(installed, status, candidates):
         if not installed:
             raise Refusal("RUNNING service with no installed package")
         declared = set()
+        engine_pid = None
         for pidfile in (
             "/var/run/dvtws2.pid",
             "/var/run/zapret2-supervisor-daemon.pid",
@@ -255,11 +284,22 @@ def attest_processes(installed, status, candidates):
             content = Path(pidfile).read_text(encoding="ascii", errors="replace").strip()
             if not content.isdecimal() or int(content) <= 1:
                 raise Refusal("invalid service-owned PID record: " + pidfile)
-            declared.add(int(content))
+            pid = int(content)
+            declared.add(pid)
+            if pidfile == "/var/run/dvtws2.pid":
+                engine_pid = pid
         if not declared:
             raise Refusal("RUNNING service has no owner PID-file evidence")
-        if not set(candidates).issubset(declared):
-            raise Refusal("unattributed native/foreign process: refuse pre-pkg deletion")
+        unknown = set(candidates) - declared
+        if unknown:
+            if engine_pid is None:
+                raise Refusal("unattributed process without native engine PID proof")
+            # The fourth process in genuine FreeBSD RUNNING is the FreeBSD
+            # daemon -f parent of the verified dvtws2 child. Admit *only*
+            # that one direct parent, with exact binary and init ancestry.
+            parent = verified_engine_daemon_parent(engine_pid)
+            if unknown != {parent}:
+                raise Refusal("unattributed native/foreign process: refuse pre-pkg deletion")
 
 
 def owned_rules():

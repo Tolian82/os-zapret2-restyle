@@ -289,8 +289,13 @@ try {
          "65431" in exact[0] and "lo0" in exact[0],
          "LOOPBACK_ONLY_OWNED_IPFW_NOT_ATTESTED")
 
-    purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
-                        "POSTCHECK:", timeout=200)
+    print("G01_PHASE3_RUNNING_PURGE=BEGIN", flush=True)
+    try:
+        purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
+                            "POSTCHECK:", timeout=200)
+    except Refusal:
+        report_native_process_attestation_mismatch()
+        raise
     need("PURGE COMPLETE" in purge, "RUNNING_NATIVE_FULL_PURGE_NOT_ACKNOWLEDGED")
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 1,
          "RUNNING_NATIVE_PACKAGE_SURVIVED_PURGE")
@@ -318,6 +323,43 @@ try {
         "real_owned_ipfw_removed": True,
         "native_pkg_stop_and_delete": True,
     }
+
+
+def report_native_process_attestation_mismatch():
+    """Disposable-VM-only, redacted PID/PPID/source diagnostics; no secrets."""
+    pidfiles = {}
+    for name in ("dvtws2.pid", "zapret2-supervisor-daemon.pid",
+                 "zapret2-supervisor-monitor.pid"):
+        location = Path("/var/run") / name
+        if location.is_file() and not location.is_symlink():
+            value = location.read_text(encoding="ascii", errors="replace").strip()
+            pidfiles[name] = int(value) if value.isdecimal() else "invalid"
+        else:
+            pidfiles[name] = None
+    census = run(["/bin/ps", "-A", "-ww", "-o", "pid=",
+                  "-o", "ppid=", "-o", "command="], timeout=20)
+    matched = []
+    if census.returncode == 0:
+        for line in census.stdout.splitlines():
+            row = re.match(r"^\s*(\d+)\s+(\d+)\s+(.*)$", line)
+            if row is None:
+                continue
+            pid, ppid, cmd = int(row[1]), int(row[2]), row[3]
+            kind = ("engine" if "dvtws2" in cmd else
+                    "script" if "/usr/local/opnsense/scripts/OPNsense/Zapret/" in cmd
+                    else "lab" if "/var/run/zapret2-restyle/strategy-lab/" in cmd
+                    else "")
+            if not kind:
+                continue
+            command_name = Path(cmd.split()[0]).name if cmd.split() else "empty"
+            matched.append({"pid": pid, "ppid": ppid,
+                            "kind": kind, "first_executable": command_name})
+    print("G01_NATIVE_REDACTED_OWNER_CENSUS=" + json.dumps({
+        "owner_pidfiles": pidfiles,
+        "candidate_count": len(matched),
+        "candidates": matched[:30],
+        "ps_returncode": census.returncode,
+    }, sort_keys=True), flush=True)
 
 
 def execute():
@@ -358,8 +400,12 @@ def execute():
     need(CONFIG.read_bytes() == dry_before and REPO.exists(),
          "DRY_RUN_MUTATED_CONFIG_OR_REPO")
     os.environ["ZAPRET2_PURGE_DISPOSABLE_GUEST"] = "1"
-    purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
-                        "POSTCHECK:", timeout=200)
+    try:
+        purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
+                            "POSTCHECK:", timeout=200)
+    except Refusal:
+        report_native_process_attestation_mismatch()
+        raise
     need("PURGE COMPLETE" in purge, "PURGE_DID_NOT_ACKNOWLEDGE")
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 1,
          "PACKAGE_STILL_INSTALLED")
@@ -384,6 +430,7 @@ def execute():
          "Saved OPNsense.Zapret settings: absent" in clean,
          "POSTPURGE_DRY_RUN_REPORTS_LEFTOVER")
     need(CONFIG.read_bytes() == post_config, "REPEAT_DRY_RUN_CHANGED_CONFIG")
+    print("G01_PHASE1_INSTALLED_PURGE=PASS", flush=True)
     # Second independently destructive invocation: plugin package and its
     # service entrypoint are GONE, but saved model and custom assets survive.
     seed_after_normal_uninstall()
@@ -404,6 +451,7 @@ def execute():
     need(len(all_backups) == 2, "MISSING_SECOND_PRIVATE_CONFIG_BACKUP")
     need(any(sha(p.read_bytes()) == sha(second_saved) for p in all_backups),
          "SECOND_CONFIG_BACKUP_CHANGED_BYTES")
+    print("G01_PHASE2_UNINSTALLED_REMNANTS=PASS", flush=True)
     running_case = verify_running_purge_after_reinstall()
 
 
