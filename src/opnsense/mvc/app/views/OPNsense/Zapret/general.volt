@@ -276,11 +276,14 @@
         // release with a real busy observation OR a changed committed version.
         // An unchanged-version replay with no busy evidence remains uncertain.
         function releaseTerminalOutcome(data, target, previous, service, observedBusy) {
-            if (!data || data.busy || !data.installed) return 'pending';
+            if (!data || data.busy) return 'pending';
             const progressed = observedBusy || (previous !== target && data.version === target);
             if (!progressed) return 'pending';
+            // A failed initial setup can correctly leave installed=0.
             if (data.setup === 'failed') return 'failed';
-            if (data.setup === 'ready' && data.version === target && data.service === service) {
+            const expectedService = service === 'error' ? 'stopped' : service;
+            if (data.installed && data.setup === 'ready' &&
+                data.version === target && data.service === expectedService) {
                 return 'success';
             }
             return 'pending';
@@ -792,8 +795,10 @@
                 return;
             }
 
-            if (!currentRuntimeInstalled ||
-                (currentServiceState !== 'started' && currentServiceState !== 'stopped') ||
+            // First install has service=error until the selected engine exists;
+            // guard already-installed invalid owners, not a blank first setup.
+            if ((currentRuntimeInstalled &&
+                currentServiceState !== 'started' && currentServiceState !== 'stopped') ||
                 releaseNeedsReview) return;
             releaseApplyPending = true;
             releaseExpectedVersion = version;

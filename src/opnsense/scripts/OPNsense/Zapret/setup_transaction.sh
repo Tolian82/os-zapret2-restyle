@@ -16,6 +16,8 @@ ACTIVE_RELEASE_FILE="${ACTIVE_RELEASE_FILE:-${STATE_DIR}/runtime.release}"
 ROLLBACK_DIR="${ROLLBACK_DIR:-${STATE_DIR}/runtime-rollback}"
 MODE="${1:-install}"
 VERSION="${2:-}"
+FIRST_INSTALL_STAGE="${FIRST_INSTALL_STAGE:-${ZAPRET_DIR}.first-install}"
+FIRST_INSTALL_MARKER="${FIRST_INSTALL_MARKER:-${STATE_DIR}/first-install.intent}"
 RUN_DIR="${RUN_DIR:-/var/run/zapret2-restyle}"
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
 SETUP_LOCK_FILE="${SETUP_LOCK_FILE:-${RUN_DIR}/setup.lock}"
@@ -661,6 +663,295 @@ rollback_runtime()
     return 0
 }
 
+
+# G03: a new runtime has no previous Git identity to restore. Stage on the
+# same filesystem under the original setup.lock and inherited native FD9.
+# Only stock configd's three OPNsense/Zapret template outputs may preexist
+# in the first upstream root. They belong to the plugin and must survive.
+first_install_template_root_safe()
+{
+    _template_root="$1"
+    [ -d "${_template_root}" ] && [ ! -L "${_template_root}" ] || return 69
+    for _template_entry in "${_template_root}"/* "${_template_root}"/.[!.]* "${_template_root}"/..?*; do
+        [ -e "${_template_entry}" ] || [ -L "${_template_entry}" ] || continue
+        case "${_template_entry##*/}" in
+            zapret.conf|hostlist.txt|hostlist-exclude.txt)
+                [ -f "${_template_entry}" ] && [ ! -L "${_template_entry}" ] || return 69 ;;
+            *) return 69 ;;
+        esac
+    done
+}
+
+first_install_templates_equal()
+{
+    _original_root="$1"
+    _published_root="$2"
+    first_install_template_root_safe "${_original_root}" || return 69
+    [ -d "${_published_root}" ] && [ ! -L "${_published_root}" ] || return 69
+    for _template_name in zapret.conf hostlist.txt hostlist-exclude.txt; do
+        if [ -f "${_original_root}/${_template_name}" ]; then
+            [ -f "${_published_root}/${_template_name}" ] &&
+            [ ! -L "${_published_root}/${_template_name}" ] &&
+            cmp -s "${_original_root}/${_template_name}" "${_published_root}/${_template_name}" || return 69
+        elif [ -e "${_published_root}/${_template_name}" ] ||
+             [ -L "${_published_root}/${_template_name}" ]; then
+            return 69
+        fi
+    done
+}
+
+# Upstream v1.0.7 Makefile creates these three links after compilation.
+# Accept only their exact relative targets inside the checked-out root.
+# Never follow unknown, absolute, escaping or linked binary destinations.
+first_install_compiler_links_safe()
+{
+    _links_root="$1"
+    [ -d "${_links_root}" ] && [ ! -L "${_links_root}" ] || return 69
+    _compiled_links=$("${FIND_BIN}" "${_links_root}" -type l -print) || return 69
+    [ -n "${_compiled_links}" ] || return 0
+    printf '%s\n' "${_compiled_links}" | while IFS= read -r _compiled_link; do
+        [ -n "${_compiled_link}" ] || continue
+        case "${_compiled_link}" in
+            "${_links_root}/nfq2/dvtws2")
+                _compiled_target="../binaries/my/dvtws2"
+                _compiled_binary=dvtws2 ;;
+            "${_links_root}/ip2net/ip2net")
+                _compiled_target="../binaries/my/ip2net"
+                _compiled_binary=ip2net ;;
+            "${_links_root}/mdig/mdig")
+                _compiled_target="../binaries/my/mdig"
+                _compiled_binary=mdig ;;
+            *) exit 69 ;;
+        esac
+        [ -L "${_compiled_link}" ] &&
+        [ "$(readlink "${_compiled_link}")" = "${_compiled_target}" ] &&
+        [ -f "${_links_root}/binaries/my/${_compiled_binary}" ] &&
+        [ ! -L "${_links_root}/binaries/my/${_compiled_binary}" ] || exit 69
+    done
+}
+
+first_install_stage_safe()
+{
+    [ -d "${FIRST_INSTALL_STAGE}" ] && [ ! -L "${FIRST_INSTALL_STAGE}" ] || return 69
+    for _entry in "${FIRST_INSTALL_STAGE}"/* "${FIRST_INSTALL_STAGE}"/.[!.]* "${FIRST_INSTALL_STAGE}"/..?*; do
+        [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
+        case "${_entry##*/}" in
+            runtime) first_install_compiler_links_safe "${_entry}" || return 69 ;;
+            original) first_install_template_root_safe "${_entry}" || return 69 ;;
+            *) return 69 ;;
+        esac
+    done
+}
+first_install_cleanup_stage()
+{
+    if [ -e "${FIRST_INSTALL_STAGE}" ] || [ -L "${FIRST_INSTALL_STAGE}" ]; then
+        first_install_stage_safe || {
+            echo "ERROR: RECOVERY_REQUIRED: unsafe first-install stage preserved" >&2
+            return 69
+        }
+        # A saved original template tree is NOT disposable build output.
+        [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
+        [ ! -L "${FIRST_INSTALL_STAGE}/original" ] || return 69
+        rm -rf "${FIRST_INSTALL_STAGE}" || return 1
+    fi
+}
+
+first_install_validate()
+{
+    _fresh_root="$1"
+    first_install_compiler_links_safe "${_fresh_root}" || return 69
+    [ -d "${_fresh_root}" ] && [ ! -L "${_fresh_root}" ] &&
+    [ -d "${_fresh_root}/.git" ] && [ ! -L "${_fresh_root}/.git" ] &&
+    [ -x "${_fresh_root}/binaries/my/dvtws2" ] && [ -x "${GIT_BIN}" ] || return 69
+    _fresh_tag=$("${GIT_BIN}" -C "${_fresh_root}" describe --tags --exact-match HEAD 2>/dev/null) || return 69
+    [ "${_fresh_tag}" = "${VERSION}" ] || return 69
+    _fresh_head=$("${GIT_BIN}" -C "${_fresh_root}" rev-parse --verify HEAD 2>/dev/null) || return 69
+    _fresh_release=$("${GIT_BIN}" -C "${_fresh_root}" rev-parse --verify "refs/tags/${VERSION}^{commit}" 2>/dev/null) || return 69
+    printf '%s\n' "${_fresh_head}" | grep -Eq '^[0-9a-f]{40}$' || return 69
+    [ "${_fresh_head}" = "${_fresh_release}" ]
+}
+first_install_finish()
+{
+    first_install_validate "${ZAPRET_DIR}" || {
+        echo "ERROR: RECOVERY_REQUIRED: new runtime identity cannot be proven" >&2
+        return 69
+    }
+    case "${FIRST_INSTALL_HAD_TEMPLATE}" in 0|1) ;; *) return 69 ;; esac
+    if [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
+        if [ -d "${FIRST_INSTALL_STAGE}/original" ] &&
+           [ ! -L "${FIRST_INSTALL_STAGE}/original" ]; then
+            first_install_templates_equal "${FIRST_INSTALL_STAGE}/original" "${ZAPRET_DIR}" || {
+                echo "ERROR: RECOVERY_REQUIRED: original template files differ after setup" >&2
+                return 69
+            }
+        else
+            # A previous attempt may have verified and retired the backup,
+            # but only AFTER committing the exact active release marker.
+            [ -f "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] &&
+            [ "$(cat "${ACTIVE_RELEASE_FILE}")" = "${VERSION}" ] || return 69
+        fi
+    else
+        [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
+        [ ! -L "${FIRST_INSTALL_STAGE}/original" ] || return 69
+    fi
+    normalize_runtime_permissions || return 69
+    if service_state; then
+        echo "ERROR: RECOVERY_REQUIRED: unexpected running owner after first setup" >&2
+        return 69
+    else
+        [ "$?" -eq 1 ] || return 69
+    fi
+    write_active_release "${VERSION}" || {
+        echo "ERROR: RECOVERY_REQUIRED: installed runtime marker not committed" >&2
+        return 69
+    }
+    if [ -d "${FIRST_INSTALL_STAGE}/original" ]; then
+        first_install_template_root_safe "${FIRST_INSTALL_STAGE}/original" || return 69
+        rm -rf "${FIRST_INSTALL_STAGE}/original" || return 69
+    fi
+    first_install_cleanup_stage || return 69
+    rm -f "${FIRST_INSTALL_MARKER}" || return 69
+    status_write ready
+    refresh_inventory_help_cache
+}
+
+install_first_runtime()
+{
+    [ -n "${VERSION}" ] && release_tag_valid "${VERSION}" || {
+        echo "ERROR: select an explicit stable upstream release for initial setup" >&2
+        return 64
+    }
+    [ "${SERVICE_WAS_RUNNING}" -eq 0 ] || return 69
+    [ ! -e "${ROLLBACK_DIR}" ] && [ ! -L "${ROLLBACK_DIR}" ] &&
+    [ ! -e "${STATE_DIR}/extra-resources/installed.json" ] &&
+    [ ! -L "${STATE_DIR}/extra-resources/installed.json" ] &&
+    [ ! -e "${STATE_DIR}/extra-resources/transaction" ] &&
+    [ ! -L "${STATE_DIR}/extra-resources/transaction" ] || {
+        echo "ERROR: RECOVERY_REQUIRED: old rollback or managed resources still exist" >&2
+        return 69
+    }
+    if [ -e "${FIRST_INSTALL_MARKER}" ] || [ -L "${FIRST_INSTALL_MARKER}" ]; then
+        [ -f "${FIRST_INSTALL_MARKER}" ] && [ ! -L "${FIRST_INSTALL_MARKER}" ] || return 69
+        [ "$(wc -l < "${FIRST_INSTALL_MARKER}" | tr -d '[:space:]')" = 2 ] || return 69
+        [ "$(sed -n '1p' "${FIRST_INSTALL_MARKER}")" = "version=${VERSION}" ] || return 69
+        case "$(sed -n '2p' "${FIRST_INSTALL_MARKER}")" in
+            original=0) FIRST_INSTALL_HAD_TEMPLATE=0 ;;
+            original=1) FIRST_INSTALL_HAD_TEMPLATE=1 ;;
+            *) return 69 ;;
+        esac
+        if [ -e "${ZAPRET_DIR}" ] || [ -L "${ZAPRET_DIR}" ]; then
+            if first_install_validate "${ZAPRET_DIR}"; then
+                # Interrupted after verified new checkout publication.
+                first_install_finish
+                return $?
+            fi
+            # Previous build failed before the package-created template root
+            # was renamed. Do not erase any preexisting template content.
+            [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ] &&
+            first_install_template_root_safe "${ZAPRET_DIR}" &&
+            [ ! -e "${FIRST_INSTALL_STAGE}/original" ] &&
+            [ ! -L "${FIRST_INSTALL_STAGE}/original" ] || return 69
+        elif [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
+            # Interrupted after moving native template outputs aside but
+            # before publishing the new checkout; restore original bytes.
+            first_install_stage_safe || return 69
+            first_install_template_root_safe "${FIRST_INSTALL_STAGE}/original" || return 69
+            mv "${FIRST_INSTALL_STAGE}/original" "${ZAPRET_DIR}" || return 69
+        fi
+        first_install_cleanup_stage || return 69
+        rm -f "${FIRST_INSTALL_MARKER}" || return 69
+    fi
+
+    [ ! -e "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ] &&
+    [ ! -e "${FIRST_INSTALL_STAGE}" ] && [ ! -L "${FIRST_INSTALL_STAGE}" ] || {
+        echo "ERROR: RECOVERY_REQUIRED: initial runtime has unexpected prior state" >&2
+        return 69
+    }
+    FIRST_INSTALL_HAD_TEMPLATE=0
+    if [ -e "${ZAPRET_DIR}" ] || [ -L "${ZAPRET_DIR}" ]; then
+        first_install_template_root_safe "${ZAPRET_DIR}" || {
+            echo "ERROR: RECOVERY_REQUIRED: unknown upstream data, not stock templates" >&2
+            return 69
+        }
+        FIRST_INSTALL_HAD_TEMPLATE=1
+    fi
+
+    mkdir -p "${STATE_DIR}" || return 1
+    _intent_tmp=$(mktemp "${STATE_DIR}/first-install.intent.XXXXXXXX") || return 1
+    if ! {
+        printf 'version=%s\n' "${VERSION}"
+        printf 'original=%s\n' "${FIRST_INSTALL_HAD_TEMPLATE}"
+    } > "${_intent_tmp}" ||
+       ! chmod 0600 "${_intent_tmp}" ||
+       ! mv -f "${_intent_tmp}" "${FIRST_INSTALL_MARKER}"; then
+        rm -f "${_intent_tmp}"
+        return 1
+    fi
+    sync || return 1
+    if ! mkdir -m 0700 "${FIRST_INSTALL_STAGE}"; then
+        echo "ERROR: RECOVERY_REQUIRED: cannot create private first-install stage" >&2
+        status_write failed || true
+        return 1
+    fi
+    status_write installing
+    _fresh_rc=0
+    if ZAPRET_DIR="${FIRST_INSTALL_STAGE}/runtime" \
+       "${SETUP_SCRIPT}" install-under-parent-lock "${VERSION}"; then
+        :
+    else
+        _fresh_rc=$?
+    fi
+    if [ "${_fresh_rc}" -ne 0 ] ||
+       ! first_install_validate "${FIRST_INSTALL_STAGE}/runtime"; then
+        status_write failed || true
+        [ "${_fresh_rc}" -ne 0 ] || _fresh_rc=69
+        first_install_cleanup_stage || return 69
+        rm -f "${FIRST_INSTALL_MARKER}" || return 69
+        return "${_fresh_rc}"
+    fi
+    first_install_stage_safe || {
+        status_write failed || true
+        echo "ERROR: RECOVERY_REQUIRED: staged upstream tree is unsafe" >&2
+        return 69
+    }
+
+    if [ "${FIRST_INSTALL_HAD_TEMPLATE}" -eq 1 ]; then
+        # A normal OPNsense package install has already rendered these
+        # native configd output files. Preserve their exact original bytes.
+        first_install_template_root_safe "${ZAPRET_DIR}" || return 69
+        for _template_name in zapret.conf hostlist.txt hostlist-exclude.txt; do
+            if [ -f "${ZAPRET_DIR}/${_template_name}" ]; then
+                [ ! -e "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" ] &&
+                [ ! -L "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" ] || return 69
+                cp -p "${ZAPRET_DIR}/${_template_name}" \
+                    "${FIRST_INSTALL_STAGE}/runtime/${_template_name}" || return 69
+            fi
+        done
+        first_install_templates_equal "${ZAPRET_DIR}" "${FIRST_INSTALL_STAGE}/runtime" || return 69
+        # Move the original template-only root to the same owned stage
+        # before exposing the new checkout. If interrupted, recovery puts
+        # it back without deleting or changing anything foreign.
+        mv "${ZAPRET_DIR}" "${FIRST_INSTALL_STAGE}/original" || return 69
+        first_install_templates_equal "${FIRST_INSTALL_STAGE}/original" \
+            "${FIRST_INSTALL_STAGE}/runtime" || {
+                echo "ERROR: RECOVERY_REQUIRED: template bytes changed during publication" >&2
+                return 69
+            }
+    else
+        [ ! -e "${ZAPRET_DIR}" ] && [ ! -L "${ZAPRET_DIR}" ] || return 69
+    fi
+    if ! mv "${FIRST_INSTALL_STAGE}/runtime" "${ZAPRET_DIR}"; then
+        echo "ERROR: RECOVERY_REQUIRED: initial runtime promotion failed" >&2
+        status_write failed || true
+        return 69
+    fi
+    if ! first_install_finish; then
+        status_write failed || true
+        return 69
+    fi
+}
+
+
 install_transaction()
 {
     # Mandatory original FD9 protection for the whole transaction, not just
@@ -698,6 +989,14 @@ install_transaction()
                 return 1
                 ;;
         esac
+    fi
+
+    # New runtime without old Git HEAD: do not enter update rollback.
+    if [ -e "${FIRST_INSTALL_MARKER}" ] || [ -L "${FIRST_INSTALL_MARKER}" ] ||
+       { [ ! -d "${ZAPRET_DIR}/.git" ] &&
+         [ ! -e "${ACTIVE_RELEASE_FILE}" ] && [ ! -L "${ACTIVE_RELEASE_FILE}" ]; }; then
+        install_first_runtime
+        return $?
     fi
 
     # Validate old tracked/managed bytes and saved strategy references.
