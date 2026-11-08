@@ -308,6 +308,7 @@ old_worker_line=$(line_of 'pgrep:-P 4242 -f configd.py console')
 parent_probe_line=$(line_of 'kill:-0 4242')
 worker_term_line=$(line_of 'kill:-TERM 4343')
 ready_line=$(line_of 'configctl:system status')
+firmware_line=$(line_of 'firmware:install os-zapret2-restyle')
 initial_line=$(line_of "initial-config:${INIT_SCRIPT}")
 configure_line=$(line_of 'configure:POST_INSTALL')
 template_line=$(line_of 'configctl:template reload OPNsense/Zapret')
@@ -316,7 +317,8 @@ status_line=$(grep -n -F 'service:status' "${TRACE}" | tail -1 | cut -d: -f1)
 [ "${parent_probe_line}" -lt "${old_worker_line}" ] || fail "worker discovery preceded watcher validation"
 [ "${old_worker_line}" -lt "${worker_term_line}" ] || fail "worker was signalled before worker discovery"
 [ "${worker_term_line}" -lt "${ready_line}" ] || fail "readiness preceded worker reload"
-[ "${ready_line}" -lt "${initial_line}" ] || fail "native initial Config saved after configd readiness"
+[ "${firmware_line}" -lt "${initial_line}" ] || fail "native initial Config preceded firmware registration"
+[ "${initial_line}" -lt "${parent_probe_line}" ] || fail "native initial Config ran after configd watcher reload"
 [ "${initial_line}" -lt "${configure_line}" ] || fail "native Config initialization ran after plugin template/config refresh"
 [ "${ready_line}" -lt "${configure_line}" ] || fail "plugin refresh preceded readiness"
 [ "${configure_line}" -lt "${template_line}" ] || fail "template preceded plugin refresh"

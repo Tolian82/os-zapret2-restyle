@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """G04: one real pkg install, saved Config clear, same-archive reinstall."""
+import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -15,6 +17,73 @@ PACKAGE = ROOT / "dist" / (
     revision_from_makefile() + ".pkg"
 )
 CONFIG = Path("/conf/config.xml")
+
+
+def load_original_clean_witness():
+    source = ROOT / "scripts/stage2-opnsense-real-native-clean-install.py"
+    spec = importlib.util.spec_from_file_location("g04_original_clean", source)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+clean = load_original_clean_witness()
+
+
+def verify_native_pkg_and_first_config():
+    # Reuse the stock original Mk/package admissibility and installed-file
+    # checks without changing that historical test (which is subscribed by
+    # many unrelated Stage 2 VMs).
+    prior_bytes = clean.preflight()
+    native_pkg = clean.native.build()
+    require(native_pkg["status"] == "PASS_OFFICIAL_NATIVE_BUILD_SOURCE_ONLY",
+            "G04_OFFICIAL_MK_BUILDER_NOT_QUALIFIED")
+    package = clean.native.ROOT / native_pkg["output"]
+    require(package == PACKAGE and package.is_file(),
+            "G04_BUILT_PACKAGE_IDENTITY_MISMATCH")
+    archive_sha = hashlib.sha256(package.read_bytes()).hexdigest()
+    clean.pkg_add(package)
+    require(hashlib.sha256(package.read_bytes()).hexdigest() == archive_sha,
+            "G04_PACKAGE_CHANGED_DURING_INSTALL")
+    manifest, _pkgdb = clean.installed_pkg_manifest(package)
+    clean.verify_installed_files(package, manifest)
+    clean.cold_status()
+
+    before = ET.fromstring(prior_bytes)
+    after = ET.fromstring(CONFIG.read_bytes())
+    require(before.find("./OPNsense/Zapret") is None,
+            "G04_GUEST_NOT_A_TRULY_CLEAN_ZAPRET_CONFIG")
+    node = after.find("./OPNsense/Zapret")
+    require(node is not None, "G04_NATIVE_SAVED_ZAPRET_MISSING")
+    traffic = node.findtext("strategy/trafficargs")
+    domains = node.findtext("hostlist/youtubedomains")
+    require(traffic is not None and domains is not None and
+            "--filter-tcp=80,443" in traffic and
+            "--filter-udp=443" in traffic and
+            traffic.count("--new") == 1 and
+            domains.splitlines() == [
+                "youtube.com", "googlevideo.com", "yt.be", "youtu.be",
+                "ytimg.com", "youtubei.googleapis.com", "youtube.googleapis.com",
+                "youtube-nocookie.com", "ggpht.com", "ssl.gstatic.com"],
+            "G04_NATIVE_INSTALLED_CONFIG_NOT_EXACT_OWNER_PROFILE")
+    general = node.find("general")
+    require(general is not None and
+            general.findtext("enabled", "0") == "0" and
+            not (general.findtext("waninterface") or "").strip(),
+            "G04_INITIAL_CONFIG_AUTO_ENABLED_OR_SELECTED_WAN")
+    # The ORIGINAL predecessor-archive oracle must see only firmware changes
+    # once the precisely allowed new plugin subtree is taken out of the
+    # comparison copy. The production Config stays untouched here.
+    normalized = copy.deepcopy(after)
+    parent = normalized.find("./OPNsense")
+    require(parent is not None, "G04_NAMESPACE_MISSING")
+    parent.remove(parent.find("Zapret"))
+    if before.find("./OPNsense") is None and len(parent) == 0:
+        normalized.remove(parent)
+    clean.verify_official_first_install_registration(
+        prior_bytes, ET.tostring(normalized, encoding="utf-8"))
+    return archive_sha
+
 
 
 class Refusal(RuntimeError):
@@ -80,7 +149,7 @@ def main():
             "G04_NOT_ROOT_OPNSENSE_GUEST")
     require(PACKAGE.is_file() and not PACKAGE.is_symlink(),
             "G04_INSTALLED_ARCHIVE_MISSING")
-    original_archive = hashlib.sha256(PACKAGE.read_bytes()).hexdigest()
+    original_archive = verify_native_pkg_and_first_config()
 
     # Stage2 preceding witness has already verified exact native first values,
     # firmware registration and the full unrelated Config preservation.

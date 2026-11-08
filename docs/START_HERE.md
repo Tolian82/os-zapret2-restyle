@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_7` · `VERSION=0.6.3` · `PLUGIN_REVISION=7` · `os-zapret2-restyle-0.6.3_7.pkg` (**GitHub CI-budget governance SOURCE candidate, not built, published or owner-installed**).
+**Current handoff identity:** `v0.6.3_8` · `VERSION=0.6.3` · `PLUGIN_REVISION=8` · `os-zapret2-restyle-0.6.3_8.pkg` (**G04 first native Config save SOURCE candidate, not published or owner-installed**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 

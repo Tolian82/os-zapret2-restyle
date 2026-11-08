@@ -136,52 +136,12 @@ def config_structure_diagnostic(before, after):
 
 
 
-# LC-05 expected native postinstall bytes. Assertions only, not a default source.
-INITIAL_YOUTUBE = (
-    "youtube.com\ngooglevideo.com\nyt.be\nyoutu.be\nytimg.com\n"
-    "youtubei.googleapis.com\nyoutube.googleapis.com\nyoutube-nocookie.com\n"
-    "ggpht.com\nssl.gstatic.com"
-)
-INITIAL_STRATEGY = (
-    "--filter-tcp=80,443\n--filter-l7=http,tls\n<HOSTLIST:youtube>\n"
-    "--blob=http_iana_org\n--out-range=-d10\n--payload=http_req\n"
-    "--lua-desync=fake:blob=http_iana_org:tcp_md5\n"
-    "--lua-desync=multisplit:pos=method+2\n"
-    "--payload=tls_client_hello\n"
-    "--lua-desync=multisplit:pos=midsld:seqovl=1\n\n--new\n\n"
-    "--filter-udp=443\n--filter-l7=quic\n<HOSTLIST:youtube>\n"
-    "--out-range=-d10\n--payload=quic_initial\n"
-    "--lua-desync=fake:blob=fake_default_quic:repeats=5"
-)
-
-
-def verify_saved_g04_config(previous, installed):
-    original = previous.find("./OPNsense/Zapret")
-    current = installed.find("./OPNsense/Zapret")
-    if original is not None:
-        need(current is not None and
-             ET.tostring(original, encoding="unicode") ==
-             ET.tostring(current, encoding="unicode"),
-             "G04_PREVIOUS_SAVED_USER_ZAPRET_CONFIG_CHANGED")
-        return False
-    need(current is not None, "G04_NATIVE_INITIAL_CONFIG_NOT_SAVED")
-    need(current.findtext("strategy/trafficargs") == INITIAL_STRATEGY and
-         current.findtext("hostlist/youtubedomains") == INITIAL_YOUTUBE,
-         "G04_NATIVE_PERSISTED_DEFAULTS_INCORRECT")
-    general = current.find("general")
-    need(general is not None and
-         general.findtext("enabled", default="0") == "0" and
-         not (general.findtext("waninterface") or "").strip(),
-         "G04_INITIAL_CONFIG_AUTOMATICALLY_ENABLED_OR_SELECTED_WAN")
-    return True
-
-
 def verify_official_first_install_registration(before, after):
-    """Accept native firmware registration plus first-install saved Config.
+    """Accept only what official register.php/Config::save() must modify.
 
-    Register.php adds the firmware entry; LC-05 uses normal model/config
-    persistence only when the entire Zapret subtree was absent.
-    All unrelated saved OPNsense Config is preserved.
+    The genuine upstream register.php adds the native package name into
+    system/firmware/plugins and Config::save() refreshes root revision.
+    All other user configuration must be preserved semantically.
     """
     need(before != after, "OFFICIAL_PLUGIN_REGISTRATION_NOT_PERSISTED")
     try:
@@ -253,24 +213,13 @@ def verify_official_first_install_registration(before, after):
         strip_formatting(root)
         return ET.tostring(root, encoding="utf-8")
 
-    initial_config_written = verify_saved_g04_config(old, new)
-    if initial_config_written:
-        # Comparing all other sections still catches any foreign mutation.
-        native_section = new.find("OPNsense")
-        need(native_section is not None, "G04_INSTALLED_NAMESPACE_MISSING")
-        native_section.remove(native_section.find("Zapret"))
-        original_section = old.find("OPNsense")
-        if original_section is None and len(native_section) == 0:
-            new.remove(native_section)
-
     prior_normal = normalize(old, prior_type is None)
     actual_normal = normalize(new, added_type)
     need(prior_normal == actual_normal,
          "UNAUTHORIZED_CONFIG_MUTATION_BEYOND_OFFICIAL_REGISTRATION:" +
          json.dumps(config_structure_diagnostic(before, after),
                     sort_keys=True))
-    return {"status": "PASS_OFFICIAL_FIRMWARE_AND_G04_INITIAL_CONFIG",
-            "initial_zapret_config_saved": initial_config_written,
+    return {"status": "PASS_OFFICIAL_FIRMWARE_REGISTER_ONLY",
             "registered_exact_new_plugin": NAME,
             "prior_plugin_count": len(original_names),
             "all_other_plugins_preserved": True,
