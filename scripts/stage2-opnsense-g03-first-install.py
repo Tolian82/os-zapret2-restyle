@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -147,9 +148,38 @@ def main():
     }, sort_keys=True))
 
 
+def bounded_disposable_failure_evidence():
+    """Only on this disposable CI guest; never print Config or secrets."""
+    log = Path("/var/log/zapret2/setup.log")
+    if not log.is_file() or log.is_symlink():
+        print("G03_SETUP_LOG=missing", file=sys.stderr)
+    else:
+        tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-36:]
+        print("G03_SETUP_LOG_TAIL_BEGIN", file=sys.stderr)
+        for line in tail:
+            line = re.sub(r"https?://\S+", "[external-url]", line)
+            line = re.sub(r"\b[A-Fa-f0-9]{40,}\b", "[digest]", line)
+            if re.search(r"token|authorization|password|secret|api[_-]?key|credential", line, re.I):
+                line = "[redacted sensitive log line]"
+            print("G03_SETUP_LOG: " + line[:220], file=sys.stderr)
+        print("G03_SETUP_LOG_TAIL_END", file=sys.stderr)
+    for path in (STATE / "setup.status", STATE / "first-install.intent"):
+        if path.is_file() and not path.is_symlink():
+            # Intent/status contain only a bounded release identity/phase.
+            values = path.read_text(errors="replace").splitlines()[:3]
+            print(f"G03_STATE:{path.name}=" + "|".join(v[:65] for v in values),
+                  file=sys.stderr)
+    for item in (ROOT / ".git", Path(str(ROOT) + ".first-install"),
+                 STATE / "runtime.release"):
+        print(f"G03_PATH:{item.name} present={item.exists()} linked={item.is_symlink()}",
+              file=sys.stderr)
+
+
 if __name__ == "__main__":
     try:
         main()
     except (Refusal, OSError, subprocess.TimeoutExpired, ValueError) as exc:
         print("G03_NATIVE=REFUSED:" + str(exc), file=sys.stderr)
+        if os.environ.get("ZAPRET2_G03_DISPOSABLE_NATIVE") == "1":
+            bounded_disposable_failure_evidence()
         sys.exit(1)
