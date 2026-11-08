@@ -77,6 +77,55 @@ class BudgetContracts(unittest.TestCase):
             self.assertIn(term, body)
         self.assertIn('cancel-in-progress: ${{ github.event_name ==', body)
 
+    def test_central_ci_legacy_vm_requires_its_own_file_scope(self):
+        """A broad src/ or package=True must not awaken frozen historical VMs."""
+        body = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        scoped = {
+            'stage0-package-baseline': 'stage0_archive_baseline',
+            'stage0-historical-hook-fd9': 'stage0_historical_fd9',
+            'stage0-real-pkg-scheduler': 'stage0_pkg_scheduler',
+            'stage0-private-elf-native-runtime': 'stage0_private_elf',
+            'native-ipfw-table': 'native_wan_process',
+        }
+        for name, selector in scoped.items():
+            match = re.search(
+                rf'(?ms)^  {re.escape(name)}:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', body)
+            self.assertIsNotNone(match, f'missing CI job: {name}')
+            gate = match.group(1).split('    steps:\n', 1)[0]
+            self.assertIn(f"needs.changes.outputs.{selector} == 'true'", gate, name)
+            self.assertNotIn("needs.changes.outputs.package == 'true'", gate, name)
+            self.assertIn("github.event_name == 'workflow_dispatch'", gate, name)
+
+    def test_ci_only_edit_never_requires_expensive_plugin_package(self):
+        body = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        classifier = body.split('          package=false\n', 1)[1].split(
+            '          # Native engine Exclude proof', 1)[0]
+        self.assertNotIn('.github/workflows/ci', classifier,
+                         'CI workflow change is policy-only, not packaged source')
+        self.assertIn('src/', classifier, 'real packaged source must remain qualified')
+        self.assertIn('old_makefile=$(git show', body)
+        self.assertIn('new_makefile=$(git show', body)
+
+    def test_long_strategy_lab_matrix_is_changed_scope_or_manual_only(self):
+        body = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        self.assertIn('strategy_lab: ${{ steps.paths.outputs.strategy_lab }}', body)
+        self.assertRegex(body, r'(?m)^      - name: Test Strategy Lab corrective matrix\n'
+                               r'        if: .*needs\.changes\.outputs\.strategy_lab ==')
+        self.assertIn('strategy_lab=false', body)
+        self.assertIn('scripts/test-strategy-lab-', body)
+
+    def test_stage0_audit_and_g03_do_not_double_trigger_every_pr(self):
+        archive = (ROOT / '.github/workflows/stage0-audit-closure.yml').read_text(
+            encoding='utf-8').split('permissions:', 1)[0]
+        for broad in ('      - Makefile', '      - docs/START_HERE.md',
+                      '      - docs/PROJECT_STATE.md', '      - docs/ROADMAP.md'):
+            self.assertNotIn(broad, archive)
+        g03 = (ROOT / '.github/workflows/g03-native-disposable-first-install.yml').read_text(
+            encoding='utf-8').split('permissions:', 1)[0]
+        self.assertIn('  pull_request:', g03)
+        self.assertNotIn('  push:', g03,
+                         'same branch must not produce duplicate push/PR preflight jobs')
+
     def test_watchdog_hourly_fallback_and_ci_event(self):
         body = (ROOT / '.github/workflows/pr-completion-watchdog.yml').read_text(encoding='utf-8')
         self.assertIn("cron: '7 * * * *'", body)
@@ -88,6 +137,8 @@ class BudgetContracts(unittest.TestCase):
         rules = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
         for identifier in range(66, 71):
             self.assertRegex(rules, rf'(?m)^GH-{identifier:03d}\. ')
+        self.assertIn('Четыре уровня S0–S3 не означают четырёх', rules)
+        self.assertIn('Центральная CI', rules)
         gate = (ROOT / '.github/workflows/pr-title.yml').read_text(encoding='utf-8')
         self.assertIn('python3 scripts/test-github-workflow-budget.py', gate)
 

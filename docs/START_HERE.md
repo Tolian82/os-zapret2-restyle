@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_6` · `VERSION=0.6.3` · `PLUGIN_REVISION=6` · `os-zapret2-restyle-0.6.3_6.pkg` (**G03 first upstream GUI setup SOURCE candidate, not published or owner-live qualified**).
+**Current handoff identity:** `v0.6.3_7` · `VERSION=0.6.3` · `PLUGIN_REVISION=7` · `os-zapret2-restyle-0.6.3_7.pkg` (**GitHub CI-budget governance SOURCE candidate, not built, published or owner-installed**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
@@ -14,11 +14,13 @@
 
 **Owner-approved requirements:** [ТЗ v1.1 «Восстановление полного жизненного цикла после чистой установки»](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md). This is the normative feature/task acceptance contract after owner feedback; it complements [native packaging ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md), not a new independent pkg, FD9 or IPFW subsystem.
 
-**GitHub CI workload policy ACTIVE:** PR #978 merged in main as `v0.6.3_4` (`58a060cb`), exact-head 4/4 PASS. Canonical GH-066–GH-070 protect against 19 unrelated Makefile-native VM triggers; validate the changed subsystem with targeted native gates. This source-only `_5` candidate adds one targeted G02 native VM workflow, not a broad history replay.
+**Current governance scope GH-066–GH-070:** earlier PR #978 (`v0.6.3_4`) removed broad revision-only triggers from standalone native workflows, but G03 PR #980 exposed an additional central `CI` package-flag fan-out and a long unrelated Strategy Lab matrix. `_7` strengthens the canonical GitHub rule and its executable budget gate, routes historical VM jobs by their actual changed inputs, and avoids CI-only source rebuilding. Existing full native package/release gates remain available for the appropriate scope.
 
 **G02 merged/source-native verified:** PR #979 (`v0.6.3_5`, merge `3c7e254d`), exact-head installed OPNsense 26.7 normal firmware uninstall/reinstall PASS; archive SHA-256 `e643771fbff7c6f639c2436c0201ed6a8492645c45827ddff65e9738ed2499b1`. G02 owner-live A18/A19 remains NOT TESTED until G11. No `_5.pkg` was published.
 
-**Exactly one current lifecycle task G03:** #970 — first GUI-selected upstream install `v1.0.7`, with no previous HEAD/release/binary. One existing configd → setup.lock → FD9 owner; isolated same-filesystem stage, preservation of the exact three stock OPNsense template files already rendered in the runtime directory, validation before publication and safe failure/interruption/retry; legacy old-runtime updates keep original rollback. SOURCE/INSTALLED-CI/OWNER-LIVE evidence is distinct; owner browser test remains pending. [G03 procedure](verification/G03_FIRST_UPSTREAM_SETUP.md).
+**G03 source and installed-native PASS, owner-browser OPEN:** PR #980 source `_6` merged as `1a120936` after exact-head 16 SUCCESS + 2 justified SKIPPED. [Native OPNsense 26.7 witness](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42517061350) installed real plugin package, selected and compiled upstream v1.0.7 through configd, confirmed ready/stopped and same-release reinstall with stock template and original FD9 preservation. No `_6.pkg` published and owner-browser A02–A04 remains for G11. [G03 procedure](verification/G03_FIRST_UPSTREAM_SETUP.md).
+
+**Current standalone governance task `_7`:** enforce selective GitHub Actions fan-out and update GH-066–GH-070; then resume lifecycle G04 (approved ten YouTube domains + TCP/QUIC) under the owner-approved G01–G11 plan. No runtime/FD9/IPFW production change in this governance scope.
 
 **Previous G02 scope:** [#971](https://github.com/Tolian82/os-zapret2-restyle/issues/971) — ordinary Firmware GUI uninstall must remove stale Services → Zapret links immediately, preserve user Config/engine/custom Lua/BIN and support same-archive reinstall. Stock OPNsense MenuSystem caches `opnsense_menu_cache.xml` for 3600 s; G02 fixes native plugin deregistration/cache invalidation through `pkg/+POST_DEINSTALL`, plus [G02 native receipt procedure](verification/G02_NORMAL_GUI_UNINSTALL.md). Actual installed/owner-live A18/A19 is PENDING.
 

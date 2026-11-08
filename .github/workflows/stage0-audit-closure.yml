@@ -3,16 +3,10 @@ name: Stage 0 audit closure evidence-only contract
 on:
   pull_request:
     paths:
-      - Makefile
-      - docs/START_HERE.md
-      - docs/PROJECT_STATE.md
-      - docs/ROADMAP.md
-      - docs/releases/v0.6.2.md
       - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
       - docs/verification/evidence/2026-11-02-v0.6.2_66-stage0-audit-closure.md
       - scripts/stage0-audit-closure.py
       - scripts/test-stage0-audit-closure.py
-      - .github/workflows/stage0-audit-closure.yml
   workflow_dispatch:
 
 permissions:
