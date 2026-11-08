@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_7` · `VERSION=0.6.3` · `PLUGIN_REVISION=7` · `os-zapret2-restyle-0.6.3_7.pkg` (**GitHub CI-budget governance SOURCE candidate, not built, published or owner-installed**).
+**Current handoff identity:** `v0.6.3_8` · `VERSION=0.6.3` · `PLUGIN_REVISION=8` · `os-zapret2-restyle-0.6.3_8.pkg` (**G04 first native Config save SOURCE candidate, not published or owner-installed**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
@@ -20,7 +20,7 @@
 
 **G03 source and installed-native PASS, owner-browser OPEN:** PR #980 source `_6` merged as `1a120936` after exact-head 16 SUCCESS + 2 justified SKIPPED. [Native OPNsense 26.7 witness](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42517061350) installed real plugin package, selected and compiled upstream v1.0.7 through configd, confirmed ready/stopped and same-release reinstall with stock template and original FD9 preservation. No `_6.pkg` published and owner-browser A02–A04 remains for G11. [G03 procedure](verification/G03_FIRST_UPSTREAM_SETUP.md).
 
-**Current standalone governance task `_7`:** enforce selective GitHub Actions fan-out and update GH-066–GH-070; then resume lifecycle G04 (approved ten YouTube domains + TCP/QUIC) under the owner-approved G01–G11 plan. No runtime/FD9/IPFW production change in this governance scope.
+**Current G04 `_8` task (owner-corrected):** do **not** implement on-read model defaults. Use official package `+POST_INSTALL` to save approved Traffic Strategy and YouTube Domains into the native `OPNsense.Zapret` subtree via the same `Zapret` model and `Config::save()` as a GUI edit, **only when that whole subtree is absent**. Existing, partially configured, or intentionally emptied Zapret settings are never touched or supplemented. Provide exact source/mock tests and one disposable OPNsense 26.7 native first-install + same physical archive reinstall test. Source/installed CI/owner-browser evidence remains distinct; no `_8.pkg` publication authorized.
 
 **Previous G02 scope:** [#971](https://github.com/Tolian82/os-zapret2-restyle/issues/971) — ordinary Firmware GUI uninstall must remove stale Services → Zapret links immediately, preserve user Config/engine/custom Lua/BIN and support same-archive reinstall. Stock OPNsense MenuSystem caches `opnsense_menu_cache.xml` for 3600 s; G02 fixes native plugin deregistration/cache invalidation through `pkg/+POST_DEINSTALL`, plus [G02 native receipt procedure](verification/G02_NORMAL_GUI_UNINSTALL.md). Actual installed/owner-live A18/A19 is PENDING.
 

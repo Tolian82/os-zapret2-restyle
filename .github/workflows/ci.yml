@@ -891,6 +891,7 @@ jobs:
           php scripts/test-shared-apply-request.php
           php scripts/test-shared-apply-envelope.php
           php scripts/test-shared-apply-config.php
+          php scripts/test-g04-initial-config.php
           php scripts/test-voice-candidate-xml.php
           php scripts/test-voice-draft-selection.php
           PHP_CHECKS
