@@ -51,7 +51,10 @@ require(".github/workflows/ci.yml", 'copyback: true')
 require(".github/workflows/ci.yml", 'ZAPRET2_NATIVE_BUILD_CI=1')
 require(".github/workflows/ci.yml", 'scripts/test-freebsd15-package-ci')
 require(".github/workflows/release.yml", 'name: Build package and pkg repository inside qualified OPNsense 26.7')
-require(".github/workflows/release.yml", "native-product-installed-acceptance.json")
+require(".github/workflows/release.yml", 'name: Require release notes for exact semantic tag')
+require(".github/workflows/release.yml", 'body_path: docs/releases/${{ github.ref_name }}.md')
+if "native-product-installed-acceptance.json" in text(".github/workflows/release.yml"):
+    fail("retired false-only acceptance JSON gate remains in release workflow")
 require(".github/workflows/release.yml", 'sh scripts/verify-release-package.sh')
 for workflow in (".github/workflows/publish-prerelease.yml",
                  ".github/workflows/testing-package-delivery-ci.yml"):

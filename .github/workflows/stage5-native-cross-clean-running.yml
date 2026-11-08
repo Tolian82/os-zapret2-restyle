@@ -121,7 +121,7 @@ jobs:
         with:
           name: stage5-single-archive-transfer-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            dist/os-zapret2-restyle-0.6.2_*.pkg
+            dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
           if-no-files-found: error
           retention-days: 1
@@ -175,7 +175,7 @@ jobs:
         with:
           name: stage5-one-archive-two-installed-modes-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            dist/os-zapret2-restyle-0.6.2_*.pkg
+            dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
             dist/stage5-native-running-voice-artifact.json
           if-no-files-found: error
@@ -277,7 +277,7 @@ jobs:
         with:
           name: stage5-one-archive-three-guests-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            dist/os-zapret2-restyle-0.6.2_*.pkg
+            dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
             dist/stage5-native-running-voice-artifact.json
             dist/stage5-native-same-archive-reboot.json
@@ -322,7 +322,7 @@ jobs:
               echo 'ERROR: guest D already has git: missing-dependency scenario not exercised' >&2
               exit 1
             fi
-            set -- dist/os-zapret2-restyle-0.6.2_*.pkg
+            set -- dist/os-zapret2-restyle-*.pkg
             [ "$#" -eq 1 ] && [ -f "$1" ] || { echo 'ERROR: exactly one original guest A .pkg required' >&2; exit 1; }
             package="$1"
             before=$(sha256 -q "$package")
@@ -332,7 +332,8 @@ jobs:
             # through the CI-only local path. No preinstalled git or manual
             # package bootstrap: the installer itself resolves all dependencies.
             expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
-            sed -e "s/@PACKAGE_VERSION@/0.6.2_${expected}/" \
+            version=$(tr -d '[:space:]' < VERSION)
+            sed -e "s/@PACKAGE_VERSION@/${version}_${expected}/" \
                 -e "s/@PACKAGE_SHA256@/${before}/" \
                 scripts/install-testing-package.sh.in > /tmp/zapret2-testing-installer.sh
             sh -n /tmp/zapret2-testing-installer.sh
@@ -346,7 +347,7 @@ jobs:
               exit 1
             }
             expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
-            [ "$(pkg query '%v' os-zapret2-restyle)" = "0.6.2_${expected}" ] || {
+            [ "$(pkg query '%v' os-zapret2-restyle)" = "${version}_${expected}" ] || {
               echo 'ERROR: local native package version was not installed' >&2
               exit 1
             }

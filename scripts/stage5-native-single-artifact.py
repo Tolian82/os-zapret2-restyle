@@ -16,12 +16,13 @@ import subprocess
 import sys
 import tempfile
 
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 
 ROOT = Path(__file__).resolve().parent.parent
 HERE = Path(__file__).resolve().parent
 REVISION = revision_from_makefile()
-IDENTITY = "os-zapret2-restyle-0.6.2_" + REVISION
+PACKAGE_VERSION = version_from_file() + "_" + REVISION
+IDENTITY = "os-zapret2-restyle-" + PACKAGE_VERSION
 ARCHIVE = ROOT / "dist" / (IDENTITY + ".pkg")
 RECEIPT = ROOT / "dist" / "stage5-native-single-artifact.json"
 SERVICES_ONLY = "PASS_STAGE5_ONE_NATIVE_PACKAGE_CLEAN_INSTALL_SHA_BOUND"
@@ -108,7 +109,7 @@ def check_record(record, package, source_sha, *, manifest=True):
         obj, manifest_sha = read_manifest(package)
         need(manifest_sha == record["manifest_sha256"] and
              obj.get("name") == "os-zapret2-restyle" and
-             obj.get("version") == "0.6.2_" + REVISION and
+             obj.get("version") == PACKAGE_VERSION and
              obj.get("abi") == "FreeBSD:15:amd64" and
              isinstance(obj.get("files"), dict) and
              len(obj["files"]) == record["checked_file_count"] and

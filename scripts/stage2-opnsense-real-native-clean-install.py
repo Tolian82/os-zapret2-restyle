@@ -10,7 +10,7 @@ import fcntl
 import importlib.util
 import json
 import os
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 import copy
 import re
 from pathlib import Path
@@ -22,7 +22,7 @@ import xml.etree.ElementTree as ET
 HERE = Path(__file__).resolve().parent
 NAME = "os-zapret2-restyle"
 REVISION = revision_from_makefile()
-VERSION = "0.6.2_" + REVISION
+VERSION = version_from_file() + "_" + REVISION
 OPTIN = "ZAPRET2_STAGE2_REAL_CLEAN_INSTALL"
 PRESERVED = ("/var/run/zapret2-restyle/pkg-upgrade.restart",
              "/var/run/zapret2-restyle/pkg-replacement.restart",
