@@ -39,17 +39,15 @@ jobs:
       - name: Install validation tools
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      - name: Require independently accepted installed native product package before full release
+      - name: Require release notes for exact semantic tag
         shell: bash
         run: |
           set -euo pipefail
-          # Stage 2 builds are source-only until LH-01–07 installed successor
-          # and Stage 3 Python/runtime migration are actually accepted.
-          test -f docs/verification/evidence/native-product-installed-acceptance.json || {
-            echo "REFUSED: native production package not accepted on installed target; no release or Pages publish" >&2
+          test -s "docs/releases/${GITHUB_REF_NAME}.md" || {
+            echo "REFUSED: missing release documentation for ${GITHUB_REF_NAME}" >&2
             exit 1
           }
-          jq -e '.stage0_closed == true and .stage1_admitted == true and .publication_approved == true' docs/verification/evidence/native-product-installed-acceptance.json >/dev/null
+          grep -Fq "os-zapret2-restyle ${GITHUB_REF_NAME}" "docs/releases/${GITHUB_REF_NAME}.md"
 
       - name: Validate project files
         shell: bash
@@ -164,6 +162,7 @@ jobs:
     needs: build
 
     steps:
+      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v8
         with:
           name: release-build
@@ -177,6 +176,7 @@ jobs:
             release-build/SHA256SUMS
           draft: false
           prerelease: false
+          body_path: docs/releases/${{ github.ref_name }}.md
           generate_release_notes: true
 
   deploy-pages:

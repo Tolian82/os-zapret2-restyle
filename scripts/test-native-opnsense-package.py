@@ -183,12 +183,37 @@ class NativeBuilderTests(unittest.TestCase):
 
     def test_native_build_does_not_claim_install_or_release(self):
         source = (HERE / "native-opnsense-package.py").read_text()
+        for binding in ("private.old.VERSION = VERSION",
+                        "private.old.REVISION = REVISION",
+                        "provider.mk.VERSION = VERSION",
+                        "provider.mk.REVISION = REVISION"):
+            self.assertIn(binding, source)
         for snippet in ('"actual_product_pkg_installed": False',
                         '"publication_approved": False',
                         '"stage0_closed": False', '"stage1_admitted": False'):
             self.assertIn(snippet, source)
-        self.assertIn("native-product-installed-acceptance.json",
-                      (HERE.parent / ".github/workflows/release.yml").read_text())
+        release_workflow = (HERE.parent / ".github/workflows/release.yml").read_text()
+        self.assertNotIn("native-product-installed-acceptance.json", release_workflow)
+        self.assertIn("Require release notes for exact semantic tag", release_workflow)
+
+    def test_release_install_witnesses_follow_single_product_version(self):
+        assertions = {
+            "stage2-opnsense-real-native-clean-install.py":
+                'VERSION = version_from_file() + "_" + REVISION',
+            "stage5-native-single-artifact.py":
+                'PACKAGE_VERSION = version_from_file() + "_" + REVISION',
+            "stage5-native-running-voice-artifact.py":
+                'PACKAGE_VERSION = version_from_file() + "_" + REVISION',
+            "stage2-packaged-configctl-readonly.py":
+                "VERSION = version_from_file() + '_' + revision_from_makefile()",
+            "stage2-opnsense-real-native-force-reinstall.py":
+                'manifest["version"] == native.VERSION + "_" + REVISION',
+            "stage2-opnsense-real-locked-unsafe-owner.py":
+                '"successor": NAME + "-" + native.VERSION + "_" + REVISION',
+        }
+        for filename, contract in assertions.items():
+            with self.subTest(filename=filename):
+                self.assertIn(contract, (HERE / filename).read_text())
 
     def test_old_manual_builder_removed_completely(self):
         wrapper = (HERE / "build-pkg.sh").read_text()

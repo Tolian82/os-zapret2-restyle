@@ -117,7 +117,7 @@ jobs:
         with:
           name: stage5-native-running-voice-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
-            dist/os-zapret2-restyle-0.6.2_*.pkg
+            dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-running-voice-artifact.json
           if-no-files-found: error
           retention-days: 7

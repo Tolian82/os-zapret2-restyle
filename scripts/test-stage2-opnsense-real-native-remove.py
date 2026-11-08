@@ -24,8 +24,7 @@ def xml(plugin_names="os-zapret2-restyle,other", saved="<Zapret><enabled>0</enab
 
 class RealNativeFirmwareRemovalTests(unittest.TestCase):
     def test_current_revision_comes_from_makefile(self):
-        self.assertEqual(mod.VERSION, "0.6.2_" +
-                         mod.revision_from_makefile())
+        self.assertEqual(mod.VERSION, mod.clean.VERSION)
 
     def test_optin_refuses_before_any_pkg_or_config(self):
         with patch.dict(mod.os.environ, {mod.OPTIN: "",

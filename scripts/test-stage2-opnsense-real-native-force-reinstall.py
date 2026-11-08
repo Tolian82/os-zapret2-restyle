@@ -15,6 +15,12 @@ spec.loader.exec_module(m)
 
 
 class RealForceReinstallTest(unittest.TestCase):
+    def test_same_revision_follows_current_root_version(self):
+        source = SOURCE.read_text()
+        self.assertIn('manifest["version"] == native.VERSION + "_" + REVISION', source)
+        self.assertIn('clean.NAME + "-" + manifest["version"]', source)
+        self.assertNotIn('"0.6.2_" + REVISION', source)
+
     def test_revision(self):
         self.assertEqual(m.REVISION, revision_from_makefile())
 

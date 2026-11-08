@@ -93,7 +93,7 @@ def execute():
          "NATIVE_ARCHIVE_BEFORE_FIRST_INSTALL_UNQUALIFIED")
     first = clean.pkg_add(path)
     manifest, installed = clean.installed_pkg_manifest(path)
-    need(manifest["version"] == "0.6.2_" + REVISION,
+    need(manifest["version"] == native.VERSION + "_" + REVISION,
          "FIRST_INSTALLED_NATIVE_PACKAGE_VERSION_MISMATCH")
     first_files = clean.verify_installed_files(path, manifest)
     need(first_files["exact_installed_package_file_count"] ==
@@ -119,7 +119,7 @@ def execute():
         xml_after_first, Path("/conf/config.xml").read_bytes())
     return {"schema": 1, "status": "PASS_REAL_NATIVE_STOPPED_SAME_VERSION_FORCE_REINSTALL",
             "tested_exact_project_sha": package["project_sha"],
-            "same_pkg_version_both_sides": clean.NAME + "-0.6.2_" + REVISION,
+            "same_pkg_version_both_sides": clean.NAME + "-" + manifest["version"],
             "source_native_archive_sha256": sha,
             "actual_first_pkg": first,
             "actual_force_same_pkg": second,

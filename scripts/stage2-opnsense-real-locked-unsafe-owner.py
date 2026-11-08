@@ -149,7 +149,7 @@ def execute(archive):
     return {
         "schema": 1, "status": "PASS_REAL_LOCKED_OLD_PACKAGE_NEGATIVE_ONLY",
         "verdict": verdict, "old_package": NAME + "-0.6.2_1",
-        "successor": NAME + "-0.6.2_" + REVISION,
+        "successor": NAME + "-" + native.VERSION + "_" + REVISION,
         "old_archive_sha256": old.ARCHIVE_SHA,
         "native_successor_sha256": successor_sha,
         "real_pkg_exit": pkg_rc, "old_status_with_orphan": 2,

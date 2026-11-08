@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
@@ -19,7 +19,7 @@ spec.loader.exec_module(mod)
 class RealInstallContracts(unittest.TestCase):
     def test_bound_to_real_source_revision(self):
         self.assertEqual(mod.REVISION, revision_from_makefile())
-        self.assertEqual(mod.VERSION, "0.6.2_" + revision_from_makefile())
+        self.assertEqual(mod.VERSION, version_from_file() + "_" + revision_from_makefile())
         self.assertEqual(mod.native.REVISION, revision_from_makefile())
 
     def test_explicit_cold_install_optin_required(self):

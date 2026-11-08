@@ -67,7 +67,7 @@ jobs:
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
           version=$(tr -d '\r\n' < VERSION)
           revision=$(sed -nE 's/^PLUGIN_REVISION=[[:space:]]*([0-9]+)[[:space:]]*$/\1/p' Makefile)
-          test "$version" = 0.6.2
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$revision" =~ ^[1-9][0-9]*$ ]]
           test -f "dist/os-zapret2-restyle-${version}_${revision}.pkg"
           sha256sum "dist/os-zapret2-restyle-${version}_${revision}.pkg"

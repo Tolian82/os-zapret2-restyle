@@ -25,18 +25,10 @@ def read(root,p):
 
 def verify(root):
     e=read(root,RECORD)
-    make=read(root,Path("Makefile"))
-    start=read(root,Path("docs/START_HERE.md"))
-    state=read(root,Path("docs/PROJECT_STATE.md"))
+    # Historical Stage-0 audit is immutable evidence for the old v0.6.2_66
+    # milestone, not an approval oracle for the current VERSION/PLUGIN_REVISION.
+    # Current identity is validated separately by test-current-handoff-identity.py.
     plan=read(root,Path("docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"))
-    rev = re.search(r"(?m)^PLUGIN_REVISION=\s*(\d+)\s*$", make)
-    need(read(root,Path("VERSION")).strip()=="0.6.2" and
-         rev is not None and int(rev.group(1)) >= 66,"WRONG_VERSION")
-    candidate = "v0.6.2_" + rev.group(1)
-    need("**Current handoff identity:** `" + candidate + "`." in start and
-         "`PLUGIN_REVISION=" + rev.group(1) + "`" in start,"WRONG_HANDOFF")
-    need("Текущий этап — **`" + candidate + "`**" in state and
-         "package candidate: `os-zapret2-restyle-0.6.2_" + rev.group(1) + ".pkg`" in state,"WRONG_STATE")
     need("**Stage 0 audit status: CLOSED**" in plan and
          ("Stage 1 READY FOR IMPLEMENTATION" in plan or
           "Stage 1 IN PROGRESS" in plan or

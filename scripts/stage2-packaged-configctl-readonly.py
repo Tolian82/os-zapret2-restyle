@@ -13,13 +13,13 @@ import re
 import stat
 import subprocess
 import sys
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTION_REL = 'opnsense/service/conf/actions.d/actions_zapret.conf'
 SERVICE_REL = 'opnsense/scripts/OPNsense/Zapret/zapret_service.sh'
 PACKAGE = 'os-zapret2-restyle'
-VERSION = '0.6.2_' + revision_from_makefile()
+VERSION = version_from_file() + '_' + revision_from_makefile()
 MARKERS = ('/var/run/zapret2-restyle/pkg-upgrade.restart',
            '/var/run/zapret2-restyle/pkg-replacement.restart')
 

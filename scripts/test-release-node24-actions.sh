@@ -11,8 +11,10 @@ fail()
     exit 1
 }
 
-[ "$(grep -c 'actions/checkout@v6' "${RELEASE_WORKFLOW}")" -eq 2 ] ||
-    fail "release workflow does not use checkout v6 in both jobs"
+[ "$(grep -c 'actions/checkout@v6' "${RELEASE_WORKFLOW}")" -eq 3 ] ||
+    fail "release workflow must check out source in validate, build and publish-release jobs"
+grep -Fq 'body_path: docs/releases/${{ github.ref_name }}.md' "${RELEASE_WORKFLOW}" ||
+    fail "release publisher must use the exact semantic-tag release notes"
 grep -q 'actions/checkout@v6' "${TRIGGER_WORKFLOW}" ||
     fail "release trigger does not use checkout v6"
 grep -q 'actions/upload-artifact@v7' "${RELEASE_WORKFLOW}" ||

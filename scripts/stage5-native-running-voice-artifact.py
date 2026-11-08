@@ -14,12 +14,13 @@ import stat
 import sys
 import tempfile
 
-from stage2_source_revision import revision_from_makefile
+from stage2_source_revision import revision_from_makefile, version_from_file
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 REVISION = revision_from_makefile()
-IDENTITY = "os-zapret2-restyle-0.6.2_" + REVISION
+PACKAGE_VERSION = version_from_file() + "_" + REVISION
+IDENTITY = "os-zapret2-restyle-" + PACKAGE_VERSION
 PACKAGE = ROOT / "dist" / (IDENTITY + ".pkg")
 RECEIPT = ROOT / "dist" / "stage5-native-running-voice-artifact.json"
 STATUS = "PASS_ONE_NATIVE_ARCHIVE_RUNNING_UPGRADE_SHARED_VOICE_HTTPS"
@@ -134,7 +135,7 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
         manifest, manhash = standard.read_manifest(path)
         need(manhash == data["manifest_sha256"] and
              manifest.get("name") == "os-zapret2-restyle" and
-             manifest.get("version") == "0.6.2_" + REVISION and
+             manifest.get("version") == PACKAGE_VERSION and
              manifest.get("abi") == data["abi"] and
              isinstance(manifest.get("files"), dict) and
              len(manifest["files"]) == data["installed_file_count"] and

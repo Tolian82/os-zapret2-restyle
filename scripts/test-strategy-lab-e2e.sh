@@ -438,11 +438,12 @@ run_job()
         actual_outcome=$(printf '%s\n' "${result}" | jq -r '.outcome // "<missing>"')
         actual_stage=$(printf '%s\n' "${result}" | jq -r '.current_stage // "<missing>"')
         printf '%s\n' "${result}" >&2
-        # Read-only mock-harness diagnostic: never classify an unverified
-        # restore as ERROR or SUCCESS. Stage 5 was intermittently returning
-        # RESTORE_FAILED for internal_error, so preserve the exact job trail.
-        if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ] &&
-           [ "${scenario}" = internal_error ]; then
+        # Read-only diagnostics for unexpected terminal results in the
+        # private mock harness, including timeout and internal_error.
+        # Never classify an unverified restore as ERROR or SUCCESS.
+        if [ "${ZAPRET2_STAGE5_INSTALLED_FUNCTIONS:-0}" = 1 ]; then
+            printf 'LAB_MOCK_SCENARIO=%s JOB=%s\n' "${scenario}" "${job}" >&2
+            printf 'LAB_MOCK_PID=%s\n' "$(cat "${RUN_DIR}/jobs/${job}/worker.pid" 2>/dev/null || echo unknown)" >&2
             printf 'LAB_MOCK_INTERNAL_ERROR_STATE=%s RESTORE_MARKER=%s\n' \
                 "$(cat "${STATE_FILE}" 2>/dev/null || echo unknown)" \
                 "$([ ! -e "${RESTORED_FILE}" ] || echo present)"

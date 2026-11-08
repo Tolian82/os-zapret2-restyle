@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 The project starts its own version history at `0.1.0`.
 
+## [v0.6.3] — OPNsense native Web/pkg release, 2026-11-08
+
+- Complete native official-Mk OPNsense 26.7/FreeBSD 15 amd64 package lifecycle with stock pkg dependency provisioning, actual clean/RUNNING/Voice/HTTPS/reboot scenarios, same-physical-archive CI receipts and scoped FD9/IPFW.
+- Fix WAN↔LAN interface selection and Strategy Lab Stage-85 shell-adapter readability preflight. Owner-installed testing `v0.6.2_188` verified Standard/Extended Stage99 shortlist and RUNNING→RUNNING restoration.
+- Protect product version via the sole root `VERSION` and changed production files via CI compatibility scans. Retire the old `native-product-installed-acceptance.json` boolean release gate, while preserving strict native/restore checks and release documentation.
+- Web/pkg publication: immutable `v0.6.3` tag, `os-zapret2-restyle-0.6.3_1.pkg`, SHA256SUMS and Pages `FreeBSD:15:amd64` must be checked against the actual release workflow; no historical test-archive digest is substituted.
+- Limitations: actual blocked-ISP DPI bypass, owner IPv6 WAN, Voice media, sudden power loss and unexecuted physical Web upgrade flows are not claimed; intermittent Guest B #954 is tracked independently.
+
 ## [v0.6.2] — full stable Web/pkg release, 2026-10-31
 
 - Add IPv4/IPv6 managed IPSET targets, one global **Exclude IPSet** applied across ordinary and Voice profiles, domain-only **Exclude Domains**, CIDR canonicalization, and universal `/0`/full-family rejection in user IP lists.

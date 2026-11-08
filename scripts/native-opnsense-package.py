@@ -46,9 +46,12 @@ private = load_module("stage2-opnsense-native-private-source.py", "signed_privat
 provider = load_module("stage2-opnsense-native-provider-preflight.py",
                        "native_provider")
 compat = load_module("validate-compatibility.py", "single_compatibility_policy")
-# These helpers have immutable earlier witness revision defaults. Reuse only
-# source/ELF/guest verification primitives, NOT their old manifest verdicts.
+# Historical Stage 0/2 witness modules retain old version/revision fixtures.
+# The production builder must bind BOTH project identity components from the
+# canonical root VERSION and Makefile before reusing their strict primitives.
+private.old.VERSION = VERSION
 private.old.REVISION = REVISION
+provider.mk.VERSION = VERSION
 provider.mk.REVISION = REVISION
 
 

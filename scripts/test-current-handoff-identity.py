@@ -15,16 +15,20 @@ package = f"os-zapret2-restyle-{version}_{revision}.pkg"
 q = chr(96)
 expect = {
     "docs/START_HERE.md": [
-        f"**Current handoff identity:** {q}{candidate}{q}.",
+        f"**Current handoff identity:** {q}{candidate}{q}",
+        f"{q}VERSION={version}{q}",
         f"{q}PLUGIN_REVISION={revision}{q}",
+        f"{q}{package}{q}",
     ],
     "docs/PROJECT_STATE.md": [
         f"Текущий этап — **{q}{candidate}{q}**",
+        f"{q}VERSION={version}{q}",
         f"{q}PLUGIN_REVISION={revision}{q}",
-        f"package candidate: {q}{package}{q}",
+        f"{q}{package}{q}",
     ],
     f"docs/releases/v{version}.md": [
-        f"{q}PLUGIN_REVISION={revision}{q}, candidate {q}{candidate}{q}",
+        f"{q}VERSION={version}{q}",
+        f"{q}PLUGIN_REVISION={revision}{q}",
         f"{q}{package}{q}",
     ],
 }
