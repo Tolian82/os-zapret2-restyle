@@ -53,6 +53,10 @@ class BudgetContracts(unittest.TestCase):
                 continue
             self.assertNotRegex(content, r'(?m)^      - Makefile\s*$',
                                 f'{path.name}: broad VM triggered by every revision')
+            for trigger in ('.github/workflows/ci.yml',
+                            '.github/workflows/release.yml'):
+                self.assertNotRegex(content, rf'(?m)^      - {re.escape(trigger)}\s*$',
+                                    f'{path.name}: CI-only YAML triggered native VM')
 
     def test_all_19_expensive_migrated_workflows_have_pr_safe_concurrency(self):
         self.assertEqual(len(MIGRATED_NATIVE), len(set(MIGRATED_NATIVE)))
