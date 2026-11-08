@@ -2,7 +2,6 @@ name: Stage 2 actual old FD9 held across authentic native pkg
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-held-fd9-pkg.py
       - scripts/test-stage2-opnsense-real-held-fd9-pkg.py
@@ -11,13 +10,16 @@ on:
       - scripts/stage2-opnsense-real-unsafe-owner-replacement.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-native-clean-install.py
-      - .github/workflows/stage2-real-held-fd9-native-pkg.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Validate fast contracts without a disposable native VM
         type: boolean
         default: false
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

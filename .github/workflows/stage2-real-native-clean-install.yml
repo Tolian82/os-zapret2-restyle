@@ -3,7 +3,6 @@ name: Stage 2 real clean install of authentic native OPNsense package
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/test-stage2-opnsense-real-native-clean-install.py
@@ -13,8 +12,11 @@ on:
       - scripts/test-stage2-opnsense-real-native-cold-service.py
       - scripts/stage2-packaged-configctl-readonly.py
       - scripts/test-stage2-packaged-configctl-readonly.py
-      - .github/workflows/stage2-real-native-clean-install.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

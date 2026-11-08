@@ -3,26 +3,26 @@ name: Stage 5 real Chromium WAN lower Apply persistence on native OPNsense
 on:
   pull_request:
     paths:
-      - Makefile
       - VERSION
       - scripts/stage5-browser-wan.py
       - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
       - src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml
-      - .github/workflows/stage5-native-browser-wan.yml
   push:
     branches: [main]
     paths:
-      - Makefile
       - VERSION
       - scripts/stage5-browser-wan.py
       - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
       - src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml
-      - .github/workflows/stage5-native-browser-wan.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

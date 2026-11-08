@@ -1,10 +1,10 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_3` · `VERSION=0.6.3` · `PLUGIN_REVISION=3` · `os-zapret2-restyle-0.6.3_3.pkg` (**not built or published; G01 code/test candidate**).
+**Current handoff identity:** `v0.6.3_4` · `VERSION=0.6.3` · `PLUGIN_REVISION=4` · `os-zapret2-restyle-0.6.3_4.pkg` (**dependent governance/CI candidate; neither merged nor packaged**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
-**Exact baseline:** v0.6.3_1 is the immutable published OPNsense release. Owner-approved lifecycle ТЗ v1.1 and staged plan G01–G11 were integrated as documentation-only `v0.6.3_2`, [PR #974](https://github.com/Tolian82/os-zapret2-restyle/pull/974) (23/23 exact-head checks passed, merged source `d0457282219eae310aa4142864ceb9c998c3cff8`). **Working G01 source branch** `feat/g01-standalone-full-purge` proposes `v0.6.3_3`, not yet merged, installed, or released. Never infer package publication from a source revision.
+**Exact baseline:** v0.6.3_1 is the immutable published OPNsense release. Owner-approved lifecycle ТЗ v1.1 and staged plan G01–G11 were integrated as documentation-only `v0.6.3_2`, [PR #974](https://github.com/Tolian82/os-zapret2-restyle/pull/974) (23/23 exact-head checks passed, merged source `d0457282219eae310aa4142864ceb9c998c3cff8`). **G01 source merged:** PR #975 exact-head `eed25bb5`, native installed PASS, merge `b247b725`; no `_3.pkg` was published, owner-live not tested. Never infer package publication from a source revision.
 
 **Owner-live newly established blockers (8 November 2026):**
 - [#970](https://github.com/Tolian82/os-zapret2-restyle/issues/970): fresh GUI package install cannot install upstream; `general.volt` silently refuses the upper Apply at `installed=0`, and `setup_transaction.sh` assumes a previous runtime.
@@ -14,7 +14,9 @@
 
 **Owner-approved requirements:** [ТЗ v1.1 «Восстановление полного жизненного цикла после чистой установки»](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md). This is the normative feature/task acceptance contract after owner feedback; it complements [native packaging ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md), not a new independent pkg, FD9 or IPFW subsystem.
 
-**Exactly one current engineering task (G01):** finish and natively qualify [standalone full purge script](../scripts/purge-os-zapret2-restyle.sh) on **disposable OPNsense only**. Source candidate handles dry-run, private backup, exact confirmation, native pkg+firmware removal, Config API lock, service/FD9/IPFW ownership, exact trees and orphan cleanup. Fast non-destructive tests are available; exact source-native disposable package/install/purge verification is still required, including running/foreign IPFW and GUI menu behavior. Do not advance to G02 or instruct owner to purge a live router until G01 gate is genuinely accepted.
+**GitHub resource policy being qualified:** owner issue #976 introduces GH-066–GH-070, stale native-PR cancellation and hourly watchdog in source-only `_4`. G01 source is now merged. Next lifecycle stage after CI governance is G02 (#971), ordinary GUI uninstall.
+
+**Next lifecycle task G02:** ordinary Firmware GUI uninstall removes stale Services → Zapret menu without deleting saved Config/upstream/custom resources. G01 source-native [CI PASS #42505329364](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364); owner-live GUI NOT TESTED.
 
 **Approved clean defaults and actual evidence boundary:** exactly ten ordered YouTube domains (`youtube.com`, `googlevideo.com`, `yt.be`, `youtu.be`, `ytimg.com`, `youtubei.googleapis.com`, `youtube.googleapis.com`, `youtube-nocookie.com`, `ggpht.com`, `ssl.gstatic.com`) and an exact TCP HTTP/TLS + UDP QUIC strategy with one `--new`, defined verbatim in [ТЗ v1.1](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md#4-стартовые-значения-полей-после-истинно-чистой-установки). Native upstream provides `http_iana_org.bin` and built-in `fake_default_quic`; prior `tls7.bin` blocker **superseded**. Real installed-native defaults parser/dvtws2/Apply is **NOT TESTED**. Upstream `no_action` exists but actual FreeBSD empty-profile Start is unverified. Localized RU/EN GUI status and diagnostics, WAN-only Save, Voice-only, Lab before first Start, normal uninstall and menu invalidation remain implementation work. The sole ordered implementation source is the [stage-gated plan G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
 

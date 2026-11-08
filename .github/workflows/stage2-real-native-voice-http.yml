@@ -3,18 +3,20 @@ name: Stage 2 authenticated native Voice HTTP API and shared Apply
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-active-service.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage2-opnsense-real-native-voice-http.py
-      - .github/workflows/stage2-real-native-voice-http.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Run only portable safety contracts
         type: boolean
         default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

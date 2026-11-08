@@ -3,7 +3,6 @@ name: Stage 2 genuine RUNNING old owner to official native OPNsense successor
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
@@ -13,13 +12,16 @@ on:
       - scripts/test-stage2-opnsense-real-native-active-service.py
       - scripts/stage2-opnsense-real-native-active-configctl.py
       - scripts/test-stage2-opnsense-real-native-active-configctl.py
-      - .github/workflows/stage2-real-native-running-upgrade.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Run only the fast negative source contracts
         type: boolean
         default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

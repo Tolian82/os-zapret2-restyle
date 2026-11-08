@@ -29,3 +29,5 @@ jobs:
         run: |
           set -euo pipefail
           bash scripts/verify-pr-revisions.sh "$BASE_SHA" "$HEAD_SHA" "$PR_TITLE"
+      - name: Enforce native Actions workload budget and non-cancelling release safeguards
+        run: python3 scripts/test-github-workflow-budget.py

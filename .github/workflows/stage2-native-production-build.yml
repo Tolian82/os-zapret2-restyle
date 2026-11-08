@@ -3,7 +3,6 @@ name: Stage 2 genuine OPNsense Mk production builder (source-only acceptance)
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/build-pkg.sh
       - scripts/native-opnsense-package.py
       - scripts/build-curl-impersonate.sh
@@ -13,10 +12,13 @@ on:
       - scripts/compatibility-bootstrap.sh
       - scripts/test-native-opnsense-package.py
       - scripts/test_freebsd15_package_ci.py
-      - .github/workflows/stage2-native-production-build.yml
       - .github/workflows/ci.yml
       - .github/workflows/release.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

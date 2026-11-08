@@ -3,11 +3,13 @@ name: Stage 2 configd watcher-worker read-only identity
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/stage2-configd-worker-readonly.py
       - scripts/test-stage2-configd-worker-readonly.py
-      - .github/workflows/stage2-configd-worker-readonly.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

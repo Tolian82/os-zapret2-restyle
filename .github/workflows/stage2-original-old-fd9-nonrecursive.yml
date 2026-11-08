@@ -2,16 +2,18 @@ name: Stage 2 historical service Status under original FD9
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/stage2-opnsense-real-old-fd9-nonrecursive.py
       - scripts/test-stage2-opnsense-real-old-fd9-nonrecursive.py
-      - .github/workflows/stage2-original-old-fd9-nonrecursive.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Run offline checks only
         type: boolean
         default: false
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

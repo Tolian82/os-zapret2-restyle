@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-03
+**Updated:** 2026-11-08
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -18,6 +18,7 @@ Read this file completely before GitHub mutation.
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
 - validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
+- strict Actions resource budget and workflow throttling: `GH-066`–`GH-070`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
 - issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
@@ -79,6 +80,18 @@ GH-022. **Never report a skipped or unrun job as PASS.** A legitimately path-ski
 GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI-infrastructure changes run required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
 
 GH-062. **Быстрые локальные проверки — обязательный входной контроль ДО открытия PR и запуска длинной CI-матрицы.** Перед публикацией ветки/открытием PR с изменённым кодом, тестами или конфигурацией разработчик **самостоятельно выполняет на точных подготовленных файлах** доступные быстрые проверки синтаксиса и форматирования, целевые unit/contract/regression-тесты для изменённого поведения и **запускает каждый новый или изменённый тест**, а не только проверяет его текст. Проверяются также относящиеся к изменению версия/ревизия, заголовок PR и элементарные ошибки тестовых фикстур, регулярных выражений, shell, PHP, Python и JavaScript. **Любой провал блокирует открытие PR и долгую CI:** сначала исправить ошибку локально в том же scope, повторить быстрый тест до успеха, и лишь затем запускать полную требуемую матрицу. При каждом последующем изменении head те же затронутые быстрые проверки повторяются **до отправки изменений**. Для docs-only и изменений правил выполняются локальные проверки ссылок, идентификаторов правил, реестров перекрёстных ссылок и целостности документации; это не требует запускать продуктовую матрицу, если она не относится к изменению. Если конкретный тест технически невозможно выполнить локально (например, требуется FreeBSD 15), явно зафиксировать причину и выполнить максимально узкую доступную отдельную проверку до длинной матрицы; **не объявлять невыполненную проверку успешной**. Перечень действительно выполненных команд и их результаты отражаются в PR. Длинная CI остаётся обязательной по сфере изменения, но не служит средством обнаружения простых ошибок, которые можно найти до PR.
+
+## Mandatory CI resource budget and GitHub queue protection
+
+GH-066. **Один логический кандидат PR — один подготовленный push, а не push на каждый файл или исправление.** До публикации нового head выполнить все доступные быстрые синтаксические/юнит/контрактные проверки на *итоговых* файлах, собрать относящиеся к одной причине изменения в единый проверенный коммит, проверить реальную identity/revision/документацию. Нельзя использовать долгую GitHub CI для выявления локально проверяемых опечаток. Пока предыдущий exact-head находится в очереди или выполняется, запрещено создавать новый head исключительно для повторного запуска очереди. Подтверждённая существенная ошибка безопасности допускает новую проверенную ревизию с конкретно зафиксированной причиной и судьбой устаревших запусков.
+
+GH-067. **Изменение только `PLUGIN_REVISION` в `Makefile` НЕ является основанием для запуска дорогостоящих FreeBSD/OPNsense VM-workflows.** Обязательное увеличение ревизии сохраняется. Центральная CI обязана нормализовать *только* поле PLUGIN_REVISION и отличать его от реальных изменений сборщика, зависимостей, ABI, plist, hooks, конфигурации упаковки и production-кода. Настоящее семантическое изменение сборки требует соответствующего native package test; но запрещено включать общий `- Makefile` в path filters нескольких тяжёлых workflow ради простого _N+1. Обязательная нативная приёмка затронутого функционала и полного релиза сохраняется. Изменение только YAML-файла дорогостоящего workflow проверяется быстрой source-policy проверкой; собственный путь `.github/workflows/<имя>.yml` не должен автоматически запускать эту VM. Для проверки самого runner/workflow использовать осмысленный `workflow_dispatch` и зафиксировать результат до релиза.
+
+GH-068. **Дублирующие проверки устаревших PR head должны автоматически прекращаться.** Каждый новый/изменённый тяжёлый native PR workflow обязан использовать отдельную concurrency-group на workflow/repository/event/PR и `cancel-in-progress` для PR. Ручные `workflow_dispatch`, защищённый `main`, testing publication и stable release должны быть изолированы от такого автосброса. Повторный запуск допускается только после выяснения реального failed/cancelled/stalled/current-head статуса; нельзя создавать пустые коммиты, запускать полную матрицу по кругу или подменять queued/skipped/cancelled статусом PASS.
+
+GH-069. **Четырёхуровневая экономная CI обязательна, но доказательная приёмка не сокращается.** S0 — реально выполненные локально синтаксис/unit/регрессия до push; S1 — быстрые обязательные PR version/title/docs/rules/source gates; S2 — точные, обоснованные изменённым кодом нативные сценарии на одноразовых FreeBSD/OPNsense, включая FD9/IPFW/Voice/GUI только когда они затронуты; S3 — полная нужная package/clean/RUNNING/reboot/Voice/GUI регрессия перед testing publication и полноценным релизом. Для связанных native-проверок использовать один побайтово идентичный `.pkg` с SHA-256, когда этого требует критерий. Исторические одноразовые тесты сохранять доступными для осмысленного ручного прогона, не гонять автоматически на каждый docs/revision-only PR. Экономия ресурсов **никогда** не заменяет обязательный exact-head PASS или реальную приёмку.
+
+GH-070. **Watchdog не должен создавать вторую очередь GitHub Actions.** Предпочитать событие завершения доверенной CI, оставив дедуплицированный *ежечасный* cron fallback и ручной dispatch. Без отдельного решения владельца запрещён опрос каждые 10 минут в дополнение к событийному мониторингу. Сохранить проверку текущего head, определение failure/stall/ready-but-open, dedup уведомлений и реальную проверку доставки. Watchdog не должен запускать нативные CI-матрицы или самостоятельно выполнять несогласованный merge. Быстрый PR gate должен автоматически отклонять возвращение широких revision-only VM triggers и нарушения установленного ограничения.
 
 ## Issue execution, PR completion and unattended monitoring
 

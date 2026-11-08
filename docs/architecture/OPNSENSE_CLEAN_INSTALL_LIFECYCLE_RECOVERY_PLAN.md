@@ -137,8 +137,8 @@
 
 | Этап | Gate | Статус на дату создания плана | Первый требуемый свидетель |
 |---|---|---|---|
-| 01 — полный purge | G01 | IN_PROGRESS — source+fast tests, disposable-native CI pending | Script + dry-run/full real disposable test (including runtime/IPFW/menu) |
-| 02 — обычное GUI удаление | G02 | BLOCKED BY G01 | GUI menu disappearance and Config retention |
+| 01 — полный purge | G01 | **INSTALLED-CI PASS** [native #42505329364](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364); **OWNER-LIVE/GUI NOT TESTED** | Actual package installed, post-uninstall residuals and RUNNING lo0/dvtws2, owned IPFW, Config backup/dry-run verified |
+| 02 — обычное GUI удаление | G02 | **NEXT / PENDING** | Actual GUI menu disappearance with saved Config/upstream retention, then owner-live acceptance |
 | 03 — первый GUI setup | G03 | BLOCKED BY G02 | First install v1.0.7 without previous runtime |
 | 04 — defaults TCP+QUIC | G04 | BLOCKED BY G03 | Ten domains and exact two profiles, installed binary dry-run |
 | 05 — независимое сохранение WAN | G05 | BLOCKED BY G04 | WAN saved with service OFF / empty strategy |
@@ -149,4 +149,4 @@
 | 10 — native regression + GitHub testing package | G10 | BLOCKED BY G09 | A01–A22 source/installed CI, same archive SHA, verified testing publication |
 | 11 — owner-live acceptance and docs | G11 | BLOCKED BY G10 | Exact published testing package tested in GUI; stable only by separate authorization |
 
-**Единственная следующая инженерная задача после утверждения плана: Этап 01 / CL-01.** План последовательно уточняется **только** по результатам завершённых измеряемых этапов или новых решений владельца; принятая цель не меняется молча.
+**Следующая инженерная задача после завершения G01 native CI:** G02 — обычный GUI uninstall и удаление устаревшего Services → Zapret меню при сохранении настроек. Owner-live G01/GUI остаётся NOT TESTED до проверки на реальном устройстве/отдельном тестовом пакете. План последовательно уточняется **только** по результатам завершённых измеряемых этапов или новых решений владельца; принятая цель не меняется молча.

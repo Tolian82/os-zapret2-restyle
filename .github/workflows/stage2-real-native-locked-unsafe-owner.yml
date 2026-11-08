@@ -2,20 +2,22 @@ name: Stage 2 genuine locked predecessor versus unsafe native pkg
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-unsafe-owner-replacement.py
       - scripts/stage2-opnsense-real-locked-unsafe-owner.py
       - scripts/test-stage2-opnsense-real-locked-unsafe-owner.py
-      - .github/workflows/stage2-real-native-locked-unsafe-owner.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Fast source contracts only
         type: boolean
         default: false
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
