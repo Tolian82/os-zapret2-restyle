@@ -1,7 +1,38 @@
 #!/bin/sh
 
-# No post-deinstall service actions. In particular, do not restart configd
-# from inside the pkg removal lifecycle. Transient replacement markers are
-# consumed after successful replacement or cleared by a later fresh pre-install.
+# G02: ordinary OPNsense pkg uninstall. The plugin package payload is already
+# removed when pkg invokes this hook. Do NOT perform G01 full purge: saved
+# OPNsense.Zapret configuration, upstream git/bin, custom Lua/BIN, resources,
+# logs and unrelated plugins all remain untouched.
+#
+# A normal GUI firmware removal additionally invokes register.php remove;
+# calling the stock helper here is intentionally idempotent and also covers
+# direct pkg delete. During pkg replacement, register.php's own disk-metadata
+# check preserves the installed replacement package's firmware registration.
+FIRMWARE_REGISTER="${FIRMWARE_REGISTER:-/usr/local/opnsense/scripts/firmware/register.php}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
+
+if [ ! -x "${FIRMWARE_REGISTER}" ] || [ ! -x "${PHP_BIN}" ]; then
+    echo "ERROR: native OPNsense registration/PHP helper unavailable after plugin removal" >&2
+    exit 1
+fi
+
+if ! "${FIRMWARE_REGISTER}" remove os-zapret2-restyle; then
+    echo "ERROR: os-zapret2-restyle firmware registration could not be removed" >&2
+    exit 1
+fi
+
+# OPNsense 26.7 MenuSystem caches all Menu.xml files for 3600 seconds. Removing
+# the plugin files alone leaves dead Services links until that cache expires.
+# Use the upstream OPNsense API, not a guessed /tmp path, whole GUI restart,
+# or a global cache purge of unrelated application data.
+if ! "${PHP_BIN}" -r '
+require_once("script/load_phalcon.php");
+$menu = new \OPNsense\Base\Menu\MenuSystem();
+$menu->invalidateCache();
+'; then
+    echo "ERROR: OPNsense menu cache invalidation failed after plugin removal" >&2
+    exit 1
+fi
 
 exit 0

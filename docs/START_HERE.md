@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_4` · `VERSION=0.6.3` · `PLUGIN_REVISION=4` · `os-zapret2-restyle-0.6.3_4.pkg` (**dependent governance/CI candidate; neither merged nor packaged**).
+**Current handoff identity:** `v0.6.3_5` · `VERSION=0.6.3` · `PLUGIN_REVISION=5` · `os-zapret2-restyle-0.6.3_5.pkg` (**G02 normal GUI uninstall source candidate; NOT published or owner-live tested**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
@@ -14,9 +14,9 @@
 
 **Owner-approved requirements:** [ТЗ v1.1 «Восстановление полного жизненного цикла после чистой установки»](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md). This is the normative feature/task acceptance contract after owner feedback; it complements [native packaging ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md), not a new independent pkg, FD9 or IPFW subsystem.
 
-**GitHub resource policy being qualified:** owner issue #976 introduces GH-066–GH-070, stale native-PR cancellation and hourly watchdog in source-only `_4`. G01 source is now merged. Next lifecycle stage after CI governance is G02 (#971), ordinary GUI uninstall.
+**GitHub CI workload policy ACTIVE:** PR #978 merged in main as `v0.6.3_4` (`58a060cb`), exact-head 4/4 PASS. Canonical GH-066–GH-070 protect against 19 unrelated Makefile-native VM triggers; validate the changed subsystem with targeted native gates. This source-only `_5` candidate adds one targeted G02 native VM workflow, not a broad history replay.
 
-**Next lifecycle task G02:** ordinary Firmware GUI uninstall removes stale Services → Zapret menu without deleting saved Config/upstream/custom resources. G01 source-native [CI PASS #42505329364](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364); owner-live GUI NOT TESTED.
+**Exactly one current lifecycle task G02:** [#971](https://github.com/Tolian82/os-zapret2-restyle/issues/971) — ordinary Firmware GUI uninstall must remove stale Services → Zapret links immediately, preserve user Config/engine/custom Lua/BIN and support same-archive reinstall. Stock OPNsense MenuSystem caches `opnsense_menu_cache.xml` for 3600 s; G02 fixes native plugin deregistration/cache invalidation through `pkg/+POST_DEINSTALL`, plus [G02 native receipt procedure](verification/G02_NORMAL_GUI_UNINSTALL.md). Actual installed/owner-live A18/A19 is PENDING.
 
 **Approved clean defaults and actual evidence boundary:** exactly ten ordered YouTube domains (`youtube.com`, `googlevideo.com`, `yt.be`, `youtu.be`, `ytimg.com`, `youtubei.googleapis.com`, `youtube.googleapis.com`, `youtube-nocookie.com`, `ggpht.com`, `ssl.gstatic.com`) and an exact TCP HTTP/TLS + UDP QUIC strategy with one `--new`, defined verbatim in [ТЗ v1.1](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md#4-стартовые-значения-полей-после-истинно-чистой-установки). Native upstream provides `http_iana_org.bin` and built-in `fake_default_quic`; prior `tls7.bin` blocker **superseded**. Real installed-native defaults parser/dvtws2/Apply is **NOT TESTED**. Upstream `no_action` exists but actual FreeBSD empty-profile Start is unverified. Localized RU/EN GUI status and diagnostics, WAN-only Save, Voice-only, Lab before first Start, normal uninstall and menu invalidation remain implementation work. The sole ordered implementation source is the [stage-gated plan G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
 

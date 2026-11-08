@@ -138,7 +138,7 @@
 | Этап | Gate | Статус на дату создания плана | Первый требуемый свидетель |
 |---|---|---|---|
 | 01 — полный purge | G01 | **INSTALLED-CI PASS** [native #42505329364](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364); **OWNER-LIVE/GUI NOT TESTED** | Actual package installed, post-uninstall residuals and RUNNING lo0/dvtws2, owned IPFW, Config backup/dry-run verified |
-| 02 — обычное GUI удаление | G02 | **NEXT / PENDING** | Actual GUI menu disappearance with saved Config/upstream retention, then owner-live acceptance |
+| 02 — обычное GUI удаление | G02 | **IN_PROGRESS SOURCE** — actual installed CI/OWNER-LIVE PENDING | POST_DEINSTALL firmware unregister + 3600s MenuSystem cache invalidation, preserve Config/upstream/Extra, same-archive reinstall |
 | 03 — первый GUI setup | G03 | BLOCKED BY G02 | First install v1.0.7 without previous runtime |
 | 04 — defaults TCP+QUIC | G04 | BLOCKED BY G03 | Ten domains and exact two profiles, installed binary dry-run |
 | 05 — независимое сохранение WAN | G05 | BLOCKED BY G04 | WAN saved with service OFF / empty strategy |
