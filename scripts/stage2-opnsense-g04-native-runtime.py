@@ -6,6 +6,7 @@ first-package proof and BEFORE the same-archive saved-empty reinstall proof.
 No owner appliance, release publication, foreign IPFW change or WAN traffic.
 """
 import hashlib
+import html
 import importlib.util
 import json
 import os
@@ -124,7 +125,12 @@ def same_gui_multiline(actual, expected):
         return False
     def normalized(value):
         return value.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
-    return normalized(actual) == normalized(expected)
+    # The OPNsense getNodes() API HTML-escapes the two
+    # <HOSTLIST:youtube> references before sending them in JSON.
+    # Its browser form decodes entities for the textarea. Decode
+    # exactly once here for the *read-back check only*, never rewrite
+    # the persisted Config or the user's posted model fields.
+    return normalized(html.unescape(actual)) == normalized(expected)
 
 
 def gui_model_diff_label(saved, traffic, domains):
@@ -227,6 +233,10 @@ def self_test():
     }
     assert stale["zapret[sync][telegramips_baseline]"] != ""
     assert same_gui_multiline("first\r\nsecond\r\n", "first\nsecond")
+    assert same_gui_multiline("one &lt;HOSTLIST:youtube&gt; two",
+                              "one <HOSTLIST:youtube> two")
+    assert not same_gui_multiline("one &lt;HOSTLIST:foreign&gt; two",
+                                  "one <HOSTLIST:youtube> two")
     assert not same_gui_multiline("first\nCHANGED", "first\nsecond")
     assert not same_gui_multiline({}, "first\nsecond")
     for malformed in ({}, {"hostlist": {}, "strategy": {}},
