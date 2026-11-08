@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from stage2_source_revision import revision_from_makefile, version_from_file
 from unittest.mock import patch
 
@@ -17,6 +18,22 @@ spec.loader.exec_module(mod)
 
 
 class RealInstallContracts(unittest.TestCase):
+    @staticmethod
+    def approved_config(xml):
+        root = ET.fromstring(xml)
+        group = root.find('OPNsense')
+        if group is None:
+            group = ET.SubElement(root, 'OPNsense')
+        zapret = ET.SubElement(group, 'Zapret')
+        general = ET.SubElement(zapret, 'general')
+        ET.SubElement(general, 'enabled').text = '0'
+        ET.SubElement(general, 'waninterface').text = ''
+        strategy = ET.SubElement(zapret, 'strategy')
+        ET.SubElement(strategy, 'trafficargs').text = mod.INITIAL_STRATEGY
+        hostlist = ET.SubElement(zapret, 'hostlist')
+        ET.SubElement(hostlist, 'youtubedomains').text = mod.INITIAL_YOUTUBE
+        return ET.tostring(root, encoding='utf-8')
+
     def test_bound_to_real_source_revision(self):
         self.assertEqual(mod.REVISION, revision_from_makefile())
         self.assertEqual(mod.VERSION, version_from_file() + "_" + revision_from_makefile())
@@ -144,8 +161,10 @@ class RealInstallContracts(unittest.TestCase):
         new = old.replace(b'<plugins>other</plugins>',
                           b'<plugins>os-zapret2-restyle,other</plugins>').replace(
                               b'<time>1</time>',b'<time>2</time>')
+        new = self.approved_config(new)
         observed = mod.verify_official_first_install_registration(old,new)
-        self.assertEqual(observed["status"],"PASS_OFFICIAL_FIRMWARE_REGISTER_ONLY")
+        self.assertEqual(observed["status"],"PASS_OFFICIAL_FIRMWARE_AND_G04_INITIAL_CONFIG")
+        self.assertTrue(observed["initial_zapret_config_saved"])
         self.assertTrue(observed["all_other_config_sections_unchanged"])
         self.assertEqual(observed["prior_plugin_count"],1)
 
@@ -154,8 +173,10 @@ class RealInstallContracts(unittest.TestCase):
         new = (b'<opnsense><system><hostname>test</hostname><firmware>'
                b'<plugins>os-zapret2-restyle</plugins><type>community</type>'
                b'</firmware></system><revision><time>2</time></revision></opnsense>')
-        self.assertTrue(mod.verify_official_first_install_registration(
-            old,new)["allowed_new_firmware_type"])
+        observed = mod.verify_official_first_install_registration(
+            old, self.approved_config(new))
+        self.assertTrue(observed["allowed_new_firmware_type"])
+        self.assertTrue(observed["initial_zapret_config_saved"])
 
     def test_unrelated_system_config_change_is_rejected(self):
         old = (b'<opnsense><system><hostname>test</hostname></system></opnsense>')
@@ -163,7 +184,39 @@ class RealInstallContracts(unittest.TestCase):
                b'<firmware><plugins>os-zapret2-restyle</plugins></firmware>'
                b'</system><revision><time>2</time></revision></opnsense>')
         with self.assertRaisesRegex(mod.Refusal, "UNAUTHORIZED_CONFIG_MUTATION"):
-            mod.verify_official_first_install_registration(old,new)
+            mod.verify_official_first_install_registration(old, self.approved_config(new))
+
+    def test_saved_empty_and_custom_zapret_roots_are_never_defaulted(self):
+        for fields in (
+            "<Zapret/>",
+            "<Zapret><strategy><trafficargs/></strategy>"
+            "<hostlist><youtubedomains/></hostlist></Zapret>",
+            "<Zapret><strategy><trafficargs>user-choice</trafficargs>"
+            "</strategy></Zapret>",
+        ):
+            xml = ET.fromstring(
+                "<opnsense><OPNsense>" + fields +
+                "</OPNsense></opnsense>")
+            self.assertFalse(mod.verify_saved_g04_config(xml, xml))
+            rewritten = ET.fromstring(ET.tostring(xml))
+            chosen = rewritten.find("./OPNsense/Zapret")
+            chosen.find("strategy/trafficargs") if chosen is not None else None
+            ET.SubElement(chosen, "hostlist").text = "unwanted"
+            with self.assertRaisesRegex(
+                    mod.Refusal, "G04_PREVIOUS_SAVED_USER_ZAPRET_CONFIG_CHANGED"):
+                mod.verify_saved_g04_config(xml, rewritten)
+
+    def test_postinstall_exact_initial_config_required_and_disabled(self):
+        original = ET.fromstring("<opnsense><system/></opnsense>")
+        installed = ET.fromstring(self.approved_config(b"<opnsense><system/></opnsense>"))
+        self.assertTrue(mod.verify_saved_g04_config(original, installed))
+        installed.find("./OPNsense/Zapret/general/enabled").text = "1"
+        with self.assertRaisesRegex(mod.Refusal, "G04_INITIAL_CONFIG_AUTOMATICALLY_ENABLED"):
+            mod.verify_saved_g04_config(original, installed)
+        installed.find("./OPNsense/Zapret/general/enabled").text = "0"
+        installed.find("./OPNsense/Zapret/hostlist/youtubedomains").text = "other"
+        with self.assertRaisesRegex(mod.Refusal, "G04_NATIVE_PERSISTED_DEFAULTS_INCORRECT"):
+            mod.verify_saved_g04_config(original, installed)
 
     def test_missing_or_foreign_registry_entry_rejected(self):
         old = b'<opnsense><system><firmware><plugins>other</plugins></firmware></system></opnsense>'

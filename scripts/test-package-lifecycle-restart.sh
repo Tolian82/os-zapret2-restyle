@@ -121,6 +121,13 @@ write_mock "${TMP_ROOT}/configctl" \
 write_mock "${TMP_ROOT}/register" \
     'printf "%s\n" "firmware:$*" >> "${TRACE}"' \
     '[ "$*" = "install os-zapret2-restyle" ]'
+write_mock "${TMP_ROOT}/mockphp" \
+    'printf "%s\n" "initial-config:$*" >> "${TRACE}"' \
+    '[ "$*" = "${INIT_SCRIPT}" ]' \
+    '[ ! -e "${INIT_FAIL}" ]'
+INIT_SCRIPT="${TMP_ROOT}/init.php"
+INIT_FAIL="${TMP_ROOT}/init.fail"
+printf '%s\n' '<?php /* only a read permission fixture; mockphp executes */' > "${INIT_SCRIPT}"
 write_mock "${TMP_ROOT}/configure" \
     'printf "%s\n" "configure:$*" >> "${TRACE}"' \
     '[ "$*" = POST_INSTALL ]'
@@ -154,6 +161,7 @@ run_post_install()
     CONFIGD_PID_FILE="${PID_FILE}" CONFIGD_WORKER_PATTERN='configd.py console' \
     PGREP_BIN="${TMP_ROOT}/pgrep" KILL_BIN="${TMP_ROOT}/kill" \
     CONFIGCTL="${TMP_ROOT}/configctl" FIRMWARE_REGISTER="${TMP_ROOT}/register" \
+    PHP_BIN="${TMP_ROOT}/mockphp" INITIAL_CONFIG_SCRIPT="${INIT_SCRIPT}" INIT_SCRIPT="${INIT_SCRIPT}" INIT_FAIL="${INIT_FAIL}" \
     CONFIGURE_PLUGINS="${TMP_ROOT}/configure" SERVICE_SCRIPT="${TMP_ROOT}/service" \
     SLEEP_BIN="${TMP_ROOT}/sleep" UPGRADE_STATE_DIR="${STATE_DIR}" \
     UPGRADE_RESTART_MARKER="${LEGACY_MARKER}" \
@@ -164,7 +172,7 @@ run_post_install()
 reset_case()
 {
     : > "${TRACE}"
-    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}" "${SHARED_JOURNAL}"
+    rm -f "${RELOADED}" "${STOP_FAIL}" "${LEGACY_MARKER}" "${REPLACEMENT_MARKER}" "${SHARED_JOURNAL}" "${INIT_FAIL}"
 }
 
 # Forced pkg add -f replacement: PKG_UPGRADE is absent. The incoming pre-install
@@ -300,6 +308,7 @@ old_worker_line=$(line_of 'pgrep:-P 4242 -f configd.py console')
 parent_probe_line=$(line_of 'kill:-0 4242')
 worker_term_line=$(line_of 'kill:-TERM 4343')
 ready_line=$(line_of 'configctl:system status')
+initial_line=$(line_of "initial-config:${INIT_SCRIPT}")
 configure_line=$(line_of 'configure:POST_INSTALL')
 template_line=$(line_of 'configctl:template reload OPNsense/Zapret')
 start_line=$(line_of 'configctl:zapret start')
@@ -307,6 +316,8 @@ status_line=$(grep -n -F 'service:status' "${TRACE}" | tail -1 | cut -d: -f1)
 [ "${parent_probe_line}" -lt "${old_worker_line}" ] || fail "worker discovery preceded watcher validation"
 [ "${old_worker_line}" -lt "${worker_term_line}" ] || fail "worker was signalled before worker discovery"
 [ "${worker_term_line}" -lt "${ready_line}" ] || fail "readiness preceded worker reload"
+[ "${ready_line}" -lt "${initial_line}" ] || fail "native initial Config saved after configd readiness"
+[ "${initial_line}" -lt "${configure_line}" ] || fail "native Config initialization ran after plugin template/config refresh"
 [ "${ready_line}" -lt "${configure_line}" ] || fail "plugin refresh preceded readiness"
 [ "${configure_line}" -lt "${template_line}" ] || fail "template preceded plugin refresh"
 [ "${template_line}" -lt "${start_line}" ] || fail "service restore preceded template"
@@ -334,5 +345,18 @@ grep -q 'ensure_runtime_components || return 1' "${SERVICE_SCRIPT_SOURCE}" ||
     fail "direct service start has no runtime guard"
 grep -q '\[ -x "${_supervisor_expected_child}" \]' "${SUPERVISOR}" ||
     fail "supervisor has no executable-child guard"
+
+# A failed/uncertain native Config initialization must abort BEFORE
+# template rendering or auto-start, without claiming clean install success.
+reset_case
+printf '%s\n' stopped > "${SERVICE_STATE}"
+: > "${INIT_FAIL}"
+if run_post_install >/dev/null 2>&1; then
+    fail "postinstall accepted failed first Config initialization"
+fi
+if grep -Fq 'configctl:template reload OPNsense/Zapret' "${TRACE}" ||
+   grep -Fq 'configctl:zapret start' "${TRACE}"; then
+    fail "postinstall proceeded beyond failed native Config initialization"
+fi
 
 echo "PASS: package replacement preserves complete service state without reboot"

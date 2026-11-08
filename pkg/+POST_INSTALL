@@ -20,6 +20,8 @@ UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgra
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
 EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
+INITIAL_CONFIG_SCRIPT="${INITIAL_CONFIG_SCRIPT:-/usr/local/opnsense/scripts/OPNsense/Zapret/initialize_config.php}"
 
 reload_configd_actions()
 {
@@ -92,6 +94,19 @@ reload_configd_actions()
 
 if ! "${FIRMWARE_REGISTER}" install os-zapret2-restyle; then
     echo "ERROR: os-zapret2-restyle could not be registered in OPNsense firmware state" >&2
+    exit 1
+fi
+
+# Persist LC-05 through the same native Config model and Config::save
+# used by the GUI. Existing (even deliberately empty) Zapret settings
+# must remain unchanged during ordinary pkg reinstall or upgrade.
+# Execute before templates; never start a service or change IPFW here.
+if [ ! -x "${PHP_BIN}" ] || [ ! -r "${INITIAL_CONFIG_SCRIPT}" ]; then
+    echo "ERROR: native first-install Config initializer is unavailable" >&2
+    exit 1
+fi
+if ! "${PHP_BIN}" "${INITIAL_CONFIG_SCRIPT}"; then
+    echo "ERROR: clean Zapret2 Config initialization failed or requires review" >&2
     exit 1
 fi
 

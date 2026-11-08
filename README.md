@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_7` — GitHub CI job-fanout governance/source candidate. G03 `_6` is source-merged and disposable OPNsense 26.7 native-qualified; no `_6`/`_7` testing package was published or owner-installed. Stable remains `v0.6.3_1`. |
+| **Current development candidate** | `v0.6.3_8` — G04 persist initial TCP/QUIC strategy and ten YouTube domains using official OPNsense Config::save exactly once, never as read-time defaults. `_7` selective CI is merged; no `_8.pkg` has been published or owner-tested. Stable remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

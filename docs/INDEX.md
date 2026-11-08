@@ -23,6 +23,7 @@
 - [G01 — guide to independent full purge](verification/G01_STANDALONE_PURGE_GUIDE.md) — отдельный деструктивный скрипт после обычного удаления пакета; исходник, backup/dry-run, подтверждение, сценарии отказа и границы disposable-native приёмки. До прохождения G01 запрещена автоматическая трактовка source-тестов как полной проверки.
 - [G02 — ordinary GUI uninstall verification](verification/G02_NORMAL_GUI_UNINSTALL.md) — merged source and disposable-native firmware remove/reinstall, owner-live pending.
 - [G03 — first upstream runtime setup verification](verification/G03_FIRST_UPSTREAM_SETUP.md) — clean GUI upper Apply, scoped first-install transaction, fail/retry/recovery and single targeted native witness; owner-browser acceptance remains G11.
+- [G04 — native first-install Config persistence](verification/G04_INITIAL_NATIVE_CONFIG.md) — save two approved fields once in normal config.xml, preserve every existing or empty Zapret subtree; one disposable same-archive reinstall witness.
 - [Дефекты опубликованного v0.6.3_1](https://github.com/Tolian82/os-zapret2-restyle/issues/970) — #970–#973, подтверждённые owner-live; исходный стабильный пакет неизменен.
 
 ## Level 2 — активное ТЗ и нативная интеграция (5 ноября 2026)
