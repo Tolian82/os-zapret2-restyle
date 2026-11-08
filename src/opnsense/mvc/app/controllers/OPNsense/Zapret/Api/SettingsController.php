@@ -197,6 +197,11 @@ class SettingsController extends ApiMutableModelControllerBase
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
+                // LC-06: the actual changed-field scope, not the full POST,
+                // identifies an independent WAN edit. Stored lists/IPSETs
+                // are irrelevant to that field when runtime is stopped.
+                $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
+                if (!$wanOnlyCandidate) {
                 $preflightStage = 'normalization';
                 // Native Python is the only IP/CIDR grammar. This read-only
                 // preflight inspects all six user lists once and does not
@@ -250,6 +255,7 @@ class SettingsController extends ApiMutableModelControllerBase
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
+                } // WAN-only does not run unrelated IPSET/domain normalization.
                 $preflightStage = 'candidate-validation';
                 // Validate against a detached model, never serialize it to
                 // the live OPNsense Config before the privileged transaction.
@@ -313,14 +319,18 @@ class SettingsController extends ApiMutableModelControllerBase
             $this->assertLifecycleAvailable();
             $backend = new Backend();
             $nativeApplyDispatched = true;
+            // One original FD9 owner: safe stopped WAN persists Config only;
+            // a running/common owner still takes full runtime Apply/rollback.
             $response = trim((string)$backend->configdpRun(
-                'zapret shared_apply', ['strategies', $encoded], false, 600
+                $wanOnlyCandidate ? 'zapret shared_apply_wan' : 'zapret shared_apply',
+                $wanOnlyCandidate ? [$encoded] : ['strategies', $encoded],
+                false, 600
             ));
             // Root preflight receipts are definitive: shared_apply_run returns
             // them only before journal PREPARED / Config / runtime / IPFW changes.
             // A generic requires_review here would freeze the GUI for a
             // safely rejected candidate and conceal the actual stage.
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
@@ -330,7 +340,10 @@ class SettingsController extends ApiMutableModelControllerBase
                     ),
                 ];
             }
-            if (!preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $response)) {
+            $wanSaved = $wanOnlyCandidate &&
+                preg_match('/^wan-saved=[a-f0-9]{64}$/D', $response) === 1;
+            if (!$wanSaved &&
+                !preg_match('/(?:^|\n)applied-id=([a-f0-9]{32})$/D', $response)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => true,
@@ -342,6 +355,7 @@ class SettingsController extends ApiMutableModelControllerBase
             return [
                 'result' => 'saved',
                 'status' => 'ok',
+                'applied' => !$wanSaved,
                 'normalized' => !empty($summary),
                 'normalization' => $summary,
                 static::$internalModelName => $plan['candidate'],

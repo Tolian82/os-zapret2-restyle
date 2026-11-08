@@ -23,7 +23,8 @@
 - [G01 — guide to independent full purge](verification/G01_STANDALONE_PURGE_GUIDE.md) — отдельный деструктивный скрипт после обычного удаления пакета; исходник, backup/dry-run, подтверждение, сценарии отказа и границы disposable-native приёмки. До прохождения G01 запрещена автоматическая трактовка source-тестов как полной проверки.
 - [G02 — ordinary GUI uninstall verification](verification/G02_NORMAL_GUI_UNINSTALL.md) — merged source and disposable-native firmware remove/reinstall, owner-live pending.
 - [G03 — first upstream runtime setup verification](verification/G03_FIRST_UPSTREAM_SETUP.md) — clean GUI upper Apply, scoped first-install transaction, fail/retry/recovery and single targeted native witness; owner-browser acceptance remains G11.
-- [G04 — saved Config and native TCP/QUIC/HTTPS Apply acceptance](verification/G04_INITIAL_NATIVE_CONFIG.md) — native initial Config and real v1.0.7 scoped Start/Stop are installed-CI PASS; current G04 checks authenticated first Strategies Apply via original FD9. Owner browser/real WAN remain NOT TESTED.
+- [G04 — saved Config and native TCP/QUIC/HTTPS Apply acceptance](verification/G04_INITIAL_NATIVE_CONFIG.md) — native initial Config, real v1.0.7 Start/Stop and authenticated first Strategies HTTPS Apply have installed-CI PASS through PR #984; owner browser/real WAN NOT TESTED.
+- [G05 — native WAN-only Config save](verification/G05_WAN_ONLY_NATIVE.md) — one original-FD9 Config-only WAN change without upstream and with empty user strategy; explicit foreign/unknown owner guards and targeted installed-native gate. RUNNING WAN rollback separately pending.
 - [Дефекты опубликованного v0.6.3_1](https://github.com/Tolian82/os-zapret2-restyle/issues/970) — #970–#973, подтверждённые owner-live; исходный стабильный пакет неизменен.
 
 ## Level 2 — активное ТЗ и нативная интеграция (5 ноября 2026)

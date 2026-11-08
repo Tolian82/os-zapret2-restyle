@@ -1215,6 +1215,113 @@ shared_apply_execute_service()
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
     printf "applied-id=%s\n" "$_shared_apply_id"
 }
+# LC-06 WAN-only Config mode of the ORIGINAL FD9, not a second owner.
+# A committed native journal requires the full runtime transaction. With
+# no journal, only a fully stopped, independently clean owner may save WAN.
+shared_apply_wan_save_service()
+{
+    [ "$#" -eq 1 ] && [ -n "$1" ] || return 64
+    _wan_encoded="$1"
+    [ -x /usr/local/bin/php ] && [ -r "${SCRIPT_DIR}/shared_apply_wan.php" ] || return 69
+    _wan_probe=$(/usr/local/bin/php "${SCRIPT_DIR}/shared_apply_wan.php" probe "$_wan_encoded") || {
+        printf '%s\n' preflight-rejected=wan-candidate
+        return 0
+    }
+    [ "$_wan_probe" = wan-eligible=1 ] || return 69
+    preflight_shared_apply_journal common-apply || return 69
+    extra_resources_block_pending_start_service || {
+        printf '%s\n' preflight-rejected=wan-lifecycle
+        return 0
+    }
+    # Never stale a sealed shared owner. RUNNING/previously committed paths
+    # retain the original fully atomic Config/runtime/IPFW Apply/rollback.
+    if shared_apply_has_record_service; then
+        shared_apply_run_service strategies "$_wan_encoded"
+        return $?
+    fi
+    # STOPPED is an expected nonzero result. Retain it even when a source-
+    # mounted test (or another CLI invoker) has inherited shell errexit.
+    _wan_status_rc=0
+    _wan_status=$(orchestrator_native_status \
+        "$CHILD_PIDFILE" "$SUPERVISOR_MONITOR_PIDFILE" \
+        "$RULE_BASE" "$RULE_MAX" "$ACTIVE_DIR" 2>/dev/null) || _wan_status_rc=$?
+    case "$_wan_status_rc" in
+        0)
+            shared_apply_run_service strategies "$_wan_encoded"
+            return $?
+            ;;
+        1) ;;
+        *)
+            printf '%s\n' preflight-rejected=wan-runtime-owner
+            return 0
+            ;;
+    esac
+    for _wan_pidfile in "$CHILD_PIDFILE" \
+                        "$SUPERVISOR_MONITOR_PIDFILE" \
+                        "$SUPERVISOR_DAEMON_PIDFILE"; do
+        if [ -e "$_wan_pidfile" ] || [ -L "$_wan_pidfile" ]; then
+            printf '%s\n' preflight-rejected=wan-runtime-owner
+            return 0
+        fi
+    done
+    _apply_engine=0
+    if ! apply_runtime_attest_engine_inventory; then
+        printf '%s\n' preflight-rejected=wan-runtime-owner
+        return 0
+    fi
+    _wan_ps=$("${COMMON_PS_BIN:-/bin/ps}" ax -o pid= -o command=) || return 69
+    _wan_orphan_supervisor=$(printf '%s\n' "$_wan_ps" |
+        awk -v expected="$SUPERVISOR_LOOP" '
+            $1 ~ /^[0-9]+$/ &&
+            ($2 == expected || (($2 == "/bin/sh" || $2 == "sh") && $3 == expected)) {
+                print $1
+            }') || return 69
+    [ -z "$_wan_orphan_supervisor" ] || {
+        printf '%s\n' preflight-rejected=wan-runtime-owner
+        return 0
+    }
+    # Both ipfw/ipdivert absent is the ONLY no-ipfw-list exception. For an
+    # already loaded kernel, both must exist; reject any Zapret/Lab rule in
+    # reserved 19000..19131, without changing any foreign rule.
+    if ! shared_apply_ipfw_kernel_absent_service; then
+        _wan_kldstat="${SHARED_APPLY_KLDSTAT_BIN:-/sbin/kldstat}"
+        _wan_ipfw="${SHARED_APPLY_IPFW_BIN:-/sbin/ipfw}"
+        if [ ! -x "$_wan_kldstat" ] || [ ! -x "$_wan_ipfw" ] ||
+           ! "$_wan_kldstat" -q -m ipfw >/dev/null 2>&1 ||
+           ! "$_wan_kldstat" -q -m ipdivert >/dev/null 2>&1; then
+            printf '%s\n' preflight-rejected=wan-kernel
+            return 0
+        fi
+        _wan_rules=$("$_wan_ipfw" -q list 2>/dev/null) || {
+            printf '%s\n' preflight-rejected=wan-kernel
+            return 0
+        }
+        if ! printf '%s\n' "$_wan_rules" | awk '
+            $1 ~ /^[0-9]+$/ && $1 >= 19000 && $1 <= 19131 { blocked=1 }
+            END { exit (blocked ? 1 : 0) }'; then
+            printf '%s\n' preflight-rejected=wan-kernel
+            return 0
+        fi
+    fi
+    # Reuse SharedConfigCommit::persist() from the existing native PHP worker.
+    # It revalidates the generation + one field under the standard Config lock.
+    # Native 69 is a known model refusal; 70 or an invalid receipt requires
+    # review. Never discard that distinction through inherited shell errexit.
+    _wan_rc=0
+    _wan_receipt=$(/usr/local/bin/php "${SCRIPT_DIR}/shared_apply_wan.php" commit "$_wan_encoded") || _wan_rc=$?
+    case "$_wan_rc" in
+        0)
+            case "$_wan_receipt" in wan-saved=*) ;; *) return 70 ;; esac
+            _wan_hash="${_wan_receipt#wan-saved=}"
+            [ "${#_wan_hash}" -eq 64 ] &&
+            ! printf '%s\n' "$_wan_hash" | grep -q '[^a-f0-9]' || return 70
+            printf '%s\n' "$_wan_receipt"
+            ;;
+        69) printf '%s\n' preflight-rejected=wan-model ;;
+        *) return 70 ;;
+    esac
+}
+
 # One indivisible FD9 entrypoint for the EXISTING Voice and Strategies
 # Apply buttons: stage → installed native template → full release →
 # seal → native Config/runtime/IPFW transaction, all under the same lock.
@@ -2182,6 +2289,9 @@ service_dispatch()
         shared-apply-recover-reviewed-legacy)
             shared_apply_recover_reviewed_legacy_service
             ;;
+        shared-apply-wan)
+            shared_apply_wan_save_service "${2:-}"
+            ;;
         shared-apply-run)
             shared_apply_run_service "${2:-}" "${3:-}"
             ;;
@@ -2612,7 +2722,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
