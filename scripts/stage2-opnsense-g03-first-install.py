@@ -57,6 +57,21 @@ def dispatch_and_poll():
     raise Refusal("G03_INSTALL_DID_NOT_REACH_VERIFIED_READY_STOPPED")
 
 
+def native_template_snapshot():
+    """Stock configd may have rendered three non-engine outputs already."""
+    names = {"zapret.conf", "hostlist.txt", "hostlist-exclude.txt"}
+    need(not ROOT.is_symlink(), "G03_UPSTREAM_ROOT_IS_SYMLINK")
+    if not ROOT.exists():
+        return {}
+    need(ROOT.is_dir(), "G03_UPSTREAM_ROOT_NOT_DIRECTORY")
+    found = {}
+    for p in ROOT.iterdir():
+        need(p.name in names and p.is_file() and not p.is_symlink(),
+             "G03_FOREIGN_UPSTREAM_ROOT_ENTRY:" + p.name)
+        found[p.name] = hashlib.sha256(p.read_bytes()).hexdigest()
+    return found
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_G03_DISPOSABLE_NATIVE") == "1" and
@@ -64,8 +79,10 @@ def main():
          "G03_DISPOSABLE_OPNSENSE_ONLY")
     need(Path("/usr/local/opnsense").is_dir() and LAUNCHER.is_file(),
          "G03_NOT_AN_INSTALLED_OPNSENSE_PLUGIN")
-    need(not ROOT.exists() and not ROOT.is_symlink(),
-         "G03_NOT_A_GENUINELY_CLEAN_RUNTIME_ROOT")
+    template_before = native_template_snapshot()
+    need(not (ROOT / ".git").exists() and
+         not (ROOT / "binaries/my/dvtws2").exists(),
+         "G03_ALREADY_HAS_UPSTREAM_ENGINE")
     need(not (STATE / "runtime.release").exists() and
          not (STATE / "first-install.intent").exists() and
          not (STATE / "runtime-rollback").exists(),
@@ -95,6 +112,11 @@ def main():
          not (STATE / "first-install.intent").exists() and
          not (STATE / "runtime-rollback").exists(),
          "G03_FIRST_INSTALL_RESIDUE")
+    for name, expected in template_before.items():
+        candidate = ROOT / name
+        need(candidate.is_file() and not candidate.is_symlink() and
+             hashlib.sha256(candidate.read_bytes()).hexdigest() == expected,
+             "G03_STOCK_CONFIGD_TEMPLATE_NOT_PRESERVED:" + name)
     # One genuine same-release reinstall tests the existing old-runtime path,
     # not a second package build or a separate VM.
     second = dispatch_and_poll()
@@ -111,6 +133,7 @@ def main():
         "service_stopped": True,
         "same_release_reinstalled": True,
         "original_fd9_transaction": True,
+        "stock_configd_templates_preserved": True,
         "no_foreign_config_or_ipfw_change": True,
         "owner_browser_tested": False
     }, sort_keys=True))

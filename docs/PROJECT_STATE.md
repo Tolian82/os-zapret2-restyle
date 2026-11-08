@@ -6,7 +6,7 @@
 
 **G01 — INSTALLED-CI PASS (8 Nov 2026):** PR #975 merged as v0.6.3_3 (main `b247b725`), 25/25 exact-head checks, 37 fast tests, [native G01 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364). Disposable OPNsense 26.7 verified real upstream v1.0.7 installed pkg purge, orphan resources after pkg removal and RUNNING dvtws2/lo0:65431, owned IPFW and private Config backup. Owner-live GUI was not tested and no `_3.pkg` was published. G02 subsequently completed source/native qualification through PR #979.
 
-**G03 — SOURCE CANDIDATE, native/owner acceptance pending:** устранение #970 — верхний Apply при `installed=0` и правильный `ready/stopped`, выделенный first-install путь под существующими setup.lock/FD9, сборка в приватном staging без стирания предыдущего/чужого checkout. Подтверждение source/native требуется на точном commit; G11 owner-browser отдельно.
+**G03 — SOURCE CANDIDATE, native/owner acceptance pending:** устранение #970 — верхний Apply при `installed=0` и правильный `ready/stopped`, выделенный first-install путь под существующими setup.lock/FD9, сборка в приватном staging без стирания предыдущего/чужого checkout; после реального pkg install учитывать три штатных configd output-файла (zapret.conf, hostlist.txt, hostlist-exclude.txt), сохраняя их байты и отклоняя посторонние пути. Подтверждение source/native требуется на точном commit; G11 owner-browser отдельно.
 
 **G02 — SOURCE + INSTALLED-CI PASS; OWNER-LIVE NOT TESTED:** PR #979, merge `3c7e254d`, real OPNsense 26.7 Firmware remove + reinstall on one physically built archive SHA-256 `e643771fbff7c6f639c2436c0201ed6a8492645c45827ddff65e9738ed2499b1`, no Config/upstream/custom-Lua deletion. Issue #971 остаётся OPEN до G11.
 

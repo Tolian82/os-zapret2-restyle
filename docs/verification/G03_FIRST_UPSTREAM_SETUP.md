@@ -12,6 +12,8 @@ Correct terminal state: installed=1, version=v1.0.7, setup=ready, service=stoppe
 
 Keep the one existing setup.lock → shared original FD9 owner. A genuinely absent upstream root takes a dedicated first-install branch; never fabricate old Git HEAD, release marker or compiled binaries for the update-only rollback. Reject old recovery state, managed Additional Resources, ambiguous existing paths and symlinks before mutation. Preserve other OPNsense Config and all non-Zapret IPFW.
 
+Stock OPNsense template reload creates three files in the upstream directory before engine installation: zapret.conf, hostlist.txt, and hostlist-exclude.txt. A clean first install must accept **only** these known regular files (or an absent root), preserve their exact bytes, and reject any additional/linked/unknown path. During promotion, temporarily move the original template-only directory into the verified owned stage and recover its bytes safely if interrupted between two same-filesystem renames.
+
 Build the selected release in a private staging directory adjacent to the actual upstream root (same filesystem). Verify exact Git tag and commit, executable and staged-path ownership before atomic promotion. Commit the release marker only after real native STOPPED verification. The private first-install intent records the selected version before work starts; failed builds clean only the verified private stage. Interrupted pre-promotion work may be safely retried; post-promotion recovery may finish only an exact matching verified checkout. Suspicious state stays intact with RECOVERY_REQUIRED diagnostics.
 
 The existing RUNNING/STOPPED upgrade, downgrade, same-release reinstall, FD9 and sealed previous-runtime rollback remain unchanged.

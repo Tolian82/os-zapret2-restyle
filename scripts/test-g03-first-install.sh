@@ -74,7 +74,7 @@ run 0 || fail "clean setup failed"
 [ ! -e "$STATE/runtime-rollback" ] || fail "unexpected old rollback"
 # Simulate crash after atomic promotion but before marker finalization.
 rm -f "$MARKER"
-printf '%s\n' version=v1.0.7 > "$INTENT"
+printf 'version=v1.0.7\noriginal=0\n' > "$INTENT"
 before=$(wc -l < "$ROOT/install.calls")
 run 0 || fail "post-promotion recovery failed"
 [ "$(wc -l < "$ROOT/install.calls")" -eq "$before" ] || fail "recovery rebuilt"
@@ -91,11 +91,71 @@ run 0 || fail "clean retry after failed build did not install"
 # Simulate SIGKILL during staged checkout and retry.
 rm -rf "$RUNTIME"
 rm -f "$MARKER"
-printf '%s\n' version=v1.0.7 > "$INTENT"
+printf 'version=v1.0.7\noriginal=0\n' > "$INTENT"
 mkdir -p "$STAGE/runtime"
 printf '%s\n' partial > "$STAGE/runtime/unfinished"
 run 0 || fail "interrupted staged checkout could not retry"
 [ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] || fail "interrupted stage leaked"
+# A normal stock OPNsense package has already rendered zapret.conf and
+# hostlists into the upstream path. They must survive source installation.
+rm -rf "$RUNTIME"
+rm -f "$MARKER"
+mkdir -p "$RUNTIME"
+printf '%s\n' USER_CONFIG > "$RUNTIME/zapret.conf"
+printf '%s\n' user.example > "$RUNTIME/hostlist.txt"
+printf '%s\n' exempt.example > "$RUNTIME/hostlist-exclude.txt"
+run 0 || fail "stock configd templates blocked clean first setup"
+[ "$(cat "$RUNTIME/zapret.conf")" = USER_CONFIG ] ||
+  fail "stock generated zapret.conf overwritten"
+[ "$(cat "$RUNTIME/hostlist.txt")" = user.example ] ||
+  fail "stock hostlist overwritten"
+[ "$(cat "$RUNTIME/hostlist-exclude.txt")" = exempt.example ] ||
+  fail "stock exclusion overwritten"
+[ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] ||
+  fail "stock templates left first-install staging residue"
+
+# A worker cut between backing up stock config and staging promotion must
+# restore exact originals before starting any new build.
+rm -rf "$RUNTIME"
+rm -f "$MARKER"
+printf 'version=v1.0.7\noriginal=1\n' > "$INTENT"
+mkdir -p "$STAGE/original" "$STAGE/runtime"
+printf '%s\n' USER_CONFIG > "$STAGE/original/zapret.conf"
+printf '%s\n' user.example > "$STAGE/original/hostlist.txt"
+printf '%s\n' exempt.example > "$STAGE/original/hostlist-exclude.txt"
+printf '%s\n' partial > "$STAGE/runtime/unfinished"
+run 0 || fail "interrupted stock-template promotion could not recover"
+[ "$(cat "$RUNTIME/zapret.conf")" = USER_CONFIG ] &&
+[ "$(cat "$RUNTIME/hostlist.txt")" = user.example ] &&
+[ "$(cat "$RUNTIME/hostlist-exclude.txt")" = exempt.example ] ||
+  fail "interrupted stock-template promotion lost original bytes"
+
+# A crash after promoting a compiled runtime but before commit must verify
+# the preserved original config before it can finalize the new marker.
+rm -f "$MARKER"
+printf 'version=v1.0.7\noriginal=1\n' > "$INTENT"
+mkdir -p "$STAGE/original"
+cp "$RUNTIME/zapret.conf" "$STAGE/original/zapret.conf"
+cp "$RUNTIME/hostlist.txt" "$STAGE/original/hostlist.txt"
+cp "$RUNTIME/hostlist-exclude.txt" "$STAGE/original/hostlist-exclude.txt"
+before=$(wc -l < "$ROOT/install.calls")
+run 0 || fail "interrupted original-template confirmation could not finish"
+[ "$(wc -l < "$ROOT/install.calls")" -eq "$before" ] ||
+  fail "post-promotion confirmation rebuilt upstream"
+[ ! -e "$INTENT" ] && [ ! -e "$STAGE" ] &&
+[ "$(cat "$MARKER")" = v1.0.7 ] ||
+  fail "post-promotion original-template stage not completed"
+
+# An unrelated file in the fresh directory is not a stock template.
+rm -rf "$RUNTIME"
+rm -f "$MARKER"
+mkdir -p "$RUNTIME"
+printf '%s\n' keep > "$RUNTIME/foreign-user-lua"
+if run 0 >/dev/null 2>&1; then fail "foreign directory content accepted"; fi
+[ "$(cat "$RUNTIME/foreign-user-lua")" = keep ] ||
+  fail "foreign directory content removed"
+rm -rf "$RUNTIME"
+
 # Existing foreign runtime and linked stage must fail before deletion.
 rm -rf "$RUNTIME"
 rm -f "$MARKER"
