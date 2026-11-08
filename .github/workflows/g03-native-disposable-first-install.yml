@@ -9,16 +9,6 @@ on:
       - scripts/test-g03-first-install.sh
       - scripts/test-gui-upstream-progress.mjs
       - scripts/stage2-opnsense-g03-first-install.py
-  push:
-    branches:
-      - feat/g03-fresh-gui-upstream-install
-    paths:
-      - src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
-      - src/opnsense/scripts/OPNsense/Zapret/setup.sh
-      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
-      - scripts/test-g03-first-install.sh
-      - scripts/test-gui-upstream-progress.mjs
-      - scripts/stage2-opnsense-g03-first-install.py
   workflow_dispatch:
 
 permissions:
@@ -54,7 +44,6 @@ jobs:
           sh scripts/test-g03-first-install.sh
           sh scripts/test-setup-runtime-transaction.sh
   native-g03:
-    if: github.event_name != 'push'
     needs: fast-g03
     name: Real OPNsense clean first upstream install and reinstall
     runs-on: ubuntu-latest

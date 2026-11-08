@@ -93,8 +93,11 @@ def main():
     cfg = Path("/conf/config.xml")
     need(cfg.is_file() and not cfg.is_symlink(), "G03_CONFIG_MISSING")
     config_before = hashlib.sha256(cfg.read_bytes()).hexdigest()
+    # A freshly installed disposable OPNsense guest may not have loaded
+    # the IPFW kernel module yet. That is an acceptable baseline: this
+    # first-runtime setup must not activate IPFW or create rules by itself.
     ipfw_before = run(["/sbin/ipfw", "list"], timeout=15)
-    need(ipfw_before.returncode == 0, "G03_NATIVE_IPFW_UNAVAILABLE")
+    module_before = run(["/sbin/kldstat", "-n", "ipfw"], timeout=15)
 
     first = dispatch_and_poll()
     need((ROOT / "binaries/my/dvtws2").is_file() and
@@ -124,8 +127,12 @@ def main():
     need(hashlib.sha256(cfg.read_bytes()).hexdigest() == config_before,
          "G03_UNEXPECTED_OPNSENSE_CONFIG_MUTATION")
     after = run(["/sbin/ipfw", "list"], timeout=15)
-    need(after.returncode == 0 and after.stdout == ipfw_before.stdout,
-         "G03_FIRST_INSTALL_MODIFIED_FIREWALL")
+    module_after = run(["/sbin/kldstat", "-n", "ipfw"], timeout=15)
+    need(after.returncode == ipfw_before.returncode and
+         after.stdout == ipfw_before.stdout and
+         module_after.returncode == module_before.returncode and
+         module_after.stdout == module_before.stdout,
+         "G03_FIRST_INSTALL_CHANGED_IPFW_STATE")
     print("G03_NATIVE=" + json.dumps({
         "status": "PASS_G03_REAL_CONFIGD_FIRST_INSTALL_AND_REINSTALL",
         "engine_release": RELEASE,
@@ -134,6 +141,7 @@ def main():
         "same_release_reinstalled": True,
         "original_fd9_transaction": True,
         "stock_configd_templates_preserved": True,
+        "ipfw_initially_loaded": ipfw_before.returncode == 0,
         "no_foreign_config_or_ipfw_change": True,
         "owner_browser_tested": False
     }, sort_keys=True))
