@@ -263,6 +263,7 @@ def main():
     started = False
     profile = None
     stop_error = None
+    primary_failure = None
     try:
         # Unlike the previous G04 proof (direct native model + configctl
         # Start), this is the actual installed page's authenticated/CSRF
@@ -311,21 +312,38 @@ def main():
         profile = check_compiled_argv()
         need(CONFIG.read_bytes() == saved_after_test_enable,
              "G04_NATIVE_START_DRYRUN_MODIFIED_SAVED_CONFIG")
+    except Exception as error:
+        # Preserve the FIRST relevant refusal; the cleanup witness must not
+        # conceal a valid pre-FD9 HTTP rejection behind ipfw-unloaded noise.
+        primary_failure = error
+        raise
     finally:
-        # Even a failed test must not leave a disposable engine and divert
-        # rules running when it can be stopped by the original native service.
+        # Even an unsuccessful first HTTP Apply must be stopped via the
+        # original configd. On a genuine fresh guest, IPFW may not have been
+        # loaded yet: rc=71 is not a leftover owned rule. Require that it
+        # was ALSO absent on entry and no dvtws2 PID remains.
         stop = call([CONFIGCTL, "zapret", "stop"], timeout=90)
         if stop.returncode:
             stop_error = "G04_NATIVE_CONFIGCTL_STOP_FAILED"
-        elif owned_rules():
-            stop_error = "G04_NATIVE_STOP_LEFT_OWNED_IPFW"
-        if before_foreign is not None and foreign_rules() != before_foreign:
-            stop_error = "G04_NATIVE_STOP_CHANGED_FOREIGN_IPFW"
+        else:
+            after_ipfw = foreign_rules()
+            if after_ipfw is None:
+                if before_foreign is not None or PID.exists() or PID.is_symlink():
+                    stop_error = "G04_NATIVE_STOP_UNVERIFIABLE_IPFW_OR_ENGINE_PID"
+            elif owned_rules():
+                stop_error = "G04_NATIVE_STOP_LEFT_OWNED_IPFW"
+            if before_foreign is not None and after_ipfw != before_foreign:
+                stop_error = "G04_NATIVE_STOP_CHANGED_FOREIGN_IPFW"
         if started or model().findtext("general/enabled") == "1":
             set_test_only_enabled(False)
             required([CONFIGCTL, "template", "reload", "OPNsense/Zapret"],
                      "G04_DISABLED_TEMPLATE_RENDER_FAILED")
-        need(stop_error is None, stop_error or "")
+        if stop_error is not None:
+            if primary_failure is not None:
+                print("G04_NATIVE_RUNTIME_CLEANUP=REFUSED:" + stop_error,
+                      file=sys.stderr)
+            else:
+                raise Refusal(stop_error)
     cleared = model()
     need(cleared.findtext("general/enabled") == "0" and
          not (cleared.findtext("general/waninterface") or "") and
