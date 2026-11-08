@@ -6,6 +6,7 @@ first-package proof and BEFORE the same-archive saved-empty reinstall proof.
 No owner appliance, release publication, foreign IPFW change or WAN traffic.
 """
 import hashlib
+import html
 import importlib.util
 import json
 import os
@@ -116,6 +117,139 @@ def setup_upstream():
     return hashlib.sha256(ENGINE.read_bytes()).hexdigest()
 
 
+def same_gui_multiline(actual, expected):
+    # OPNsense form textareas/JSON may normalize CRLF or terminal newlines.
+    # Exact byte-for-byte first saved XML remains a separate native witness;
+    # this check proves the rendered page reads the SAME ordered text.
+    if not isinstance(actual, str):
+        return False
+    def normalized(value):
+        return value.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+    # The OPNsense getNodes() API HTML-escapes the two
+    # <HOSTLIST:youtube> references before sending them in JSON.
+    # Its browser form decodes entities for the textarea. Decode
+    # exactly once here for the *read-back check only*, never rewrite
+    # the persisted Config or the user's posted model fields.
+    return normalized(html.unescape(actual)) == normalized(expected)
+
+
+def gui_model_diff_label(saved, traffic, domains):
+    strategy = saved.get("strategy") if isinstance(saved, dict) else None
+    hostlist = saved.get("hostlist") if isinstance(saved, dict) else None
+    actual_t = strategy.get("trafficargs") if isinstance(strategy, dict) else None
+    actual_d = hostlist.get("youtubedomains") if isinstance(hostlist, dict) else None
+    return (
+        "traffic_type=" + type(actual_t).__name__ +
+        ",traffic_len=" + str(len(actual_t) if isinstance(actual_t, str) else -1) +
+        ",expected_traffic_len=" + str(len(traffic)) +
+        ",youtube_type=" + type(actual_d).__name__ +
+        ",youtube_lines=" + str(len(actual_d.splitlines()) if isinstance(actual_d, str) else -1) +
+        ",expected_youtube_lines=" + str(len(domains.splitlines()))
+    )
+
+
+def g04_http_form(saved, *, stale=False):
+    """Use the form's actual posted namespace, not direct Config/model writes."""
+    need(isinstance(saved, dict), "G04_HTTPS_NATIVE_MODEL_MISSING")
+    hostlist = saved.get("hostlist")
+    strategy = saved.get("strategy")
+    need(isinstance(hostlist, dict) and isinstance(strategy, dict),
+         "G04_HTTPS_NATIVE_MODEL_SHAPE_INVALID")
+    baseline = hostlist.get("telegramips")
+    need(isinstance(baseline, str), "G04_HTTPS_BASELINE_NOT_SCALAR")
+    return [
+        ("zapret[sync][telegramips_baseline]",
+         "__g04_intentionally_stale_baseline__" if stale else baseline),
+        ("zapret[general][enabled]", "1"),
+        ("zapret[general][waninterface]", "lo0"),
+    ]
+
+
+def authenticated_first_apply(traffic, domains):
+    """Installed HTTPS cookie + CSRF; normal GUI page and Strategies API."""
+    spec = importlib.util.spec_from_file_location(
+        "g04_existing_authenticated_https",
+        HERE / "stage2-opnsense-real-native-voice-http.py")
+    voice = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(voice)
+    web = voice.GuestHttps()
+    voice.login(web)
+    page = web.request("GET", "/ui/zapret")
+    need('frm_GeneralSettings' in page and 'reconfigureAct' in page and
+         '/api/zapret/settings/apply' in page,
+         "G04_INSTALLED_GENERAL_APPLY_PAGE_UNAVAILABLE")
+    result = web.api("GET", "/api/zapret/settings/get")
+    saved = result.get("zapret")
+    need(isinstance(saved, dict) and
+         isinstance(saved.get("strategy"), dict) and
+         isinstance(saved.get("hostlist"), dict) and
+         same_gui_multiline(saved["strategy"].get("trafficargs"), traffic) and
+         same_gui_multiline(saved["hostlist"].get("youtubedomains"), domains),
+         "G04_HTTPS_FRESH_MODEL_DID_NOT_RENDER_SAVED_DEFAULTS:" +
+         gui_model_diff_label(saved, traffic, domains))
+
+    before_config = CONFIG.read_bytes()
+    negative = web.api(
+        "POST", "/api/zapret/settings/apply",
+        g04_http_form(saved, stale=True))
+    need(negative.get("result") == "failed" and
+         negative.get("requires_review") is not True,
+         "G04_HTTPS_STALE_BASELINE_NOT_SAFELY_REJECTED")
+    need(CONFIG.read_bytes() == before_config and
+         not PID.exists() and not PID.is_symlink(),
+         "G04_HTTPS_STALE_APPLY_MUTATED_CONFIG_OR_ENGINE")
+
+    applied = web.api(
+        "POST", "/api/zapret/settings/apply",
+        g04_http_form(saved))
+    need(applied.get("result") == "saved" and applied.get("status") == "ok",
+         "G04_HTTPS_FIRST_STRATEGIES_APPLY_NOT_COMMITTED:" +
+         str(applied.get("message", "no-receipt"))[:190])
+    after = model()
+    need(after.findtext("general/enabled") == "1" and
+         after.findtext("general/waninterface") == "lo0" and
+         after.findtext("strategy/trafficargs") == traffic and
+         after.findtext("hostlist/youtubedomains") == domains,
+         "G04_HTTPS_COMMITTED_CONFIG_OR_INITIAL_PROFILE_CHANGED")
+    loaded = web.api("GET", "/api/zapret/settings/get").get("zapret")
+    need(isinstance(loaded, dict) and
+         same_gui_multiline(loaded.get("strategy", {}).get("trafficargs"), traffic) and
+         same_gui_multiline(loaded.get("hostlist", {}).get("youtubedomains"), domains),
+         "G04_HTTPS_FRESH_GET_DID_NOT_READ_PERSISTED_APPLY:" +
+         gui_model_diff_label(loaded, traffic, domains))
+    return {"authenticated": True, "csrf": True, "negative_no_write": True,
+            "positive_native_apply": True, "fresh_gui_get": True}
+
+
+def self_test():
+    sample = {"hostlist": {"telegramips": "", "youtubedomains": "youtube.com"},
+              "strategy": {"trafficargs": "--filter-tcp=80,443"}}
+    correct = dict(g04_http_form(sample))
+    stale = dict(g04_http_form(sample, stale=True))
+    assert correct == {
+        "zapret[sync][telegramips_baseline]": "",
+        "zapret[general][enabled]": "1",
+        "zapret[general][waninterface]": "lo0",
+    }
+    assert stale["zapret[sync][telegramips_baseline]"] != ""
+    assert same_gui_multiline("first\r\nsecond\r\n", "first\nsecond")
+    assert same_gui_multiline("one &lt;HOSTLIST:youtube&gt; two",
+                              "one <HOSTLIST:youtube> two")
+    assert not same_gui_multiline("one &lt;HOSTLIST:foreign&gt; two",
+                                  "one <HOSTLIST:youtube> two")
+    assert not same_gui_multiline("first\nCHANGED", "first\nsecond")
+    assert not same_gui_multiline({}, "first\nsecond")
+    for malformed in ({}, {"hostlist": {}, "strategy": {}},
+                      {"hostlist": {"telegramips": []}, "strategy": {}}):
+        try:
+            g04_http_form(malformed)
+        except Refusal:
+            pass
+        else:
+            raise AssertionError("G04 accepted malformed baseline")
+    print("PASS: G04 exact GUI Apply form, stale baseline and malformed source contracts")
+
+
 def check_compiled_argv():
     args = ACTIVE / "dvtws.args"
     need(args.is_file() and not args.is_symlink(),
@@ -170,20 +304,20 @@ def main():
     started = False
     profile = None
     stop_error = None
+    primary_failure = None
     try:
-        set_test_only_enabled(True)
+        # Unlike the previous G04 proof (direct native model + configctl
+        # Start), this is the actual installed page's authenticated/CSRF
+        # Strategies Apply from a first-runtime STOPPED state. It invokes the
+        # established common FD9 owner and is not a simulated GUI success.
+        http_evidence = authenticated_first_apply(traffic, domains)
+        started = True
         updated = model()
         need(hashlib.sha256((updated.findtext("strategy/trafficargs") or "").encode()).hexdigest()
              == initial_traffic_sha and
              (updated.findtext("hostlist/youtubedomains") or "") == domains,
-             "G04_ENABLING_LO0_CHANGED_INITIAL_PROFILE")
-        required([CONFIGCTL, "template", "reload", "OPNsense/Zapret"],
-                 "G04_NATIVE_TEMPLATE_RENDER_FAILED")
+             "G04_HTTPS_ENABLING_LO0_CHANGED_INITIAL_PROFILE")
         saved_after_test_enable = CONFIG.read_bytes()
-        start = call([CONFIGCTL, "zapret", "start"], timeout=150)
-        need(start.returncode == 0, "G04_NATIVE_CONFIGCTL_START_REFUSED:rc=" +
-             str(start.returncode) + ":" + (start.stdout + start.stderr)[-400:])
-        started = True
         for _ in range(12):
             live = call([str(SERVICE), "status"], timeout=20)
             if live.returncode == 0 and "zapret is running" in live.stdout:
@@ -219,21 +353,38 @@ def main():
         profile = check_compiled_argv()
         need(CONFIG.read_bytes() == saved_after_test_enable,
              "G04_NATIVE_START_DRYRUN_MODIFIED_SAVED_CONFIG")
+    except Exception as error:
+        # Preserve the FIRST relevant refusal; the cleanup witness must not
+        # conceal a valid pre-FD9 HTTP rejection behind ipfw-unloaded noise.
+        primary_failure = error
+        raise
     finally:
-        # Even a failed test must not leave a disposable engine and divert
-        # rules running when it can be stopped by the original native service.
+        # Even an unsuccessful first HTTP Apply must be stopped via the
+        # original configd. On a genuine fresh guest, IPFW may not have been
+        # loaded yet: rc=71 is not a leftover owned rule. Require that it
+        # was ALSO absent on entry and no dvtws2 PID remains.
         stop = call([CONFIGCTL, "zapret", "stop"], timeout=90)
         if stop.returncode:
             stop_error = "G04_NATIVE_CONFIGCTL_STOP_FAILED"
-        elif owned_rules():
-            stop_error = "G04_NATIVE_STOP_LEFT_OWNED_IPFW"
-        if before_foreign is not None and foreign_rules() != before_foreign:
-            stop_error = "G04_NATIVE_STOP_CHANGED_FOREIGN_IPFW"
+        else:
+            after_ipfw = foreign_rules()
+            if after_ipfw is None:
+                if before_foreign is not None or PID.exists() or PID.is_symlink():
+                    stop_error = "G04_NATIVE_STOP_UNVERIFIABLE_IPFW_OR_ENGINE_PID"
+            elif owned_rules():
+                stop_error = "G04_NATIVE_STOP_LEFT_OWNED_IPFW"
+            if before_foreign is not None and after_ipfw != before_foreign:
+                stop_error = "G04_NATIVE_STOP_CHANGED_FOREIGN_IPFW"
         if started or model().findtext("general/enabled") == "1":
             set_test_only_enabled(False)
             required([CONFIGCTL, "template", "reload", "OPNsense/Zapret"],
                      "G04_DISABLED_TEMPLATE_RENDER_FAILED")
-        need(stop_error is None, stop_error or "")
+        if stop_error is not None:
+            if primary_failure is not None:
+                print("G04_NATIVE_RUNTIME_CLEANUP=REFUSED:" + stop_error,
+                      file=sys.stderr)
+            else:
+                raise Refusal(stop_error)
     cleared = model()
     need(cleared.findtext("general/enabled") == "0" and
          not (cleared.findtext("general/waninterface") or "") and
@@ -244,6 +395,7 @@ def main():
     print("G04_NATIVE_RUNTIME=" + json.dumps({
         "status": "PASS_G04_REAL_TCP_QUIC_DVTWS_DRYRUN_AND_LO0_START_STOP",
         "release": "v1.0.7", **profile,
+        "real_authenticated_https_strategies_apply": http_evidence,
         "actual_native_configctl_start_stop": True,
         "only_owned_lo0_ipfw_rules": True,
         "owner_browser_tested": False, "real_wan_network_bypass_tested": False
@@ -252,6 +404,9 @@ def main():
 
 if __name__ == "__main__":
     try:
+        if sys.argv[1:] == ["--self-test"]:
+            self_test()
+            sys.exit(0)
         main()
     except (Refusal, OSError, ValueError, ET.ParseError, subprocess.TimeoutExpired) as exc:
         print("G04_NATIVE_RUNTIME=REFUSED:" + str(exc), file=sys.stderr)

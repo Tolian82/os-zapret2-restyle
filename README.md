@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_9` — G04/A06 real installed v1.0.7 TCP+QUIC parser, blob/hostlist, dvtws2 dry-run and scoped lo0 Start/Stop acceptance. `_8` first native Config persistence is merged and disposable-native PASS; owner GUI and real WAN bypass remain NOT TESTED. Stable is `v0.6.3_1`, no `_9.pkg` published. |
+| **Current development candidate** | `v0.6.3_10` — G04 cookie/CSRF-authenticated native HTTP Strategies first Apply from a clean, stopped v1.0.7 and saved TCP/QUIC Config. `_8` persisted initial Config and `_9` real native Start/Stop are disposable-guest PASS. Physical browser Apply, owner WAN/bypass still NOT TESTED. Stable is `v0.6.3_1`; no `_10.pkg` published. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
