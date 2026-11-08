@@ -3,7 +3,7 @@
 # zapret2 runtime setup backend for OPNsense/FreeBSD.
 # Run explicitly after plugin installation or through the GUI maintenance action.
 
-ZAPRET_DIR="/usr/local/etc/zapret2"
+ZAPRET_DIR="${ZAPRET_DIR:-/usr/local/etc/zapret2}"
 ZAPRET_REPO="https://github.com/bol-van/zapret2.git"
 ZAPRET_RELEASES_API="https://api.github.com/repos/bol-van/zapret2/releases?per_page=100"
 STATE_DIR="${STATE_DIR:-/var/db/zapret2-restyle}"
@@ -420,7 +420,13 @@ install_runtime()
             status_write "failed"
             return 1
         }
-        rm -rf "${ZAPRET_DIR}"
+        # Never remove an unrecognized existing checkout in first setup.
+        # The GUI transaction supplies a private, initially absent staging root.
+        if [ -e "${ZAPRET_DIR}" ] || [ -L "${ZAPRET_DIR}" ]; then
+            echo "ERROR: incomplete or foreign upstream path: ${ZAPRET_DIR}; inspect before retry" >&2
+            status_write failed
+            return 69
+        fi
         git clone --depth 1 --branch "${_zapret_ref}" "${ZAPRET_REPO}" "${ZAPRET_DIR}"
     fi
 

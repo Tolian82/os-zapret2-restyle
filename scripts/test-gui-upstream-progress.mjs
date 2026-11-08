@@ -33,10 +33,23 @@ assert.equal(classifier(state('v1.0.6', 'ready'), 'v1.0.5.2', 'v1.0.6', 'started
     'wrong active release cannot finish successfully');
 assert.equal(classifier(null, 'v1.0.5.2', 'v1.0.6', 'started', true), 'pending',
     'unavailable API response cannot claim success');
+assert.equal(classifier(state('v1.0.7', 'ready', false, 'stopped'), 'v1.0.7',
+    'Not installed', 'error', false), 'success',
+    'genuine initial install finishes stopped even without a seen busy pulse');
+assert.equal(classifier({installed: false, setup: 'failed', busy: false},
+    'v1.0.7', 'Not installed', 'error', true), 'failed',
+    'failed first install with no executable must surface a real failure');
+assert.equal(classifier({installed: false, setup: 'failed', busy: false},
+    'v1.0.7', 'Not installed', 'error', false), 'pending',
+    'stale failure without observed progress cannot terminate a new click');
+assert.equal(classifier(state('v1.0.7', 'ready', false, 'started'), 'v1.0.7',
+    'Not installed', 'error', true), 'pending',
+    'initial runtime setup must not auto-start the service');
 
 const script = view.slice(view.indexOf('<script>'), view.indexOf('</script>'));
 const braces = script.replace(/\{\{[\s\S]*?\}\}/g, '"x"');
 assert.match(script, /function ensureRuntimePolling\(busy\)/);
+assert.match(script, /currentRuntimeInstalled &&[\s\S]{0,120}currentServiceState !== 'started'/);
 assert.match(script, /\(releaseApplyPending \|\| busy\) && runtimePoll === null/);
 assert.match(script, /runtimeStatusInFlight\) return;/);
 assert.match(script, /Date\.now\(\) - releaseApplyStartedAt >= releaseApplyDeadlineMs/);

@@ -1,0 +1,84 @@
+name: G03 real native GUI-selected fresh upstream setup
+
+on:
+  pull_request:
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
+      - src/opnsense/scripts/OPNsense/Zapret/setup.sh
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - scripts/test-g03-first-install.sh
+      - scripts/test-gui-upstream-progress.mjs
+      - scripts/stage2-opnsense-g03-first-install.py
+  push:
+    branches:
+      - feat/g03-fresh-gui-upstream-install
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
+      - src/opnsense/scripts/OPNsense/Zapret/setup.sh
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - scripts/test-g03-first-install.sh
+      - scripts/test-gui-upstream-progress.mjs
+      - scripts/stage2-opnsense-g03-first-install.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast-g03:
+    name: Fast G03 exact-source preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run setup/frontend/old-rollback regressions
+        run: |
+          set -eu
+          sh -n src/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/setup.sh
+          sh -n scripts/test-g03-first-install.sh
+          python3.13 -m py_compile scripts/stage2-opnsense-g03-first-install.py
+          node scripts/test-gui-upstream-progress.mjs
+          sh scripts/test-g03-first-install.sh
+          sh scripts/test-setup-runtime-transaction.sh
+  native-g03:
+    if: github.event_name != 'push'
+    needs: fast-g03
+    name: Real OPNsense clean first upstream install and reinstall
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Disposable OPNsense 26.7 real pkg install and first GUI-selected configd setup
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
