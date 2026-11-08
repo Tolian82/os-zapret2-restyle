@@ -86,7 +86,21 @@ apply_runtime_probe()
             firewall_shared_runtime verify-legacy "$ACTIVE_DIR" "$1" || return 69
         fi
     else
-        firewall_shared_runtime verify "$1" - || return 69
+        # On a genuine first HTTPS Strategies Apply, the clean OPNsense
+        # kernel can have NEITHER ipfw NOR ipdivert loaded. The read-only
+        # adapter cannot list rules in that precise ENOPROTOOPT state.
+        # Reuse the stock cold-boot classifier only after the engine,
+        # supervisor and independent process census above all passed.
+        # No module is loaded here. The existing native activation later
+        # prepares IPFW under original FD9 and repeats ownership checks.
+        # Loaded, partial or ambiguous kernels always use exact IPFW
+        # manifest verification; never guess "empty" from a query error.
+        if command -v shared_apply_ipfw_kernel_absent_service >/dev/null 2>&1 &&
+           shared_apply_ipfw_kernel_absent_service; then
+            :
+        else
+            firewall_shared_runtime verify "$1" - || return 69
+        fi
     fi
 }
 

@@ -10,6 +10,7 @@ on:
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage2-opnsense-g04-native-config.py
       - scripts/stage2-opnsense-g04-native-runtime.py
+      - scripts/test-g04-cold-shared-apply-preflight.sh
   workflow_dispatch:
 
 permissions:
@@ -38,6 +39,9 @@ jobs:
           php scripts/test-g04-initial-config.php
           sh -n pkg/+POST_INSTALL
           sh -n scripts/test-package-lifecycle-restart.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+          sh -n scripts/test-g04-cold-shared-apply-preflight.sh
+          sh scripts/test-g04-cold-shared-apply-preflight.sh
           sh scripts/test-package-lifecycle-restart.sh
           python3.13 -m py_compile scripts/stage2-opnsense-real-native-clean-install.py scripts/stage2-opnsense-g04-native-config.py scripts/stage2-opnsense-g04-native-runtime.py
           python3.13 scripts/stage2-opnsense-g04-native-runtime.py --self-test
