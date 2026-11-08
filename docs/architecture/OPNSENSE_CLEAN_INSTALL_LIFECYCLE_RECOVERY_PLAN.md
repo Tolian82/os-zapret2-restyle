@@ -137,7 +137,7 @@
 
 | Этап | Gate | Статус на дату создания плана | Первый требуемый свидетель |
 |---|---|---|---|
-| 01 — полный purge | G01 | OPEN | Script + dry-run/full real disposable test |
+| 01 — полный purge | G01 | IN_PROGRESS — source+fast tests, disposable-native CI pending | Script + dry-run/full real disposable test (including runtime/IPFW/menu) |
 | 02 — обычное GUI удаление | G02 | BLOCKED BY G01 | GUI menu disappearance and Config retention |
 | 03 — первый GUI setup | G03 | BLOCKED BY G02 | First install v1.0.7 without previous runtime |
 | 04 — defaults TCP+QUIC | G04 | BLOCKED BY G03 | Ten domains and exact two profiles, installed binary dry-run |
