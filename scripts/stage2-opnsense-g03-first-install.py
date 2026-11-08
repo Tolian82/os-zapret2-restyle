@@ -104,6 +104,14 @@ def main():
     need((ROOT / "binaries/my/dvtws2").is_file() and
          os.access(ROOT / "binaries/my/dvtws2", os.X_OK),
          "G03_COMPILED_DVTWS2_MISSING")
+    for relative, target in {
+        "nfq2/dvtws2": "../binaries/my/dvtws2",
+        "ip2net/ip2net": "../binaries/my/ip2net",
+        "mdig/mdig": "../binaries/my/mdig",
+    }.items():
+        symlink = ROOT / relative
+        need(symlink.is_symlink() and os.readlink(symlink) == target,
+             "G03_EXPECTED_COMPILER_LINK_MISSING_OR_UNSAFE:" + relative)
     commit = run(["/usr/local/bin/git", "-C", str(ROOT), "rev-parse", "HEAD"])
     tag = run(["/usr/local/bin/git", "-C", str(ROOT), "rev-parse",
                "refs/tags/" + RELEASE + "^{commit}"])

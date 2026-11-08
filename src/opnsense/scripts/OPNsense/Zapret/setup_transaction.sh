@@ -700,14 +700,43 @@ first_install_templates_equal()
     done
 }
 
+# Upstream v1.0.7 Makefile creates these three links after compilation.
+# Accept only their exact relative targets inside the checked-out root.
+# Never follow unknown, absolute, escaping or linked binary destinations.
+first_install_compiler_links_safe()
+{
+    _links_root="$1"
+    [ -d "${_links_root}" ] && [ ! -L "${_links_root}" ] || return 69
+    _compiled_links=$("${FIND_BIN}" "${_links_root}" -type l -print) || return 69
+    [ -n "${_compiled_links}" ] || return 0
+    printf '%s\n' "${_compiled_links}" | while IFS= read -r _compiled_link; do
+        [ -n "${_compiled_link}" ] || continue
+        case "${_compiled_link}" in
+            "${_links_root}/nfq2/dvtws2")
+                _compiled_target="../binaries/my/dvtws2"
+                _compiled_binary=dvtws2 ;;
+            "${_links_root}/ip2net/ip2net")
+                _compiled_target="../binaries/my/ip2net"
+                _compiled_binary=ip2net ;;
+            "${_links_root}/mdig/mdig")
+                _compiled_target="../binaries/my/mdig"
+                _compiled_binary=mdig ;;
+            *) exit 69 ;;
+        esac
+        [ -L "${_compiled_link}" ] &&
+        [ "$(readlink "${_compiled_link}")" = "${_compiled_target}" ] &&
+        [ -f "${_links_root}/binaries/my/${_compiled_binary}" ] &&
+        [ ! -L "${_links_root}/binaries/my/${_compiled_binary}" ] || exit 69
+    done
+}
+
 first_install_stage_safe()
 {
     [ -d "${FIRST_INSTALL_STAGE}" ] && [ ! -L "${FIRST_INSTALL_STAGE}" ] || return 69
-    [ -z "$("${FIND_BIN}" "${FIRST_INSTALL_STAGE}" -type l -print 2>/dev/null)" ] || return 69
     for _entry in "${FIRST_INSTALL_STAGE}"/* "${FIRST_INSTALL_STAGE}"/.[!.]* "${FIRST_INSTALL_STAGE}"/..?*; do
         [ -e "${_entry}" ] || [ -L "${_entry}" ] || continue
         case "${_entry##*/}" in
-            runtime) [ -d "${_entry}" ] && [ ! -L "${_entry}" ] || return 69 ;;
+            runtime) first_install_compiler_links_safe "${_entry}" || return 69 ;;
             original) first_install_template_root_safe "${_entry}" || return 69 ;;
             *) return 69 ;;
         esac
@@ -730,6 +759,7 @@ first_install_cleanup_stage()
 first_install_validate()
 {
     _fresh_root="$1"
+    first_install_compiler_links_safe "${_fresh_root}" || return 69
     [ -d "${_fresh_root}" ] && [ ! -L "${_fresh_root}" ] &&
     [ -d "${_fresh_root}/.git" ] && [ ! -L "${_fresh_root}/.git" ] &&
     [ -x "${_fresh_root}/binaries/my/dvtws2" ] && [ -x "${GIT_BIN}" ] || return 69

@@ -30,6 +30,18 @@ printf '%s\n' setup >> "$TEST_INSTALL_CALLS"
 mkdir -p "$ZAPRET_DIR/.git" "$ZAPRET_DIR/binaries/my"
 printf '#!/bin/sh\nexit 0\n' > "$ZAPRET_DIR/binaries/my/dvtws2"
 chmod 0755 "$ZAPRET_DIR/binaries/my/dvtws2"
+# The upstream v1.0.7 Makefile creates these three internal compiler links.
+mkdir -p "$ZAPRET_DIR/nfq2" "$ZAPRET_DIR/ip2net" "$ZAPRET_DIR/mdig"
+for binary in ip2net mdig; do
+  cp "$ZAPRET_DIR/binaries/my/dvtws2" "$ZAPRET_DIR/binaries/my/$binary"
+  chmod 0755 "$ZAPRET_DIR/binaries/my/$binary"
+done
+ln -s ../binaries/my/dvtws2 "$ZAPRET_DIR/nfq2/dvtws2"
+ln -s ../binaries/my/ip2net "$ZAPRET_DIR/ip2net/ip2net"
+ln -s ../binaries/my/mdig "$ZAPRET_DIR/mdig/mdig"
+if [ "${TEST_UNSAFE_LINK:-0}" = 1 ]; then
+  ln -s /etc/passwd "$ZAPRET_DIR/nfq2/foreign"
+fi
 [ "$TEST_BUILD_FAIL" != 1 ] || exit 77
 printf '%s\n' ready > "$TEST_SETUP_STATUS"
 EOF
@@ -53,7 +65,7 @@ exit 69
 EOF
 chmod 0755 "$ROOT/service" "$ROOT/setup" "$ROOT/git" "$ROOT/extra" "$ROOT/configctl"
 run() {
-  TEST_BUILD_FAIL="$1" \
+  TEST_BUILD_FAIL="$1" TEST_UNSAFE_LINK="${2:-0}" \
   TEST_SETUP_STATUS="$STATUS" TEST_INSTALL_CALLS="$ROOT/install.calls" \
   SETUP_SCRIPT="$ROOT/setup" SERVICE_SCRIPT="$ROOT/service" \
   CONFIGCTL="$ROOT/configctl" GIT_BIN="$ROOT/git" \
@@ -70,6 +82,9 @@ run 0 || fail "clean setup failed"
 [ "$(cat "$MARKER")" = v1.0.7 ] || fail "no release marker"
 [ "$(cat "$STATUS")" = ready ] || fail "not ready"
 [ -x "$RUNTIME/binaries/my/dvtws2" ] || fail "binary not published"
+[ -L "$RUNTIME/nfq2/dvtws2" ] &&
+[ "$(readlink "$RUNTIME/nfq2/dvtws2")" = "../binaries/my/dvtws2" ] ||
+  fail "expected upstream compiler link was not preserved"
 [ ! -e "$STAGE" ] && [ ! -e "$INTENT" ] || fail "stage not cleaned"
 [ ! -e "$STATE/runtime-rollback" ] || fail "unexpected old rollback"
 # Simulate crash after atomic promotion but before marker finalization.
@@ -155,6 +170,17 @@ if run 0 >/dev/null 2>&1; then fail "foreign directory content accepted"; fi
 [ "$(cat "$RUNTIME/foreign-user-lua")" = keep ] ||
   fail "foreign directory content removed"
 rm -rf "$RUNTIME"
+
+# A staging symlink to an external path is not a valid compiler link.
+rm -rf "$RUNTIME"
+rm -f "$MARKER"
+if run 0 1 >/dev/null 2>&1; then fail "external stage symlink accepted"; fi
+[ ! -e "$RUNTIME" ] && [ -L "$STAGE/runtime/nfq2/foreign" ] ||
+  fail "unsafe staged checkout was published or overwritten"
+# These are disposable test-fixture files only. Production preserves uncertain
+# foreign state for inspection rather than deleting it.
+rm -rf "$STAGE"
+rm -f "$INTENT"
 
 # Existing foreign runtime and linked stage must fail before deletion.
 rm -rf "$RUNTIME"
