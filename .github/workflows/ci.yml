@@ -22,6 +22,8 @@ jobs:
       stage0_private_elf: ${{ steps.paths.outputs.stage0_private_elf }}
       stage0_pkg_scheduler: ${{ steps.paths.outputs.stage0_pkg_scheduler }}
       stage0_historical_fd9: ${{ steps.paths.outputs.stage0_historical_fd9 }}
+      stage0_archive_baseline: ${{ steps.paths.outputs.stage0_archive_baseline }}
+      strategy_lab: ${{ steps.paths.outputs.strategy_lab }}
 
     steps:
       - uses: actions/checkout@v6
@@ -82,7 +84,7 @@ jobs:
           package=false
           if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
             package=true
-          elif printf '%s\n' "${classified_changed}" | grep -Eq '^(\.github/workflows/ci\.yml$|VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/stage2_source_revision[.]py$|scripts/test-stage2-source-revision[.]py$|scripts/native-opnsense-package\.py$|scripts/build-curl-impersonate\.sh$|scripts/stage2-opnsense-native-private-source\.py$|scripts/stage2-opnsense-native-provider-preflight\.py$|scripts/stage0-opnsense-official-mk-source-package\.py$|compatibility\.json$|scripts/validate-compatibility\.py$|scripts/compatibility-bootstrap\.sh$|scripts/stage1-native-policy-static\.py$|scripts/test-freebsd15-package-ci\.sh$)'; then
+          elif printf '%s\n' "${classified_changed}" | grep -Eq '^(VERSION$|Makefile$|pkg/|src/|repository/|scripts/build-pkg\.sh$|scripts/stage2_source_revision[.]py$|scripts/test-stage2-source-revision[.]py$|scripts/native-opnsense-package\.py$|scripts/build-curl-impersonate\.sh$|scripts/stage2-opnsense-native-private-source\.py$|scripts/stage2-opnsense-native-provider-preflight\.py$|scripts/stage0-opnsense-official-mk-source-package\.py$|compatibility\.json$|scripts/validate-compatibility\.py$|scripts/compatibility-bootstrap\.sh$|scripts/stage1-native-policy-static\.py$|scripts/test-freebsd15-package-ci\.sh$)'; then
             package=true
           fi
 
@@ -104,12 +106,28 @@ jobs:
           if printf '%s\n' "${changed}" | grep -Eq '^scripts/(stage0-archived-hooks-native-fd9|test-stage0-archived-hooks-native-fd9|stage0-installed-pkgdb-native|test-stage0-installed-pkgdb-native|stage0-installed-predecessor-readonly|test-stage0-installed-predecessor-readonly)[.]py$'; then
             stage0_historical_fd9=true
           fi
+          # Frozen predecessor baselines are not changed by ordinary plugin source.
+          stage0_archive_baseline=false
+          if printf '%s\n' "${classified_changed}" | grep -Eq '^scripts/(stage0-published-package-audit|test-stage0-published-package-audit|stage0-private-elf-audit|test-stage0-private-elf-audit)[.]py$'; then
+            stage0_archive_baseline=true
+          fi
+
+          # The expensive Strategy Lab corrective matrix is only relevant
+          # to its own code/shared native runtime; never run on a GUI-only fix.
+          strategy_lab=false
+          if printf '%s\n' "${classified_changed}" | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/zapret_service[.]sh$|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
+            strategy_lab=true
+          fi
+
           # Resolve ^ fallback and dispatch refs to immutable full Git SHAs.
           resolved_base_sha=$(git rev-parse "${base_sha}")
           resolved_head_sha=$(git rev-parse "${head_sha}")
           echo "base_sha=${resolved_base_sha}" >> "${GITHUB_OUTPUT}"
           echo "head_sha=${resolved_head_sha}" >> "${GITHUB_OUTPUT}"
           echo "stage0_historical_fd9=${stage0_historical_fd9}" >> "${GITHUB_OUTPUT}"
+          echo "stage0_archive_baseline=${stage0_archive_baseline}" >> "${GITHUB_OUTPUT}"
+          echo "strategy_lab=${strategy_lab}" >> "${GITHUB_OUTPUT}"
+          echo "SCOPE package=${package} stage0_archive=${stage0_archive_baseline} historical_fd9=${stage0_historical_fd9} scheduler=${stage0_pkg_scheduler} elf=${stage0_private_elf} native_ipfw=${native_wan_process} strategy_lab=${strategy_lab}"
           echo "stage0_pkg_scheduler=${stage0_pkg_scheduler}" >> "${GITHUB_OUTPUT}"
           echo "stage0_private_elf=${stage0_private_elf}" >> "${GITHUB_OUTPUT}"
           echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
@@ -126,6 +144,7 @@ jobs:
 
   stage0-package-baseline:
     name: Stage 0 published old-package archive baseline
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_archive_baseline == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
     steps:
@@ -206,7 +225,7 @@ jobs:
 
   stage0-historical-hook-fd9:
     name: Stage 0 actual archived four hooks and native FreeBSD 15.1 FD9
-    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.stage0_historical_fd9 == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_historical_fd9 == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
     steps:
@@ -250,7 +269,7 @@ jobs:
 
   stage0-real-pkg-scheduler:
     name: Stage 0 real FreeBSD 15.1 pkg hook phase order (synthetic fixtures)
-    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.stage0_pkg_scheduler == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_pkg_scheduler == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
     steps:
@@ -287,7 +306,7 @@ jobs:
 
   stage0-private-elf-native-runtime:
     name: Stage 0 exact published ELF FreeBSD 15.1 dynamic runtime
-    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.stage0_private_elf == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_private_elf == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
     steps:
@@ -989,6 +1008,7 @@ jobs:
         run: python3.13 scripts/test-voice-profile-compiler.py
 
       - name: Test Strategy Lab corrective matrix
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.strategy_lab == 'true' }}
         run: sh scripts/test-strategy-lab-corrective-matrix.sh
 
       - name: Test diagnostics guidance localization
@@ -1212,7 +1232,7 @@ jobs:
 
   native-ipfw-table:
     name: Isolated FreeBSD 15.1 native IPFW tables and IPv6 UDP divert
-    if: ${{ github.event_name == 'pull_request' && (needs.changes.outputs.package == 'true' || needs.changes.outputs.native_wan_process == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.native_wan_process == 'true') }}
     runs-on: ubuntu-latest
     needs: changes
 

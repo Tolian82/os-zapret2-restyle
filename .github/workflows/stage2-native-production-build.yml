@@ -12,8 +12,6 @@ on:
       - scripts/compatibility-bootstrap.sh
       - scripts/test-native-opnsense-package.py
       - scripts/test_freebsd15_package_ci.py
-      - .github/workflows/ci.yml
-      - .github/workflows/release.yml
   workflow_dispatch:
 
 concurrency:

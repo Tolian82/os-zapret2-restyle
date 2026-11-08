@@ -44,7 +44,7 @@ class NativePackageClassification(unittest.TestCase):
                 self.assertTrue(package_source_pattern().search(path))
 
     def test_old_product_delivery_paths_continue_triggering(self):
-        for path in ("Makefile", "VERSION", ".github/workflows/ci.yml",
+        for path in ("Makefile", "VERSION",
                      "pkg/+PRE_INSTALL", "src/opnsense/service/conf/actions.d/actions_zapret.conf",
                      "repository/zapret2-restyle.conf", "scripts/build-pkg.sh",
                      "scripts/test-freebsd15-package-ci.sh"):
@@ -53,6 +53,7 @@ class NativePackageClassification(unittest.TestCase):
 
     def test_docs_only_and_unrelated_sources_do_not_trigger(self):
         for path in ("README.md", "docs/START_HERE.md",
+                     ".github/workflows/ci.yml", ".github/workflows/release.yml",
                      "docs/verification/evidence/receipt.md",
                      "scripts/test-stage2-native-package-ci-classifier.py",
                      "scripts/other-unrelated-analysis.py"):
