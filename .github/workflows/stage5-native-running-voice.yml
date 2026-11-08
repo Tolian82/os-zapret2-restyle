@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - Makefile
       - VERSION
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
@@ -27,11 +26,9 @@ on:
       - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
-      - .github/workflows/stage5-native-running-voice.yml
   pull_request:
     branches: [main]
     paths:
-      - Makefile
       - VERSION
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
@@ -54,8 +51,11 @@ on:
       - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
-      - .github/workflows/stage5-native-running-voice.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

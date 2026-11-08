@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - Makefile
       - VERSION
       - compatibility.json
       - scripts/native-opnsense-package.py
@@ -31,11 +30,9 @@ on:
       - scripts/stage5-native-same-archive-reboot.py
       - scripts/stage5-native-real-shared-voice-reboot.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
-      - .github/workflows/stage5-native-cross-clean-running.yml
   pull_request:
     branches: [main]
     paths:
-      - Makefile
       - VERSION
       - compatibility.json
       - scripts/native-opnsense-package.py
@@ -62,8 +59,11 @@ on:
       - scripts/stage5-native-same-archive-reboot.py
       - scripts/stage5-native-real-shared-voice-reboot.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
-      - .github/workflows/stage5-native-cross-clean-running.yml
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

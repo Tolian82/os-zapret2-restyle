@@ -43,7 +43,7 @@ Historical implementation milestones:
 Current `.github/workflows/pr-completion-watchdog.yml` has four triggers:
 
 - **`workflow_run`**: only when a PR-triggered workflow **named `CI`** completes. This limits fanout; the initial design listened to many specialized workflow completions and generated numerous redundant/cancelled jobs.
-- **`schedule`**: GitHub cron `7,17,27,37,47,57 * * * *`, a nominal **10-minute** fallback. GitHub Actions schedules are best effort: heavy load, disabled Actions, or account/repository restrictions can delay or suppress runs. There is **no strict ten-minute SLA**.
+- **`schedule`**: GitHub cron `7 * * * *`, an **hourly** fallback (GH-070, 8 November 2026; previous ten-minute cron is historical). GitHub Actions schedules are best effort: heavy load, disabled Actions, or account/repository restrictions can delay or suppress runs. There is **no strict ten-minute SLA**.
 - **`workflow_dispatch`**: manual on-demand diagnosis or recheck.
 - **`push`** to `main` when **any of these three paths** changes: `.github/workflows/pr-completion-watchdog.yml`, `scripts/github_pr_watchdog.py`, or `scripts/test_github_pr_watchdog.py`. This qualifies deployment/source or test-only edits without waiting for a schedule; unrelated product commits do not trigger this path.
 

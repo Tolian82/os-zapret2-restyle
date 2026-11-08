@@ -3,20 +3,22 @@ name: Stage 2 native unsafe-owner real pkg replacement witness
 on:
   pull_request:
     paths:
-      - Makefile
       - pkg/+PRE_INSTALL
       - scripts/native-opnsense-package.py
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-unsafe-owner-replacement.py
       - scripts/test-stage2-opnsense-real-unsafe-owner-replacement.py
-      - .github/workflows/stage2-real-native-unsafe-owner-replacement.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Fast source contracts only
         type: boolean
         default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

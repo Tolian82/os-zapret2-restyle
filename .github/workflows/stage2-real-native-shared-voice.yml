@@ -3,17 +3,19 @@ name: Stage 2 real installed common Strategies and Telegram Voice owner
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-active-service.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
-      - .github/workflows/stage2-real-native-shared-voice.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Run only portable safety contracts
         type: boolean
         default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

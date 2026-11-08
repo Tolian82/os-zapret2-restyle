@@ -463,7 +463,7 @@ class DeliveryFallbackTests(unittest.TestCase):
                 '.github/workflows/pr-completion-watchdog.yml').read_text()
         self.assertEqual(text.count("      - 'CI'"), 1)
         self.assertEqual(text.count('    workflows:'), 1)
-        self.assertIn("cron: '7,17,27,37,47,57 * * * *'", text)
+        self.assertIn("cron: '7 * * * *'", text)
         self.assertIn('  pull-requests: write', text)
         self.assertIn('  issues: write', text)
         self.assertIn('ref: ${{ github.event.repository.default_branch }}', text)

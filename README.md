@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_3` — first G01 standalone full-purge source and isolated-native acceptance under development. No `0.6.3_3.pkg` has been published or owner-tested. Published stable remains `v0.6.3_1`; merged documentation v0.6.3_2 has no package. |
+| **Current development candidate** | `v0.6.3_4` — GitHub CI/governance optimization following merged native-qualified G01 `_3`; neither `_3` nor `_4` has a published/owner-installed package. Stable remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |

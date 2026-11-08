@@ -3,18 +3,20 @@ name: Stage 2 real installed OPNsense shutdown and boot syshook lifecycle
 on:
   pull_request:
     paths:
-      - Makefile
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage2-opnsense-real-native-active-service.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
       - scripts/test-stage2-opnsense-real-native-boot-syshook.py
-      - .github/workflows/stage2-real-native-boot-syshook.yml
   workflow_dispatch:
     inputs:
       fast_only:
         description: Run only off-target safety/boot-contract tests
         type: boolean
         default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
