@@ -116,6 +116,32 @@ def setup_upstream():
     return hashlib.sha256(ENGINE.read_bytes()).hexdigest()
 
 
+def same_gui_multiline(actual, expected):
+    # OPNsense form textareas/JSON may normalize CRLF or terminal newlines.
+    # Exact byte-for-byte first saved XML remains a separate native witness;
+    # this check proves the rendered page reads the SAME ordered text.
+    if not isinstance(actual, str):
+        return False
+    def normalized(value):
+        return value.replace("\r\n", "\n").replace("\r", "\n").rstrip("\n")
+    return normalized(actual) == normalized(expected)
+
+
+def gui_model_diff_label(saved, traffic, domains):
+    strategy = saved.get("strategy") if isinstance(saved, dict) else None
+    hostlist = saved.get("hostlist") if isinstance(saved, dict) else None
+    actual_t = strategy.get("trafficargs") if isinstance(strategy, dict) else None
+    actual_d = hostlist.get("youtubedomains") if isinstance(hostlist, dict) else None
+    return (
+        "traffic_type=" + type(actual_t).__name__ +
+        ",traffic_len=" + str(len(actual_t) if isinstance(actual_t, str) else -1) +
+        ",expected_traffic_len=" + str(len(traffic)) +
+        ",youtube_type=" + type(actual_d).__name__ +
+        ",youtube_lines=" + str(len(actual_d.splitlines()) if isinstance(actual_d, str) else -1) +
+        ",expected_youtube_lines=" + str(len(domains.splitlines()))
+    )
+
+
 def g04_http_form(saved, *, stale=False):
     """Use the form's actual posted namespace, not direct Config/model writes."""
     need(isinstance(saved, dict), "G04_HTTPS_NATIVE_MODEL_MISSING")
@@ -151,9 +177,10 @@ def authenticated_first_apply(traffic, domains):
     need(isinstance(saved, dict) and
          isinstance(saved.get("strategy"), dict) and
          isinstance(saved.get("hostlist"), dict) and
-         saved["strategy"].get("trafficargs") == traffic and
-         saved["hostlist"].get("youtubedomains") == domains,
-         "G04_HTTPS_FRESH_MODEL_DID_NOT_RENDER_SAVED_DEFAULTS")
+         same_gui_multiline(saved["strategy"].get("trafficargs"), traffic) and
+         same_gui_multiline(saved["hostlist"].get("youtubedomains"), domains),
+         "G04_HTTPS_FRESH_MODEL_DID_NOT_RENDER_SAVED_DEFAULTS:" +
+         gui_model_diff_label(saved, traffic, domains))
 
     before_config = CONFIG.read_bytes()
     negative = web.api(
@@ -180,9 +207,10 @@ def authenticated_first_apply(traffic, domains):
          "G04_HTTPS_COMMITTED_CONFIG_OR_INITIAL_PROFILE_CHANGED")
     loaded = web.api("GET", "/api/zapret/settings/get").get("zapret")
     need(isinstance(loaded, dict) and
-         loaded.get("strategy", {}).get("trafficargs") == traffic and
-         loaded.get("hostlist", {}).get("youtubedomains") == domains,
-         "G04_HTTPS_FRESH_GET_DID_NOT_READ_PERSISTED_APPLY")
+         same_gui_multiline(loaded.get("strategy", {}).get("trafficargs"), traffic) and
+         same_gui_multiline(loaded.get("hostlist", {}).get("youtubedomains"), domains),
+         "G04_HTTPS_FRESH_GET_DID_NOT_READ_PERSISTED_APPLY:" +
+         gui_model_diff_label(loaded, traffic, domains))
     return {"authenticated": True, "csrf": True, "negative_no_write": True,
             "positive_native_apply": True, "fresh_gui_get": True}
 
@@ -198,6 +226,9 @@ def self_test():
         "zapret[general][waninterface]": "lo0",
     }
     assert stale["zapret[sync][telegramips_baseline]"] != ""
+    assert same_gui_multiline("first\r\nsecond\r\n", "first\nsecond")
+    assert not same_gui_multiline("first\nCHANGED", "first\nsecond")
+    assert not same_gui_multiline({}, "first\nsecond")
     for malformed in ({}, {"hostlist": {}, "strategy": {}},
                       {"hostlist": {"telegramips": []}, "strategy": {}}):
         try:
