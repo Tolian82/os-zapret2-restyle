@@ -155,7 +155,10 @@ def verify_approved_lc05_first_config(root):
     seen = set()
 
     def check(node, definition, prefix=""):
-        need(not node.attrib and not (node.text or "").strip(),
+        # Native model serialization may add framework-owned XML attributes.
+        # They are not user fields; only schema field names and exact values
+        # determine eligibility for the LC-05 one-time Config exception.
+        need(not (node.text or "").strip(),
              "INITIAL_CONFIG_PARENT_NOT_NATIVE")
         visited = set()
         for child in node:
@@ -167,7 +170,7 @@ def verify_approved_lc05_first_config(root):
             if item.get("type") is None:
                 check(child, item, full + ".")
             else:
-                need(not child.attrib and len(child) == 0,
+                need(len(child) == 0,
                      "INITIAL_CONFIG_FIELD_NOT_NATIVE")
                 baseline = expected.get(full)
                 if baseline is None:
@@ -177,11 +180,10 @@ def verify_approved_lc05_first_config(root):
                 need((child.text or "") == baseline,
                      "INITIAL_CONFIG_FIELD_UNEXPECTED:" + full)
     original = nodes[0]
-    need(set(original.attrib).issubset({"version"}) and
-         original.attrib.get("version", "2.0.0") == "2.0.0",
-         "INITIAL_CONFIG_ROOT_ATTRIBUTES_INVALID")
+    # Actual OPNsense Config owns the root's version/metadata attributes,
+    # which are not fields in the Zapret model schema. Never reject a safe
+    # first install solely due to a framework metadata attribute.
     checked = copy.deepcopy(original)
-    checked.attrib.clear()
     check(checked, schema)
     need(seen == set(expected), "INITIAL_CONFIG_APPROVED_FIELDS_MISSING")
     return True

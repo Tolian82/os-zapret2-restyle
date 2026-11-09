@@ -140,6 +140,21 @@ def prove_preserved_config(before, after):
          'REPLACEMENT_FOREIGN_PLUGIN_REGISTRY_MODIFIED')
 
     aa, bb = copy.deepcopy(a), copy.deepcopy(b)
+    # Only a completely absent prior Zapret subtree permits current LC-05
+    # first Config values. An existing user subtree is never exempted.
+    initial_config_added = False
+    old_saved = aa.findall("./OPNsense/Zapret")
+    new_saved = bb.findall("./OPNsense/Zapret")
+    need(len(old_saved) <= 1 and len(new_saved) <= 1,
+         "REPLACEMENT_PLUGIN_CONFIG_ROOT_AMBIGUOUS")
+    if not old_saved and new_saved:
+        clean.verify_approved_lc05_first_config(bb)
+        initial_config_added = True
+        parent = bb.find("./OPNsense")
+        parent.remove(new_saved[0])
+        if (aa.find("./OPNsense") is None and len(parent) == 0 and
+            not parent.attrib and not (parent.text or "").strip()):
+            bb.remove(parent)
     for root in (aa, bb):
         for revision in root.findall('revision'):
             root.remove(revision)
@@ -163,7 +178,8 @@ def prove_preserved_config(before, after):
             'plugin_registry_count': len(after_names),
             'plugin_name_registered': True,
             'all_non_registry_config_preserved': True,
-            'only_normal_revision_metadata_exempted': True}
+            'only_normal_revision_metadata_exempted': True,
+            'only_exact_new_lc05_config_exempted': initial_config_added}
 
 
 def check_old_archive(path):
