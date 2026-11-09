@@ -300,6 +300,30 @@ validator_validate_argument_references()
     done < "${_validator_refs_args}"
 }
 
+validator_validate_ordinary_scope()
+{
+    _validator_scope_traffic="$1"
+    _validator_scope_tcp="$2"
+    _validator_scope_udp="$3"
+
+    # Only semantically blank ordinary traffic may have no ordinary filters.
+    # Keep all existing requirements for actual nonempty Strategies.
+    if LC_ALL=C grep -q '[^[:space:]]' "${_validator_scope_traffic}"; then
+        validator_has_filter "${_validator_scope_traffic}" || {
+            validator_fail "resolved traffic strategy contains no --filter-tcp= or --filter-udp="
+            return 1
+        }
+        if [ ! -s "${_validator_scope_tcp}" ] &&
+           [ ! -s "${_validator_scope_udp}" ]; then
+            validator_fail "both TCP and UDP port artifacts are empty"
+            return 1
+        fi
+    fi
+    # This also rejects a blank traffic artifact paired with nonempty ports.
+    validator_compare_ports "${_validator_scope_traffic}" \
+        "${_validator_scope_tcp}" "${_validator_scope_udp}"
+}
+
 validator_validate_build()
 {
     _validator_build_args="$1"
@@ -322,7 +346,7 @@ validator_validate_build()
     validator_require_regular_file \
         "${_validator_build_args}" "generated argument file" 1 || return 1
     validator_require_regular_file \
-        "${_validator_build_traffic}" "resolved traffic strategy" 1 || return 1
+        "${_validator_build_traffic}" "resolved traffic strategy" 0 || return 1
 
     validator_validate_port_csv \
         "${_validator_build_tcp}" "TCP port artifact" || return 1
@@ -338,18 +362,7 @@ validator_validate_build()
     validator_reject_unresolved_placeholders "${_validator_build_traffic}" ||
         return 1
 
-    validator_has_filter "${_validator_build_traffic}" || {
-        validator_fail "resolved traffic strategy contains no --filter-tcp= or --filter-udp="
-        return 1
-    }
-
-    if [ ! -s "${_validator_build_tcp}" ] &&
-       [ ! -s "${_validator_build_udp}" ]; then
-        validator_fail "both TCP and UDP port artifacts are empty"
-        return 1
-    fi
-
-    validator_compare_ports \
+    validator_validate_ordinary_scope \
         "${_validator_build_traffic}" \
         "${_validator_build_tcp}" \
         "${_validator_build_udp}" || return 1
@@ -481,7 +494,7 @@ validator_validate_build_mapped()
     validator_require_regular_file \
         "${_validator_build_mapped_args}" "generated argument file" 1 || return 1
     validator_require_regular_file \
-        "${_validator_build_mapped_traffic}" "resolved traffic strategy" 1 || return 1
+        "${_validator_build_mapped_traffic}" "resolved traffic strategy" 0 || return 1
     validator_validate_port_csv \
         "${_validator_build_mapped_tcp}" "TCP port artifact" || return 1
     validator_validate_port_csv \
@@ -494,18 +507,7 @@ validator_validate_build_mapped()
         "${_validator_build_mapped_args}" || return 1
     validator_reject_unresolved_placeholders \
         "${_validator_build_mapped_traffic}" || return 1
-    validator_has_filter "${_validator_build_mapped_traffic}" || {
-        validator_fail "resolved traffic strategy contains no --filter-tcp= or --filter-udp="
-        return 1
-    }
-
-    if [ ! -s "${_validator_build_mapped_tcp}" ] &&
-       [ ! -s "${_validator_build_mapped_udp}" ]; then
-        validator_fail "both TCP and UDP port artifacts are empty"
-        return 1
-    fi
-
-    validator_compare_ports \
+    validator_validate_ordinary_scope \
         "${_validator_build_mapped_traffic}" \
         "${_validator_build_mapped_tcp}" \
         "${_validator_build_mapped_udp}" || return 1

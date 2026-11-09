@@ -329,7 +329,7 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
     ):
         raise IPFWAdapterError("common engine/IPFW traffic changed after STUN staging")
     argv = read("dvtws.args").decode("utf-8")
-    if not traffic.strip() or not argv.strip():
+    if not argv.strip() or (not traffic.strip() and profiles):
         raise IPFWAdapterError("common engine argv differs from merged Voice traffic")
     policy_witness = release / "dvtws.args.global-policy.json"
     if policy_witness.exists() or policy_witness.is_symlink():
@@ -360,7 +360,7 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
                 release,
                 Path("/usr/local/etc/zapret2"),
             )
-            expected_rows = profile_tokens(traffic)
+            expected_rows = profile_tokens(traffic) if traffic.strip() else []
             effective_rows = profile_tokens(argv)
             if len(effective_rows) < len(expected_rows):
                 raise IPFWAdapterError("common engine lost merged runtime profiles")
@@ -393,9 +393,16 @@ def _verify_shared_voice_engine(release: Path, plan: dict, read) -> None:
         socket_tokens != [f"--port={divert}"]
     ):
         raise IPFWAdapterError("common engine divert socket differs from shared IPFW")
-    tokens = profile_tokens(traffic)
-    if len(tokens) < len(profiles) + 1:
-        raise IPFWAdapterError("missing ordinary Strategy after Voice profiles")
+    tokens = profile_tokens(traffic) if traffic.strip() else []
+    if len(tokens) < len(profiles):
+        raise IPFWAdapterError("common engine lost Voice profiles")
+    if len(tokens) == len(profiles):
+        # A Voice-only (or no-action) candidate is valid only when the
+        # staged ordinary artifact is genuinely blank and SHA-bound to the
+        # same original shared release. Never infer emptiness from names.
+        ordinary_bytes = read("traffic-user.conf")
+        if ordinary_bytes.strip() or hashlib.sha256(ordinary_bytes).hexdigest() != source.get("ordinary_sha256"):
+            raise IPFWAdapterError("missing ordinary Strategy after Voice profiles")
     for index, row in enumerate(profiles):
         if not isinstance(row, dict) or row.get("service") not in SERVICES or (
             row.get("enabled") is not True
@@ -502,11 +509,11 @@ def legacy_strategies_manifest(release: Path, target: dict, *, owner: int = 0) -
     }
     # The existing Strategies firewall installer uses exactly these two
     # standard divert rules. No Voice table is owned by this predecessor.
-    return prepare_desired(
-        capture,
-        read("tcp-ports.txt").strip(),
-        read("udp-ports.txt").strip(),
-    )
+    tcp = read("tcp-ports.txt").strip()
+    udp = read("udp-ports.txt").strip()
+    if not tcp and not udp:
+        raise IPFWAdapterError("legacy Strategies predecessor cannot own zero ordinary rules")
+    return prepare_desired(capture, tcp, udp)
 
 
 def shared_release_manifest(release: Path) -> dict:

@@ -16,8 +16,8 @@ profile_normalizer_validate_count()
     profile_normalizer_count=$1
 
     case "${profile_normalizer_count}" in
-        ''|*[!0-9]*|0)
-            common_error "profile_normalizer_normalize_all requires a positive profile count"
+        ''|*[!0-9]*)
+            common_error "profile_normalizer_normalize_all requires a nonnegative profile count"
             return 1
             ;;
     esac
@@ -129,6 +129,16 @@ profile_normalizer_normalize_all()
         common_error "normalizer work directory does not exist: ${profile_normalizer_workdir}"
         return 1
     }
+
+    if [ "${profile_normalizer_input_count}" = "0" ]; then
+        [ -f "${profile_normalizer_workdir}/profile-count" ] &&
+        [ "$(cat "${profile_normalizer_workdir}/profile-count")" = "0" ] || {
+            common_error "normalizer zero-profile input is not backed by parser count"
+            return 1
+        }
+        printf '0\n'
+        return 0
+    fi
 
     rm -rf "${profile_normalizer_stage}" "${profile_normalizer_backup}"
     mkdir -p "${profile_normalizer_stage}" || {

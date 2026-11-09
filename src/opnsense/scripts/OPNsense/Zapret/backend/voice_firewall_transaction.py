@@ -80,8 +80,8 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
         raise VoiceFirewallError("unsafe plugin rule range, WAN or divert port")
     tcp = _validate_port_string(tcp, "ordinary TCP")
     udp = _validate_port_string(udp, "ordinary UDP")
-    if not tcp and not udp:
-        raise VoiceFirewallError("ordinary Strategy has neither TCP nor UDP ports")
+    # Zero ordinary ports deliberately installs zero ordinary divert rules.
+    # Voice still uses the same destination-scoped owned rule/table manifest.
     rules: dict[int, list[str]] = {}
     tables: dict[str, list[str]] = {}
     voice = capture_plan.get("voice")

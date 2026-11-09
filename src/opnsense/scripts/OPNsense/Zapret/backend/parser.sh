@@ -77,8 +77,11 @@ parser_parse()
     END {
         if (failed)
             exit 21
-        if (NR == 0 || (profile == 1 && !content))
-            fail("Traffic Strategy contains no profiles")
+        if (profile == 1 && !content) {
+            # A blank user Strategy has zero ordinary profiles.
+            print 0 > count_file
+            exit
+        }
         if (!content)
             fail("empty strategy profile after the final --new")
         print profile > count_file
@@ -89,7 +92,10 @@ parser_parse()
         common_error "parser did not produce a profile count"
         return 1
     }
-
+    # awk can open profile-1.conf on blank lines. No ghost profile survives.
+    if [ "$(cat "${count_file}")" = "0" ]; then
+        rm -f "${workdir}/profile-1.conf" || return 1
+    fi
     cat "${count_file}"
 }
 

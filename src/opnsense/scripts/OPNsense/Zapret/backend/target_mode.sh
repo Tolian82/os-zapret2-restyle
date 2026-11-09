@@ -171,9 +171,11 @@ target_mode_apply_all()
     target_mode_registry=$4
     target_mode_profile_no=1
 
+    # Even with no profiles, a malformed global Target Mode is an error.
+    target_mode_validate_mode "${target_mode_value}" || return 1
     case "${target_mode_profile_count}" in
-        ''|*[!0-9]*|0)
-            common_error "target_mode_apply_all requires a positive profile count"
+        ''|*[!0-9]*)
+            common_error "target_mode_apply_all requires a nonnegative profile count"
             return 1
             ;;
     esac

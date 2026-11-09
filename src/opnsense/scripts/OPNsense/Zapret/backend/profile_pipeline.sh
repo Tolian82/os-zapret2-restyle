@@ -5,7 +5,7 @@
 # Every public step uses the same contract:
 #   profile_pipeline_<step> WORKDIR PROFILE_COUNT [STEP ARGUMENTS...]
 #
-# A successful step prints the resulting positive PROFILE_COUNT to stdout.
+# A successful step prints the resulting nonnegative PROFILE_COUNT to stdout.
 # Steps that do not change the number of profiles return the input count.
 
 profile_pipeline_validate_count()
@@ -14,7 +14,7 @@ profile_pipeline_validate_count()
     _profile_pipeline_label="${2:-profile pipeline}"
 
     case "${_profile_pipeline_count}" in
-        ''|*[!0-9]*|0)
+        ''|*[!0-9]*)
             common_error "${_profile_pipeline_label} returned an invalid profile count"
             return 1
             ;;

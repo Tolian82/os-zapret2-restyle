@@ -207,14 +207,8 @@ orchestrator_build_release()
             "native Voice ON requires the completed transactional runtime"
         return 1
     }
-    [ -n "${TRAFFIC_ARGS}" ] || {
-        common_error "Traffic Strategy is empty"
-        orchestrator_fail_stage \
-            "${_orchestrator_build_stage_file}" 1 \
-            "${_orchestrator_build_total}" config \
-            "Traffic Strategy is empty"
-        return 1
-    }
+    # A genuinely empty Traffic Strategy is allowed; the parser still
+    # rejects empty --new segments and invalid nonempty profiles.
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 1 "${_orchestrator_build_total}" \
         config ok "configuration loaded" || return 1
