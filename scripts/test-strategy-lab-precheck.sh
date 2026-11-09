@@ -151,6 +151,20 @@ printf '%s\n' "${MOCK_SERVICE} strategy-lab job.fixture" |
     grep -Eq 'zapret_service\.sh.*strategy-lab' ||
     fail "mock service identity does not match native Strategy Lab owner"
 
+# Offline Linux fixture: keep production launcher bytes unchanged.
+# Only replace the native read-only WAN probe in this private test directory.
+WAN_FIXTURE_DIR="${TMP_ROOT}/wan-fixture"
+mkdir -p "${WAN_FIXTURE_DIR}"
+for file in "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/"*; do
+    ln -s "${file}" "${WAN_FIXTURE_DIR}/$(basename "${file}")"
+done
+rm -f "${WAN_FIXTURE_DIR}/wan_preflight.sh"
+cat > "${WAN_FIXTURE_DIR}/wan_preflight.sh" <<'WAN_PROBE'
+#!/bin/sh
+printf '%s\n' wan-ready
+WAN_PROBE
+chmod 0755 "${WAN_FIXTURE_DIR}/wan_preflight.sh"
+
 launcher()
 {
     STRATEGY_LAB_JQ="$(command -v jq)" \
@@ -159,7 +173,7 @@ launcher()
     STRATEGY_LAB_JOBS_DIR="${RUN_DIR}/jobs" \
     STRATEGY_LAB_ACTIVE_FILE="${RUN_DIR}/active.job" \
     STRATEGY_LAB_LOCK_FILE="${RUN_DIR}/launcher.lock" \
-    SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret" \
+    SCRIPT_DIR="${WAN_FIXTURE_DIR}" \
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
     PROBE_RUNNER="${PROBE_RUNNER}" \

@@ -136,6 +136,57 @@ def config_structure_diagnostic(before, after):
 
 
 
+def verify_approved_lc05_first_config(root):
+    """Strict first-install exception: two approved fields and model defaults."""
+    nodes = root.findall("./OPNsense/Zapret")
+    need(len(nodes) == 1, "INITIAL_CONFIG_ROOT_NOT_UNIQUE")
+    schema = ET.parse(HERE.parent / "src/opnsense/mvc/app/models/OPNsense"
+                      / "Zapret/Zapret.xml").getroot().find("./items")
+    native_source = (HERE.parent / "src/opnsense/scripts/OPNsense/Zapret"
+                     / "initialize_config.php").read_text(encoding="utf-8")
+    expected = {}
+    for name, field in (("TRAFFIC_STRATEGY", "strategy.trafficargs"),
+                        ("YOUTUBE_DOMAINS", "hostlist.youtubedomains")):
+        match = re.search(r"public const " + name +
+                          r" = <<<'(?P<tag>[A-Z]+)'\n(?P<value>.*?)\n(?P=tag);",
+                          native_source, re.S)
+        need(match is not None, "INITIAL_CONFIG_SOURCE_CONSTANT_MISSING")
+        expected[field] = match.group("value")
+    seen = set()
+
+    def check(node, definition, prefix=""):
+        need(not node.attrib and not (node.text or "").strip(),
+             "INITIAL_CONFIG_PARENT_NOT_NATIVE")
+        visited = set()
+        for child in node:
+            need(child.tag not in visited, "INITIAL_CONFIG_DUPLICATE_FIELD")
+            visited.add(child.tag)
+            item = definition.find(child.tag)
+            need(item is not None, "INITIAL_CONFIG_FOREIGN_FIELD")
+            full = prefix + child.tag
+            if item.get("type") is None:
+                check(child, item, full + ".")
+            else:
+                need(not child.attrib and len(child) == 0,
+                     "INITIAL_CONFIG_FIELD_NOT_NATIVE")
+                baseline = expected.get(full)
+                if baseline is None:
+                    baseline = item.findtext("Default") or ""
+                else:
+                    seen.add(full)
+                need((child.text or "") == baseline,
+                     "INITIAL_CONFIG_FIELD_UNEXPECTED:" + full)
+    original = nodes[0]
+    need(set(original.attrib).issubset({"version"}) and
+         original.attrib.get("version", "2.0.0") == "2.0.0",
+         "INITIAL_CONFIG_ROOT_ATTRIBUTES_INVALID")
+    checked = copy.deepcopy(original)
+    checked.attrib.clear()
+    check(checked, schema)
+    need(seen == set(expected), "INITIAL_CONFIG_APPROVED_FIELDS_MISSING")
+    return True
+
+
 def verify_official_first_install_registration(before, after):
     """Accept only what official register.php/Config::save() must modify.
 
@@ -151,6 +202,22 @@ def verify_official_first_install_registration(before, after):
         raise Refusal("REGISTERED_CONFIG_NOT_WELL_FORMED_XML") from None
     need(old.tag == "opnsense" and new.tag == "opnsense",
          "REGISTERED_OPNSENSE_CONFIG_ROOT_WRONG")
+    # An authentic first-install Config save seeds the approved two model
+    # values once. Compare every other old/new XML section unchanged.
+    first_initialized = False
+    prior_nodes = old.findall("./OPNsense/Zapret")
+    installed_nodes = new.findall("./OPNsense/Zapret")
+    need(len(prior_nodes) <= 1 and len(installed_nodes) <= 1,
+         "INITIAL_CONFIG_ROOT_AMBIGUOUS")
+    if not prior_nodes and installed_nodes:
+        verify_approved_lc05_first_config(new)
+        first_initialized = True
+        new = copy.deepcopy(new)
+        parent = new.find("./OPNsense")
+        parent.remove(new.find("./OPNsense/Zapret"))
+        if (old.find("./OPNsense") is None and len(parent) == 0 and
+            not parent.attrib and not (parent.text or "").strip()):
+            new.remove(parent)
     original_firmware = old.find("system/firmware")
     installed_firmware = new.find("system/firmware")
     need(installed_firmware is not None and
@@ -225,7 +292,8 @@ def verify_official_first_install_registration(before, after):
             "all_other_plugins_preserved": True,
             "allowed_new_firmware_type": added_type,
             "config_revision_metadata_updated": True,
-            "all_other_config_sections_unchanged": True}
+            "all_other_config_sections_unchanged": True,
+             "approved_lc05_first_config_initialized": first_initialized}
 
 
 def pkg_add(archive):
@@ -344,9 +412,10 @@ def python_down_installed_cold_status():
              "NATIVE_PYTHON_DOWN_COLD_" + action.upper() + "_FAILED:" +
              str(result.returncode) + ":" + (result.stdout + result.stderr)[-180:])
     start = run([str(service), "start"], timeout=25, env=environment)
-    need(start.returncode == 69 and
-         "python" in start.stderr.lower() and not start.stdout.strip(),
-         "NATIVE_PYTHON_DOWN_START_DID_NOT_REFUSE_BEFORE_MUTATION:" +
+    # With no saved WAN, reject it before checking Python installation.
+    need(start.returncode == 64 and
+         "WAN_REQUIRED" in start.stderr and not start.stdout.strip(),
+         "NATIVE_COLD_START_WAN_NOT_FIRST_BEFORE_PYTHON:" +
          str(start.returncode) + ":" + (start.stdout + start.stderr)[-180:])
     need(Path("/conf/config.xml").read_bytes() == before_config,
          "NATIVE_PYTHON_DOWN_START_CHANGED_CONFIG")
@@ -357,6 +426,7 @@ def python_down_installed_cold_status():
     return {"native_python_down_cold_status": "STOPPED",
             "native_python_down_cold_stop": "IDEMPOTENT",
             "native_python_down_cold_start": "REFUSED_BEFORE_MUTATION",
+             "no_wan_precedes_missing_python": True,
             "native_python_down_running_owner_tested": False,
             "native_python_down_shared_owner_tested": False}
 
