@@ -13,6 +13,7 @@ counter growth.  The rule itself matches source port + pinned destination IPv4 +
 
 from __future__ import annotations
 
+import ipaddress
 import time
 from typing import Any, Sequence
 
@@ -36,8 +37,27 @@ def _command_binding_matches(
     local_port: int,
 ) -> tuple[bool, bool]:
     source_port_match = _option_value(execution.command, "--local-port") == str(local_port)
-    resolve_match = _option_value(execution.command, "--resolve") == f"{endpoint}:443:{selected_ip}"
-    return source_port_match, resolve_match
+    try:
+        literal = ipaddress.ip_address(endpoint)
+    except ValueError:
+        literal = None
+    if literal is not None:
+        # request._curl_command deliberately omits --resolve for an IP literal.
+        # Its exact HTTPS URL, --ipv4, and the same pinned IPv4, plus the
+        # source-port-qualified IPFW counter, provide the binding instead.
+        destination_match = (
+            literal.version == 4
+            and str(literal) == selected_ip
+            and "--resolve" not in execution.command
+            and "--ipv4" in execution.command
+            and execution.command[-1] == f"https://{endpoint}/"
+        )
+    else:
+        destination_match = (
+            _option_value(execution.command, "--resolve")
+            == f"{endpoint}:443:{selected_ip}"
+        )
+    return source_port_match, destination_match
 
 
 def _probe_endpoint(

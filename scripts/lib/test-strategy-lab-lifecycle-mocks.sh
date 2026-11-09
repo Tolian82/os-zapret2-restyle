@@ -78,6 +78,23 @@ cat > "${MOCK_BIN}/nc" <<'MOCK'
 exit "${MOCK_NC_STATUS:-1}"
 MOCK
 
+cat > "${MOCK_BIN}/kldstat" <<'MOCK'
+#!/bin/sh
+# Already-loaded kernel fixture: no production cold load executed on Linux.
+exit 0
+MOCK
+cat > "${MOCK_BIN}/kldload" <<'MOCK'
+#!/bin/sh
+exit 1
+MOCK
+cat > "${MOCK_BIN}/sysctl" <<'MOCK'
+#!/bin/sh
+printf '%s\n' 1
+MOCK
+cat > "${MOCK_BIN}/ipfw" <<'MOCK'
+#!/bin/sh
+exit 0
+MOCK
 cat > "${MOCK_BIN}/candidate" <<'MOCK'
 #!/bin/sh
 job_id="$1"
@@ -132,4 +149,5 @@ esac
 MOCK
 chmod +x "${MOCK_BIN}/lockf" "${MOCK_BIN}/daemon" "${MOCK_BIN}/service" \
     "${MOCK_BIN}/curl" "${MOCK_BIN}/drill" "${MOCK_BIN}/netstat" \
-    "${MOCK_BIN}/openssl" "${MOCK_BIN}/nc" "${MOCK_BIN}/candidate"
+    "${MOCK_BIN}/openssl" "${MOCK_BIN}/nc" "${MOCK_BIN}/candidate" \
+    "${MOCK_BIN}/kldstat" "${MOCK_BIN}/kldload" "${MOCK_BIN}/sysctl" "${MOCK_BIN}/ipfw"

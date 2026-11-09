@@ -36,7 +36,7 @@ class FakeCompleted:
         self.stderr = stderr
 
 
-def run_case(execution: request.CommandResult, after_counter=None):
+def run_case(execution: request.CommandResult, after_counter=None, endpoint_binding=binding):
     counter_calls = 0
     def fake_adapter(action, *args, timeout=15):
         nonlocal counter_calls
@@ -45,7 +45,7 @@ def run_case(execution: request.CommandResult, after_counter=None):
             assert args == ("42000",)
             return FakeCompleted()
         if action == "route-add-source":
-            assert args == (str(slot.rule), str(slot.port), "203.0.113.20", "wan0", "tcp", "443", "42000")
+            assert args == (str(slot.rule), str(slot.port), endpoint_binding["selected_ip"], "wan0", "tcp", "443", "42000")
             return FakeCompleted()
         if action == "counter":
             assert args == (str(slot.rule),)
@@ -58,7 +58,7 @@ def run_case(execution: request.CommandResult, after_counter=None):
 
     with mock.patch.object(model_b, "_adapter", side_effect=fake_adapter), \
          mock.patch.object(model_b_parallel, "_parallel_curl_request", return_value=execution):
-        return corrective._probe_endpoint(slot, binding, "wan0", 42000)
+        return corrective._probe_endpoint(slot, endpoint_binding, "wan0", 42000)
 
 # Real blocked/failed connection shape: command binding is exact and IPFW sees the packet,
 # but curl has no connected remote/local write-out values. Attribution must still succeed,
@@ -99,6 +99,41 @@ result = run_case(wrong_source)
 assert result["command_source_port_match"] is False
 assert result["intercepted"] is True
 assert result["attribution_ok"] is False
+
+# IP-literal target: production curl correctly sends HTTPS directly to the IP
+# without --resolve. Exact URL/family/pinned address + controlled source port +
+# IPFW packet counter is still a strict attribution proof for a failed probe.
+literal_binding = {"endpoint": "4.2.2.2", "selected_ip": "4.2.2.2"}
+literal_command = request._curl_command(
+    "4.2.2.2", scheme="https", family="ipv4", bound_ip="4.2.2.2"
+)
+literal_command[-1:-1] = ["--local-port", "42000"]
+assert "--resolve" not in literal_command
+literal_failure = request.CommandResult(
+    command=literal_command, returncode=28, stdout="", stderr="timeout",
+    timed_out=False, termination="completed", signal=None, duration_ms=1500,
+)
+literal_result = run_case(literal_failure, endpoint_binding=literal_binding)
+assert literal_result["classification"] == "fail"
+assert literal_result["intercepted"] is True
+assert literal_result["command_endpoint_match"] is True
+assert literal_result["attribution_ok"] is True
+
+for forged_command in (
+    literal_command[:-1] + ["https://4.2.2.3/"],
+    literal_command[:-1] + ["--resolve", "4.2.2.2:443:4.2.2.2", "https://4.2.2.2/"],
+    [part for part in literal_command if part != "--ipv4"],
+):
+    forged = request.CommandResult(
+        command=forged_command, returncode=28, stdout="", stderr="timeout",
+        timed_out=False, termination="completed", signal=None, duration_ms=1500,
+    )
+    probe = run_case(forged, endpoint_binding=literal_binding)
+    assert probe["intercepted"] is True and probe["attribution_ok"] is False, probe
+
+wrong_literal_binding = {"endpoint": "4.2.2.2", "selected_ip": "4.2.2.3"}
+probe = run_case(literal_failure, endpoint_binding=wrong_literal_binding)
+assert probe["attribution_ok"] is False, probe
 
 # Successful probes retain the stricter success contract: connected remote IP and local
 # port must both be reported exactly before PASS is possible.
@@ -148,4 +183,4 @@ assert r["classification"]=="fail" and r["attribution_ok"] is False
 PY
 
 sh -n "$0"
-echo 'PASS: parallel Model B attributes blocked probes by exact command binding plus exact IPFW counter growth while retaining strict connected-socket evidence for PASS'
+echo 'PASS: Model B/Model C exact domain --resolve and IP-literal direct HTTPS attribution, source port, IPFW counters and anti-forgery'
