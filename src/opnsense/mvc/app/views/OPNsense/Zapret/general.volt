@@ -38,9 +38,13 @@
             stop: '{{ lang._("Stop") }}',
             apply: '{{ lang._("Apply") }}',
             applying: isRussian ? 'Применение…' : 'Applying…',
+            installing: isRussian ? 'Установка…' : 'Installing…',
             loading: isRussian ? 'Загрузка…' : 'Loading…',
             unavailable: isRussian ? 'Недоступно' : 'Unavailable',
-            notInstalled: 'not installed',
+            notInstalled: isRussian ? 'Не установлен' : 'Not installed',
+            statusUnavailable: isRussian
+                ? 'Невозможно достоверно определить состояние службы'
+                : 'The service state cannot be verified',
             operationFailed: isRussian
                 ? 'Установка Zapret2 завершилась с ошибкой. Подробности: /var/log/zapret2/setup.log'
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
@@ -320,8 +324,31 @@
             }
         }
 
+        // Exactly the five visible LC-09 categories. API uncertainty,
+        // inconsistent setup receipts and malformed native states fail closed.
+        function classifyRuntimeStatus(data) {
+            if (!data || data.status !== 'ok' ||
+                typeof data.installed !== 'boolean' ||
+                typeof data.busy !== 'boolean' ||
+                typeof data.version !== 'string' ||
+                ['started', 'stopped', 'error'].indexOf(data.service) === -1 ||
+                ['ready', 'installing', 'failed', 'unknown'].indexOf(data.setup) === -1) {
+                return 'error';
+            }
+            if (data.busy) return data.setup === 'installing' ? 'installing' : 'error';
+            if (data.setup === 'installing') return 'error';
+            if (!data.installed) {
+                return data.setup === 'unknown' && data.service === 'error' &&
+                    data.version === '' ? 'not-installed' : 'error';
+            }
+            if (!/^v[0-9]+(?:\.[0-9]+)+$/.test(data.version)) return 'error';
+            return data.service === 'started' || data.service === 'stopped'
+                ? data.service : 'error';
+        }
+
         function renderRuntime(data) {
-            const installed = !!(data && data.installed);
+            const category = classifyRuntimeStatus(data);
+            const installed = !!(data && data.installed === true);
             const service = data && ['started', 'stopped', 'error'].indexOf(data.service) !== -1
                 ? data.service
                 : 'error';
@@ -348,31 +375,35 @@
             }
 
             currentRuntimeInstalled = installed;
-            if (!busy) currentServiceState = installed ? service : 'error';
+            if (!busy) {
+                currentServiceState = category === 'started' || category === 'stopped'
+                    ? category : 'error';
+            }
             badge.removeClass('label-success label-default label-danger label-info');
+            badge.attr('title', data && data.reason === 'status-unavailable'
+                ? runtimeText.statusUnavailable : '');
 
-            if (busy) {
-                // The native lifecycle is intentionally STOPPED during an
-                // upstream build; do not publish its transient error as a
-                // terminal service failure or block on its FD9 status.
-                badge.addClass('label-info').text(runtimeText.applying);
+            if (category === 'installing') {
+                // Native setup holds FD9; do not mistake transient stopped or
+                // error service status for terminal installation failure.
+                badge.addClass('label-info').text(runtimeText.installing);
                 $('#zapretRuntimeVersion').text(data.version || '—');
                 serviceButton.hide().prop('disabled', true);
-            } else if (!installed) {
-                badge.addClass('label-danger').text(runtimeText.error);
-                $('#zapretRuntimeVersion').text(runtimeText.notInstalled);
+            } else if (category === 'not-installed') {
+                badge.addClass('label-default').text(runtimeText.notInstalled);
+                $('#zapretRuntimeVersion').text('—');
                 serviceButton.hide().prop('disabled', true);
-            } else if (service === 'started') {
+            } else if (category === 'started') {
                 badge.addClass('label-success').text(runtimeText.started);
                 $('#zapretRuntimeVersion').text(data.version || '—');
                 serviceButton.show().text(runtimeText.stop).prop('disabled', busy);
-            } else if (service === 'stopped') {
+            } else if (category === 'stopped') {
                 badge.addClass('label-default').text(runtimeText.stopped);
                 $('#zapretRuntimeVersion').text(data.version || '—');
                 serviceButton.show().text(runtimeText.start).prop('disabled', busy);
             } else {
                 badge.addClass('label-danger').text(runtimeText.error);
-                $('#zapretRuntimeVersion').text(data.version || '—');
+                $('#zapretRuntimeVersion').text(data && data.version || '—');
                 serviceButton.hide().prop('disabled', true);
             }
 
@@ -393,12 +424,15 @@
                 setRuntimeBusy(runtimeWasBusy);
                 return;
             }
+            // No verified state means a new install is NOT safe to dispatch.
+            releaseNeedsReview = true;
             currentRuntimeInstalled = false;
             currentServiceState = 'error';
             $('#zapretServiceStatus')
                 .removeClass('label-success label-default label-danger label-info')
                 .addClass('label-danger')
-                .text(runtimeText.error);
+                .text(runtimeText.error)
+                .attr('title', runtimeText.statusUnavailable);
             $('#zapretRuntimeVersion').text('—');
             $('#zapretServiceControl').hide().prop('disabled', true);
             setRuntimeBusy(false);
@@ -1162,7 +1196,7 @@
                         <div id="zapretServiceLine">
                             <b>{{ lang._("Status") }}:</b>
                             <span id="zapretServiceStatus" class="label label-danger">{{ lang._("Error") }}</span>
-                            <strong id="zapretRuntimeVersion">not installed</strong>
+                            <strong id="zapretRuntimeVersion">—</strong>
                             <span id="zapretServiceControlSlot">
                                 <button class="btn btn-default" id="zapretServiceControl" type="button" disabled style="display: none;">
                                     {{ lang._("Start") }}
