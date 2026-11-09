@@ -121,6 +121,33 @@ class CommonRuntimeTests(unittest.TestCase):
                              plan["source"]["ipset_manifest_sha256"])
             self.assertIn("--ipset-exclude=" + ACTIVE + "/managed/ipset-exclude.txt", argv)
 
+    def test_empty_ordinary_strategy_builds_voice_only_and_no_action(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for n, enabled in enumerate(((), ("telegram",), ("telegram", "discord"))):
+                source = root / str(n)
+                source.mkdir()
+                result, release = build(source, enabled, traffic_args="  \n  ")
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual("", (release / "traffic-user.conf").read_text())
+                self.assertEqual("", (release / "tcp-ports.txt").read_text())
+                self.assertEqual("", (release / "udp-ports.txt").read_text())
+                self.assertNotIn("--new", (release / "traffic.conf").read_text().splitlines()[-1:])
+                manifest = shared_release_manifest(release)
+                self.assertEqual(len(enabled), len(manifest["rules"]))
+                self.assertEqual(len(enabled), len(manifest["tables"]))
+                self.assertTrue(all(v[2] == "udp" and "table(" in v[6]
+                                    for v in manifest["rules"].values()))
+                if not enabled:
+                    self.assertEqual("", (release / "traffic.conf").read_text())
+                    self.assertFalse(any(token.startswith("--filter-")
+                                         for token in (release / "dvtws.args").read_text().split()))
+                else:
+                    self.assertEqual(len(enabled), (release / "traffic.conf").read_text().count("--name=voice-"))
+                (release / "traffic-user.conf").write_text("--filter-tcp=443\n")
+                with self.assertRaisesRegex(IPFWAdapterError, "missing ordinary"):
+                    shared_release_manifest(release)
+
     def test_global_exclusion_applies_to_voice_and_every_ordinary_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             result, release = build(Path(directory), ("telegram", "discord"),

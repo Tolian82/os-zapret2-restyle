@@ -85,10 +85,8 @@ generator_build_args()
     common_require_file \
         "${_generator_build_exclude}" "Exclude Domains list" || return 1
 
-    [ -s "${_generator_build_traffic}" ] || {
-        common_error "resolved traffic strategy is empty"
-        return 1
-    }
+    # An empty resolved ordinary Strategy is valid. The shared candidate
+    # may contain only Voice profiles or only the base dvtws2 socket.
 
     : > "${_generator_build_tmp}" || {
         common_error "cannot create generated argument file: ${_generator_build_tmp}"
@@ -128,7 +126,7 @@ generator_build_args()
 
     generator_append_file \
         "${_generator_build_traffic}" "${_generator_build_tmp}" \
-        "resolved traffic strategy" 1 || {
+        "resolved traffic strategy" 0 || {
             rm -f "${_generator_build_tmp}"
             return 1
         }

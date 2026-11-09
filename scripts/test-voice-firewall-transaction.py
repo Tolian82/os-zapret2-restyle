@@ -61,7 +61,7 @@ class FakeIPFW:
             raise OSError("rule number collision")
         self.rules[number] = deepcopy(argv)
 
-def fixture(*services):
+def fixture(*services, tcp="443", udp="596-599"):
     data = {
         "strategy_wan":"WAN", "voice_wan":"",
         "services":{s:{"enabled":False,"args":"","ips":""} for s in compiler.SERVICES}
@@ -70,9 +70,30 @@ def fixture(*services):
         data["services"][name] = {"enabled":True,"args":ARGS,"ips":ips}
     _, profile = compiler.compile_candidate(data, MANAGED)
     plan = capture.compile_capture_plan(profile, 19000, 19010, 989, physical_wan="vtnet1")
-    return transaction.prepare_desired(plan, "443", "596-599")
+    return transaction.prepare_desired(plan, tcp, udp)
 
 class VoiceFirewallTransactionTests(unittest.TestCase):
+    def test_zero_ordinary_rules_preserve_voice_and_foreign_ipfw(self):
+        # The shared manifest, not an ordinary wildcard rule, owns Voice-only.
+        voice = fixture(("telegram", "91.108.13.10"), tcp="", udp="")
+        combined = fixture(("telegram", "91.108.13.10"))
+        idle = fixture(tcp="", udp="")
+        self.assertEqual([19000], sorted(voice["rules"]))
+        self.assertEqual([], sorted(idle["rules"]))
+        self.assertEqual({}, idle["tables"])
+        self.assertEqual([19000, 19001, 19002], sorted(combined["rules"]))
+        empty = {"rule_base": 19000, "rule_max": 19010, "rules": {}, "tables": {}}
+        foreign = {18500: ["allow", "ip", "from", "any", "to", "any"]}
+        adapter = FakeIPFW(foreign)
+        for previous, desired in ((empty, voice), (voice, combined),
+                                  (combined, voice), (voice, idle)):
+            shared_firewall_action(adapter, "install", previous, desired)
+            shared_firewall_action(adapter, "verify-staged", previous, desired)
+            shared_firewall_action(adapter, "commit", previous, desired)
+            shared_firewall_action(adapter, "verify", previous, desired)
+        self.assertEqual(foreign, adapter.rules)
+        self.assertEqual({}, adapter.tables)
+
     def test_common_precommit_ipfw_attestation_requires_original_stage(self):
         previous = fixture(("telegram", "91.108.0.0/16"))
         desired = fixture(("telegram", "91.108.13.10"))
@@ -243,8 +264,11 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         profile["voice"][0]["destinations"]=["1.1.1.1;rm"]
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"IPv4"):
             transaction.prepare_desired(profile,"443","596-599")
-        with self.assertRaisesRegex(transaction.VoiceFirewallError,"neither TCP nor UDP"):
-            transaction.prepare_desired({**profile,"voice":[],"ordinary_rule_base":19000},"","")
+        # A valid empty ordinary/no-Voice candidate now owns no IPFW rules.
+        zero = transaction.prepare_desired(
+            {**profile, "voice": [], "ordinary_rule_base": 19000}, "", "")
+        self.assertEqual({}, zero["rules"])
+        self.assertEqual({}, zero["tables"])
 
     def test_mixed_family_voice_tables_use_original_transaction_and_rollback(self):
         old = fixture(("telegram", "91.108.0.0/16"))

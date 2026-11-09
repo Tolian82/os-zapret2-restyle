@@ -1,6 +1,6 @@
 # G06 / LC-07 — native no-action and empty Traffic Strategy experiment
 
-**Status (9 November 2026):** G06 `_19` native FreeBSD v1.0.7 no-profile packet experiment [S2 PASS #42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520), [PR #993](https://github.com/Tolian82/os-zapret2-restyle/pull/993) merged `fa53e937`. Branch A proved feasible on test-only localhost (6 packets/368 bytes); G06 full shared runtime/Voice-only/FD9/IPFW remains OPEN, no owner-live. `_20` adds only the safe pure Voice/ordinary composition step. G05 `_18` [native installed S2 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42646971454), [PR #992](https://github.com/Tolian82/os-zapret2-restyle/pull/992) merged `ae9efc5b`. No changes to production WAN, orchestration, generators, validators, firewall rules or installation.
+**Status (9 November 2026):** `_19` upstream zero-profile real FreeBSD 15 native packet PASS [#42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520), `_20` pure Voice composer merged [PR #994](https://github.com/Tolian82/os-zapret2-restyle/pull/994). `_21` is the **source-only** extension through zero ordinary parser/pipeline/generator/validator and shared firewall manifest. Actual authenticated OPNsense FD9 Voice-only Apply/rollback and all owner-live tests remain **OPEN**. Published stable `v0.6.3_1` is unchanged.
 
 ## Mandatory experiment before implementation
 
@@ -17,6 +17,16 @@ The result determines whether to proceed with **Branch A** (remove unnecessary l
 ## G06 Stage 1 (`_20` source only)
 
 The pure `voice_traffic_merge.py::merge_profiles` must accept an explicitly empty ordinary user Strategy (including whitespace-only) without inventing a `--new` segment. When Voice is OFF, preserve user-empty bytes exactly; when Voice is ON, return exactly the real staged Voice profile(s), without a fake trailing ordinary profile. Keep NUL/CR/malformed boundaries, STUN scope protection, and exclusive CLI output creation. Focused source unit tests do **not** prove installed shared Voice-only FD9/IPFW. Parser, generator, validator and firewall integration remain separate gated G06 work.
+
+## G06 Stage 2 (`_21` source candidate; installed acceptance OPEN)
+
+A genuinely blank user Traffic Strategy must produce parser count `0` and no `profile-*.conf`. Target Mode validation, normalization, mapped target resolution, blob and port artifact generation must preserve zero; malformed or trailing `--new` remains an error. Both validator variants accept blank traffic only with two empty ordinary port artifacts; any nonblank invalid strategy or inconsistent ports fails closed. The generator emits `--port` and the actual Voice profiles only, with no artificial trailing `--new`.
+
+Shared `prepare_desired` installs no ordinary TCP/UDP divert rules when both port artifacts are blank, while retaining every authentic destination-scoped Voice table/rule and existing ownership/rollback checks. Legacy ordinary-only adoption still rejects missing ordinary ownership evidence. The common manifest attests an unchanged SHA-bound blank `traffic-user.conf` instead of requiring a nonexistent ordinary profile. No alternative engine, FD9 owner, WAN resolver, or firewall range is introduced.
+
+Source regressions: `scripts/test-profile-pipeline.sh`, `scripts/test-voice-common-runtime.py`, and `scripts/test-voice-firewall-transaction.py` cover zero, malformed nonempty, Voice-only, combined, no-action, retained foreign rules and staged corruption. They are NOT a native installed or owner-live proof.
+
+**Next native S2 gate:** use one disposable OPNsense 26.7 with real v1.0.7, original FD9, saved effective WAN and authenticated existing shared Apply. Collect before/after Config bytes, original FD9 identity, PID/engine argv, scoped `19000–19010` IPFW list and tables, foreign-rule witness. Move through Voice-only → Voice+ordinary → Voice-only → no-action and back, include rejection before mutation plus failed activation/rollback and Stop/Restart. Assert precisely zero **ordinary** intercepts in Voice-only/no-action, exactly Voice destination-scoped rules when Voice ON, foreign state unchanged, and no second engine. Full G06/A09/A11 acceptance requires actual native PASS; current source and synthetic fixtures do not qualify. Reboot, IPv6 on a real native stack and owner-browser scenarios remain separate.
 
 ## CI budget and evidence
 

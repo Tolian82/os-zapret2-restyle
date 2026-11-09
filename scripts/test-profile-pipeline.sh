@@ -77,4 +77,29 @@ fi
 named_count=$(profile_pipeline_normalize "${named_root}" "${named_count}")
 assert_equal 2 "${named_count}" "named profiles after target normalization"
 
+blank_root="${TEST_ROOT}/blank"
+mkdir -p "${blank_root}"
+# Reused workdir: parser zero must remove an earlier positive profile.
+assert_equal 1 "$(profile_pipeline_parse "${blank_root}" 0 '--filter-tcp=443')" "blank fixture setup"
+for blank_strategy in '' "$(printf ' \t\n  ')"; do
+    blank_count=$(profile_pipeline_parse "${blank_root}" 0 "${blank_strategy}")
+    assert_equal 0 "${blank_count}" "empty parser count"
+    [ ! -e "${blank_root}/profile-1.conf" ] || fail "ghost ordinary profile"
+    assert_equal 0 "$(cat "${blank_root}/profile-count")" "zero parser artifact"
+    blank_count=$(profile_pipeline_registry "${blank_root}" "${blank_count}" "${blank_root}/registry.tsv")
+    blank_count=$(profile_pipeline_target_mode "${blank_root}" "${blank_count}" all "${blank_root}/registry.tsv")
+    blank_count=$(profile_pipeline_normalize "${blank_root}" "${blank_count}")
+    blank_count=$(profile_pipeline_index "${blank_root}" "${blank_count}")
+    assert_equal 0 "${blank_count}" "zero passed through complete pipeline"
+    if target_mode_apply_all "${blank_root}" 0 invalid "${blank_root}/registry.tsv" >/dev/null 2>&1; then
+        fail "zero profile bypassed invalid Target Mode"
+    fi
+done
+for malformed in '--new' '--new=bad' '--filter-tcp=443
+--new'; do
+    if profile_pipeline_parse "${blank_root}" 0 "${malformed}" >/dev/null 2>&1; then
+        fail "empty --new boundary accepted: ${malformed}"
+    fi
+done
+
 echo "Profile pipeline tests passed."
