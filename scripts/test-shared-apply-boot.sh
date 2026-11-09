@@ -23,6 +23,7 @@ CHILD_PIDFILE="$ROOT/child.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
 common_error() { echo "ERROR: $*" >&2; }
+wan_first_service() { echo wan:$1 >> "$LOG"; [ "${WAN_OK:-1}" = 1 ] || return 64; }
 preflight_shared_apply_journal() { echo guard:$1 >> "$LOG"; [ "$GUARD" -eq 0 ]; }
 shared_apply_bundle_service() { echo seal:$1 >> "$LOG"; [ "$SEAL" -eq 0 ]; }
 shared_apply_native_config() { echo config:$1 >> "$LOG"; [ "$CONFIG" -eq 0 ] || return 69; echo '{"result":"committed","enabled":"'"$BOOT_ENABLED"'"}'; }
@@ -70,8 +71,12 @@ expect() {
   [ "$got" = "$*" ] || fail "boot steps: $got"
 }
 reset
-expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "boot receipt"
+# This gate must reject a committed owner before attempting activation/IPFW.
+reset; WAN_OK=0
+expect 64 'guard:common-apply seal:verify config:saved wan:require '
+WAN_OK=1
 # Global OFF still commits the saved common profile release without a
 # daemon and must prove the new IPFW scope empty after commit.
 reset; BOOT_ENABLED=0
@@ -88,8 +93,8 @@ for fault in tree probe child monitor; do
     monitor) POST_MONITOR_LOST=1 ;;
   esac
   case "$fault" in
-    tree) expected='guard:common-apply seal:verify config:saved activate commit tree-verify ' ;;
-    *) expected='guard:common-apply seal:verify config:saved activate commit tree-verify probe:1 ' ;;
+    tree) expected='guard:common-apply seal:verify config:saved wan:require activate commit tree-verify ' ;;
+    *) expected='guard:common-apply seal:verify config:saved wan:require activate commit tree-verify probe:1 ' ;;
   esac
   expect 70 "$expected"
   [ ! -s "$ROOT/output" ] || fail "$fault post-COMMIT drift claimed boot"
@@ -97,14 +102,14 @@ done
 # Repeated Start/reconfigure on already verified shared Voice ON must not
 # stop, launch or replace the engine; a mismatched release/kernel refuses.
 reset; ENGINE=1; MONITOR=1
-expect 0 'guard:common-apply seal:verify config:saved tree-verify probe:1 '
+expect 0 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "idempotent boot receipt"
 reset; ENGINE=1; MONITOR=1; TREE_OK=0
-expect 69 'guard:common-apply seal:verify config:saved tree-verify '
+expect 69 'guard:common-apply seal:verify config:saved wan:require tree-verify '
 reset; ENGINE=1; MONITOR=1; PROBE_OK=0
-expect 69 'guard:common-apply seal:verify config:saved tree-verify probe:1 '
+expect 69 'guard:common-apply seal:verify config:saved wan:require tree-verify probe:1 '
 reset; ENGINE=1; MONITOR=0
-expect 69 'guard:common-apply seal:verify config:saved '
+expect 69 'guard:common-apply seal:verify config:saved wan:require '
 reset; ENGINE=1; MONITOR=1; BOOT_ENABLED=0
 expect 69 'guard:common-apply seal:verify config:saved '
 reset; SEAL=1
@@ -112,9 +117,9 @@ expect 69 'guard:common-apply seal:verify '
 reset; CONFIG=1
 expect 69 'guard:common-apply seal:verify config:saved '
 reset; ACTIVE=1
-expect 70 'guard:common-apply seal:verify config:saved activate '
+expect 70 'guard:common-apply seal:verify config:saved wan:require activate '
 reset; COMMIT=1
-expect 70 'guard:common-apply seal:verify config:saved activate commit '
+expect 70 'guard:common-apply seal:verify config:saved wan:require activate commit '
 reset; GUARD=1
 expect 69 'guard:common-apply '
 reset
@@ -125,9 +130,11 @@ grep -Fq "start|reconfigure)" "$SOURCE" || fail "normal startup not routed throu
 grep -Fq 'shared_apply_boot_service "$_shared_owner"' "$SOURCE" || fail "common boot not called from lifecycle"
 # Exercise the ACTUAL lifecycle wrapper, including the original lockf FD9.
 # These tests never touch a real system lock or OPNsense configuration.
+# The isolated original-FD9 router receives a read-only WAN mock.
 sed -n '/^service_with_lifecycle_lock()$/,/^}$/p' "$SOURCE" > "$ROOT/lifecycle.sh"
 sh -n "$ROOT/lifecycle.sh" || fail "lifecycle shell syntax"
 . "$ROOT/lifecycle.sh"
+wan_first_service() { [ "${WAN_OK:-1}" = 1 ] || return 64; }
 cat > "$ROOT/lockf" <<'MOCK'
 #!/bin/sh
 [ "$1" = -s ] && [ "$2" = -t ] && [ "$4" = 9 ]
@@ -190,6 +197,12 @@ RECOVER=0 RECOVER_OWNER=- SAVED_OK=0 STOP_OK=0 PRISTINE_OK=0 COLD_OK=0 PARKED_OK
 COLD_NATIVE_OK=0 COLD_NO_ADVANCE=0
 PREVIOUS=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 HAS_RECORD=1 OWNER_OK=1 OWNER="committed $ID voice"
+WAN_OK=0
+check_route 64 start
+[ ! -s "$LOG" ] || fail "WAN missing reached owner or IPFW"
+check_route 64 reconfigure
+[ ! -s "$LOG" ] || fail "WAN missing reconfigure reached owner"
+WAN_OK=1
 check_route 0 start
 [ "$(cat "$LOG")" = "common:committed $ID voice" ] ||
     fail "committed start fell through to legacy runtime"

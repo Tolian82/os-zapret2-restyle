@@ -987,6 +987,10 @@ shared_apply_boot_service()
     _shared_boot_saved=$(shared_apply_native_config saved "$_shared_boot_id" "$_shared_boot_page") || return 69
     _shared_boot_mode=$(printf "%s\n" "$_shared_boot_saved" |
         shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+    # Even internal committed-owner boot must validate WAN before engine/IPFW.
+    if [ "$_shared_boot_mode" = 1 ]; then
+        wan_first_service require || return $?
+    fi
     _shared_boot_check=$(printf "%s\n" "$_shared_boot_saved" |
         shared_apply_json_field '.result | select(.=="committed")') || return 69
     _shared_boot_dir=$(shared_apply_workspace "$_shared_boot_id") || return 69
