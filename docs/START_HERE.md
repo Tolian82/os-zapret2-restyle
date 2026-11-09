@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_12` · `VERSION=0.6.3` · `PLUGIN_REVISION=12` · `os-zapret2-restyle-0.6.3_12.pkg` (**WAN-first runtime guards SOURCE candidate; not published or owner-installed**).
+**Current handoff identity:** `v0.6.3_13` · `VERSION=0.6.3` · `PLUGIN_REVISION=13` · `os-zapret2-restyle-0.6.3_13.pkg` (**G05 active-owner WAN Apply regression SOURCE candidate; not published or owner-installed**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
