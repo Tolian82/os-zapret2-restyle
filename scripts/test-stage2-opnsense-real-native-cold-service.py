@@ -22,6 +22,12 @@ def outcome(action, case='ok'):
         return SimpleNamespace(returncode=0, stdout='', stderr='')
     if case == 'foreign_failure':
         return SimpleNamespace(returncode=69, stdout='', stderr='other failure')
+    if case == 'engine_first_start':
+        return SimpleNamespace(returncode=1, stdout='',
+            stderr='ERROR: zapret2 runtime is not installed or installation is incomplete')
+    if action == 'start':
+        return SimpleNamespace(returncode=64, stdout='',
+            stderr='ERROR: WAN_REQUIRED: Select a WAN interface')
     return SimpleNamespace(returncode=1, stdout='',
                            stderr='ERROR: zapret2 runtime is not installed or installation is incomplete')
 
@@ -37,7 +43,9 @@ class ColdServiceContracts(unittest.TestCase):
         def invoke(argv):
             action = argv[1]
             actions.append(action)
-            return outcome(action, broken if action == 'restart' else 'ok')
+            return outcome(action, broken if (action == 'restart' and
+                broken != 'engine_first_start') or
+                (action == 'start' and broken == 'engine_first_start') else 'ok')
         images = iter(snapshots) if snapshots else None
         def observe():
             return next(images) if images else self.baseline
@@ -48,8 +56,14 @@ class ColdServiceContracts(unittest.TestCase):
         self.assertEqual(actions, ['start', 'status', 'restart', 'status',
                                    'reconfigure', 'status'])
         self.assertEqual(result['actions'], list(mod.ACTIONS))
+        self.assertTrue(result['wan_first_missing_wan'])
         self.assertFalse(result['boot_tested'])
         self.assertFalse(result['common_running_owner_tested'])
+
+    def test_engine_first_start_is_rejected(self):
+        with self.assertRaisesRegex(mod.Refusal,
+                                    'START_DID_NOT_REFUSE_MISSING_WAN'):
+            self.simulate(broken='engine_first_start')
 
     def test_false_restart_success_refused(self):
         with self.assertRaisesRegex(mod.Refusal, 'RESTART_DID_NOT_REFUSE'):
