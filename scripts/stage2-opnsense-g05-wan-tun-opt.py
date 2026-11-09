@@ -179,13 +179,20 @@ def execute():
          'G05_OPT_IPV4_ASSIGNED_TUN_NOT_RESOLVED')
     with_fixture = active.CONFIG.read_bytes()
     exact_config_except_fixture(before_xml, with_fixture, boot)
+    # InterfaceField returns native dynamic option lists. Adding opt0 changes
+    # those lists without changing any saved Zapret model field, so snapshot
+    # the current full model AFTER the temporary OPNsense assignment.
+    fixture_model, fixture_baseline = g05.read_model(web)
+    need(g05.logical_wan(fixture_model, save) == 'lo0' and
+         fixture_baseline == baseline, 'G05_OPT_FIXTURE_CHANGED_NATIVE_ZAPRET')
     # Full original authenticated Strategies Apply; no test-specific HTTP API.
-    applied = web.api('POST', '/api/zapret/settings/apply', opt_form(OPT, baseline))
+    applied = web.api('POST', '/api/zapret/settings/apply',
+                      opt_form(OPT, fixture_baseline))
     need(applied.get('result') == 'saved' and applied.get('applied') is True,
          'G05_OPT_FULL_HTTPS_APPLY_REFUSED:' + str(applied.get('message', ''))[:140])
     on, new_baseline = g05.read_model(web)
     need(g05.logical_wan(on, save) == OPT, 'G05_OPT_MODEL_WAN_NOT_SAVED')
-    g05.preserved_other_model(before_model, on)
+    g05.preserved_other_model(fixture_model, on)
     opt_owner = g05.shared_owner(active, common, engine_sha, device)
     need(opt_owner['id'] != old['id'] and opt_owner['pid'] != old['pid'],
          'G05_OPT_ENGINE_NOT_REPLACED')
@@ -196,7 +203,7 @@ def execute():
     need(reversed_apply.get('result') == 'saved' and
          reversed_apply.get('applied') is True, 'G05_OPT_REVERSE_APPLY_REFUSED')
     after, _ = g05.read_model(web)
-    voice.attest_complete_native_model(before_model, after)
+    voice.attest_complete_native_model(fixture_model, after)
     last = g05.shared_owner(active, common, engine_sha, 'lo0')
     need(last['id'] != opt_owner['id'] and last['pid'] != opt_owner['pid'] and
          last['rules'] == old['rules'], 'G05_OPT_REVERSE_VOICE_IPFW_NOT_RESTORED')
