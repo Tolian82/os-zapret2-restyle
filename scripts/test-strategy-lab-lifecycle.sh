@@ -61,6 +61,10 @@ launcher()
     STRATEGY_LAB_CURL_BIN="${MOCK_BIN}/curl" \
     STRATEGY_LAB_DRILL_BIN="${MOCK_BIN}/drill" \
     STRATEGY_LAB_NETSTAT_BIN="${MOCK_BIN}/netstat" \
+    STRATEGY_LAB_KLDSTAT_BIN="${MOCK_BIN}/kldstat" \
+    STRATEGY_LAB_KLDLOAD_BIN="${MOCK_BIN}/kldload" \
+    STRATEGY_LAB_SYSCTL_BIN="${MOCK_BIN}/sysctl" \
+    STRATEGY_LAB_IPFW_BIN="${MOCK_BIN}/ipfw" \
     STRATEGY_LAB_OPENSSL_BIN="${MOCK_BIN}/openssl" \
     STRATEGY_LAB_NC_BIN="${MOCK_BIN}/nc" \
     CANDIDATE_RUNNER="${MOCK_BIN}/candidate" \

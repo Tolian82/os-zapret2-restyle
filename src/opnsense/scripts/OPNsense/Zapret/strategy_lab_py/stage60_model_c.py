@@ -11,6 +11,7 @@ fallback in the underlying Stage-60 owner.
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -279,8 +280,15 @@ def _bucket_probe_candidate(
             route_slot, binding, wan, local_port
         )
         if probe.get("attribution_ok") is not True:
+            # Keep fail-closed; retain a bounded cause, never claim bypass
+            # merely because a probe did not create an IPFW packet.
+            keys = ("rule", "selected_ip", "requested_local_port", "intercepted",
+                    "command_source_port_match", "command_endpoint_match",
+                    "route_cleanup_ok", "counter_before", "counter_after")
+            details = {key: probe.get(key) for key in keys}
             raise ModelCInfrastructureError(
-                f"Model C route attribution failed for {record['spec_id']}"
+                f"Model C route attribution failed for {record['spec_id']}: "
+                + json.dumps(details, sort_keys=True, separators=(",", ":"))[:450]
             )
         endpoint_probes.append(probe)
     ended = time.monotonic()

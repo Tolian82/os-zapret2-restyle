@@ -142,6 +142,24 @@ cat > "${MOCK_BIN}/nc" <<'MOCK'
 #!/bin/sh
 exit "${MOCK_NC_STATUS:-1}"
 MOCK
+cat > "${MOCK_BIN}/kldstat" <<'MOCK'
+#!/bin/sh
+# Already-loaded kernel fixture: no production cold load executed on Linux.
+exit 0
+MOCK
+cat > "${MOCK_BIN}/kldload" <<'MOCK'
+#!/bin/sh
+exit 1
+MOCK
+cat > "${MOCK_BIN}/sysctl" <<'MOCK'
+#!/bin/sh
+printf '%s\n' 1
+MOCK
+cat > "${MOCK_BIN}/ipfw" <<'MOCK'
+#!/bin/sh
+exit 0
+MOCK
+
 
 chmod +x "${MOCK_BIN}"/*
 # The real launcher can poll while the initial process still has the shim
@@ -185,6 +203,10 @@ launcher()
     STRATEGY_LAB_CURL_BIN="${MOCK_BIN}/curl" \
     STRATEGY_LAB_DRILL_BIN="${MOCK_BIN}/drill" \
     STRATEGY_LAB_NETSTAT_BIN="${MOCK_BIN}/netstat" \
+    STRATEGY_LAB_KLDSTAT_BIN="${MOCK_BIN}/kldstat" \
+    STRATEGY_LAB_KLDLOAD_BIN="${MOCK_BIN}/kldload" \
+    STRATEGY_LAB_SYSCTL_BIN="${MOCK_BIN}/sysctl" \
+    STRATEGY_LAB_IPFW_BIN="${MOCK_BIN}/ipfw" \
     STRATEGY_LAB_OPENSSL_BIN="${MOCK_BIN}/openssl" \
     STRATEGY_LAB_NC_BIN="${MOCK_BIN}/nc" \
     MOCK_WORKER="${WORKER}" \

@@ -17,6 +17,47 @@ class StrategyLabController extends ApiControllerBase
     private const UDP_PAYLOAD_MAX_BASE64_LENGTH = 5464;
     private const BACKEND_TIMEOUT_SECONDS = 190;
 
+    /**
+     * HTTP presentation of large Lab jobs. The complete authoritative job
+     * remains in its original state/evidence files and configd/CLI output.
+     * Never truncate disk evidence or omit stages, restoration or shortlist.
+     */
+    private static function compactLargeEvidence(array $value): array
+    {
+        $topLevel = [
+            'status', 'schema', 'revision', 'job_id', 'state', 'outcome',
+            'target', 'target_type', 'endpoints', 'network', 'baseline',
+            'mode', 'language', 'ipv6_enabled', 'initial_service_state',
+            'cancel_requested', 'cancel_requested_at', 'current_stage',
+            'message', 'progress', 'stages', 'restoration', 'shortlist',
+            'circular_eligible', 'circular_eligibility_reason',
+            'circular_candidate_count', 'started_at', 'standard_deadline_at',
+            'deadline_at', 'standard_budget_seconds', 'extended_budget_seconds',
+            'search_budget_seconds', 'stage80_budget_seconds'
+        ];
+        $compact = array_intersect_key($value, array_fill_keys($topLevel, true));
+        $summaries = [
+            'candidate_smoke' => ['search_epoch_id', 'total', 'completed',
+                                  'accepted', 'rejected', 'all_pass',
+                                  'infrastructure_error', 'stopped_reason'],
+            'parameter_expansion' => ['search_epoch_id', 'total_available',
+                                      'completed', 'working', 'failed',
+                                      'stopped_reason', 'partial', 'execution_model'],
+            'stability' => ['search_epoch_id', 'completed', 'stable', 'unstable',
+                            'stopped_reason', 'partial'],
+            'family_screening' => ['total', 'completed', 'accepted', 'rejected'],
+        ];
+        foreach ($summaries as $name => $fields) {
+            if (isset($value[$name]) && is_array($value[$name])) {
+                $compact[$name] = array_intersect_key(
+                    $value[$name], array_fill_keys($fields, true)
+                );
+            }
+        }
+        $compact['api_evidence_compacted'] = true;
+        return $compact;
+    }
+
     private function backendResponse(string $action, array $params = []): array
     {
         $backend = new \OPNsense\Core\Backend();
@@ -42,6 +83,15 @@ class StrategyLabController extends ApiControllerBase
                 'transient' => true,
                 'message' => 'Strategy Lab returned invalid output.'
             ];
+        }
+
+        // A full Model C expansion can exceed the guest's reliable HTTP
+        // chunked-response envelope. Preserve the exact CLI/disk evidence,
+        // but render bounded job summaries through the existing GUI API.
+        if (in_array($action, [
+            'strategy_lab_status', 'strategy_lab_result', 'strategy_lab_cancel'
+        ], true) && strlen($response) > 65536) {
+            return self::compactLargeEvidence($decoded);
         }
 
         return $decoded;
