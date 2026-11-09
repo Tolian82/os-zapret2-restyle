@@ -61,4 +61,14 @@ wanAssert(strpos($labSource, '[ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]') >
     strpos($labSource, '[ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]') <
     strpos($labSource, '_strategy_lab_jobdir=$(mktemp'),
     'Standard/Extended Lab must check engine before allocating Job');
-echo "PASS: WAN-first inactive Save, candidate, Voice, TUN, Lab, engine before Job\n";
+$actionFile = file_get_contents(__DIR__ .
+    '/../src/opnsense/service/conf/actions.d/actions_zapret.conf');
+foreach (['strategy_lab_start', 'strategy_lab_circular_start'] as $action) {
+    $pos = strpos($actionFile, '[' . $action . "]\n");
+    wanAssert($pos !== false, 'native Laboratory action missing: ' . $action);
+    $end = strpos($actionFile, "\n[", $pos + 1);
+    $section = substr($actionFile, $pos, $end === false ? null : $end - $pos);
+    wanAssert(strpos($section, "type:script_output\nerrors:no\n") !== false,
+        'configd masks typed WAN/engine refusal in ' . $action);
+}
+echo "PASS: WAN-first inactive Save, candidate, Voice, TUN, Lab, engine before Job and configd structured refusal\n";

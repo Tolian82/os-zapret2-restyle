@@ -131,6 +131,19 @@ def _wan_first_command(argv, code, fragment, name):
     return status
 
 
+def _wan_first_configd(argv, reason, message, label):
+    # In OPNsense configd, errors:no is the standard contract for preserving
+    # a script_output payload from a nonzero CLI command. Neither rc=0 nor
+    # an HTTP 200 means success: the typed JSON status remains "error".
+    result = run(argv, timeout=50)
+    need(result.returncode == 0, "G05_CONFIGD_" + label + "_TRANSPORT_FAILED")
+    reply = json.loads(result.stdout)
+    need(isinstance(reply, dict) and reply.get("status") == "error" and
+         reply.get("reason") == reason and reply.get("message") == message,
+         "G05_CONFIGD_" + label + "_TYPED_REFUSAL_MISSING")
+    return reply
+
+
 def _wan_first_lab_form(mode, language):
     # Deliberately invalid target: WAN / engine must win over target grammar.
     return [("target", "invalid_target"), ("mode", mode),
@@ -201,10 +214,14 @@ def _wan_first_cold_matrix(web, baseline, ipfw_baseline):
         _wan_first_unchanged(saved, ipfw_baseline, jobs, "LAB_" + mode.upper())
 
     # Original launchers and configd, not a synthetic WAN resolver.
-    _wan_first_command([
+    _wan_first_configd([
         "/usr/local/sbin/configctl", "zapret", "strategy_lab_start",
         "invalid_target", "standard", "ru", "0", "-", "-", "-", "0"],
-        None, "Укажите WAN интерфейс", "CONFIGD_LAB")
+        "wan-required", "Укажите WAN интерфейс", "LAB_WAN")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_circular_start",
+        "job.G05WithoutWAN"],
+        "wan-required", "Select a WAN interface", "CIRCULAR_WAN")
     _wan_first_command([
         script + "strategy_lab_circular_launcher.sh",
         "start", "job.G05WithoutWAN"],
@@ -238,6 +255,16 @@ def _wan_first_saved_no_engine_matrix(web, ipfw_baseline):
         script + "strategy_lab_launcher.sh", "start", "invalid_target",
         "standard", "en", "0", "-", "-", "-", "0"],
         64, "The zapret2 service is not installed", "DIRECT_LAB_ENGINE")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_start",
+        "invalid_target", "standard", "en", "0", "-", "-", "-", "0"],
+        "engine-not-installed", "The zapret2 service is not installed",
+        "LAB_ENGINE")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_circular_start",
+        "job.G05NoEngine"],
+        "engine-not-installed", "The zapret2 service is not installed",
+        "CIRCULAR_ENGINE")
     _wan_first_command([
         script + "strategy_lab_circular_launcher.sh",
         "start", "job.G05NoEngine"],
