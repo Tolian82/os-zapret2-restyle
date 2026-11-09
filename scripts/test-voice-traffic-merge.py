@@ -25,6 +25,33 @@ class OneEngineMergeTests(unittest.TestCase):
             with self.subTest(text=ordinary):
                 self.assertEqual(ordinary, merge.merge_profiles("", ordinary))
 
+    def test_empty_ordinary_is_explicitly_allowed_without_fake_profile(self):
+        for empty in ("", "  ", "\n", "\t\n"):
+            with self.subTest(empty=repr(empty)):
+                # Config must preserve the user's exact deliberately empty text.
+                self.assertEqual(empty, merge.merge_profiles("", empty))
+                # The common engine has ONLY the actual staged Voice profile.
+                self.assertEqual(VOICE, merge.merge_profiles(VOICE, empty))
+                self.assertEqual(0, merge.merge_profiles(VOICE, empty).count("--new"))
+
+    def test_voice_only_preserves_multiple_real_profiles_without_tail(self):
+        second = "--name=voice-discord\n--filter-l3=ipv4\n--filter-udp=1400\n"
+        candidate = VOICE.rstrip("\n") + "\n--new\n" + second
+        self.assertEqual(candidate, merge.merge_profiles(candidate, ""))
+        self.assertEqual(1, merge.merge_profiles(candidate, "").count("--new"))
+        self.assertFalse(merge.merge_profiles(candidate, "").endswith("--new\n"))
+
+    def test_empty_ordinary_cannot_bypass_malformed_voice_or_control_bytes(self):
+        for voice in ("--new\n" + VOICE, VOICE + "--new\n",
+                      "some completely unowned profile\n", VOICE + "\r"):
+            with self.subTest(voice=voice):
+                with self.assertRaises(merge.VoiceMergeError):
+                    merge.merge_profiles(voice, "")
+        for ordinary in ("\x00", "\r"):
+            with self.subTest(ordinary=repr(ordinary)):
+                with self.assertRaises(merge.VoiceMergeError):
+                    merge.merge_profiles(VOICE, ordinary)
+
     def test_voice_before_user_and_one_explicit_boundary(self):
         result = merge.merge_profiles(VOICE, STRATEGIES)
         self.assertTrue(result.startswith("--name=voice-telegram"))
@@ -43,7 +70,6 @@ class OneEngineMergeTests(unittest.TestCase):
 
     def test_reject_duplicate_poc_profile_identity_and_corrupt_boundaries(self):
         invalid = (
-            "",
             "--new\n" + STRATEGIES,
             STRATEGIES + "--new\n",
             "--name=voice-telegram\n" + STRATEGIES,

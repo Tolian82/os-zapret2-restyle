@@ -1,6 +1,6 @@
 # G06 / LC-07 — native no-action and empty Traffic Strategy experiment
 
-**Status (9 November 2026):** `v0.6.3_19` source-only experimental candidate. **Native S2 NOT YET RUN; G06 NOT ACCEPTED; owner-live NOT TESTED.** G05 `_18` [native installed S2 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42646971454), [PR #992](https://github.com/Tolian82/os-zapret2-restyle/pull/992) merged `ae9efc5b`. No changes to production WAN, orchestration, generators, validators, firewall rules or installation.
+**Status (9 November 2026):** G06 `_19` native FreeBSD v1.0.7 no-profile packet experiment [S2 PASS #42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520), [PR #993](https://github.com/Tolian82/os-zapret2-restyle/pull/993) merged `fa53e937`. Branch A proved feasible on test-only localhost (6 packets/368 bytes); G06 full shared runtime/Voice-only/FD9/IPFW remains OPEN, no owner-live. `_20` adds only the safe pure Voice/ordinary composition step. G05 `_18` [native installed S2 PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42646971454), [PR #992](https://github.com/Tolian82/os-zapret2-restyle/pull/992) merged `ae9efc5b`. No changes to production WAN, orchestration, generators, validators, firewall rules or installation.
 
 ## Mandatory experiment before implementation
 
@@ -13,6 +13,10 @@ If dry-run accepts, run a bounded private foreground `dvtws2 --port=989` process
 In `finally`, delete **only** the rule the test itself created, stop/reap only the private child, preserve the native service PID existence, and require the entire original Config bytes and IPFW rule list to be unchanged. Failure to restore is an explicit blocker. The experiment never edits the user's saved ordinary profile or publishes a new service owner.
 
 The result determines whether to proceed with **Branch A** (remove unnecessary local empty ordinary strategy restrictions while installing zero ordinary intercept rules, followed by a *separate* true shared Voice-only FD9/Apply/rollback acceptance) or **Branch B** (truthful enabled-but-inactive state with no misleading RUNNING PID and zero ordinary rules). Do **not** implement either branch on the basis of `--dry-run` alone.
+
+## G06 Stage 1 (`_20` source only)
+
+The pure `voice_traffic_merge.py::merge_profiles` must accept an explicitly empty ordinary user Strategy (including whitespace-only) without inventing a `--new` segment. When Voice is OFF, preserve user-empty bytes exactly; when Voice is ON, return exactly the real staged Voice profile(s), without a fake trailing ordinary profile. Keep NUL/CR/malformed boundaries, STUN scope protection, and exclusive CLI output creation. Focused source unit tests do **not** prove installed shared Voice-only FD9/IPFW. Parser, generator, validator and firewall integration remain separate gated G06 work.
 
 ## CI budget and evidence
 
