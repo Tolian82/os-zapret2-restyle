@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - scripts/stage2-opnsense-g05-wan-running.py
+      - scripts/stage2-opnsense-g05-wan-rollback.py
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,8 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage2-opnsense-g05-wan-running.py
           python3.13 scripts/stage2-opnsense-g05-wan-running.py --self-test
+          python3.13 -m py_compile scripts/stage2-opnsense-g05-wan-rollback.py
+          python3.13 scripts/stage2-opnsense-g05-wan-rollback.py --self-test
           sh scripts/test-g05-wan-route.sh
           php scripts/test-g05-wan-config.php
 
@@ -68,9 +71,11 @@ jobs:
             export ZAPRET2_STAGE2_REAL_COMMON_VOICE=1
             export ZAPRET2_STAGE2_REAL_VOICE_HTTP=1
             export ZAPRET2_G05_RUNNING_WAN_NATIVE=1
+            export ZAPRET2_G05_ROLLBACK_NATIVE=1
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
             /usr/local/bin/python3 scripts/stage2-opnsense-real-native-shared-voice.py run
             /usr/local/bin/python3 scripts/stage2-opnsense-real-native-voice-http.py run
             /usr/local/bin/python3 scripts/stage2-opnsense-g05-wan-running.py run
+            /usr/local/bin/python3 scripts/stage2-opnsense-g05-wan-rollback.py run
