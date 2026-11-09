@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_14` · `VERSION=0.6.3` · `PLUGIN_REVISION=14` · `os-zapret2-restyle-0.6.3_14.pkg` (**G05 installed RUNNING WAN/Voice native acceptance candidate; not published or owner-installed**).
+**Current handoff identity:** `v0.6.3_15` · `VERSION=0.6.3` · `PLUGIN_REVISION=15` · `os-zapret2-restyle-0.6.3_15.pkg` (**G05 sealed STOPPED shared-owner full WAN Apply native acceptance candidate; not published or owner-installed**).
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 

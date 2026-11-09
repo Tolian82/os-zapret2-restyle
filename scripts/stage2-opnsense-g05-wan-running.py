@@ -268,10 +268,76 @@ def execute():
          voice.native_unmanaged_xml(original) ==
          voice.native_unmanaged_xml(final_xml),
          "RUNNING_WAN_REVERSE_MODIFIED_UNRELATED_CONFIG")
+    # G05 sealed, STOPPED common owner is not an empty runtime. Its committed
+    # FD9 journal still binds the previous WAN. Never take WAN-only Config Save.
+    # Use the existing Stop, then real authenticated full Strategies Apply.
+    common.invoke(active, "/usr/local/sbin/configctl", "zapret", "stop",
+                  timeout=180)
+    stopped = common.witness(active, engine_sha, running=False, page="strategies")
+    need(stopped["id"] == final["id"] and
+         active.CONFIG.read_bytes() == final_xml,
+         "G05_SEALED_STOP_MODIFIED_COMMON_OWNER_OR_CONFIG")
+
+    stopped_model, stopped_baseline = read_model(web)
+    need(logical_wan(stopped_model, g05) == "lo0",
+         "G05_STOPPED_SEALED_WAN_NOT_ORIGINAL")
+    rejected = web.api("POST", "/api/zapret/settings/apply",
+                       form("unassigned0", stopped_baseline))
+    need(rejected.get("result") == "failed" and
+         rejected.get("applied") is not True and
+         rejected.get("requires_review") is not True and
+         active.CONFIG.read_bytes() == final_xml and
+         common.witness(active, engine_sha, running=False,
+                        page="strategies") == stopped,
+         "G05_STOPPED_SEALED_INVALID_WAN_MUTATED_OWNER")
+
+    # The positive stopped-journal transition must START the real engine and
+    # update the old committed owner with a full transaction. A Config-only
+    # receipt (applied=false) must never be accepted as success.
+    resumed = web.api("POST", "/api/zapret/settings/apply",
+                      form("wan", stopped_baseline))
+    need(resumed.get("result") == "saved" and
+         resumed.get("status") == "ok" and
+         resumed.get("applied") is True,
+         "G05_STOPPED_SEALED_WAN_NOT_FULL_NATIVE_APPLY")
+    running_wan, resumed_baseline = read_model(web)
+    need(logical_wan(running_wan, g05) == "wan",
+         "G05_STOPPED_SEALED_WAN_NOT_SAVED")
+    preserved_other_model(before, running_wan)
+    resumed_owner = shared_owner(active, common, engine_sha, target_device)
+    need(resumed_owner["id"] != stopped["id"] and
+         resumed_owner["pid"] != final["pid"],
+         "G05_STOPPED_SEALED_FULL_APPLY_DID_NOT_REPLACE_OWNER")
+
+    # Return to original state with a second full Apply. This is not the
+    # automatic rollback-on-activation-error criterion.
+    back = web.api("POST", "/api/zapret/settings/apply",
+                   form("lo0", resumed_baseline))
+    need(back.get("result") == "saved" and
+         back.get("status") == "ok" and
+         back.get("applied") is True,
+         "G05_SEALED_STOPPED_REVERSE_APPLY_REFUSED")
+    end_model, _ = read_model(web)
+    voice.attest_complete_native_model(before, end_model)
+    end_owner = common.witness(active, engine_sha, running=True,
+                               page="strategies")
+    need(end_owner["id"] != resumed_owner["id"] and
+         end_owner["pid"] != resumed_owner["pid"] and
+         end_owner["rules"] == old["rules"],
+         "G05_STOPPED_SEALED_FINAL_VOICE_IPFW_NOT_RESTORED")
+    end_xml = active.CONFIG.read_bytes()
+    need(boot.config_except_model(original) ==
+         boot.config_except_model(end_xml) and
+         voice.native_unmanaged_xml(original) ==
+         voice.native_unmanaged_xml(end_xml),
+         "G05_STOPPED_SEALED_FINAL_FOREIGN_XML_CHANGED")
+
     return {
         "schema": 1, "status": STATUS,
         "source_sha": os.environ["ZAPRET2_NATIVE_PROJECT_SHA"],
         "two_real_authenticated_full_wan_apply": True,
+        "stopped_sealed_owner_full_apply_and_reverse": True,
+        "four_authenticated_full_wan_apply_total": True,
         "invalid_wan_and_stale_tab_refused_unchanged": True,
         "shared_voice_remained_attested": True,
         "original_fd9_owner_rotated": True,
