@@ -2,6 +2,7 @@
 """Bounded, offline tests of extra-resource catalog preflight (no appliance writes)."""
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib.util
 import io
@@ -11,6 +12,8 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
+from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLED_MODE = os.environ.get("ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES") == "1"
@@ -66,6 +69,71 @@ def archive_for(payloads=None, *, corrupted=False, duplicate=False, escape=False
             member.size = len(data)
             stream.addfile(member, io.BytesIO(data))
     return raw.getvalue()
+
+
+class _ReadResponse:
+    def __init__(self, value):
+        self.value = value
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self, size):
+        return self.value[:size]
+
+
+class TestBoundedReadOnlyFetch(unittest.TestCase):
+    def test_first_healthy_get_has_exactly_one_network_call(self):
+        with patch.object(extra, "urlopen", return_value=_ReadResponse(
+                json.dumps({"object": {"sha": REV}}).encode())) as open_mock, \
+             patch.object(extra.time, "sleep") as sleep_mock:
+            self.assertEqual(extra.obtain_revision(), REV)
+            self.assertEqual(open_mock.call_count, 1)
+            sleep_mock.assert_not_called()
+
+    def test_transient_eacces_recovers_before_any_install(self):
+        denied = URLError(PermissionError(errno.EACCES, "Permission denied"))
+        payload = json.dumps({"object": {"sha": REV}}).encode()
+        with patch.object(extra, "urlopen", side_effect=[
+                denied, _ReadResponse(payload)]) as open_mock, \
+             patch.object(extra.time, "sleep") as sleep_mock:
+            self.assertEqual(extra.obtain_revision(), REV)
+            self.assertEqual(open_mock.call_count, 2)
+            sleep_mock.assert_called_once_with(1)
+
+        archive_bytes = archive_for()
+        with patch.object(extra, "urlopen", side_effect=[
+                denied, denied, _ReadResponse(archive_bytes)]) as open_mock, \
+             patch.object(extra.time, "sleep") as sleep_mock:
+            self.assertEqual(extra.obtain_archive(REV), archive_bytes)
+            self.assertEqual(open_mock.call_count, 3)
+            self.assertEqual([c.args[0] for c in sleep_mock.call_args_list],
+                             [1, 3])
+
+    def test_permanent_eacces_still_fails_closed_after_three_read_only_gets(self):
+        denied = URLError(PermissionError(errno.EACCES, "Permission denied"))
+        with patch.object(extra, "urlopen", side_effect=[denied]*3) as opens, \
+             patch.object(extra.time, "sleep") as sleeps:
+            with self.assertRaises(URLError):
+                extra.obtain_revision()
+            self.assertEqual(opens.call_count, 3)
+            self.assertEqual(sleeps.call_count, 2)
+
+    def test_http_and_unrelated_socket_failures_are_never_retried(self):
+        for reason in (URLError(PermissionError(errno.EPERM, "not allowed")),
+                       URLError(ConnectionRefusedError(errno.ECONNREFUSED,
+                                                       "not connected")),
+                       URLError("HTTP 403 rate-limited")):
+            with self.subTest(reason=repr(reason)), \
+                 patch.object(extra, "urlopen", side_effect=reason) as opens, \
+                 patch.object(extra.time, "sleep") as sleeps:
+                with self.assertRaises(URLError):
+                    extra.obtain_revision()
+                self.assertEqual(opens.call_count, 1)
+                sleeps.assert_not_called()
 
 
 class TestCatalogPreflight(unittest.TestCase):
