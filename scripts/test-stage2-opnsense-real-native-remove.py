@@ -44,13 +44,22 @@ class RealNativeFirmwareRemovalTests(unittest.TestCase):
         self.assertTrue(result["saved_zapret_config_retained_when_present"])
         self.assertTrue(result["other_config_preserved_semantically"])
 
-    def test_disposable_saved_config_seeds_without_overwriting_user_state(self):
+    def test_disposable_saved_config_preserves_existing_user_state(self):
         with patch.object(mod.CONFIG.__class__, "read_bytes", return_value=xml()), \
              patch.object(mod.clean, "run") as command:
-            with self.assertRaisesRegex(
-                    mod.Refusal, "ZAPRET_CONFIG_ALREADY_PRESENT"):
-                mod.seed_saved_config_for_disposable_guest()
+            self.assertTrue(mod.seed_saved_config_for_disposable_guest())
             command.assert_not_called()
+
+    def test_disposable_existing_g04_values_survive_unregistration(self):
+        saved = ("<Zapret><general><enabled>0</enabled></general>"
+                 "<strategy><trafficargs>approved profile</trafficargs></strategy>"
+                 "<hostlist><youtubedomains>www.youtube.com</youtubedomains></hostlist>"
+                 "</Zapret>")
+        before = xml(saved=saved)
+        after = xml("other", saved=saved).replace(b"<time>1</time>", b"<time>2</time>")
+        result = mod.check_official_unregistration(before, after)
+        self.assertTrue(result["saved_zapret_config_retained_when_present"])
+        self.assertTrue(result["other_config_preserved_semantically"])
 
     def test_disposable_saved_config_uses_opnsense_php_config_api(self):
         fixture = ("<Zapret><enabled>0</enabled>"
@@ -67,6 +76,17 @@ class RealNativeFirmwareRemovalTests(unittest.TestCase):
         self.assertEqual(args[:2], ["/usr/local/bin/php", "-r"])
         self.assertIn("Config::getInstance()->save()", args[2])
         self.assertIn(mod.SAVED_CONFIG_SENTINEL, args[2])
+
+    def test_pkg_delete_allows_only_idempotent_official_unregister(self):
+        before = xml()
+        official = xml("other").replace(b"<time>1</time>", b"<time>2</time>")
+        self.assertFalse(mod.verify_pkg_delete_config_before_final_unregister(
+            before, before))
+        self.assertTrue(mod.verify_pkg_delete_config_before_final_unregister(
+            before, official))
+        with self.assertRaisesRegex(mod.Refusal, "UNRELATED_CONFIG"):
+            mod.verify_pkg_delete_config_before_final_unregister(
+                before, xml("other", other="<hostname>foreign</hostname>"))
 
     def test_rejects_unregistered_or_foreign_plugin_change(self):
         for after in (xml(), xml(""), xml("other,foreign"),
@@ -102,7 +122,7 @@ class RealNativeFirmwareRemovalTests(unittest.TestCase):
         self.assertIn('["pkg", "-o", "REPO_AUTOUPDATE=false", "delete", "-y", NAME]', source)
         self.assertIn('clean.installed_pkg_manifest(archive)', source)
         self.assertIn('REGISTRATION, "remove", NAME', source)
-        self.assertIn("PKG_DELETE_CHANGED_CONFIG_BEFORE_OFFICIAL_UNREGISTER", source)
+        self.assertIn("verify_pkg_delete_config_before_final_unregister", source)
         self.assertIn("NATIVE_REMOVAL_DID_NOT_PROVE_POPULATED_CONFIG_RETENTION", source)
         self.assertNotIn('"pkg", "delete", "-f"', source)
         self.assertNotIn('"pkg", "delete", "-I"', source)

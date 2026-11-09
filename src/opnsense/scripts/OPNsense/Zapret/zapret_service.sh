@@ -327,6 +327,10 @@ strategy_lab_internal_dispatch()
             extra_resources_native_build_saved_service
             ;;
         strategy-lab-start)
+            # Internal Strategy Lab start inherits FD9. A direct caller must
+            # not bypass the external launcher WAN-first gate before ANY
+            # common/legacy engine or IPFW owner restoration.
+            wan_first_service require || return $?
             if shared_apply_has_record_service; then
                 _lab_owner=$(shared_apply_inspect_service) || return 69
                 case "$_lab_owner" in

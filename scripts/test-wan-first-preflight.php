@@ -39,4 +39,14 @@ try {
 } catch (\InvalidArgumentException $e) {
     wanAssert($phase==='wan-required','WAN not first candidate preflight');
 }
-echo "PASS: WAN-first inactive Save, candidate, Voice, TUN\n";
+// Internal inherited-FD9 Lab start must not skip the same prerequisite.
+$serviceSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh');
+$labStart = strpos($serviceSource, "        strategy-lab-start)\n");
+wanAssert($labStart !== false, 'internal Laboratory start entry is missing');
+$labTail = substr($serviceSource, $labStart, 420);
+$labGate = strpos($labTail, 'wan_first_service require');
+$labOwner = strpos($labTail, 'if shared_apply_has_record_service; then');
+wanAssert($labGate !== false && $labOwner !== false && $labGate < $labOwner,
+    'inherited-FD9 Laboratory start can bypass WAN-first before runtime');
+echo "PASS: WAN-first inactive Save, candidate, Voice, TUN, internal Lab\n";
