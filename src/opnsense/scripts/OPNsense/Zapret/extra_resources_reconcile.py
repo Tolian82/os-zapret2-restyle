@@ -258,13 +258,25 @@ def make_remove_plan(
             raise PreflightError(f"upstream resource changed during removal planning: {name}")
         stats[name] = record
 
-    # A second census and HEAD/dir check detect changes while constructing the
-    # digest-bound plan. A later transaction must repeat these checks.
-    if (_remove_head(root, git_bin) != head or
-            _remove_directory_witness(root) != directories or
-            installed_resources(root) != actual or
-            tracked_resources(root, git_bin) != upstream):
-        raise PreflightError("upstream or runtime inventory changed during removal planning")
+    # A second census and HEAD/dir check detect changes while constructing
+    # the digest-bound plan. Preserve the original FAIL-CLOSED behavior, but
+    # identify the exact witness class so an intermittent native race is
+    # diagnosable. Do not leak user-resource names or contents to GUI/status.
+    if _remove_head(root, git_bin) != head:
+        raise PreflightError(
+            "upstream or runtime inventory changed during removal planning: HEAD")
+    current_directories = _remove_directory_witness(root)
+    for name in ("", "lua", "files", "files/fake"):
+        if current_directories.get(name) != directories.get(name):
+            raise PreflightError(
+                "upstream or runtime inventory changed during removal planning: "
+                "directory/" + (name or "root"))
+    if installed_resources(root) != actual:
+        raise PreflightError(
+            "upstream or runtime inventory changed during removal planning: runtime-files")
+    if tracked_resources(root, git_bin) != upstream:
+        raise PreflightError(
+            "upstream or runtime inventory changed during removal planning: upstream-files")
     if _remove_file_attestation(config, 64 * 1024 * 1024) != (config_raw, config_meta):
         raise PreflightError("saved configuration changed during removal planning")
     if managed.exists():

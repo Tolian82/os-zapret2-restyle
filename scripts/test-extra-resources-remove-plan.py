@@ -143,6 +143,61 @@ class TestReadOnlyRemovalPlanner(unittest.TestCase):
             with self.assertRaisesRegex(PreflightError, "inventory changed"):
                 self.plan()
 
+    def test_directory_timestamp_drift_identifies_scoped_witness_and_refuses(self):
+        from extra_resources_reconcile import _remove_directory_witness
+        calls = [0]
+
+        def changing(root):
+            result = _remove_directory_witness(root)
+            calls[0] += 1
+            if calls[0] == 2:
+                # A transient metadata-only update is NOT authorization to
+                # ignore concurrent changes even if file hashes agree.
+                prior = result["lua"]
+                result["lua"] = (*prior[:-1], prior[-1] + 1)
+            return result
+
+        original = {p: p.read_bytes() for p in (
+            self.root / "lua/native.lua", self.root / "files/fake/native.bin",
+            self.config)}
+        with patch("extra_resources_reconcile._remove_directory_witness",
+                   side_effect=changing):
+            with self.assertRaisesRegex(PreflightError, "directory/lua"):
+                self.plan()
+        self.assertEqual({p: p.read_bytes() for p in original}, original)
+
+    def test_runtime_resource_census_drift_identifies_witness_and_refuses(self):
+        from extra_resources_reconcile import installed_resources
+        calls = [0]
+
+        def changing(root):
+            result = installed_resources(root)
+            calls[0] += 1
+            if calls[0] == 2:
+                result["lua/unexpected.lua"] = "0" * 64
+            return result
+
+        with patch("extra_resources_reconcile.installed_resources",
+                   side_effect=changing):
+            with self.assertRaisesRegex(PreflightError, "runtime-files"):
+                self.plan()
+
+    def test_upstream_resource_census_drift_identifies_witness_and_refuses(self):
+        from extra_resources_reconcile import tracked_resources
+        calls = [0]
+
+        def changing(root, git_bin="git"):
+            result = tracked_resources(root, git_bin)
+            calls[0] += 1
+            if calls[0] == 2:
+                result["lua/unexpected.lua"] = "0" * 64
+            return result
+
+        with patch("extra_resources_reconcile.tracked_resources",
+                   side_effect=changing):
+            with self.assertRaisesRegex(PreflightError, "upstream-files"):
+                self.plan()
+
     def test_locked_service_remove_plan_reuses_original_git_planner_without_mutation(self):
         # One native CLI plan path, no second compatibility test and no status
         # write. The synthetic lifecycle below stands in only for installed FD9.

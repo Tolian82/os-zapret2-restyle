@@ -13,7 +13,8 @@ import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLED_MODE = os.environ.get("ZAPRET2_STAGE5_INSTALLED_LAB_RESOURCES") == "1"
@@ -121,6 +122,77 @@ class TestBoundedReadOnlyFetch(unittest.TestCase):
                 extra.obtain_revision()
             self.assertEqual(opens.call_count, 3)
             self.assertEqual(sleeps.call_count, 2)
+
+    def test_api_rate_limit_falls_back_to_same_github_git_main_once(self):
+        # The primary API is still tried first; only an actual rate-limit
+        # response enables the read-only Git transport for the same ref.
+        limited = HTTPError(extra.SOURCE_REF_URL, 403, "Forbidden",
+                            {"X-RateLimit-Remaining": "0"},
+                            io.BytesIO(b'{"message":"API rate limit exceeded"}'))
+        resolved = subprocess.CompletedProcess([], 0,
+                                               REV + "\trefs/heads/main\n", "")
+        with patch.object(extra, "urlopen", side_effect=limited) as api, \
+             patch.object(extra.subprocess, "run", return_value=resolved) as git, \
+             patch.object(extra.time, "sleep") as sleeps:
+            self.assertEqual(extra.obtain_revision(), REV)
+            self.assertEqual(api.call_count, 1)
+            self.assertEqual(git.call_count, 1)
+            self.assertEqual(git.call_args.args[0][-2:], [
+                "https://github.com/" + extra.SOURCE + ".git", "refs/heads/main"
+            ])
+            self.assertEqual(git.call_args.kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
+            self.assertEqual(git.call_args.kwargs["timeout"], 30)
+            sleeps.assert_not_called()
+
+    def test_api_403_other_than_rate_limit_must_not_fallback(self):
+        forbidden = HTTPError(extra.SOURCE_REF_URL, 403, "Forbidden", {},
+                              io.BytesIO(b'{"message":"permission denied"}'))
+        with patch.object(extra, "urlopen", side_effect=forbidden), \
+             patch.object(extra.subprocess, "run") as git:
+            with self.assertRaises(HTTPError):
+                extra.obtain_revision()
+            git.assert_not_called()
+
+    def test_git_rate_limit_fallback_rejects_ambiguous_or_foreign_ref(self):
+        for output in ("", REV + "\tHEAD\n",
+                       REV + "\trefs/heads/main\n" + REV + "\trefs/tags/x\n",
+                       "not-a-commit\trefs/heads/main\n"):
+            with self.subTest(output=output):
+                limited = HTTPError(extra.SOURCE_REF_URL, 403, "Forbidden",
+                                    {"X-RateLimit-Remaining": "0"}, io.BytesIO(b""))
+                result = subprocess.CompletedProcess([], 0, output, "")
+                with patch.object(extra, "urlopen", side_effect=limited), \
+                     patch.object(extra.subprocess, "run", return_value=result):
+                    with self.assertRaisesRegex(extra.PreflightError, "no single valid main"):
+                        extra.obtain_revision()
+
+    def test_api_rate_limit_message_without_header_uses_same_git_ref(self):
+        limited = HTTPError(extra.SOURCE_REF_URL, 403, "Forbidden", {},
+                            io.BytesIO(b'{"message":"API rate limit exceeded"}'))
+        resolved = subprocess.CompletedProcess([], 0,
+                                               REV + "\trefs/heads/main\n", "")
+        with patch.object(extra, "urlopen", side_effect=limited), \
+             patch.object(extra.subprocess, "run", return_value=resolved):
+            self.assertEqual(extra.obtain_revision(), REV)
+
+    def test_rate_limited_api_with_failed_git_transport_remains_refused(self):
+        limited = HTTPError(extra.SOURCE_REF_URL, 403, "Forbidden",
+                            {"X-RateLimit-Remaining": "0"}, None)
+        result = subprocess.CompletedProcess([], 128, "", "untrusted git error")
+        with patch.object(extra, "urlopen", side_effect=limited), \
+             patch.object(extra.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(extra.PreflightError, "no single valid main"):
+                extra.obtain_revision()
+
+    def test_git_rate_limit_fallback_timeout_is_fail_closed(self):
+        limited = HTTPError(extra.SOURCE_REF_URL, 429, "Too Many Requests", {},
+                            io.BytesIO(b""))
+        with patch.object(extra, "urlopen", side_effect=limited), \
+             patch.object(extra.subprocess, "run",
+                          side_effect=subprocess.TimeoutExpired(["git"], 30)):
+            with self.assertRaisesRegex(extra.PreflightError,
+                                        "GitHub main revision unavailable"):
+                extra.obtain_revision()
 
     def test_http_and_unrelated_socket_failures_are_never_retried(self):
         for reason in (URLError(PermissionError(errno.EPERM, "not allowed")),
