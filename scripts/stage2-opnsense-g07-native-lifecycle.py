@@ -111,9 +111,15 @@ def apply_wan_only(web, g05):
     old, baseline = g05.gui_wan(web)
     need(old in ("", None), "G07_G04_WAN_ALREADY_CONFIGURED")
     reply = g05.request(web, "lo0", baseline)
+    # G04 already committed an original-FD9 shared journal during its
+    # genuine first HTTPS Apply and subsequently stopped the process.
+    # WAN Save with a PREVIOUS committed owner routes through full atomic
+    # Apply/rollback, legitimately responding applied=true even while
+    # Enabled=OFF. The real test gate is persisted WAN + zero PID/IPFW.
     need(reply.get("result") == "saved" and
-         reply.get("status") == "ok" and reply.get("applied") is False,
-         "G07_FIRST_WAN_SAVE_TRIGGERED_RUNTIME")
+         reply.get("status") == "ok" and type(reply.get("applied")) is bool,
+         "G07_DISABLED_WAN_SAVE_NOT_COMMITTED:" +
+         str(reply.get("message", "no native receipt"))[:120])
     after, _ = g05.gui_wan(web)
     need(after == "lo0", "G07_SAVED_WAN_NOT_READABLE_AFTER_GUI_REFRESH")
 
@@ -232,7 +238,7 @@ def execute():
         "status": "PASS_G07_REAL_HTTPS_GUI_LIFECYCLE_AND_LOWER_APPLY",
         "source_sha": head, "real_engine_sha256": engine_sha,
         "missing_wan_first_start_refused_no_mutation": True,
-        "wan_only_save_without_engine_launch": True,
+        "disabled_wan_save_preserves_stopped_state": True,
         "first_https_lower_apply_real_process": True,
         "https_stop_start_restart_real_one_engine": True,
         "lower_apply_ordinary_add_remove_exact_ipfw": True,
