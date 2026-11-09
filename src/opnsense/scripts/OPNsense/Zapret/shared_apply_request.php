@@ -12,10 +12,12 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
+require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/WanRequirement.php';
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
 require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
+use OPNsense\Zapret\Api\WanRequirement;
 use OPNsense\Zapret\Api\SharedApplyEnvelope;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
@@ -55,6 +57,12 @@ final class SharedApplyRequest
     public static function prepare(
         array $request, array $current, string $activeXml, ?string &$phase = null
     ): array {
+        // Priority 1: evaluate the persisted+submitted WAN before strategies.
+        // Inactive edits remain valid without a WAN or installed upstream.
+        $phase = 'wan-required';
+        if (WanRequirement::missingBeforeActivation($current, $request['fields'])) {
+            throw new \InvalidArgumentException('Select a WAN interface');
+        }
         $phase = 'candidate-plan';
         $plan = $request['page'] === 'voice'
             ? SettingsApply::prepareVoice(

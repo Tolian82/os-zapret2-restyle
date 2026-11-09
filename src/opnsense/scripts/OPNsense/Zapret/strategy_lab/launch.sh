@@ -110,6 +110,20 @@ start_job()
             usage_error "start requires TARGET MODE LANGUAGE and optional ENABLE_QUIC plus UDP_PORT UDP_PAYLOAD_BASE64 SERVICE_HOST"
             ;;
     esac
+    # WAN must be saved/resolved before target validation or Job creation.
+    _wan_first=$("${SCRIPT_DIR}/wan_preflight.sh" require) || {
+        emit_error_json 'Saved WAN preflight is unavailable'
+        return 69
+    }
+    case "${_wan_first}" in
+        wan-ready) ;;
+        wan-required)
+            if [ "$4" = ru ]; then emit_error_json 'Укажите WAN интерфейс'
+            else emit_error_json 'Select a WAN interface'; fi
+            return 64 ;;
+        wan-invalid) emit_error_json 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
+        *) emit_error_json 'Saved WAN preflight is unavailable'; return 69 ;;
+    esac
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"

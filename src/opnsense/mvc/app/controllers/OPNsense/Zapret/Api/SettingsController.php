@@ -11,6 +11,7 @@ use OPNsense\Base\ApiMutableModelControllerBase;
 use OPNsense\Base\UserException;
 use OPNsense\Core\Backend;
 use OPNsense\Core\Config;
+require_once __DIR__ . '/WanRequirement.php';
 
 require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
@@ -197,6 +198,17 @@ class SettingsController extends ApiMutableModelControllerBase
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
+                // WAN-first on every active candidate; no other profile
+                // validation may mask a missing selected WAN.
+                if (WanRequirement::missingBeforeActivation($plan['candidate'])) {
+                    return [
+                        'result' => 'failed',
+                        'applied' => false, 'requires_review' => false,
+                        'message' => gettext('Select a WAN interface'),
+                        'validations' => ['zapret.general.waninterface' =>
+                            gettext('Select a WAN interface')],
+                    ];
+                }
                 // LC-06: the actual changed-field scope, not the full POST,
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
@@ -330,7 +342,7 @@ class SettingsController extends ApiMutableModelControllerBase
             // them only before journal PREPARED / Config / runtime / IPFW changes.
             // A generic requires_review here would freeze the GUI for a
             // safely rejected candidate and conceal the actual stage.
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,

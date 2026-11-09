@@ -61,13 +61,15 @@
 
 ## Этап 05 — WAN сохраняется сам по себе
 
-**Задача:** LC-06.
+**Задача:** LC-06/LC-06A/LC-06B/LC-06C — обязательный WAN-first на всех путях запуска.
 
 **Что сделать:** GUI/API сохраняют WAN независимо от `Enabled`, наличия Traffic Strategy, hostlists/IPSet и даже отсутствия upstream; не требуют обычный runtime-build для безопасного изменения Config. На RUNNING система должна применять защищённую native runtime-транзакцию с rollback; проверка logical/interface mapping сохраняет работающие real WAN/TUN/OPT случаи.
 
 **Проверки:** WAN-only Apply с полностью пустыми полями, выключенной службой, установленной/неустановленной службой и F5; отсутствие создания собственных IPFW; отдельные отрицательные tests invalid interface/readonly; RUNNING WAN-change rollback без потери Voice.
 
-**Выход G05:** **A07** и WAN-часть **A17**; сохранённый и разрешаемый интерфейс позже виден Laboratory без первого Start.
+**Обязательный WAN-first gate, проходящий через G05/G07/G08:** пересмотреть весь production call graph — GUI Start, configd start/restart/reconfigure, reboot, Shared Apply (включая одновременное изменение WAN), Voice-only, Standard/Extended/Circular Lab и worker. Сначала saved/effective WAN, затем интерфейс mapping, затем upstream/strategies/Voice/Job/IPFW. Прокинуть `wan-required`/ `wan-invalid` в локализованный GUI. Не блокировать WAN-only Save, Stop, setup, uninstall или recovery. Нельзя считать холодный native WAN Save из PR #985 закрытием runtime WAN-first.
+
+**Выход G05:** **A07** и WAN-часть **A17**; WAN-first полностью квалифицируется дополнительно в G07/G08, лаборатория видит сохранённый WAN без первого Start.
 
 ## Этап 06 — пустая Traffic Strategy, no-action и Voice-only
 
@@ -91,7 +93,7 @@
 
 **Что сделать:** определить конкретные ошибки первого Start и нижнего Apply; возвращать/показывать фактические native ошибки с этапом, не подавлять результат AJAX callback. Ровно пять локализованных категорий: `Не установлен / Not installed`, `Установка… / Installing…`, `Остановлена / Stopped`, `Запущена / Started`, `Ошибка / Error`. Неисполненная или неопределённая операция — код и безопасная диагностика внутри `Ошибка`, **никаких** «Требуется проверка» и ложного Start. Не показывать ошибку как успех по таймауту или потерянному ответу.
 
-**Проверки:** GUI actual button clicks с disabled/WAN missing/invalid profile/missing binary, running PID check/FD9/IPFW and normal Stop/Restart/Apply; RU, EN и reload; невозможность повторно отправить то же неопределённое действие, когда оно выполняется.
+**Проверки:** WAN-first matrix: одновременно missing WAN + missing engine + invalid profile — первым только `wan-required`, no mutation. Выбранный, но invalid WAN — `wan-invalid`; затем отдельный upstream missing; отключённый Save/Stop/Install остаются доступны. GUI actual button clicks с disabled/WAN missing/invalid profile/missing binary, running PID check/FD9/IPFW and normal Stop/Restart/Apply; RU, EN и reload; невозможность повторно отправить то же неопределённое действие, когда оно выполняется.
 
 **Выход G07:** **A10, A16, A17** и точные сообщения в двух локалях; никакого generic-only `preflight failed`.
 
@@ -99,9 +101,9 @@
 
 **Задача:** LC-11/12.
 
-**Что сделать:** и client, и native API/worker preflight: вначале реальное наличие upstream runtime, затем сохранённый, назначенный и разрешимый WAN; локализованные сообщения «Служба zapret2 не установлена» / “The zapret2 service is not installed” и «Нужно указать WAN интерфейс» / “You need to select a WAN interface”. Независимость от `Enabled`, основной Traffic Strategy, запуска общего сервиса хотя бы один раз. Использовать временную стратегию Laboratory, scoped rules, сохранить/восстановить STOPPED состояние; при RUNNING — восстановить RUNNING, original FD9, Config/Voice.
+**Что сделать:** и client, и native API/worker preflight: **вначале сохранённый, назначенный и разрешимый WAN** (`wan-required`: «Укажите WAN интерфейс» / “Select a WAN interface”; `wan-invalid` отдельно), **затем** реальное наличие upstream (`not installed` с RU/EN переводом). Независимость от `Enabled`, основной Traffic Strategy, запуска общего сервиса хотя бы один раз. Использовать временную стратегию Laboratory, scoped rules, сохранить/восстановить STOPPED состояние; при RUNNING — восстановить RUNNING, original FD9, Config/Voice.
 
-**Проверки:** впервые установленный upstream + сохранённый WAN + никогда не запускавшийся обычный engine, реальная authenticated Standard и Extended job; отдельные ранние отказы без движка/WAN; cancel/error/timeouts со strict restore; WAN/IPv6 route boundaries.
+**Проверки:** одновременно нет WAN/upstream — сначала WAN; после выбора WAN без upstream — не установлен, без Job/daemon/IPFW. Затем впервые установленный upstream + сохранённый WAN + никогда не запускавшийся обычный engine, реальная authenticated Standard и Extended job; отдельные ранние отказы без движка/WAN; cancel/error/timeouts со strict restore; WAN/IPv6 route boundaries.
 
 **Выход G08:** **A12, A13, A14** с genuine installed Job/Stage/restore, не только mock или доступный внешний endpoint.
 

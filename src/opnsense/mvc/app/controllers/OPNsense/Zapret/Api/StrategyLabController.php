@@ -8,6 +8,7 @@
 namespace OPNsense\Zapret\Api;
 
 use OPNsense\Base\ApiControllerBase;
+require_once __DIR__ . '/WanRequirement.php';
 
 class StrategyLabController extends ApiControllerBase
 {
@@ -170,6 +171,20 @@ class StrategyLabController extends ApiControllerBase
             return ['status' => 'error', 'message' => 'POST required.'];
         }
 
+        // Check the saved WAN first, before target, engine or Job validation.
+        $wanLanguage = trim((string)$this->request->getPost('language', 'striptags', 'en'));
+        $config = \OPNsense\Core\Config::getInstance();
+        $config->lock();
+        try {
+            $wan = WanRequirement::effectiveWan((new \OPNsense\Zapret\Zapret())->getNodes());
+        } finally {
+            $config->unlock();
+        }
+        if ($wan === '') {
+            return ['status' => 'error', 'reason' => 'wan-required',
+                'message' => $wanLanguage === 'ru'
+                    ? 'Укажите WAN интерфейс' : 'Select a WAN interface'];
+        }
         $targetContract = $this->targetContract();
         $target = $targetContract['target'];
         $targetType = $targetContract['type'];

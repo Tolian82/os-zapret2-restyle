@@ -781,7 +781,12 @@
             }).done(function() {
                 refreshRuntime();
                 updateServiceControlUI('zapret');
-            }).fail(function() {
+            }).fail(function(xhr) {
+                const message = xhr && xhr.responseJSON && xhr.responseJSON.message;
+                showRuntimeError(runtimeText.applyError,
+                    typeof message === 'string' && message ? message :
+                    (isRussian ? 'Не удалось запустить Zapret2. Проверьте WAN интерфейс.' :
+                        'Zapret2 could not be started. Check the WAN interface.'));
                 refreshRuntime();
             });
         });

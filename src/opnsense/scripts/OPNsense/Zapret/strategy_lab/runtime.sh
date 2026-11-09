@@ -302,6 +302,9 @@ strategy_lab_candidate_ready()
 
 strategy_lab_candidate_start()
 {
+    # An internal worker must not bypass the launcher WAN-first gate.
+    _wan_first=$("${SCRIPT_DIR}/wan_preflight.sh" require) || return 69
+    [ "${_wan_first}" = wan-ready ] || return 64
     _strategy_lab_job="$1"
     _strategy_lab_args=$(strategy_lab_candidate_args_file "${_strategy_lab_job}")
     _strategy_lab_pidfile=$(strategy_lab_candidate_pid_file "${_strategy_lab_job}")
