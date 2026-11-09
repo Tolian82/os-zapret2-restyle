@@ -1,6 +1,6 @@
 # G06 / LC-07 — native no-action and empty Traffic Strategy experiment
 
-**Status (9 November 2026):** `_19` real v1.0.7 FreeBSD no-action packet [S2 PASS #42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520); `_20` pure Voice composer [PR #994](https://github.com/Tolian82/os-zapret2-restyle/pull/994) merged; `_21` zero ordinary production path, scoped tests and exact-head CI [PR #995](https://github.com/Tolian82/os-zapret2-restyle/pull/995) PASS merged `303bb807`. `_22` one installed-native G06 transitions probe is **PENDING**. Full original FD9/Voice-only, post-activation rollback, owner-live, real WAN/Voice media are **OPEN** until corresponding evidence; no new package published.
+**Status (9 November 2026):** `_19` real FreeBSD v1.0.7 no-action packet S2 PASS [#42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520); `_20` pure merger merged; `_21` zero ordinary production path [PR #995](https://github.com/Tolian82/os-zapret2-restyle/pull/995) source/CI PASS; `_22` installed original FD9 one-engine Voice-only/combined/empty Stop/Start [native S2 PASS #42669040205](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42669040205), [PR #996](https://github.com/Tolian82/os-zapret2-restyle/pull/996) merged `1fde537e`. `_23` targeted post-activation fault/rollback is **PENDING**. Unmodified browser-fault, physical owner, real WAN/media/IPv6/reboot remain OPEN. Published stable `v0.6.3_1` unchanged.
 
 ## Mandatory experiment before implementation
 
@@ -35,6 +35,12 @@ New `scripts/stage2-opnsense-g06-native-shared-voice.py` and its path-filtered o
 Witness: saved `TRAFFIC_ARGS=\"\"` and WAN `lo0`; no-action real engine with zero owned IPFW; only destination-scoped Voice UDP when enabled, no broad ordinary UDP; adding ordinary TCP `65431` yields exactly one additional ordinary IPFW; deleting restores Voice-only without `--new` ghost; disabling Voice removes every Zapret2 rule; stopped and restarted no-action retains same committed journal and one real engine PID; stale Voice snapshot refused unchanged; foreign Config/IPFW remain intact. Localhost test only, documentation IPs, no actual Voice media.
 
 The `_22` workflow must finish native SUCCESS on its **exact PR head** before G06 A09/A11 acceptance; until then this is a planned test, not PASS. The separate injected **post-activation** automatic rollback, boot/reboot, native IPv6 and physical owner-browser/real VPN remain OPEN.
+
+## G06 Stage 4 (`_23` private native post-activation rollback candidate)
+
+`scripts/stage2-opnsense-g06-native-fault-rollback.py` reuses exactly the existing G05 `fault_copy()` and `restored_predecessor()` guards, with no new lifecycle, IPFW, Config or Python backend. ONE G04 native first-install/real upstream v1.0.7 disposable guest creates a saved empty ordinary + committed Voice-only shared FD9 owner via the installed cookie/CSRF HTTPS API. A private root-owned copy of the *same installed native service* replaces only its actual Config-save call with return 69, after `apply_runtime_attest_activated` has succeeded and the new ordinary TCP/IPFW owner was really activated. The test then requires exact persisted Config bytes, terminal `restored.previous` original Voice-only identity, new single real engine PID, original Voice-only IPFW/table, zero ordinary rules and untouched unrelated IPFW. Two subsequent unmodified HTTPS ordinary Add/Remove Applies and final native Stop must PASS.
+
+The `_23` test is **instrumented** (private service copy), NOT unmodified browser fault or power-loss proof. This is separate from the already completed `_22` positive native transitions. Never claim `_23` PASS without exact-head run evidence. Reboot, native IPv6 packets, physical owner-browser and actual media remain OPEN.
 
 ## CI budget and evidence
 
