@@ -140,6 +140,10 @@ class ServiceController extends ApiMutableServiceControllerBase
         if (count($seen) !== 5) {
             return $unavailable;
         }
+        // A live setup always has BOTH native busy=1 and setup=installing.
+        if ($state['busy'] !== ($state['setup'] === 'installing')) {
+            return $unavailable;
+        }
         // Contradictory installed=0 evidence is an error, not Not installed.
         if (!$state['installed'] &&
             ($state['service'] !== 'error' || $state['version'] !== '')) {
@@ -506,6 +510,12 @@ class ServiceController extends ApiMutableServiceControllerBase
             throw new UserException(
                 gettext('A zapret2 runtime operation is already in progress.'),
                 gettext('Zapret2 runtime busy')
+            );
+        }
+        if ($runtime['installed'] === true && $runtime['service'] === 'error') {
+            throw new UserException(
+                gettext('The installed zapret2 service is in an error state. Inspect runtime recovery before reinstalling.'),
+                gettext('Zapret2 setup error')
             );
         }
 

@@ -374,6 +374,11 @@
                 }
             }
 
+            // Unknown native receipt must also lock the release Install
+            // control; the backend independently repeats this refusal.
+            if (data && data.reason === 'status-unavailable') {
+                releaseNeedsReview = true;
+            }
             currentRuntimeInstalled = installed;
             if (!busy) {
                 currentServiceState = category === 'started' || category === 'stopped'

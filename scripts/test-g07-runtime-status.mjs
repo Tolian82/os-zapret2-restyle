@@ -62,6 +62,8 @@ assert.match(view, /category === 'not-installed'/);
 assert.match(view, /category === 'installing'/);
 assert.match(view, /badge\.addClass\('label-default'\)\.text\(runtimeText\.notInstalled\)/);
 assert.match(view, /releaseNeedsReview = true;/);
+assert.match(view, /data && data.reason === 'status-unavailable'/);
+assert.match(view, /releaseNeedsReview = true;[\s\S]{0,130}currentRuntimeInstalled = installed;/);
 assert.match(controller, /'installed' => null/);
 assert.match(controller, /'reason' => 'status-unavailable'/);
 assert.match(controller, /count\(\$seen\) !== 5/);

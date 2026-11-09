@@ -50,7 +50,8 @@ namespace {
             controller()->installAction();
         } catch (UserException $error) {
             assertion(str_contains($error->getMessage(), 'status cannot be verified') ||
-                      str_contains($error->getMessage(), 'already in progress'),
+                      str_contains($error->getMessage(), 'already in progress') ||
+                      str_contains($error->getMessage(), 'error state'),
                       'wrong fail-closed message');
             assertion(count(Backend::$mutations) === $before, 'mutating configd called');
             return;
@@ -83,6 +84,7 @@ namespace {
               'unexpected configd mutation identity');
     Backend::$mutations = [];
     refusedInstall($installing);
+    refusedInstall("installed=1\nservice=error\nversion=v1.0.7\nsetup=ready\nbusy=0");
 
     $malformed = [
         '',
@@ -95,6 +97,8 @@ namespace {
         "installed=1\nservice=started\nversion=foo\nsetup=ready\nbusy=0",
         "installed=0\nservice=error\nversion=\nsetup=garbage\nbusy=0",
         "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=foo",
+        "installed=0\nservice=error\nversion=\nsetup=installing\nbusy=0",
+        "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=1",
         "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0\nextra=1",
     ];
     foreach ($malformed as $fixture) {
