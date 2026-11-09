@@ -118,6 +118,23 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('strategy_lab=false', body)
         self.assertIn('scripts/test-strategy-lab-', body)
 
+    def test_lab_fixture_change_only_uses_scoped_lab_ci_not_both_stage5_s3(self):
+        # GH-069: a changed mock-backed Lab e2e fixture belongs to the fast
+        # corrective matrix, NOT two unrelated S3 guests that fetch the
+        # 73-resource GitHub catalog over and over.
+        ci = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        self.assertIn('scripts/test-strategy-lab-', ci)
+        self.assertIn('run: sh scripts/test-strategy-lab-corrective-matrix.sh', ci)
+        for name in ('stage5-native-running-voice.yml',
+                     'stage5-native-cross-clean-running.yml'):
+            body = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
+            self.assertNotIn('      - scripts/test-strategy-lab-e2e.sh', body,
+                             name + ': unrelated S3 network fanout on Lab fixture')
+            self.assertIn('  workflow_dispatch:', body,
+                          name + ': S3 must remain manually invocable')
+            self.assertIn('      - scripts/stage5-native-running-voice-artifact.py',
+                          body, name + ': real Stage5 changes must still trigger S3')
+
     def test_stage0_audit_and_g03_do_not_double_trigger_every_pr(self):
         archive = (ROOT / '.github/workflows/stage0-audit-closure.yml').read_text(
             encoding='utf-8').split('permissions:', 1)[0]
