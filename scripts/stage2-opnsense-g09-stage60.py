@@ -2,6 +2,7 @@
 """G09 installed OPNsense negative-control: real Stage50->Stage60 before normal Start.
 Qualifies a routed public IPv4 TCP/443-negative control, not an ISP DPI bypass.
 """
+import http.client
 import importlib.util
 import json
 import os
@@ -161,7 +162,7 @@ def poll(g08, web, job):
         try:
             state = web.api("POST", LAB + "status", {"job_id": job})
             need(state.get("job_id") == job, "G09_JOB_STATUS_ID_MISMATCH")
-        except (RuntimeError, OSError, ValueError):
+        except (RuntimeError, OSError, ValueError, http.client.HTTPException):
             failures += 1
             need(failures < 3, "G09_STATUS_UNAVAILABLE")
             time.sleep(2)
