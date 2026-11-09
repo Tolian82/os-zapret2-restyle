@@ -195,6 +195,19 @@ class SettingsController extends ApiMutableModelControllerBase
             $config->lock();
             try {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                // WAN must be the first semantic preflight, before the
+                // strategy candidate, hostlists/IPSET and runtime checks.
+                if (WanRequirement::missingBeforeActivation($current, $post)) {
+                    return [
+                        'result' => 'failed',
+                        'applied' => false, 'requires_review' => false,
+                        'message' => gettext('Select a WAN interface'),
+                        'validations' => [
+                            'zapret.general.waninterface' =>
+                                gettext('Select a WAN interface'),
+                        ],
+                    ];
+                }
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
