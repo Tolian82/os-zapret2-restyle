@@ -483,6 +483,11 @@ run_job()
     LAST_RESULT="${result}"
 }
 
+# This fixture simulates a previously installed upstream binary; job
+# execution remains mock-only under the existing test-owned process adapter.
+printf '#!/bin/sh\nexit 99\n' > "${BIN_DIR}/dvtws2-unused"
+chmod 0755 "${BIN_DIR}/dvtws2-unused"
+
 # The missing WAN must reject before any Standard/Extended Job creation,
 # even though the mocked runtime/strategies are otherwise ready.
 MOCK_WAN_REPLY=wan-required

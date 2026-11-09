@@ -185,6 +185,35 @@ class StrategyLabController extends ApiControllerBase
                 'message' => $wanLanguage === 'ru'
                     ? 'Укажите WAN интерфейс' : 'Select a WAN interface'];
         }
+        // The existing native read-only preflight resolves the *saved* WAN.
+        // No second mapping algorithm, and do not validate a Lab target or
+        // create a Job before the selected interface and engine are ready.
+        $wanProbe = trim((string)(new \OPNsense\Core\Backend())->configdRun(
+            'zapret wan_preflight', false, 20
+        ));
+        if ($wanProbe === 'wan-required') {
+            return ['status' => 'error', 'reason' => 'wan-required',
+                'message' => $wanLanguage === 'ru'
+                    ? 'Укажите WAN интерфейс' : 'Select a WAN interface'];
+        }
+        if ($wanProbe === 'wan-invalid') {
+            return ['status' => 'error', 'reason' => 'wan-invalid',
+                'message' => $wanLanguage === 'ru'
+                    ? 'Выбранный WAN интерфейс недоступен'
+                    : 'Selected WAN interface is not assigned or unavailable'];
+        }
+        if ($wanProbe !== 'wan-ready') {
+            return ['status' => 'error', 'reason' => 'wan-unavailable',
+                'message' => $wanLanguage === 'ru'
+                    ? 'Проверка сохранённого WAN недоступна'
+                    : 'Saved WAN preflight is unavailable'];
+        }
+        if (!is_executable('/usr/local/etc/zapret2/binaries/my/dvtws2')) {
+            return ['status' => 'error', 'reason' => 'engine-not-installed',
+                'message' => $wanLanguage === 'ru'
+                    ? 'Служба zapret2 не установлена'
+                    : 'The zapret2 service is not installed'];
+        }
         $targetContract = $this->targetContract();
         $target = $targetContract['target'];
         $targetType = $targetContract['type'];

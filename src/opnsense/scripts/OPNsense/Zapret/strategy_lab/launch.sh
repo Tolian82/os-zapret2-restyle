@@ -124,6 +124,13 @@ start_job()
         wan-invalid) emit_error_json 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
         *) emit_error_json 'Saved WAN preflight is unavailable'; return 69 ;;
     esac
+    # Stage two after saved WAN, BEFORE target checking, Job creation and
+    # worker scheduling. Reuse the installed native runtime binary path.
+    if [ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]; then
+        if [ "$4" = ru ]; then emit_error_json 'Служба zapret2 не установлена'
+        else emit_error_json 'The zapret2 service is not installed'; fi
+        return 64
+    fi
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"

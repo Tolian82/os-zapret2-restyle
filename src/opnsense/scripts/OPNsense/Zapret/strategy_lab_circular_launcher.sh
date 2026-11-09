@@ -117,6 +117,12 @@ circular_dispatch()
                 wan-invalid) circular_emit_error 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
                 *) circular_emit_error 'Saved WAN preflight is unavailable'; return 69 ;;
             esac
+            # A circular session must never precede upstream availability.
+            # Runtime.sh supplies the same installed binary path as Standard Lab.
+            if [ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]; then
+                circular_emit_error 'The zapret2 service is not installed'
+                return 64
+            fi
             if _slcl_eligibility=$(strategy_lab_circular_eligibility "${PARENT_JOB_ID}"); then
                 :
             else
