@@ -123,6 +123,7 @@ fi
 grep -Fq "'status' => 'unavailable'" "${CONTROLLER}" || fail "passive release failure is not represented without an exception"
 grep -Fq 'catch (\Throwable' "${CONTROLLER}" || fail "release-list failure is not contained"
 php -l "${CONTROLLER}" >/dev/null
+php "${ROOT_DIR}/scripts/test-g07-runtime-api.php"
 
 # GUI installation must be transactional and must not expose a candidate Git HEAD
 # as the installed release before setup succeeds.
