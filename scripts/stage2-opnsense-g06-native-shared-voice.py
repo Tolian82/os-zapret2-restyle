@@ -16,6 +16,8 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+from stage2_source_revision import revision_from_makefile, version_from_file
+
 ROOT = Path(__file__).resolve().parent
 CONFIG = Path("/conf/config.xml")
 ENGINE = Path("/usr/local/etc/zapret2/binaries/my/dvtws2")
@@ -235,10 +237,19 @@ def execute():
          os.uname().sysname == "FreeBSD" and os.geteuid() == 0 and
          Path("/usr/local/opnsense").is_dir() and ENGINE.is_file(),
          "G06_DISPOSABLE_NATIVE_GUEST_REQUIRED")
-    head = output("/usr/local/bin/git", "rev-parse", "HEAD").strip()
-    need(re.fullmatch(r"[a-f0-9]{40}", head) and
-         os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA") == head,
-         "G06_EXACT_HEAD_NOT_ATTESTED")
+    # vmactions sync=tar deliberately has no .git directory inside the guest.
+    # The preceding G04 step has already built and installed the SAME native
+    # archive using the CI-pinned source identity, then reinstalled that exact
+    # physical package and attested its contents. Reuse that native witness.
+    head = os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA", "")
+    need(re.fullmatch(r"[a-f0-9]{40}", head) is not None,
+         "G06_CI_PROJECT_SHA_NOT_QUALIFIED")
+    package = ROOT.parent / "dist" / (
+        "os-zapret2-restyle-" + version_from_file() + "_" +
+        revision_from_makefile() + ".pkg")
+    need(package.is_file() and not package.is_symlink() and
+         package.stat().st_size > 1024,
+         "G06_G04_EXACT_NATIVE_ARCHIVE_NOT_RETAINED")
     binary_sha = hashlib.sha256(ENGINE.read_bytes()).hexdigest()
     initial = CONFIG.read_bytes()
     cfg = ET.fromstring(initial).find("./OPNsense/Zapret")
@@ -313,6 +324,7 @@ def execute():
          "G06_FINAL_STOP_CHANGED_FOREIGN_IPFW")
     return {"status": "PASS_G06_REAL_NATIVE_SHARED_VOICE_ONLY",
             "source_sha": head, "engine_sha256": binary_sha,
+            "source_provenance": "reused exact G04 native package witness",
             "real_no_action_engine": True,
             "voice_only_zero_ordinary_rules": True,
             "voice_combined_voice_empty_transitions": True,
