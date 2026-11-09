@@ -14,6 +14,7 @@ import base64
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import stat
 import subprocess
 import sys
@@ -76,6 +77,26 @@ def envelope(wan, baseline):
     return base64.urlsafe_b64encode(payload).decode().rstrip("=")
 
 
+def restored_predecessor(record, expected, *, page):
+    """Attest terminal rollback *and* the unchanged prior committed owner."""
+    need(isinstance(expected, dict) and expected.get("page") == page and
+         isinstance(expected.get("id"), str) and
+         len(expected["id"]) == 32 and
+         all(c in "0123456789abcdef" for c in expected["id"]),
+         "G05_FAULT_ORIGINAL_OWNER_UNTRUSTED")
+    need(isinstance(record, dict) and record.get("schema") == 1 and
+         record.get("phase") == "restored" and
+         record.get("previous") == expected and
+         isinstance(record.get("detail"), dict) and
+         record["detail"].get("page") == "strategies" and
+         isinstance(record["detail"].get("id"), str) and
+         len(record["detail"]["id"]) == 32 and
+         all(c in "0123456789abcdef" for c in record["detail"]["id"]) and
+         record["detail"]["id"] != expected["id"],
+         "G05_FAULT_TERMINAL_RESTORED_PREDECESSOR_MISMATCH")
+    return expected["id"]
+
+
 def execute():
     for key in ("GITHUB_ACTIONS", "ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK",
                 "ZAPRET2_NATIVE_BUILD_CI", "ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST",
@@ -104,6 +125,10 @@ def execute():
          "G05_FAULT_INITIAL_COMMON_OWNER_MISSING")
     xml_before = active.CONFIG.read_bytes()
     old = g05.shared_owner(active, common, engine_sha, "lo0")
+    original_journal = json.loads(common.JOURNAL.read_text())
+    need(original_journal.get("phase") == "committed" and
+         original_journal.get("detail", {}).get("id") == old["id"],
+         "G05_FAULT_ORIGINAL_JOURNAL_NOT_COMMITTED")
 
     # Use the same installed service code, not a new runner or transaction.
     info = SERVICE.lstat()
@@ -134,7 +159,16 @@ def execute():
          "G05_FAULT_MODIFIED_NATIVE_CONFIG")
     after, _ = g05.read_model(web)
     voice.attest_complete_native_model(before, after)
-    witness = g05.shared_owner(active, common, engine_sha, "lo0")
+    # The shared journal deliberately records the failed transaction as
+    # terminal RESTORED; its `previous` is the unchanged committed owner.
+    # Only the journal reader is adapted for this specific proof. All other
+    # engine/PID/Voice/IPFW checks reuse the unmodified native G05 witness.
+    def restored_checked(record, *, page):
+        return restored_predecessor(record, original_journal["detail"], page=page)
+    restored_common = SimpleNamespace(
+        JOURNAL=common.JOURNAL, invoke=common.invoke,
+        checked_journal=restored_checked)
+    witness = g05.shared_owner(active, restored_common, engine_sha, "lo0")
     need(witness["id"] == old["id"] and witness["pid"] != old["pid"] and
          witness["rules"] == old["rules"],
          "G05_FAULT_PREVIOUS_FD9_VOICE_IPFW_NOT_RESTORED")
@@ -203,6 +237,24 @@ def self_test():
             pass
         else:
             raise AssertionError("unsafe fixture source admitted")
+    previous = {"id": "a" * 32, "page": "strategies", "candidate": "b" * 64}
+    restored = {"schema": 1, "phase": "restored",
+                "detail": {"id": "c" * 32, "page": "strategies"},
+                "previous": previous}
+    need(restored_predecessor(restored, previous, page="strategies") == previous["id"],
+         "G05_FAULT_PREDECESSOR_SELFTEST")
+    for bad in (
+        dict(restored, phase="committed"),
+        dict(restored, previous=dict(previous, id="d" * 32)),
+        dict(restored, detail=dict(restored["detail"], id=previous["id"])),
+        dict(restored, previous=None),
+    ):
+        try:
+            restored_predecessor(bad, previous, page="strategies")
+        except Refusal:
+            pass
+        else:
+            raise AssertionError("invalid terminal rollback journal admitted")
     raw = envelope("wan", "192.0.2.42/32")
     decoded = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
     need(decoded["fields"] == {"general": {"waninterface": "wan"}},
