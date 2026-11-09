@@ -301,7 +301,8 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
             stage="50",
             candidate_id=candidate_id,
             protocol="tls13",
-            outcome="pass" if candidate.get("all_pass") is True else "fail",
+            outcome=("error" if candidate.get("error") is True else
+                     ("pass" if candidate.get("all_pass") is True else "fail")),
             details={"search_epoch_id": epoch.epoch_id},
         )
         result["families"].append(candidate)
@@ -309,6 +310,16 @@ def screen(job_id: str, endpoints_file: str, result_file: str) -> int:
         result["accepted"] = [item.get("family", "") for item in result["families"] if item.get("all_pass") is True]
         result["rejected"] = [item.get("family", "") for item in result["families"] if item.get("all_pass") is not True]
         result["all_pass"] = bool(result["accepted"])
+        # A system-adapter error is NOT a valid rejected TLS family. Preserve
+        # the exact candidate evidence, stop immediately and let the existing
+        # Stage-90 restoration path report an internal error honestly.
+        if candidate.get("error") is True:
+            result["infrastructure_error"] = str(
+                candidate.get("message") or "candidate runtime infrastructure error"
+            )[:512]
+            result["stopped_reason"] = "candidate_infrastructure_error"
+            _atomic_json(output, result)
+            return EX_SOFTWARE
         _atomic_json(output, result)
 
     return EX_OK if result["completed"] == result["total"] else EX_SOFTWARE

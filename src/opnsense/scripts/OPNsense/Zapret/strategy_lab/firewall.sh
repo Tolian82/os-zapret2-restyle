@@ -7,6 +7,38 @@ STRATEGY_LAB_RULE_BASE="${STRATEGY_LAB_RULE_BASE:-19100}"
 STRATEGY_LAB_RULE_MAX="${STRATEGY_LAB_RULE_MAX:-19131}"
 STRATEGY_LAB_DIVERT_PORT="${STRATEGY_LAB_DIVERT_PORT:-9989}"
 
+strategy_lab_firewall_prepare_search_kernel()
+{
+    # Called ONLY after WAN-first, a captured original service state and
+    # Stage-20 stopped-service verification, before the first Stage-50 candidate.
+    # Reuse the EXISTING guarded cold IPFW loader; do not call the backend
+    # firewall_prepare, which also changes PF. No new firewall owner or range.
+    _slfw_kldstat="${STRATEGY_LAB_KLDSTAT_BIN:-/sbin/kldstat}"
+    _slfw_kldload="${STRATEGY_LAB_KLDLOAD_BIN:-/sbin/kldload}"
+    [ -x "${_slfw_kldstat}" ] && [ -x "${_slfw_kldload}" ] || return 1
+
+    _slfw_loaded_rc=0
+    "${_slfw_kldstat}" -q -m ipfw || _slfw_loaded_rc=$?
+    case "${_slfw_loaded_rc}" in
+        0) ;;
+        1)
+            _slfw_existing_loader="${SCRIPT_DIR}/backend/firewall.sh"
+            [ -r "${_slfw_existing_loader}" ] || return 1
+            # shellcheck disable=SC1090
+            . "${_slfw_existing_loader}"
+            # This attests BOTH modules unloaded, ipfw 71, exact default-allow
+            # KENV before kldload, and rejects foreign rules without touching PF.
+            firewall_cold_load_ipfw || return 1
+            ;;
+        *) return 1 ;;
+    esac
+
+    if ! "${_slfw_kldstat}" -q -m ipdivert; then
+        "${_slfw_kldload}" ipdivert || return 1
+    fi
+    strategy_lab_firewall_require_ready
+}
+
 strategy_lab_firewall_rule_number_valid()
 {
     case "$1" in

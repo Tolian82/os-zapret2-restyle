@@ -220,12 +220,26 @@ case "${ACTION}" in
         esac
         ;;
     50)
+        # An accessible Stage-40 control never gets here. In the true fresh,
+        # never-started search, Stage-50 must prime the same safe FreeBSD kernel
+        # prerequisites that normal service Start would have supplied.
+        # Keep original service STOPPED and do not toggle PF.
+        strategy_lab_firewall_prepare_search_kernel ||
+            error 'Strategy Lab cannot safely prepare ipfw/ipdivert for family screening.'
         CANDIDATE_FILE="${JOB_DIR}/candidate-smoke.json"
         if run_timed "${CANDIDATE_RUNNER}" "${JOB_ID}" "${ENDPOINTS_FILE}" "${CANDIDATE_FILE}"; then status=0; else status=$?; fi
         [ -r "${CANDIDATE_FILE}" ] || error 'Temporary candidate result was not produced.'
         strategy_lab_set_candidate_smoke_result "${JOB_ID}" "${CANDIDATE_FILE}" ||
             error 'Temporary candidate state could not be recorded.'
-        [ "${status}" -eq 0 ] || error 'Temporary candidate runtime failed internally.'
+        if [ "${status}" -ne 0 ]; then
+            if "${STRATEGY_LAB_JQ}" -e '.stopped_reason == "candidate_infrastructure_error"' "${CANDIDATE_FILE}" >/dev/null; then
+                # Only an already-persisted bounded structured failure reason is
+                # surfaced; no failed candidate is misreported as NO_CANDIDATE.
+                _slfam_reason=$("${STRATEGY_LAB_JQ}" -r '.infrastructure_error // "unavailable"' "${CANDIDATE_FILE}")
+                error "Temporary candidate infrastructure failed: ${_slfam_reason}"
+            fi
+            error 'Temporary candidate runtime failed internally.'
+        fi
         if "${STRATEGY_LAB_JQ}" -e '.all_pass == true' "${CANDIDATE_FILE}" >/dev/null; then
             msg='PASS — Family screening completed; at least one working TLS 1.3 family was found.'
             [ "${LANGUAGE}" != ru ] || msg='PASS — Проверка семейств завершена; найдено как минимум одно рабочее TLS 1.3-семейство.'
