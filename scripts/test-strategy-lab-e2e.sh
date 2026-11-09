@@ -40,7 +40,7 @@ rm -f "${WAN_TEST_SCRIPT_DIR}/wan_preflight.sh"
 cat > "${WAN_TEST_SCRIPT_DIR}/wan_preflight.sh" <<'WAN_MOCK'
 #!/bin/sh
 case "${MOCK_WAN_REPLY:-wan-ready}" in
-    wan-ready|wan-required|wan-invalid) printf '%s\\n' "${MOCK_WAN_REPLY:-wan-ready}" ;;
+    wan-ready|wan-required|wan-invalid) printf '%s\n' "${MOCK_WAN_REPLY:-wan-ready}" ;;
     *) exit 69 ;;
 esac
 WAN_MOCK
@@ -490,7 +490,7 @@ export MOCK_WAN_REPLY
 if premature=$(api_call strategy_lab_start blocked.example standard en); then
     fail "Lab without WAN accepted a job"
 fi
-printf '%s\\n' "${premature}" | jq -e     '.status=="error" and .message=="Select a WAN interface"' >/dev/null ||
+printf '%s\n' "${premature}" | jq -e     '.status=="error" and .message=="Select a WAN interface"' >/dev/null ||
     fail "Lab without WAN did not return the primary user error"
 [ -z "$(find "${RUN_DIR}/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit)" ] ||
     fail "Lab allocated Job data before rejecting absent WAN"
