@@ -64,10 +64,16 @@ apply_runtime_attest_engine_inventory() { [ "$ORPHAN" = 0 ]; }
 shared_apply_ipfw_kernel_absent_service() { [ "$KERNEL_COLD" = 1 ]; }
 shared_apply_run_service() {
     echo full >> "$TRACE"
-    printf 'applied-id=%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    case "${FULL_RESULT:-ok}" in
+        ok) printf 'applied-id=%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+        preflight) printf '%s\n' preflight-rejected=runtime-preflight ;;
+        uncertain) return 70 ;;
+        *) return 69 ;;
+    esac
 }
 reset() {
     JOURNAL_OK=1 RESOURCES_OK=1 RECORD=0 RUNTIME_STATUS=1 ORPHAN=0
+    FULL_RESULT=ok
     KERNEL_COLD=1 TEST_SUPERVISOR=0 TEST_MODULES=none TEST_IPFW_FAIL=0
     TEST_IPFW_RULES="65535 allow ip from any to any"
     export TEST_SUPERVISOR TEST_MODULES TEST_IPFW_FAIL TEST_IPFW_RULES
@@ -85,6 +91,31 @@ APPLIED=applied-id=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 reset; check cold "$SAVED" "probe,commit"
 reset; RECORD=1; check committed-owner "$APPLIED" "probe,full"
 reset; RUNTIME_STATUS=0; check running-old-owner "$APPLIED" "probe,full"
+# A RUNNING or sealed original owner MUST NEVER take the Config-only commit
+# branch even when full Apply refuses or its rollback outcome is uncertain.
+# Propagate the full FD9 result; the GUI must not report a WAN Save.
+assert_full_refusal() {
+    label="$1"; expected_rc="$2"; expected_output="$3"
+    _full_rc=0
+    _full_output=$(shared_apply_wan_save_service encoded) || _full_rc=$?
+    [ "$_full_rc" -eq "$expected_rc" ] ||
+        fail "$label lost full Apply error: rc=$_full_rc expected=$expected_rc"
+    [ "$_full_output" = "$expected_output" ] ||
+        fail "$label emitted false WAN success receipt: $_full_output"
+    [ "$(paste -sd, "$TRACE")" = "probe,full" ] ||
+        fail "$label called Config-only commit or skipped full Apply"
+}
+reset; RECORD=1; FULL_RESULT=uncertain
+assert_full_refusal sealed-owner-uncertain 70 ""
+reset; RUNTIME_STATUS=0; FULL_RESULT=uncertain
+assert_full_refusal running-old-owner-uncertain 70 ""
+reset; RECORD=1; FULL_RESULT=preflight
+assert_full_refusal sealed-owner-preflight 0 preflight-rejected=runtime-preflight
+reset; RUNTIME_STATUS=0; FULL_RESULT=preflight
+assert_full_refusal running-old-owner-preflight 0 preflight-rejected=runtime-preflight
+reset; RECORD=1; RESOURCES_OK=0
+check pending-resources-with-owner preflight-rejected=wan-lifecycle probe
+
 reset; RUNTIME_STATUS=2; check incomplete-owner preflight-rejected=wan-runtime-owner probe
 reset; ORPHAN=1; check orphan-dvtws preflight-rejected=wan-runtime-owner probe
 reset; TEST_SUPERVISOR=1; export TEST_SUPERVISOR
@@ -109,4 +140,4 @@ grep -Fq 'shared-apply-run|shared-apply-wan|' "$SOURCE" ||
     fail "WAN-only action not routed through original FD9"
 grep -Fq '[shared_apply_wan]' "$BASE/src/opnsense/service/conf/actions.d/actions_zapret.conf" ||
     fail "configd WAN-only action unavailable"
-echo 'PASS: G05 WAN-only native FD9 Config mode; owner/foreign/partial/unknown cases fail closed'
+echo 'PASS: G05 WAN-only native FD9 Config mode; RUNNING/committed full Apply refusal propagates without Config-only fallback'
