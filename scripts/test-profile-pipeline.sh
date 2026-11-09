@@ -81,8 +81,7 @@ blank_root="${TEST_ROOT}/blank"
 mkdir -p "${blank_root}"
 # Reused workdir: parser zero must remove an earlier positive profile.
 assert_equal 1 "$(profile_pipeline_parse "${blank_root}" 0 '--filter-tcp=443')" "blank fixture setup"
-for blank_strategy in '' '   
-   '; do
+for blank_strategy in '' "$(printf ' \\t\\n  ')"; do
     blank_count=$(profile_pipeline_parse "${blank_root}" 0 "${blank_strategy}")
     assert_equal 0 "${blank_count}" "empty parser count"
     [ ! -e "${blank_root}/profile-1.conf" ] || fail "ghost ordinary profile"
