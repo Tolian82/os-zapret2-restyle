@@ -1,6 +1,6 @@
 # G10 — один пакет после orphan-purge, чистая установка и RUNNING-обновление
 
-**Текущий статус:** этап G10 **IN PROGRESS**; `v0.6.3_28` — исходный кандидат, **не опубликованный пакет**. Ни один результат нового G10 native workflow пока не засчитан до выполнения на точном PR-head. Основное ТЗ: [clean-install recovery § LC-14/15](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) и [план G10](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
+**Текущий статус:** G10 **IN PROGRESS**, `v0.6.3_29` — непубликованный source-кандидат. `_28` PR S3 [#42707265476](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42707265476) PASS, но отдельный main S3 [#42708601883](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42708601883) FAILED Guest B в двух попытках, итоговая сверка SKIPPED. `_29` пока NOT TESTED native; [Issue #1003](https://github.com/Tolian82/os-zapret2-restyle/issues/1003) OPEN. Нормативные условия: [ТЗ LC-14/15](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [план G10](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
 
 ## Одна физическая сборка, четыре независимых проверяемых среды
 
@@ -20,3 +20,9 @@
 ## Следующий переход
 
 Только после успешных точных PR checks и **фактической** G10 native S3-проверки подтвердить объединённый `main`, действительный SHA физического пакета и исполняемый штатный installer. Затем через существующий testing publisher создать постоянные GitHub prerelease assets и отдельный bounded publication-record PR. Это **не** стабильный релиз и **не** разрешение устанавливать что-либо на рабочую OPNsense автоматически. G11 — последующая фактическая owner-live приёмка опубликованных байтов.
+
+## Точечный блокер G10 — HTTP 403 и изменение inventory
+
+Главный исходный `main=0c3fda2b` Guest B закончил FAILED: в попытке 1 источник непостоянства HEAD/каталогов/файлов не установлен; в попытке 2 API GitHub вернул документированный `HTTP 403: rate limit exceeded`. Для `_29` на production пути **только подтверждённый** GitHub API rate-limit разрешает чтение *того же публичного `refs/heads/main`* через read-only `git ls-remote` фиксированного `https://github.com/Tolian82/zapret2-extra-resources.git`. Никакого локально закреплённого/альтернативного каталога и повторной POST Install: полученный SHA проверяется, затем архив строго проверяется по SHA/Git blob до единственного native Install. Любой другой 403, TLS/сеть, неоднозначный Git ref или ошибка Git остаются отказом.
+
+`extra_resources_reconcile.make_remove_plan()` теперь при *той же* fail-closed проверке сообщает класс конкретного расхождения (`HEAD`, `directory/root|lua|files|files/fake`, `runtime-files`, `upstream-files`). Изменённый witness не считается допустимым; это диагностика и возможность локализовать гонку при следующем единственном обоснованном native прогоне, но не устранённая/принятая гонка. S0/S1 тесты должны доказать не только успешный fallback, но и отказ при произвольных 403, таймауте Git, ошибке ref и изменении каталогов/ресурсов.

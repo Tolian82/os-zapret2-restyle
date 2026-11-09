@@ -14,10 +14,11 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
+import subprocess
 import sys
 import tarfile
 import time
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 SOURCE = "Tolian82/zapret2-extra-resources"
@@ -77,11 +78,52 @@ def _readonly_fetch_with_bounded_eacces_retry(request: Request, *, timeout: int,
     raise AssertionError("unreachable after bounded HTTPS attempts")
 
 
+def _git_main_revision_after_rate_limit() -> str:
+    """Only fall back to the SAME public GitHub main ref on an API rate limit.
+
+    GitHub's Git transport is read-only and does not consume REST API quota.
+    This does not pin an outdated catalogue, change repositories, or bypass
+    content verification: the subsequent archive is fetched by exact SHA and
+    every file is checked against its Git blob hash before native Install.
+    """
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    try:
+        result = subprocess.run(
+            ["git", "-c", "credential.helper=", "ls-remote", "--exit-code",
+             f"https://github.com/{SOURCE}.git", "refs/heads/main"],
+            capture_output=True, text=True, timeout=30, check=False, env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PreflightError("GitHub main revision unavailable after API rate limit") from exc
+    # One EXACT main-branch reference only: never accept tags, HEAD, ambiguity,
+    # stderr, an empty result or an arbitrary SHA provided by the caller.
+    match = re.fullmatch(r"([0-9a-f]{40})\trefs/heads/main\n?", result.stdout)
+    if result.returncode or match is None or len(result.stdout) > 60:
+        raise PreflightError("GitHub Git transport returned no single valid main revision")
+    return match.group(1)
+
+
 def obtain_revision() -> str:
     req = Request(SOURCE_REF_URL, headers={"Accept": "application/vnd.github+json",
                                           "User-Agent": "os-zapret2-restyle"})
-    raw = _readonly_fetch_with_bounded_eacces_retry(
-        req, timeout=20, max_bytes=8193)
+    try:
+        raw = _readonly_fetch_with_bounded_eacces_retry(
+            req, timeout=20, max_bytes=8193)
+    except HTTPError as exc:
+        # Never retry or reinterpret a general 403, proxy refusal, TLS
+        # failure, malformed response, or any mutating operation. Only the
+        # verified GitHub API *rate limit* enables the same-origin Git read.
+        if exc.code not in (403, 429):
+            raise
+        body = exc.read(1025) if exc.code == 403 and exc.fp is not None else b""
+        remaining = exc.headers.get("X-RateLimit-Remaining", "") if exc.headers else ""
+        if exc.code == 403 and not (
+            remaining == "0" or b"rate limit exceeded" in body.lower()
+        ):
+            raise
+        return _git_main_revision_after_rate_limit()
     if len(raw) > 8192:
         raise PreflightError("GitHub revision response exceeds the supported size")
     try:
