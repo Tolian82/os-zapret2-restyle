@@ -1,0 +1,71 @@
+name: G06 native Voice-only and zero ordinary shared FD9
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/stage2-opnsense-g06-native-shared-voice.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast-g06:
+    name: Focused G06 source and zero-profile contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Check G06 specific scripts and transactions
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage2-opnsense-g06-native-shared-voice.py
+          python3.13 scripts/stage2-opnsense-g06-native-shared-voice.py --self-test
+          sh scripts/test-profile-pipeline.sh
+          python3.13 scripts/test-voice-common-runtime.py
+          python3.13 scripts/test-voice-firewall-transaction.py
+
+  native-g06:
+    needs: fast-g06
+    name: OPNsense 26.7 one real v1.0.7 shared Voice-only Apply guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 85
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: One G04 installed package and original-FD9 G06 transitions
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: false
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_G04_DISPOSABLE_NATIVE=1
+            export ZAPRET2_G04_RUNTIME_NATIVE=1
+            export ZAPRET2_G06_SHARED_NATIVE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            /usr/local/bin/python3 scripts/stage2-opnsense-g04-native-config.py
+            /usr/local/bin/python3 scripts/stage2-opnsense-g06-native-shared-voice.py run
