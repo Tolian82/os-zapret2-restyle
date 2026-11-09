@@ -1,6 +1,6 @@
 # G06 / LC-07 — native no-action and empty Traffic Strategy experiment
 
-**Status (9 November 2026):** `_19` upstream zero-profile real FreeBSD 15 native packet PASS [#42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520), `_20` pure Voice composer merged [PR #994](https://github.com/Tolian82/os-zapret2-restyle/pull/994). `_21` is the **source-only** extension through zero ordinary parser/pipeline/generator/validator and shared firewall manifest. Actual authenticated OPNsense FD9 Voice-only Apply/rollback and all owner-live tests remain **OPEN**. Published stable `v0.6.3_1` is unchanged.
+**Status (9 November 2026):** `_19` real v1.0.7 FreeBSD no-action packet [S2 PASS #42650456520](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42650456520); `_20` pure Voice composer [PR #994](https://github.com/Tolian82/os-zapret2-restyle/pull/994) merged; `_21` zero ordinary production path, scoped tests and exact-head CI [PR #995](https://github.com/Tolian82/os-zapret2-restyle/pull/995) PASS merged `303bb807`. `_22` one installed-native G06 transitions probe is **PENDING**. Full original FD9/Voice-only, post-activation rollback, owner-live, real WAN/Voice media are **OPEN** until corresponding evidence; no new package published.
 
 ## Mandatory experiment before implementation
 
@@ -27,6 +27,14 @@ Shared `prepare_desired` installs no ordinary TCP/UDP divert rules when both por
 Source regressions: `scripts/test-profile-pipeline.sh`, `scripts/test-voice-common-runtime.py`, and `scripts/test-voice-firewall-transaction.py` cover zero, malformed nonempty, Voice-only, combined, no-action, retained foreign rules and staged corruption. They are NOT a native installed or owner-live proof.
 
 **Next native S2 gate:** use one disposable OPNsense 26.7 with real v1.0.7, original FD9, saved effective WAN and authenticated existing shared Apply. Collect before/after Config bytes, original FD9 identity, PID/engine argv, scoped `19000–19010` IPFW list and tables, foreign-rule witness. Move through Voice-only → Voice+ordinary → Voice-only → no-action and back, include rejection before mutation plus failed activation/rollback and Stop/Restart. Assert precisely zero **ordinary** intercepts in Voice-only/no-action, exactly Voice destination-scoped rules when Voice ON, foreign state unchanged, and no second engine. Full G06/A09/A11 acceptance requires actual native PASS; current source and synthetic fixtures do not qualify. Reboot, IPv6 on a real native stack and owner-browser scenarios remain separate.
+
+## G06 Stage 3 (`_22` native candidate)
+
+New `scripts/stage2-opnsense-g06-native-shared-voice.py` and its path-filtered one-guest workflow `.github/workflows/g06-native-shared-voice.yml` reuse a real G04 first-install/reinstall archive and upstream v1.0.7 on the **same** disposable OPNsense 26.7. All candidate changes use only the installed cookie+CSRF protected `/api/zapret/settings/apply` and `/api/zapret/voice/apply`, then existing configctl Stop/Start under original FD9. No direct Config/IPFW/test-owned independent engine.
+
+Witness: saved `TRAFFIC_ARGS=\"\"` and WAN `lo0`; no-action real engine with zero owned IPFW; only destination-scoped Voice UDP when enabled, no broad ordinary UDP; adding ordinary TCP `65431` yields exactly one additional ordinary IPFW; deleting restores Voice-only without `--new` ghost; disabling Voice removes every Zapret2 rule; stopped and restarted no-action retains same committed journal and one real engine PID; stale Voice snapshot refused unchanged; foreign Config/IPFW remain intact. Localhost test only, documentation IPs, no actual Voice media.
+
+The `_22` workflow must finish native SUCCESS on its **exact PR head** before G06 A09/A11 acceptance; until then this is a planned test, not PASS. The separate injected **post-activation** automatic rollback, boot/reboot, native IPv6 and physical owner-browser/real VPN remain OPEN.
 
 ## CI budget and evidence
 
