@@ -104,9 +104,14 @@ assert result["attribution_ok"] is False
 # without --resolve. Exact URL/family/pinned address + controlled source port +
 # IPFW packet counter is still a strict attribution proof for a failed probe.
 literal_binding = {"endpoint": "4.2.2.2", "selected_ip": "4.2.2.2"}
-literal_command = request._curl_command(
-    "4.2.2.2", scheme="https", family="ipv4", bound_ip="4.2.2.2"
-)
+# This is a command-construction-only fixture on Linux, not a real curl run.
+# The OPNsense-private binary is deliberately unavailable here; mock only
+# executable lookup while retaining the complete production argv semantics.
+with mock.patch.object(request, "binary", return_value="curl"):
+    literal_command = request._curl_command(
+        "4.2.2.2", scheme="https", family="ipv4", bound_ip="4.2.2.2"
+    )
+assert literal_command[0] == "curl"
 literal_command[-1:-1] = ["--local-port", "42000"]
 assert "--resolve" not in literal_command
 literal_failure = request.CommandResult(
