@@ -31,9 +31,9 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage2-opnsense-g06-native-shared-voice.py
           python3.13 scripts/stage2-opnsense-g06-native-shared-voice.py --self-test
-          sh scripts/test-profile-pipeline.sh
-          python3.13 scripts/test-voice-common-runtime.py
-          python3.13 scripts/test-voice-firewall-transaction.py
+          # Other shell/Python suites already run in the central CI where
+          # the required qualified runtime/shim is prepared. Do not run
+          # duplicate unqualified copies on plain Ubuntu (GH-066–070).
 
   native-g06:
     needs: fast-g06
