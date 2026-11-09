@@ -195,20 +195,40 @@ cleanup_all()
 
 preflight()
 {
-    firewall_ready || return 1
-    [ -x "${STRATEGY_LAB_DVTWS_BIN}" ] || return 1
-    [ -x "${STRATEGY_LAB_DAEMON_BIN}" ] || return 1
+    # Return exact bounded predicate evidence rather than a generic nonzero.
+    # This is read-only; it never changes kernel modules or foreign IPFW.
+    if ! firewall_ready; then
+        if ! "${STRATEGY_LAB_MODEL_B_KLDSTAT_BIN}" -q -m ipfw; then
+            echo 'Model C preflight: ipfw module unavailable' >&2
+        elif ! "${STRATEGY_LAB_MODEL_B_KLDSTAT_BIN}" -q -m ipdivert; then
+            echo 'Model C preflight: ipdivert module unavailable' >&2
+        else
+            echo 'Model C preflight: ipfw disabled or inspection unavailable' >&2
+        fi
+        return 1
+    fi
+    if [ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]; then
+        echo 'Model C preflight: upstream dvtws2 executable unavailable' >&2
+        return 1
+    fi
+    if [ ! -x "${STRATEGY_LAB_DAEMON_BIN}" ]; then
+        echo 'Model C preflight: stock daemon executable unavailable' >&2
+        return 1
+    fi
     for _mb_rule in $MODEL_B_RULES
     do
-        rule_present "${_mb_rule}" && return 1
+        if rule_present "${_mb_rule}"; then
+            printf 'Model C preflight: reserved IPFW rule %s already occupied\n' "${_mb_rule}" >&2
+            return 1
+        fi
     done
     for _mb_port in $MODEL_B_PORTS
     do
-        port_in_use "${_mb_port}" && return 1
+        if port_in_use "${_mb_port}"; then
+            printf 'Model C preflight: divert port %s already occupied\n' "${_mb_port}" >&2
+            return 1
+        fi
     done
-    # The last successful availability check is intentionally a negative predicate:
-    # port_in_use returns 1 when the port is free. Do not leak that expected status as
-    # the function result after the loop.
     return 0
 }
 

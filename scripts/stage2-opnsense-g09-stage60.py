@@ -48,7 +48,44 @@ def diagnostic(job):
             record[name] = {key: value.get(key) for key in keys}
         except (OSError, ValueError, Refusal) as exc:
             record[name] = {"error": str(exc)}
+    try:
+        family = artifact(job, "candidate-smoke.json")
+        items = family.get("families", [])
+        record["stage50_candidate_diagnostics"] = [
+            {key: candidate.get(key)
+             for key in ("id", "all_pass", "timeout", "error", "runner_status",
+                         "error_code", "error_message", "message")}
+            for candidate in items[:7] if isinstance(candidate, dict)
+        ] if isinstance(items, list) else []
+    except (OSError, ValueError, Refusal):
+        pass
     return record
+
+def readonly_preflight_diagnostic():
+    import subprocess
+    probes = {
+        "ipfw_module": ["/sbin/kldstat", "-q", "-m", "ipfw"],
+        "ipdivert_module": ["/sbin/kldstat", "-q", "-m", "ipdivert"],
+        "ipfw_enabled": ["/sbin/sysctl", "-n", "net.inet.ip.fw.enable"],
+        "ipfw_reserved_19128": ["/sbin/ipfw", "list", "19128"],
+    }
+    result = {}
+    for name, argv in probes.items():
+        try:
+            call = subprocess.run(argv, check=False, capture_output=True,
+                                  text=True, timeout=5)
+            result[name] = {"exit": call.returncode,
+                            "stdout": call.stdout.strip()[:250],
+                            "stderr": call.stderr.strip()[:250]}
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result[name] = {"error": str(exc)}
+    for name, path in {
+        "engine": "/usr/local/etc/zapret2/binaries/my/dvtws2",
+        "daemon": "/usr/sbin/daemon",
+    }.items():
+        result[name] = {"exists": Path(path).is_file(),
+                        "executable": os.access(path, os.X_OK)}
+    return result
 
 def accepted(g08, result, job):
     need(result.get("job_id") == job and result.get("target") == TARGET and
@@ -189,6 +226,9 @@ def execute():
         if job:
             print("G09_NATIVE_JOB_DIAGNOSTIC=" +
                   json.dumps(diagnostic(job), ensure_ascii=False, sort_keys=True),
+                  file=sys.stderr)
+            print("G09_NATIVE_PREFLIGHT_READONLY=" +
+                  json.dumps(readonly_preflight_diagnostic(), sort_keys=True),
                   file=sys.stderr)
             try:
                 web.api("POST", LAB + "cancel", {"job_id": job})
