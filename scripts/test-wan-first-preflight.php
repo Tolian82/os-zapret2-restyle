@@ -17,6 +17,20 @@ wanAssert(WanRequirement::missingBeforeActivation($empty,
     ['voice'=>['telegram'=>['enabled'=>'1']]]),'Voice-only bypassed');
 wanAssert(WanRequirement::effectiveWan($empty,
     ['general'=>['waninterface'=>'opt0']])==='opt0','TUN selection lost');
+$native = $active;
+$native['general']['waninterface'] = [
+    'wan'=>['selected'=>'0'], 'lo0'=>['selected'=>'1'],
+    'opt0'=>['selected'=>'0'],
+];
+wanAssert(WanRequirement::effectiveWan($native)==='lo0',
+    'native OPNsense selected-option InterfaceField was misread');
+wanAssert(!WanRequirement::missingBeforeActivation($native),
+    'native selected WAN incorrectly reported missing');
+$native['general']['waninterface'] = [
+    'wan'=>['selected'=>'0'], 'lo0'=>['selected'=>'0'],
+];
+wanAssert(WanRequirement::missingBeforeActivation($native),
+    'no native selected WAN incorrectly accepted');
 $phase=null;
 try {
     SharedApplyRequest::prepare(['page'=>'strategies','fields'=>[],

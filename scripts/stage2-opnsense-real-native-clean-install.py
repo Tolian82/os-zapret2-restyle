@@ -344,9 +344,12 @@ def python_down_installed_cold_status():
              "NATIVE_PYTHON_DOWN_COLD_" + action.upper() + "_FAILED:" +
              str(result.returncode) + ":" + (result.stdout + result.stderr)[-180:])
     start = run([str(service), "start"], timeout=25, env=environment)
-    need(start.returncode == 69 and
-         "python" in start.stderr.lower() and not start.stdout.strip(),
-         "NATIVE_PYTHON_DOWN_START_DID_NOT_REFUSE_BEFORE_MUTATION:" +
+    # No WAN is saved on a genuine cold first installation. Owner canon:
+    # WAN is the FIRST reason for refusal even while Python is unavailable.
+    # A valid-WAN/Python-down check belongs to the separate active-owner gate.
+    need(start.returncode == 64 and
+         "WAN_REQUIRED" in start.stderr and not start.stdout.strip(),
+         "NATIVE_COLD_START_WAN_NOT_FIRST_BEFORE_PYTHON:" +
          str(start.returncode) + ":" + (start.stdout + start.stderr)[-180:])
     need(Path("/conf/config.xml").read_bytes() == before_config,
          "NATIVE_PYTHON_DOWN_START_CHANGED_CONFIG")
@@ -357,6 +360,7 @@ def python_down_installed_cold_status():
     return {"native_python_down_cold_status": "STOPPED",
             "native_python_down_cold_stop": "IDEMPOTENT",
             "native_python_down_cold_start": "REFUSED_BEFORE_MUTATION",
+            "no_wan_precedes_missing_python": True,
             "native_python_down_running_owner_tested": False,
             "native_python_down_shared_owner_tested": False}
 

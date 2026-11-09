@@ -102,6 +102,8 @@ $(document).ready(function () {
             'Zapret lifecycle became busy before applying': 'Служба занята — применение отменено до сохранения',
             'Settings saved, but Zapret reconfigure failed; inspect current runtime before retrying': 'Настройки сохранены, но перезапуск Zapret2 завершился ошибкой; проверьте фактическое состояние службы',
             'Save inactive draft requires all Voice services OFF; use Apply to change active profiles': 'Черновик можно сохранить только при всех выключенных профилях Voice. Для изменения активных профилей используйте «Применить»',
+            'Select a WAN interface': 'Укажите WAN интерфейс',
+            'Selected WAN interface is not assigned or unavailable': 'Указанный WAN интерфейс не назначен или недоступен',
             'Strategies WAN must be configured before Voice': 'Сначала настройте WAN на странице «Стратегии».',
             'Independent Voice WAN cannot be isolated by the shared engine yet; select the Strategies WAN': 'Отдельный WAN для голоса пока нельзя изолировать в общем движке. Выберите WAN из страницы «Стратегии».',
             'Missing Voice form': 'Не получена форма передачи голоса',

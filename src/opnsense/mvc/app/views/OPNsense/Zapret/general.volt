@@ -179,6 +179,9 @@
         function localizeStrategiesApplyError(message) {
             if (!isRussian) return message;
             const translations = {
+                'Select a WAN interface': 'Укажите WAN интерфейс',
+                'Selected WAN interface is not assigned or unavailable':
+                    'Указанный WAN интерфейс не назначен или недоступен',
                 'Candidate changes fields outside the owning form':
                     'Кандидат изменяет поля, не принадлежащие форме «Стратегии».',
                 'Candidate changes a foreign field':
@@ -784,7 +787,8 @@
             }).fail(function(xhr) {
                 const message = xhr && xhr.responseJSON && xhr.responseJSON.message;
                 showRuntimeError(runtimeText.applyError,
-                    typeof message === 'string' && message ? message :
+                    typeof message === 'string' && message
+                        ? localizeStrategiesApplyError(message) :
                     (isRussian ? 'Не удалось запустить Zapret2. Проверьте WAN интерфейс.' :
                         'Zapret2 could not be started. Check the WAN interface.'));
                 refreshRuntime();

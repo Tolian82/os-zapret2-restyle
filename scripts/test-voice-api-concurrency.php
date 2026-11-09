@@ -637,6 +637,11 @@ namespace {
         'mode' => 'auto', 'youtubedomains' => '',
         'userdomains' => '', 'excludedomains' => '',
     ];
+    // Restore a genuine saved WAN after the deliberately blank offline Voice
+    // fixture: this test covers native large-form/no-op dispatch, not an
+    // attempt to activate a service without WAN (covered by WAN-first tests).
+    Zapret::$nodes['general']['waninterface'] = 'WAN';
+
     // Strategies shares the SAME FD9 worker. Post-dispatch exceptions must
     // never masquerade as safe field errors on that second GUI.
     $strategy = new SettingsController();
