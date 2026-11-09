@@ -264,8 +264,11 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         profile["voice"][0]["destinations"]=["1.1.1.1;rm"]
         with self.assertRaisesRegex(transaction.VoiceFirewallError,"IPv4"):
             transaction.prepare_desired(profile,"443","596-599")
-        with self.assertRaisesRegex(transaction.VoiceFirewallError,"neither TCP nor UDP"):
-            transaction.prepare_desired({**profile,"voice":[],"ordinary_rule_base":19000},"","")
+        # A valid empty ordinary/no-Voice candidate now owns no IPFW rules.
+        zero = transaction.prepare_desired(
+            {**profile, "voice": [], "ordinary_rule_base": 19000}, "", "")
+        self.assertEqual({}, zero["rules"])
+        self.assertEqual({}, zero["tables"])
 
     def test_mixed_family_voice_tables_use_original_transaction_and_rollback(self):
         old = fixture(("telegram", "91.108.0.0/16"))
