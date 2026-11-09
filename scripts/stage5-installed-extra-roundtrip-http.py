@@ -181,6 +181,29 @@ def failed_fetch_network_diagnostics(before=None):
           json.dumps(result, sort_keys=True), file=sys.stderr, flush=True)
 
 
+def strict_negative_remove_receipt(row):
+    return (isinstance(row, dict) and
+            row.get("status") == "rejected" and
+            row.get("reason") == "plan_changed" and
+            row.get("started") is False and
+            "operation" not in row)
+
+
+def safe_negative_remove_category(row):
+    """Only fixed reason/status labels; never serialize API payloads/secrets."""
+    if not isinstance(row, dict):
+        return {"kind": "non_object"}
+    status = row.get("status")
+    reason = row.get("reason")
+    allowed_status = {"rejected", "unavailable", "uncertain", "ok", "failed"}
+    allowed_reason = {"plan_changed", "not_ready", "preflight_unavailable",
+                      "invalid_confirmation", "nothing_to_remove"}
+    return {"status": status if isinstance(status, str) and status in allowed_status else "other",
+            "reason": reason if isinstance(reason, str) and reason in allowed_reason else "other",
+            "started": row.get("started") is True,
+            "operation_present": "operation" in row}
+
+
 def self_test():
     entries = {"lua/z%02d.lua" % i: "a" * 64 for i in range(LUA)}
     entries.update({"files/fake/x%02d.bin" % i: "b" * 64 for i in range(BIN)})
@@ -218,6 +241,20 @@ def self_test():
     need(summarize_scoped_egress_rules(sample.replace("pass out quick", "block out"))[
          "stock_scoped_https_pass_count"] == 0,
          "EXTRA_ROUNDTRIP_SCOPED_PF_DENY_MISCLASSIFIED")
+    good = {"status": "rejected", "reason": "plan_changed", "started": False}
+    need(strict_negative_remove_receipt(good), "EXTRA_NEGATIVE_RECEIPT_GOOD_REFUSED")
+    for bad in ({"status": "ok", "reason": "plan_changed", "started": True},
+                {"status": "unavailable", "reason": "preflight_unavailable", "started": False},
+                {"status": "rejected", "reason": "not_ready", "started": False},
+                {**good, "operation": "f" * 32}, {}, []):
+        need(not strict_negative_remove_receipt(bad),
+             "EXTRA_NEGATIVE_RECEIPT_BAD_ACCEPTED")
+    classified = safe_negative_remove_category({
+        "status": ["malformed"], "reason": {"secrets": "NEVER-LOG"},
+        "operation": "private", "started": False})
+    need(classified == {"status": "other", "reason": "other", "started": False,
+                        "operation_present": True},
+         "EXTRA_NEGATIVE_DIAGNOSTIC_UNSAFE")
     print("PASS_STAGE5_EXTRA_REPEAT_INSTALL_REMOVE_SHAPE_NEGATIVES=1")
     return 0
 
@@ -363,10 +400,15 @@ def execute(initial_install):
     bad_witness = web.api("POST", BASE + "resourcesRemove",
                           {"inventory_sha256": stale,
                            "confirmation": "REMOVE 73"})
-    need(all(row.get("status") == "rejected" and
-             row.get("reason") == "plan_changed" and
-             row.get("started") is False for row in (bad_count, bad_witness)),
-         "EXTRA_ROUNDTRIP_BAD_CONFIRMATION_OR_STALE_SHA_NOT_REFUSED")
+    # Never replay an uncertain removal. Even if a response is a safe
+    # not_ready/unavailable refusal, it is NOT proof of the required
+    # plan_changed negative guard. Print bounded diagnostics and fail closed.
+    negatives = (bad_count, bad_witness)
+    if not all(strict_negative_remove_receipt(row) for row in negatives):
+        print("STAGE5_EXTRA_REMOVE_NEGATIVE_REFUSAL_CLASS=" +
+              json.dumps([safe_negative_remove_category(row) for row in negatives],
+                         sort_keys=True), file=sys.stderr, flush=True)
+        raise Refusal("EXTRA_ROUNDTRIP_BAD_CONFIRMATION_OR_STALE_SHA_NOT_REFUSED")
     need(common.witness(active, engine_sha, running=True, page="strategies") ==
          owner_repeat and
          reconcile.installed_resources(ROOT) == installed and
