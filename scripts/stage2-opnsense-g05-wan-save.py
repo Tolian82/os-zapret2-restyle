@@ -120,9 +120,14 @@ def _wan_first_unchanged(config_bytes, ipfw_baseline, jobs, label):
 
 def _wan_first_command(argv, code, fragment, name):
     status = run(argv, timeout=50)
-    need(status.returncode == code and
-         fragment in (status.stdout + status.stderr),
-         "G05_WAN_FIRST_" + name + "_WRONG_REFUSAL")
+    # Direct shell invocations return their own exact rc. Configd
+    # script_output may serialize its refusal with a different transport rc:
+    # require the specific refusal payload, not a guessed wrapper rc.
+    reply = (status.stdout + status.stderr).strip()
+    need((code is None or status.returncode == code) and fragment in reply,
+         "G05_WAN_FIRST_" + name + "_WRONG_REFUSAL" +
+         ":rc=" + str(status.returncode) +
+         ":reply=" + repr(reply[:180]))
     return status
 
 
@@ -199,7 +204,7 @@ def _wan_first_cold_matrix(web, baseline, ipfw_baseline):
     _wan_first_command([
         "/usr/local/sbin/configctl", "zapret", "strategy_lab_start",
         "invalid_target", "standard", "ru", "0", "-", "-", "-", "0"],
-        64, "Укажите WAN интерфейс", "CONFIGD_LAB")
+        None, "Укажите WAN интерфейс", "CONFIGD_LAB")
     _wan_first_command([
         script + "strategy_lab_circular_launcher.sh",
         "start", "job.G05WithoutWAN"],
