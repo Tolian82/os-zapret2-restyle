@@ -98,8 +98,6 @@ def check_stun_scopes(voice: str, ordinary: str, ipsets: dict[str, list[str]]) -
 def merge_profiles(voice: str, ordinary: str, ipsets: dict[str, list[str]] | None = None) -> str:
     if not isinstance(voice, str) or not isinstance(ordinary, str):
         raise VoiceMergeError("native Voice and ordinary strategies must be text")
-    if not ordinary.strip():
-        raise VoiceMergeError("ordinary Traffic Strategy is empty")
     if "\x00" in ordinary or "\r" in ordinary or "\x00" in voice or "\r" in voice:
         raise VoiceMergeError("invalid NUL/CR in resolved strategy")
     lines = [line.strip() for line in ordinary.splitlines() if line.strip()]
@@ -115,6 +113,10 @@ def merge_profiles(voice: str, ordinary: str, ipsets: dict[str, list[str]] | Non
         raise VoiceMergeError("Voice generator produced an empty profile boundary")
     if not any(line.startswith("--name=voice-") for line in voice_lines):
         raise VoiceMergeError("missing generated Voice identity")
+    # With no user ordinary profile, do not invent an empty trailing
+    # --new segment: preserve exactly the natively compiled Voice profiles.
+    if not ordinary.strip():
+        return voice
     if any(token.startswith(("--filter-l7=", "--payload=")) and
            "stun" in token.partition("=")[2].split(",") for token in ordinary.split()):
         check_stun_scopes(voice, ordinary, ipsets or {})
