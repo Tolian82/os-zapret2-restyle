@@ -115,6 +115,7 @@ jobs:
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             GITHUB_ACTIONS=true ZAPRET2_G10_PREINSTALL_PURGE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-g10-preinstall-purge.py run
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_STAGE5_SINGLE_ARTIFACT=1 ZAPRET2_STAGE5_SAME_ARCHIVE_FORCE_REINSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-single-artifact.py run
+            GITHUB_ACTIONS=true ZAPRET2_G10_PREINSTALL_PURGE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-g10-preinstall-purge.py bind
       - name: Verify copied-back CLEAN-installed archive and immutable receipt
         run: |
           set -eu
@@ -127,7 +128,6 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
-            dist/g10-preinstall-purge.json
           if-no-files-found: error
           retention-days: 1
 
@@ -183,7 +183,6 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
-            dist/g10-preinstall-purge.json
             dist/stage5-native-running-voice-artifact.json
           if-no-files-found: error
           retention-days: 7
@@ -287,7 +286,6 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
-            dist/g10-preinstall-purge.json
             dist/stage5-native-running-voice-artifact.json
             dist/stage5-native-same-archive-reboot.json
           if-no-files-found: error

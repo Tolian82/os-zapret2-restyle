@@ -168,18 +168,52 @@ try {
     print("G10_NATIVE_PREINSTALL_PURGE=" + json.dumps(receipt, sort_keys=True))
 
 
-def verify(head):
-    need(RECEIPT.is_file() and not RECEIPT.is_symlink() and
-         stat.S_ISREG(RECEIPT.lstat().st_mode) and
-         CLEAN.is_file() and not CLEAN.is_symlink(),
-         "G10_RECEIPTS_MISSING")
-    record = json.loads(RECEIPT.read_text(encoding="utf-8"))
-    clean = json.loads(CLEAN.read_text(encoding="utf-8"))
-    validate(record, head)
-    need(clean.get("project_sha") == head and
+def linked(clean, head):
+    need(isinstance(clean, dict) and clean.get("project_sha") == head and
          clean.get("genuine_clean_pkg_add") is True and
-         clean.get("archive_sha256") is not None,
+         re.fullmatch(r"[0-9a-f]{64}", str(clean.get("archive_sha256", ""))) is not None,
          "G10_PURGE_NOT_BOUND_TO_GUEST_A_INSTALL")
+    validate(clean.get("g10_preinstall_orphan_purge"), head)
+    return True
+
+
+def bind():
+    # Only the isolated Guest A can enrich its own already-valid Stage 5 receipt.
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_G10_PREINSTALL_PURGE") == "1" and
+         os.environ.get("ZAPRET2_PURGE_DISPOSABLE_GUEST") == "1" and
+         os.environ.get("ZAPRET2_G01_DISPOSABLE_NATIVE") == "1" and
+         os.geteuid() == 0 and os.uname().sysname == "FreeBSD",
+         "G10_BIND_REQUIRES_ISOLATED_NATIVE_GUEST")
+    need(RECEIPT.is_file() and not RECEIPT.is_symlink() and
+         CLEAN.is_file() and not CLEAN.is_symlink(),
+         "G10_BIND_REQUIRES_BOTH_GUEST_A_RECEIPTS")
+    head = os.environ.get("ZAPRET2_NATIVE_PROJECT_SHA", "")
+    purge = json.loads(RECEIPT.read_text(encoding="utf-8"))
+    clean = json.loads(CLEAN.read_text(encoding="utf-8"))
+    validate(purge, head)
+    need("g10_preinstall_orphan_purge" not in clean,
+         "G10_RECEIPT_ALREADY_BOUND")
+    need(clean.get("project_sha") == head and
+         clean.get("genuine_clean_pkg_add") is True,
+         "G10_GUEST_A_NATIVE_INSTALL_RECEIPT_MISSING")
+    clean["g10_preinstall_orphan_purge"] = purge
+    linked(clean, head)
+    tmp = CLEAN.with_name(CLEAN.name + ".g10-tmp")
+    need(not tmp.exists() and not tmp.is_symlink(),
+         "G10_RECEIPT_TEMP_ALREADY_PRESENT")
+    with tmp.open("x", encoding="utf-8") as stream:
+        stream.write(json.dumps(clean, sort_keys=True, indent=2) + "\n")
+    os.replace(tmp, CLEAN)
+    print("G10_NATIVE_PREINSTALL_PURGE_BOUND_TO_SINGLE_PACKAGE_RECEIPT")
+
+
+def verify(head):
+    need(CLEAN.is_file() and not CLEAN.is_symlink() and
+         stat.S_ISREG(CLEAN.lstat().st_mode),
+         "G10_GUEST_A_COPIED_RECEIPT_MISSING")
+    clean = json.loads(CLEAN.read_text(encoding="utf-8"))
+    linked(clean, head)
     print("PASS_G10_PURGE_THEN_SAME_SOURCE_GUEST_A_INSTALL")
 
 
@@ -197,6 +231,21 @@ def self_test():
               "candidate_package_built_during_purge": False,
               "owner_device_modified": False}
     validate(record, head)
+    clean = {"project_sha": head, "genuine_clean_pkg_add": True,
+             "archive_sha256": "b" * 64, "g10_preinstall_orphan_purge": record}
+    need(linked(clean, head), "G10_SOURCE_REJECTED_BOUND_RECEIPT")
+    for key, altered in (("genuine_clean_pkg_add", False),
+                         ("archive_sha256", "not-a-sha"),
+                         ("g10_preinstall_orphan_purge", None),
+                         ("project_sha", "f" * 40)):
+        bad = dict(clean)
+        bad[key] = altered
+        try:
+            linked(bad, head)
+        except Refusal:
+            pass
+        else:
+            raise AssertionError("G10_FALSE_CROSS_RECEIPT_PASS:" + key)
     for key in record:
         bad = dict(record)
         bad[key] = None
@@ -218,10 +267,12 @@ def main():
             self_test()
         elif sys.argv[1:] == ["run"]:
             native()
+        elif sys.argv[1:] == ["bind"]:
+            bind()
         elif len(sys.argv) == 3 and sys.argv[1] == "verify":
             verify(sys.argv[2])
         else:
-            raise Refusal("G10_USAGE_SELF_TEST_RUN_VERIFY_HEAD")
+            raise Refusal("G10_USAGE_SELF_TEST_RUN_BIND_VERIFY_HEAD")
         return 0
     except (Refusal, OSError, ValueError, ET.ParseError, subprocess.TimeoutExpired) as exc:
         print("G10_PREINSTALL_PURGE=REFUSED:" + str(exc), file=sys.stderr)

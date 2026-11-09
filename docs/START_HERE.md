@@ -1,6 +1,6 @@
 # os-zapret2-restyle — START HERE
 
-**Current handoff identity:** `v0.6.3_28` · `VERSION=0.6.3` · `PLUGIN_REVISION=28` · G10 same-archive after-orphan-purge SOURCE candidate (**native S3 still NOT TESTED; no new package published**). G09 `_27` merged [PR #1001](https://github.com/Tolian82/os-zapret2-restyle/pull/1001) at `796370ea`; native [#42695450643](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42695450643) PASS only for the negative Stage50→60 control. Stable `v0.6.3_1` unchanged.
+**Current handoff identity:** `v0.6.3_28` · `VERSION=0.6.3` · `PLUGIN_REVISION=28` · `os-zapret2-restyle-0.6.3_28.pkg` (**source candidate, not published**) · G10 same-archive after-orphan-purge SOURCE candidate (**native S3 still NOT TESTED; no new package published**). G09 `_27` merged [PR #1001](https://github.com/Tolian82/os-zapret2-restyle/pull/1001) at `796370ea`; native [#42695450643](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42695450643) PASS only for the negative Stage50→60 control. Stable `v0.6.3_1` unchanged.
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
