@@ -123,6 +123,7 @@ fi
 grep -Fq "'status' => 'unavailable'" "${CONTROLLER}" || fail "passive release failure is not represented without an exception"
 grep -Fq 'catch (\Throwable' "${CONTROLLER}" || fail "release-list failure is not contained"
 php -l "${CONTROLLER}" >/dev/null
+php "${ROOT_DIR}/scripts/test-g07-runtime-api.php"
 
 # GUI installation must be transactional and must not expose a candidate Git HEAD
 # as the installed release before setup succeeds.
@@ -167,8 +168,13 @@ if grep -Fq 'busy = !!busy || strategiesApplyPending || strategiesApplyNeedsRevi
 fi
 
 # Existing GUI state and geometry contract stays intact.
-grep -Fq "notInstalled: 'not installed'" "${VIEW}" || fail "not installed label is missing"
+grep -Fq "notInstalled: isRussian ? 'Не установлен' : 'Not installed'" "${VIEW}" ||
+    fail "LC-09 not-installed status is not localized"
 grep -Fq 'serviceButton.hide()' "${VIEW}" || fail "service control is not hidden without runtime"
+grep -Fq "getRuntimeState(\$backend)" "${CONTROLLER}" ||
+    fail "runtime installation does not check actual native state"
+grep -Fq "isset(\$runtime['reason'])" "${CONTROLLER}" ||
+    fail "ambiguous backend status does not block another install"
 grep -Fq 'id="zapretServiceControlSlot"' "${VIEW}" || fail "fixed service-control slot is missing"
 grep -Fq 'max-content max-content 14ch 12ch 4ch' "${VIEW}" || fail "fixed runtime layout is missing"
 
@@ -185,6 +191,7 @@ grep -Fq 'releaseTerminalOutcome(data, releaseExpectedVersion' "${VIEW}" ||
     fail "upstream terminal state is not correlated with selected release"
 if command -v node >/dev/null 2>&1; then
     node "${ROOT_DIR}/scripts/test-gui-upstream-progress.mjs"
+    node "${ROOT_DIR}/scripts/test-g07-runtime-status.mjs"
 fi
 
 sh "${ROOT_DIR}/scripts/test-setup-runtime-transaction.sh"

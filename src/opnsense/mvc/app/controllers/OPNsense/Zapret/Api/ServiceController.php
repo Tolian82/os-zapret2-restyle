@@ -83,49 +83,72 @@ class ServiceController extends ApiMutableServiceControllerBase
     private function getRuntimeState(Backend $backend): array
     {
         $response = trim((string)$backend->configdRun('zapret setup_status', false, 30));
-        $state = [
-            'installed' => false,
+        $unavailable = [
+            // A missing or malformed native status is NOT a clean install.
+            // Null is intentional: consumers must not confuse uncertainty
+            // with the independently witnessed installed=0 status.
+            'installed' => null,
             'service' => 'error',
             'version' => '',
             'setup' => 'unknown',
             'busy' => false,
+            'reason' => 'status-unavailable',
         ];
+        $state = $unavailable;
+        unset($state['reason']);
+        $seen = [];
 
         foreach (preg_split('/\\R/u', $response) as $line) {
             if (!preg_match('/^([a-z]+)=(.*)$/D', trim($line), $matches)) {
-                continue;
+                return $unavailable;
             }
-
-            switch ($matches[1]) {
+            $field = $matches[1];
+            $value = $matches[2];
+            if (!array_key_exists($field, $state) || isset($seen[$field])) {
+                return $unavailable;
+            }
+            $seen[$field] = true;
+            switch ($field) {
                 case 'installed':
-                    $state['installed'] = $matches[2] === '1';
+                case 'busy':
+                    if ($value !== '0' && $value !== '1') {
+                        return $unavailable;
+                    }
+                    $state[$field] = $value === '1';
                     break;
                 case 'service':
-                    if (in_array($matches[2], ['started', 'stopped', 'error'], true)) {
-                        $state['service'] = $matches[2];
+                    if (!in_array($value, ['started', 'stopped', 'error'], true)) {
+                        return $unavailable;
                     }
+                    $state[$field] = $value;
                     break;
                 case 'version':
-                    if ($matches[2] === '' || preg_match(self::RELEASE_PATTERN, $matches[2])) {
-                        $state['version'] = $matches[2];
+                    if ($value !== '' && !preg_match(self::RELEASE_PATTERN, $value)) {
+                        return $unavailable;
                     }
+                    $state[$field] = $value;
                     break;
                 case 'setup':
-                    if (in_array($matches[2], ['ready', 'installing', 'failed', 'unknown'], true)) {
-                        $state['setup'] = $matches[2];
+                    if (!in_array($value, ['ready', 'installing', 'failed', 'unknown'], true)) {
+                        return $unavailable;
                     }
-                    break;
-                case 'busy':
-                    $state['busy'] = $matches[2] === '1';
+                    $state[$field] = $value;
                     break;
             }
         }
 
-        if (!$state['installed']) {
-            $state['service'] = 'error';
-            $state['version'] = '';
+        if (count($seen) !== 5) {
+            return $unavailable;
         }
-
+        // A live setup always has BOTH native busy=1 and setup=installing.
+        if ($state['busy'] !== ($state['setup'] === 'installing')) {
+            return $unavailable;
+        }
+        // Contradictory installed=0 evidence is an error, not Not installed.
+        if (!$state['installed'] &&
+            ($state['service'] !== 'error' || $state['version'] !== '')) {
+            return $unavailable;
+        }
         return $state;
     }
 
@@ -438,7 +461,11 @@ class ServiceController extends ApiMutableServiceControllerBase
             return ['status' => 'failed'];
         }
 
-        return array_merge(['status' => 'ok'], $this->getRuntimeState(new Backend()));
+        $state = $this->getRuntimeState(new Backend());
+        // An invalid, incomplete or unavailable native receipt is never a
+        // verified clean install. Expose a stable failure status to the GUI.
+        $status = isset($state['reason']) ? 'unavailable' : 'ok';
+        return array_merge(['status' => $status], $state);
     }
 
     public function installAction(): array
@@ -472,10 +499,23 @@ class ServiceController extends ApiMutableServiceControllerBase
             );
         }
 
-        if ($this->getRuntimeState($backend)['busy']) {
+        $runtime = $this->getRuntimeState($backend);
+        if (isset($runtime['reason'])) {
+            throw new UserException(
+                gettext('The zapret2 runtime status cannot be verified. Reload and inspect before trying installation again.'),
+                gettext('Zapret2 setup error')
+            );
+        }
+        if ($runtime['busy']) {
             throw new UserException(
                 gettext('A zapret2 runtime operation is already in progress.'),
                 gettext('Zapret2 runtime busy')
+            );
+        }
+        if ($runtime['installed'] === true && $runtime['service'] === 'error') {
+            throw new UserException(
+                gettext('The installed zapret2 service is in an error state. Inspect runtime recovery before reinstalling.'),
+                gettext('Zapret2 setup error')
             );
         }
 

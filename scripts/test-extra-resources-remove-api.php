@@ -22,7 +22,8 @@ namespace OPNsense\Core {
             if (self::$throwPreflight) throw new \RuntimeException('simulated read-only preflight error');
             if ($key === 'zapret setup_status') {
                 return "installed=1\nservice=" . self::$service .
-                    "\nsetup=ready\nbusy=" . (self::$busy ? '1' : '0');
+                    "\nversion=v1.0.7\nsetup=ready\nbusy=" .
+                    (self::$busy ? '1' : '0');
             }
             if ($key === 'zapret extra_resources_status') {
                 return "phase=" . self::$extrasPhase . "\ninstalled=1\nbusy=0\nlua=19\nbin=54";
