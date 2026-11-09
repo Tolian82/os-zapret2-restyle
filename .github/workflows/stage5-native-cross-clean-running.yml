@@ -8,6 +8,7 @@ on:
       - compatibility.json
       - scripts/native-opnsense-package.py
       - scripts/stage5-native-single-artifact.py
+      - scripts/stage5-g10-preinstall-purge.py
       - scripts/stage5-native-running-voice-artifact.py
       - scripts/stage5-native-pf-egress-fixture.py
       - scripts/stage5-installed-exclude.py
@@ -36,6 +37,7 @@ on:
       - compatibility.json
       - scripts/native-opnsense-package.py
       - scripts/stage5-native-single-artifact.py
+      - scripts/stage5-g10-preinstall-purge.py
       - scripts/stage5-native-running-voice-artifact.py
       - scripts/stage5-native-pf-egress-fixture.py
       - scripts/stage5-installed-exclude.py
@@ -83,6 +85,8 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage5-native-single-artifact.py scripts/stage5-native-running-voice-artifact.py scripts/stage2-opnsense-real-native-running-upgrade.py scripts/stage5-installed-exclude.py scripts/stage5-installed-lab-resources.py scripts/stage5-installed-functional.py scripts/stage5-installed-auth-web.py scripts/stage5-installed-exclude-http-apply.py scripts/stage2-opnsense-real-native-shared-voice.py scripts/stage5-installed-extra-remove-http.py scripts/stage5-installed-extra-install-http.py scripts/stage5-installed-extra-roundtrip-http.py scripts/stage5-native-pf-egress-fixture.py scripts/stage5-installed-lab-real-http.py
           python3.13 scripts/stage5-native-single-artifact.py --self-test
+          python3.13 -m py_compile scripts/stage5-g10-preinstall-purge.py
+          python3.13 scripts/stage5-g10-preinstall-purge.py --self-test
           python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
           python3.13 scripts/stage5-native-pf-egress-fixture.py --self-test
           python3.13 scripts/stage5-installed-lab-real-http.py --self-test
@@ -109,11 +113,13 @@ jobs:
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            GITHUB_ACTIONS=true ZAPRET2_G10_PREINSTALL_PURGE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-g10-preinstall-purge.py run
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_STAGE5_SINGLE_ARTIFACT=1 ZAPRET2_STAGE5_SAME_ARCHIVE_FORCE_REINSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage5-native-single-artifact.py run
       - name: Verify copied-back CLEAN-installed archive and immutable receipt
         run: |
           set -eu
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3.13 scripts/stage5-g10-preinstall-purge.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Transfer exact installed archive plus read-only receipt to SEPARATE runner/VM
         uses: actions/upload-artifact@v7
         with:
@@ -121,6 +127,7 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
+            dist/g10-preinstall-purge.json
           if-no-files-found: error
           retention-days: 1
 
@@ -145,6 +152,7 @@ jobs:
         run: |
           set -eu
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3.13 scripts/stage5-g10-preinstall-purge.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: FRESH disposable OPNsense guest B - SAME downloaded pkg, genuine old RUNNING Voice HTTPS, NO REBUILD
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
@@ -175,6 +183,7 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
+            dist/g10-preinstall-purge.json
             dist/stage5-native-running-voice-artifact.json
           if-no-files-found: error
           retention-days: 7
@@ -206,6 +215,7 @@ jobs:
         run: |
           set -eu
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3.13 scripts/stage5-g10-preinstall-purge.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: Genuine old RUNNING replacement with A archive, common Voice and NEW kernel
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
@@ -277,6 +287,7 @@ jobs:
           path: |
             dist/os-zapret2-restyle-*.pkg
             dist/stage5-native-single-artifact.json
+            dist/g10-preinstall-purge.json
             dist/stage5-native-running-voice-artifact.json
             dist/stage5-native-same-archive-reboot.json
           if-no-files-found: error
@@ -303,6 +314,7 @@ jobs:
         run: |
           set -eu
           python3.13 scripts/stage5-native-single-artifact.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
+          python3.13 scripts/stage5-g10-preinstall-purge.py verify "${{ github.event.pull_request.head.sha || github.sha }}"
       - name: FRESH disposable OPNsense guest D - no preinstalled git or dependency bootstrap
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
