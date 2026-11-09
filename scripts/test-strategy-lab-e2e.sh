@@ -164,6 +164,11 @@ cat > "${BIN_DIR}/kldstat" <<'MOCK'
 #!/bin/sh
 exit 0
 MOCK
+cat > "${BIN_DIR}/kldload" <<'MOCK'
+#!/bin/sh
+# This fixture has already-loaded ipfw/ipdivert. Never mutate the real kernel.
+exit 1
+MOCK
 cat > "${BIN_DIR}/sysctl" <<'MOCK'
 #!/bin/sh
 printf '%s\n' 1
@@ -378,6 +383,7 @@ api_call()
     STRATEGY_LAB_NC_BIN="${BIN_DIR}/nc" \
     STRATEGY_LAB_IPFW_BIN="${BIN_DIR}/ipfw" \
     STRATEGY_LAB_KLDSTAT_BIN="${BIN_DIR}/kldstat" \
+    STRATEGY_LAB_KLDLOAD_BIN="${BIN_DIR}/kldload" \
     STRATEGY_LAB_SYSCTL_BIN="${BIN_DIR}/sysctl" \
     STRATEGY_LAB_DVTWS_BIN="${BIN_DIR}/dvtws2-unused" \
     PROBE_RUNNER="${PROBE_RUNNER}" \

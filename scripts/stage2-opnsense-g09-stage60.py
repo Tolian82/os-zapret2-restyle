@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """G09 installed OPNsense negative-control: real Stage50->Stage60 before normal Start.
-192.0.2.42 is TEST-NET-1, never an ISP DPI or successful bypass witness.
+Qualifies a routed public IPv4 TCP/443-negative control, not an ISP DPI bypass.
 """
 import importlib.util
 import json
@@ -8,13 +8,16 @@ import os
 from pathlib import Path
 import re
 import socket
+import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parent
 JOBS = Path("/var/run/zapret2-restyle/strategy-lab/jobs")
-TARGET = "192.0.2.42"
+TARGET = ""
+PUBLIC_CONTROLS = ("4.2.2.2", "4.2.2.1", "208.67.222.222",
+                   "208.67.220.220", "9.9.9.10")
 LAB = "/api/zapret/strategy_lab/"
 
 class Refusal(RuntimeError):
@@ -61,8 +64,35 @@ def diagnostic(job):
         pass
     return record
 
+def qualify_negative_control():
+    checked = []
+    for ip in PUBLIC_CONTROLS:
+        route = subprocess.run(["/sbin/route", "-n", "get", ip],
+                               capture_output=True, text=True, check=False, timeout=5)
+        match = re.search(r"(?m)^\s*interface:\s*(\S+)\s*$", route.stdout)
+        iface = match.group(1) if match else ""
+        if route.returncode or not iface or iface.startswith(("lo", "tun")):
+            checked.append({"ip": ip, "route_rc": route.returncode,
+                            "interface": iface, "qualifies": False})
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.5)
+            try:
+                connect_code = sock.connect_ex((ip, 443))
+            except OSError:
+                connect_code = -1
+        checked.append({"ip": ip, "interface": iface,
+                        "tcp443_connect_code": connect_code,
+                        "qualifies": connect_code != 0})
+        if connect_code != 0:
+            print("G09_PUBLIC_NEGATIVE_CONTROL=" +
+                  json.dumps({"selected": ip, "interface": iface,
+                              "checked": checked}, sort_keys=True), flush=True)
+            return ip
+    raise Refusal("G09_NO_ROUTED_TCP443_NEGATIVE_CONTROL:" +
+                  json.dumps(checked, sort_keys=True))
+
 def readonly_preflight_diagnostic():
-    import subprocess
     probes = {
         "ipfw_module": ["/sbin/kldstat", "-q", "-m", "ipfw"],
         "ipdivert_module": ["/sbin/kldstat", "-q", "-m", "ipdivert"],
@@ -187,15 +217,10 @@ def execute():
     owned, foreign = g08.partition_rules(g08.observed_rules())
     need(not owned, "G09_PREEXISTING_LAB_RULES")
     g08.stopped_truth(web, saved, foreign)
-    # Public documentation address must not accidentally become a positive
-    # TCP control. No foreign route or firewall rules are ever inserted.
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(2)
-        try:
-            connected = sock.connect_ex((TARGET, 443)) == 0
-        except OSError:
-            connected = False
-    need(not connected, "G09_TESTNET_PORT_443_UNEXPECTEDLY_OPEN")
+    # TEST-NET may be dropped before the WAN/IPFW rule. A Model-C packet
+    # attribution control must have a genuine native route. No route changes.
+    global TARGET
+    TARGET = qualify_negative_control()
     need(web.api("POST", LAB + "status", {"job_id": "@active"}).get("status")
          == "idle", "G09_ACTIVE_JOB_BEFORE_START")
     job = None
@@ -217,6 +242,7 @@ def execute():
         print("G09_STAGE60_NATIVE=" + json.dumps({
             "status": "PASS_REAL_STAGE50_STAGE60_NO_CANDIDATE_RESTORED",
             "source_sha": head, "negative_control": TARGET,
+            "negative_control_is_public_ip": True,
             "real_dpi_bypass_tested": False,
             "owner_blocked_youtube_tested": False,
             "ipv6_quic_cancel_timeout_tested": False,
