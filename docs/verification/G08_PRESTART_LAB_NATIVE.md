@@ -1,6 +1,6 @@
 # G08 — Installed Standard/Extended Lab before first ordinary Start
 
-**Current scope (9 November 2026):** `v0.6.3_26` SOURCE-only S2 candidate. Not a native PASS, published package or owner-live proof.
+**Current scope (9 November 2026):** `_26` real OPNsense 26.7 S2 PASS [#42681458370](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42681458370), [PR #1000](https://github.com/Tolian82/os-zapret2-restyle/pull/1000) merged. Both genuine HTTP Lab jobs completed Stage40 TARGET_ACCESSIBLE, Stage50 SKIPPED, Stage90 STOPPED PASS. Not real blocked-target search or owner-live bypass.
 
 ## Exact native qualification
 
@@ -10,4 +10,4 @@ After authenticated native Status=Stopped, run the actual packaged `/api/zapret/
 
 **Scope boundary:** a genuinely accessible public control stops at Stage 40 with `TARGET_ACCESSIBLE`; Stage 50 search is **SKIPPED**. This proves real Job + network/probe/STOPPED restore before first normal Start, *not* desync candidate discovery or DPI bypass. The blocked-target Stage50→60 investigation and real NO_CANDIDATE/failure handling remain G09; cancel/timeouts and owner-live must be separately qualified. No production Lab/FD9/IPFW/WAN implementation changes in `_26`.
 
-**Evidence:** G05 early WAN-first + missing engine native #42646971454; G07 real installed Start/Stop/Restart [#42678641429](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42678641429). G08 native run evidence **PENDING**.
+**Evidence:** G05 early WAN-first + missing engine native #42646971454; G07 real installed Start/Stop/Restart [#42678641429](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42678641429). G08 native run evidence **PASS #42681458370**; G09 searches a separate unreachable negative control.
