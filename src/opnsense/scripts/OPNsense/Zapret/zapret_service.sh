@@ -46,6 +46,17 @@ STRATEGY_LAB_SEMANTIC_IPFW_BIN="${STRATEGY_LAB_SEMANTIC_IPFW_BIN:-${IPFW_BIN}}"
 STRATEGY_LAB_SEMANTIC_PS_BIN="${STRATEGY_LAB_SEMANTIC_PS_BIN:-${ZAPRET_PROCESS_QUERY_BIN}}"
 STRATEGY_LAB_SEMANTIC_SHA256_BIN="${STRATEGY_LAB_SEMANTIC_SHA256_BIN:-/sbin/sha256}"
 
+wan_first_service()
+{
+    _wan_response=$("${SCRIPT_DIR}/wan_preflight.sh" "$1") || return 69
+    case "${_wan_response}" in
+        wan-ready|wan-not-required) return 0 ;;
+        wan-required) echo 'ERROR: WAN_REQUIRED: Select a WAN interface' >&2; return 64 ;;
+        wan-invalid) echo 'ERROR: WAN_INVALID: Selected WAN interface is not assigned or unavailable' >&2; return 64 ;;
+        *) echo 'ERROR: WAN_PREFLIGHT_UNAVAILABLE: Saved WAN cannot be verified' >&2; return 69 ;;
+    esac
+}
+
 ensure_runtime_components()
 {
     [ -x "${DVTWS_BIN}" ] && return 0
@@ -316,6 +327,10 @@ strategy_lab_internal_dispatch()
             extra_resources_native_build_saved_service
             ;;
         strategy-lab-start)
+            # Internal Strategy Lab start inherits FD9. A direct caller must
+            # not bypass the external launcher WAN-first gate before ANY
+            # common/legacy engine or IPFW owner restoration.
+            wan_first_service require || return $?
             if shared_apply_has_record_service; then
                 _lab_owner=$(shared_apply_inspect_service) || return 69
                 case "$_lab_owner" in
@@ -976,6 +991,10 @@ shared_apply_boot_service()
     _shared_boot_saved=$(shared_apply_native_config saved "$_shared_boot_id" "$_shared_boot_page") || return 69
     _shared_boot_mode=$(printf "%s\n" "$_shared_boot_saved" |
         shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+    # Even internal committed-owner boot must validate WAN before engine/IPFW.
+    if [ "$_shared_boot_mode" = 1 ]; then
+        wan_first_service require || return $?
+    fi
     _shared_boot_check=$(printf "%s\n" "$_shared_boot_saved" |
         shared_apply_json_field '.result | select(.=="committed")') || return 69
     _shared_boot_dir=$(shared_apply_workspace "$_shared_boot_id") || return 69
@@ -1337,7 +1356,7 @@ shared_apply_run_service()
     _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
     _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
     case "$_shared_run_receipt" in
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
             # Nothing reached shared_apply_execute_service: no Config save,
             # runtime handoff, IPFW mutation or durable operation was started.
             printf '%s\n' "$_shared_run_receipt"
@@ -1368,7 +1387,7 @@ shared_apply_build_service()
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace)
             printf '%s\n' "$_shared_stage_result"
             return 0
             ;;
@@ -2521,6 +2540,12 @@ service_with_lifecycle_lock()
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
+        # WAN-first runtime gate; no effect on Stop, setup or passive Save.
+        case "${1:-}" in
+            start) wan_first_service require || return $? ;;
+            restart|reconfigure|telegram-voice-enable)
+                wan_first_service if-start || return $? ;;
+        esac
         # Refuse Python-dependent operations BEFORE any Config/engine/IPFW
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.

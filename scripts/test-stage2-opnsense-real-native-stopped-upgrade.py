@@ -74,6 +74,24 @@ class StoppedNativeContracts(unittest.TestCase):
         self.assertTrue(r['all_non_registry_config_preserved'])
 
 
+    def test_only_exact_lc05_when_old_plugin_config_absent(self):
+        NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
+        verifier = Mock(return_value=True)
+        NS['clean'] = SimpleNamespace(verify_approved_lc05_first_config=verifier)
+        old = ET.fromstring('<opnsense><system><firmware><plugins>foo</plugins>'
+                            '</firmware></system><OPNsense><foreign>keep</foreign>'
+                            '</OPNsense></opnsense>')
+        new = copy.deepcopy(old)
+        new.find('./system/firmware/plugins').text = 'foo,os-zapret2-restyle'
+        ET.SubElement(new.find('./OPNsense'), 'Zapret')
+        result = NS['prove_preserved_config'](ET.tostring(old), ET.tostring(new))
+        self.assertTrue(result['only_exact_new_lc05_config_exempted'])
+        verifier.assert_called_once()
+        # Previously saved settings may never be overwritten.
+        ET.SubElement(old.find('./OPNsense'), 'Zapret').text = 'user'
+        with self.assertRaisesRegex(NS['Refusal'], 'BEYOND_OFFICIAL_METADATA'):
+            NS['prove_preserved_config'](ET.tostring(old), ET.tostring(new))
+
     def test_existing_plugin_sorted_without_foreign_loss(self):
         NS['native'] = SimpleNamespace(NAME='os-zapret2-restyle')
         before = b'<opnsense><system><firmware><plugins>os-zapret2-restyle,foo</plugins></firmware></system></opnsense>'

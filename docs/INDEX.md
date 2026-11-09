@@ -18,7 +18,7 @@
 
 ## Level 2 — активное ТЗ по полной чистой установке (8 ноября 2026)
 
-- [Восстановление полного жизненного цикла после чистой установки — ТЗ v1.1](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) — новое утверждённое пользовательское поведение; первая задача: безопасный автономный purge-скрипт, затем исправления GUI/uninstall/bootstrap/WAN/пустых стратегий/Strategy Lab. Реализация пока открыта.
+- [Восстановление полного жизненного цикла после чистой установки — ТЗ v1.2](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) — новое утверждённое пользовательское поведение; первая задача: безопасный автономный purge-скрипт, затем исправления GUI/uninstall/bootstrap/WAN/пустых стратегий/Strategy Lab. Реализация пока открыта.
 - [Поэтапный план восстановления G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) — единственная текущая последовательность реализации: сначала безопасный full-purge, затем обычный GUI uninstall, первая runtime-install, утверждённые 10 доменов + TCP/QUIC, WAN/empty/Voice, RU/EN GUI/Lab, real native/owner-live acceptance. Результаты не подтверждены созданием документа.
 - [G01 — guide to independent full purge](verification/G01_STANDALONE_PURGE_GUIDE.md) — отдельный деструктивный скрипт после обычного удаления пакета; исходник, backup/dry-run, подтверждение, сценарии отказа и границы disposable-native приёмки. До прохождения G01 запрещена автоматическая трактовка source-тестов как полной проверки.
 - [G02 — ordinary GUI uninstall verification](verification/G02_NORMAL_GUI_UNINSTALL.md) — merged source and disposable-native firmware remove/reinstall, owner-live pending.

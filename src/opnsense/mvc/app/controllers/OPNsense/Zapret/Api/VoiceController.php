@@ -14,6 +14,7 @@ require_once __DIR__ . '/VoiceCandidateValidator.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceSettingsPayload.php';
 require_once __DIR__ . '/SettingsApply.php';
+require_once __DIR__ . '/WanRequirement.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
 require_once __DIR__ . '/VoiceDraftSelection.php';
@@ -370,6 +371,10 @@ class VoiceController extends ApiControllerBase
             $config->lock();
             try {
                 $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                // No Voice validator may mask the primary WAN requirement.
+                if (WanRequirement::missingBeforeActivation($current, $fields)) {
+                    return $failed(gettext('Select a WAN interface'));
+                }
                 $plan = SettingsApply::prepareVoice($current, $fields, $sync['snapshot']);
                 if (($plan['result'] ?? null) !== 'prepared') {
                     return $plan;

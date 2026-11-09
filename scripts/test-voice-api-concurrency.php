@@ -637,6 +637,11 @@ namespace {
         'mode' => 'auto', 'youtubedomains' => '',
         'userdomains' => '', 'excludedomains' => '',
     ];
+    // Restore a genuine saved WAN after the deliberately blank offline Voice
+    // fixture: this test covers native large-form/no-op dispatch, not an
+    // attempt to activate a service without WAN (covered by WAN-first tests).
+    Zapret::$nodes['general']['waninterface'] = 'WAN';
+
     // Strategies shares the SAME FD9 worker. Post-dispatch exceptions must
     // never masquerade as safe field errors on that second GUI.
     $strategy = new SettingsController();
@@ -782,5 +787,8 @@ namespace {
     equal(0, Config::getInstance()->locks,
         'Strategies Apply must release the GUI Config lock');
 
+    // Reuse the already executed fast PHP suite; never fan out native CI
+    // merely because a new pure WAN-first assertion was registered.
+    require __DIR__ . '/test-wan-first-preflight.php';
     echo "PASS: shared native FD9 Voice/Strategies Apply, envelope, Config lock and review guards\n";
 }

@@ -27,6 +27,25 @@ else
 fi
 TEST_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-e2e.XXXXXX")
 
+# Run the unchanged source/installed launcher and worker through symlinks to
+# their original bytes. Override ONLY the read-only native WAN probe in the
+# private offline fixture: Linux has no OPNsense Config/InterfaceField.
+# Never change the packaged script or add a production probe bypass.
+WAN_TEST_SCRIPT_DIR="${TEST_ROOT}/native-fixture"
+mkdir -p "${WAN_TEST_SCRIPT_DIR}"
+for script in "${SCRIPT_DIR}"/*; do
+    ln -s "${script}" "${WAN_TEST_SCRIPT_DIR}/$(basename "${script}")"
+done
+rm -f "${WAN_TEST_SCRIPT_DIR}/wan_preflight.sh"
+cat > "${WAN_TEST_SCRIPT_DIR}/wan_preflight.sh" <<'WAN_MOCK'
+#!/bin/sh
+case "${MOCK_WAN_REPLY:-wan-ready}" in
+    wan-ready|wan-required|wan-invalid) printf '%s\n' "${MOCK_WAN_REPLY:-wan-ready}" ;;
+    *) exit 69 ;;
+esac
+WAN_MOCK
+chmod 0755 "${WAN_TEST_SCRIPT_DIR}/wan_preflight.sh"
+
 cleanup()
 {
     if [ -d "${TEST_ROOT}" ]; then
@@ -339,7 +358,7 @@ export MOCK_CIRCULAR_LAUNCHER="${CIRCULAR_LAUNCHER}"
 
 api_call()
 {
-    SCRIPT_DIR="${SCRIPT_DIR}" \
+    SCRIPT_DIR="${WAN_TEST_SCRIPT_DIR}" \
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
     TRANSACTION_SCRIPT="${BIN_DIR}/service" \
@@ -463,6 +482,20 @@ run_job()
     LAST_JOB="${job}"
     LAST_RESULT="${result}"
 }
+
+# The missing WAN must reject before any Standard/Extended Job creation,
+# even though the mocked runtime/strategies are otherwise ready.
+MOCK_WAN_REPLY=wan-required
+export MOCK_WAN_REPLY
+if premature=$(api_call strategy_lab_start blocked.example standard en); then
+    fail "Lab without WAN accepted a job"
+fi
+printf '%s\n' "${premature}" | jq -e     '.status=="error" and .message=="Select a WAN interface"' >/dev/null ||
+    fail "Lab without WAN did not return the primary user error"
+[ -z "$(find "${RUN_DIR}/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit)" ] ||
+    fail "Lab allocated Job data before rejecting absent WAN"
+MOCK_WAN_REPLY=wan-ready
+export MOCK_WAN_REPLY
 
 strategy_before=$(sha256sum "${STRATEGY_FILE}" | awk '{print $1}')
 run_job success standard RUNNING completed SUCCESS

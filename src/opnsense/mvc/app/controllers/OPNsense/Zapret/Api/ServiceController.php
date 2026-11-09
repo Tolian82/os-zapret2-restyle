@@ -39,6 +39,25 @@ class ServiceController extends ApiMutableServiceControllerBase
     protected static $internalServiceEnabled = 'general.enabled';
     protected static $internalServiceName = 'zapret';
 
+    /** Localized GUI guard; original FD9 repeats the native WAN-first test. */
+    public function startAction(): array
+    {
+        $result = trim((string)(new Backend())->configdRun('zapret wan_preflight', false, 20));
+        if ($result === 'wan-required') {
+            throw new UserException(gettext('Select a WAN interface'),
+                gettext('Zapret configuration error'));
+        }
+        if ($result === 'wan-invalid') {
+            throw new UserException(gettext('Selected WAN interface is not assigned or unavailable'),
+                gettext('Zapret configuration error'));
+        }
+        if ($result !== 'wan-ready') {
+            throw new UserException(gettext('Saved WAN preflight is unavailable'),
+                gettext('Zapret configuration error'));
+        }
+        return parent::startAction();
+    }
+
     private const RELEASE_PATTERN = '/^v[0-9]+(?:\\.[0-9]+)+$/D';
 
     private function getReleaseList(Backend $backend): array

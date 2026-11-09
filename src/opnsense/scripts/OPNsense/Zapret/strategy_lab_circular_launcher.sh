@@ -107,6 +107,16 @@ circular_dispatch()
                 return 64
             }
             PARENT_JOB_ID="$2"
+            _wan_first=$("${SCRIPT_DIR}/wan_preflight.sh" require) || {
+                circular_emit_error 'Saved WAN preflight is unavailable'
+                return 69
+            }
+            case "${_wan_first}" in
+                wan-ready) ;;
+                wan-required) circular_emit_error 'Select a WAN interface'; return 64 ;;
+                wan-invalid) circular_emit_error 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
+                *) circular_emit_error 'Saved WAN preflight is unavailable'; return 69 ;;
+            esac
             if _slcl_eligibility=$(strategy_lab_circular_eligibility "${PARENT_JOB_ID}"); then
                 :
             else

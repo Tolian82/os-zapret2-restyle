@@ -6,6 +6,7 @@ before adding a privileged transaction/restart entrypoint.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import io
 import json
@@ -15,6 +16,8 @@ import re
 import stat
 import sys
 import tarfile
+import time
+from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 SOURCE = "Tolian82/zapret2-extra-resources"
@@ -51,11 +54,34 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob " + str(len(data)).encode("ascii") + b"\0" + data).hexdigest()
 
 
+def _readonly_fetch_with_bounded_eacces_retry(request: Request, *, timeout: int,
+                                               max_bytes: int) -> bytes:
+    """Retry only transient local EACCES while reading a public immutable GET.
+
+    GitHub CI's disposable guest can temporarily refuse outgoing connect(2)
+    with errno=13 and immediately recover. The retry wraps only read-only
+    HTTPS retrieval, BEFORE any resource Install/Stop/Apply or filesystem
+    mutation. Never retry a transaction, HTTP status, SSL or malformed data.
+    """
+    for attempt in range(3):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return response.read(max_bytes)
+        except OSError as exc:
+            reason = exc.reason if isinstance(exc, URLError) else exc
+            if not (isinstance(reason, OSError) and
+                    reason.errno == errno.EACCES and attempt < 2):
+                raise
+            # One plus three seconds: bounded, without hammering GitHub.
+            time.sleep((1, 3)[attempt])
+    raise AssertionError("unreachable after bounded HTTPS attempts")
+
+
 def obtain_revision() -> str:
     req = Request(SOURCE_REF_URL, headers={"Accept": "application/vnd.github+json",
                                           "User-Agent": "os-zapret2-restyle"})
-    with urlopen(req, timeout=20) as response:
-        raw = response.read(8193)
+    raw = _readonly_fetch_with_bounded_eacces_retry(
+        req, timeout=20, max_bytes=8193)
     if len(raw) > 8192:
         raise PreflightError("GitHub revision response exceeds the supported size")
     try:
@@ -71,8 +97,9 @@ def obtain_archive(revision: str) -> bytes:
     if not SHA_PATTERN.fullmatch(revision):
         raise PreflightError("source revision is not an immutable commit SHA")
     url = f"https://codeload.github.com/{SOURCE}/tar.gz/{revision}"
-    with urlopen(Request(url, headers={"User-Agent": "os-zapret2-restyle"}), timeout=60) as response:
-        result = response.read(MAX_ARCHIVE + 1)
+    result = _readonly_fetch_with_bounded_eacces_retry(
+        Request(url, headers={"User-Agent": "os-zapret2-restyle"}),
+        timeout=60, max_bytes=MAX_ARCHIVE + 1)
     if len(result) > MAX_ARCHIVE:
         raise PreflightError("source archive exceeds the size limit")
     return result

@@ -16,6 +16,8 @@ grep -Fq 'service_with_lifecycle_lock()' "${TMP}/functions.sh" ||
     fail "missing native FD9 dispatcher"
 sh -n "${TMP}/functions.sh"
 . "${TMP}/functions.sh"
+# WAN is present in the Python-down fixture; test the subsequent Python gate.
+wan_first_service() { return 0; }
 
 mkdir -p "${TMP}/active"
 ACTIVE_DIR="${TMP}/active"

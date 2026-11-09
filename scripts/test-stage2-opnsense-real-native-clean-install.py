@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import re
+import xml.etree.ElementTree as ET
 from stage2_source_revision import revision_from_makefile, version_from_file
 from unittest.mock import patch
 
@@ -105,7 +107,7 @@ class RealInstallContracts(unittest.TestCase):
             result(1, "zapret is not running\n"),
             result(0, "zapret is not running (stopped)\n"),
             result(1, "zapret is not running\n"),
-            result(69, "", "ERROR: qualified Python runtime unavailable"),
+            result(64, "", "ERROR: WAN_REQUIRED: Select a WAN interface"),
         ]
         with patch.object(mod, "run", side_effect=responses) as run, \
              patch.object(Path, "read_bytes", return_value=b"unchanged"), \
@@ -113,6 +115,7 @@ class RealInstallContracts(unittest.TestCase):
             summary = mod.python_down_installed_cold_status()
         self.assertEqual(summary["native_python_down_cold_stop"],
                          "IDEMPOTENT")
+        self.assertTrue(summary["no_wan_precedes_missing_python"])
         self.assertFalse(summary["native_python_down_running_owner_tested"])
         self.assertFalse(summary["native_python_down_shared_owner_tested"])
         self.assertEqual([call.args[0][-1] for call in run.call_args_list],
@@ -148,6 +151,58 @@ class RealInstallContracts(unittest.TestCase):
         self.assertEqual(observed["status"],"PASS_OFFICIAL_FIRMWARE_REGISTER_ONLY")
         self.assertTrue(observed["all_other_config_sections_unchanged"])
         self.assertEqual(observed["prior_plugin_count"],1)
+
+    def test_lc05_exact_native_first_config_is_only_new_subtree(self):
+        old = ET.fromstring(
+            '<opnsense><system><hostname>keep</hostname><firmware>'
+            '<plugins>other</plugins></firmware></system>'
+            '<OPNsense><secret>unchanged</secret></OPNsense></opnsense>')
+        installed = ET.fromstring(ET.tostring(old))
+        installed.find('./system/firmware/plugins').text = 'os-zapret2-restyle,other'
+        root = ET.SubElement(installed.find('./OPNsense'), 'Zapret')
+        general = ET.SubElement(root, 'general')
+        ET.SubElement(general, 'enabled').text = '0'
+        strategy = ET.SubElement(root, 'strategy')
+        hostlist = ET.SubElement(root, 'hostlist')
+        src = (HERE.parent / 'src/opnsense/scripts/OPNsense/Zapret'
+               / 'initialize_config.php').read_text(encoding='utf-8')
+        for constant, parent, field in (
+            ('TRAFFIC_STRATEGY', strategy, 'trafficargs'),
+            ('YOUTUBE_DOMAINS', hostlist, 'youtubedomains'),
+        ):
+            match = re.search(r"public const " + constant +
+                              r" = <<<'(?P<tag>[A-Z]+)'\n(?P<value>.*?)\n(?P=tag);",
+                              src, re.S)
+            self.assertIsNotNone(match)
+            ET.SubElement(parent, field).text = match.group('value')
+
+        before = ET.tostring(old)
+        accepted = mod.verify_official_first_install_registration(
+            before, ET.tostring(installed))
+        self.assertTrue(accepted['approved_lc05_first_config_initialized'])
+        self.assertTrue(accepted['all_other_config_sections_unchanged'])
+
+        general.find('enabled').text = '1'
+        with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):
+            mod.verify_official_first_install_registration(
+                before, ET.tostring(installed))
+        general.find('enabled').text = '0'
+        ET.SubElement(root, 'foreignsetting').text = 'disallowed'
+        with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):
+            mod.verify_official_first_install_registration(
+                before, ET.tostring(installed))
+        root.remove(root.find('foreignsetting'))
+        hostlist.find('youtubedomains').text = 'attacker.example'
+        with self.assertRaisesRegex(mod.Refusal, 'INITIAL_CONFIG'):
+            mod.verify_official_first_install_registration(
+                before, ET.tostring(installed))
+        # A pre-existing user subtree is never allowed to be silently reseeded.
+        prior = ET.fromstring(before)
+        previous = ET.SubElement(prior.find('./OPNsense'), 'Zapret')
+        ET.SubElement(ET.SubElement(previous, 'strategy'), 'trafficargs').text = 'user'
+        with self.assertRaisesRegex(mod.Refusal, 'UNAUTHORIZED_CONFIG'):
+            mod.verify_official_first_install_registration(
+                ET.tostring(prior), ET.tostring(installed))
 
     def test_fresh_registration_creates_initial_firmware_section(self):
         old = b'<opnsense><system><hostname>test</hostname></system></opnsense>'

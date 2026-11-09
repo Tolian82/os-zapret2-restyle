@@ -94,15 +94,35 @@ def check_official_unregistration(before, after):
             "saved_zapret_config_retained_when_present": True}
 
 
+def verify_pkg_delete_config_before_final_unregister(before, after):
+    """The stock +POST_DEINSTALL may already call register.php remove.
+
+    An unchanged config is valid if firmware unregister will run explicitly.
+    Otherwise, permit ONLY the exact official registration/revision delta;
+    no Zapret or foreign setting change is permitted.
+    """
+    if before == after:
+        return False
+    check_official_unregistration(before, after)
+    return True
+
+
 def seed_saved_config_for_disposable_guest():
     """Put nonempty saved Zapret settings in THIS guest via official Config API.
 
     This is a CI fixture only and is never an installed hook or production
-    operation. Refuse rather than overwrite any existing Zapret configuration.
+    operation. If G04 already saved the approved initial or user settings,
+    do not seed or modify them: that existing Config is the stronger witness.
     """
     original = xml_root(CONFIG.read_bytes())
-    need(original.find("OPNsense/Zapret") is None,
-         "DISPOSABLE_GUEST_ZAPRET_CONFIG_ALREADY_PRESENT")
+    saved = original.findall("OPNsense/Zapret")
+    need(len(saved) <= 1, "DISPOSABLE_GUEST_DUPLICATE_ZAPRET_CONFIG")
+    if saved:
+        # LC-05: an ordinary first installation now persists the two
+        # approved model values. Uninstall must preserve those bytes, just
+        # as it preserves any existing user-customized Zapret Config.
+        # No Config write is performed by this test in this case.
+        return True
     php = r"""
 require_once("config.inc");
 require_once("script/load_phalcon.php");
@@ -201,9 +221,12 @@ def remove():
         item = Path(marker)
         need(not item.exists() and not item.is_symlink(),
              "REMOVAL_LEFT_RUNTIME_OR_RESTART_MARKER:" + marker)
-    need(CONFIG.read_bytes() == before,
-         "PKG_DELETE_CHANGED_CONFIG_BEFORE_OFFICIAL_UNREGISTER")
+    after_pkg_delete = CONFIG.read_bytes()
+    already_unregistered_in_hook = verify_pkg_delete_config_before_final_unregister(
+        before, after_pkg_delete)
     # Mirrors the official OPNsense stable/26.7 firmware/remove.sh sequence.
+    # A second call is idempotent when our stock +POST_DEINSTALL already
+    # deregistered the plugin; it must not alter any saved user settings.
     # Do not run autoremove: it could affect system-wide dependencies.
     register = clean.run([REGISTRATION, "remove", NAME], timeout=30)
     need(register.returncode == 0,
@@ -224,7 +247,8 @@ def remove():
             "packaged_files_removed": len(expected_files),
             "no_leftover_restart_or_pid_markers": True,
             "config_before_pkg_delete_sha256": before_sha,
-            "config_unchanged_by_pkg_delete": True,
+            "pkg_delete_config_changes_registration_only": True,
+            "post_deinstall_already_unregistered": already_unregistered_in_hook,
             "official_unregister": retained,
             "owner_device_modified": False,
             "forced_reinstall_or_running_remove_tested": False}

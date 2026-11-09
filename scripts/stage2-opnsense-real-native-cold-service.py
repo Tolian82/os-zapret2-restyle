@@ -121,12 +121,22 @@ def exercise(invoke=run, observe=snapshot):
     baseline = observe()
     need(not baseline['runtime_present'] and not baseline['markers_present']
          and not baseline['ipfw']['rules'], 'COLD_BASELINE_NOT_EMPTY')
+    # Fresh installed Config has no WAN and Enabled=OFF. An explicit Start
+    # must refuse missing WAN BEFORE the engine/Python checks. Restart and
+    # Reconfigure on the disabled cold fixture may do non-activation work;
+    # they still refuse the absent engine without mutating any system state.
+    expected = {
+        'start': (64, 'WAN_REQUIRED', 'MISSING_WAN'),
+        'restart': (1, 'runtime is not installed', 'MISSING_ENGINE'),
+        'reconfigure': (1, 'runtime is not installed', 'MISSING_ENGINE'),
+    }
     checked = []
     for action in ACTIONS:
         result = invoke([str(SERVICE), action])
-        need(result.returncode == 1 and not result.stdout.strip() and
-             'runtime is not installed' in result.stderr.lower(),
-             'COLD_' + action.upper() + '_DID_NOT_REFUSE_MISSING_ENGINE')
+        code, message, reason = expected[action]
+        need(result.returncode == code and not result.stdout.strip() and
+             message.lower() in result.stderr.lower(),
+             'COLD_' + action.upper() + '_DID_NOT_REFUSE_' + reason)
         need(observe() == baseline,
              'COLD_' + action.upper() + '_MUTATED_CONFIG_OWNER_OR_IPFW')
         status = invoke([str(SERVICE), 'status'])
@@ -138,7 +148,8 @@ def exercise(invoke=run, observe=snapshot):
         checked.append(action)
     return {'schema': 1, 'status': 'PASS_REAL_INSTALLED_COLD_LIFECYCLE_REFUSAL',
             'actions': checked, 'qualified_python_available': True,
-            'runtime_missing': True, 'config_unchanged': True,
+            'runtime_missing': True, 'wan_first_missing_wan': True,
+            'config_unchanged': True,
             'plugin_ipfw_unchanged': True, 'no_owner_started': True,
             'common_running_owner_tested': False, 'boot_tested': False,
             'web_apply_tested': False, 'owner_device_modified': False}
