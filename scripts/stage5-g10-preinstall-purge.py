@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PURGER = ROOT / "scripts/purge-os-zapret2-restyle.sh"
 CONFIG = Path("/conf/config.xml")
 SENTINEL = Path("/var/log/zapret2/g10-preinstall-orphan.log")
-RECEIPT = ROOT / "dist/g10-preinstall-purge.json"
+RECEIPT = Path("/root/g10-preinstall-purge.json")
 CLEAN = ROOT / "dist/stage5-native-single-artifact.json"
 STATUS = "PASS_G10_NATIVE_ORPHAN_PURGE_BEFORE_CLEAN_PACKAGE"
 
@@ -99,6 +99,8 @@ def native():
     need(git.returncode == 0 and git.stdout.strip() == head and
          re.fullmatch(r"[a-f0-9]{40}", head) is not None,
          "G10_SOURCE_HEAD_MISMATCH")
+    need(RECEIPT.parent == Path("/root"),
+         "G10_RECEIPT_WOULD_BE_DESTROYED_BY_NATIVE_DIST_CLEAN")
     need(PURGER.is_file() and not PURGER.is_symlink() and
          CONFIG.is_file() and not CONFIG.is_symlink() and
          not RECEIPT.exists() and not RECEIPT.is_symlink() and
@@ -219,6 +221,8 @@ def verify(head):
 
 def self_test():
     head = "a" * 40
+    need(RECEIPT.parent == Path("/root"),
+         "G10_RECEIPT_IN_NATIVE_BUILD_CLEANUP_PATH")
     record = {"schema": 1, "status": STATUS, "project_sha": head,
               "disposable_opnsense": "26.7", "abi": "FreeBSD:15:amd64",
               "preexisting_package_absent": True,
