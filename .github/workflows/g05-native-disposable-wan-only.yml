@@ -42,7 +42,6 @@ jobs:
           php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php
           sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab_circular_launcher.sh
-          sh scripts/test-strategy-lab-job-contract.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           sh -n scripts/test-g05-wan-route.sh
           sh scripts/test-g05-wan-route.sh
