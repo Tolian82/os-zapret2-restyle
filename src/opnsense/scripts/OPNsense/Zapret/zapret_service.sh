@@ -2543,8 +2543,11 @@ service_with_lifecycle_lock()
         # WAN-first runtime gate; no effect on Stop, setup or passive Save.
         case "${1:-}" in
             start) wan_first_service require || return $? ;;
-            restart|reconfigure|telegram-voice-enable)
+            restart|reconfigure)
                 wan_first_service if-start || return $? ;;
+            # An explicit compatibility Voice ENABLE is a start request even
+            # if persisted general/Voice Enabled are currently OFF.
+            telegram-voice-enable) wan_first_service require || return $? ;;
         esac
         # Refuse Python-dependent operations BEFORE any Config/engine/IPFW
         # mutation. Status, Stop and runtime-failure retain native access

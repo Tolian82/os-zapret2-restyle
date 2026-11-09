@@ -483,6 +483,11 @@ run_job()
     LAST_RESULT="${result}"
 }
 
+# This fixture simulates a previously installed upstream binary; job
+# execution remains mock-only under the existing test-owned process adapter.
+printf '#!/bin/sh\nexit 99\n' > "${BIN_DIR}/dvtws2-unused"
+chmod 0755 "${BIN_DIR}/dvtws2-unused"
+
 # The missing WAN must reject before any Standard/Extended Job creation,
 # even though the mocked runtime/strategies are otherwise ready.
 MOCK_WAN_REPLY=wan-required
@@ -490,7 +495,7 @@ export MOCK_WAN_REPLY
 if premature=$(api_call strategy_lab_start blocked.example standard en); then
     fail "Lab without WAN accepted a job"
 fi
-printf '%s\n' "${premature}" | jq -e     '.status=="error" and .message=="Select a WAN interface"' >/dev/null ||
+printf '%s\n' "${premature}" | jq -e     '.status=="error" and .reason=="wan-required" and .message=="Select a WAN interface"' >/dev/null ||
     fail "Lab without WAN did not return the primary user error"
 [ -z "$(find "${RUN_DIR}/jobs" -mindepth 1 -maxdepth 1 -type d -print -quit)" ] ||
     fail "Lab allocated Job data before rejecting absent WAN"

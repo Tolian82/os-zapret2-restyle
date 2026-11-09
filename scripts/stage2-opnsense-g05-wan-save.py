@@ -103,6 +103,176 @@ def gui_wan(web):
     return selected(general.get("waninterface")), baseline
 
 
+
+def _wan_first_jobs():
+    """Only real Lab jobs/sessions count; launcher lockfiles are not jobs."""
+    roots = (Path("/var/run/zapret2-restyle/strategy-lab/jobs"),
+             Path("/var/run/zapret2-restyle/strategy-lab/circular/sessions"))
+    return tuple(sorted(str(p) for root in roots if root.is_dir()
+                        for p in root.glob("job.*")))
+
+
+def _wan_first_unchanged(config_bytes, ipfw_baseline, jobs, label):
+    no_runtime_mutation(False, ipfw_baseline, config_bytes)
+    need(_wan_first_jobs() == jobs,
+         "G05_WAN_FIRST_CREATED_LAB_JOB_" + label)
+
+
+def _wan_first_command(argv, code, fragment, name):
+    status = run(argv, timeout=50)
+    # Direct shell invocations return their own exact rc. Configd
+    # script_output may serialize its refusal with a different transport rc:
+    # require the specific refusal payload, not a guessed wrapper rc.
+    reply = (status.stdout + status.stderr).strip()
+    need((code is None or status.returncode == code) and fragment in reply,
+         "G05_WAN_FIRST_" + name + "_WRONG_REFUSAL" +
+         ":rc=" + str(status.returncode) +
+         ":reply=" + repr(reply[:180]))
+    return status
+
+
+def _wan_first_configd(argv, reason, message, label):
+    # In OPNsense configd, errors:no is the standard contract for preserving
+    # a script_output payload from a nonzero CLI command. Neither rc=0 nor
+    # an HTTP 200 means success: the typed JSON status remains "error".
+    result = run(argv, timeout=50)
+    need(result.returncode == 0, "G05_CONFIGD_" + label + "_TRANSPORT_FAILED")
+    reply = json.loads(result.stdout)
+    need(isinstance(reply, dict) and reply.get("status") == "error" and
+         reply.get("reason") == reason and reply.get("message") == message,
+         "G05_CONFIGD_" + label + "_TYPED_REFUSAL_MISSING")
+    return reply
+
+
+def _wan_first_lab_form(mode, language):
+    # Deliberately invalid target: WAN / engine must win over target grammar.
+    return [("target", "invalid_target"), ("mode", mode),
+            ("language", language), ("enable_quic", "0"),
+            ("ipv6_enabled", "0")]
+
+
+def _wan_first_cold_matrix(web, baseline, ipfw_baseline):
+    """Actual cookie/CSRF and installed configd/Voice/Lab before first WAN Save."""
+    saved = CONF.read_bytes()
+    jobs = _wan_first_jobs()
+    script = "/usr/local/opnsense/scripts/OPNsense/Zapret/"
+    _wan_first_command([script + "wan_preflight.sh", "require"],
+                       0, "wan-required", "SAVED_PROBE")
+    _wan_first_command(["/usr/local/sbin/configctl", "zapret", "wan_preflight"],
+                       0, "wan-required", "CONFIGD_PROBE")
+    _wan_first_command([script + "zapret_service.sh", "start"],
+                       64, "WAN_REQUIRED", "DIRECT_START")
+    _wan_first_unchanged(saved, ipfw_baseline, jobs, "START")
+
+    missing = web.api("POST", "/api/zapret/settings/apply", [
+        ("zapret[sync][telegramips_baseline]", baseline),
+        ("zapret[general][enabled]", "1"),
+        ("zapret[strategy][trafficargs]", "--not-a-valid-strategy")])
+    need(missing.get("result") == "failed" and
+         missing.get("applied") is not True and
+         missing.get("requires_review") is not True and
+         "Select a WAN interface" in str(missing.get("message", "")),
+         "G05_WAN_FIRST_GUI_STRATEGIES_MASKED_MISSING_WAN")
+    _wan_first_unchanged(saved, ipfw_baseline, jobs, "STRATEGIES")
+
+    voice = web.api("GET", "/api/zapret/voice/load")
+    model, snapshot = voice.get("zapret"), voice.get("snapshot")
+    need(isinstance(model, dict) and isinstance(snapshot, str) and
+         len(snapshot) == 64 and
+         all(c in "0123456789abcdef" for c in snapshot),
+         "G05_WAN_FIRST_NATIVE_VOICE_LOAD_MISSING")
+    form = [("zapret[sync][snapshot]", snapshot)]
+    for name in ("telegram", "discord", "x", "sip", "custom"):
+        item = model["voice"][name]
+        need(str(item["enabled"]) == "0",
+             "G05_WAN_FIRST_NOT_COLD_VOICE_OFF")
+        form.extend([
+            ("zapret[voice][" + name + "][enabled]",
+             "1" if name == "telegram" else "0"),
+            ("zapret[voice][" + name + "][args]", str(item["args"])),
+            ("zapret[hostlist][" + name + "ips]",
+             str(model["hostlist"][name + "ips"]))])
+    voice_rejected = web.api("POST", "/api/zapret/voice/apply", form)
+    need(voice_rejected.get("result") == "failed" and
+         voice_rejected.get("requires_review") is not True and
+         "Select a WAN interface" in str(
+             voice_rejected.get("validations", {}).get(
+                 "zapret.voice.waninterface", "")),
+         "G05_WAN_FIRST_GUI_VOICE_MASKED_MISSING_WAN")
+    _wan_first_unchanged(saved, ipfw_baseline, jobs, "VOICE")
+
+    for mode, language, expected in (
+        ("standard", "ru", "Укажите WAN интерфейс"),
+        ("extended", "en", "Select a WAN interface"),
+    ):
+        refused = web.api("POST", "/api/zapret/strategy_lab/start",
+                          _wan_first_lab_form(mode, language))
+        need(refused.get("status") == "error" and
+             refused.get("reason") == "wan-required" and
+             refused.get("message") == expected,
+             "G05_WAN_FIRST_GUI_LAB_" + mode.upper())
+        _wan_first_unchanged(saved, ipfw_baseline, jobs, "LAB_" + mode.upper())
+
+    # Original launchers and configd, not a synthetic WAN resolver.
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_start",
+        "invalid_target", "standard", "ru", "0", "-", "-", "-", "0"],
+        "wan-required", "Укажите WAN интерфейс", "LAB_WAN")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_circular_start",
+        "job.G05WithoutWAN"],
+        "wan-required", "Select a WAN interface", "CIRCULAR_WAN")
+    _wan_first_command([
+        script + "strategy_lab_circular_launcher.sh",
+        "start", "job.G05WithoutWAN"],
+        64, "Select a WAN interface", "CIRCULAR_LAB")
+    _wan_first_command([script + "zapret_service.sh", "telegram-voice-enable"],
+                       64, "WAN_REQUIRED", "DIRECT_VOICE_ON")
+    _wan_first_unchanged(saved, ipfw_baseline, jobs, "INTERNAL")
+    return True
+
+
+def _wan_first_saved_no_engine_matrix(web, ipfw_baseline):
+    """WAN now saved; engine is the second prerequisite, before Job/target."""
+    saved = CONF.read_bytes()
+    jobs = _wan_first_jobs()
+    script = "/usr/local/opnsense/scripts/OPNsense/Zapret/"
+    _wan_first_command([script + "wan_preflight.sh", "require"],
+                       0, "wan-ready", "SAVED_WAN_READY")
+    _wan_first_command([script + "zapret_service.sh", "start"],
+                       1, "runtime is not installed", "ENGINE_SECOND")
+    for mode, language, expected in (
+        ("standard", "ru", "Служба zapret2 не установлена"),
+        ("extended", "en", "The zapret2 service is not installed"),
+    ):
+        refused = web.api("POST", "/api/zapret/strategy_lab/start",
+                          _wan_first_lab_form(mode, language))
+        need(refused.get("status") == "error" and
+             refused.get("reason") == "engine-not-installed" and
+             refused.get("message") == expected,
+             "G05_WAN_FIRST_NO_ENGINE_BEFORE_LAB_" + mode.upper())
+    _wan_first_command([
+        script + "strategy_lab_launcher.sh", "start", "invalid_target",
+        "standard", "en", "0", "-", "-", "-", "0"],
+        64, "The zapret2 service is not installed", "DIRECT_LAB_ENGINE")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_start",
+        "invalid_target", "standard", "en", "0", "-", "-", "-", "0"],
+        "engine-not-installed", "The zapret2 service is not installed",
+        "LAB_ENGINE")
+    _wan_first_configd([
+        "/usr/local/sbin/configctl", "zapret", "strategy_lab_circular_start",
+        "job.G05NoEngine"],
+        "engine-not-installed", "The zapret2 service is not installed",
+        "CIRCULAR_ENGINE")
+    _wan_first_command([
+        script + "strategy_lab_circular_launcher.sh",
+        "start", "job.G05NoEngine"],
+        64, "The zapret2 service is not installed", "CIRCULAR_NO_ENGINE")
+    _wan_first_unchanged(saved, ipfw_baseline, jobs, "ENGINE_PRE_JOB")
+    return True
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -129,6 +299,9 @@ def main():
     old, baseline = gui_wan(web)
     need(old in ("", None), "G05_FIRST_WAN_NOT_EMPTY")
 
+    # Existing no-engine native guest: WAN-first GUI/configd/Voice/Lab matrix.
+    _wan_first_cold_matrix(web, baseline, ipfw_before)
+
     # Stale tab + unknown logical interface must refuse with no mutation.
     initial = CONF.read_bytes()
     stale = request(web, "lo0", "__g05_stale_telegram__")
@@ -153,6 +326,8 @@ def main():
     no_runtime_mutation(False, ipfw_before)
     reread, baseline = gui_wan(web)
     need(reread == "lo0", "G05_WAN_NOT_VISIBLE_AFTER_FRESH_GET")
+
+    _wan_first_saved_no_engine_matrix(web, ipfw_before)
 
     # Manual emptying of previously populated strategy/domains MUST NOT
     # obstruct the next WAN-only Save, trigger backend compilation, or
@@ -188,6 +363,8 @@ def main():
         "status": "PASS_G05_COLD_NO_ENGINE_WAN_ONLY_HTTPS_CONFIG_AND_REINSTALL",
         "first_api_authenticated": True,
         "first_save_without_upstream_engine": True,
+        "wan_first_gui_configd_voice_lab_ru_en": True,
+        "wan_first_engine_second_before_job": True,
         "empty_strategy_and_domains_preserved": True,
         "wan_get_after_f5": True,
         "no_dvtws_or_ipfw_mutation": True,

@@ -21,7 +21,6 @@ on:
       - scripts/stage5-installed-lab-real-http.py
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
-      - scripts/test-strategy-lab-e2e.sh
       - scripts/test-extra-resources-preflight.py
       - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py
@@ -50,7 +49,6 @@ on:
       - scripts/stage5-installed-lab-real-http.py
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
-      - scripts/test-strategy-lab-e2e.sh
       - scripts/test-extra-resources-preflight.py
       - scripts/test-extra-resources-inventory-cache.py
       - scripts/test-global-exclusions.py

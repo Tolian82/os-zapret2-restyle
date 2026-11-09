@@ -12,6 +12,14 @@ emit_error_json()
     "${STRATEGY_LAB_JQ}" -nc --arg message "$1" '{status:"error",message:$message}'
 }
 
+# Shell CLI retains the refusal exit status; configd (errors:no)
+# forwards its typed JSON rather than replacing it with "Execute error".
+emit_preflight_error_json()
+{
+    "${STRATEGY_LAB_JQ}" -nc --arg reason "$1" --arg message "$2" \
+        '{status:"error",reason:$reason,message:$message}'
+}
+
 strategy_lab_recovery_verified()
 {
     _strategy_lab_recovery_status="$1"
@@ -112,18 +120,25 @@ start_job()
     esac
     # WAN must be saved/resolved before target validation or Job creation.
     _wan_first=$("${SCRIPT_DIR}/wan_preflight.sh" require) || {
-        emit_error_json 'Saved WAN preflight is unavailable'
+        emit_preflight_error_json wan-unavailable 'Saved WAN preflight is unavailable'
         return 69
     }
     case "${_wan_first}" in
         wan-ready) ;;
         wan-required)
-            if [ "$4" = ru ]; then emit_error_json 'Укажите WAN интерфейс'
-            else emit_error_json 'Select a WAN interface'; fi
+            if [ "$4" = ru ]; then emit_preflight_error_json wan-required 'Укажите WAN интерфейс'
+            else emit_preflight_error_json wan-required 'Select a WAN interface'; fi
             return 64 ;;
-        wan-invalid) emit_error_json 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
-        *) emit_error_json 'Saved WAN preflight is unavailable'; return 69 ;;
+        wan-invalid) emit_preflight_error_json wan-invalid 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
+        *) emit_preflight_error_json wan-unavailable 'Saved WAN preflight is unavailable'; return 69 ;;
     esac
+    # Stage two after saved WAN, BEFORE target checking, Job creation and
+    # worker scheduling. Reuse the installed native runtime binary path.
+    if [ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]; then
+        if [ "$4" = ru ]; then emit_preflight_error_json engine-not-installed 'Служба zapret2 не установлена'
+        else emit_preflight_error_json engine-not-installed 'The zapret2 service is not installed'; fi
+        return 64
+    fi
     _strategy_lab_target=$(strategy_lab_normalize_target "$2" 2>/dev/null || true)
     _strategy_lab_mode="$3"
     _strategy_lab_language="$4"

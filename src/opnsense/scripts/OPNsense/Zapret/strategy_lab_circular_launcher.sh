@@ -27,7 +27,9 @@ strategy_lab_circular_prepare_dir
 
 circular_emit_error()
 {
-    "${STRATEGY_LAB_JQ}" -nc --arg message "$1" '{status:"error",message:$message}'
+    "${STRATEGY_LAB_JQ}" -nc --arg message "$1" --arg reason "${2:-}" \
+        '{status:"error",message:$message} +
+         (if $reason=="" then {} else {reason:$reason} end)'
 }
 
 circular_active_session()
@@ -113,10 +115,16 @@ circular_dispatch()
             }
             case "${_wan_first}" in
                 wan-ready) ;;
-                wan-required) circular_emit_error 'Select a WAN interface'; return 64 ;;
-                wan-invalid) circular_emit_error 'Selected WAN interface is not assigned or unavailable'; return 64 ;;
+                wan-required) circular_emit_error 'Select a WAN interface' wan-required; return 64 ;;
+                wan-invalid) circular_emit_error 'Selected WAN interface is not assigned or unavailable' wan-invalid; return 64 ;;
                 *) circular_emit_error 'Saved WAN preflight is unavailable'; return 69 ;;
             esac
+            # A circular session must never precede upstream availability.
+            # Runtime.sh supplies the same installed binary path as Standard Lab.
+            if [ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]; then
+                circular_emit_error 'The zapret2 service is not installed' engine-not-installed
+                return 64
+            fi
             if _slcl_eligibility=$(strategy_lab_circular_eligibility "${PARENT_JOB_ID}"); then
                 :
             else

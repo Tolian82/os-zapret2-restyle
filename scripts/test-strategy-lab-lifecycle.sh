@@ -53,6 +53,7 @@ launcher()
     SCRIPT_DIR="${WAN_FIXTURE_DIR}" \
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
+    STRATEGY_LAB_DVTWS_BIN="${MOCK_BIN}/daemon" \
     TRANSACTION_SCRIPT="${MOCK_BIN}/service" \
     DAEMON_BIN="${MOCK_BIN}/daemon" \
     LOCKF_BIN="${MOCK_BIN}/lockf" \

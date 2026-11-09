@@ -49,4 +49,26 @@ $labGate = strpos($labTail, 'wan_first_service require');
 $labOwner = strpos($labTail, 'if shared_apply_has_record_service; then');
 wanAssert($labGate !== false && $labOwner !== false && $labGate < $labOwner,
     'inherited-FD9 Laboratory start can bypass WAN-first before runtime');
-echo "PASS: WAN-first inactive Save, candidate, Voice, TUN, internal Lab\n";
+$earlyVoice = strpos($serviceSource, 'telegram-voice-enable) wan_first_service require');
+wanAssert($earlyVoice !== false,
+    'explicit Voice-only ENABLE must require WAN even when saved Enabled=OFF');
+$labSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh');
+wanAssert(strpos($labSource, 'wan_first=$("${SCRIPT_DIR}/wan_preflight.sh" require)') !== false,
+    'Standard/Extended Lab WAN check missing');
+wanAssert(strpos($labSource, '[ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]') >
+    strpos($labSource, '_wan_first=') &&
+    strpos($labSource, '[ ! -x "${STRATEGY_LAB_DVTWS_BIN}" ]') <
+    strpos($labSource, '_strategy_lab_jobdir=$(mktemp'),
+    'Standard/Extended Lab must check engine before allocating Job');
+$actionFile = file_get_contents(__DIR__ .
+    '/../src/opnsense/service/conf/actions.d/actions_zapret.conf');
+foreach (['strategy_lab_start', 'strategy_lab_circular_start'] as $action) {
+    $pos = strpos($actionFile, '[' . $action . "]\n");
+    wanAssert($pos !== false, 'native Laboratory action missing: ' . $action);
+    $end = strpos($actionFile, "\n[", $pos + 1);
+    $section = substr($actionFile, $pos, $end === false ? null : $end - $pos);
+    wanAssert(strpos($section, "type:script_output\nerrors:no\n") !== false,
+        'configd masks typed WAN/engine refusal in ' . $action);
+}
+echo "PASS: WAN-first inactive Save, candidate, Voice, TUN, Lab, engine before Job and configd structured refusal\n";
