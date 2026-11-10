@@ -5,7 +5,10 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SCRIPT_DIR="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret"
 MODULE_DIR="${SCRIPT_DIR}/strategy_lab"
 TMP=$(mktemp -d /tmp/strategy-lab-candidate-test.XXXXXX)
-trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
+# The hostlist staging directory is traversable, but the job tree stays private.
+STAGING=$(mktemp -d /tmp/strategy-lab-hostlists-test.XXXXXX)
+chmod 0755 "${STAGING}"
+trap 'rm -rf "${TMP}" "${STAGING}"' EXIT HUP INT TERM
 mkdir -p "${TMP}/bin" "${TMP}/run/jobs/job.test" "${TMP}/log" "${TMP}/lua" "${TMP}/fake"
 for lua in zapret-lib.lua zapret-antidpi.lua zapret-auto.lua unrelated.lua
 do
@@ -114,11 +117,14 @@ int main(void)
     const char *jobdir = getenv("MOCK_DVTWS_JOBDIR");
     const char *runtime = getenv("MOCK_DVTWS_RUNTIME_DIR");
     const char *hostlist = getenv("MOCK_DVTWS_HOSTLIST");
+    const char *staging = getenv("MOCK_DVTWS_STAGING_DIR");
+    struct stat private_dir;
 
-    /* Model dvtws2 after --user=nobody: it is neither owner nor owning group. */
-    if (!require_other_access(jobdir, S_IXOTH, "job directory") ||
-        !require_other_access(runtime, S_IXOTH, "candidate runtime directory") ||
-        !require_other_access(hostlist, S_IROTH, "hostlist file")) {
+    /* The private job MUST stay closed while the engine is running.
+       Only the staged copy grants group-nobody read, never global read. */
+    if (stat(jobdir, &private_dir) != 0 || (private_dir.st_mode & S_IXOTH) != 0 ||
+        !require_other_access(staging, S_IXOTH, "staging directory") ||
+        !require_other_access(hostlist, S_IRGRP, "staged hostlist")) {
         return 1;
     }
 
@@ -174,6 +180,9 @@ export SCRIPT_DIR MODULE_DIR
 export STRATEGY_LAB_JQ=/usr/bin/jq
 export STRATEGY_LAB_RUN_DIR="${TMP}/run"
 export STRATEGY_LAB_JOBS_DIR="${TMP}/run/jobs"
+export STRATEGY_LAB_HOSTLIST_STAGING_DIR="${STAGING}"
+# Only non-root mock fixtures simulate chgrp; native root creates root:nobody.
+export STRATEGY_LAB_TEST_HOSTLIST_STAGING=1
 export STRATEGY_LAB_LOG_DIR="${TMP}/log"
 export STRATEGY_LAB_TIMEOUT_BIN="${TMP}/bin/timeout"
 export STRATEGY_LAB_CURL_BIN="${TMP}/bin/curl"
@@ -197,7 +206,8 @@ export MOCK_DRILL_LOG="${TMP}/drill.log"
 export MOCK_DVTWS_PIDFILE="${TMP}/run/jobs/job.test/candidate-runtime/dvtws2.pid"
 export MOCK_DVTWS_JOBDIR="${TMP}/run/jobs/job.test"
 export MOCK_DVTWS_RUNTIME_DIR="${TMP}/run/jobs/job.test/candidate-runtime"
-export MOCK_DVTWS_HOSTLIST="${TMP}/run/jobs/job.test/candidate-runtime/hostlist.txt"
+export MOCK_DVTWS_HOSTLIST="${STAGING}/zapret2-lab-hostlist-job.test"
+export MOCK_DVTWS_STAGING_DIR="${STAGING}"
 
 PYTHONPATH="${SCRIPT_DIR}" STRATEGY_LAB_EPOCH_JOB_DIR="${TMP}/run/jobs/job.test" \
 STRATEGY_LAB_EPOCH_ENDPOINTS="${TMP}/endpoints.txt" \
@@ -272,6 +282,7 @@ grep -Fxq -- '--out-range=-d10' "${TMP}/run/jobs/job.test/candidate-runtime/dvtw
 ' "${TMP}/run/jobs/job.test/resource-inventory.json" >/dev/null
 [ ! -s "${TMP}/ipfw.state" ]
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
+[ ! -e "${MOCK_DVTWS_HOSTLIST}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 [ "$(stat -c '%a' "${TMP}/run/jobs/job.test")" = 700 ]
 [ ! -s "${TMP}/drill.log" ]
@@ -291,6 +302,7 @@ if "${SCRIPT_DIR}/strategy_lab_candidate_runner.sh" job.test "${TMP}/endpoints.t
 fi
 [ ! -s "${TMP}/ipfw.state" ]
 [ ! -e "${MOCK_DVTWS_PIDFILE}" ]
+[ ! -e "${MOCK_DVTWS_HOSTLIST}" ]
 ! pgrep -f "${TMP}/bin/dvtws2" >/dev/null 2>&1
 [ "$(stat -c '%a' "${TMP}/run/jobs/job.test")" = 700 ]
 

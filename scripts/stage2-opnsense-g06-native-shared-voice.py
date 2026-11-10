@@ -427,6 +427,8 @@ def lab_running_stage50(web, engine_sha, foreign_before, initial):
         need(web.api("POST", "/api/zapret/strategy_lab/status",
                      {"job_id": "@active"}).get("status") == "idle",
              "G11_RUNNING_STAGE50_ACTIVE_JOB_NOT_CLEARED")
+        need(not (Path("/var/run") / f"zapret2-lab-hostlist-{job}").exists(),
+             "G11_RUNNING_STAGE50_SHADOW_HOSTLIST_LEAK")
         after = running(engine_sha, foreign_before, 1, 1, "strategies")
         after_hashes = {name: hashlib.sha256((ACTIVE / name).read_bytes()).hexdigest()
                         for name in artifact_names}
@@ -510,7 +512,22 @@ def execute():
     combined = running(binary_sha, foreign_before, 1, 1, "strategies")
     need(combined["id"] != only["id"] and combined["pid"] != only["pid"],
          "G06_COMBINED_OWNER_NOT_ROTATED")
-    lab_running = lab_running_stage50(web, binary_sha, foreign_before, combined)
+    # Owner-live _47 had /var/run/zapret2-restyle = 0750 root:wheel.
+    # Reproduce the inaccessible ancestor on the disposable native guest;
+    # restore its original mode even if the Stage50 assertion fails.
+    private_run = Path("/var/run/zapret2-restyle")
+    need(private_run.is_dir() and private_run.stat().st_uid == 0,
+         "G11_STAGE50_NATIVE_RUNTIME_PARENT_UNTRUSTED")
+    private_mode = stat.S_IMODE(private_run.stat().st_mode)
+    try:
+        private_run.chmod(0o750)
+        need(stat.S_IMODE(private_run.stat().st_mode) == 0o750,
+             "G11_STAGE50_PRIVATE_PARENT_MODE_NOT_0750")
+        lab_running = lab_running_stage50(web, binary_sha, foreign_before, combined)
+        need(stat.S_IMODE(private_run.stat().st_mode) == 0o750,
+             "G11_STAGE50_RUNTIME_ANCESTOR_WAS_LOOSENED")
+    finally:
+        private_run.chmod(private_mode)
     strategies(web, "")
     back = running(binary_sha, foreign_before, 1, 0, "strategies")
     need(back["id"] != combined["id"] and back["rules"] == only["rules"],

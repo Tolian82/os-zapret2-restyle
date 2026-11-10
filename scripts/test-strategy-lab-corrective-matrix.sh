@@ -39,6 +39,11 @@ find "${ROOT_DIR}/scripts" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh' |
 printf '%s\n' 'MATRIX: domain-diagnostics-contract'
 sh "${DOMAIN_TEST}"
 
+# Run the new Python post-drop file-access regression in the existing matrix;
+# no extra workflow/job is needed.
+printf '%s\n' 'MATRIX: native-shared-hostlist-permission-contract'
+"${STRATEGY_LAB_PYTHON_BIN:-python3}" "${ROOT_DIR}/scripts/test-strategy-lab-hostlist-access.py"
+
 find "${ROOT_DIR}/scripts" -maxdepth 1 -type f -name 'test-strategy-lab-*.sh' |
     LC_ALL=C sort |
     while IFS= read -r test_script
