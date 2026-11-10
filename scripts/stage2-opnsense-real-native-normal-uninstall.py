@@ -133,8 +133,11 @@ def qualify():
     require(menu_has_zapret(before_menu), "G02_PLUGIN_NOT_PRESENT_IN_INITIAL_MENU")
     seed_user_config()
 
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
-    require(setup.is_file(), "G02_UPSTREAM_INSTALLER_MISSING")
+    # G02 uses the same transactional upstream entrypoint as OPNsense GUI.
+    # Bare setup.sh is intentionally not the GUI service path: it cannot own
+    # a staging-root transaction or rollback an incomplete first checkout.
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
+    require(setup.is_file(), "G02_NATIVE_TRANSACTIONAL_UPSTREAM_INSTALLER_MISSING")
     execute(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=350)
     engine = RUNTIME / "binaries/my/dvtws2"
     require(engine.is_file() and os.access(engine, os.X_OK),
