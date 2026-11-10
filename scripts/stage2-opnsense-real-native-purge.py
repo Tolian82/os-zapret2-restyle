@@ -18,6 +18,27 @@ import xml.etree.ElementTree as ET
 NAME = "os-zapret2-restyle"
 CONFIG = Path("/conf/config.xml")
 PURGER = Path(__file__).with_name("purge-os-zapret2-restyle.sh")
+PACKAGED_PURGER = Path(
+    "/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
+)
+
+
+def attest_installed_purger():
+    """Require the actual root-owned package executable, not the checkout tool."""
+    need(PACKAGED_PURGER.is_file() and not PACKAGED_PURGER.is_symlink(),
+         "G10A_INSTALLED_PACKAGE_PURGER_MISSING_OR_SYMLINK")
+    details = PACKAGED_PURGER.lstat()
+    need(stat.S_ISREG(details.st_mode) and details.st_uid == 0 and
+         stat.S_IMODE(details.st_mode) == 0o755,
+         "G10A_PACKAGE_PURGER_MODE_OR_OWNER_CHANGED")
+    need(PACKAGED_PURGER.read_bytes() == PURGER.read_bytes(),
+         "G10A_PACKAGE_PURGER_BYTES_DIFFER_FROM_G01")
+
+
+def attest_package_purger_removed():
+    """The invoked file must vanish with native pkg delete before script exit."""
+    need(not os.path.lexists(PACKAGED_PURGER),
+         "G10A_INSTALLED_PACKAGE_PURGER_SURVIVED_PURGE")
 BACKUP_ROOT = Path("/root/zapret2-restyle-purge-backups")
 REPO = Path("/usr/local/etc/pkg/repos/zapret2-restyle.conf")
 RUNTIME = Path("/usr/local/etc/zapret2")
@@ -93,6 +114,7 @@ def preflight():
     guest = require_run(["/sbin/sysctl", "-n", "kern.vm_guest"]).strip().lower()
     need(guest not in ("none", "unknown", ""), "NOT_A_DISPOSABLE_GUEST")
     need(PURGER.is_file() and not PURGER.is_symlink(), "MISSING_STANDALONE_PURGER")
+    attest_installed_purger()
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 0,
          "PLUGIN_MUST_ALREADY_BE_INSTALLED")
     # GitHub Actions tar sync leaves the checkout owned by the host UID.
@@ -105,7 +127,19 @@ def preflight():
          "SOURCE_SHA_MISMATCH")
     config = CONFIG.read_bytes()
     root = xml(config)
-    need(root.find("OPNsense/Zapret") is None, "NOT_EMPTY_FOR_G01_CONFIG_SEED")
+    # LC-05 now persists default Zapret Config during the real package
+    # POST_INSTALL. The fixture must verify it, never require it absent.
+    z = root.find("OPNsense/Zapret")
+    defaults = (z.findtext("hostlist/youtubedomains") or "").strip().splitlines() if z is not None else []
+    strategy = (z.findtext("strategy/trafficargs") or "") if z is not None else ""
+    need(z is not None and z.find("purgeSentinel") is None and
+         (z.findtext("general/enabled") or "0") == "0" and
+         (z.findtext("general/waninterface") or "") == "" and
+         defaults == ["youtube.com", "googlevideo.com", "yt.be", "youtu.be",
+                      "ytimg.com", "youtubei.googleapis.com", "youtube.googleapis.com",
+                      "youtube-nocookie.com", "ggpht.com", "ssl.gstatic.com"] and
+         "--filter-tcp=80,443" in strategy and "--filter-udp=443" in strategy,
+         "G01_REAL_CLEAN_INSTALL_DEFAULT_CONFIG_MISMATCH")
     need(BACKUP_ROOT.exists() is False, "BACKUP_ROOT_NOT_FRESH")
     need(not REPO.exists(), "REPO_ALREADY_EXISTS")
     return config
@@ -122,9 +156,12 @@ $c->lock();
 try {
     $root = $c->object();
     if (!isset($root->OPNsense)) $root->addChild("OPNsense");
-    if (isset($root->OPNsense->Zapret)) exit(73);
-    $entry = $root->OPNsense->addChild("Zapret");
-    $entry->addChild("enabled", "0");
+    // A real first install ALREADY has LC-05 defaults. Uninstalled-remnant
+    // scenario starts without a Zapret node. Never replace existing values.
+    $entry = isset($root->OPNsense->Zapret)
+        ? $root->OPNsense->Zapret
+        : $root->OPNsense->addChild("Zapret");
+    if (isset($entry->purgeSentinel)) exit(73);
     $entry->addChild("purgeSentinel", "g01-disposable-owned");
     $c->save();
 } finally { $c->unlock(); }
@@ -138,7 +175,7 @@ def seed():
     # Install the ACTUAL original upstream v1.0.7, not an empty directory
     # masquerading as an engine. This verifies the full checkout/binary tree
     # can be purged without touching the installed OPNsense system.
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
     need(setup.is_file() and not setup.is_symlink(), "NATIVE_SETUP_SCRIPT_MISSING")
     upstream = run(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=300)
     need(upstream.returncode == 0, "NATIVE_UPSTREAM_1_0_7_INSTALL_FAILED:" +
@@ -226,6 +263,7 @@ def verify_running_purge_after_reinstall():
     require_run(["/usr/sbin/pkg", "add", "-f", str(archive)], timeout=180)
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 0,
          "RUNNING_NATIVE_REINSTALL_NOT_INSTALLED")
+    attest_installed_purger()
 
     # Use the source-qualified Stage 0 loopback-only native profile:
     # one harmless TCP 65431/lo0 rule (port 989), no WAN interception.
@@ -236,19 +274,22 @@ $c = \OPNsense\Core\Config::getInstance();
 $c->lock();
 try {
     $root = $c->object();
-    if (!isset($root->OPNsense)) $root->addChild("OPNsense");
-    if (isset($root->OPNsense->Zapret)) exit(73);
-    $z = $root->OPNsense->addChild("Zapret");
-    $g = $z->addChild("general");
-    $g->addChild("enabled", "1");
-    $g->addChild("waninterface", "lo0");
-    $g->addChild("divertport", "989");
-    $g->addChild("ports", "65431");
-    $s = $z->addChild("strategy");
-    $s->addChild("trafficargs", "--filter-tcp=65431\n--filter-l7=tls\n--lua-desync=pktmod:ip_ttl=23");
-    $s->addChild("extraargs", "");
-    $h = $z->addChild("hostlist");
-    $h->addChild("mode", "all");
+    if (!isset($root->OPNsense) || !isset($root->OPNsense->Zapret)) exit(73);
+    // Preserve original POST_INSTALL defaults; only set loopback-only values
+    // through the stock Config API for the disposable RUNNING purge witness.
+    $z = $root->OPNsense->Zapret;
+    if (!isset($z->general) || !isset($z->strategy) || !isset($z->hostlist)
+        || isset($z->purgeSentinel)) exit(73);
+    $g = $z->general;
+    $g->enabled = "1";
+    $g->waninterface = "lo0";
+    $g->divertport = "989";
+    $g->ports = "65431";
+    $s = $z->strategy;
+    $s->trafficargs = "--filter-tcp=65431\n--filter-l7=tls\n--lua-desync=pktmod:ip_ttl=23";
+    $s->extraargs = "";
+    $h = $z->hostlist;
+    $h->mode = "all";
     $c->save();
 } finally { $c->unlock(); }
 '''
@@ -258,7 +299,7 @@ try {
          check.findtext("OPNsense/Zapret/general/ports") == "65431",
          "RUNNING_PROFILE_NOT_BOUND_TO_LOOPBACK")
 
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
     installed = run(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=300)
     need(installed.returncode == 0, "RUNNING_RUNTIME_INSTALL_FAILED:" +
          str(installed.returncode) + ":" + installed.stderr[-450:])
@@ -289,14 +330,15 @@ try {
          "65431" in exact[0] and "lo0" in exact[0],
          "LOOPBACK_ONLY_OWNED_IPFW_NOT_ATTESTED")
 
-    print("G01_PHASE3_RUNNING_PURGE=BEGIN", flush=True)
+    print("G01_PHASE3_RUNNING_PACKAGED_PURGE=BEGIN", flush=True)
     try:
-        purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
+        purge = require_run(["/bin/sh", str(PACKAGED_PURGER), "--purge", "--yes-disposable"],
                             "POSTCHECK:", timeout=200)
     except Refusal:
         report_native_process_attestation_mismatch()
         raise
     need("PURGE COMPLETE" in purge, "RUNNING_NATIVE_FULL_PURGE_NOT_ACKNOWLEDGED")
+    attest_package_purger_removed()
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 1,
          "RUNNING_NATIVE_PACKAGE_SURVIVED_PURGE")
     need(not RUNTIME.exists() and not pidfile.exists(),
@@ -318,6 +360,7 @@ try {
     verify_isolation(before, CONFIG.read_bytes())
     return {
         "running_to_purged": True,
+        "installed_package_purger_self_removed": True,
         "lo0_only_65431": True,
         "real_dvtws2_pid": True,
         "real_owned_ipfw_removed": True,
@@ -386,7 +429,7 @@ def execute():
     dry_before = CONFIG.read_bytes()
     fd9 = Path("/var/run/zapret2-lifecycle.lock")
     before_fd9 = fd9.lstat() if fd9.exists() else None
-    output = require_run(["/bin/sh", str(PURGER), "--dry-run"], "DRY RUN:")
+    output = require_run(["/bin/sh", str(PACKAGED_PURGER), "--dry-run"], "DRY RUN:")
     after_fd9 = fd9.lstat() if fd9.exists() else None
     need((before_fd9 is None and after_fd9 is None) or
          (before_fd9 is not None and after_fd9 is not None and
@@ -401,12 +444,13 @@ def execute():
          "DRY_RUN_MUTATED_CONFIG_OR_REPO")
     os.environ["ZAPRET2_PURGE_DISPOSABLE_GUEST"] = "1"
     try:
-        purge = require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
+        purge = require_run(["/bin/sh", str(PACKAGED_PURGER), "--purge", "--yes-disposable"],
                             "POSTCHECK:", timeout=200)
     except Refusal:
         report_native_process_attestation_mismatch()
         raise
     need("PURGE COMPLETE" in purge, "PURGE_DID_NOT_ACKNOWLEDGE")
+    attest_package_purger_removed()
     need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 1,
          "PACKAGE_STILL_INSTALLED")
     need(not REPO.exists() and not RUNTIME.exists() and
@@ -430,6 +474,7 @@ def execute():
          "Saved OPNsense.Zapret settings: absent" in clean,
          "POSTPURGE_DRY_RUN_REPORTS_LEFTOVER")
     need(CONFIG.read_bytes() == post_config, "REPEAT_DRY_RUN_CHANGED_CONFIG")
+    print("G10A_INSTALLED_PACKAGE_PURGER_SELF_DELETE=PASS", flush=True)
     print("G01_PHASE1_INSTALLED_PURGE=PASS", flush=True)
     # Second independently destructive invocation: plugin package and its
     # service entrypoint are GONE, but saved model and custom assets survive.
@@ -459,6 +504,8 @@ def execute():
         "status": "PASS_DISPOSABLE_NATIVE_G01_INSTALLED_AND_UNINSTALLED_REMNANTS",
         "exact_source_sha": os.environ["ZAPRET2_NATIVE_PROJECT_SHA"],
         "real_pkg_delete": True,
+        "installed_package_purger_used_and_self_removed": True,
+        "running_package_purger_used_and_self_removed": running_case["installed_package_purger_self_removed"],
         "firmware_registration_removed": True,
         "root_config_backup_sha256": sha(backup.read_bytes()),
         "nonzapret_config_semantically_unchanged": True,
