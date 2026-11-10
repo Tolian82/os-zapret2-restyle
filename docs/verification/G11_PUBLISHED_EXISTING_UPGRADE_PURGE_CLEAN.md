@@ -8,6 +8,8 @@
 - **Current published testing successor**: [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33), source `48564cde7910f0c3bb463aed9db65d2d6fbaf42f`, exact package SHA-256 `59f38d12bcd09496f8178af597a383062f7045c3e63f8120b964076fdae01b64`, pinned installer SHA-256 `b7cef59e26e73c361f719d098e2a33f177de0bc506a113d9606f8237721f09ba`. **This physical testing package still needs full sequential nine-stage native gate before owner G11.** Historical `_29` remains immutable but is superseded for this G10A qualification.
 - `v0.6.3_34` — only docs/publication record after `_33`; **no `_34.pkg`**. Stable Pages/pkg repository stays on `_1`.
 
+**New G10A nine-stage native smoke (source-only _35, test-only):** `scripts/stage11-published-nine-step-native.py` and `.github/workflows/g11-published-nine-step-native.yml` exercise exact **published** `_1` and `_33` archive SHA and the same immutable companion installer; no file:// pkg repo. It tests stock server-side Firmware removal/menu cache, user Config/runtime preservation, the installed self-deleting purge and initial clean defaults. This **does not** on its own prove full two-pass functional regression, RUNNING original stable _1 upgrade, physical GUI clicks, or A01–A22. These remain explicit negative receipt fields until actually tested. Do not invite owner before full G10A gate.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)
