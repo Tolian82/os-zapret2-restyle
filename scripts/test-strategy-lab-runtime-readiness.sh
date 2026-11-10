@@ -73,7 +73,7 @@ grep -Fq 'if protocol == "udp":' "${CANDIDATE_PY}"
 grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
 
 # Exercise actual Python readiness states, not just grep-based shape checks.
-PYTHONPATH="${SCRIPT_DIR}" "${STRATEGY_LAB_PYTHON_BIN:-python3}" - <<'PY'
+PYTHONPATH="${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret" "${STRATEGY_LAB_PYTHON_BIN:-python3}" - <<'PY'
 import json
 import os
 from pathlib import Path
