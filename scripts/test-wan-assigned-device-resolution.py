@@ -89,4 +89,40 @@ with tempfile.TemporaryDirectory() as temp:
     check("unsafe logical assignment", "opt0foo", "", "tun42", "tun42",
           None, False)
 
+    # Lab Stage 50 must use the same native resolver; -4-only would refuse TUN.
+    lab_dir = root / "lab"
+    (lab_dir / "backend").mkdir(parents=True)
+    (lab_dir / "backend" / "config.sh").write_text(mock_config.read_text())
+    (lab_dir / "backend" / "common.sh").write_text(
+        'common_error() { echo "REFUSED: $*" >&2; }\n'
+    )
+    lab_config = lab_dir / "zapret.conf"
+    lab_source = ROOT / "src/opnsense/scripts/OPNsense/Zapret/strategy_lab/runtime.sh"
+    lab_shell = (
+        'ifconfig() { case " $MOCK_DEVICES " in *" $1 "*) return 0 ;; esac; return 1; }\n'
+        '. "$1"\n'
+        'strategy_lab_candidate_resolve_wan\n'
+    )
+    for name, logical, assigned, expected in (
+        ("IPv4-less assigned OPT/TUN", "opt0", "tun42", "tun42"),
+        ("unassigned OPT/TUN", "opt0", "", None),
+        ("unsafe device", "opt0", "tun42;bad", None),
+        ("direct device", "tun42", "", "tun42"),
+        ("missing WAN", "", "tun42", None),
+    ):
+        lab_config.write_text(f'WAN_IF="{logical}"\n')
+        env = os.environ.copy()
+        env.pop("STRATEGY_LAB_WAN_DEVICE", None)
+        env.update(SCRIPT_DIR=str(lab_dir), STRATEGY_LAB_CONFIG_FILE=str(lab_config),
+                   MOCK_TRACE=str(trace), MOCK_IPV4="", MOCK_ASSIGNED=assigned,
+                   MOCK_DEVICES="tun42")
+        actual = subprocess.run(["sh", "-c", lab_shell, "lab-wan",
+                                 str(lab_source)], env=env, capture_output=True, text=True)
+        if expected is None:
+            assert actual.returncode != 0 and actual.stdout.strip() == "", (
+                name, actual.stdout, actual.stderr)
+        else:
+            assert actual.returncode == 0 and actual.stdout.strip() == expected, (
+                name, actual.stdout, actual.stderr)
+
 print("PASS: native TUN without IPv4, unchanged WAN, fail-closed invalid/unavailable device")

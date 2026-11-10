@@ -18,6 +18,10 @@
 
 **Nine-stage smoke result:** [#42777032678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42777032678) **PASS** for published `_1` STOPPED predecessor → published `_33` and all nine ordered native smoke phases, with menu invalidation, Config retention, package local purge self-delete and clean defaults. The receipt explicitly refuses to claim complete A01–A22, two comprehensive regressions or old `_1` RUNNING upgrade. A separate source-only `_36` native witness tests the last item under unchanged physical `_33` assets; none of this instructs the owner to install before full G10A.
 
+## Owner G11 clean reinstall receipt — 10 ноября 2026, exact published `_40`
+
+На реальной OPNsense владелец выполнил `--dry-run`, подтверждённый `--purge` с `PURGE COMPLETE` и приватным Config backup, проверил отсутствие пакета, скрипта, runtime, собственных каталогов и `dvtws2`; после повторного `pkg add -f` получил `zapret-config=initialized`, правильные defaults `Traffic Strategy` и `YouTube Domains`, успешный setup `v1.0.7`, RUNNING no-action, работу Voice и Extra BIN. **Stage 10 FAIL** при RUNNING с пустым профилем: `Zapret2 is in an incomplete or unknown state`. **Stage 50 FAIL** независимо от RUNNING/STOPPED и наполненности стратегии: `Temporary candidate infrastructure failed: candidate system adapter wan failed`; Stage90 restoration PASS, Stage99 ERROR. До установки runtime при полностью пустых полях нижний Apply выдаёт общий RU preflight вместо специально запрошенного сообщения об установке службы; корректный доступ к WAN dropdown в этом состоянии требует уточнённого GUI теста. Эти FAIL не равны отсутствующему Lua/BIN: Stage50 отказывает при разрешении WAN до launch временного dvtws2. Полная G11 A01–A22 НЕ ПРИНЯТА; отдельно требуется native original-FD9 qualification и новый тестовый пакет.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)
