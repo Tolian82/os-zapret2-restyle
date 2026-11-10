@@ -102,20 +102,6 @@
             none: isRussian ? 'Нет установленных файлов' : 'No installed files',
             log: '/var/log/zapret2/extra-resources.log'
         };
-        const purgeText = {
-            title: isRussian ? 'Полезные ссылки' : 'Useful links',
-            link: isRussian ? 'Исходный код скрипта полной очистки' : 'Full purge script source',
-            instructions: isRussian
-                ? 'Локальный скрипт установлен вместе с пакетом. Команды запускаются только вручную из консоли OPNsense (root).'
-                : 'This local script is installed with the package. Run it manually from the OPNsense root console only.',
-            warning: isRussian
-                ? 'ВНИМАНИЕ: --purge безвозвратно удаляет все настройки Zapret2, upstream, Lua/BIN и данные лаборатории после подтверждения и резервного копирования. Обычное удаление пакета эти данные сохраняет.'
-                : 'WARNING: --purge permanently removes all Zapret2 settings, upstream, Lua/BIN and Lab data after confirmation and a backup. Ordinary package removal preserves them.'
-        };
-        $('#zapretUsefulLinksTitle').text(purgeText.title);
-        $('#zapretPurgeSourceLink').text(purgeText.link);
-        $('#zapretPurgeInstructions').text(purgeText.instructions);
-        $('#zapretPurgeWarning').text(purgeText.warning);
         let extraPoll = null;
         let extraPollAttempts = 0;
         let helpInventoryLoaded = false;
@@ -1256,14 +1242,6 @@
             </tbody>
         </table>
     </div>
-</div>
-<div class="content-box __mb" id="zapretUsefulLinks">
-    <h3 id="zapretUsefulLinksTitle">Useful links</h3>
-    <p><a id="zapretPurgeSourceLink" href="https://github.com/Tolian82/os-zapret2-restyle/blob/main/scripts/purge-os-zapret2-restyle.sh" target="_blank" rel="noopener noreferrer">Full purge script source</a></p>
-    <p id="zapretPurgeInstructions"></p>
-    <pre><code>/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --dry-run
-/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --purge</code></pre>
-    <p class="text-danger" id="zapretPurgeWarning"></p>
 </div>
 <section class="grid-bottom-reserve __mt">
     <div class="alert content-box" style="display: flex; align-items: center; margin-bottom: 0;">
