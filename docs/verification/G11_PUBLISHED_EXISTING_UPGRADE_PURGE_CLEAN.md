@@ -41,7 +41,7 @@ SHA, ставит реальный stable `_1` с оригинальными pkg
 заявлять готовность пользователя. Owner-live browser/DPI/IPv6/Voice
 media ещё NOT TESTED.
 
-## Последовательность для владельца (после положительного native gate)
+## Последовательность для владельца (native gate PASS; owner-live ещё не начат)
 
 **0. Подготовка:** внешний backup Config и окна обслуживания; сохранить
 до обновления версию, состояние службы и заполненные поля. Не публиковать
@@ -99,3 +99,13 @@ RU/EN/F5, reboot, штатный GUI uninstall/reinstall и остальные A
 [Third native run #42745411439](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42745411439) also **PASS** exact published `_1 → _29` stock `pkg upgrade` + user/foreign Config preservation, then refused at upstream setup before purge. Root cause **identified** using redacted diagnostic: `ERROR: incomplete or foreign upstream path: /usr/local/etc/zapret2; inspect before retry`. The previous fixture had called **low-level** `setup.sh install v1.0.7`, which correctly rejects the template-only `/usr/local/etc/zapret2` created by stock package hooks. This is a **test-fixture invocation defect**, not proof of a product failure. The corrected fixture must invoke the exact GUI-supported original FD9-protected `setup_transaction.sh install v1.0.7`, which explicitly stages a true first install while preserving native template-only entries. Do not delete the template directory, weaken its owner guard or claim the complete 5-step run PASS before new native evidence.
 
 [Fourth native run #42745920924](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42745920924) used the **correct** stock `setup_transaction.sh install v1.0.7`: published `_1→_29` `pkg upgrade` and exact Config preservation PASS again, then original `zapret_service.sh start` refused rc=1 after upstream setup. The fixture had preserved its test `general/enabled=0` across upgrade (correct behavior) but never explicitly Enabled it before intentionally starting its test loopback service. The follow-up now enables **only the disposable CI `lo0:65431` profile** through locked native `Config::save()` *after* upgrade preservation proof; then requires real Start/PID/owned IPFW, diagnoses fixed sanitized native errors and still refuses on any nonzero status. Full G01 purge and clean install remain pending until this exact-head native path passes.
+
+## Итог нативной приёмки двух опубликованных пакетов (10 ноября 2026)
+
+[G11 native exact published-archive run #42746292077](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42746292077) — **SUCCESS**, exact head `d566d11c3e34ae8efcc39d9c561cfd74545da4d6`, published stable `_1` SHA-256 `eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be`, published testing `_29` SHA-256 `c5ceab0088d22205f46b2260e25e1d93c1500a59d8a19afa7b63b4d8f7f6e852`. All subsequent tests used **these exact existing asset bytes**, not a freshly built `v0.6.3_31.pkg`.
+
+- Genuine stock `pkg upgrade -r G11PublishedAcceptance` from installed published stable `_1` to testing `_29` PASS, user/foreign Config preserved. The stable predecessor was STOPPED at upgrade; earlier G10 tested RUNNING but from the historical `_0.6.2_1` predecessor, not a confirmed RUNNING `_1`.
+- Native `setup_transaction.sh install v1.0.7` PASS: proper original FD9-locked first-runtime path that preserves template-only upstream root. Enabled changed from `0` to `1` **only after exact upgrade preservation** on disposable lo0:65431; real dvtws2 PID and scoped IPFW verified.
+- G01 real `--dry-run` and full `--purge --yes-disposable` PASS under CI opt-ins, private config backup hash and permission checked, no stale saved Zapret/engine/PID/IPFW, foreign Config/repo preserved.
+- Genuine stock `pkg install -r G11PublishedAcceptance` of SAME published `_29` from local disposable catalog PASS: exactly ten default domains, TCP/QUIC with one `--new`, previous user sentinel removed, WAN unset, Enabled off and no unexpected IPFW intercepts.
+- **NOT TESTED:** owner Firmware GUI click/update source, user WAN traffic, DPI evasion, IPv6, Voice media, production purge and owner-specific settings. Native `file://` catalog was isolated to CI and never deployed to stable Pages/pkg.
