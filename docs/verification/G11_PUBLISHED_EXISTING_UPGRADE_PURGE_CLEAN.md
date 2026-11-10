@@ -10,6 +10,8 @@
 
 **New G10A nine-stage native smoke (source-only _35, test-only):** `scripts/stage11-published-nine-step-native.py` and `.github/workflows/g11-published-nine-step-native.yml` exercise exact **published** `_1` and `_33` archive SHA and the same immutable companion installer; no file:// pkg repo. It tests stock server-side Firmware removal/menu cache, user Config/runtime preservation, the installed self-deleting purge and initial clean defaults. This **does not** on its own prove full two-pass functional regression, RUNNING original stable _1 upgrade, physical GUI clicks, or A01–A22. These remain explicit negative receipt fields until actually tested. Do not invite owner before full G10A gate.
 
+**Nine-stage smoke result:** [#42777032678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42777032678) **PASS** for published `_1` STOPPED predecessor → published `_33` and all nine ordered native smoke phases, with menu invalidation, Config retention, package local purge self-delete and clean defaults. The receipt explicitly refuses to claim complete A01–A22, two comprehensive regressions or old `_1` RUNNING upgrade. A separate source-only `_36` native witness tests the last item under unchanged physical `_33` assets; none of this instructs the owner to install before full G10A.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)

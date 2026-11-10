@@ -1,0 +1,85 @@
+name: G10A published stable RUNNING predecessor (disposable)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/stage11-published-running-predecessor.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g10a-stable-running-published-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  nine-stage-native:
+    name: RUNNING stable _1 to published _33 under original FD9
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Source-only pin contract and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/stage11-published-running-predecessor.py
+          python3.13 scripts/stage11-published-running-predecessor.py --self-test
+      - name: Download and verify exact immutable published assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/g11-nine-published
+          gh release download v0.6.3 --pattern 'os-zapret2-restyle-0.6.3_1.pkg' --dir dist/g11-nine-published
+          gh release download v0.6.3_33 --pattern 'os-zapret2-restyle-0.6.3_33.pkg' --dir dist/g11-nine-published
+          gh release download v0.6.3_33 --pattern 'install-os-zapret2-restyle-0.6.3_33.sh' --dir dist/g11-nine-published
+          echo 'eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be  dist/g11-nine-published/os-zapret2-restyle-0.6.3_1.pkg' | sha256sum --check --status
+          echo '59f38d12bcd09496f8178af597a383062f7045c3e63f8120b964076fdae01b64  dist/g11-nine-published/os-zapret2-restyle-0.6.3_33.pkg' | sha256sum --check --status
+          echo 'b7cef59e26e73c361f719d098e2a33f177de0bc506a113d9606f8237721f09ba  dist/g11-nine-published/install-os-zapret2-restyle-0.6.3_33.sh' | sha256sum --check --status
+          test "$(gh api repos/"$GITHUB_REPOSITORY"/git/ref/tags/v0.6.3_33 --jq '.object.sha')" = '48564cde7910f0c3bb463aed9db65d2d6fbaf42f'
+          test "$(gh api repos/"$GITHUB_REPOSITORY"/releases/tags/v0.6.3_33 --jq '.prerelease')" = true
+          test "$(gh api repos/"$GITHUB_REPOSITORY"/releases/tags/v0.6.3 --jq '.prerelease')" = false
+          echo PASS_G10A_NINE_PINNED_RELEASE_ASSETS=1
+      - name: Real published old stable RUNNING upgrade in disposable OPNsense
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: tar
+          copyback: true
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            sh scripts/compatibility-bootstrap.sh
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G11_PUBLISHED_DISPOSABLE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_G10A_NINE_PUBLISHED=1 ZAPRET2_G10A_RUNNING_STABLE=1 /usr/local/bin/python3 scripts/stage11-published-running-predecessor.py
+      - name: Strict stable RUNNING predecessor native receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("dist/g11-published-running-stable.json").read_text())
+          assert r["status"] == "PASS_G10A_PUBLISHED_STABLE1_RUNNING_TO_PUBLISHED33"
+          assert r["old_stable_engine_running_pre_upgrade"] is True
+          assert r["old_pid_replaced_under_new_version"] is True
+          assert r["one_original_fd9_inode"] is True
+          assert r["upstream_engine_unchanged"] is True
+          assert r["user_and_foreign_config_preserved"] is True
+          assert r["full_nine_stage_sequential_acceptance"] is False
+          assert r["full_A01_A22_owner_live"] is False
+          assert r["owner_appliance_modified"] is False
+          print("PASS_G10A_STABLE_RUNNING_UPGRADE_GUEST_ONLY=1")
+          PY
