@@ -326,6 +326,129 @@ def lab_running_no_action(web, engine_sha, foreign_before, initial):
                 pass
 
 
+
+def lab_running_stage50(web, engine_sha, foreign_before, initial):
+    """Real RUNNING + populated ordinary + Voice candidate-runtime witness.
+
+    This advances past Stage10 (where old G06 canceled), then cancels
+    through the native API only after Stage50 finishes. Public TCP-negative
+    connectivity is a candidate readiness control, not YouTube DPI proof.
+    """
+    g09 = module("stage2-opnsense-g09-stage60.py")
+    target = g09.qualify_negative_control()
+    saved = CONFIG.read_bytes()
+    artifact_names = ("traffic-user.conf", "traffic.conf", "tcp-ports.txt",
+                      "udp-ports.txt", "voice-plan.json")
+    before_hashes = {name: hashlib.sha256((ACTIVE / name).read_bytes()).hexdigest()
+                     for name in artifact_names}
+    need(running(engine_sha, foreign_before, 1, 1, "strategies") == initial,
+         "G11_RUNNING_STAGE50_INITIAL_SHARED_OWNER_CHANGED")
+    job = None
+    finished = False
+    cancel_sent = False
+    stage50_pass = False
+    try:
+        start = web.api("POST", "/api/zapret/strategy_lab/start", {
+            "target": target, "mode": "standard", "language": "ru",
+            "enable_quic": "0", "ipv6_enabled": "0",
+        })
+        job = start.get("job_id")
+        need(start.get("status") == "ok" and start.get("state") == "queued" and
+             isinstance(job, str) and
+             re.fullmatch(r"job\.[A-Za-z0-9]{4,40}", job) is not None,
+             "G11_RUNNING_STAGE50_JOB_NOT_QUEUED")
+        status_file = Path("/var/run/zapret2-restyle/strategy-lab/jobs") / job / "status.json"
+        report = {}
+        deadline = time.monotonic() + 420
+        while time.monotonic() < deadline:
+            state = web.api("POST", "/api/zapret/strategy_lab/status",
+                            {"job_id": job})
+            need(state.get("job_id") == job and state.get("state") in
+                 ("queued", "running", "cancel_requested", "completed", "error"),
+                 "G11_RUNNING_STAGE50_JOB_STATUS_INVALID")
+            try:
+                snapshot = json.loads(status_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                snapshot = {}
+            stages = snapshot.get("stages", [])
+            if isinstance(stages, list):
+                stage50 = [x for x in stages if isinstance(x, dict) and
+                           str(x.get("number")) == "50"]
+                need(len(stage50) <= 1, "G11_RUNNING_STAGE50_DUPLICATE_STAGE")
+                if stage50:
+                    need(stage50[0].get("status") not in ("ERROR", "FAIL", "TIMEOUT"),
+                         "G11_RUNNING_STAGE50_INFRASTRUCTURE_FAILED")
+                    stage50_pass |= stage50[0].get("status") == "PASS"
+            if state["state"] in ("completed", "error"):
+                report = web.api("POST", "/api/zapret/strategy_lab/result",
+                                 {"job_id": job})
+                finished = True
+                break
+            if stage50_pass and not cancel_sent and state["state"] == "running":
+                web.api("POST", "/api/zapret/strategy_lab/cancel", {"job_id": job})
+                cancel_sent = True
+            time.sleep(1)
+        need(finished and stage50_pass and report.get("state") == "completed" and
+             report.get("initial_service_state") == "RUNNING" and
+             report.get("target") == target and report.get("target_type") == "ip",
+             "G11_RUNNING_STAGE50_NOT_COMPLETED")
+        stages = report.get("stages", [])
+        for number in ("10", "20", "30", "40", "50", "90", "99"):
+            found = [x for x in stages if isinstance(x, dict) and
+                     str(x.get("number")) == number]
+            need(len(found) == 1 and found[0].get("status") == "PASS",
+                 "G11_RUNNING_STAGE50_MISSING_PASS_" + number)
+        smoke = g09.artifact(job, "candidate-smoke.json")
+        families = smoke.get("families")
+        completed = smoke.get("completed")
+        need(type(completed) is int and completed > 0 and
+             isinstance(families, list) and len(families) == completed,
+             "G11_RUNNING_STAGE50_CANDIDATES_MISSING")
+        for family in families:
+            runtime = family.get("runtime") if isinstance(family, dict) else None
+            need(isinstance(runtime, dict) and family.get("error") is not True and
+                 runtime.get("ready") is True and
+                 runtime.get("process_identity") is True and
+                 runtime.get("socket_ready") is True and
+                 runtime.get("log_clean") is True and
+                 runtime.get("failure_kind", "") == "" and
+                 type(runtime.get("stable_checks")) is int and
+                 runtime["stable_checks"] >= 2,
+                 "G11_RUNNING_STAGE50_UNREADY_" +
+                 str(family.get("id") if isinstance(family, dict) else "unknown"))
+        restoration = report.get("restoration")
+        need(isinstance(restoration, dict) and
+             restoration.get("verified") is True and
+             restoration.get("initial_state") == "RUNNING" and
+             restoration.get("final_state") == "RUNNING" and
+             restoration.get("strategy_unchanged") is True and
+             restoration.get("temporary_runtime_clean") is True,
+             "G11_RUNNING_STAGE50_STAGE90_UNSAFE")
+        need(web.api("POST", "/api/zapret/strategy_lab/status",
+                     {"job_id": "@active"}).get("status") == "idle",
+             "G11_RUNNING_STAGE50_ACTIVE_JOB_NOT_CLEARED")
+        after = running(engine_sha, foreign_before, 1, 1, "strategies")
+        after_hashes = {name: hashlib.sha256((ACTIVE / name).read_bytes()).hexdigest()
+                        for name in artifact_names}
+        need(after["id"] == initial["id"] and
+             after["rules"] == initial["rules"] and
+             saved == CONFIG.read_bytes() and before_hashes == after_hashes,
+             "G11_RUNNING_STAGE50_CONFIG_IPFW_RUNTIME_OR_FD9_DRIFT")
+        return {"stage50": "PASS", "ready_candidates": completed,
+                "stage90": "PASS", "stage99": "PASS",
+                "initial_state": "RUNNING", "final_state": "RUNNING",
+                "original_fd9_and_user_state_preserved": True,
+                "network_control": "routed_public_tcp_negative",
+                "real_dpi_bypass_tested": False}
+    finally:
+        if job is not None and not finished:
+            try:
+                web.api("POST", "/api/zapret/strategy_lab/cancel", {"job_id": job})
+            except (RuntimeError, OSError, ValueError):
+                pass
+
+
+
 def execute():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -387,6 +510,7 @@ def execute():
     combined = running(binary_sha, foreign_before, 1, 1, "strategies")
     need(combined["id"] != only["id"] and combined["pid"] != only["pid"],
          "G06_COMBINED_OWNER_NOT_ROTATED")
+    lab_running = lab_running_stage50(web, binary_sha, foreign_before, combined)
     strategies(web, "")
     back = running(binary_sha, foreign_before, 1, 0, "strategies")
     need(back["id"] != combined["id"] and back["rules"] == only["rules"],
@@ -424,6 +548,7 @@ def execute():
             "source_provenance": "reused exact G04 native package witness",
             "real_no_action_engine": True,
             "native_lab_no_action": lab_empty,
+            "native_lab_running_stage50": lab_running,
             "voice_only_zero_ordinary_rules": True,
             "voice_combined_voice_empty_transitions": True,
             "common_original_fd9_https_owner": True,
