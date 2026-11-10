@@ -64,7 +64,7 @@ jobs:
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             sh scripts/compatibility-bootstrap.sh
             GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G11_PUBLISHED_DISPOSABLE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 ZAPRET2_G10A_NINE_PUBLISHED=1 /usr/local/bin/python3 scripts/stage11-published-nine-step-native.py
-      - name: Strict receipt: nine phases PASS as smoke; full owner acceptance still OPEN
+      - name: Strict nine-phase smoke receipt with live acceptance explicitly open
         shell: bash
         run: |
           set -euo pipefail
