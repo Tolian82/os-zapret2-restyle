@@ -184,6 +184,7 @@
             if (!isRussian) return message;
             const translations = {
                 'Select a WAN interface': 'Укажите WAN интерфейс',
+                'The zapret2 service must be installed': 'Требуется установка службы zapret2',
                 'Selected WAN interface is not assigned or unavailable':
                     'Указанный WAN интерфейс не назначен или недоступен',
                 'Candidate changes fields outside the owning form':
