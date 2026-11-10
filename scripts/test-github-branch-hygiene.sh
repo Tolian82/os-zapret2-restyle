@@ -108,6 +108,10 @@ require_fixed 'docs/verification/evidence/testing-publications/${TAG}.md' "${PRE
 require_fixed 'gh pr create' "${PRERELEASE_WORKFLOW}" 'testing publisher does not open publication-record PR'
 require_fixed '--draft' "${PRERELEASE_WORKFLOW}" 'publication-record PR is not deliberately Draft before bounded reconciliation'
 require_fixed 'Direct package asset:' "${PRERELEASE_WORKFLOW}" 'publication-record PR does not expose the direct GitHub package URL'
+if grep -Eiq 'INSTALLER:|INSTALLER_SHA:|install-testing-package[.]sh[.]in|dist/\$\{INSTALLER\}|Direct installer asset:' "${PRERELEASE_WORKFLOW}"; then
+  fail 'testing publisher must not create or offer SH installer assets'
+fi
+require_fixed 'pkg add -f /root/' "${CHAT_RULES}" 'CHAT-027 must provide native .pkg installation command'
 if grep -Eq 'pages:[[:space:]]*write|actions/deploy-pages|build-pkg-repository' "${PRERELEASE_WORKFLOW}"; then
   fail 'testing package publisher must not publish Pages/pkg repository'
 fi

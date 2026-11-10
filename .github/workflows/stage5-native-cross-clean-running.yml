@@ -335,19 +335,17 @@ jobs:
             package="$1"
             before=$(sha256 -q "$package")
             tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "git" in d["deps"], "native package lacks git dependency"'
-            # Publish candidate does not yet exist. Render its exact, SHA-pinned
-            # companion installer and feed the SAME original Guest A archive
-            # through the CI-only local path. No preinstalled git or manual
-            # package bootstrap: the installer itself resolves all dependencies.
-            expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
-            version=$(tr -d '[:space:]' < VERSION)
-            sed -e "s/@PACKAGE_VERSION@/${version}_${expected}/" \
-                -e "s/@PACKAGE_SHA256@/${before}/" \
-                scripts/install-testing-package.sh.in > /tmp/zapret2-testing-installer.sh
-            sh -n /tmp/zapret2-testing-installer.sh
-            GITHUB_ACTIONS=true ZAPRET2_STAGE5_CROSS_VM=1 \
-              ZAPRET2_CI_LOCAL_ARCHIVE="$package" \
-              sh /tmp/zapret2-testing-installer.sh
+            # Package-only native path: resolve physical manifest dependencies
+            # exclusively from the official OPNsense repository, then pkg add.
+            dependencies=$(tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c '
+import json,sys
+m=json.load(sys.stdin)
+d=m["deps"]
+assert isinstance(d,dict) and "git" in d and d
+print(" ".join(sorted(d)))')
+            test -n "$dependencies"
+            pkg install -y -r OPNsense $dependencies
+            pkg add -f "$package"
             pkg info -q git
             git --version
             [ "$(pkg query '%R' git)" = OPNsense ] || {
@@ -364,4 +362,4 @@ jobs:
               echo 'ERROR: downloaded guest A archive mutated' >&2
               exit 1
             }
-            echo 'PASS: fresh no-git guest ran SHA-bound installer against SAME archive, official dependencies, native hooks'
+            echo 'PASS: fresh no-git guest installed SAME .pkg via official manifest dependencies and native pkg hooks, no external installer'

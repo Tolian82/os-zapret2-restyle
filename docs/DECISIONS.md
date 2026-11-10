@@ -1,5 +1,9 @@
 # os-zapret2-restyle
 
+## 2026-11-10 — Revoke all external SH testing installers; native .pkg ONLY
+
+**Binding owner decision:** [pkg-only testing delivery](decisions/DEC-2026-11-10-pkg-only-testing-delivery.md). Old SH companion instructions in CHAT-027/GH-060/GH-061 and G10A are cancelled. Only immutable GitHub `.pkg` plus `fetch`, `pkg add -f` and `pkg info`, with official OPNsense manifest dependencies installed separately if missing. Publisher must not create or offer external SH install wrappers. Previously published assets remain historical evidence, not current instructions.
+
 ## 2026-11-05 — Cancel pkg approval infrastructure; finish native OPNsense integration
 
 **Owner-approved decision:** Standard OPNsense `pkg`, official `Mk/plugins.mk`, `PLUGIN_DEPENDS`, native configd/rc/hooks, a unified Python policy, maintainability and a working plugin are the purpose of the project. The prior separate SQLite approval witness, external authorization server, one-use cryptographic grants, RSA signatures, root warnings/interceptors, managed pre-pkg gateway, FD9-spanning package-approval system and universal PRE_INSTALL veto obligation are **cancelled**, not postponed. Real `_74` pkg hook behavior remains a historical technical finding, not authority to construct a distributed trust subsystem.

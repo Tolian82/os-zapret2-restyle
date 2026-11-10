@@ -7,6 +7,7 @@ on:
       - '.github/workflows/publish-prerelease.yml'
       - '.github/workflows/testing-package-delivery-ci.yml'
       - 'scripts/test-github-branch-hygiene.sh'
+      - 'scripts/test-testing-package-install-route.py'
 
 permissions:
   contents: read
@@ -23,6 +24,7 @@ jobs:
         run: |
           sh -n scripts/test-github-branch-hygiene.sh
           sh scripts/test-github-branch-hygiene.sh
+          python3 scripts/test-testing-package-install-route.py
 
   package:
     name: Qualify official OPNsense 26.7 testing-package build (source-only)
