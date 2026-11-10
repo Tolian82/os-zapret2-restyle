@@ -63,6 +63,72 @@ final class SettingsApply
         ];
     }
 
+    /**
+     * LC-06D: only a genuinely unchanged, inert, user-empty candidate may
+     * receive the missing-upstream message. WAN-only edits are not no-ops.
+     * Do not count default port/hostlist mode or disabled Voice args as active
+     * user profiles. An unrecognized model shape fails closed.
+     */
+    public static function isInertEmptyStrategiesPlan(array $plan): bool
+    {
+        if (($plan['result'] ?? null) !== 'prepared' ||
+            ($plan['changed_fields'] ?? null) !== [] ||
+            !isset($plan['candidate']) || !is_array($plan['candidate'])) {
+            return false;
+        }
+        $node = $plan['candidate'];
+        // Missing model sections are corruption, not a verified empty form.
+        foreach (['general', 'strategy', 'hostlist', 'voice'] as $section) {
+            if (!isset($node[$section]) || !is_array($node[$section])) {
+                return false;
+            }
+        }
+        if (!array_key_exists('enabled', $node['general'])) {
+            return false;
+        }
+        foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
+            if (!isset($node['voice'][$service]) ||
+                !is_array($node['voice'][$service]) ||
+                !array_key_exists('enabled', $node['voice'][$service])) {
+                return false;
+            }
+        }
+        try {
+            if (VoiceModelValues::text($node['general']['enabled'] ?? '0') !== '0') {
+                return false;
+            }
+            foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
+                if (VoiceModelValues::text($node['voice'][$service]['enabled'] ?? '0') !== '0') {
+                    return false;
+                }
+            }
+        } catch (\InvalidArgumentException $error) {
+            return false;
+        }
+        foreach (['trafficargs', 'extraargs', 'httpargs', 'httpsargs'] as $field) {
+            $value = $node['strategy'][$field] ?? '';
+            if (!is_string($value) || trim($value) !== '') {
+                return false;
+            }
+        }
+        foreach (['domains', 'youtubedomains', 'telegramips', 'discordips',
+            'xips', 'sipips', 'customips', 'userdomains',
+            'excludedomains', 'excludeipset'] as $field) {
+            $value = $node['hostlist'][$field] ?? '';
+            if (!is_string($value) || trim($value) !== '') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Exact read-only installed=0 receipt, not an inferred absence. */
+    public static function isVerifiedMissingUpstream(string $receipt): bool
+    {
+        return trim(str_replace("\r\n", "\n", $receipt)) ===
+            "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0";
+    }
+
     /** All five Voice services, with the original full-model snapshot gate. */
     public static function prepareVoice(array $previous, array $submitted, $snapshot): array
     {

@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_42` — source-only G11 Stage10/Stage50 Lab corrections, **no `_42.pkg` published**; newest testing installation remains `_40.pkg`. Empty-fields/no-runtime RU/EN GUI diagnostic and physical WAN dropdown require further validation. |
+| **Current development candidate** | `v0.6.3_43` — source-only G11 LC-06D fix: exact RU/EN no-runtime message for unchanged/empty passive Strategies Apply, preserving WAN-first and WAN-only save. Native HTTPS and real browser not yet accepted; no `_43.pkg` published. |
 | **Published testing candidate** | [`v0.6.3_40.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_40/os-zapret2-restyle-0.6.3_40.pkg), SHA-256 `2e87cac8ca6e68b450fb3215936d726d02795e8dc910311e948905d443589ccd`, exact source `698cb7f`. Owner confirms purge and clean reinstall/initial Config; Strategy Lab Stage 10/50 regression remains OPEN. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |

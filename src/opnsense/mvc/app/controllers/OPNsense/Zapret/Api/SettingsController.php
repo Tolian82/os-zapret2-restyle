@@ -226,6 +226,26 @@ class SettingsController extends ApiMutableModelControllerBase
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
                 $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
+                // LC-06D: a non-changing and completely inert first Apply
+                // before native upstream installation needs the exact user
+                // message, not an unrelated model/preflight failure. This
+                // comes AFTER WAN-first and changed-field detection, so an
+                // actual WAN-only Save never enters this diagnostic branch.
+                // setup_status is read-only; malformed/uncertain receipts
+                // must not be mistaken for a cleanly absent runtime.
+                if (SettingsApply::isInertEmptyStrategiesPlan($plan)) {
+                    $preflightStage = 'runtime-status';
+                    $runtimeReceipt = (string)(new Backend())->configdRun(
+                        'zapret setup_status', false, 30
+                    );
+                    if (SettingsApply::isVerifiedMissingUpstream($runtimeReceipt)) {
+                        return [
+                            'result' => 'failed', 'applied' => false,
+                            'requires_review' => false,
+                            'message' => gettext('The zapret2 service must be installed'),
+                        ];
+                    }
+                }
                 if (!$wanOnlyCandidate) {
                 $preflightStage = 'normalization';
                 // Native Python is the only IP/CIDR grammar. This read-only
