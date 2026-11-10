@@ -31,7 +31,7 @@ EXPECTED_ROLES = ("python-runtime", "engine-build-make", "engine-build-pkgconf",
 HOOKS = {"+PRE_INSTALL": "pre-install", "+POST_INSTALL": "post-install",
          "+PRE_DEINSTALL": "pre-deinstall", "+POST_DEINSTALL": "post-deinstall"}
 SERVICE = "opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-PURGE_SCRIPT = "share/zapret2-restyle/purge-os-zapret2-restyle.sh"
+PURGE_SCRIPT = "opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
 BINARY = "libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate"
 LAUNCHER = "libexec/zapret2-restyle/run-curl-impersonate.sh"
 

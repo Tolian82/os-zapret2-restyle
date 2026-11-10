@@ -6,7 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = ROOT / "scripts/purge-os-zapret2-restyle.sh"
-RELATIVE = "src/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
+RELATIVE = "src/opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
 OLD_OWNED = ROOT / "src/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
 PACKAGED = ROOT / RELATIVE
 LOCAL = "/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
@@ -19,7 +19,7 @@ class PackagedPurgeTest(unittest.TestCase):
     def test_persistent_purge_is_unowned_but_template_is_pkg_owned(self):
         self.assertFalse(OLD_OWNED.exists(), "old pkg-owned path will vanish on uninstall")
         hook = (ROOT / "pkg/+POST_INSTALL").read_text()
-        self.assertIn('source = Path("/usr/local/share/zapret2-restyle/purge-os-zapret2-restyle.sh")', hook)
+        self.assertIn('source = Path("/usr/local/opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh")', hook)
         self.assertIn('target = Path("' + LOCAL + '")', hook)
         self.assertIn("os.replace(temp, target)", hook)
         self.assertIn("trusted_file(target)", hook)
@@ -111,7 +111,7 @@ class PackagedPurgeTest(unittest.TestCase):
 
     def test_package_verify_checks_exact_bytes_and_execute_mode(self):
         code = (ROOT / "scripts/native-opnsense-package.py").read_text()
-        self.assertIn('PURGE_SCRIPT = "share/zapret2-restyle/purge-os-zapret2-restyle.sh"', code)
+        self.assertIn('PURGE_SCRIPT = "opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh"', code)
         self.assertIn('archived_file(pkg, PURGE_SCRIPT)', code)
         self.assertIn('for rel in (SERVICE, PURGE_SCRIPT, BINARY', code)
 

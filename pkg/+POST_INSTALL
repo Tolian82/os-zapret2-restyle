@@ -36,7 +36,7 @@ from pathlib import Path
 import stat
 import tempfile
 
-source = Path("/usr/local/share/zapret2-restyle/purge-os-zapret2-restyle.sh")
+source = Path("/usr/local/opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh")
 target = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh")
 
 def trusted_dir(directory):
@@ -52,7 +52,7 @@ def trusted_file(path):
     return meta
 
 for directory in (
-        Path("/usr/local"), Path("/usr/local/share"), source.parent,
+        Path("/usr/local"), Path("/usr/local/opnsense/share"), source.parent,
         Path("/usr/local/opnsense"), Path("/usr/local/opnsense/scripts"),
         Path("/usr/local/opnsense/scripts/OPNsense"), target.parent):
     trusted_dir(directory)
