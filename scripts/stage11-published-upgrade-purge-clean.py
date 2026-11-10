@@ -195,6 +195,34 @@ def assert_no_capture():
         need(not any(re.match(r"^\s*(?:1900[0-9]|19010|191(?:0[0-9]|[12][0-9]|3[01]))\s+", row)
                      for row in rules.splitlines()), "OWNED_IPFW_PRESENT_BEFORE_START")
 
+def enable_loopback_only_for_running_purge():
+    """After upgrade-preservation proof, explicitly enable CI lo0-only service.
+
+    This change belongs ONLY to the disposable guest, not to published owner
+    config. The initial upgrade intentionally tests old Enabled=0 unchanged.
+    """
+    php = r'''
+require_once("script/load_phalcon.php");
+$c = \OPNsense\Core\Config::getInstance();
+$c->lock();
+try {
+    $z = $c->object()->OPNsense->Zapret;
+    if (!isset($z->general) ||
+        (string)$z->g11Sentinel !== "g11-disposable-published-package" ||
+        (string)$z->general->waninterface !== "lo0" ||
+        (string)$z->general->ports !== "65431") exit(74);
+    $z->general->enabled = "1";
+    $c->save();
+} finally { $c->unlock(); }
+'''
+    command(["/usr/local/bin/php", "-r", php], timeout=60)
+    z = xml().find("./OPNsense/Zapret")
+    need(z is not None and z.findtext("general/enabled") == "1" and
+         z.findtext("general/waninterface") == "lo0" and
+         z.findtext("general/ports") == "65431",
+         "G11_DISPOSABLE_LOOPBACK_ENABLED_STATE_MISMATCH")
+
+
 def exercise_running_on_loopback():
     # Real upstream, native service, original FD9, only lo0:65431; no WAN
     # DPI bypass is claimed. The G01 test already used this safe profile.
@@ -242,7 +270,22 @@ def exercise_running_on_loopback():
     engine = RUNTIME / "binaries/my/dvtws2"
     need(engine.is_file() and os.access(engine, os.X_OK), "NATIVE_ENGINE_NOT_BUILT")
     need(SERVICE.is_file() and not SERVICE.is_symlink(), "INSTALLED_SERVICE_MISSING")
-    command([str(SERVICE), "start"], timeout=180)
+    enable_loopback_only_for_running_purge()
+    started = subprocess.run([str(SERVICE), "start"], capture_output=True,
+                             text=True, timeout=180, check=False)
+    if started.returncode:
+        # Only fixed, sanitized native ERROR lines; no user data or arbitrary
+        # strategy/Config dump, and never treat an error as success.
+        errors = []
+        for raw in (started.stdout + "\n" + started.stderr).splitlines():
+            line = raw.strip()
+            if (line.startswith("ERROR:") and len(line) <= 220 and
+                    re.fullmatch(r"[A-Za-z0-9 _./:(),;=+-]+", line)):
+                errors.append(line)
+        print("G11_NATIVE_SERVICE_START_FIXED_ERRORS=" +
+              json.dumps(errors[:3], ensure_ascii=True), flush=True)
+        raise Refusal("G11_REAL_LOOPBACK_SERVICE_START_REFUSED:rc=" +
+                      str(started.returncode))
     check = command([str(SERVICE), "status"], timeout=30)
     need("zapret is running" in check.stdout, "SERVICE_NOT_ACTUALLY_RUNNING")
     pid = Path("/var/run/dvtws2.pid")
