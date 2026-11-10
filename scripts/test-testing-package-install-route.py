@@ -40,7 +40,8 @@ for value in ("fetch -o /root/os-zapret2-restyle-<actual-version>.pkg",
               "pkg info -x os-zapret2-restyle"):
     need(value in chat, "CHAT-027 missing pkg command " + value)
 for name, body in (("CHAT-027",chat),("GH-060",gh)):
-    need("shell" in body.lower() or "SH-установщик" in body,
+    need(any(token in body.lower() for token in
+             ("shell installer", "sh companion installer", "sh-установщик")),
          name + " must prohibit shell installer delivery")
     need("pkg add -f" in body, name + " must use native pkg add")
     need("sh /root/install-" not in body and "fetch → sh" not in body,
