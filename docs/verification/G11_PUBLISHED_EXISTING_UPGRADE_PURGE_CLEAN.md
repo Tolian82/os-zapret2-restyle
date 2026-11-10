@@ -19,7 +19,7 @@
 публичный `v0.6.3_1`; полная 5-шаговая последовательность владельца на
 точных опубликованных байтах в одном native guest тогда не выполнялась.
 
-Для этого введён скрипт `scripts/g11-published-upgrade-purge-clean.py` и
+Для этого введён скрипт `scripts/stage11-published-upgrade-purge-clean.py` и
 один нативный workflow `g11-published-upgrade-purge-clean.yml`. На
 **изолированной** OPNsense 26.7 он сверяет опубликованные архивы и
 SHA, ставит реальный stable `_1` с оригинальными pkg hooks, сохраняет
@@ -89,3 +89,7 @@ RU/EN/F5, reboot, штатный GUI uninstall/reinstall и остальные A
 **Не подменять** тест реального Firmware GUI локальным pkg add или
 внутренним CI-каталогом; стабильный Web/pkg репозиторий не изменять.
 Полный purge рабочего шлюза разрушителен и не запускается нами.
+
+## First exact-head native attempt (diagnostic, not accepted)
+
+[Native #42744121612](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42744121612) on PR #1006 downloaded both release assets with correct SHA, installed real `_1`, executed genuine **repository-driven** `pkg upgrade` to `_29`, and reported `PASS_G11_PUBLISHED_STOCK_PKG_UPGRADE_WITH_USER_CONFIG=1` (exact old user/foreign Config preserved). The run then **FAILED** while preparing upstream `v1.0.7`: stock setup exited 69 before service Start, purge, or clean reinstall. The initial harness redacted the actual error class, so its root cause is **not yet established**. A source-policy CI refusal also required classifying this script as a *Stage 11 test fixture* rather than production. Follow-up now emits only a fixed sanitized setup-error class and retains all fail-closed conditions. Neither G11 full-chain nor owner GUI is accepted based on this first attempt.

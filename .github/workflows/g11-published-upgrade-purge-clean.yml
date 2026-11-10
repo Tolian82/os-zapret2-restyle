@@ -3,13 +3,13 @@ name: G11 published upgrade, full purge, clean reinstall (disposable)
 on:
   pull_request:
     paths:
-      - 'scripts/g11-published-upgrade-purge-clean.py'
+      - 'scripts/stage11-published-upgrade-purge-clean.py'
       - '.github/workflows/g11-published-upgrade-purge-clean.yml'
       - 'scripts/purge-os-zapret2-restyle.sh'
   push:
     branches: [main]
     paths:
-      - 'scripts/g11-published-upgrade-purge-clean.py'
+      - 'scripts/stage11-published-upgrade-purge-clean.py'
       - '.github/workflows/g11-published-upgrade-purge-clean.yml'
   workflow_dispatch:
 
@@ -35,8 +35,8 @@ jobs:
       - name: Source syntax and exact published digest pins
         run: |
           set -euo pipefail
-          python3.13 -m py_compile scripts/g11-published-upgrade-purge-clean.py
-          python3.13 scripts/g11-published-upgrade-purge-clean.py --self-test
+          python3.13 -m py_compile scripts/stage11-published-upgrade-purge-clean.py
+          python3.13 scripts/stage11-published-upgrade-purge-clean.py --self-test
           sh -n scripts/purge-os-zapret2-restyle.sh
       - name: Download both immutable GitHub releases and verify tag and bytes
         shell: bash
@@ -72,7 +72,7 @@ jobs:
             pkg update -f
             pkg install -y git ca_root_nss jq gmake pkgconf luajit
             sh scripts/compatibility-bootstrap.sh
-            GITHUB_ACTIONS=true ZAPRET2_G11_PUBLISHED_DISPOSABLE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 /usr/local/bin/python3 scripts/g11-published-upgrade-purge-clean.py
+            GITHUB_ACTIONS=true ZAPRET2_G11_PUBLISHED_DISPOSABLE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 /usr/local/bin/python3 scripts/stage11-published-upgrade-purge-clean.py
       - name: Verify exact published asset receipts and untested GUI scope
         shell: bash
         run: |

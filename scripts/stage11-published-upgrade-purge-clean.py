@@ -200,7 +200,28 @@ def exercise_running_on_loopback():
     # DPI bypass is claimed. The G01 test already used this safe profile.
     setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
     need(setup.is_file() and not setup.is_symlink(), "UPSTREAM_INSTALLER_MISSING")
-    command(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=360)
+    native_setup = subprocess.run(
+        ["/bin/sh", str(setup), "install", "v1.0.7"],
+        capture_output=True, text=True, timeout=360, check=False)
+    if native_setup.returncode:
+        # No Config contents, tokens, hostnames or raw command output in CI.
+        observed = (native_setup.stdout + native_setup.stderr).lower()
+        rules = (
+            ("could not obtain bol-van/zapret2 releases", "GITHUB_RELEASES_UNAVAILABLE"),
+            ("no cached stable bol-van", "GITHUB_RELEASES_CACHE_UNAVAILABLE"),
+            ("stable bol-van/zapret2 release not found", "UNEXPECTED_STABLE_TAG"),
+            ("stock freebsd repository is enabled", "FOREIGN_FREEBSD_REPO_ENABLED"),
+            ("legacy freebsd repository backup remains", "LEGACY_FREEBSD_REPO_BACKUP"),
+            ("missing opnsense package", "MISSING_NATIVE_DEPENDENCY"),
+            ("an incomplete or unknown state", "INCOMPLETE_NATIVE_OWNER"),
+            ("zapret service is in an incomplete or unknown state", "INCOMPLETE_NATIVE_OWNER"),
+            ("original git", "GIT_RESOURCE_GUARD_REFUSED"),
+            ("could not install", "RUNTIME_BUILD_FAILED"),
+        )
+        matches = [label for phrase, label in rules if phrase in observed]
+        raise Refusal("EXACT_NATIVE_RUNTIME_SETUP_REFUSED:rc=" +
+                      str(native_setup.returncode) +
+                      ":class=" + (matches[0] if matches else "UNCLASSIFIED"))
     engine = RUNTIME / "binaries/my/dvtws2"
     need(engine.is_file() and os.access(engine, os.X_OK), "NATIVE_ENGINE_NOT_BUILT")
     need(SERVICE.is_file() and not SERVICE.is_symlink(), "INSTALLED_SERVICE_MISSING")
@@ -344,4 +365,4 @@ if __name__ == "__main__":
                   file=sys.stderr)
             sys.exit(2)
     else:
-        sys.exit("Usage: g11-published-upgrade-purge-clean.py [--self-test]")
+        sys.exit("Usage: stage11-published-upgrade-purge-clean.py [--self-test]")
