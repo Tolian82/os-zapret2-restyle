@@ -31,63 +31,84 @@ $zero = [
 ];
 $plan = ['result' => 'prepared', 'candidate' => $zero, 'changed_fields' => []];
 $clean = "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0";
-chk(SettingsApply::isInertEmptyStrategiesPlan($plan),
-    'a genuinely empty/no-change inert candidate was rejected');
-chk(SettingsApply::isVerifiedMissingUpstream($clean),
-    'genuine native no-runtime receipt was rejected');
+chk(SettingsApply::isPassiveStrategiesPlan($plan),
+    'an unchanged empty passive candidate was rejected');
+foreach (['unknown', 'failed', 'ready'] as $setup) {
+    $receipt = str_replace('setup=unknown', 'setup=' . $setup, $clean);
+    chk(SettingsApply::isVerifiedMissingUpstream($receipt),
+        'real installed=0 with an old setup receipt was rejected');
+}
 foreach ([
     '', "installed=0\nservice=error\nversion=\nsetup=unknown",
-    "installed=0\nservice=error\nversion=\nsetup=failed\nbusy=0",
     "installed=0\nservice=error\nversion=\nsetup=installing\nbusy=1",
+    "installed=0\nservice=error\nversion=\nsetup=installing\nbusy=0",
     "installed=1\nservice=started\nversion=v1.0.7\nsetup=ready\nbusy=0",
     $clean . "\nextra=1",
+    $clean . "\ninstalled=0",
+    str_replace('busy=0', 'busy=1', $clean),
 ] as $bad) {
     chk(!SettingsApply::isVerifiedMissingUpstream($bad),
-        'malformed, busy, active or unknown runtime treated as missing');
+        'malformed, busy, active or uncertain status treated as absent');
 }
 $wan = $plan;
 $wan['changed_fields'] = ['general.waninterface'];
 $wan['candidate']['general']['waninterface'] = 'wan';
-chk(!SettingsApply::isInertEmptyStrategiesPlan($wan),
-    'WAN-only Save mistaken for inert no-op');
+chk(!SettingsApply::isPassiveStrategiesPlan($wan),
+    'WAN-only Save incorrectly blocked by runtime installation');
+$wanMixed = $wan;
+$wanMixed['changed_fields'] = ['general.waninterface', 'strategy.trafficargs'];
+chk(!SettingsApply::isPassiveStrategiesPlan($wanMixed),
+    'WAN edit mixed with Strategies must not skip WAN validation');
+
 $active = $plan;
 $active['candidate']['general']['enabled'] = '1';
-chk(!SettingsApply::isInertEmptyStrategiesPlan($active),
-    'active enabled candidate received no-runtime shortcut before WAN-first');
+chk(!SettingsApply::isPassiveStrategiesPlan($active),
+    'active candidate must follow WAN-first/normal activation');
 $voice = $plan;
 $voice['candidate']['voice']['telegram']['enabled'] = '1';
-chk(!SettingsApply::isInertEmptyStrategiesPlan($voice),
+chk(!SettingsApply::isPassiveStrategiesPlan($voice),
     'active Voice-only candidate bypassed WAN-first');
-foreach ([
-    ['strategy', 'trafficargs', '--filter-tcp=443'],
-    ['hostlist', 'youtubedomains', 'youtube.com'],
-    ['hostlist', 'excludeipset', '192.0.2.0/24'],
-    ['hostlist', 'discordips', '192.0.2.1/32'],
-] as [$group, $field, $value]) {
-    $configured = $plan;
-    $configured['candidate'][$group][$field] = $value;
-    chk(!SettingsApply::isInertEmptyStrategiesPlan($configured),
-        'nonempty persisted data mistaken for fully empty');
-}
+$seeded = $plan;
+$seeded['candidate']['strategy']['trafficargs'] =
+    "--filter-tcp=80,443\n--filter-l7=http,tls\n--new\n--filter-udp=443";
+$seeded['candidate']['hostlist']['youtubedomains'] =
+    "youtube.com\ngooglevideo.com\nyoutu.be";
+chk(SettingsApply::isPassiveStrategiesPlan($seeded),
+    'real first-install preseeded passive Strategies incorrectly rejected');
+$clearing = $seeded;
+$clearing['candidate']['strategy']['trafficargs'] = '';
+$clearing['candidate']['hostlist']['youtubedomains'] = '';
+$clearing['changed_fields'] = [
+    'strategy.trafficargs', 'hostlist.youtubedomains',
+];
+chk(SettingsApply::isPassiveStrategiesPlan($clearing),
+    'user clear form is still incorrectly treated as not an inert Apply');
+$edit = $seeded;
+$edit['changed_fields'] = ['strategy.trafficargs'];
+$edit['candidate']['strategy']['trafficargs'] = "--filter-tcp=443";
+chk(SettingsApply::isPassiveStrategiesPlan($edit),
+    'non-mutating service warning did not cover passive user strategy edit');
 $broken = $plan;
 unset($broken['candidate']['voice']['custom']);
-chk(!SettingsApply::isInertEmptyStrategiesPlan($broken),
-    'missing Voice section accepted as an inert complete model');
+chk(!SettingsApply::isPassiveStrategiesPlan($broken),
+    'missing Voice section accepted as a complete model');
 $broken = $plan;
 unset($broken['candidate']['general']);
-chk(!SettingsApply::isInertEmptyStrategiesPlan($broken),
-    'missing general section accepted as a valid empty model');
-$untrusted = $plan;
-$untrusted['candidate']['general']['enabled'] = ['on' => ['selected' => 1],
-                                               'off' => ['selected' => 1]];
-chk(!SettingsApply::isInertEmptyStrategiesPlan($untrusted),
-    'ambiguous native model accepted');
+chk(!SettingsApply::isPassiveStrategiesPlan($broken),
+    'missing General model accepted');
+$invalid = $plan;
+$invalid['candidate']['general']['enabled'] = [
+    'on' => ['selected' => 1], 'off' => ['selected' => 1],
+];
+chk(!SettingsApply::isPassiveStrategiesPlan($invalid),
+    'ambiguous OPNsense option map accepted');
+
 $source = file_get_contents(dirname(__DIR__) .
     '/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
 $view = file_get_contents(dirname(__DIR__) .
     '/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt');
 $wanFirst = strpos($source, "WanRequirement::missingBeforeActivation(\$plan['candidate'])");
-$proof = strpos($source, 'SettingsApply::isInertEmptyStrategiesPlan($plan)');
+$proof = strpos($source, 'SettingsApply::isPassiveStrategiesPlan($plan)');
 $liveReceipt = strpos($source, "'zapret setup_status'");
 $wanOnly = strpos($source, "\$wanOnlyCandidate = \$plan['changed_fields'] === ['general.waninterface']");
 $dispatch = strpos($source, '$nativeApplyDispatched = true;');

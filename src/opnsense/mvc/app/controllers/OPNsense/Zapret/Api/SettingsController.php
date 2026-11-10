@@ -226,14 +226,14 @@ class SettingsController extends ApiMutableModelControllerBase
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
                 $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
-                // LC-06D: a non-changing and completely inert first Apply
-                // before native upstream installation needs the exact user
-                // message, not an unrelated model/preflight failure. This
-                // comes AFTER WAN-first and changed-field detection, so an
-                // actual WAN-only Save never enters this diagnostic branch.
+                // LC-06E: passive lower Apply on an installed native package
+                // requires a real upstream even with preseeded first-install
+                // YouTube data, or genuine user edits clearing those fields.
+                // WAN-first runs above; the one-field WAN-only Save is still
+                // handled by its original shared FD9 contract below.
                 // setup_status is read-only; malformed/uncertain receipts
                 // must not be mistaken for a cleanly absent runtime.
-                if (SettingsApply::isInertEmptyStrategiesPlan($plan)) {
+                if (SettingsApply::isPassiveStrategiesPlan($plan)) {
                     $preflightStage = 'runtime-status';
                     $runtimeReceipt = (string)(new Backend())->configdRun(
                         'zapret setup_status', false, 30
