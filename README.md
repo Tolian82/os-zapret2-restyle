@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_10` — G04 cookie/CSRF-authenticated native HTTP Strategies first Apply from a clean, stopped v1.0.7 and saved TCP/QUIC Config. `_8` persisted initial Config and `_9` real native Start/Stop are disposable-guest PASS. Physical browser Apply, owner WAN/bypass still NOT TESTED. Stable is `v0.6.3_1`; no `_10.pkg` published. |
+| **Current development candidate** | `v0.6.3_33` — G10A packaged local full-purge script and main-page instructions, **source candidate only until native checks and publication**. Published testing `v0.6.3_29` does not meet the new nine-step acceptance. Stable remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -370,11 +370,25 @@ The two Zapret2 resource directories above hold both installed upstream-tracked 
 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
-## Independent full removal (G01 — source candidate; not yet owner-approved for execution)
+## Independent full removal — installed local script (G10A source candidate)
 
-The [standalone full-purge script](scripts/purge-os-zapret2-restyle.sh) is designed to remain available **after the plugin package was removed** and independently from installed Zapret binaries. The [native verification plan](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) requires an isolated OPNsense 26.7 disposable VM test before declaring it safe for real use; until that completes **do not run destructive mode on a production firewall**.
+The [canonical standalone G01 purge source](scripts/purge-os-zapret2-restyle.sh) is shipped verbatim in G10A package candidates as the executable local file `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. The plugin's main Settings page has **Useful links / Полезные ссылки** with the local commands and a link to the reviewed source. This implementation must still pass the full disposable-native nine-step G10A gate **before production use**; the published testing `v0.6.3_29` does not include this packaged script.
 
-Running it without arguments or with `--dry-run` only inventories Zapret-owned data and foreign safety blockers; it never creates an FD9 lock or deletes a file. The separately destructive `--purge` requires an exact interactive confirmation, creates a private timestamped backup of `/conf/config.xml` under `/root/zapret2-restyle-purge-backups`, uses stock pkg and firmware unregister plus native locked Config API and owned-IPFW checks, and removes only verified Zapret2 runtime, custom/extra resources, logs and menu paths. `--keep-repo` deliberately retains the dedicated repository file. `--yes-disposable` works only when an isolated VM is explicitly marked `ZAPRET2_PURGE_DISPOSABLE_GUEST=1`, not for ordinary user invocation. Normal plugin uninstall deliberately retains saved Config/upstream/assets; it is NOT a purge. See [the owner's G01 guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) for safety and confirmation boundaries.
+Use the OPNsense **root console**. The first command only inventories, and changes nothing:
+
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --dry-run
+```
+
+**Destructive operation:** only when intentionally performing complete removal after a separate backup/confirmation:
+
+```sh
+/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --purge
+```
+
+The script asks for the exact confirmation phrase `PURGE OS-ZAPRET2-RESTYLE`, creates a verified private copy of `/conf/config.xml` under `/root/zapret2-restyle-purge-backups`, and uses native pkg hooks, ownership/FD9/IPFW checks and native Config API. It removes the plugin's own installed path (including **itself**) only after the shell has passed the full embedded Python program to the interpreter, so deletion of the package file does not interrupt an already started purge. A failed owner/backup/state check refuses destructive progress. It does not remove unrelated system dependencies or foreign configuration.
+
+**Normal GUI uninstall is not purge:** it must preserve saved Zapret configuration, installed upstream, additional Lua/BIN and other plugin data for later reinstall. The `--keep-repo` option deliberately preserves the dedicated repository, so it is not complete removal; `--yes-disposable` is restricted to explicitly identified isolated CI guests. Review [G01 safety and acceptance guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) and [nine-stage G11 procedure](docs/verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md) before production use.
 
 ## Removal policy
 

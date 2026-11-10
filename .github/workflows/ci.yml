@@ -767,6 +767,11 @@ jobs:
           python3.13 -m py_compile scripts/test-native-template-heredoc.py
           python3.13 scripts/test-native-template-heredoc.py
 
+      - name: Check packaged G01 purge exact bytes, executable mode and GUI safety path
+        run: |
+          python3.13 -m py_compile scripts/test-g10a-packaged-purge.py
+          python3.13 scripts/test-g10a-packaged-purge.py -v
+
       - name: Fail-closed GitHub PR watchdog unit and negative security contracts
         run: |
           python3.13 -m py_compile scripts/github_pr_watchdog.py scripts/test_github_pr_watchdog.py
