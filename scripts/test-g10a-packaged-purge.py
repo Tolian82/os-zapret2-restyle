@@ -6,7 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = ROOT / "scripts/purge-os-zapret2-restyle.sh"
-RELATIVE = "src/opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
+RELATIVE = "src/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
 OLD_OWNED = ROOT / "src/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
 PACKAGED = ROOT / RELATIVE
 LOCAL = "/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
