@@ -189,10 +189,17 @@ def authenticated_readonly_regression(label):
         }
         after_invalidate = False
         after_webgui_restart = False
+        delayed_visible = False
         web_process_changed = None
         def web_process_ids():
-            allps = call(["/bin/ps", "-axo", "pid=,comm="], timeout=25)
-            return sorted(re.findall(r"(?m)^\s*(\d+)\s+php-cgi\s*$", allps))
+            allps = call(["/bin/ps", "-axo", "pid=,command="], timeout=25)
+            # FreeBSD's -o comm is not guaranteed to be the literal basename;
+            # select actual absolute php-cgi executables in the full command.
+            return sorted(
+                int(m.group(1)) for line in allps.splitlines()
+                if (m := re.match(
+                    r"^\s*(\d+)\s+(?:/usr/local/bin/)?php-cgi(?:\s|$)",
+                    line)))
         before_web_ids = web_process_ids()
         if len(eligible) == 1:
             eligible[0].unlink()
@@ -217,10 +224,21 @@ def authenticated_readonly_regression(label):
                         except (voice.Refusal, OSError):
                             import time
                             time.sleep(2)
+                    import time
+                    time.sleep(10)
                     after_web_ids = web_process_ids()
                     web_process_changed = (
                         bool(before_web_ids) and bool(after_web_ids) and
                         before_web_ids != after_web_ids)
+                    try:
+                        delayed = voice.GuestHttps()
+                        voice.login(delayed)
+                        delayed_page = delayed.request("GET", "/ui/zapret")
+                        delayed_visible = (
+                            'id="zapretUsefulLinks"' in delayed_page and
+                            "purge-os-zapret2-restyle.sh" in delayed_page)
+                    except (voice.Refusal, OSError):
+                        delayed_visible = False
         print("G10A_VOLT_CACHE_DIAGNOSTIC=" + json.dumps({
             "compiled_plugin_general_count": len(eligible),
             "compiled_general_lacks_new_link": stale_source,
@@ -233,7 +251,11 @@ def authenticated_readonly_regression(label):
                 eligible[0].read_text(errors="replace"))
                 if len(eligible) == 1 and eligible[0].is_file() else False,
             "rendered_main": initial_render,
+            "php_cgi_workers_before_count": len(before_web_ids),
+            "php_cgi_workers_after_count": len(after_web_ids)
+                if web_process_changed is not None else None,
             "php_cgi_workers_changed_after_webgui_restart": web_process_changed,
+            "delayed_new_view_after_webgui_restart": delayed_visible,
             "production_hook_or_other_cache_changed": False,
             "disposable_vm_only": True,
         }, sort_keys=True), flush=True)
