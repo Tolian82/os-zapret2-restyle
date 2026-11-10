@@ -456,6 +456,32 @@ def inventory(keep_repo):
     return installed, status, marker, repo, paths, rules, tables, pids
 
 
+def read_confirmation_from_tty():
+    """Read owner confirmation from the actual controlling terminal.
+
+    The script itself is fed to python3 - through a shell heredoc, so
+    input()/sys.stdin is always EOF after Python consumes that program.
+    No piped text, headless runner or redirected stdin may authorize purge.
+    """
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError as error:
+        raise Refusal("interactive controlling terminal required; no changes") from error
+    try:
+        if not os.isatty(fd) or not stat.S_ISCHR(os.fstat(fd).st_mode):
+            raise Refusal("interactive controlling terminal required; no changes")
+        os.write(fd, b"Type PURGE OS-ZAPRET2-RESTYLE to destroy all Zapret data: ")
+        response = os.read(fd, 128)
+    finally:
+        os.close(fd)
+    if not response or b"\n" not in response:
+        raise Refusal("confirmation not received from terminal; no changes")
+    try:
+        return response.decode("utf-8").rstrip("\r\n")
+    except UnicodeDecodeError as error:
+        raise Refusal("invalid terminal confirmation encoding; no changes") from error
+
+
 def purge(keep_repo, yes_disposable):
     check_platform()
     snapshot = inventory(keep_repo)
@@ -473,7 +499,7 @@ def purge(keep_repo, yes_disposable):
         if guest in ("", "none", "unknown"):
             raise Refusal("noninteractive purge refused on a non-virtual host")
     else:
-        phrase = input("Type PURGE OS-ZAPRET2-RESTYLE to destroy all Zapret data: ")
+        phrase = read_confirmation_from_tty()
         if phrase != "PURGE OS-ZAPRET2-RESTYLE":
             raise Refusal("confirmation did not match; no changes")
     # Avoid partially deleting an installed package when the required native

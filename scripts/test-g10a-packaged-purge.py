@@ -27,6 +27,42 @@ class PackagedPurgeTest(unittest.TestCase):
             body = path.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
             compile(body, str(path), "exec")
 
+    def test_interactive_purge_confirmation_reads_controlling_tty_not_stdin(self):
+        """Real PTY input is accepted; absent/wrong TTY fails before any deletion."""
+        import ast
+        import errno
+        import os
+        import pty
+        import stat
+        from unittest import mock
+
+        text = CANONICAL.read_text().split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        tree = ast.parse(text)
+        functions = [node for node in tree.body
+                     if isinstance(node, ast.FunctionDef)
+                     and node.name == "read_confirmation_from_tty"]
+        self.assertEqual(len(functions), 1)
+        class Refusal(Exception):
+            pass
+        namespace = {"os": os, "stat": stat, "Refusal": Refusal}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), "<tty-only>", "exec"),
+             namespace)
+        confirm = namespace["read_confirmation_from_tty"]
+        with mock.patch.object(os, "open", side_effect=OSError(errno.ENXIO, "no tty")):
+            with self.assertRaisesRegex(Refusal, "controlling terminal required"):
+                confirm()
+        for entry, allowed in ((b"PURGE OS-ZAPRET2-RESTYLE\\n", True),
+                               (b"WRONG\\n", False)):
+            master, slave = pty.openpty()
+            try:
+                os.write(master, entry.replace(b"\\n", b"\n"))
+                with mock.patch.object(os, "open", return_value=os.dup(slave)):
+                    got = confirm()
+                self.assertEqual(got == "PURGE OS-ZAPRET2-RESTYLE", allowed)
+            finally:
+                os.close(slave)
+                os.close(master)
+
     def test_survives_removal_of_its_own_package_file(self):
         code = PACKAGED.read_text()
         self.assertIn('exec /usr/bin/env python3 - "$@" <<', code)
@@ -34,6 +70,9 @@ class PackagedPurgeTest(unittest.TestCase):
         self.assertIn('"/usr/local/opnsense/scripts/OPNsense/Zapret",', code)
         self.assertIn('backup = backup_config()', code)
         self.assertIn('phrase != "PURGE OS-ZAPRET2-RESTYLE"', code)
+        self.assertIn('phrase = read_confirmation_from_tty()', code)
+        self.assertNotIn('phrase = input(', code)
+        self.assertIn('os.open("/dev/tty"', code)
         self.assertIn('if processes():', code)
 
     def test_strategies_gui_does_not_expose_purge_links_or_commands(self):
