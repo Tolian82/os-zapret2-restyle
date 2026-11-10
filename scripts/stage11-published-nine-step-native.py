@@ -167,7 +167,22 @@ def authenticated_readonly_regression(label):
         initial_render = {
             "old_service_section_present": "zapretServiceLine" in general,
             "bottom_apply_present": "reconfigureAct" in general,
-            "useful_links_id_present": "zapretUsefulLinks" in general,
+            "useful_links_text_mentioned_anywhere": "zapretUsefulLinks" in general,
+            "useful_links_div_actually_rendered":
+                'id="zapretUsefulLinks"' in general,
+            "useful_links_heading_actually_rendered":
+                'id="zapretUsefulLinksTitle"' in general,
+            "source_hyperlink_actually_rendered":
+                'id="zapretPurgeSourceLink"' in general,
+            "purge_warning_actually_rendered":
+                'id="zapretPurgeWarning"' in general,
+            "purge_web_href_present":
+                "github.com/Tolian82/os-zapret2-restyle/blob/main/scripts/purge" in general,
+            "purge_command_dry_run_present":
+                "--dry-run" in general,
+            "purge_command_purge_present":
+                "--purge" in general,
+            "response_length": len(general),
             "rendered_page_reaches_2mib_read_cap": len(general) >= 2 * 1024 * 1024,
             "generic_php_fatal_marker": (
                 "Fatal error" in general or "Uncaught" in general),
