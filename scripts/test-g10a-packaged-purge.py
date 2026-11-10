@@ -36,13 +36,27 @@ class PackagedPurgeTest(unittest.TestCase):
         self.assertIn('phrase != "PURGE OS-ZAPRET2-RESTYLE"', code)
         self.assertIn('if processes():', code)
 
-    def test_gui_exposes_local_path_without_destructive_web_handler(self):
+    def test_strategies_gui_does_not_expose_purge_links_or_commands(self):
+        """Owner decision: remove the purge help UI, not the packaged CLI script."""
         ui = (ROOT / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
-        self.assertIn('Полезные ссылки', ui)
-        self.assertIn('Useful links', ui)
-        self.assertIn(LOCAL + " --dry-run", ui)
-        self.assertIn(LOCAL + " --purge", ui)
-        self.assertIn('id="zapretPurgeWarning"', ui)
+        for marker in ("zapretUsefulLinks", "zapretPurgeSourceLink",
+                       "zapretPurgeInstructions", "zapretPurgeWarning",
+                       "purgeText", "Полезные ссылки", "Full purge script source",
+                       LOCAL, "PURGE OS-ZAPRET2-RESTYLE"):
+            self.assertNotIn(marker, ui, "Unexpected purge UI: " + marker)
+        self.assertIn('id="zapretExtraInstall"', ui)
+        self.assertIn('id="zapretExtraRemove"', ui)
+        self.assertIn('id="reconfigureAct"', ui)
+
+    def test_cli_only_policy_remains_in_spec_and_plan(self):
+        for path in ("docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md",
+                     "docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md"):
+            doc = (ROOT / path).read_text()
+            self.assertIn("не отображать", doc)
+            self.assertIn("Полезные ссылки", doc)
+            self.assertIn(LOCAL, doc)
+            self.assertIn("--dry-run", doc)
+            self.assertIn("--purge", doc)
 
     def test_package_verify_checks_exact_bytes_and_execute_mode(self):
         code = (ROOT / "scripts/native-opnsense-package.py").read_text()
