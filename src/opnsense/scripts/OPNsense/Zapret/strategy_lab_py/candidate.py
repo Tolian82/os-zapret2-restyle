@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, endpoint_epoch, request, resources, telemetry
+from . import candidate_spec, endpoint_epoch, hostlist_access, request, resources, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -22,7 +22,8 @@ EX_USAGE = 64
 JOB_RE = re.compile(r"^job\.[A-Za-z0-9]+$")
 FATAL_RE = re.compile(
     r"(^|[^a-z])(fatal|panic|syntax error|unknown option|invalid (argument|option)|"
-    r"cannot (bind|open|load)|failed to (bind|load))([^a-z]|$)",
+    r"cannot (bind|open|load)|failed to (bind|load)|file_open_test|"
+    r"cannot access hostlist file|permission denied)([^a-z]|$)",
     re.IGNORECASE,
 )
 REMOTE_IP_RE = re.compile(r"(?:^|\s)remote_ip=([^\s]+)")
@@ -234,8 +235,12 @@ def _prepare_runtime_files(
     work = runtime_dir(job_id)
     work.mkdir(parents=True, exist_ok=True)
     hostlist = work / "hostlist.txt"
+    staged_hostlist = None
     if description.target_binding:
         _write_text(hostlist, "".join(f"{endpoint}\n" for endpoint in endpoints))
+        # /var/run/zapret2-restyle may be root:wheel 0750. Never widen it:
+        # dvtws2 reloads the hostlist after dropping to UID/GID nobody.
+        staged_hostlist = hostlist_access.stage(job_id, endpoints)
     else:
         try:
             hostlist.unlink()
@@ -245,7 +250,7 @@ def _prepare_runtime_files(
     arguments = description.render_runtime_arguments(
         inventory,
         divert_port=divert_port,
-        hostlist_path=hostlist if description.target_binding else None,
+        hostlist_path=staged_hostlist,
     )
     _write_text(work / "dvtws.args", "".join(f"{argument}\n" for argument in arguments))
     return arguments

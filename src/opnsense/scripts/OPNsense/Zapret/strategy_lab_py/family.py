@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import candidate_spec, endpoint_epoch, resources, search_graph, telemetry
+from . import candidate_spec, endpoint_epoch, hostlist_access, resources, search_graph, telemetry
 
 EX_OK = 0
 EX_USAGE = 64
@@ -175,7 +175,7 @@ def _timeout_result(
         inventory,
         divert_port=int(os.environ.get("STRATEGY_LAB_DIVERT_PORT", "9989")),
         hostlist_path=(
-            job / "candidate-runtime/hostlist.txt" if description.target_binding else None
+            hostlist_access.path_for(job_id) if description.target_binding else None
         ),
     )
     return {

@@ -20,14 +20,13 @@ valid_port()
 
 jobdir_allow_access()
 {
+    # Preserve the private job/Config/runtime tree (0700). The only post-drop
+    # grant is the root-owned, group-nobody-readable ephemeral hostlist.
     jobdir=$(strategy_lab_job_dir "$1")
     runtime=$(strategy_lab_candidate_runtime_dir "$1")
-    [ -d "${jobdir}" ] && [ -d "${runtime}" ] || return 1
-    chmod 0711 "${jobdir}" || return 1
-    chmod 0755 "${runtime}" || {
-        chmod 0700 "${jobdir}" || true
-        return 1
-    }
+    shadow=$(strategy_lab_candidate_hostlist_shadow_file "$1") || return 1
+    [ -d "${jobdir}" ] && [ -d "${runtime}" ] &&
+        [ ! -L "${shadow}" ] && [ -f "${shadow}" ] && [ -r "${shadow}" ]
 }
 
 jobdir_restore_private()
@@ -39,7 +38,12 @@ jobdir_restore_private()
 cleanup_candidate()
 {
     status=0
-    strategy_lab_candidate_stop "$1" || status=1
+    if strategy_lab_candidate_stop "$1"; then
+        strategy_lab_candidate_hostlist_shadow_cleanup "$1" || status=1
+    else
+        # Do not revoke a still-owned running process's only hostlist path.
+        status=1
+    fi
     strategy_lab_firewall_remove_rules || status=1
     strategy_lab_firewall_range_empty || status=1
     jobdir_restore_private "$1" || status=1

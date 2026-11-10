@@ -107,6 +107,10 @@ with TemporaryDirectory(prefix="g11-readiness-") as temp:
     check("one-good", [down, down, up], "readiness-not-stable")
     check("stable", [down, up, up], "", True)
     check("fatal", [down], "engine-fatal-log", fatal="FATAL cannot bind divert")
+    # Actual owner-live _47: dvtws2 printed a post-drop permission error,
+    # but the old fatal regex reported log_clean=true and no fatal_reason.
+    check("post-drop-hostlist", [down], "engine-fatal-log",
+          fatal="file_open_test: Permission denied\ncannot access hostlist file '/private/job/hostlist.txt'")
 print("PASS_G11_RUNTIME_READINESS_DIAGNOSTICS=1")
 PY
 

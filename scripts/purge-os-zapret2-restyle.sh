@@ -8,6 +8,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import shutil
@@ -107,6 +108,25 @@ def safe_tree(path):
                 # an owned root nor any path ancestor may be a symlink.
 
     return True
+
+
+def owned_shadow_hostlists():
+    """Attest only our root-owned, exact-name ephemeral post-drop hostlists."""
+    root = Path("/var/run")
+    nobody_gid = pwd.getpwnam("nobody").pw_gid
+    files = []
+    for file in root.iterdir():
+        if not file.name.startswith("zapret2-lab-hostlist-"):
+            continue
+        if not re.fullmatch(r"zapret2-lab-hostlist-job\.[A-Za-z0-9]+", file.name):
+            raise Refusal("unverified candidate hostlist shadow name")
+        metadata = node(file)
+        if (metadata is None or not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != 0 or metadata.st_gid != nobody_gid
+                or stat.S_IMODE(metadata.st_mode) != 0o640):
+            raise Refusal("unverified candidate hostlist shadow owner/mode")
+        files.append(str(file))
+    return tuple(sorted(files))
 
 
 def opnsense_core_uid():
@@ -439,6 +459,7 @@ def inventory(keep_repo):
     saved, registered = config_state()
     repo = safe_repo()
     paths = [path for path in OWNED_TREES + OWNED_FILES if safe_tree(path)]
+    paths.extend(owned_shadow_hostlists())
     rules, tables, pids = owned_rules(), voice_tables(), processes()
     print("Package:", "installed" if installed else "absent")
     print("Service:", status)
@@ -577,6 +598,8 @@ def purge(keep_repo, yes_disposable):
             if path == str(LOCK):
                 continue
             delete_exact(path)
+        for shadow in owned_shadow_hostlists():
+            delete_exact(shadow)
         if not keep_repo and repo:
             delete_exact(REPO)
         # Explicit purge only: refresh stock GUI menu/PHP cache.
@@ -597,6 +620,7 @@ def purge(keep_repo, yes_disposable):
     if (pkg_installed() or saved or registered or firmware_marker() or owned_rules()
             or voice_tables() or processes()
             or any(safe_tree(path) for path in OWNED_TREES + OWNED_FILES)
+            or owned_shadow_hostlists()
             or (not keep_repo and REPO.exists())):
         raise Refusal("post-purge residuals remain: manual review required")
     print("POSTCHECK: plugin/owned paths/IPFW are absent")

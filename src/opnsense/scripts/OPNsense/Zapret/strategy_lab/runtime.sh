@@ -3,6 +3,7 @@
 STRATEGY_LAB_DVTWS_BIN="${STRATEGY_LAB_DVTWS_BIN:-/usr/local/etc/zapret2/binaries/my/dvtws2}"
 STRATEGY_LAB_DAEMON_BIN="${STRATEGY_LAB_DAEMON_BIN:-/usr/sbin/daemon}"
 STRATEGY_LAB_CONFIG_FILE="${STRATEGY_LAB_CONFIG_FILE:-/usr/local/etc/zapret2/zapret.conf}"
+STRATEGY_LAB_HOSTLIST_STAGING_DIR="${STRATEGY_LAB_HOSTLIST_STAGING_DIR:-/var/run}"
 STRATEGY_LAB_LUA_DIR="${STRATEGY_LAB_LUA_DIR:-/usr/local/etc/zapret2/lua}"
 STRATEGY_LAB_PLUGINCTL_BIN="${STRATEGY_LAB_PLUGINCTL_BIN:-/usr/local/sbin/pluginctl}"
 STRATEGY_LAB_IFCONFIG_BIN="${STRATEGY_LAB_IFCONFIG_BIN:-/sbin/ifconfig}"
@@ -36,6 +37,26 @@ strategy_lab_candidate_args_file()
 strategy_lab_candidate_hostlist_file()
 {
     printf '%s/hostlist.txt\n' "$(strategy_lab_candidate_runtime_dir "$1")"
+}
+
+strategy_lab_candidate_hostlist_shadow_file()
+{
+    strategy_lab_job_id_valid "$1" || return 64
+    printf '%s/zapret2-lab-hostlist-%s\n' "$STRATEGY_LAB_HOSTLIST_STAGING_DIR" "$1"
+}
+
+strategy_lab_candidate_hostlist_shadow_cleanup()
+{
+    _slshadow_path=$(strategy_lab_candidate_hostlist_shadow_file "$1") || return 64
+    # Only our exact job-scoped regular file is removed, after owned dvtws2
+    # has stopped. Never follow or remove an unexpected symlink/directory.
+    if [ -L "$_slshadow_path" ]; then
+        return 1
+    fi
+    if [ -e "$_slshadow_path" ]; then
+        [ -f "$_slshadow_path" ] || return 1
+        rm -f "$_slshadow_path" || return 1
+    fi
 }
 
 strategy_lab_candidate_addresses_file()

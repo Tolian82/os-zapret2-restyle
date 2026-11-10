@@ -2,6 +2,10 @@
 
 **Утверждённый приоритет владельца, 10.11.2026:** сначала локальное обновление существующей установки, затем полная проверка, обычное удаление из GUI, локальная переустановка с сохранением параметров, повторная полная проверка, запакованный локальный purge, чистая локальная установка и её полная приёмка — **девять шагов** по [ТЗ v1.3 §8.1](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md). Прежняя пятишаговая G11 последовательность заменена. Для установки применять только прямой GitHub `.pkg` через `fetch → pkg add -f → pkg info`, без внешних SH-установщиков; недостающие manifest dependencies предварительно разрешаются только штатным `pkg install -r OPNsense`.
 
+## Owner-live Stage50 forensic evidence — _47 (10.11.2026)
+
+Проверены два локальных сохранённых Job (`job.gaL6kG`, `job.7d8aJZ`) и read-only watch на FreeBSD 15.1-p6 с `os-zapret2-restyle-0.6.3_47`. Native WAN preflight: `vtnet1`, scoped IPFW `19100 divert 9989` создан, Stage90 удалил. В обоих логах dvtws2: `Loaded 1 hosts` → `binding divert4 socket` → `Running as UID=65534 GID=65534` → `file_open_test: Permission denied` → `cannot access hostlist file`. Причина — ancestor `/var/run/zapret2-restyle` режим `0750 root:wheel` и отсутствие search permission для nobody. Старые CI fixture проверяли только job dir `0711`, runtime `0755` и hostlist `0644`, не их предка. Дополнительно `readiness.json` ложно сообщал `log_clean=true` при этой ошибке. Source _50 предлагает строго ограниченный root:nobody `0640` shadow hostlist в `/var/run`, не раскрывая закрытый Job и родителя. Проверка установленного пакета после исправления **ещё не выполнена**, G11 P0 #1022 OPEN.
+
 ## Публикационные исходные данные
 
 - Stable predecessor: [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3), пакет `os-zapret2-restyle-0.6.3_1.pkg`, SHA-256 `eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be`.
