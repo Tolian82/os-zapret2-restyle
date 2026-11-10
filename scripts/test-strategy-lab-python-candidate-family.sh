@@ -28,7 +28,11 @@ if grep -Fq 'strategy_lab_family_screen()' "${SCRIPT_DIR}/strategy_lab/family.sh
 fi
 
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-python-candidate.XXXXXX")
-trap 'rm -rf "${TMP}"' EXIT HUP INT TERM
+# The engine's post-drop hostlist needs a root-owned-style traversable path.
+# Keep the synthetic Job tree private and grant no broad ancestor access.
+STAGING=$(mktemp -d "${TMPDIR:-/tmp}/strategy-lab-stage-hostlist.XXXXXX")
+chmod 0755 "${STAGING}"
+trap 'rm -rf "${TMP}" "${STAGING}"' EXIT HUP INT TERM
 JOBS="${TMP}/jobs"
 JOB="job.test"
 JOB_DIR="${JOBS}/${JOB}"
@@ -130,6 +134,8 @@ run_candidate()
 {
   MOCK_ACTIONS="${ACTIONS}" MOCK_RUNTIME="${RUNTIME}" MOCK_COUNTER="${COUNTER_STATE}" MOCK_FATAL="${1:-0}" \
   STRATEGY_LAB_JOBS_DIR="${JOBS}" \
+  STRATEGY_LAB_HOSTLIST_STAGING_DIR="${STAGING}" \
+  STRATEGY_LAB_TEST_WAN_OVERRIDE=1 STRATEGY_LAB_TEST_HOSTLIST_STAGING=1 \
   STRATEGY_LAB_CANDIDATE_SYSTEM_ADAPTER="${ADAPTER}" \
   STRATEGY_LAB_LUA_DIR="${LUA_DIR}" \
   STRATEGY_LAB_FAKE_DIR="${FAKE_DIR}" \
