@@ -32,6 +32,10 @@ Owner physically upgraded `_40 → _43`, then independently performed full appro
 
 Source-only `v0.6.3_45` corrects only the Stage50 canonical saved-WAN adapter and hardens actual G09 candidate readiness proof. It is **not published or owner-tested**. The missing-upstream GUI message and real RUNNING candidate readiness remain separately blocked; do not purge/reinstall again to obtain evidence.
 
+## G11 source-only `v0.6.3_46` — LC-06E/LC-12D
+
+Уровень готовности: **CI/native ещё не подтверждены, owner G11 OPEN**. После слияния source-only `_45` ([PR #1023](https://github.com/Tolian82/os-zapret2-restyle/pull/1023)) осталось два разных блокера: нижний Apply без upstream и failed runtime on upgraded RUNNING. Для первого native G11 заново проходит первичную установку с настоящим `strategy.trafficargs` и десятью `hostlist.youtubedomains`, а не прежнюю искусственную очистку, сохраняет WAN-only и проверяет точный ответ во всех состояниях формы. Для второго добавлен проверяемый `failure_kind` из фактических PID/socket/log observations без увеличения тайм-аута и без утверждения, что сам запуск на системе владельца починен. Стратегия, Voice, WAN-only, FD9, foreign IPFW и Stage90 должны остаться без регрессий.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)

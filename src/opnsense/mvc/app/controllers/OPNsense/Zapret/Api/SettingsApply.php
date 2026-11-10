@@ -64,20 +64,23 @@ final class SettingsApply
     }
 
     /**
-     * LC-06D: only a genuinely unchanged, inert, user-empty candidate may
-     * receive the missing-upstream message. WAN-only edits are not no-ops.
-     * Do not count default port/hostlist mode or disabled Voice args as active
-     * user profiles. An unrecognized model shape fails closed.
+     * LC-06D/LC-06E: a *passive* Strategies Apply requires the upstream service
+     * even if the package seeded standard YouTube strategy/hostlist defaults or
+     * the user submitted edits to clear those fields. This is NOT a proof that
+     * user fields are empty. Only existing native Config state is inspected.
+     *
+     * A single WAN-only change remains an independent no-runtime Save. A
+     * START/Voice activation retains WAN-first and normal lifecycle checks.
      */
-    public static function isInertEmptyStrategiesPlan(array $plan): bool
+    public static function isPassiveStrategiesPlan(array $plan): bool
     {
         if (($plan['result'] ?? null) !== 'prepared' ||
-            ($plan['changed_fields'] ?? null) !== [] ||
+            !isset($plan['changed_fields']) || !is_array($plan['changed_fields']) ||
+            in_array('general.waninterface', $plan['changed_fields'], true) ||
             !isset($plan['candidate']) || !is_array($plan['candidate'])) {
             return false;
         }
         $node = $plan['candidate'];
-        // Missing model sections are corruption, not a verified empty form.
         foreach (['general', 'strategy', 'hostlist', 'voice'] as $section) {
             if (!isset($node[$section]) || !is_array($node[$section])) {
                 return false;
@@ -94,39 +97,46 @@ final class SettingsApply
             }
         }
         try {
-            if (VoiceModelValues::text($node['general']['enabled'] ?? '0') !== '0') {
+            if (VoiceModelValues::text($node['general']['enabled']) !== '0') {
                 return false;
             }
             foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
-                if (VoiceModelValues::text($node['voice'][$service]['enabled'] ?? '0') !== '0') {
+                if (VoiceModelValues::text($node['voice'][$service]['enabled']) !== '0') {
                     return false;
                 }
             }
         } catch (\InvalidArgumentException $error) {
             return false;
         }
-        foreach (['trafficargs', 'extraargs', 'httpargs', 'httpsargs'] as $field) {
-            $value = $node['strategy'][$field] ?? '';
-            if (!is_string($value) || trim($value) !== '') {
-                return false;
-            }
-        }
-        foreach (['domains', 'youtubedomains', 'telegramips', 'discordips',
-            'xips', 'sipips', 'customips', 'userdomains',
-            'excludedomains', 'excludeipset'] as $field) {
-            $value = $node['hostlist'][$field] ?? '';
-            if (!is_string($value) || trim($value) !== '') {
-                return false;
-            }
-        }
         return true;
     }
 
-    /** Exact read-only installed=0 receipt, not an inferred absence. */
+    /**
+     * Accept only a complete, unambiguous native setup_status receipt with
+     * installed=0 and busy=0. Persisted setup.status can legitimately contain
+     * ready/failed/unknown from an earlier attempt, while the real dvtws2
+     * binary is absent. Do not trust missing, duplicated or busy receipts.
+     */
     public static function isVerifiedMissingUpstream(string $receipt): bool
     {
-        return trim(str_replace("\r\n", "\n", $receipt)) ===
-            "installed=0\nservice=error\nversion=\nsetup=unknown\nbusy=0";
+        $lines = preg_split('/\R/u', trim($receipt));
+        if (!is_array($lines) || count($lines) !== 5) {
+            return false;
+        }
+        $seen = [];
+        foreach ($lines as $line) {
+            if (!preg_match('/^(installed|service|version|setup|busy)=(.*)$/D', $line, $m) ||
+                array_key_exists($m[1], $seen)) {
+                return false;
+            }
+            $seen[$m[1]] = $m[2];
+        }
+        return count($seen) === 5 &&
+            $seen['installed'] === '0' &&
+            $seen['service'] === 'error' &&
+            $seen['version'] === '' &&
+            $seen['busy'] === '0' &&
+            in_array($seen['setup'], ['unknown', 'ready', 'failed'], true);
     }
 
     /** All five Voice services, with the original full-model snapshot gate. */

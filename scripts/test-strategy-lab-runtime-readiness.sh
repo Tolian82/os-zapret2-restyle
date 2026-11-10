@@ -72,6 +72,44 @@ grep -Fq 'if protocol == "quic":' "${CANDIDATE_PY}"
 grep -Fq 'if protocol == "udp":' "${CANDIDATE_PY}"
 grep -Fq 'candidate run' "${ROOT_DIR}/src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_runner.sh"
 
+# Exercise actual Python readiness states, not just grep-based shape checks.
+PYTHONPATH="${SCRIPT_DIR}" "${STRATEGY_LAB_PYTHON_BIN:-python3}" - <<'PY'
+import json
+import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from strategy_lab_py import candidate
+
+os.environ["STRATEGY_LAB_RUNTIME_START_TIMEOUT"] = "3"
+os.environ["STRATEGY_LAB_RUNTIME_READY_POLL"] = "0.01"
+candidate.time.sleep = lambda _: None
+with TemporaryDirectory(prefix="g11-readiness-") as temp:
+    work = Path(temp)
+    candidate.runtime_dir = lambda job_id: work
+    def check(case, observations, kind, ready=False, fatal=""):
+        (work / "dvtws2.log").write_text(fatal)
+        snapshots = iter(observations)
+        candidate._runtime_snapshot = lambda job_id: next(snapshots)
+        evidence = candidate._readiness("job.G11")
+        disk = json.loads((work / "readiness.json").read_text())
+        assert evidence == disk, (case, evidence, disk)
+        assert evidence["ready"] is ready, (case, evidence)
+        assert evidence["failure_kind"] == kind, (case, evidence)
+        assert isinstance(evidence["attempts"], int) and evidence["attempts"] > 0
+        assert "command" in disk and "process_identity" in disk
+    down = {"process_identity": False, "socket_ready": False, "command": ""}
+    proc = {"process_identity": True, "socket_ready": False, "command": ""}
+    sock = {"process_identity": False, "socket_ready": True, "command": ""}
+    up = {"process_identity": True, "socket_ready": True, "command": ""}
+    check("neither", [down] * 3, "process-and-divert-unavailable")
+    check("socket", [sock] * 3, "process-identity-unverified")
+    check("process", [proc] * 3, "divert-socket-unavailable")
+    check("one-good", [down, down, up], "readiness-not-stable")
+    check("stable", [down, up, up], "", True)
+    check("fatal", [down], "engine-fatal-log", fatal="FATAL cannot bind divert")
+print("PASS_G11_RUNTIME_READINESS_DIAGNOSTICS=1")
+PY
+
 # QUIC/UDP compatibility runners may only select protocol parameters and enter
 # the same Python candidate runner; they cannot regain shell readiness policy.
 for runner in \

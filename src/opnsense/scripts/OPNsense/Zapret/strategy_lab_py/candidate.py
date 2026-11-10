@@ -331,6 +331,22 @@ def _fatal_reason(log_text: str) -> str:
     return ""
 
 
+def _readiness_failure_kind(identity: bool, socket_ready: bool, fatal: str,
+                            stable_checks: int) -> str:
+    """Non-sensitive reason based on observed PID, divert socket and log."""
+    if fatal:
+        return "engine-fatal-log"
+    if not identity and not socket_ready:
+        return "process-and-divert-unavailable"
+    if not identity:
+        return "process-identity-unverified"
+    if not socket_ready:
+        return "divert-socket-unavailable"
+    if stable_checks < 2:
+        return "readiness-not-stable"
+    return ""
+
+
 def _readiness(job_id: str) -> dict[str, Any]:
     work = runtime_dir(job_id)
     output = work / "readiness.json"
@@ -369,6 +385,8 @@ def _readiness(job_id: str) -> dict[str, Any]:
             "attempts": attempt,
             "stable_checks": stable,
             "fatal_reason": fatal,
+            "failure_kind": _readiness_failure_kind(
+                identity, socket_ready, fatal, stable),
         }
         _atomic_json(output, last)
         if ready:
@@ -393,6 +411,7 @@ def _readiness(job_id: str) -> dict[str, Any]:
         "attempts": 0,
         "stable_checks": 0,
         "fatal_reason": "runtime snapshot unavailable",
+        "failure_kind": "snapshot-unavailable",
     }
 
 
@@ -628,7 +647,10 @@ def run_candidate(
         runtime_evidence = _readiness(job_id)
         timings["readiness_ms"] = telemetry.elapsed_ms(phase_started)
         if not runtime_evidence.get("ready"):
-            reason = runtime_evidence.get("fatal_reason") or "candidate runtime did not become ready"
+            # Include bounded PID/socket/sampling reason, never command args.
+            failure_kind = runtime_evidence.get("failure_kind") or "unknown"
+            reason = runtime_evidence.get("fatal_reason") or (
+                "candidate runtime did not become ready: " + failure_kind)
             raise RuntimeError(str(reason))
         phase_started = time.monotonic()
         endpoint_results = [_probe_endpoint(binding, protocol) for binding in bindings]
