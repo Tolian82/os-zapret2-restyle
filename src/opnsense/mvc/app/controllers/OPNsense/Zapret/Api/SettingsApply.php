@@ -18,6 +18,7 @@ require_once __DIR__ . '/VoiceApplyCandidate.php';
 require_once __DIR__ . '/VoiceSettingsSnapshot.php';
 require_once __DIR__ . '/VoiceCandidateXml.php';
 require_once __DIR__ . '/VoiceModelValues.php';
+require_once __DIR__ . '/WanRequirement.php';
 
 final class SettingsApply
 {
@@ -109,6 +110,42 @@ final class SettingsApply
             return false;
         }
         return true;
+    }
+
+    /**
+     * LC-06E: inactive Strategies requests are diagnostic-only when the
+     * selected WAN is unchanged. Check before overlay/validation: a native
+     * clean Config has seeded YouTube data and may omit optional Voice nodes.
+     */
+    public static function isPassiveStrategiesRequest(array $current, array $submitted): bool
+    {
+        if (!isset($current['general']) || !is_array($current['general']) ||
+            (isset($submitted['general']) && !is_array($submitted['general'])) ||
+            WanRequirement::effectiveWan($current) !==
+                WanRequirement::effectiveWan($current, $submitted)) {
+            return false;
+        }
+        // Unknown/ambiguous enabled fields must never authorize a shortcut.
+        foreach ([$current, $submitted] as $state) {
+            $values = [$state['general']['enabled'] ?? null];
+            foreach (['telegram', 'discord', 'x', 'sip', 'custom'] as $service) {
+                $values[] = $state['voice'][$service]['enabled'] ?? null;
+            }
+            foreach ($values as $raw) {
+                if ($raw === null) {
+                    continue;
+                }
+                try {
+                    if (!in_array(VoiceModelValues::text($raw), ['0', '1'], true)) {
+                        return false;
+                    }
+                } catch (\InvalidArgumentException $error) {
+                    return false;
+                }
+            }
+        }
+        return !WanRequirement::runtimeRequested($current) &&
+            !WanRequirement::runtimeRequested($current, $submitted);
     }
 
     /**

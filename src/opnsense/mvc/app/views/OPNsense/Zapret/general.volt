@@ -180,7 +180,13 @@
 
         // Keep known pre-dispatch errors localized like the rest of the UI.
         // Other PHP exception strings are not suitable as UI translations.
-        function localizeStrategiesApplyError(message) {
+        function localizeStrategiesApplyError(message, reason) {
+            // Server gettext and browser language can differ.
+            if (reason === 'runtime-not-installed') {
+                return isRussian
+                    ? 'Требуется установка службы zapret2'
+                    : 'The zapret2 service must be installed';
+            }
             if (!isRussian) return message;
             const translations = {
                 'Select a WAN interface': 'Укажите WAN интерфейс',
@@ -1110,7 +1116,7 @@
                         // Only explicitly rejected, pre-dispatch errors are
                         // editable without a new Config snapshot.
                         showRuntimeError(runtimeText.applyError,
-                            localizeStrategiesApplyError(data.message));
+                            localizeStrategiesApplyError(data.message, data.reason));
                     }
                     finishApply();
                 }
