@@ -12,6 +12,8 @@
 
 **Nine-stage smoke result:** [#42777032678](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42777032678) **PASS** for published `_1` STOPPED predecessor → published `_33` and all nine ordered native smoke phases, with menu invalidation, Config retention, package local purge self-delete and clean defaults. The receipt explicitly refuses to claim complete A01–A22, two comprehensive regressions or old `_1` RUNNING upgrade. A separate source-only `_36` native witness tests the last item under unchanged physical `_33` assets; none of this instructs the owner to install before full G10A.
 
+**Дальнейшее усиление native G10A (_37, source-only, _33 package unchanged):** в успешно испытанную 9-фазную VM добавляются реальные OPNsense HTTPS cookie/CSRF/Volt и Settings GET со сверкой сохранённых XML, Voice всех пяти профилей, Extra Resources status/inventory и отрицательные Lab start/cancel/result **дважды** (сразу после обновления и после штатного uninstall/reinstall). На чистой установке дополнительно проверяется HTTPS GET десяти доменов/стратегии до первого Start. Тест обязан сравнить исходный Config, IPFW и PID и отказывать при изменении. Все проверки выполняются с отмеченной границей: **read-only/negative ≠ полноценная установка Extra, две функциональные регрессии, два Lab search или A01–A22**. Пакет `_37` не публикуется.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)

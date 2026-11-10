@@ -79,6 +79,20 @@ jobs:
           assert r["used_disposable_file_pkg_repository"] is False
           assert r["all_A01_A22_live_acceptance_tested"] is False
           assert r["complete_functional_regression_twice_tested"] is False
+          assert r["twice_authenticated_https_readonly_regression"] is True
+          assert r["fresh_default_authenticated_https_read"] is True
+          for stage in ("2", "6"):
+              checks=r["stages"][stage]["real_authenticated_https_readonly"]
+              assert checks["real_root_login_cookie_csrf_and_php_volt"] is True
+              assert checks["settings_model_matches_saved_config"] is True
+              assert checks["voice_five_services_http_read"] is True
+              assert checks["extra_resource_status_and_inventory_http"] is True
+              assert checks["lab_idle_and_invalid_jobs_safely_refused"] is True
+              assert checks["config_pid_ipfw_unchanged"] is True
+              assert checks["actual_extra_install_remove_done_here"] is False
+              assert checks["actual_standard_extended_lab_search_done_here"] is False
+          assert r["stages"]["9"]["cold_defaults_authenticated_https_get"] is True
+          assert r["stages"]["9"]["full_A01_A22_native_regression_completed"] is False
           assert r["owner_appliance_modified"] is False
           print("PASS_G10A_NINE_ORDERED_NATIVE_SMOKE_BUT_FULL_ACCEPTANCE_OPEN=1")
           PY

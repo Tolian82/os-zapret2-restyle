@@ -107,6 +107,127 @@ def live(label):
              "65431" in row and "lo0" in row for row in rules.splitlines()),
          "NATIVE_LOOPBACK_IPFW_NOT_INSTALLED_" + label)
 
+def authenticated_readonly_regression(label):
+    """Real installed MVC/HTTPS session, CSRF and bounded negative APIs.
+
+    Run once after the published upgrade and again after stock Firmware
+    uninstall + same published package reinstall. It is NOT a substitute for
+    a full Lab strategy search or real Extra Resources installation.
+    """
+    voice = load("g10a_native_voice_https_" + label,
+                 "stage2-opnsense-real-native-voice-http.py")
+    auth = load("g10a_native_auth_resources_" + label,
+                "stage5-installed-auth-web.py")
+    g04 = load("g10a_native_gui_model_" + label,
+               "stage2-opnsense-g04-native-runtime.py")
+    before_config = historical.CONFIG.read_bytes()
+    before_rules = call(["/sbin/ipfw", "-q", "list"], timeout=30)
+    before_pid = Path("/var/run/dvtws2.pid").read_text().strip()
+    web = voice.GuestHttps()
+    voice.login(web)
+    general = web.request("GET", "/ui/zapret")
+    diagnostics = web.request("GET", "/ui/zapret/diagnostics")
+    need("frm_GeneralSettings" in general and
+         "/api/zapret/settings/apply" in general and
+         "resourcesStatus" in general and
+         "resourcesInventory" in general and
+         "purge-os-zapret2-restyle.sh" in general and
+         "strategyLabBtn" in diagnostics and
+         "/api/zapret/strategy_lab/status" in diagnostics,
+         "NATIVE_WEB_MAIN_OR_DIAGNOSTICS_MISSING_" + label)
+    model = web.api("GET", "/api/zapret/settings/get").get("zapret")
+    native = historical.xml().find("./OPNsense/Zapret")
+    need(isinstance(model, dict) and native is not None and
+         isinstance(model.get("general"), dict) and
+         isinstance(model.get("strategy"), dict) and
+         isinstance(model.get("hostlist"), dict) and
+         g04.same_gui_multiline(
+             model["strategy"].get("trafficargs"),
+             native.findtext("strategy/trafficargs") or "") and
+         g04.same_gui_multiline(
+             model["hostlist"].get("youtubedomains"),
+             native.findtext("hostlist/youtubedomains") or ""),
+         "NATIVE_HTTPS_GUI_MODEL_DIFFERS_FROM_USER_CONFIG_" + label)
+    voice_model = web.api("GET", "/api/zapret/voice/load")
+    need(isinstance(voice_model.get("zapret"), dict) and
+         isinstance(voice_model["zapret"].get("voice"), dict) and
+         set(voice_model["zapret"]["voice"]) >=
+         {"telegram", "discord", "x", "sip", "custom"} and
+         re.fullmatch("[0-9a-f]{64}", str(voice_model.get("snapshot", "")))
+         is not None,
+         "NATIVE_HTTPS_VOICE_MODEL_INCOMPLETE_" + label)
+    status = auth.resource_status(
+        web.api("POST", "/api/zapret/service/resourcesStatus", {}))
+    inventory = auth.inventory_status(
+        web.api("POST", "/api/zapret/service/resourcesInventory", {}))
+    need(status["busy"] is False, "NATIVE_EXTRA_BUSY_" + label)
+    need(web.api("GET", "/api/zapret/service/resourcesStatus").get("status")
+         == "failed" and
+         web.api("GET", "/api/zapret/service/resourcesInventory").get("status")
+         == "failed", "NATIVE_EXTRA_UNAUTHORIZED_METHOD_ACCEPTED_" + label)
+    idle = web.api("POST", "/api/zapret/strategy_lab/status",
+                   {"job_id": "@active"})
+    need(idle.get("status") == "idle",
+         "NATIVE_LAB_JOB_STARTED_DURING_READONLY_REGRESSION_" + label)
+    for path in ("cancel", "result"):
+        answer = web.api("POST", "/api/zapret/strategy_lab/" + path,
+                         {"job_id": "../invalid"})
+        need(answer.get("status") == "error" and
+             "Invalid Strategy Lab job id" in answer.get("message", ""),
+             "NATIVE_LAB_INVALID_JOB_NOT_REJECTED_" + label)
+    invalid = web.api("POST", "/api/zapret/strategy_lab/start",
+                      {"target": "", "mode": "standard", "language": "en"})
+    need(invalid.get("status") == "error" and
+         "Invalid Strategy Lab" in invalid.get("message", ""),
+         "NATIVE_LAB_INVALID_START_NOT_REFUSED_" + label)
+    need(historical.CONFIG.read_bytes() == before_config and
+         call(["/sbin/ipfw", "-q", "list"], timeout=30) == before_rules and
+         Path("/var/run/dvtws2.pid").read_text().strip() == before_pid,
+         "NATIVE_READONLY_HTTPS_CHANGED_CONFIG_IPFW_OR_ENGINE_" + label)
+    return {
+        "real_root_login_cookie_csrf_and_php_volt": True,
+        "settings_model_matches_saved_config": True,
+        "voice_five_services_http_read": True,
+        "extra_resource_status_and_inventory_http": True,
+        "extra_inventory_available": inventory,
+        "lab_idle_and_invalid_jobs_safely_refused": True,
+        "config_pid_ipfw_unchanged": True,
+        "actual_extra_install_remove_done_here": False,
+        "actual_standard_extended_lab_search_done_here": False,
+    }
+
+
+def cold_defaults_over_authenticated_https():
+    """Read the post-purge FIRST package defaults before any setup/Start."""
+    voice = load("g10a_cold_native_voice_https",
+                 "stage2-opnsense-real-native-voice-http.py")
+    g04 = load("g10a_cold_native_gui_model",
+               "stage2-opnsense-g04-native-runtime.py")
+    before = historical.CONFIG.read_bytes()
+    web = voice.GuestHttps()
+    voice.login(web)
+    page = web.request("GET", "/ui/zapret")
+    need("frm_GeneralSettings" in page and
+         "purge-os-zapret2-restyle.sh" in page,
+         "COLD_GUI_MAIN_OR_LOCAL_PURGE_LINK_MISSING")
+    model = web.api("GET", "/api/zapret/settings/get").get("zapret")
+    node = historical.xml().find("./OPNsense/Zapret")
+    need(node is not None and isinstance(model, dict) and
+         isinstance(model.get("strategy"), dict) and
+         isinstance(model.get("hostlist"), dict) and
+         g04.same_gui_multiline(
+             model["strategy"].get("trafficargs"),
+             node.findtext("strategy/trafficargs") or "") and
+         g04.same_gui_multiline(
+             model["hostlist"].get("youtubedomains"),
+             node.findtext("hostlist/youtubedomains") or "") and
+         historical.CONFIG.read_bytes() == before and
+         not Path("/var/run/dvtws2.pid").exists(),
+         "COLD_HTTPS_GUI_DEFAULTS_NOT_IDENTICAL_OR_MUTATED")
+    historical.assert_no_capture()
+    return True
+
+
 def functional_smoke(label, first=False):
     if first:
         historical.exercise_running_on_loopback()
@@ -119,7 +240,12 @@ def functional_smoke(label, first=False):
     live(label + "_AFTER_RESTART")
     need(historical.xml().findtext("./OPNsense/Zapret/g11Sentinel") ==
          "g11-disposable-published-package", "USER_SETTINGS_LOST_" + label)
-    return "PASS_NATIVE_LOOPBACK_START_STOP_RESTART_SMOKE_ONLY"
+    https = authenticated_readonly_regression(label)
+    return {
+        "native_loopback_start_stop_restart": True,
+        "real_authenticated_https_readonly": https,
+        "full_functional_regression_completed": False,
+    }
 
 def native_gate():
     historical.gate()
@@ -223,12 +349,17 @@ def run():
 
     # 9. Clean defaults, first upstream setup and loopback engine; not A01-A22.
     historical.verify_clean_defaults()
+    cold_defaults_over_authenticated_https()
     historical.seed_existing_saved_config()
     historical.exercise_running_on_loopback()
     live("FRESH_FIRST_START")
     call([str(SERVICE), "stop"], timeout=180)
     clean_rules()
-    stages["9"] = "PASS_CLEAN_DEFAULTS_AND_FIRST_NATIVE_LOOPBACK_SMOKE_ONLY"
+    stages["9"] = {
+        "cold_defaults_authenticated_https_get": True,
+        "first_real_native_loopback_start_stop": True,
+        "full_A01_A22_native_regression_completed": False,
+    }
 
     need(sha(oldpkg) == OLD[1] and sha(newpkg) == NEW[1] and
          sha(INSTALLER) == INSTALLER_SHA and
@@ -242,6 +373,8 @@ def run():
         "original_stable_predecessor_was_stopped": True,
         "original_stable_running_upgrade_tested": False,
         "complete_functional_regression_twice_tested": False,
+        "twice_authenticated_https_readonly_regression": True,
+        "fresh_default_authenticated_https_read": True,
         "all_A01_A22_live_acceptance_tested": False,
         "used_disposable_file_pkg_repository": False,
         "native_GUI_server_uninstall_menu": True,

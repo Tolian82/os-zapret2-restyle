@@ -65,6 +65,23 @@ class PackagedPurgeTest(unittest.TestCase):
         self.assertIn('setup_transaction.sh', native)
         self.assertNotIn('NOT_EMPTY_FOR_G01_CONFIG_SEED', native)
 
+    def test_published_nine_stage_runs_exact_two_http_regressions_and_cold_get(self):
+        native = (ROOT / "scripts/stage11-published-nine-step-native.py").read_text()
+        self.assertIn("def authenticated_readonly_regression(label):", native)
+        self.assertIn("def cold_defaults_over_authenticated_https():", native)
+        self.assertEqual(native.count('functional_smoke("UPGRADED", first=True)'), 1)
+        self.assertEqual(native.count('functional_smoke("REINSTALLED", first=False)'), 1)
+        self.assertEqual(native.count('https = authenticated_readonly_regression(label)'), 1)
+        self.assertIn('cold_defaults_over_authenticated_https()', native)
+        self.assertIn('"complete_functional_regression_twice_tested": False', native)
+        self.assertIn('"twice_authenticated_https_readonly_regression": True', native)
+        self.assertIn('"fresh_default_authenticated_https_read": True', native)
+        self.assertIn('"full_functional_regression_completed": False', native)
+        self.assertIn('"actual_standard_extended_lab_search_done_here": False', native)
+        self.assertIn('"actual_extra_install_remove_done_here": False', native)
+        self.assertIn("historical.CONFIG.read_bytes() == before_config", native)
+        self.assertIn('NATIVE_READONLY_HTTPS_CHANGED_CONFIG_IPFW_OR_ENGINE_', native)
+
     def test_readme_includes_local_safety_instructions(self):
         readme = (ROOT / "README.md").read_text()
         self.assertIn(LOCAL + " --dry-run", readme)
