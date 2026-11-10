@@ -115,6 +115,8 @@
 
 **G11 LC-06E/LC-12D, source-only `v0.6.3_46` (10.11.2026):** G11 предыдущей версии тестировал уже стёртый через `G05.main` первоначальный Config и пустой POST, из-за чего пропустил реальный GUI-дефект. Изолированная нативная OPNsense 26.7 должна начать с законного стартового десятидоменного YouTube и TCP+QUIC seed, без установленного upstream сохранить WAN-only, проверить нижний Apply (неизменённый seed, полный POST seed, очистка unsaved и сохранённый empty) с точной API/GUI RU/EN формулировкой и отсутствием изменений Config/IPFW/процессов. При runtime readiness FAIL сохранить точный `failure_kind` PID/divert/socket/stability/fatal и исследовать отдельный owner RUNNING Job. Только после этого решать о новой публикации; не подменять реальную сеть недоступным IP-контролем.
 
+**G11 LC-12E, after merged `v0.6.3_46`, 10.11.2026:** the original G06 native RUNNING/no-action smoke stops at Stage10. In its *same* disposable VM and established RUNNING shared-FD9 ordinary+Voice mode, additionally exercise a real Stage50 negative-control Lab until every candidate has PID/process identity, divert socket, clean log and >=2 stable samples. Cancel *only after* Stage50, then verify Stage90+99, original RUNNING state, saved Config and runtime byte hashes, original FD9 id, owned and foreign IPFW rule equivalence, and cleared active.job. Do not change core WAN, launcher or readiness timeout without failed native receipts. This is an infrastructure witness, not YouTube DPI/IPv6/owner-live acceptance; P0 #1022 remains OPEN.
+
 ## Этап 09 — устранение Stage-60 internal ERROR на blocked target
 
 **Задача:** LC-13, [#973](https://github.com/Tolian82/os-zapret2-restyle/issues/973).
