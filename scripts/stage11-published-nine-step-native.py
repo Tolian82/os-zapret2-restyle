@@ -140,8 +140,43 @@ def authenticated_readonly_regression(label):
     need(installed_view.is_file() and not installed_view.is_symlink() and
          "purge-os-zapret2-restyle.sh" in installed_view.read_text(),
          "NATIVE_PUBLISHED_INSTALLED_GENERAL_VOLT_MISSING_" + label)
-    need("purge-os-zapret2-restyle.sh" in general,
-         "NATIVE_HTTPS_RENDERED_PURGE_LINK_MISSING_" + label)
+    if "purge-os-zapret2-restyle.sh" not in general:
+        # Diagnostic ONLY on a disposable VM: installed Volt is attested above
+        # but HTTPS may serve an older compiled Phalcon view. Derive native
+        # cache dir through AppConfig and delete at most ONE exact plugin view
+        # cache entry to establish causality. Regardless of result, REFUSE
+        # G10A acceptance and do not mutate owner/foreign resources.
+        query = ('require_once("script/load_phalcon.php"); '
+                 '$c = new \OPNsense\Core\AppConfig(); '
+                 'echo (string)$c->application->cacheDir;')
+        location = call(["/usr/local/bin/php", "-r", query], timeout=35).strip()
+        folder = Path(location)
+        eligible = []
+        if folder.is_dir() and not folder.is_symlink():
+            for item in folder.iterdir():
+                if (item.name.lower().endswith(
+                        "_opnsense_zapret_general.volt.php") and
+                        item.name.lower().startswith("_usr_local_opnsense_") and
+                        item.is_file() and not item.is_symlink() and
+                        item.stat().st_nlink == 1):
+                    eligible.append(item)
+        stale_source = (len(eligible) == 1 and
+                        "purge-os-zapret2-restyle.sh" not in
+                        eligible[0].read_text(errors="replace"))
+        after_invalidate = False
+        if len(eligible) == 1:
+            eligible[0].unlink()
+            fresh = web.request("GET", "/ui/zapret")
+            after_invalidate = "purge-os-zapret2-restyle.sh" in fresh
+        print("G10A_VOLT_CACHE_DIAGNOSTIC=" + json.dumps({
+            "compiled_plugin_general_count": len(eligible),
+            "compiled_general_lacks_new_link": stale_source,
+            "new_page_visible_after_exact_cache_unlink": after_invalidate,
+            "source_file_contains_link": True,
+            "production_hook_or_other_cache_changed": False,
+            "disposable_vm_only": True,
+        }, sort_keys=True), flush=True)
+        raise Refusal("NATIVE_HTTPS_RENDERED_PURGE_LINK_MISSING_" + label)
     need("strategyLabBtn" in diagnostics,
          "NATIVE_HTTPS_DIAGNOSTICS_LAB_BUTTON_MISSING_" + label)
     need("/api/zapret/strategy_lab/status" in diagnostics,
