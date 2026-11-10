@@ -22,6 +22,8 @@ REGISTER = Path("/usr/local/opnsense/scripts/firmware/register.php")
 PHP = "/usr/local/bin/php"
 MENU_XML = Path("/usr/local/opnsense/mvc/app/models/OPNsense/Zapret/Menu/Menu.xml")
 REMOVE = Path("/usr/local/opnsense/scripts/firmware/remove.sh")
+PURGER = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh")
+CANONICAL = ROOT / "scripts/purge-os-zapret2-restyle.sh"
 
 
 class GateFailure(Exception):
@@ -124,12 +126,18 @@ def preflight():
 def qualify():
     pkg = preflight()
     pkg_sha = sha(pkg)
+    require(PURGER.is_file() and not PURGER.is_symlink() and sha(PURGER) == sha(CANONICAL),
+            "G02_INSTALLED_PERSISTENT_PURGE_MISSING")
+    original_purge_inode = PURGER.stat().st_ino
     before_menu = menu_cache(refresh=True)
     require(menu_has_zapret(before_menu), "G02_PLUGIN_NOT_PRESENT_IN_INITIAL_MENU")
     seed_user_config()
 
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
-    require(setup.is_file(), "G02_UPSTREAM_INSTALLER_MISSING")
+    # G02 uses the same transactional upstream entrypoint as OPNsense GUI.
+    # Bare setup.sh is intentionally not the GUI service path: it cannot own
+    # a staging-root transaction or rollback an incomplete first checkout.
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
+    require(setup.is_file(), "G02_NATIVE_TRANSACTIONAL_UPSTREAM_INSTALLER_MISSING")
     execute(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=350)
     engine = RUNTIME / "binaries/my/dvtws2"
     require(engine.is_file() and os.access(engine, os.X_OK),
@@ -149,6 +157,17 @@ def qualify():
     require(execute(["/usr/sbin/pkg", "info", "-e", PKG], expected=(0, 1)).returncode == 1,
             "G02_PACKAGE_STILL_REGISTERED")
     require(not MENU_XML.exists(), "G02_PLUGIN_MENU_FILE_SURVIVED_NATIVE_REMOVAL")
+    require(PURGER.is_file() and not PURGER.is_symlink() and
+            PURGER.stat().st_uid == 0 and
+            stat.S_IMODE(PURGER.stat().st_mode) == 0o755 and
+            PURGER.stat().st_ino == original_purge_inode and
+            sha(PURGER) == sha(CANONICAL),
+            "G02_UNINSTALL_REMOVED_OR_MODIFIED_PERSISTENT_PURGE")
+    dry = execute(["/bin/sh", str(PURGER), "--dry-run"], timeout=45)
+    require("Package: absent" in dry.stdout and
+            "Saved OPNsense.Zapret settings: present" in dry.stdout and
+            "DRY RUN:" in dry.stdout,
+            "G02_UNINSTALLED_PERSISTENT_PURGE_DRY_RUN_FAILED")
     require(not before_menu.exists(), "G02_MENU_CACHE_NOT_INVALIDATED")
     after = config()
     require(not registered(after), "G02_FIRMWARE_REGISTRATION_REMAINS")
@@ -174,6 +193,11 @@ def qualify():
     require(sha(owned) == before_user_sha and sha(engine) == before_engine_sha,
             "G02_REINSTALL_CHANGED_UPSTREAM_OR_CUSTOM_RESOURCES")
     require(registered(config()), "G02_FIRMWARE_REINSTALL_NOT_REGISTERED")
+    require(PURGER.is_file() and not PURGER.is_symlink() and
+            PURGER.stat().st_uid == 0 and
+            stat.S_IMODE(PURGER.stat().st_mode) == 0o755 and
+            sha(PURGER) == sha(CANONICAL),
+            "G02_REINSTALL_PERSISTENT_PURGER_UNTRUSTED")
     require(menu_has_zapret(menu_cache(refresh=True)),
             "G02_REINSTALLED_PLUGIN_MENU_NOT_RETURNED")
     require(sha(pkg) == pkg_sha, "G02_REINSTALL_PACKAGE_SHA_CHANGED")
@@ -182,6 +206,8 @@ def qualify():
         "package_sha256": pkg_sha,
         "real_firmware_remove_script": True,
         "native_menu_cache_invalidated_without_gui_restart": True,
+        "persistent_cli_survived_real_firmware_uninstall": True,
+        "postuninstall_dry_run_without_package": True,
         "saved_Config_and_upstream_and_customLua_preserved": True,
         "same_physical_package_reinstalled": True,
         "owner_live_browser_tested": False,

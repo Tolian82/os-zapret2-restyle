@@ -31,7 +31,7 @@ EXPECTED_ROLES = ("python-runtime", "engine-build-make", "engine-build-pkgconf",
 HOOKS = {"+PRE_INSTALL": "pre-install", "+POST_INSTALL": "post-install",
          "+PRE_DEINSTALL": "pre-deinstall", "+POST_DEINSTALL": "post-deinstall"}
 SERVICE = "opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-PURGE_SCRIPT = "opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
+PURGE_SCRIPT = "opnsense/share/zapret2-restyle/purge-os-zapret2-restyle.sh"
 BINARY = "libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate"
 LAUNCHER = "libexec/zapret2-restyle/run-curl-impersonate.sh"
 
@@ -314,12 +314,19 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
          "POLICY_ARCHIVED_BYTES_MISMATCH")
     modes = command(["tar", "-tvf", str(pkg)]).decode().splitlines()
     for rel, path in name_to_source.items():
+        key = "usr/local/" + rel
+        candidates = [name for name in names if name.lstrip("./") == key]
+        need(len(candidates) == 1,
+             "NATIVE_ARCHIVE_MISSING_SOURCE_MEMBER:" + rel +
+             ":count=" + str(len(candidates)) +
+             ":near=" + ",".join(name for name in names
+                                 if Path(name).name == Path(rel).name)[:250])
         member = private.old.exact_installed_tar_member(names, rel)
         got = command(["tar", "-xOf", str(pkg), member], timeout=35)
         need(got == path.read_bytes(), "NATIVE_ARCHIVE_SOURCE_BYTES_CHANGED:" + rel)
     need(archived_file(pkg, PURGE_SCRIPT) ==
          (ROOT / "scripts/purge-os-zapret2-restyle.sh").read_bytes(),
-         "NATIVE_PACKAGED_PURGE_DIFFERS_FROM_G01_CANONICAL")
+         "NATIVE_STAGED_PERSISTENT_PURGE_DIFFERS_FROM_G01_CANONICAL")
     for rel in (SERVICE, PURGE_SCRIPT, BINARY, LAUNCHER,
                 "libexec/zapret2-restyle/check-curl-impersonate.sh"):
         member = private.old.exact_installed_tar_member(names, rel)
