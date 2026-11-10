@@ -377,6 +377,8 @@ The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BL
 
 ## Independent full removal — persistent CLI (testing v0.6.3_43)
 
+**Normal GUI uninstall is not purge.** It preserves user data and the separately owned purge CLI; destructive complete removal requires an explicit confirmation and verified private backup.
+
 The [canonical G01 purge script](scripts/purge-os-zapret2-restyle.sh) is deployed by native `POST_INSTALL` from a package-owned template as a separately owned CLI at `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. **Ordinary GUI/`pkg delete` uninstall preserves this CLI** and user Config/upstream runtime/Lua/BIN; an explicitly confirmed **full purge** removes the plugin if still installed, then all owned Zapret2 remnants and the independent script itself. This correct behavior was verified by the owner on `_40` and is included in the immutable published `_43`. Historical `_33` is defective (interactive stdin EOF and purge-script removed on ordinary uninstall) and must not be used for these operations.
 
 Read-only root-console inspection:
