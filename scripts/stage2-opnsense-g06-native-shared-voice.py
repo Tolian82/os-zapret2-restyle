@@ -89,6 +89,8 @@ def check_rules(rows, voice, ordinary):
 
 
 def fast():
+    need(re.fullmatch(r"job\.[A-Za-z0-9]{4,40}", "job.jUGcJp") is not None,
+         "G11_JOB_ID_REGEX_REJECTED_REAL_NATIVE_JOB")
     voice = ("19000 divert 989 udp from any to table(zapret2_voice_telegram) "
              "out not diverted not sockarg xmit lo0")
     ordinary = ("19001 divert 989 tcp from any to any 65431 "
@@ -250,7 +252,7 @@ def lab_running_no_action(web, engine_sha, foreign_before, initial):
     need(start.get("status") == "ok" and
          start.get("state") == "queued" and
          isinstance(start.get("job_id"), str) and
-         re.fullmatch(r"job\\.[A-Za-z0-9]{4,40}", start["job_id"]) is not None,
+         re.fullmatch(r"job\.[A-Za-z0-9]{4,40}", start["job_id"]) is not None,
          "G11_NO_ACTION_NATIVE_LAB_NOT_QUEUED:" +
          json.dumps({k: str(start.get(k, ""))[:240] for k in (
              "status", "state", "reason", "message", "job_id", "transient")},
