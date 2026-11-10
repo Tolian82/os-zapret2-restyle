@@ -219,6 +219,18 @@ def exercise_running_on_loopback():
             ("could not install", "RUNTIME_BUILD_FAILED"),
         )
         matches = [label for phrase, label in rules if phrase in observed]
+        # Source is a fully synthetic disposable CI guest; emit ONLY bounded
+        # product-generated ERROR lines. Never print Config, runtime, tokens,
+        # user domains or arbitrary subprocess output.
+        errors = []
+        for raw in (native_setup.stdout + "\n" + native_setup.stderr).splitlines():
+            line = raw.strip()
+            if not line.startswith("ERROR:"):
+                continue
+            if (len(line) <= 220 and re.fullmatch(r"[A-Za-z0-9 _./:(),;=+-]+", line)):
+                errors.append(line)
+        print("G11_NATIVE_SETUP_FIXED_ERRORS=" +
+              json.dumps(errors[:3], ensure_ascii=True), flush=True)
         raise Refusal("EXACT_NATIVE_RUNTIME_SETUP_REFUSED:rc=" +
                       str(native_setup.returncode) +
                       ":class=" + (matches[0] if matches else "UNCLASSIFIED"))
