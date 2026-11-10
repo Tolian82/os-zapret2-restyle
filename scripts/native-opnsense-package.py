@@ -31,7 +31,7 @@ EXPECTED_ROLES = ("python-runtime", "engine-build-make", "engine-build-pkgconf",
 HOOKS = {"+PRE_INSTALL": "pre-install", "+POST_INSTALL": "post-install",
          "+PRE_DEINSTALL": "pre-deinstall", "+POST_DEINSTALL": "post-deinstall"}
 SERVICE = "opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-PURGE_SCRIPT = "opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh"
+PURGE_SCRIPT = "share/zapret2-restyle/purge-os-zapret2-restyle.sh"
 BINARY = "libexec/zapret2-restyle/curl-impersonate/bin/curl-impersonate"
 LAUNCHER = "libexec/zapret2-restyle/run-curl-impersonate.sh"
 
@@ -319,7 +319,7 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
         need(got == path.read_bytes(), "NATIVE_ARCHIVE_SOURCE_BYTES_CHANGED:" + rel)
     need(archived_file(pkg, PURGE_SCRIPT) ==
          (ROOT / "scripts/purge-os-zapret2-restyle.sh").read_bytes(),
-         "NATIVE_PACKAGED_PURGE_DIFFERS_FROM_G01_CANONICAL")
+         "NATIVE_STAGED_PERSISTENT_PURGE_DIFFERS_FROM_G01_CANONICAL")
     for rel in (SERVICE, PURGE_SCRIPT, BINARY, LAUNCHER,
                 "libexec/zapret2-restyle/check-curl-impersonate.sh"):
         member = private.old.exact_installed_tar_member(names, rel)

@@ -476,16 +476,32 @@ def execute():
     need(CONFIG.read_bytes() == post_config, "REPEAT_DRY_RUN_CHANGED_CONFIG")
     print("G10A_INSTALLED_PACKAGE_PURGER_SELF_DELETE=PASS", flush=True)
     print("G01_PHASE1_INSTALLED_PURGE=PASS", flush=True)
-    # Second independently destructive invocation: plugin package and its
-    # service entrypoint are GONE, but saved model and custom assets survive.
+    # Second destructive case: actual reinstall followed by stock Firmware
+    # removal. The locally deployed purge must still exist without a pkg.
+    root = Path(__file__).resolve().parents[1]
+    revision = re.search(r"(?m)^PLUGIN_REVISION=\s*([0-9]+)\s*$",
+                         (root / "Makefile").read_text())
+    need(revision is not None, "REMNANT_PACKAGE_REVISION_MISSING")
+    pkgpath = root / "dist" / (
+        NAME + "-" + (root / "VERSION").read_text().strip()
+        + "_" + revision.group(1) + ".pkg")
+    need(pkgpath.is_file() and not pkgpath.is_symlink(),
+         "REMNANT_REAL_PACKAGE_ARCHIVE_MISSING")
+    require_run(["/usr/sbin/pkg", "add", "-f", str(pkgpath)], timeout=180)
+    attest_installed_purger()
+    require_run(["/bin/sh", "/usr/local/opnsense/scripts/firmware/remove.sh",
+                 NAME], timeout=220)
+    need(run(["/usr/sbin/pkg", "info", "-e", NAME]).returncode == 1,
+         "REMNANT_PACKAGE_UNINSTALL_FAILED")
+    attest_installed_purger()
     seed_after_normal_uninstall()
     second_saved = CONFIG.read_bytes()
-    dry_uninstalled = require_run(["/bin/sh", str(PURGER), "--dry-run"], "DRY RUN:")
+    dry_uninstalled = require_run(["/bin/sh", str(PACKAGED_PURGER), "--dry-run"], "DRY RUN:")
     need("Package: absent" in dry_uninstalled and
          "Saved OPNsense.Zapret settings: present" in dry_uninstalled,
          "POSTUNINSTALL_LEFTOVER_INVENTORY_WRONG")
     need(second_saved == CONFIG.read_bytes(), "POSTUNINSTALL_DRY_RUN_CHANGED_CONFIG")
-    require_run(["/bin/sh", str(PURGER), "--purge", "--yes-disposable"],
+    require_run(["/bin/sh", str(PACKAGED_PURGER), "--purge", "--yes-disposable"],
                 "POSTCHECK:", timeout=200)
     need(not RUNTIME.exists() and not STATE.exists() and
          not LOGS.exists() and not LAB.exists() and
@@ -496,7 +512,8 @@ def execute():
     need(len(all_backups) == 2, "MISSING_SECOND_PRIVATE_CONFIG_BACKUP")
     need(any(sha(p.read_bytes()) == sha(second_saved) for p in all_backups),
          "SECOND_CONFIG_BACKUP_CHANGED_BYTES")
-    print("G01_PHASE2_UNINSTALLED_REMNANTS=PASS", flush=True)
+    need(not os.path.lexists(PACKAGED_PURGER), "POSTUNINSTALL_PURGE_SCRIPT_SURVIVED")
+    print("G01_PHASE2_REAL_FIRMWARE_UNINSTALL_PERSISTENT_PURGE=PASS", flush=True)
     running_case = verify_running_purge_after_reinstall()
 
 
@@ -512,7 +529,7 @@ def execute():
         "custom_lua_bin_job_logs_removed": True,
         "repo_removed": True,
         "second_dry_run_idempotent": True,
-        "postuninstall_legacy_tail_purge_tested": True,
+        "postuninstall_real_firmware_retained_cli_purge_tested": True,
         "exact_upstream_v1_0_7_tree_purged": True,
         "runtime_ipfw_rules_tested": running_case["real_owned_ipfw_removed"],
         "real_running_process_tested": running_case["real_dvtws2_pid"],

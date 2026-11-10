@@ -3,7 +3,10 @@
 # G02: ordinary OPNsense pkg uninstall. The plugin package payload is already
 # removed when pkg invokes this hook. Do NOT perform G01 full purge: saved
 # OPNsense.Zapret configuration, upstream git/bin, custom Lua/BIN, resources,
-# logs and unrelated plugins all remain untouched.
+# logs and unrelated plugins all remain untouched. The root-owned unowned
+# CL-01-PERSIST purge command is independently deployed by +POST_INSTALL
+# and MUST remain after ordinary GUI/pkg uninstall (and be available when
+# the package is absent). ONLY confirmed G01 --purge removes that file.
 #
 # A normal GUI firmware removal additionally invokes register.php remove;
 # calling the stock helper here is intentionally idempotent and also covers
