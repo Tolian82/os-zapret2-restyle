@@ -61,6 +61,9 @@ class PackagedPurgeTest(unittest.TestCase):
         self.assertEqual(native.count('str(PURGER), "--purge"'), 1)
         self.assertIn('str(PACKAGED_PURGER), "--dry-run"', native)
         self.assertIn('G10A_INSTALLED_PACKAGE_PURGER_SELF_DELETE=PASS', native)
+        self.assertIn('G01_REAL_CLEAN_INSTALL_DEFAULT_CONFIG_MISMATCH', native)
+        self.assertIn('setup_transaction.sh', native)
+        self.assertNotIn('NOT_EMPTY_FOR_G01_CONFIG_SEED', native)
 
     def test_readme_includes_local_safety_instructions(self):
         readme = (ROOT / "README.md").read_text()

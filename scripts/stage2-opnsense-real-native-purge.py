@@ -127,7 +127,19 @@ def preflight():
          "SOURCE_SHA_MISMATCH")
     config = CONFIG.read_bytes()
     root = xml(config)
-    need(root.find("OPNsense/Zapret") is None, "NOT_EMPTY_FOR_G01_CONFIG_SEED")
+    # LC-05 now persists default Zapret Config during the real package
+    # POST_INSTALL. The fixture must verify it, never require it absent.
+    z = root.find("OPNsense/Zapret")
+    defaults = (z.findtext("hostlist/youtubedomains") or "").strip().splitlines() if z is not None else []
+    strategy = (z.findtext("strategy/trafficargs") or "") if z is not None else ""
+    need(z is not None and z.find("purgeSentinel") is None and
+         (z.findtext("general/enabled") or "0") == "0" and
+         (z.findtext("general/waninterface") or "") == "" and
+         defaults == ["youtube.com", "googlevideo.com", "yt.be", "youtu.be",
+                      "ytimg.com", "youtubei.googleapis.com", "youtube.googleapis.com",
+                      "youtube-nocookie.com", "ggpht.com", "ssl.gstatic.com"] and
+         "--filter-tcp=80,443" in strategy and "--filter-udp=443" in strategy,
+         "G01_REAL_CLEAN_INSTALL_DEFAULT_CONFIG_MISMATCH")
     need(BACKUP_ROOT.exists() is False, "BACKUP_ROOT_NOT_FRESH")
     need(not REPO.exists(), "REPO_ALREADY_EXISTS")
     return config
@@ -144,9 +156,12 @@ $c->lock();
 try {
     $root = $c->object();
     if (!isset($root->OPNsense)) $root->addChild("OPNsense");
-    if (isset($root->OPNsense->Zapret)) exit(73);
-    $entry = $root->OPNsense->addChild("Zapret");
-    $entry->addChild("enabled", "0");
+    // A real first install ALREADY has LC-05 defaults. Uninstalled-remnant
+    // scenario starts without a Zapret node. Never replace existing values.
+    $entry = isset($root->OPNsense->Zapret)
+        ? $root->OPNsense->Zapret
+        : $root->OPNsense->addChild("Zapret");
+    if (isset($entry->purgeSentinel)) exit(73);
     $entry->addChild("purgeSentinel", "g01-disposable-owned");
     $c->save();
 } finally { $c->unlock(); }
@@ -160,7 +175,7 @@ def seed():
     # Install the ACTUAL original upstream v1.0.7, not an empty directory
     # masquerading as an engine. This verifies the full checkout/binary tree
     # can be purged without touching the installed OPNsense system.
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
     need(setup.is_file() and not setup.is_symlink(), "NATIVE_SETUP_SCRIPT_MISSING")
     upstream = run(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=300)
     need(upstream.returncode == 0, "NATIVE_UPSTREAM_1_0_7_INSTALL_FAILED:" +
@@ -259,19 +274,22 @@ $c = \OPNsense\Core\Config::getInstance();
 $c->lock();
 try {
     $root = $c->object();
-    if (!isset($root->OPNsense)) $root->addChild("OPNsense");
-    if (isset($root->OPNsense->Zapret)) exit(73);
-    $z = $root->OPNsense->addChild("Zapret");
-    $g = $z->addChild("general");
-    $g->addChild("enabled", "1");
-    $g->addChild("waninterface", "lo0");
-    $g->addChild("divertport", "989");
-    $g->addChild("ports", "65431");
-    $s = $z->addChild("strategy");
-    $s->addChild("trafficargs", "--filter-tcp=65431\n--filter-l7=tls\n--lua-desync=pktmod:ip_ttl=23");
-    $s->addChild("extraargs", "");
-    $h = $z->addChild("hostlist");
-    $h->addChild("mode", "all");
+    if (!isset($root->OPNsense) || !isset($root->OPNsense->Zapret)) exit(73);
+    // Preserve original POST_INSTALL defaults; only set loopback-only values
+    // through the stock Config API for the disposable RUNNING purge witness.
+    $z = $root->OPNsense->Zapret;
+    if (!isset($z->general) || !isset($z->strategy) || !isset($z->hostlist)
+        || isset($z->purgeSentinel)) exit(73);
+    $g = $z->general;
+    $g->enabled = "1";
+    $g->waninterface = "lo0";
+    $g->divertport = "989";
+    $g->ports = "65431";
+    $s = $z->strategy;
+    $s->trafficargs = "--filter-tcp=65431\n--filter-l7=tls\n--lua-desync=pktmod:ip_ttl=23";
+    $s->extraargs = "";
+    $h = $z->hostlist;
+    $h->mode = "all";
     $c->save();
 } finally { $c->unlock(); }
 '''
@@ -281,7 +299,7 @@ try {
          check.findtext("OPNsense/Zapret/general/ports") == "65431",
          "RUNNING_PROFILE_NOT_BOUND_TO_LOOPBACK")
 
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
     installed = run(["/bin/sh", str(setup), "install", "v1.0.7"], timeout=300)
     need(installed.returncode == 0, "RUNNING_RUNTIME_INSTALL_FAILED:" +
          str(installed.returncode) + ":" + installed.stderr[-450:])
