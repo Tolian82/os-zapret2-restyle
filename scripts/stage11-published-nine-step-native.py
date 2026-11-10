@@ -164,7 +164,25 @@ def authenticated_readonly_regression(label):
                         "purge-os-zapret2-restyle.sh" not in
                         eligible[0].read_text(errors="replace"))
         # Fixed names/flags only; never emit HTML, CSRF tokens or PHP errors.
+        php_error_log = Path("/var/lib/php/tmp/PHP_errors.log")
+        php_tail = ""
+        if php_error_log.is_file() and not php_error_log.is_symlink():
+            php_tail = php_error_log.read_bytes()[-65536:].decode(
+                "utf-8", errors="replace")
         initial_render = {
+            "actual_settings_form_rendered": 'id="frm_GeneralSettings"' in general,
+            "actual_service_line_rendered": 'id="zapretServiceLine"' in general,
+            "actual_bottom_apply_rendered": 'id="reconfigureAct"' in general,
+            "script_closed": "</script>" in general,
+            "style_closed": "</style>" in general,
+            "php_error_log_present": bool(php_tail),
+            "php_error_log_mentions_base_form": "base_form.volt.php" in php_tail,
+            "php_error_log_mentions_type_error": "TypeError" in php_tail,
+            "php_error_log_mentions_count_null": (
+                "count(): Argument #1" in php_tail and
+                "null given" in php_tail),
+            "php_error_log_mentions_zapret_general": (
+                "opnsense_zapret_general.volt.php" in php_tail),
             "old_service_section_present": "zapretServiceLine" in general,
             "bottom_apply_present": "reconfigureAct" in general,
             "useful_links_text_mentioned_anywhere": "zapretUsefulLinks" in general,
