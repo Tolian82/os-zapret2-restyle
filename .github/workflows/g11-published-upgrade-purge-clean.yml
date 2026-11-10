@@ -1,0 +1,110 @@
+name: G11 published upgrade, full purge, clean reinstall (disposable)
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/g11-published-upgrade-purge-clean.py'
+      - '.github/workflows/g11-published-upgrade-purge-clean.yml'
+      - 'scripts/purge-os-zapret2-restyle.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/g11-published-upgrade-purge-clean.py'
+      - '.github/workflows/g11-published-upgrade-purge-clean.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g11-published-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  published-stable-to-testing:
+    name: Published _1 to _29 repo upgrade, RUNNING purge, clean pkg
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Source syntax and exact published digest pins
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/g11-published-upgrade-purge-clean.py
+          python3.13 scripts/g11-published-upgrade-purge-clean.py --self-test
+          sh -n scripts/purge-os-zapret2-restyle.sh
+      - name: Download both immutable GitHub releases and verify tag and bytes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/g11-published
+          gh release download v0.6.3 \
+            --pattern os-zapret2-restyle-0.6.3_1.pkg \
+            --dir dist/g11-published
+          gh release download v0.6.3_29 \
+            --pattern os-zapret2-restyle-0.6.3_29.pkg \
+            --dir dist/g11-published
+          echo 'eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be  dist/g11-published/os-zapret2-restyle-0.6.3_1.pkg' | sha256sum --check --status
+          echo 'c5ceab0088d22205f46b2260e25e1d93c1500a59d8a19afa7b63b4d8f7f6e852  dist/g11-published/os-zapret2-restyle-0.6.3_29.pkg' | sha256sum --check --status
+          test "$(gh api repos/${GITHUB_REPOSITORY}/git/ref/tags/v0.6.3_29 --jq '.object.sha')" = '0ba0c5fcf041201465c647b94597e51c2a1ac40a'
+          test "$(gh api repos/${GITHUB_REPOSITORY}/releases/tags/v0.6.3_29 --jq '.prerelease')" = true
+          test "$(gh api repos/${GITHUB_REPOSITORY}/releases/tags/v0.6.3 --jq '.prerelease')" = false
+          echo 'PASS_G11_TWO_PUBLISHED_RELEASE_SHA_PINS=1'
+      - name: Disposable OPNsense 26.7 real pkg catalog UPGRADE, full purge, clean install
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          cpu: 2
+          mem: 4096
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            sh scripts/compatibility-bootstrap.sh
+            GITHUB_ACTIONS=true ZAPRET2_G11_PUBLISHED_DISPOSABLE=1 ZAPRET2_G01_DISPOSABLE_NATIVE=1 ZAPRET2_PURGE_DISPOSABLE_GUEST=1 /usr/local/bin/python3 scripts/g11-published-upgrade-purge-clean.py
+      - name: Verify exact published asset receipts and untested GUI scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 - <<'PY'
+          import json
+          from pathlib import Path
+          o=json.loads(Path('dist/g11-published-upgrade-purge-clean.json').read_text())
+          assert o['status'] == 'PASS_G11_EXACT_PUBLISHED_UPGRADE_PURGE_CLEAN'
+          assert o['source_old'] == 'v0.6.3_1' and o['source_new'] == 'v0.6.3_29'
+          assert o['published_old_pkg_sha256'] == 'eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be'
+          assert o['published_new_pkg_sha256'] == 'c5ceab0088d22205f46b2260e25e1d93c1500a59d8a19afa7b63b4d8f7f6e852'
+          keys = ['old_exact_published_pkg_installed',
+                  'real_file_pkg_repository_upgrade',
+                  'existing_user_and_foreign_config_preserved',
+                  'real_runtime_loopback_fd9_ipfw',
+                  'real_native_full_purge_after_upgrade',
+                  'foreign_ci_repo_not_purged',
+                  'original_config_private_backup_verified',
+                  'same_published_package_clean_reinstall_from_catalog',
+                  'clean_initial_domains_and_tcp_quic_strategy',
+                  'no_auto_wan_or_service_start']
+          assert all(o[k] is True for k in keys)
+          assert o['owner_appliance_modified'] is False
+          assert o['browser_firmware_gui_tested'] is False
+          assert o['real_wan_dpi_or_voice_media_tested'] is False
+          print('PASS_G11_EXACT_PUBLISHED_5_STEP_PRE_OWNER_NATIVE=1')
+          PY
+      - name: Retain redacted exact-asset acceptance receipt
+        uses: actions/upload-artifact@v7
+        with:
+          name: g11-published-upgrade-purge-clean-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/g11-published-upgrade-purge-clean.json
+          if-no-files-found: error
+          retention-days: 7
