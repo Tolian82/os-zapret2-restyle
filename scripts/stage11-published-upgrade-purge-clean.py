@@ -198,8 +198,12 @@ def assert_no_capture():
 def exercise_running_on_loopback():
     # Real upstream, native service, original FD9, only lo0:65431; no WAN
     # DPI bypass is claimed. The G01 test already used this safe profile.
-    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh")
-    need(setup.is_file() and not setup.is_symlink(), "UPSTREAM_INSTALLER_MISSING")
+    # Native first-setup MUST use the same transaction+FD9 path as GUI:
+    # stock pkg can render a template-only /usr/local/etc/zapret2 directory.
+    # Direct low-level setup.sh correctly refuses that valid initial state.
+    setup = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/setup_transaction.sh")
+    need(setup.is_file() and not setup.is_symlink(),
+         "NATIVE_TRANSACTIONAL_UPSTREAM_INSTALLER_MISSING")
     native_setup = subprocess.run(
         ["/bin/sh", str(setup), "install", "v1.0.7"],
         capture_output=True, text=True, timeout=360, check=False)
@@ -217,6 +221,7 @@ def exercise_running_on_loopback():
             ("zapret service is in an incomplete or unknown state", "INCOMPLETE_NATIVE_OWNER"),
             ("original git", "GIT_RESOURCE_GUARD_REFUSED"),
             ("could not install", "RUNTIME_BUILD_FAILED"),
+            ("incomplete or foreign upstream path", "DIRECT_SETUP_TEMPLATE_GUARD"),
         )
         matches = [label for phrase, label in rules if phrase in observed]
         # Source is a fully synthetic disposable CI guest; emit ONLY bounded
