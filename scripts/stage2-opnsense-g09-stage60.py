@@ -144,6 +144,22 @@ def accepted(g08, result, job):
     expansion = artifact(job, "parameter-expansion.json")
     need(family.get("accepted") == [] and type(family.get("completed")) is int and
          family["completed"] > 0, "G09_STAGE50_NOT_ALL_REJECTED")
+    # Stage50 completed != a ready runtime. Demand the actual candidate
+    # process/socket/clean-log evidence for every rejected network family.
+    families = family.get("families")
+    need(isinstance(families, list) and len(families) == family["completed"],
+         "G11_STAGE50_CANDIDATE_SET_INCOMPLETE")
+    for candidate in families:
+        runtime = candidate.get("runtime") if isinstance(candidate, dict) else None
+        need(isinstance(runtime, dict) and candidate.get("error") is not True and
+             runtime.get("ready") is True and
+             runtime.get("process_identity") is True and
+             runtime.get("socket_ready") is True and
+             runtime.get("log_clean") is True and
+             type(runtime.get("stable_checks")) is int and
+             runtime["stable_checks"] >= 2,
+             "G11_STAGE50_REJECTED_UNREADY_RUNTIME:" +
+             str(candidate.get("id") if isinstance(candidate, dict) else "invalid"))
     need(expansion.get("search_epoch_id") == family.get("search_epoch_id") and
          type(expansion.get("completed")) is int and expansion["completed"] > 0 and
          expansion.get("working") == [] and
@@ -151,6 +167,7 @@ def accepted(g08, result, job):
          expansion.get("partial") is False, "G09_STAGE60_NOT_EXHAUSTED")
     return {"job_id": job, "outcome": "NO_CANDIDATE",
             "stage50_completed": family["completed"],
+             "stage50_ready": len(families),
             "stage60_completed": expansion["completed"],
             "stage60_stopped_reason": expansion["stopped_reason"],
             "stage90": "STOPPED_RESTORED"}
@@ -218,6 +235,38 @@ def execute():
     owned, foreign = g08.partition_rules(g08.observed_rules())
     need(not owned, "G09_PREEXISTING_LAB_RULES")
     g08.stopped_truth(web, saved, foreign)
+    # Native owner-specific regression: generated zapret.conf need not exist,
+    # and must never override the saved WAN. Read-only adapter action, no
+    # firewall, runtime, original Config or service changes.
+    import tempfile
+    adapter = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh")
+    preflight = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/wan_preflight.sh")
+    authoritative = subprocess.run(
+        ["/bin/sh", str(preflight), "device"],
+        capture_output=True, text=True, timeout=10,
+    )
+    need(authoritative.returncode == 0 and
+         re.fullmatch(r"[A-Za-z0-9_.:-]+", authoritative.stdout.strip()) is not None,
+         "G11_NATIVE_WAN_DEVICE_PRECHECK_FAILED")
+    with tempfile.TemporaryDirectory(prefix="g11-wan-source-") as temp:
+        stale = Path(temp) / "zapret.conf"
+        stale.write_text('WAN_IF="obsolete_if"\n', encoding="utf-8")
+        for label, generated in (
+            ("absent", Path(temp) / "not-generated.conf"),
+            ("stale", stale),
+        ):
+            env = os.environ.copy()
+            env.pop("STRATEGY_LAB_WAN_DEVICE", None)
+            env.pop("STRATEGY_LAB_TEST_WAN_OVERRIDE", None)
+            env["STRATEGY_LAB_CONFIG_FILE"] = str(generated)
+            actual = subprocess.run(
+                ["/bin/sh", str(adapter), "wan"], env=env,
+                capture_output=True, text=True, timeout=10,
+            )
+            need(actual.returncode == 0 and
+                 actual.stdout.strip() == authoritative.stdout.strip(),
+                 "G11_NATIVE_STAGE50_WAN_" + label.upper() + ":" +
+                 actual.stderr.strip()[:180])
     # TEST-NET may be dropped before the WAN/IPFW rule. A Model-C packet
     # attribution control must have a genuine native route. No route changes.
     global TARGET

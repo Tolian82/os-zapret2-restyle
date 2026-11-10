@@ -291,6 +291,7 @@ def main():
             "STRATEGY_LAB_RUN_DIR": str(home),
             "STRATEGY_LAB_JOBS_DIR": str(home / "jobs"),
             "STRATEGY_LAB_WAN_DEVICE": "lo0",
+            "STRATEGY_LAB_TEST_WAN_OVERRIDE": "1",
             "STRATEGY_LAB_DVTWS_BIN": str(engine),
             "STRATEGY_LAB_DAEMON_BIN": "/usr/sbin/daemon",
             "STRATEGY_LAB_PS_BIN": "/bin/ps",

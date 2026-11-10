@@ -26,6 +26,12 @@
 
 [Publisher #42839892447](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42839892447) successfully built and verified [`v0.6.3_43.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg), but failed **after publication** because GitHub Actions cannot create its required record PR. Its pushed evidence branch is completed manually in docs-only `_44`; no package rebuild or stable promotion. [G06](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42836322198) native original-FD9 RUNNING/no-action Stage10/90 PASS, [G09](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42836322103) real STOPPED Stage50/60/90 PASS, [G11 no-runtime HTTPS + G05 WAN-only](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42838740717) PASS, and [Chromium WAN select/Apply/F5](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42838739432) PASS. **Physical owner G11 `_43`, actual blocked ISP DPI, IPv6 and real Voice media are NOT TESTED.**
 
+## G11 owner `v0.6.3_43` regression — source candidate `_45`, OPEN
+
+Owner physically upgraded `_40 → _43`, then independently performed full approved purge/true clean install. With valid selected WAN and working upstream, Lab Stage00/10/20/30/40 PASS but Stage50 FAIL: clean STOPPED/RUNNING, empty/populated strategies → `candidate system adapter wan failed` before a temporary runtime or `readiness.json`; existing RUNNING upgrade → independent `candidate runtime did not become ready`; all preserve Stage90 STOPPED/RUNNING correctly. User-empty lower Apply without installed upstream still returns generic RU preflight, despite LC-06D. This evidence supersedes the earlier inference of owner compatibility from disposable OPNsense PASS. [P0 issue #1022](https://github.com/Tolian82/os-zapret2-restyle/issues/1022) OPEN.
+
+Source-only `v0.6.3_45` corrects only the Stage50 canonical saved-WAN adapter and hardens actual G09 candidate readiness proof. It is **not published or owner-tested**. The missing-upstream GUI message and real RUNNING candidate readiness remain separately blocked; do not purge/reinstall again to obtain evidence.
+
 ## Почему нужен дополнительный native gate
 
 [Предыдущий G10 S3](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42716247017)

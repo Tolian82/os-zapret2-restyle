@@ -23,8 +23,8 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_44` — docs-only testing-publication record for `_43`. **No `_44.pkg` published**. |
-| **Published testing candidate** | [`v0.6.3_43.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg), SHA-256 `1d978e5f8ade0649a2b5faf06a7e6cd1322c40641f65273f0521a4013f55060a`, source `41bd7d5cd70f6cef12928ee264613ee8af2f2e70`, FreeBSD:15:amd64. G06/G09/G05/G11/Chromium native PASS; owner G11 on `_43` OPEN. |
+| **Current development candidate** | `v0.6.3_45` — **source-only**, fixes Stage50 reading obsolete/missing `zapret.conf` instead of saved OPNsense WAN, with native missing/stale generated Config and per-candidate readiness tests; no `_45.pkg` published, owner acceptance still OPEN. |
+| **Published testing candidate** | [`v0.6.3_43.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg), SHA-256 `1d978e5f8ade0649a2b5faf06a7e6cd1322c40641f65273f0521a4013f55060a`, source `41bd7d5cd70f6cef12928ee264613ee8af2f2e70`, FreeBSD:15:amd64; **owner G11 Stage50 FAIL** despite previous disposable VM PASS (see [#1022](https://github.com/Tolian82/os-zapret2-restyle/issues/1022)). |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -376,6 +376,8 @@ The two Zapret2 resource directories above hold both installed upstream-tracked 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
 ## Independent full removal — persistent CLI (testing v0.6.3_43)
+
+**Normal GUI uninstall is not purge.** It preserves user data and the separately owned purge CLI; destructive complete removal requires an explicit confirmation and verified private backup.
 
 The [canonical G01 purge script](scripts/purge-os-zapret2-restyle.sh) is deployed by native `POST_INSTALL` from a package-owned template as a separately owned CLI at `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. **Ordinary GUI/`pkg delete` uninstall preserves this CLI** and user Config/upstream runtime/Lua/BIN; an explicitly confirmed **full purge** removes the plugin if still installed, then all owned Zapret2 remnants and the independent script itself. This correct behavior was verified by the owner on `_40` and is included in the immutable published `_43`. Historical `_33` is defective (interactive stdin EOF and purge-script removed on ordinary uninstall) and must not be used for these operations.
 

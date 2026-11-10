@@ -189,6 +189,7 @@ export STRATEGY_LAB_NETSTAT_BIN=/nonexistent
 export STRATEGY_LAB_LUA_DIR="${TMP}/lua"
 export STRATEGY_LAB_FAKE_DIR="${TMP}/fake"
 export STRATEGY_LAB_WAN_DEVICE=mock0
+export STRATEGY_LAB_TEST_WAN_OVERRIDE=1
 export MOCK_IPFW_STATE="${TMP}/ipfw.state"
 export MOCK_IPFW_LOG="${TMP}/ipfw.log"
 export MOCK_IPFW_COUNTER="${TMP}/ipfw.counter"

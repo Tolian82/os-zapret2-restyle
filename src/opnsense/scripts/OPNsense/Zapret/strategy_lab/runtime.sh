@@ -50,26 +50,24 @@ strategy_lab_candidate_result_file()
 
 strategy_lab_candidate_resolve_wan()
 {
+    # Explicit opt-in for isolated FreeBSD/mock kernel test fixtures only.
+    # No environment override alone may bypass saved WAN in production.
     if [ -n "${STRATEGY_LAB_WAN_DEVICE:-}" ]; then
+        [ "${STRATEGY_LAB_TEST_WAN_OVERRIDE:-0}" = 1 ] || {
+            echo 'wan-device-override-refused' >&2
+            return 69
+        }
         printf '%s\n' "${STRATEGY_LAB_WAN_DEVICE}"
         return 0
     fi
 
-    [ -r "${STRATEGY_LAB_CONFIG_FILE}" ] || return 1
-    # shellcheck disable=SC1090
-    . "${STRATEGY_LAB_CONFIG_FILE}"
-    [ -n "${WAN_IF:-}" ] || return 1
-
-    # Reuse the original native logical-to-kernel device resolver. It
-    # supports assigned TUN/OPT even when pluginctl -4 has no IPv4 address.
-    # WAN-first admission remains enforced before job creation.
-    [ -r "${SCRIPT_DIR}/backend/common.sh" ] &&
-        [ -r "${SCRIPT_DIR}/backend/config.sh" ] || return 1
-    (
-        . "${SCRIPT_DIR}/backend/common.sh"
-        . "${SCRIPT_DIR}/backend/config.sh"
-        config_resolve_interface "${WAN_IF}"
-    )
+    # WAN-first and kernel device resolution use the same saved OPNsense
+    # Config, regardless of stale/absent generated zapret.conf.
+    [ -x "${SCRIPT_DIR}/wan_preflight.sh" ] || {
+        echo 'wan-native-preflight-unavailable' >&2
+        return 69
+    }
+    "${SCRIPT_DIR}/wan_preflight.sh" device
 }
 
 strategy_lab_candidate_prepare_files()
