@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_33` — G10A packaged local full-purge script and main-page instructions, **source candidate only until native checks and publication**. Published testing `v0.6.3_29` does not meet the new nine-step acceptance. Stable remains `v0.6.3_1`. |
+| **Published testing candidate** | [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33) — permanent SHA-pinned `.pkg` plus companion installer; packaged G01 purge/self-delete and Chromium WAN verified on disposable OPNsense ([G01 native](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772554936), [S3 A/B/C/D](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772555090)). **Nine-step published-byte G10A gate and owner G11 NOT YET PASS.** Current source revision `_34` is publication documentation only, unpublished. Stable remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -370,9 +370,9 @@ The two Zapret2 resource directories above hold both installed upstream-tracked 
 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
-## Independent full removal — installed local script (G10A source candidate)
+## Independent full removal — installed local script (testing v0.6.3_33)
 
-The [canonical standalone G01 purge source](scripts/purge-os-zapret2-restyle.sh) is shipped verbatim in G10A package candidates as the executable local file `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. The plugin's main Settings page has **Useful links / Полезные ссылки** with the local commands and a link to the reviewed source. This implementation must still pass the full disposable-native nine-step G10A gate **before production use**; the published testing `v0.6.3_29` does not include this packaged script.
+The [canonical standalone G01 purge source](scripts/purge-os-zapret2-restyle.sh) is shipped verbatim in published testing [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33) as the executable local file `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. The plugin's main Settings page has **Useful links / Полезные ссылки** with the local commands. **Exact installed-file self-deletion has passed** the [disposable native G01 test](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772554936) for both STOPPED and RUNNING paths. **This is not authorization for production destructive use:** the full published-asset nine-step native gate and owner G11 still have not passed; prior testing `_29` lacks the packaged script.
 
 Use the OPNsense **root console**. The first command only inventories, and changes nothing:
 
