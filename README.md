@@ -23,8 +23,8 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_43` — source-only G11 LC-06D fix: exact RU/EN no-runtime message for unchanged/empty passive Strategies Apply, preserving WAN-first and WAN-only save. Native HTTPS and real browser not yet accepted; no `_43.pkg` published. |
-| **Published testing candidate** | [`v0.6.3_40.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_40/os-zapret2-restyle-0.6.3_40.pkg), SHA-256 `2e87cac8ca6e68b450fb3215936d726d02795e8dc910311e948905d443589ccd`, exact source `698cb7f`. Owner confirms purge and clean reinstall/initial Config; Strategy Lab Stage 10/50 regression remains OPEN. |
+| **Current development candidate** | `v0.6.3_44` — docs-only testing-publication record for `_43`. **No `_44.pkg` published**. |
+| **Published testing candidate** | [`v0.6.3_43.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg), SHA-256 `1d978e5f8ade0649a2b5faf06a7e6cd1322c40641f65273f0521a4013f55060a`, source `41bd7d5cd70f6cef12928ee264613ee8af2f2e70`, FreeBSD:15:amd64. G06/G09/G05/G11/Chromium native PASS; owner G11 on `_43` OPEN. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -236,15 +236,15 @@ The repository is transported over HTTPS and uses the project-approved unsigned 
 
 ## Installing a testing package — native `.pkg` ONLY
 
-**Owner decision 10 November 2026:** No new companion `.sh` installers, no SH download links, no wrapper commands. Each testing prerelease publishes one verified native FreeBSD:15:amd64 **`.pkg`** asset with its SHA-256. Example using the already-published immutable `v0.6.3_33` (not the unpublished source-only `_37`):
+**Owner decision 10 November 2026:** No new companion `.sh` installers, no SH download links, no wrapper commands. Each testing prerelease publishes one verified native FreeBSD:15:amd64 **`.pkg`** asset with its SHA-256. Example using the immutable published native testing `v0.6.3_43.pkg` (the subsequent `_44` is docs-only):
 
 ```sh
-fetch -o /root/os-zapret2-restyle-0.6.3_33.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_33/os-zapret2-restyle-0.6.3_33.pkg
-pkg add -f /root/os-zapret2-restyle-0.6.3_33.pkg
+fetch -o /root/os-zapret2-restyle-0.6.3_43.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg
+pkg add -f /root/os-zapret2-restyle-0.6.3_43.pkg
 pkg info -x os-zapret2-restyle
 ```
 
-**Dependencies:** local `pkg add -f` does not download missing dependencies. On a fresh OPNsense first inspect the verified physical `+MANIFEST` (e.g. `tar -xOf /root/os-zapret2-restyle-0.6.3_33.pkg +MANIFEST`), then install only its missing/outdated package dependencies interactively using **official OPNsense** `pkg install -r OPNsense <missing-package-names>`; review removals/upgrades before confirmation. Never enable stock FreeBSD repositories, force ignored dependencies (`pkg add -M`), bypass native package hooks, or run `pkg install -f <local.pkg>` (previous native solver SIGSEGV). Keep the package's `PLUGIN_DEPENDS` unchanged and no new testing pkg repository. Package SHA-256 is validated during release publication; the owner may verify it independently. Earlier `.sh` release assets and historic installer experiments remain immutable historical records, **not** current installation instructions. This policy supersedes prior SH delivery parts of `CHAT-027`, `GH-060`, `GH-061` and LC-16 without altering the required nine-stage acceptance scope.
+**Dependencies:** local `pkg add -f` does not download missing dependencies. On a fresh OPNsense first inspect the verified physical `+MANIFEST` (e.g. `tar -xOf /root/os-zapret2-restyle-0.6.3_43.pkg +MANIFEST`), then install only its missing/outdated package dependencies interactively using **official OPNsense** `pkg install -r OPNsense <missing-package-names>`; review removals/upgrades before confirmation. Never enable stock FreeBSD repositories, force ignored dependencies (`pkg add -M`), bypass native package hooks, or run `pkg install -f <local.pkg>` (previous native solver SIGSEGV). Keep the package's `PLUGIN_DEPENDS` unchanged and no new testing pkg repository. Package SHA-256 is validated during release publication; the owner may verify it independently. Earlier `.sh` release assets and historic installer experiments remain immutable historical records, **not** current installation instructions. This policy supersedes prior SH delivery parts of `CHAT-027`, `GH-060`, `GH-061` and LC-16 without altering the required nine-stage acceptance scope.
 
 
 ## First setup
@@ -375,25 +375,23 @@ The two Zapret2 resource directories above hold both installed upstream-tracked 
 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
-## Independent full removal — installed local script (testing v0.6.3_33)
+## Independent full removal — persistent CLI (testing v0.6.3_43)
 
-The [canonical standalone G01 purge source](scripts/purge-os-zapret2-restyle.sh) is shipped verbatim in published testing [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33) as the executable local file `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. Owner decision 10 November 2026: the entire **Useful links / Полезные ссылки** purge card is removed from the Strategies GUI. The destructive operation is **CLI-only** and documented here, never exposed in the web interface. **Exact installed-file self-deletion has passed** the [disposable native G01 test](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772554936) for both STOPPED and RUNNING paths. **This is not authorization for production destructive use:** the full published-asset nine-step native gate and owner G11 still have not passed; prior testing `_29` lacks the packaged script.
+The [canonical G01 purge script](scripts/purge-os-zapret2-restyle.sh) is deployed by native `POST_INSTALL` from a package-owned template as a separately owned CLI at `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. **Ordinary GUI/`pkg delete` uninstall preserves this CLI** and user Config/upstream runtime/Lua/BIN; an explicitly confirmed **full purge** removes the plugin if still installed, then all owned Zapret2 remnants and the independent script itself. This correct behavior was verified by the owner on `_40` and is included in the immutable published `_43`. Historical `_33` is defective (interactive stdin EOF and purge-script removed on ordinary uninstall) and must not be used for these operations.
 
-Use the OPNsense **root console**. The first command only inventories, and changes nothing:
+Read-only root-console inspection:
 
 ```sh
 /usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --dry-run
 ```
 
-**Destructive operation:** only when intentionally performing complete removal after a separate backup/confirmation:
+Only when independently authorizing irreversible complete removal:
 
 ```sh
 /usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --purge
 ```
 
-**Known published `_33.pkg` defect (owner 10 November 2026):** its Python program is passed through stdin using a shell heredoc and the old interactive `input()` reads from the now-exhausted stdin; `--purge` prints inventory and then refuses with `EOF`, so no deletion or backup happened. **Do not retry destructive cleanup with the immutable `_33` copy or treat its refusal as a completed clean install.** The next package candidate reads exact user confirmation only from `/dev/tty` and fails closed without a controlling TTY. The correctly functioning script asks for the exact confirmation phrase `PURGE OS-ZAPRET2-RESTYLE`, creates a verified private copy of `/conf/config.xml` under `/root/zapret2-restyle-purge-backups`, and uses native pkg hooks, ownership/FD9/IPFW checks and native Config API. It removes the plugin's own installed path (including **itself**) only after the shell has passed the full embedded Python program to the interpreter, so deletion of the package file does not interrupt an already started purge. A failed owner/backup/state check refuses destructive progress. It does not remove unrelated system dependencies or foreign configuration.
-
-**Normal GUI uninstall is not purge:** it must preserve saved Zapret configuration, installed upstream, additional Lua/BIN and other plugin data for later reinstall. Native pkg uninstall removes its installed purge-script file, but leaves saved data. A `--purge` invocation that encounters EOF before the exact confirmation changes nothing and does not create a backup. To invoke the installed copy after normal removal, install a **verified corrected package version once published** (do not use `_33` for interactive purge); the separate standalone G01 maintenance source supports the package-absent case only with the same corrected, reviewed TTY confirmation. The `--keep-repo` option deliberately preserves the dedicated repository, so it is not complete removal; `--yes-disposable` is restricted to explicitly identified isolated CI guests. Review [G01 safety and acceptance guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) and [nine-stage G11 procedure](docs/verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md) before production use.
+Full purge requires the exact `PURGE OS-ZAPRET2-RESTYLE` phrase through controlling `/dev/tty` **before any mutation**, a verified private `/conf/config.xml` backup under `/root/zapret2-restyle-purge-backups`, and scoped process/FD9/IPFW ownership checks. The same process works if the package was already removed ordinarily; foreign system data, shared dependencies and unrelated services must remain untouched. `--keep-repo` is not full removal; `--yes-disposable` is isolated-CI-only. The «Полезные ссылки» purge card is removed from the Strategies GUI. Review the [G01 guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) and [nine-step G11 acceptance](docs/verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md). **Owner `_43` full G11 is not yet tested.**
 
 ## Removal policy
 
