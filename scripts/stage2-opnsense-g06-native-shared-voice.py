@@ -14,6 +14,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 from stage2_source_revision import revision_from_makefile, version_from_file
@@ -230,6 +231,96 @@ def voice(web, enabled):
          "G06_VOICE_HTTPS_APPLY_NOT_COMMITTED")
 
 
+def lab_running_no_action(web, engine_sha, foreign_before, initial):
+    """Exact native Stage10 and Stage90 with an installed RUNNING/no-action owner.
+
+    Cancel once the real status.json records Stage10 PASS so this isolated
+    lifecycle regression does not spend a full DPI search budget. All state
+    and owner checks occur after the Lab's original-FD9 restoration.
+    """
+    job = None
+    finished = False
+    stage10_passed = False
+    status_file = None
+    saved = CONFIG.read_bytes()
+    start = web.api("POST", "/api/zapret/strategy_lab/start", {
+        "target": "yandex.ru", "mode": "standard", "language": "ru",
+        "enable_quic": "0", "ipv6_enabled": "0",
+    })
+    need(start.get("status") == "ok" and
+         start.get("state") == "queued" and
+         isinstance(start.get("job_id"), str) and
+         re.fullmatch(r"job\\.[A-Za-z0-9]{4,40}", start["job_id"]) is not None,
+         "G11_NO_ACTION_NATIVE_LAB_NOT_QUEUED")
+    job = start["job_id"]
+    status_file = Path("/var/run/zapret2-restyle/strategy-lab/jobs") / job / "status.json"
+    report = {}
+    try:
+        deadline = time.monotonic() + 240
+        while time.monotonic() < deadline:
+            observed = web.api("POST", "/api/zapret/strategy_lab/status",
+                               {"job_id": job})
+            need(observed.get("job_id") == job and observed.get("state") in (
+                "queued", "running", "cancel_requested", "completed", "error"),
+                "G11_NO_ACTION_NATIVE_LAB_STATUS_INVALID")
+            try:
+                state = json.loads(status_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                state = {}
+            stages = state.get("stages", [])
+            if isinstance(stages, list):
+                stage10_passed = stage10_passed or any(
+                    isinstance(row, dict) and str(row.get("number")) == "10"
+                    and row.get("status") == "PASS" for row in stages
+                )
+            if observed["state"] in ("completed", "error"):
+                report = web.api("POST", "/api/zapret/strategy_lab/result",
+                                 {"job_id": job})
+                finished = True
+                break
+            # One read-only Stage10 witness is enough for this lifecycle test;
+            # request normal cancellation rather than waiting for Stage50/60.
+            if stage10_passed and observed["state"] == "running":
+                web.api("POST", "/api/zapret/strategy_lab/cancel",
+                        {"job_id": job})
+            time.sleep(1)
+        need(finished, "G11_NO_ACTION_NATIVE_LAB_TERMINAL_TIMEOUT")
+        stages = report.get("stages", [])
+        need(isinstance(stages, list) and any(
+            isinstance(row, dict) and str(row.get("number")) == "10"
+            and row.get("status") == "PASS" for row in stages
+        ), "G11_NO_ACTION_STAGE10_FALSE_INCOMPLETE")
+        need(any(isinstance(row, dict) and str(row.get("number")) == "90"
+                 and row.get("status") == "PASS" for row in stages),
+             "G11_NO_ACTION_STAGE90_FAILED")
+        restored = report.get("restoration", {})
+        need(isinstance(restored, dict) and
+             restored.get("verified") is True and
+             restored.get("initial_state") == "RUNNING" and
+             restored.get("final_state") == "RUNNING" and
+             restored.get("strategy_unchanged") is True and
+             restored.get("temporary_runtime_clean") is True,
+             "G11_NO_ACTION_RUNNING_OWNER_NOT_RESTORED")
+        need(web.api("POST", "/api/zapret/strategy_lab/status",
+                     {"job_id": "@active"}).get("status") == "idle",
+             "G11_NO_ACTION_LAB_ACTIVE_JOB_NOT_CLEARED")
+        after = running(engine_sha, foreign_before, 0, 0, "strategies")
+        need(after["id"] == initial["id"] and
+             CONFIG.read_bytes() == saved and not after["rules"],
+             "G11_NO_ACTION_FD9_OWNER_OR_CONFIG_DRIFT")
+        return {"stage10": "PASS", "stage90": "PASS",
+                "initial_state": "RUNNING", "final_state": "RUNNING",
+                "restoration_verified": True, "lab_outcome": report.get("outcome"),
+                "job_id": job}
+    finally:
+        if job is not None and not finished:
+            try:
+                web.api("POST", "/api/zapret/strategy_lab/cancel",
+                        {"job_id": job})
+            except (RuntimeError, OSError, ValueError):
+                pass
+
+
 def execute():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1" and
@@ -270,6 +361,7 @@ def execute():
 
     strategies(web, "", first=True)
     empty_initial = running(binary_sha, foreign_before, 0, 0, "strategies")
+    lab_empty = lab_running_no_action(web, binary_sha, foreign_before, empty_initial)
     voice(web, True)
     only = running(binary_sha, foreign_before, 1, 0, "voice")
     need(only["id"] != empty_initial["id"] and
@@ -326,6 +418,7 @@ def execute():
             "source_sha": head, "engine_sha256": binary_sha,
             "source_provenance": "reused exact G04 native package witness",
             "real_no_action_engine": True,
+            "native_lab_no_action": lab_empty,
             "voice_only_zero_ordinary_rules": True,
             "voice_combined_voice_empty_transitions": True,
             "common_original_fd9_https_owner": True,
