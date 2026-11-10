@@ -164,14 +164,35 @@ def authenticated_readonly_regression(label):
                         "purge-os-zapret2-restyle.sh" not in
                         eligible[0].read_text(errors="replace"))
         after_invalidate = False
+        after_webgui_restart = False
         if len(eligible) == 1:
             eligible[0].unlink()
             fresh = web.request("GET", "/ui/zapret")
             after_invalidate = "purge-os-zapret2-restyle.sh" in fresh
+            # Isolate running FPM/opcache from disk Volt: this is DISPOSABLE
+            # diagnostic only. No global WebGUI restart is added to pkg hooks.
+            if not after_invalidate:
+                attempt = subprocess.run(
+                    ["/usr/local/sbin/configctl", "webgui", "restart"],
+                    capture_output=True, text=True, timeout=180,
+                    check=False)
+                if attempt.returncode == 0:
+                    for n in range(5):
+                        try:
+                            again = voice.GuestHttps()
+                            voice.login(again)
+                            page = again.request("GET", "/ui/zapret")
+                            after_webgui_restart = (
+                                "purge-os-zapret2-restyle.sh" in page)
+                            break
+                        except (voice.Refusal, OSError):
+                            import time
+                            time.sleep(2)
         print("G10A_VOLT_CACHE_DIAGNOSTIC=" + json.dumps({
             "compiled_plugin_general_count": len(eligible),
             "compiled_general_lacks_new_link": stale_source,
             "new_page_visible_after_exact_cache_unlink": after_invalidate,
+            "new_page_visible_after_disposable_webgui_restart": after_webgui_restart,
             "source_file_contains_link": True,
             "production_hook_or_other_cache_changed": False,
             "disposable_vm_only": True,
