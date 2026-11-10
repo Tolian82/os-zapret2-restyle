@@ -76,7 +76,6 @@ jobs:
           echo "package_version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "tag=v${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "asset=os-zapret2-restyle-${PACKAGE_VERSION}.pkg" >> "${GITHUB_OUTPUT}"
-          echo "installer=install-os-zapret2-restyle-${PACKAGE_VERSION}.sh" >> "${GITHUB_OUTPUT}"
           echo "target_sha=${TARGET_SHA}" >> "${GITHUB_OUTPUT}"
 
       - name: Inspect immutable publication state
@@ -86,7 +85,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           ASSET: ${{ steps.candidate.outputs.asset }}
-          INSTALLER: ${{ steps.candidate.outputs.installer }}
           TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
@@ -96,8 +94,7 @@ jobs:
               --arg tag "${TAG}" \
               --arg target "${TARGET_SHA}" \
               --arg asset "${ASSET}" \
-              --arg installer "${INSTALLER}" \
-              '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded") and any(.assets[]; .name == $installer and .state == "uploaded")' \
+              '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded")' \
               <<< "${RELEASE_JSON}" >/dev/null || {
                 echo "Existing release ${TAG} does not match the immutable requested candidate." >&2
                 exit 1
@@ -136,7 +133,6 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           gh release download "${TAG}" --pattern "${ASSET}" --dir dist
-          gh release download "${TAG}" --pattern "${{ steps.candidate.outputs.installer }}" --dir dist
 
       - name: Verify package manifest and digest
         id: package
@@ -160,37 +156,6 @@ jobs:
           echo "sha256=${DIGEST}" >> "${GITHUB_OUTPUT}"
           echo "${DIGEST}  ${ASSET}"
 
-      - name: Generate exact-SHA native installer and verify recovered asset
-        id: installer
-        shell: bash
-        env:
-          PACKAGE_VERSION: ${{ steps.candidate.outputs.package_version }}
-          DIGEST: ${{ steps.package.outputs.sha256 }}
-          INSTALLER: ${{ steps.candidate.outputs.installer }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          from pathlib import Path
-          candidate = os.environ["PACKAGE_VERSION"]
-          sha = os.environ["DIGEST"]
-          installer = os.environ["INSTALLER"]
-          assert len(sha) == 64 and set(sha) <= set("0123456789abcdef")
-          template = Path("scripts/install-testing-package.sh.in").read_text()
-          assert template.count("@PACKAGE_VERSION@") == 1
-          assert template.count("@PACKAGE_SHA256@") == 1
-          exact = template.replace("@PACKAGE_VERSION@", candidate).replace("@PACKAGE_SHA256@", sha)
-          output = Path("dist") / installer
-          if output.exists():
-              assert output.read_text() == exact, "PUBLISHED_INSTALLER_CHANGED"
-          else:
-              output.write_text(exact)
-          output.chmod(0o755)
-          assert "@PACKAGE_" not in output.read_text()
-          PY
-          sh -n "dist/${INSTALLER}"
-          echo "sha256=$(sha256sum "dist/${INSTALLER}" | awk '{print $1}')" >> "${GITHUB_OUTPUT}"
-
       - name: Publish testing prerelease
         if: steps.publication.outputs.already_published != 'true'
         shell: bash
@@ -198,16 +163,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           ASSET: ${{ steps.candidate.outputs.asset }}
-          INSTALLER: ${{ steps.candidate.outputs.installer }}
           TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
 
-          gh release create "${TAG}" "dist/${ASSET}" "dist/${INSTALLER}" \
+          gh release create "${TAG}" "dist/${ASSET}" \
             --target "${TARGET_SHA}" \
             --title "${TAG}" \
             --prerelease \
-            --notes $'Testing candidate built with official OPNsense 26.7 Mk for FreeBSD:15:amd64. Includes SHA-pinned native installer for normal OPNsense dependency solving before stock pkg add. Direct pkg add alone cannot fetch remote dependencies; no stable Pages or pkg repository promotion.'
+            --notes $'Testing candidate built with official OPNsense 26.7 Mk for FreeBSD:15:amd64. Published installation artifact is .pkg only. Use stock OPNsense pkg to resolve manifest-declared dependencies and pkg add -f for the archive. No shell wrapper, no stable Pages or pkg repository promotion.'
 
       - name: Verify published release contract
         shell: bash
@@ -215,7 +179,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           ASSET: ${{ steps.candidate.outputs.asset }}
-          INSTALLER: ${{ steps.candidate.outputs.installer }}
           TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
         run: |
           set -euo pipefail
@@ -225,8 +188,7 @@ jobs:
             --arg tag "${TAG}" \
             --arg target "${TARGET_SHA}" \
             --arg asset "${ASSET}" \
-            --arg installer "${INSTALLER}" \
-            '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded") and any(.assets[]; .name == $installer and .state == "uploaded")' \
+            '.tag_name == $tag and .target_commitish == $target and .draft == false and .prerelease == true and any(.assets[]; .name == $asset and .state == "uploaded")' \
             <<< "${RELEASE_JSON}" >/dev/null
 
           TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha')
@@ -242,8 +204,6 @@ jobs:
           ASSET: ${{ steps.candidate.outputs.asset }}
           TARGET_SHA: ${{ steps.candidate.outputs.target_sha }}
           DIGEST: ${{ steps.package.outputs.sha256 }}
-          INSTALLER: ${{ steps.candidate.outputs.installer }}
-          INSTALLER_SHA: ${{ steps.installer.outputs.sha256 }}
         run: |
           set -euo pipefail
 
@@ -251,7 +211,6 @@ jobs:
           RECORD_FILE="docs/verification/evidence/testing-publications/${TAG}.md"
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           ASSET_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ASSET}"
-          INSTALLER_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/download/${TAG}/${INSTALLER}"
 
           git fetch --no-tags origin main
           if git ls-remote --exit-code --heads origin "${RECORD_BRANCH}" >/dev/null 2>&1; then
@@ -268,11 +227,10 @@ jobs:
           - release/tag: \`${TAG}\`
           - package asset: \`${ASSET}\`
           - SHA-256: \`${DIGEST}\`
-          - installer asset: [${INSTALLER}](${INSTALLER_URL})
-          - installer SHA-256: \`${INSTALLER_SHA}\`
           - ABI: \`FreeBSD:15:amd64\`
           - publication workflow run: [${GITHUB_RUN_ID}](${RUN_URL})
           - direct package asset: [${ASSET}](${ASSET_URL})
+          - owner commands: fetch -o /root/${ASSET} ${ASSET_URL}; pkg add -f /root/${ASSET}; pkg info -x os-zapret2-restyle (install manifest-declared OPNsense dependencies first if absent)
           - stable Pages/pkg repository promoted: **no**
 
           This record is generated by \`.github/workflows/publish-prerelease.yml\`. The publication-record PR remains Draft until bounded current documentation is reconciled under \`GH-060\`–\`GH-061\` and \`DOC-037\`.
@@ -304,7 +262,6 @@ jobs:
           - squash-merge, verify main, and clean this branch without asking for a second owner confirmation.
 
           Direct package asset: ${ASSET_URL}
-          Direct installer asset: ${INSTALLER_URL}
           EOF
             gh pr create \
               --draft \
