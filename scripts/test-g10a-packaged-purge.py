@@ -50,6 +50,18 @@ class PackagedPurgeTest(unittest.TestCase):
         self.assertIn('archived_file(pkg, PURGE_SCRIPT)', code)
         self.assertIn('for rel in (SERVICE, PURGE_SCRIPT, BINARY', code)
 
+    def test_native_installed_g01_runs_package_executable_and_checks_self_delete(self):
+        native = (ROOT / "scripts/stage2-opnsense-real-native-purge.py").read_text()
+        self.assertIn('def attest_installed_purger():', native)
+        self.assertIn('def attest_package_purger_removed():', native)
+        self.assertIn('PACKAGED_PURGER.read_bytes() == PURGER.read_bytes()', native)
+        self.assertIn('stat.S_IMODE(details.st_mode) == 0o755', native)
+        self.assertIn('not os.path.lexists(PACKAGED_PURGER)', native)
+        self.assertEqual(native.count('str(PACKAGED_PURGER), "--purge"'), 2)
+        self.assertEqual(native.count('str(PURGER), "--purge"'), 1)
+        self.assertIn('str(PACKAGED_PURGER), "--dry-run"', native)
+        self.assertIn('G10A_INSTALLED_PACKAGE_PURGER_SELF_DELETE=PASS', native)
+
     def test_readme_includes_local_safety_instructions(self):
         readme = (ROOT / "README.md").read_text()
         self.assertIn(LOCAL + " --dry-run", readme)

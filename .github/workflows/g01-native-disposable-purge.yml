@@ -35,6 +35,7 @@ jobs:
           sh -n scripts/purge-os-zapret2-restyle.sh
           python3.13 -m py_compile scripts/test-purge-os-zapret2-restyle.py scripts/stage2-opnsense-real-native-purge.py
           python3.13 scripts/test-purge-os-zapret2-restyle.py -v
+          python3.13 scripts/test-g10a-packaged-purge.py -v
       - name: Isolated FreeBSD 15 / OPNsense 26.7 genuine pkg install then full destructive G01 purge
         if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_source_only != true) }}
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
