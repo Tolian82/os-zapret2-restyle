@@ -5,8 +5,8 @@
 ## Публикационные исходные данные
 
 - Stable predecessor: [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3), пакет `os-zapret2-restyle-0.6.3_1.pkg`, SHA-256 `eecae7fd21665dd74311323e9359467065663ba6a5662bd0d1c31d847296d0be`.
-- Testing successor: [v0.6.3_29](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_29), source `0ba0c5fcf041201465c647b94597e51c2a1ac40a`, пакет SHA-256 `c5ceab0088d22205f46b2260e25e1d93c1500a59d8a19afa7b63b4d8f7f6e852`, pinned installer SHA-256 `0106dd9ce92203dced4aa82220ac393a38c6f5ff287480a332c51632641619e2`.
-- `v0.6.3_30` — после публикации только docs/source, **не** опубликованный пакет.
+- **Current published testing successor**: [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33), source `48564cde7910f0c3bb463aed9db65d2d6fbaf42f`, exact package SHA-256 `59f38d12bcd09496f8178af597a383062f7045c3e63f8120b964076fdae01b64`, pinned installer SHA-256 `b7cef59e26e73c361f719d098e2a33f177de0bc506a113d9606f8237721f09ba`. **This physical testing package still needs full sequential nine-stage native gate before owner G11.** Historical `_29` remains immutable but is superseded for this G10A qualification.
+- `v0.6.3_34` — only docs/publication record after `_33`; **no `_34.pkg`**. Stable Pages/pkg repository stays on `_1`.
 
 ## Почему нужен дополнительный native gate
 
