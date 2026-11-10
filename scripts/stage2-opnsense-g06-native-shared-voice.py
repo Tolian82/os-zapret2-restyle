@@ -251,7 +251,10 @@ def lab_running_no_action(web, engine_sha, foreign_before, initial):
          start.get("state") == "queued" and
          isinstance(start.get("job_id"), str) and
          re.fullmatch(r"job\\.[A-Za-z0-9]{4,40}", start["job_id"]) is not None,
-         "G11_NO_ACTION_NATIVE_LAB_NOT_QUEUED")
+         "G11_NO_ACTION_NATIVE_LAB_NOT_QUEUED:" +
+         json.dumps({k: str(start.get(k, ""))[:240] for k in (
+             "status", "state", "reason", "message", "job_id", "transient")},
+                    ensure_ascii=False, sort_keys=True))
     job = start["job_id"]
     status_file = Path("/var/run/zapret2-restyle/strategy-lab/jobs") / job / "status.json"
     report = {}
