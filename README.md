@@ -23,6 +23,7 @@
 |---|---|
 | **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
 | **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
+| **Current development candidate** | `v0.6.3_34` — documentation/publication record only; **no `_34.pkg` exists**. The actual testing package is immutable `_33` below. |
 | **Published testing candidate** | [v0.6.3_33](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_33) — permanent SHA-pinned `.pkg` plus companion installer; packaged G01 purge/self-delete and Chromium WAN verified on disposable OPNsense ([G01 native](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772554936), [S3 A/B/C/D](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42772555090)). **Nine-step published-byte G10A gate and owner G11 NOT YET PASS.** Current source revision `_34` is publication documentation only, unpublished. Stable remains `v0.6.3_1`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
