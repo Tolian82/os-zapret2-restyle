@@ -208,6 +208,23 @@ class SettingsController extends ApiMutableModelControllerBase
                         ],
                     ];
                 }
+                // Native missing-upstream diagnosis must precede seeded
+                // candidate overlay/normalization; WAN-first already ran.
+                if (SettingsApply::isPassiveStrategiesRequest($current, $post)) {
+                    $preflightStage = 'runtime-status';
+                    $runtimeReceipt = (string)(new Backend())->configdRun(
+                        'zapret setup_status', false, 30
+                    );
+                    if (SettingsApply::isVerifiedMissingUpstream($runtimeReceipt)) {
+                        return [
+                            'result' => 'failed', 'applied' => false,
+                            'requires_review' => false,
+                            'reason' => 'runtime-not-installed',
+                            'message' => gettext('The zapret2 service must be installed'),
+                        ];
+                    }
+                }
+                $preflightStage = 'model';
                 $plan = SettingsApply::prepareStrategies(
                     $current, $post, $sync['telegramips_baseline']
                 );
@@ -226,26 +243,6 @@ class SettingsController extends ApiMutableModelControllerBase
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
                 $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
-                // LC-06E: passive lower Apply on an installed native package
-                // requires a real upstream even with preseeded first-install
-                // YouTube data, or genuine user edits clearing those fields.
-                // WAN-first runs above; the one-field WAN-only Save is still
-                // handled by its original shared FD9 contract below.
-                // setup_status is read-only; malformed/uncertain receipts
-                // must not be mistaken for a cleanly absent runtime.
-                if (SettingsApply::isPassiveStrategiesPlan($plan)) {
-                    $preflightStage = 'runtime-status';
-                    $runtimeReceipt = (string)(new Backend())->configdRun(
-                        'zapret setup_status', false, 30
-                    );
-                    if (SettingsApply::isVerifiedMissingUpstream($runtimeReceipt)) {
-                        return [
-                            'result' => 'failed', 'applied' => false,
-                            'requires_review' => false,
-                            'message' => gettext('The zapret2 service must be installed'),
-                        ];
-                    }
-                }
                 if (!$wanOnlyCandidate) {
                 $preflightStage = 'normalization';
                 // Native Python is the only IP/CIDR grammar. This read-only

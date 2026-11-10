@@ -39,10 +39,12 @@ def module(name):
 def self_test():
     view = (ROOT.parent / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
     source = (ROOT.parent / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php").read_text()
-    need("'The zapret2 service must be installed': 'Требуется установка службы zapret2'" in view,
+    need("reason === 'runtime-not-installed'" in view and
+         "localizeStrategiesApplyError(data.message, data.reason)" in view,
          "G11_RU_LOCALE_NOT_WIRED")
-    need(source.index("WanRequirement::missingBeforeActivation($plan['candidate'])") <
-         source.index("SettingsApply::isPassiveStrategiesPlan($plan)") <
+    need(source.index("WanRequirement::missingBeforeActivation($current, $post)") <
+         source.index("SettingsApply::isPassiveStrategiesRequest($current, $post)") <
+         source.index("SettingsApply::prepareStrategies(") <
          source.index("$nativeApplyDispatched = true;"),
          "G11_WAN_FIRST_OR_PRE_DISPATCH_ORDER_CHANGED")
     print("G11_EMPTY_RUNTIME_SOURCE=PASS")
@@ -59,7 +61,8 @@ def _single_apply(web, baseline, label, extra, expected_config):
     need(result.get("result") == "failed" and
          result.get("applied") is False and
          result.get("requires_review") is False and
-         result.get("message") == "The zapret2 service must be installed",
+         result.get("message") == "The zapret2 service must be installed" and
+         result.get("reason") == "runtime-not-installed",
          "G11_" + label + "_WRONG_NO_ENGINE_MESSAGE:" +
          str({k: result.get(k) for k in ("result", "message", "requires_review")})[:300])
     after = subprocess.run(["/sbin/ipfw", "-q", "list"],

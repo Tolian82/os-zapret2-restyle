@@ -241,11 +241,31 @@ def main() -> None:
         )
         check(syntax.returncode == 0,
               "Strategies GUI JS syntax: " + syntax.stderr)
-        check("function localizeStrategiesApplyError(message)" in strategies_script.group(1) and
+        check("function localizeStrategiesApplyError(message, reason)" in strategies_script.group(1) and
+          "reason === 'runtime-not-installed'" in strategies_script.group(1) and
           "Кандидат изменяет поля, не принадлежащие форме" in strategies_script.group(1) and
           "Предварительная проверка настроек не пройдена" in strategies_script.group(1) and
-          "localizeStrategiesApplyError(data.message)" in strategies_script.group(1),
+          "localizeStrategiesApplyError(data.message, data.reason)" in strategies_script.group(1),
           "Strategies Apply must restore RU locale on safe rejection")
+        notice_helper = re.search(
+            r"        function localizeStrategiesApplyError\(message, reason\) \{.*?^        \}",
+            strategies_script.group(1), re.DOTALL | re.MULTILINE,
+        )
+        check(notice_helper is not None, "Missing-runtime localization helper absent")
+        reason_js = (
+            "let isRussian=true;\n" + notice_helper.group(0) + "\n"
+            "if(localizeStrategiesApplyError('server text RU','runtime-not-installed') !== "
+            "'Требуется установка службы zapret2') throw Error('RU exact notice');\n"
+            "isRussian=false;\n"
+            "if(localizeStrategiesApplyError('server text RU','runtime-not-installed') !== "
+            "'The zapret2 service must be installed') throw Error('EN exact notice');\n"
+        )
+        notice_run = subprocess.run(
+            ["node", "-"], input=reason_js, text=True,
+            capture_output=True, check=False,
+        )
+        check(notice_run.returncode == 0,
+              "Strategies missing-upstream localized notice failed: " + notice_run.stderr)
         # Execute the actual RU/EN browser helper: a static phrase
         # assertion alone would not have caught the untranslated dialog.
         normalization_helper = re.search(

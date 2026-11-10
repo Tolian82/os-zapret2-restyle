@@ -103,21 +103,53 @@ $invalid['candidate']['general']['enabled'] = [
 chk(!SettingsApply::isPassiveStrategiesPlan($invalid),
     'ambiguous OPNsense option map accepted');
 
+// Owner-live v0.6.3_47: test the *pre-overlay* missing-runtime path.
+chk(SettingsApply::isPassiveStrategiesRequest($zero, []),
+    'empty no-engine first form must be passive before model overlay');
+chk(SettingsApply::isPassiveStrategiesRequest($seeded['candidate'], []),
+    'initial seeded Config must be passive before model overlay');
+chk(SettingsApply::isPassiveStrategiesRequest($seeded['candidate'],
+    ['strategy' => ['trafficargs' => ''],
+     'hostlist' => ['youtubedomains' => '']]),
+    'clearing unsaved seed still requires runtime notice');
+$partial = $seeded['candidate'];
+unset($partial['voice']['custom']);
+chk(SettingsApply::isPassiveStrategiesRequest($partial, []),
+    'missing optional Voice child hid missing runtime notice');
+unset($partial['voice']);
+chk(SettingsApply::isPassiveStrategiesRequest($partial, []),
+    'missing optional Voice section hid missing runtime notice');
+chk(!SettingsApply::isPassiveStrategiesRequest($zero,
+    ['general' => ['waninterface' => 'wan']]),
+    'WAN-only Save incorrectly consumed by runtime notice');
+chk(!SettingsApply::isPassiveStrategiesRequest($zero,
+    ['general' => ['enabled' => '1']]),
+    'active request incorrectly consumed by runtime notice');
+chk(!SettingsApply::isPassiveStrategiesRequest($zero,
+    ['voice' => ['telegram' => ['enabled' => '1']]]),
+    'Voice activation incorrectly consumed by runtime notice');
+chk(!SettingsApply::isPassiveStrategiesRequest($invalid['candidate'], []),
+    'ambiguous options incorrectly treated as passive');
+
 $source = file_get_contents(dirname(__DIR__) .
     '/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
 $view = file_get_contents(dirname(__DIR__) .
     '/src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt');
-$wanFirst = strpos($source, "WanRequirement::missingBeforeActivation(\$plan['candidate'])");
-$proof = strpos($source, 'SettingsApply::isPassiveStrategiesPlan($plan)');
+$wanFirst = strpos($source, 'WanRequirement::missingBeforeActivation($current, $post)');
+$proof = strpos($source, 'SettingsApply::isPassiveStrategiesRequest($current, $post)');
 $liveReceipt = strpos($source, "'zapret setup_status'");
+$prepare = strpos($source, 'SettingsApply::prepareStrategies(');
 $wanOnly = strpos($source, "\$wanOnlyCandidate = \$plan['changed_fields'] === ['general.waninterface']");
 $dispatch = strpos($source, '$nativeApplyDispatched = true;');
-chk($wanFirst !== false && $wanOnly !== false && $proof !== false &&
-    $liveReceipt !== false && $dispatch !== false &&
-    $wanFirst < $wanOnly && $wanOnly < $proof &&
-    $proof < $liveReceipt && $liveReceipt < $dispatch,
-    'LC-06D did not preserve WAN-first and native no-write preflight order');
-chk(strpos($source, "gettext('The zapret2 service must be installed')") !== false &&
-    strpos($view, "'The zapret2 service must be installed': 'Требуется установка службы zapret2'") !== false,
-    'exact required English/Russian GUI error is not wired');
+chk($wanFirst !== false && $proof !== false && $liveReceipt !== false &&
+    $prepare !== false && $wanOnly !== false && $dispatch !== false &&
+    $wanFirst < $proof && $proof < $liveReceipt &&
+    $liveReceipt < $prepare && $prepare < $wanOnly && $wanOnly < $dispatch,
+    'LC-06E must report absent runtime before candidate overlay after WAN-first');
+chk(strpos($source, "'reason' => 'runtime-not-installed'") !== false &&
+    strpos($source, "gettext('The zapret2 service must be installed')") !== false &&
+    strpos($view, "reason === 'runtime-not-installed'") !== false &&
+    strpos($view, "'Требуется установка службы zapret2'") !== false &&
+    strpos($view, 'localizeStrategiesApplyError(data.message, data.reason)') !== false,
+    'explicit API reason and rendered RU/EN text missing');
 echo "PASS_G11_EMPTY_RUNTIME_APPLY_WAN_FIRST=1\n";
