@@ -127,14 +127,25 @@ def authenticated_readonly_regression(label):
     voice.login(web)
     general = web.request("GET", "/ui/zapret")
     diagnostics = web.request("GET", "/ui/zapret/diagnostics")
-    need("frm_GeneralSettings" in general and
-         "/api/zapret/settings/apply" in general and
-         "resourcesStatus" in general and
-         "resourcesInventory" in general and
-         "purge-os-zapret2-restyle.sh" in general and
-         "strategyLabBtn" in diagnostics and
-         "/api/zapret/strategy_lab/status" in diagnostics,
-         "NATIVE_WEB_MAIN_OR_DIAGNOSTICS_MISSING_" + label)
+    need("frm_GeneralSettings" in general,
+         "NATIVE_HTTPS_GENERAL_FORM_MISSING_" + label)
+    need("/api/zapret/settings/apply" in general,
+         "NATIVE_HTTPS_SETTINGS_APPLY_SCRIPT_MISSING_" + label)
+    need("resourcesStatus" in general,
+         "NATIVE_HTTPS_EXTRA_STATUS_SCRIPT_MISSING_" + label)
+    need("resourcesInventory" in general,
+         "NATIVE_HTTPS_EXTRA_INVENTORY_SCRIPT_MISSING_" + label)
+    installed_view = Path(
+        "/usr/local/opnsense/mvc/app/views/OPNsense/Zapret/general.volt")
+    need(installed_view.is_file() and not installed_view.is_symlink() and
+         "purge-os-zapret2-restyle.sh" in installed_view.read_text(),
+         "NATIVE_PUBLISHED_INSTALLED_GENERAL_VOLT_MISSING_" + label)
+    need("purge-os-zapret2-restyle.sh" in general,
+         "NATIVE_HTTPS_RENDERED_PURGE_LINK_MISSING_" + label)
+    need("strategyLabBtn" in diagnostics,
+         "NATIVE_HTTPS_DIAGNOSTICS_LAB_BUTTON_MISSING_" + label)
+    need("/api/zapret/strategy_lab/status" in diagnostics,
+         "NATIVE_HTTPS_DIAGNOSTICS_STATUS_SCRIPT_MISSING_" + label)
     model = web.api("GET", "/api/zapret/settings/get").get("zapret")
     native = historical.xml().find("./OPNsense/Zapret")
     need(isinstance(model, dict) and native is not None and
