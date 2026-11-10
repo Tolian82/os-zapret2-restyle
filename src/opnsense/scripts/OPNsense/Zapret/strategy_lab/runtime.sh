@@ -60,20 +60,16 @@ strategy_lab_candidate_resolve_wan()
     . "${STRATEGY_LAB_CONFIG_FILE}"
     [ -n "${WAN_IF:-}" ] || return 1
 
-    if [ -x "${STRATEGY_LAB_IFCONFIG_BIN}" ] &&
-        "${STRATEGY_LAB_IFCONFIG_BIN}" "${WAN_IF}" >/dev/null 2>&1; then
-        printf '%s\n' "${WAN_IF}"
-        return 0
-    fi
-
-    [ -x "${STRATEGY_LAB_PLUGINCTL_BIN}" ] || return 1
-    strategy_lab_require_jq || return 1
-    _strategy_lab_wan=$(
-        "${STRATEGY_LAB_PLUGINCTL_BIN}" -4 "${WAN_IF}" 2>/dev/null |
-            "${STRATEGY_LAB_JQ}" -r --arg logical "${WAN_IF}" '.[$logical][0].device // empty'
+    # Reuse the original native logical-to-kernel device resolver. It
+    # supports assigned TUN/OPT even when pluginctl -4 has no IPv4 address.
+    # WAN-first admission remains enforced before job creation.
+    [ -r "${SCRIPT_DIR}/backend/common.sh" ] &&
+        [ -r "${SCRIPT_DIR}/backend/config.sh" ] || return 1
+    (
+        . "${SCRIPT_DIR}/backend/common.sh"
+        . "${SCRIPT_DIR}/backend/config.sh"
+        config_resolve_interface "${WAN_IF}"
     )
-    [ -n "${_strategy_lab_wan}" ] || return 1
-    printf '%s\n' "${_strategy_lab_wan}"
 }
 
 strategy_lab_candidate_prepare_files()

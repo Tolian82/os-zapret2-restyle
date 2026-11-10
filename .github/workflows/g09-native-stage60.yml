@@ -3,7 +3,10 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # A real Stage-50 WAN adapter change must requalify its native job,
+      # not only source policy. Do not trigger this VM for workflow-YAML edits.
       - scripts/stage2-opnsense-g09-stage60.py
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_lab/runtime.sh
   workflow_dispatch:
 permissions:
   contents: read

@@ -95,7 +95,11 @@ case "${1:-}" in
         if [ "${state}" = RUNNING ]; then
             child=true
             supervisor=true
-            firewall_hash=$(hash_file "${MOCK_RULES_FILE}")
+            if [ -s "${MOCK_RULES_FILE}" ]; then
+                firewall_hash=$(hash_file "${MOCK_RULES_FILE}")
+            else
+                firewall_hash=empty
+            fi
         elif [ "${state}" = STOPPED ]; then
             child=false
             supervisor=false
@@ -164,6 +168,20 @@ strategy_lab_restore_initial_service_state || fail 'matching RUNNING semantics d
     .restoration.strategy_unchanged==true and
     .restoration.temporary_runtime_clean==true
 ' "${STATUS_FILE}" >/dev/null || fail 'successful semantic restoration evidence is invalid'
+
+# A verified RUNNING/no-action engine has no ordinary IPFW rules.
+reset_fixture
+printf '%s\n' 'TRAFFIC_ARGS=' > "${CONFIG_FILE}"
+printf '%s\n' '--port=989' > "${ARGS_FILE}"
+: > "${RULES_FILE}"
+printf '%s\n' RUNNING > "${STATE_FILE}"
+strategy_lab_capture_initial_service_state || fail 'no-action RUNNING snapshot was falsely rejected'
+"${STRATEGY_LAB_JQ}" -e '.lifecycle_snapshot.state=="RUNNING" and .lifecycle_snapshot.normal_firewall_hash=="empty"' "${STATUS_FILE}" >/dev/null ||
+    fail 'no-action RUNNING empty firewall witness was not recorded'
+strategy_lab_stop_normal_service || fail 'no-action RUNNING service could not stop'
+strategy_lab_restore_initial_service_state || fail 'no-action RUNNING restoration falsely rejected'
+"${STRATEGY_LAB_JQ}" -e '.restoration.verified==true and .restoration.final_state=="RUNNING"' "${STATUS_FILE}" >/dev/null ||
+    fail 'no-action RUNNING semantic restoration was not verified'
 
 reset_fixture
 printf '%s\n' RUNNING > "${STATE_FILE}"

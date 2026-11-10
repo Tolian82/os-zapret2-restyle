@@ -63,11 +63,13 @@ strategy_lab_fetch_semantic_evidence()
 strategy_lab_semantic_snapshot_valid()
 {
     _strategy_lab_snapshot="$1"; _strategy_lab_expected_state="$2"
+    # Genuine RUNNING with zero ordinary/Voice rules has firewall_hash=empty.
+    # Native service status remains authoritative for the actual owner.
     "${STRATEGY_LAB_JQ}" -e --arg state "${_strategy_lab_expected_state}" '
         .state==$state and .effective_config_hash!="missing" and
         (if $state=="RUNNING" then
             .child_running==true and .supervisor_running==true and .runtime_args_hash!="missing" and
-            .normal_firewall_hash!="empty" and .normal_firewall_hash!="missing"
+            .normal_firewall_hash!="missing"
          else .child_running==false and .supervisor_running==false and .normal_firewall_hash=="empty" end)
     ' "${_strategy_lab_snapshot}" >/dev/null
 }

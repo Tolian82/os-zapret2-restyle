@@ -71,6 +71,8 @@
 
 **G05 `_18` установленный native S2:** [OPNsense 26.7 #42640788056](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42640788056) PASS для WAN-first через Strategies/Voice/Standard+Extended+Circular Lab и configd, до Job, с корректными RU/EN JSON-ошибками, затем engine-second после сохранения WAN без upstream. Слияние PR #992 ожидает исправления маршрутизации исторических S3 workflow, случайно запущенных Lab mock-фикстурой и упавших на GitHub HTTP 403. **Выход G05:** **A07** и WAN-часть **A17**; owner-live и реальная VPN/IPsec среда квалифицируются отдельно в G07/G08/G11, лаборатория видит сохранённый WAN без первого Start.
 
+**G11 10.11.2026 — обязательное уточнение LC-06D.** При действительно пустом инертном нижнем Apply без upstream сообщать RU «Требуется установка службы zapret2» / EN “The zapret2 service must be installed” вместо общего preflight FAIL. Проверить точный backend-код и RU/EN через GUI/HTTPS. Это **не** запрет WAN-only Save до установки runtime и **не** изменение первичного WAN-first для Start/Voice/Lab. В отдельном фактическом GUI случае проверить доступность селектора WAN при пустых полях и полном отсутствии движка; не подменять непроверенный GUI-дефект предположением.
+
 ## Этап 06 — пустая Traffic Strategy, no-action и Voice-only
 
 **Задача:** LC-07.
@@ -106,6 +108,8 @@
 **Проверки:** одновременно нет WAN/upstream — сначала WAN; после выбора WAN без upstream — не установлен, без Job/daemon/IPFW. Затем впервые установленный upstream + сохранённый WAN + никогда не запускавшийся обычный engine, реальная authenticated Standard и Extended job; отдельные ранние отказы без движка/WAN; cancel/error/timeouts со strict restore; WAN/IPv6 route boundaries.
 
 **Выход G08:** **A12, A13, A14** с genuine installed Job/Stage/restore, не только mock или доступный внешний endpoint.
+
+**G11 owner-live `_40` блокеры LC-12A/LC-12B (10.11.2026):** Stage50 в STOPPED/RUNNING завершает Job инфраструктурной ошибкой `candidate system adapter wan failed`, Stage90 успешно возвращает исходный state, но Stage99 — ERROR. Stage10 при RUNNING/no-action ошибочно возвращает `incomplete or unknown`; Stage90 отмечает отсутствие модификации. Исправить только урезанный локальный WAN resolver через штатный backend `config_resolve_interface` и ложный запрет `normal_firewall_hash=empty` при удостоверенном RUNNING. Обязательные S0 shell/Python тесты и native original-FD9 OPNsense 26.7 на назначенном TUN/OPT без IPv4, STOPPED/RUNNING, no-action/Voice-only, Stage50→Stage90/99, неизменной Config/FD9/чужих правил. Не считать SOURCE или CI на эмуляторах настоящим owner-live PASS.
 
 ## Этап 09 — устранение Stage-60 internal ERROR на blocked target
 
