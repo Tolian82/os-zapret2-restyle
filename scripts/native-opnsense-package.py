@@ -314,6 +314,13 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
          "POLICY_ARCHIVED_BYTES_MISMATCH")
     modes = command(["tar", "-tvf", str(pkg)]).decode().splitlines()
     for rel, path in name_to_source.items():
+        key = "usr/local/" + rel
+        candidates = [name for name in names if name.lstrip("./") == key]
+        need(len(candidates) == 1,
+             "NATIVE_ARCHIVE_MISSING_SOURCE_MEMBER:" + rel +
+             ":count=" + str(len(candidates)) +
+             ":near=" + ",".join(name for name in names
+                                 if Path(name).name == Path(rel).name)[:250])
         member = private.old.exact_installed_tar_member(names, rel)
         got = command(["tar", "-xOf", str(pkg), member], timeout=35)
         need(got == path.read_bytes(), "NATIVE_ARCHIVE_SOURCE_BYTES_CHANGED:" + rel)

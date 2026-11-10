@@ -131,6 +131,9 @@ printf '%s\n' '<?php /* only a read permission fixture; mockphp executes */' > "
 write_mock "${TMP_ROOT}/configure" \
     'printf "%s\n" "configure:$*" >> "${TRACE}"' \
     '[ "$*" = POST_INSTALL ]'
+write_mock "${TMP_ROOT}/persist-cli-mock" \
+    'printf "%s\n" "persist-purge:test-hook-only" >> "${TRACE}"' \
+    'cat >/dev/null'
 write_mock "${TMP_ROOT}/sleep" \
     'printf "%s\n" "sleep:$*" >> "${TRACE}"'
 
@@ -163,6 +166,7 @@ run_post_install()
     CONFIGCTL="${TMP_ROOT}/configctl" FIRMWARE_REGISTER="${TMP_ROOT}/register" \
     PHP_BIN="${TMP_ROOT}/mockphp" INITIAL_CONFIG_SCRIPT="${INIT_SCRIPT}" INIT_SCRIPT="${INIT_SCRIPT}" INIT_FAIL="${INIT_FAIL}" \
     CONFIGURE_PLUGINS="${TMP_ROOT}/configure" SERVICE_SCRIPT="${TMP_ROOT}/service" \
+    PURGE_PYTHON="${TMP_ROOT}/persist-cli-mock" \
     SLEEP_BIN="${TMP_ROOT}/sleep" UPGRADE_STATE_DIR="${STATE_DIR}" \
     UPGRADE_RESTART_MARKER="${LEGACY_MARKER}" \
     REPLACEMENT_RESTART_MARKER="${REPLACEMENT_MARKER}" \

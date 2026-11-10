@@ -28,7 +28,8 @@ INITIAL_CONFIG_SCRIPT="${INITIAL_CONFIG_SCRIPT:-/usr/local/opnsense/scripts/OPNs
 # the immutable delivery template in share/, NOT the deployed executable.
 # This runs in the native POST_INSTALL hook (never any global pkg interceptor).
 # All pathname trust checks and atomic replacement happen before registering.
-if ! /usr/local/bin/python3 - <<'PY_PURGE_DEPLOY'
+PURGE_PYTHON="${PURGE_PYTHON:-/usr/local/bin/python3}"
+if ! "${PURGE_PYTHON}" - <<'PY_PURGE_DEPLOY'
 import hashlib
 import os
 from pathlib import Path
