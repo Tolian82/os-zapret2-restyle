@@ -51,4 +51,11 @@ with tempfile.TemporaryDirectory() as tmp:
     result = subprocess.run(["node", "--check", str(path)],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-print("PASS: cached Lua/BIN full help, source colors and native toggle wiring")
+# P4b: run the *actual* production renderer against cache-ok native-only,
+# cache-ok optional bundle, empty, missing and malformed cache responses.
+dom_test = ROOT / "scripts/test-extra-resources-help-render.mjs"
+assert dom_test.is_file(), "missing P4b display regression"
+dom = subprocess.run(["node", str(dom_test)], capture_output=True, text=True)
+assert dom.returncode == 0, dom.stdout + dom.stderr
+assert "PASS P4b:" in dom.stdout
+print("PASS: cached Lua/BIN full help, native-only resources, source colors and native toggle wiring")

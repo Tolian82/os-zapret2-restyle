@@ -22,7 +22,7 @@ on:
       - scripts/stage5-installed-lab-real-http.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
-      - scripts/test-extra-resources-inventory-cache.py
+      - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
   pull_request:
@@ -46,7 +46,7 @@ on:
       - scripts/stage5-installed-lab-real-http.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
-      - scripts/test-extra-resources-inventory-cache.py
+      - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
   workflow_dispatch:

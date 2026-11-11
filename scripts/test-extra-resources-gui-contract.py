@@ -330,38 +330,16 @@ assert.match(extrasLabel({phase:'restore_failed',installed:true}), /Ошибка
     checked = subprocess.run(["node", str(probe)], text=True, capture_output=True)
     require(checked.returncode == 0, "real status renderer regression: " + checked.stderr)
 
-    # Help must show only install guidance when the same cache says absent;
-    # a missing cache is UNKNOWN, never an invitation based on stale state.
-    help_fun = re.search(
-        r"        function renderResourceHelpInventory\(data\) \{.*?^        \}",
-        view, re.M | re.S,
+    # P4b changes the honest Help contract: optional bundle absence is
+    # independent of actual, provenance-tagged native Lua/BIN filenames.
+    # Reuse the real extracted renderer test rather than maintaining an old
+    # fake Item whose return type hid all list/append operations.
+    renderer = subprocess.run(
+        ["node", str(ROOT / "scripts/test-extra-resources-help-render.mjs")],
+        text=True, capture_output=True,
     )
-    require(help_fun is not None, "full-help renderer missing")
-    help_probe = Path(tmp) / "recovery-help.js"
-    help_probe.write_text("""
-const assert = require('node:assert/strict');
-const extrasText = {installHelp:'Нажмите «Установить дополнительные ресурсы»',
-    listUnavailable:'Кэш списка ресурсов недоступен'};
-let helpInventoryLastInstalled = true;
-class Item {
-    constructor(){this.children=[];this.label='';}
-    empty(){this.children=[];return this;}
-    append(value){this.children.push(value);return this;}
-    text(value){this.label=value;return this;}
-}
-const panel=new Item();
-function $(what){return what==='#zapretExtraResourceHelp' ? panel : new Item();}
-""" + help_fun.group(0) + """
-renderResourceHelpInventory({status:'ok',installed:false,lua:[{name:'added.lua'}],bin:[]});
-assert.equal(panel.children.length,1);
-assert.equal(panel.children[0].label, extrasText.installHelp);
-assert.equal(helpInventoryLastInstalled,false);
-renderResourceHelpInventory({status:'unavailable'});
-assert.equal(panel.children.length,1);
-assert.equal(panel.children[0].label, extrasText.listUnavailable);
-""")
-    checked = subprocess.run(["node", str(help_probe)], text=True, capture_output=True)
-    require(checked.returncode == 0, "real full-help renderer regression: " + checked.stderr)
+    require(renderer.returncode == 0 and "PASS P4b:" in renderer.stdout,
+            "real full-help renderer regression: " + renderer.stdout + renderer.stderr)
 
     result = subprocess.run(["sh", str(LAUNCHER), "install", "invalid"],
                             text=True, capture_output=True, env=env)

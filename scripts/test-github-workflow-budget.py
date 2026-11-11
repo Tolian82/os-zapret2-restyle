@@ -164,6 +164,20 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('assert native_required({VIEW}, base, updated.replace("setup();", "changedSetup();"))', scope)
         self.assertIn('assert not native_required({VIEW}, base, updated)', scope)
 
+    def test_extra_inventory_test_changes_do_not_launch_historical_running_vms(self):
+        # GH-067/GH-071: a Python cache *test* change is S0/S1, whereas a
+        # change to the actual installed cache code may justify native S3.
+        for name in ('stage5-native-cross-clean-running.yml',
+                     'stage5-native-running-voice.yml'):
+            text = (ROOT / '.github/workflows' / name).read_text(encoding='utf-8')
+            trigger = text.split('permissions:', 1)[0]
+            self.assertNotIn('      - scripts/test-extra-resources-inventory-cache.py',
+                             trigger, name)
+            self.assertEqual(
+                trigger.count('      - src/opnsense/scripts/OPNsense/Zapret/'
+                              'extra_resources_inventory_cache.py'), 2, name)
+            self.assertIn('cancel-in-progress:', text, name)
+
     def test_watchdog_hourly_fallback_and_ci_event(self):
         body = (ROOT / '.github/workflows/pr-completion-watchdog.yml').read_text(encoding='utf-8')
         self.assertIn("cron: '7 * * * *'", body)

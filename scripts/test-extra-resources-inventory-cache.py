@@ -48,6 +48,25 @@ class TestInventoryCache(unittest.TestCase):
         (self.root / "lua/extra.lua").write_text("external Lua\n")
         (self.root / "files/fake/extra.bin").write_bytes(b"extra blob")
 
+    def test_native_only_cache_is_valid_without_optional_bundle(self):
+        # The engine's stock files remain visible even if Extra Resources
+        # has no installed.json manifest and no optional files are present.
+        (self.root / "lua/extra.lua").unlink()
+        (self.root / "files/fake/extra.bin").unlink()
+        self.assertFalse((self.state / "installed.json").exists())
+        refreshed = refresh(self.root, self.state)
+        self.assertFalse(refreshed["installed"])
+        loaded = read_cached(self.state)
+        self.assertEqual(loaded["status"], "ok")
+        self.assertIs(loaded["installed"], False)
+        self.assertEqual(loaded["lua"], [
+            {"name": "zapret-lib.lua", "origin": "upstream"}])
+        self.assertEqual(loaded["bin"], [
+            {"name": "original.bin", "origin": "upstream"}])
+        # A Help opening is read-only and never requires runtime Git access.
+        self.root.rename(self.root.with_name("gone"))
+        self.assertEqual(read_cached(self.state), loaded)
+
     def test_first_refresh_creates_missing_state_and_usable_upstream_cache(self):
         self.state.rmdir()
         data = refresh(self.root, self.state)

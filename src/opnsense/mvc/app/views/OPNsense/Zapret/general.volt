@@ -754,22 +754,43 @@
         updateResourceAdvancedVisibility();
 
         function isResourceHelpEnabled() {
-            // Native OPNsense 26.7 full-help toggle for frm_GeneralSettings.
-            return $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on');
+            // Native OPNsense 26.7 Form Help has two authoritative signals:
+            // the actual toggle class and the per-tab Full Help preset plus
+            // the visible native help source. initFormHelpUI() can reapply a
+            // stored preset with toggleClass() on the icon, leaving the icon
+            // visually OFF while its real help sources remain shown.
+            if ($('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on')) {
+                return true;
+            }
+            let preset = false;
+            try {
+                preset = !!window.sessionStorage &&
+                    window.sessionStorage.getItem('all_help_preset') === '1';
+            } catch (error) {
+                // Storage can be disabled; never infer Full Help from failure.
+                return false;
+            }
+            const nativeHelp = $('[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]');
+            return preset && nativeHelp.length === 1 &&
+                nativeHelp.hasClass('show') && !nativeHelp.hasClass('hidden');
         }
 
         function renderResourceHelpInventory(data) {
             const panel = $('#zapretExtraResourceHelp');
             panel.empty();
-            if (!data || data.status !== 'ok') {
+            if (!data || data.status !== 'ok' ||
+                typeof data.installed !== 'boolean' ||
+                !Array.isArray(data.lua) || !Array.isArray(data.bin)) {
                 // A missing/corrupt cache is UNKNOWN, never evidence of absence.
                 panel.append($('<p/>').text(extrasText.listUnavailable));
                 return;
             }
-            helpInventoryLastInstalled = !!data.installed;
+            helpInventoryLastInstalled = data.installed;
             if (!data.installed) {
+                // The optional bundle is absent, but the verified cache can
+                // still contain native Zapret2 Lua/BIN. Display both facts.
                 panel.append($('<p/>').text(extrasText.installHelp));
-                return;
             }
             const legend = $('<div/>', {'class': 'zapret-resource-legend'});
             $('<span/>', {'class': 'text-success'}).text(extrasText.native).appendTo(legend);
@@ -842,6 +863,20 @@
         if (resourceHelpIcon && window.MutationObserver) {
             const observer = new MutationObserver(updateResourceHelpVisibility);
             observer.observe(resourceHelpIcon, {attributes: true, attributeFilter: ['class']});
+        }
+        // The stock OPNsense initFormHelpUI() restores a stored Help preset
+        // by toggling the icon class and then setting 'show' on real help
+        // sources. At the icon mutation, the help source may still be hidden.
+        // Observe that second native transition as well. No new toggle,
+        // synthetic event or polling: a true OFF stays OFF.
+        const resourceHelpNativeSource = document.querySelector(
+            '[id="row_zapret.strategy.trafficargs"] ' +
+            'div[data-for="help_for_zapret.strategy.trafficargs"]'
+        );
+        if (resourceHelpNativeSource && window.MutationObserver) {
+            const sourceObserver = new MutationObserver(updateResourceHelpVisibility);
+            sourceObserver.observe(resourceHelpNativeSource,
+                {attributes: true, attributeFilter: ['class']});
         }
         updateResourceHelpVisibility();
 

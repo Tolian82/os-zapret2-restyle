@@ -152,7 +152,113 @@ def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
     source.wait_for(state="hidden", timeout=12000)
     need(control(page, field).input_value() == before, "HIDE_HELP_CHANGED_VALUE_" + field)
 
-def check_strategies(page, mode: str) -> dict[str, str]:
+def check_resource_help_cache(page, mode: str) -> str:
+    """Real native Help + backend response, without mocked routing or mutation."""
+    toggle = native_form_toggle(page, "frm_GeneralSettings", "show_all_help")
+    # Help and Service collapse are independent native controls. Open the
+    # Service table first, and never toggle an already-on help switch OFF.
+    service_body = page.locator("#zapretServiceBody")
+    need(service_body.count() == 1, "P4B_SERVICE_BODY_MISSING")
+    if not service_body.is_visible():
+        page.locator("#zapretServiceHeader").click()
+        service_body.wait_for(state="visible", timeout=6000)
+    was_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    if not was_on:
+        toggle.click()
+    clicked_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    # Stock initFormHelpUI can restore the preset by toggling the icon
+    # class again. Do not repair/force the icon from the test. The production
+    # Help binding must continue showing the catalog while its real native
+    # help source remains visible with the saved preset.
+    page.wait_for_timeout(350)
+    settled_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    panel = page.locator("#zapretExtraResourceHelp")
+    if not panel.is_visible():
+        state = page.evaluate("""() => ({
+            icon_on: document.getElementById('show_all_help_frm_GeneralSettings')
+                     ?.classList.contains('fa-toggle-on') || false,
+            panel_display: document.getElementById('zapretExtraResourceHelp')
+                           ?.style.display || '',
+            service_visible: !!document.getElementById('zapretServiceBody')
+                              ?.getBoundingClientRect().height,
+            preset_on: (() => {
+                try { return sessionStorage.getItem('all_help_preset') === '1'; }
+                catch (e) { return false; }
+            })(),
+            native_help_shown: document.querySelector(
+                '[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]'
+            )?.classList.contains('show') || false,
+            native_help_hidden: document.querySelector(
+                '[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]'
+            )?.classList.contains('hidden') || false
+        })""")
+        raise Refusal("P4B_NATIVE_HELP_PANEL_HIDDEN:" +
+                      "was_on=" + str(was_on) +
+                      ":clicked_on=" + str(clicked_on) +
+                      ":settled_on=" + str(settled_on) +
+                      ":icon_on=" + str(state["icon_on"]) +
+                      ":panel_display=" + str(state["panel_display"]) +
+                      ":service_visible=" + str(state["service_visible"]) +
+                      ":preset_on=" + str(state["preset_on"]) +
+                      ":native_help_shown=" + str(state["native_help_shown"]) +
+                      ":native_help_hidden=" + str(state["native_help_hidden"]))
+    # Read the same production cache-only API with the browser's real
+    # authenticated jQuery session. Never forge the response or mutate Config.
+    data = page.evaluate("""async () => {
+        try {
+            return await new Promise(resolve => {
+                $.ajax({
+                    type: 'POST',
+                    url: '/api/zapret/service/resourcesInventory',
+                    dataType: 'json',
+                    timeout: 10000
+                }).done(resolve).fail(() => resolve({status: 'unavailable'}));
+            });
+        } catch (error) {
+            return {status: 'unavailable'};
+        }
+    }""")
+    need(isinstance(data, dict), "P4B_REAL_CACHE_RESPONSE_INVALID")
+    if data.get("status") != "ok":
+        text = "Кэш списка ресурсов недоступен" if mode == "ru" else "The resource list cache is unavailable"
+        panel.locator("p").first.wait_for(state="visible", timeout=12000)
+        need(text in panel.inner_text(), "P4B_UNAVAILABLE_MUST_STAY_UNKNOWN_" + mode)
+        need(panel.locator("ul.zapret-resource-list li").count() == 0,
+             "P4B_UNAVAILABLE_MUST_NOT_SHOW_CACHED_FILES")
+        status = "unavailable"
+    else:
+        need(type(data.get("installed")) is bool and
+             isinstance(data.get("lua"), list) and isinstance(data.get("bin"), list),
+             "P4B_REAL_CACHE_SHAPE_INVALID")
+        panel.locator(".zapret-resource-columns").wait_for(state="visible", timeout=12000)
+        optional_note = ("Дополнительные ресурсы пока не установлены" if mode == "ru"
+                         else "Additional Resources have not been installed")
+        if data["installed"]:
+            need(optional_note not in panel.inner_text(),
+                 "P4B_INSTALLED_HAS_FALSE_ABSENCE_NOTICE")
+        else:
+            need(optional_note in panel.inner_text(),
+                 "P4B_NATIVE_ONLY_ABSENCE_NOTICE_MISSING")
+        # Each category can independently be empty. Do not mistakenly
+        # demand zero empty-state rows when the other category has files.
+        empty = "Нет установленных файлов" if mode == "ru" else "No installed files"
+        expected = []
+        for kind in ("lua", "bin"):
+            if data[kind]:
+                expected.extend(entry["name"] for entry in data[kind])
+            else:
+                expected.append(empty)
+        rendered = panel.locator("ul.zapret-resource-list > li").all_inner_texts()
+        need(rendered == expected, "P4B_NATIVE_RESOURCES_HIDDEN_OR_CHANGED_" + mode)
+        status = "ok-optional" if data["installed"] else "ok-native-only"
+    # The isolated authenticated tab is closed by the caller; no state
+    # restoration click is needed, and the real user Config is untouched.
+    return status
+
+
+def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
     expected = (
@@ -206,7 +312,21 @@ def check_strategies(page, mode: str) -> dict[str, str]:
     f5_and_wait(page, "/api/zapret/settings/get")
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
-    return initial
+    # P4b runs in a separate real tab sharing this authenticated OPNsense
+    # context/user profile. Earlier Full Help popup probes in the first tab
+    # cannot leak their per-tab native sessionStorage/animation state.
+    inventory_page = page.context.new_page()
+    try:
+        wait_native_load(inventory_page, "/api/zapret/settings/get",
+                         "/ui/zapret", "frm_GeneralSettings")
+        wait_locale(inventory_page, mode)
+        inventory_page.wait_for_timeout(350)
+        cache_state = check_resource_help_cache(inventory_page, mode)
+    finally:
+        inventory_page.close()
+    need(value_snapshot(page, FIELDS_GENERAL) == initial,
+         "P4B_RESOURCE_HELP_CHANGED_SAVED_VALUES")
+    return initial, cache_state
 
 
 def check_lab_guidance(page, mode: str) -> bool:
@@ -331,7 +451,7 @@ def browser_run(mode: str) -> None:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
             login(page)
-            strategies = check_strategies(page, mode)
+            strategies, cache_state = check_strategies(page, mode)
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -359,6 +479,8 @@ def browser_run(mode: str) -> None:
         "readonly_voice_error_checked": validated,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
+        "resource_help_cache_state": cache_state,
+        "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,
         "model_digest": identity,
         "owner_appliance_touched": False,
