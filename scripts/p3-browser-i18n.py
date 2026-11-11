@@ -166,6 +166,16 @@ def check_resource_help_cache(page, mode: str) -> str:
     if not was_on:
         toggle.click()
     clicked_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    # Stock OPNsense may restore sessionStorage's form Help preset after
+    # asynchronous native form initialization. Let that settle briefly, then
+    # permit at most one *real* native second click if the icon went OFF.
+    page.wait_for_timeout(250)
+    settled_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    retried_native_click = False
+    if not settled_on:
+        toggle.click()
+        retried_native_click = True
+        page.wait_for_timeout(250)
     panel = page.locator("#zapretExtraResourceHelp")
     if not panel.is_visible():
         state = page.evaluate("""() => ({
@@ -179,6 +189,8 @@ def check_resource_help_cache(page, mode: str) -> str:
         raise Refusal("P4B_NATIVE_HELP_PANEL_HIDDEN:" +
                       "was_on=" + str(was_on) +
                       ":clicked_on=" + str(clicked_on) +
+                      ":settled_on=" + str(settled_on) +
+                      ":retried_native_click=" + str(retried_native_click) +
                       ":icon_on=" + str(state["icon_on"]) +
                       ":panel_display=" + str(state["panel_display"]) +
                       ":service_visible=" + str(state["service_visible"]))

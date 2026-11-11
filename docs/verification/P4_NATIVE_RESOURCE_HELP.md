@@ -47,3 +47,7 @@ The exact Chromium refusal reported icon_on=False with the separate Service body
 ## Fresh F5 isolation and native toggle evidence
 
 An earlier exact-head Chromium run still found icon_on=False despite a visible Service section. To avoid diagnosing prior popup/Full Help toggles as a product resource catalog bug, the inventory probe now executes **after native F5** with verified unchanged saved field values. It checks again that opening resource Help does not mutate those fields. On a remaining invisible panel it records only native icon state before and immediately after the real click and the final native icon/Service/panel visibility, without dumping private page data or forcing CSS.
+
+## Bounded native session preset recheck
+
+The observed native toggle changes from OFF to ON immediately after the genuine click but is OFF again before the panel becomes visible. To distinguish an OPNsense form-session preset race from a broken renderer, the test now allows the native state to settle for 250 ms, then at most one additional genuine toggle click if it reverted to OFF, with a second 250 ms settling check. It still requires the actual panel visible and compares the actual cache-only API response with the actual DOM; no synthetic class changes, direct style writes, or retries of a failing network call. Any failure reports both phases as non-sensitive booleans.
