@@ -16,7 +16,11 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
-## Level 2 — активное ТЗ по полной чистой установке (8 ноября 2026)
+## Level 2 — approved current feature requirements (11 November 2026)
+
+- [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3. The specification is recorded; implementation and owner's real OPNsense acceptance are **not** claimed. A development plan is to be presented separately for discussion.
+
+## Level 2 — completed clean-install lifecycle ТЗ v1.3 (8–11 November 2026)
 
 - [Stable v0.6.4 release notes](releases/v0.6.4.md) — owner-approved release `v0.6.4_1`, native `FreeBSD:15:amd64` package publication proof, exact source SHA, boundaries of owner testing vs immutable stable artifacts; `_2` is docs-only.
 

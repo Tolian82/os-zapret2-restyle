@@ -1,5 +1,7 @@
 # os-zapret2-restyle — краткий master plan
 
+**Owner-approved feature direction (11 November 2026):** [Strategies HOSTLIST `!/^ `, native profiles/filter and duplicate semantics, complete Strategies+Voice RU/EN and read-only preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) is **APPROVED** for [FEATURE #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), but **NOT IMPLEMENTED**. Next task: stage a development plan for owner discussion, without claiming plan approval. Previously completed lifecycle ТЗ v1.3 remains accepted; standalone `v0.6.4_7` documentation revision does not publish a package.
+
 **Текущий CI-only scope `v0.6.4_6` (11.11.2026):** исправить ранее существовавший невалидный YAML в Stage 5 cross-clean workflow (Guest D / проверка зависимостей пакета): main push #448/#449 не запускали ни одной job из-за отсутствующих отступов Python. Исходники кеша из объединённого PR #1036 остаются без изменений; применять быстрый YAML/source gate, без автоматического тяжёлого VM-прогона только из-за workflow-правки (GH-067). Стабильный `.pkg` — `v0.6.4_1`.
 
 **Текущий точечный исправительный scope `v0.6.4_5` (11.11.2026):** устранить предупреждение `INVENTORY_CACHE_UNAVAILABLE` при чистой установке пакета / первого runtime: генератор Full Help должен безопасно создать отсутствующее extra-resource состояние, не затронув чужие пути и штатные ресурсы. Точный PR, локальные тесты и штатная нативная квалификация отдельно от owner GUI; опубликованный стабильный `v0.6.4_1.pkg` не заменяется.
