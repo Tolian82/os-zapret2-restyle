@@ -2,6 +2,7 @@
 """Static contract for the staged Voice Transmission GUI; not runtime validation."""
 from pathlib import Path
 import re
+from html import unescape
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -93,6 +94,62 @@ def main() -> None:
           "visible.text().trim()" in view and
           "Shared IPv4 or CIDR targets/.test(visible.text())" not in view,
           "Voice label/help translation must not inspect English DOM prose")
+    # P3: each native Voice IPSET popup/Full Help must retain its unique
+    # managed <IPSET:name> selector. Earlier generic JS help overwrote the
+    # per-service native form XML markers on both RU and EN pages.
+    check("function sharedVoiceIPSETHelp(fieldId)" in view and
+          "else localizedHelp = sharedVoiceIPSETHelp(id);" in view and
+          "row.find('div[data-for^=\"help_for_\"] small').html(localizedHelp);" in view and
+          "if (visible.length && visible.text().trim())" in view,
+          "Voice IPSET popover/F5 must render the per-service selector")
+    help_match = re.search(
+        r"^    function sharedVoiceIPSETHelp\(fieldId\) \{.*?^    \}",
+        view, re.MULTILINE | re.DOTALL,
+    )
+    check(help_match is not None and
+          "var match = /^zapret\\.hostlist\\.(telegram|discord|x|sip|custom)ips$/" in
+          help_match.group(0) and
+          "match[1]" in help_match.group(0) and
+          ".val(" not in help_match.group(0) and
+          ".value =" not in help_match.group(0),
+          "Voice IPSET help must use only five immutable form IDs; never write fields")
+    for service in SERVICES:
+        native = next((f for f in form.findall("./field")
+                       if f.findtext("id") == f"zapret.hostlist.{service}ips"), None)
+        check(native is not None and
+              f"<IPSET:{service}>" in unescape(native.findtext("help", "")),
+              f"Native Voice IPSET help missing managed selector for {service}")
+    if shutil.which("node"):
+        script = (
+            "var text={ipHelp:'Shared IPSET help.'};var ru=false;\n"
+            + help_match.group(0)
+            + "\n"
+            + """function eq(a,b){if(a!==b)throw Error(JSON.stringify([a,b]));}
+for (const service of ['telegram','discord','x','sip','custom']) {
+  const id='zapret.hostlist.'+service+'ips';
+  const html=sharedVoiceIPSETHelp(id);
+  if (!html.includes('&lt;IPSET:'+service+'&gt;')) throw Error('wrong selector '+id);
+  if (html.includes('IPSET:undefined')) throw Error('missing service '+id);
+  if (!html.includes('Use this target in Traffic Strategy as ')) throw Error('EN help');
+}
+eq(sharedVoiceIPSETHelp('zapret.hostlist.unknownips'),null);
+eq(sharedVoiceIPSETHelp('zapret.hostlist.customips<script>'),null);
+eq(sharedVoiceIPSETHelp('zapret.voice.telegram.args'),null);
+ru=true;
+for (const service of ['telegram','discord','x','sip','custom']) {
+  const html=sharedVoiceIPSETHelp('zapret.hostlist.'+service+'ips');
+  if (!html.includes('В Traffic Strategy используйте ') ||
+      !html.includes('&lt;IPSET:'+service+'&gt;')) throw Error('RU help '+service);
+}
+"""
+        )
+        checked = subprocess.run(
+            ["node", "-"], input=script, text=True,
+            capture_output=True, check=False,
+        )
+        check(checked.returncode == 0,
+              "Voice per-service RU/EN IPSET popover help contract: " + checked.stderr)
+
     for name in SERVICES:
         enable = model.find(f"./items/voice/{name}/enabled")
         args = model.find(f"./items/voice/{name}/args")
