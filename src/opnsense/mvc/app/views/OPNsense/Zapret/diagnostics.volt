@@ -50,10 +50,14 @@ $(document).ready(function () {
     };
     var strategyLabGuidance = isRussian ? [
         'Введите домен, IPv4- или IPv6-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.',
-        'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».'
+        'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».',
+        'Сверьте порт TCP/UDP, --filter-l7, HOSTLIST/IPSET и порядок профилей. Для дополнительного Lua-обработчика с теми же фильтрами используйте соответствующие --payload/--in-range/--out-range и --lua-desync внутри существующего профиля; новый --new нужен только для самостоятельного профиля.',
+        'Опирайтесь на финальное подтверждение и явно проверенный протокол: HTTP/TLS, QUIC и произвольный UDP не взаимозаменяемы. Результат по одному протоколу не доказывает остальные, реальный обход у провайдера или успешный голосовой вызов. Лаборатория не сохраняет стратегию автоматически.'
     ] : [
         'Enter a domain, IPv4 or IPv6 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.',
-        'Review the results and add the required profile to the strategy currently in use on the “Settings” page.'
+        'Review the results and add the required profile to the strategy currently in use on the “Settings” page.',
+        'Match the TCP/UDP port, --filter-l7, HOSTLIST/IPSET and profile order. For another Lua handler with the same filters, place --payload/--in-range/--out-range and --lua-desync within the existing profile; use --new only for a genuinely independent profile.',
+        'Use final verified evidence for the specific tested protocol: HTTP/TLS, QUIC and generic UDP are not interchangeable. A result for one protocol does not prove the others, real ISP bypass or a successful voice call. Strategy Lab never automatically saves a Traffic Strategy.'
     ];
     var ui = isRussian ? {
         running:'Strategy Lab выполняет проверку.', completed:'Проверка завершена.', cancel:'Остановка запрошена. Выполняется обязательное восстановление Zapret2.',

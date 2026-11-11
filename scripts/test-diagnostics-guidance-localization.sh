@@ -23,6 +23,15 @@ require "${VIEW}" "${EN_FIRST}"
 require "${VIEW}" "${EN_SECOND}"
 require "${VIEW}" "${RU_FIRST}"
 require "${VIEW}" "${RU_SECOND}"
+# P4: actual RU/EN Strategy Lab guidance must distinguish in-profile Lua
+# handlers from a separate --new profile and avoid protocol-wide success.
+require "${VIEW}" 'Для дополнительного Lua-обработчика с теми же фильтрами'
+require "${VIEW}" 'новый --new нужен только для самостоятельного профиля'
+require "${VIEW}" 'HTTP/TLS, QUIC и произвольный UDP не взаимозаменяемы'
+require "${VIEW}" 'For another Lua handler with the same filters'
+require "${VIEW}" 'use --new only for a genuinely independent profile'
+require "${VIEW}" 'HTTP/TLS, QUIC and generic UDP are not interchangeable'
+require "${VIEW}" 'Strategy Lab never automatically saves a Traffic Strategy.'
 
 # Owner-selected deterministic RU/EN diagnostics presentation.
 # Result summary is localized by the existing client-side RU/EN dictionary,
