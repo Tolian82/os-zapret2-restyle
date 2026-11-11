@@ -210,6 +210,69 @@ if (!helpRu.includes('другие Lua-действия') ||
         check(checked.returncode == 0,
               "Actual Voice RU/EN STUN help must match validator: " + checked.stderr)
 
+    # P3 native status diagnostics: when backend distinguishes partial
+    # engine/monitor, mismatched release, or stray IPFW objects after Stop,
+    # show a bounded RU/EN reason, not an untranslated status or raw kernel
+    # output. This is display only; start/stop and Apply gates stay unchanged.
+    inspector = (
+        ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py"
+    ).read_text(encoding="utf-8")
+    check('"condition": "common-runtime-" + runtime["state"]' in inspector and
+          '"condition": "common-stopped-with-kernel-objects"' in inspector and
+          '"partial", "unverified-release"' in inspector,
+          "Voice status locale mapping must reflect actual native backend conditions")
+    status_helper = re.search(
+        r"^    function localizeVoiceInspectionDetail\(state, condition, unverified\) \{.*?^    \}",
+        view, re.MULTILINE | re.DOTALL,
+    )
+    locale_dict = re.search(
+        r"^    var text = ru \? \{.*?^    \};",
+        view, re.MULTILINE | re.DOTALL,
+    )
+    check(status_helper is not None and locale_dict is not None and
+          "localizeVoiceInspectionDetail(\n                    state, reply && reply.condition, unverified" in view and
+          "voiceInspectionState = ['ready', 'stopped'].includes(state) ? state : null" in view and
+          ".html(" not in status_helper.group(0) and
+          ".val(" not in status_helper.group(0),
+          "Read-only Voice condition details must use known codes without enabling control")
+    if shutil.which("node"):
+        code = (
+            "var ru=true;\n" + locale_dict.group(0) + "\n"
+            "const ruText=text;\nru=false;\n" + locale_dict.group(0) + "\n"
+            "const enText=text;\n" + status_helper.group(0) + "\n"
+            + """function eq(a,b){if(a!==b)throw Error(JSON.stringify([a,b]));}
+for(const [locale,words] of [
+ [ruText,['частично','проверенным файлам','остались объекты IPFW']],
+ [enText,['partially running','not verified','IPFW kernel objects remain']]
+]) {
+  text=locale;
+  const states=[
+    ['interrupted','common-runtime-partial'],
+    ['interrupted','common-runtime-unverified-release'],
+    ['foreign-or-modified-rules','common-stopped-with-kernel-objects']
+  ];
+  states.forEach(([state,condition],i) => {
+    const description=localizeVoiceInspectionDetail(state,condition,false);
+    if (!description.includes(words[i])) throw Error('untranslated native '+condition);
+  });
+  eq(localizeVoiceInspectionDetail('unverified-profiles','ignored',true),
+     locale.commonProfileUnverified);
+  eq(localizeVoiceInspectionDetail('ready','common-runtime-partial',false),'');
+  eq(localizeVoiceInspectionDetail('stopped','common-stopped-with-kernel-objects',false),'');
+  eq(localizeVoiceInspectionDetail('interrupted','common-stopped-with-kernel-objects',false),'');
+  eq(localizeVoiceInspectionDetail('foreign-or-modified-rules','common-runtime-partial',false),'');
+  eq(localizeVoiceInspectionDetail('interrupted','untrusted PRIVATE CONFIG',false),'');
+  eq(localizeVoiceInspectionDetail('foreign-or-modified-rules','<img onerror=alert(1)>',false),'');
+}
+"""
+        )
+        parsed = subprocess.run(
+            ["node", "-"], input=code, text=True,
+            capture_output=True, check=False,
+        )
+        check(parsed.returncode == 0,
+              "Voice actual RU/EN native inspection status translations: " + parsed.stderr)
+
     for name in SERVICES:
         enable = model.find(f"./items/voice/{name}/enabled")
         args = model.find(f"./items/voice/{name}/args")
