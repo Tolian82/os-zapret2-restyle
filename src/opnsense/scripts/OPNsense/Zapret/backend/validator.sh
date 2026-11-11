@@ -472,6 +472,28 @@ validator_validate_argument_references_mapped()
     done < "${_validator_mapped_args}"
 }
 
+
+# Final assembled argv has Voice, Extra Arguments and global exclusions applied.
+# Guard only duplicate resolved list identities. Native --dry-run remains the
+# authority for templates/imports and all other engine semantics.
+validator_check_resolved_lists()
+{
+    _validator_lists_args="$1"
+    _validator_lists_static="$2"
+    _validator_lists_reference="$3"
+    _validator_lists_source="$4"
+    _validator_lists_backend="${BACKEND_DIR:-${BACKEND:-${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}/backend}}"
+    _validator_lists_python="${PYTHON_RUNTIME:-${_validator_lists_backend%/backend}/python_runtime.sh}"
+    [ -x "${_validator_lists_python}" ] &&
+    [ -f "${_validator_lists_backend}/profile_policy.py" ] || {
+        validator_fail "PROFILE_POLICY_UNAVAILABLE"
+        return 1
+    }
+    "${_validator_lists_python}" "${_validator_lists_backend}/profile_policy.py" \
+        check-lists "${_validator_lists_args}" "${_validator_lists_static}" \
+        "${_validator_lists_reference}" "${_validator_lists_source}"
+}
+
 validator_validate_build_mapped()
 {
     _validator_build_mapped_args="$1"
@@ -513,6 +535,12 @@ validator_validate_build_mapped()
         "${_validator_build_mapped_udp}" || return 1
 
     validator_validate_argument_references_mapped \
+        "${_validator_build_mapped_args}" \
+        "${_validator_build_mapped_static_root}" \
+        "${_validator_build_mapped_reference_root}" \
+        "${_validator_build_mapped_source_root}" || return 1
+
+    validator_check_resolved_lists \
         "${_validator_build_mapped_args}" \
         "${_validator_build_mapped_static_root}" \
         "${_validator_build_mapped_reference_root}" \

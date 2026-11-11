@@ -29,10 +29,17 @@ Python prepares outputs under a private workdir temporary directory and backs up
 - Existing `scripts/test-profile-normalizer.sh` and `scripts/test-profile-pipeline.sh`: unchanged test scenarios using explicit source-fixture Python runtime. These cover Target Mode, mixed IPSET/HOSTLIST, named `--new`, zero profiles, managed references, generated order and consistency.
 - Exact-head CI: Python syntax/unit, shell syntax/contracts, original pipeline tests, Voice regression, source-only native package build and relevant disposable GUI as the change classifier requires. Separately record results instead of presuming they passed.
 
+## `v0.6.4_12`: final-argv mapped resolved-list guard
+
+- `validator_validate_build_mapped()` invokes `validator_check_resolved_lists()` **after** the final global-exclusion rewrite and mapped reference validity checks. It uses qualified `PYTHON_RUNTIME` and the existing `profile_policy.py check-lists` CLI. This is read-only and does not touch the generator, user Config, live FD9, IPFW or shared Voice service.
+- For each native `--new` / `--new=name` profile, the Python guard checks explicit `--hostlist`, `--hostlist-exclude`, `--ipset`, `--ipset-exclude` file options by resolving mapped staging paths or static-root paths. It compares `realpath` only **within the same option collection in the same profile**. Duplicates, aliases, absent/unmapped/escaping list paths fail with structured code and profile/option/position metadata. Paths are not echoed in errors.
+- Distinct profiles and include/exclude collections may reuse one file; distinct files inside one profile remain legal; ordered `--payload` / `--lua-desync` pairs are not interpreted or rewritten. `--template` / `--import` expansion remains entrusted to existing native `dvtws2 --dry-run`.
+- `scripts/test-profile-policy.py` includes duplicate, alias, missing/escaping path, per-profile allowlist, two-handler preservation and real shell adapter/CLI cases. Separate exact-source CI and native/installed acceptance have not yet been established by this record. No `_12.pkg` published.
+
 ## Still outstanding in P2
 
-1. Detect prohibited duplicate **resolved** list-file references within the same native profile, accounting for symlink/realpath identity and include/exclude/type distinction; do not reject legitimate references in distinct `--new` profiles.
-2. Review `--template`/`--import` interaction and ensure existing native `dvtws2 --dry-run` remains the final validation authority.
-3. Complete actual A06–A09 acceptance criteria and regression evidence. This migration is a bounded engineering increment, **not** P2 or Issue #936 final acceptance.
+1. Establish exact-head CI and native candidate-activation refusal/rollback evidence at mapped validator plus current `dvtws2 --dry-run` boundaries, including existing Voice and generated exclude handling.
+2. Confirm real `--template` / `--import` integration without implementing a second native option parser.
+3. Complete and record A06–A09 evidence and owner acceptance, then proceed to P3 localization. This migration is a bounded engineering increment, **not** P2 or Issue #936 final acceptance.
 
-**Status:** Python policy migration SOURCE CANDIDATE. No native-engine semantic re-tests requested, no test package published and no owner-installed appliance acceptance claimed.
+**Status:** `_12` Python final-argv guard SOURCE CANDIDATE. No extra engine semantic experiments requested, no test package published and no owner-installed appliance acceptance claimed.
