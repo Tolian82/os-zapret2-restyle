@@ -19,6 +19,31 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # G03's frontend shares general.volt with Strategies help. A change only
+  # to bilingual help text must not spawn a 75-minute guest. The source
+  # classifier fails closed for actual setup or unknown frontend changes.
+  scope-g03:
+    name: Classify native G03 setup scope without booting a VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    outputs:
+      native_required: ${{ steps.classify.outputs.native_required }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Prove help-only is safe to skip, setup changes require native
+        id: classify
+        env:
+          G03_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          G03_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/g03_native_scope.py
+          python3 scripts/g03_native_scope.py --self-test
+          python3 scripts/g03_native_scope.py --classify
+
   fast-g03:
     name: Fast G03 exact-source preflight
     runs-on: ubuntu-latest
@@ -44,7 +69,8 @@ jobs:
           sh scripts/test-g03-first-install.sh
           sh scripts/test-setup-runtime-transaction.sh
   native-g03:
-    needs: fast-g03
+    needs: [fast-g03, scope-g03]
+    if: needs.scope-g03.outputs.native_required == 'true'
     name: Real OPNsense clean first upstream install and reinstall
     runs-on: ubuntu-latest
     timeout-minutes: 75
