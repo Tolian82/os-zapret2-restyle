@@ -154,9 +154,41 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('cancel-in-progress: false', body)
         self.assertNotIn("cron: '7,17,27,37,47,57 * * * *'", body)
 
+    def test_native_browser_p3_stays_bounded_and_preserves_native_evidence(self):
+        # GH-071: UI smoke must not implicitly rebuild old RUNNING systems.
+        # DNS/hypervisor outages must fail before an expensive guest launch.
+        workflow = (ROOT / '.github/workflows/stage5-native-browser-wan.yml').read_text(
+            encoding='utf-8')
+        match = re.search(r'(?m)^    timeout-minutes: (\d+)\s*$', workflow)
+        self.assertIsNotNone(match, 'native UI job must have an explicit budget')
+        self.assertLessEqual(int(match.group(1)), 15)
+        self.assertIn('cache-after-prepare: true', workflow)
+        self.assertNotIn('disable-cache: true', workflow)
+        self.assertIn('Fail early if host DNS cannot install QEMU', workflow)
+        self.assertIn('timeout 8 getent ahostsv4', workflow)
+        self.assertLess(workflow.index('Fail early if host DNS cannot install QEMU'),
+                        workflow.index('uses: vmactions/opnsense-vm@'))
+        self.assertIn('stage2-opnsense-real-native-clean-install.py', workflow)
+        self.assertNotIn('stage2-opnsense-real-native-running-upgrade.py', workflow)
+        for real_check in ('scripts/stage5-browser-wan.py --browser',
+                           'scripts/stage5-browser-wan.py --native-confirm',
+                           'scripts/p3-browser-i18n.py --en-browser',
+                           'scripts/p3-browser-i18n.py --ru-browser'):
+            self.assertIn(real_check, workflow)
+
+    def test_native_execution_rule_is_canonical_not_just_p3_notes(self):
+        rulebook = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
+        agents = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')
+        self.assertRegex(rulebook, r'(?m)^GH-071\. \*\*Native-test placement')
+        for required in ('pre-provisioned KVM', 'infrastructure failure / NOT TESTED',
+                         'owner-live acceptance', 'GitHub-hosted runner',
+                         'Cache reusable verified base images'):
+            self.assertIn(required, rulebook)
+        self.assertIn('GH-071', agents)
+
     def test_canonical_rules_and_pr_gate_are_mandatory(self):
         rules = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
-        for identifier in range(66, 71):
+        for identifier in range(66, 72):
             self.assertRegex(rules, rf'(?m)^GH-{identifier:03d}\. ')
         self.assertIn('Четыре уровня S0–S3 не означают четырёх', rules)
         self.assertIn('Центральная CI', rules)

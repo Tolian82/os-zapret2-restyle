@@ -35,7 +35,8 @@ def real_browser():
          'REAL_BROWSER_DISPOSABLE_CI_OPTIN_REQUIRED')
     origin = 'https://127.0.0.1:18443'
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
+        browser_args = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+        browser = pw.chromium.launch(headless=True, **browser_args)
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
@@ -66,7 +67,7 @@ def real_browser():
             need(field.input_value() == target, 'WAN_NOT_SELECTED_IN_BROWSER')
             # Original installed Volt/jQuery dispatch, not an injected request.
             with page.expect_response(lambda r: r.request.method == 'POST' and
-                 r.url.split('?')[0].endswith('/api/zapret/settings/apply'), timeout=625000) as response:
+                 r.url.split('?')[0].endswith('/api/zapret/settings/apply'), timeout=90000) as response:
                 page.locator('#reconfigureAct').click()
             actual = response.value
             need(actual.status == 200, 'LOWER_APPLY_HTTP_' + str(actual.status))
