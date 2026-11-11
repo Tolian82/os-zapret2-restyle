@@ -20,12 +20,22 @@ if (PHP_OS_FAMILY !== 'BSD') {
     fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_NOT_FREEBSD\n");
     exit(2);
 }
-if ((function_exists('posix_geteuid') && posix_geteuid() !== 0) ||
-    !is_file('/conf/config.xml') ||
-    is_link('/conf/config.xml') ||
-    fileowner('/conf/config.xml') !== 0 ||
-    !is_writable('/conf/config.xml')) {
-    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_ROOT_CONFIG_ACCESS\n");
+// Each identity/precondition guard has a distinct, non-sensitive refusal
+// receipt. A combined "root Config access" code hid the actual native cause.
+if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_NOT_ROOT\n");
+    exit(2);
+}
+if (!is_file('/conf/config.xml') || is_link('/conf/config.xml')) {
+    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_NOT_REGULAR\n");
+    exit(2);
+}
+if (fileowner('/conf/config.xml') !== 0) {
+    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_OWNER_NOT_ROOT\n");
+    exit(2);
+}
+if (!is_writable('/conf/config.xml')) {
+    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_NOT_WRITABLE\n");
     exit(2);
 }
 // Stage 5 generated this runner-only key and installed the same key into the
