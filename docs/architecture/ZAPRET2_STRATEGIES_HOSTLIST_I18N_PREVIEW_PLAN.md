@@ -48,6 +48,8 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 **Gate:** enough direct evidence to code P1 and P2 without inventing native semantics. If the engine contradicts an approved requirement, stop the affected change and present the exact evidence plus options to the owner; do not weaken the requirement silently.
 
+**P0 evidence record:** [upstream v1.0.6/v1.0.7 source findings and native witness still required](../verification/P0_UPSTREAM_HOSTLIST_PROFILE_EVIDENCE.md). This link records research progress only; it does not change this gate or declare P0 accepted.
+
 ## 4. P1 — HOSTLIST modifiers and normalization parity
 
 **User scenario:** The GUI accepts an approved target line, saves it, reopens it unchanged in meaning, and the managed list ultimately given to `dvtws2` has the same semantics.

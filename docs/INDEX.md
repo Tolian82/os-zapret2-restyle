@@ -20,6 +20,7 @@
 
 - [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3.
 - [Owner-approved P0–P6 development plan](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) — exact stage sequence, source ownership, native verification and A01–A19 gates. P0 is the immediate next task; P0–P6 are not implemented and a test package has not been published.
+- [P0 upstream source evidence and missing native witness](verification/P0_UPSTREAM_HOSTLIST_PROFILE_EVIDENCE.md) — immutable `v1.0.6`/`v1.0.7` hostlist parser, duplicate-rule semantics, current integration map, safe native verification matrix; P0 IN PROGRESS, no runtime acceptance claimed.
 
 ## Level 2 — completed clean-install lifecycle ТЗ v1.3 (8–11 November 2026)
 
