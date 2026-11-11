@@ -46,7 +46,8 @@
             Native <code>dvtws2</code> strategy. Independent profiles are separated by <code>--new</code>; the first eligible profile is chosen in engine order. The same HOSTLIST/IPSET target may be used by different profiles.<br/>
             A single profile may contain multiple ordered <code>--payload</code> and <code>--lua-desync</code> actions. Do not split them with <code>--new</code> unless you intend independent profiles.<br/>
             <code>--filter-tcp</code>/<code>--filter-udp</code> select profile ports and contribute to IPFW interception coverage; <code>--filter-l7</code> selects the protocol. Range, payload and Lua actions belong to their profile.<br/>
-            Managed targets: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>, <code>&lt;IPSET:telegram&gt;</code>. Do not reference the same resolved list file of the same type twice inside one profile. Native dry-run checks syntax/runtime support; it does not prove DPI bypass.
+            Managed targets: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>, <code>&lt;IPSET:telegram&gt;</code>. Do not reference the same resolved list file of the same type twice inside one profile. Native dry-run checks syntax/runtime support; it does not prove DPI bypass.<br/>
+            <b>Lua action scope:</b> <code>--payload</code> selects payload types, while <code>--in-range</code> and <code>--out-range</code> filter the incoming/outgoing conntrack counter ranges for <b>subsequent</b> <code>--lua-desync</code> instances in this profile, until redefined. <code>--new</code> starts another independent profile, not another handler in the current sequence. Compare port, L7, target and profile order before transferring any Lab action.
         ]]></help>
     </field>
     <field>

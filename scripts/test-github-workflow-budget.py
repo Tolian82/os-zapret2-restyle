@@ -147,6 +147,23 @@ class BudgetContracts(unittest.TestCase):
         self.assertNotIn('  push:', g03,
                          'same branch must not produce duplicate push/PR preflight jobs')
 
+    def test_g03_native_setup_gate_rejects_only_help_exemption(self):
+        workflow = (ROOT / '.github/workflows/g03-native-disposable-first-install.yml').read_text(
+            encoding='utf-8')
+        scope = (ROOT / 'scripts/g03_native_scope.py').read_text(encoding='utf-8')
+        self.assertIn('  scope-g03:', workflow)
+        self.assertIn('needs: [fast-g03, scope-g03]', workflow)
+        self.assertIn("if: needs.scope-g03.outputs.native_required == 'true'", workflow)
+        self.assertIn('python3 scripts/g03_native_scope.py --self-test', workflow)
+        self.assertIn('python3 scripts/g03_native_scope.py --classify', workflow)
+        self.assertIn('fetch-depth: 0', workflow)
+        self.assertIn('G03_BASE_SHA:', workflow)
+        self.assertIn('G03_HEAD_SHA:', workflow)
+        self.assertIn('SETUP_PATHS & changed', scope)
+        self.assertIn('return without_help(base_view) != without_help(head_view)', scope)
+        self.assertIn('assert native_required({VIEW}, base, updated.replace("setup();", "changedSetup();"))', scope)
+        self.assertIn('assert not native_required({VIEW}, base, updated)', scope)
+
     def test_watchdog_hourly_fallback_and_ci_event(self):
         body = (ROOT / '.github/workflows/pr-completion-watchdog.yml').read_text(encoding='utf-8')
         self.assertIn("cron: '7 * * * *'", body)

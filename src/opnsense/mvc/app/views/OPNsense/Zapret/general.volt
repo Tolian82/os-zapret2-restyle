@@ -173,7 +173,12 @@
                 'выбранному профилю.<br/>' +
                 'Цели: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>, ' +
                 '<code>&lt;IPSET:telegram&gt;</code>. Нельзя дважды подключать один и тот же ' +
-                'файл списка одного типа внутри профиля. Нативный dry-run проверяет синтаксис, а не успех обхода DPI.',
+                'файл списка одного типа внутри профиля. Нативный dry-run проверяет синтаксис, а не успех обхода DPI.<br/>' +
+                'Фильтры <code>--payload</code> (тип полезной нагрузки), <code>--in-range</code> и ' +
+                '<code>--out-range</code> (диапазоны входящих/исходящих счётчиков conntrack) действуют на ' +
+                'следующие <code>--lua-desync</code> внутри профиля до переопределения. ' +
+                '<code>--new</code> начинает независимый профиль, а не следующий обработчик той же цепочки. ' +
+                'Перед переносом из Лаборатории сравните порт, L7, цель и порядок профилей.',
             'zapret.strategy.extraargs':
                 'Добавляются после Traffic Strategy в итоговую командную строку <code>dvtws2</code>. ' +
                 '<b>Не обязательно глобальные:</b> параметры профиля могут относиться к последнему профилю. ' +
@@ -216,7 +221,11 @@
             'Изучите результат <b>SUMMARY</b> и добавьте профиль в поле ' +
             '<b>Стратегия обработки трафика</b>. HTTP, HTTPS/TLS, TCP и UDP могут ' +
             'сосуществовать. Независимые профили разделяются <code>--new</code>. ' +
-            'Не заменяйте существующую многопрофильную стратегию без проверки объединения.';
+            'Не заменяйте существующую многопрофильную стратегию без проверки объединения.<br/>' +
+            'Если Лаборатория подтвердила отдельный профиль, добавьте его через <code>--new</code>, ' +
+            'проверив приоритет более ранних профилей. Если нужен лишь дополнительный Lua-обработчик ' +
+            'для того же набора целей и L7, переносите действие внутрь нужного профиля после его ' +
+            '<code>--payload</code>/<code>--in-range</code>/<code>--out-range</code>, без нового <code>--new</code>.';
 
         const strategiesInfoEN =
             'Run <b>blockcheck2</b> from the ' +
@@ -225,7 +234,12 @@
             'Review the working strategy from the <b>SUMMARY</b> output and add the profile ' +
             'to the unified <b>Traffic Strategy</b> field. HTTP, HTTPS/TLS, TCP and UDP ' +
             'profiles may coexist; separate independent profiles with <code>--new</code>. ' +
-            'Do not overwrite an existing multi-profile strategy without checking how to merge.';
+            'Do not overwrite an existing multi-profile strategy without checking how to merge.<br/>' +
+            'If the Lab verified an independent profile, insert it with <code>--new</code> after checking ' +
+            'whether an earlier profile would match the same flow. For an additional Lua handler ' +
+            'with the same targets and L7, append the action inside the existing profile after the ' +
+            'appropriate <code>--payload</code>/<code>--in-range</code>/<code>--out-range</code> filters; ' +
+            'do not create a new <code>--new</code> profile just for another action.';
 
         function localizeStrategiesForm() {
             const form = $('#frm_GeneralSettings');

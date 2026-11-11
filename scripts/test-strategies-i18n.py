@@ -113,6 +113,19 @@ for field_id, required in required_help.items():
     text = help_fields[field_id]
     for phrase in required:
         assert phrase in text, (field_id, "missing EN Full Help:", phrase)
+# P4: native in-profile counter/payload filters and safe handler transfer
+# must appear in the actual EN XML help and bilingual rendered form help.
+for term in ("--in-range", "--out-range", "conntrack", "subsequent",
+             "another independent profile", "Compare port, L7, target"):
+    assert term in help_fields["zapret.strategy.trafficargs"], ("P4 EN help", term)
+for term in ("--in-range", "--out-range", "входящих/исходящих",
+             "следующие", "независимый профиль", "порядок профилей"):
+    assert term in view, ("P4 RU help", term)
+for term in ("If the Lab verified an independent profile",
+             "Если Лаборатория подтвердила отдельный профиль"):
+    assert term in view, ("P4 bilingual transfer guidance", term)
+assert "cache-only" in view or "The resource list cache is unavailable" in view
+
 assert "Additional global dvtws2 arguments" not in view
 assert "Additional global dvtws2 arguments" not in help_fields["zapret.strategy.extraargs"]
 # The runtime RU help dictionary has exactly the same 10 existing fields;

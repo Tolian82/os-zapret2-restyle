@@ -190,6 +190,13 @@ def check_strategies(page, mode: str) -> dict[str, str]:
         advanced = native_form_toggle(page, "frm_GeneralSettings", "show_advanced")
         advanced.click()
         advanced_help.wait_for(state="visible", timeout=12000)
+    # P4: verify the newly rendered native popup/Full Help, not just source XML.
+    p4_token = "входящих/исходящих счётчиков conntrack" if mode == "ru" else "incoming/outgoing conntrack counter"
+    verify_help_cycle(page, "frm_GeneralSettings", "zapret.strategy.trafficargs", p4_token)
+    info_token = ("Если Лаборатория подтвердила отдельный профиль" if mode == "ru"
+                  else "If the Lab verified an independent profile")
+    need(info_token in page.locator("#zapretStrategiesInfoSource").inner_text(),
+         "P4_STRATEGIES_TRANSFER_INFO_MISSING_" + mode)
     help_token = "Не обязательно глобальные" if mode == "ru" else "Not necessarily global"
     verify_help_cycle(page, "frm_GeneralSettings", "zapret.strategy.extraargs", help_token)
     need(field.input_value().endswith(marker), "STRATEGY_EDIT_CHANGED_BY_HELP")
@@ -200,6 +207,28 @@ def check_strategies(page, mode: str) -> dict[str, str]:
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
     return initial
+
+
+def check_lab_guidance(page, mode: str) -> bool:
+    # Real authenticated Laboratory page; no route interception, synthetic DOM,
+    # settings POST, Run/Stop, or service/FD9/IPFW change.
+    page.goto(ORIGIN + "/ui/zapret/diagnostics", wait_until="domcontentloaded", timeout=45000)
+    wait_locale(page, mode)
+    paragraphs = page.locator("#strategyLabSummary p")
+    paragraphs.nth(3).wait_for(timeout=20000)
+    need(paragraphs.count() == 4, "P4_NATIVE_LAB_GUIDANCE_PARAGRAPHS_" + mode)
+    transfer = paragraphs.nth(2).inner_text()
+    caveat = paragraphs.nth(3).inner_text()
+    transfer_token = ("новый --new нужен только для самостоятельного профиля"
+                      if mode == "ru" else
+                      "use --new only for a genuinely independent profile")
+    caveat_token = ("HTTP/TLS, QUIC и произвольный UDP не взаимозаменяемы"
+                    if mode == "ru" else
+                    "HTTP/TLS, QUIC and generic UDP are not interchangeable")
+    need(transfer_token in transfer and "--in-range" in transfer and
+         "--out-range" in transfer, "P4_NATIVE_LAB_TRANSFER_MISSING_" + mode)
+    need(caveat_token in caveat, "P4_NATIVE_LAB_PROTOCOL_SCOPE_MISSING_" + mode)
+    return True
 
 
 def check_voice(page, mode: str) -> tuple[dict[str, str], bool]:
@@ -304,6 +333,7 @@ def browser_run(mode: str) -> None:
             login(page)
             strategies = check_strategies(page, mode)
             voice, validated = check_voice(page, mode)
+            lab_guidance = check_lab_guidance(page, mode)
             context.close()
         finally:
             browser.close()
@@ -327,6 +357,8 @@ def browser_run(mode: str) -> None:
         "native_popup_and_full_help_checked": True,
         "f5_values_unchanged": True,
         "readonly_voice_error_checked": validated,
+        "strategy_lab_p4_guidance_checked": lab_guidance,
+        "strategies_p4_native_full_help_checked": True,
         "apply_or_save_sent": False,
         "model_digest": identity,
         "owner_appliance_touched": False,
