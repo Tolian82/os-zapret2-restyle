@@ -108,6 +108,9 @@ require_fixed 'docs/verification/evidence/testing-publications/${TAG}.md' "${PRE
 require_fixed 'gh pr create' "${PRERELEASE_WORKFLOW}" 'testing publisher does not open publication-record PR'
 require_fixed '--draft' "${PRERELEASE_WORKFLOW}" 'publication-record PR is not deliberately Draft before bounded reconciliation'
 require_fixed 'Direct package asset:' "${PRERELEASE_WORKFLOW}" 'publication-record PR does not expose the direct GitHub package URL'
+require_fixed 'id: published_contract' "${PRERELEASE_WORKFLOW}" 'publisher lacks a successful immutable package/tag verification marker before branch deletion'
+require_fixed "if: \${{ !cancelled() && steps.published_contract.outcome == 'success' }}" "${PRERELEASE_WORKFLOW}" 'publisher cleanup must run after a PR-creation failure but only after verified immutable publication'
+require_fixed 'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"' "${PRERELEASE_WORKFLOW}" 'publisher cleanup must use the validated branch ref and inspect deletion'
 if grep -Eiq 'INSTALLER:|INSTALLER_SHA:|install-testing-package[.]sh[.]in|dist/\$\{INSTALLER\}|Direct installer asset:' "${PRERELEASE_WORKFLOW}"; then
   fail 'testing publisher must not create or offer SH installer assets'
 fi
