@@ -101,27 +101,37 @@ def f5_and_wait(page, endpoint: str) -> None:
 
 def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
     before = control(page, field).input_value()
-    text = help_source(page, field)
-    need(token in text, "NATIVE_HELP_NOT_LOCALIZED_" + field)
-    # Native help icon, do not inject jQuery or replace the real document.
+    source_text = help_source(page, field)
+    need(token in source_text, "NATIVE_HELP_NOT_LOCALIZED_" + field)
+    # OPNsense 26.7 form_input_tr.volt renders the real help inside
+    # div[data-for="help_for_FIELD"]; help_block_FIELD is reserved for
+    # validation errors and is never the Full Help container.
+    source = page.locator(
+        '[id="row_' + field + '"] div[data-for="help_for_' + field + '"]'
+    )
+    need(source.count() == 1, "NATIVE_HELP_SOURCE_MISSING_" + field)
     icon = page.locator('[id="help_for_' + field + '"]')
     need(icon.count() == 1, "NATIVE_HELP_ICON_MISSING_" + field)
-    icon.click()
-    need(control(page, field).input_value() == before, "POPUP_CHANGED_VALUE_" + field)
-    page.keyboard.press("Escape")
     toggle = page.locator('[id="show_all_help_' + form_id + '"]')
     need(toggle.count() == 1, "NATIVE_FULL_HELP_TOGGLE_MISSING_" + form_id)
+    # The global help state may have been restored from sessionStorage.
+    # Normalize it through the native UI rather than manipulating DOM/CSS.
+    if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
+        toggle.click()
+    source.wait_for(state="hidden", timeout=12000)
+    icon.click()
+    source.wait_for(state="visible", timeout=12000)
+    need(token in source.inner_text(), "NATIVE_POPUP_NOT_LOCALIZED_" + field)
+    need(control(page, field).input_value() == before, "POPUP_CHANGED_VALUE_" + field)
+    icon.click()
+    source.wait_for(state="hidden", timeout=12000)
     toggle.click()
-    # The source backing BOTH popup and F5 full-help is the same hidden
-    # div; visible help must now be populated by OPNsense's real handler.
-    visible = page.locator('[id="help_block_' + field + '"]')
-    need(visible.count() == 1, "NATIVE_HELP_BLOCK_MISSING_" + field)
-    visible.wait_for(state="visible", timeout=12000)
-    need(token in visible.inner_text(), "FULL_HELP_NOT_LOCALIZED_" + field)
+    source.wait_for(state="visible", timeout=12000)
+    need(token in source.inner_text(), "FULL_HELP_NOT_LOCALIZED_" + field)
     need(control(page, field).input_value() == before, "FULL_HELP_CHANGED_VALUE_" + field)
     toggle.click()
+    source.wait_for(state="hidden", timeout=12000)
     need(control(page, field).input_value() == before, "HIDE_HELP_CHANGED_VALUE_" + field)
-
 
 def check_strategies(page, mode: str) -> dict[str, str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
