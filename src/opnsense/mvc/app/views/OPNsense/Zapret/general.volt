@@ -294,6 +294,65 @@
             });
         }
 
+        // Localize ONLY known validation outputs from the Python-backed
+        // domain/IPSET bridges and the native model. Never expose arbitrary
+        // backend text or submitted user values in a translated field error.
+        function localizeStrategiesFieldErrors(errors) {
+            if (!isRussian || !errors || typeof errors !== 'object' ||
+                Array.isArray(errors)) return errors || {};
+            const fixed = {
+                'Please enter a valid port number.': 'Укажите корректный номер порта.',
+                'Please enter comma-separated port numbers.': 'Укажите номера портов через запятую.',
+                'Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.':
+                    'Укажите IPv4/IPv6-адреса или сети CIDR. Охват всего семейства запрещён.',
+                'Enter IPv4/IPv6 address or CIDR per line; /0 and full-family unions are forbidden.':
+                    'Укажите по одному IPv4/IPv6-адресу или CIDR в строке. /0 и охват всего семейства запрещены.',
+                'Select a WAN interface': 'Укажите WAN-интерфейс.',
+                'Selected WAN interface is not assigned or unavailable':
+                    'Выбранный WAN-интерфейс не назначен или недоступен.',
+                'Invalid bounded domain field': 'Некорректный или слишком большой список доменов.',
+                'Native IPSET preflight refused invalid addresses or networks':
+                    'IPSET содержит некорректные адреса или сети.',
+                'Native IPSET preflight unavailable':
+                    'Невозможно проверить IPSET: проверка недоступна.'
+            };
+            const domain = {
+                'Missing domain': 'Отсутствует домен',
+                'Repeated ! or ^ modifier': 'Повторён модификатор ! или ^',
+                'Modifiers are not permitted in Exclude Domains':
+                    'Модификаторы запрещены в глобальном списке исключений доменов',
+                'Modifiers cannot be combined with wildcard domains':
+                    'Нельзя сочетать модификаторы и домены с маской',
+                'IP addresses and networks are not allowed in domain lists':
+                    'IP-адреса и сети не допускаются в списках доменов',
+                'Invalid domain': 'Некорректный домен',
+                'Conflicting rules for the same domain':
+                    'Противоречащие правила для одного домена'
+            };
+            const result = {};
+            Object.keys(errors).forEach(function(key) {
+                const message = errors[key];
+                if (typeof message !== 'string') { result[key] = message; return; }
+                if (Object.prototype.hasOwnProperty.call(fixed, message)) {
+                    result[key] = fixed[message];
+                    return;
+                }
+                const match = /^(.+) \(line ([1-9][0-9]{0,6})\)$/.exec(message);
+                if (match && Object.prototype.hasOwnProperty.call(domain, match[1])) {
+                    result[key] = domain[match[1]] + ' (строка ' + match[2] + ')';
+                    return;
+                }
+                const ipset = /^Invalid IPSET [A-Za-z ()]{1,80}(?: at line ([1-9][0-9]{0,6}))?$/.exec(message);
+                if (ipset) {
+                    result[key] = 'Некорректный IPSET' +
+                        (ipset[1] ? ' (строка ' + ipset[1] + ')' : '') + '.';
+                    return;
+                }
+                result[key] = 'Ошибка проверки поля. Исправьте значение или проверьте журнал Zapret2.';
+            });
+            return result;
+        }
+
         // Keep known pre-dispatch errors localized like the rest of the UI.
         // Other PHP exception strings are not suitable as UI translations.
         function localizeStrategiesApplyError(message, reason) {
@@ -1224,7 +1283,7 @@
                 timeout: 630000
             }).done(function(data) {
                 handleFormValidation('frm_GeneralSettings',
-                    (data && data.validations) || {});
+                    localizeStrategiesFieldErrors((data && data.validations) || {}));
                 if (data && data.result === 'saved' && data.status === 'ok') {
                     reloadSettings().done(function() {
                         if (data.normalized && Array.isArray(data.normalization)) {

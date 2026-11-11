@@ -1125,6 +1125,9 @@ jobs:
       - name: Test Strategies native RU/EN form labels and help
         run: python3.13 scripts/test-strategies-i18n.py
 
+      - name: Test P3 Strategies and Voice field validation locale
+        run: python3.13 scripts/test-p3-field-errors.py
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 

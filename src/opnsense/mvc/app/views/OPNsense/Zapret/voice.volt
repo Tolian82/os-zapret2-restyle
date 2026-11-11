@@ -93,6 +93,14 @@ $(document).ready(function () {
             'Unexpected Voice form fields': 'В запросе есть посторонние поля',
             'Voice settings and IPSET fields are required': 'Требуются настройки голоса и поля IPSET',
             'Invalid Voice WAN selection': 'Некорректный выбор голосового WAN',
+            'Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.':
+                'Укажите IPv4/IPv6-адреса или сети CIDR. Охват всего семейства запрещён.',
+            'Enter IPv4/IPv6 address or CIDR per line; /0 and full-family unions are forbidden.':
+                'Укажите по одному IPv4/IPv6-адресу или CIDR в строке. /0 и охват всего семейства запрещены.',
+            'Native IPSET preflight refused invalid addresses or networks':
+                'IPSET содержит некорректные адреса или сети.',
+            'Native IPSET preflight unavailable': 'Невозможно проверить IPSET: проверка недоступна.',
+            'Invalid native overlap evidence': 'Невозможно проверить пересечения IPSET.',
             'Service checkbox and parameters are required': 'Требуются переключатель службы и параметры',
             'IPSET must be a text list': 'IPSET должен быть текстовым списком',
             'Enabled Voice service requires destination IPs': 'Для включённой службы нужны IP-адреса назначения',
@@ -132,6 +140,8 @@ $(document).ready(function () {
         var dynamic = [
             [/^Native Voice preflight rejected before runtime \((root-gate|bootstrap|model|decode|candidate|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight)\)$/, 'Подготовка Voice остановлена до переключения службы (стадия: $1). Настройки не применены'],
             [/^Invalid IPv4\/CIDR at line ([0-9]+)$/, 'Некорректный IPv4/CIDR в строке $1'],
+            [/^Invalid IPSET [A-Za-z ()]{1,80} at line ([1-9][0-9]{0,6})$/, 'Некорректный IPSET (строка $1)'],
+            [/^Invalid IPSET [A-Za-z ()]{1,80}$/, 'Некорректный IPSET.'],
             [/^CIDR contains host bits at line ([0-9]+)$/, 'В CIDR заданы биты хоста в строке $1'],
             [/^Duplicate fake option: ([A-Za-z0-9_]+)$/, 'Повторяется параметр fake: $1'],
             [/^Repeated (--[a-z0-9-]+) at line ([0-9]+)$/, 'Повторяется $1 в строке $2'],
