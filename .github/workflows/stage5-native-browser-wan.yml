@@ -5,6 +5,9 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/p3-browser-i18n.py
+      - scripts/p3-native-profile-locale.php
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
       - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
@@ -14,6 +17,9 @@ on:
     paths:
       - VERSION
       - scripts/stage5-browser-wan.py
+      - scripts/p3-browser-i18n.py
+      - scripts/p3-native-profile-locale.php
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/voice.volt
       - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
       - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php
@@ -42,7 +48,8 @@ jobs:
       - name: Offline exact-source GUI selectors and actual Chromium harness
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-browser-wan.py
+          python3.13 -m py_compile scripts/stage5-browser-wan.py scripts/p3-browser-i18n.py
+          python3.13 scripts/p3-browser-i18n.py --self-test
           python3.13 -m pip install playwright
           python3.13 -m playwright install --with-deps chromium
           python3.13 scripts/stage5-browser-wan.py --self-test
@@ -100,10 +107,41 @@ jobs:
         run: |
           set -eu
           GITHUB_ACTIONS=true ZAPRET2_STAGE5_BROWSER_WAN=1 /usr/local/bin/python3 scripts/stage5-browser-wan.py --native-confirm
+      - name: P3 set logged-in root user profile to English using native Config (disposable guest ONLY)
+        shell: opnsense {0}
+        run: |
+          set -eu
+          /usr/local/bin/php -l scripts/p3-native-profile-locale.php
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
+      - name: P3 real Chromium English Strategies and Voice native forms / F5 / validation
+        env:
+          ZAPRET2_P3_NATIVE_LOCALE: '1'
+        run: |
+          set -eu
+          python3.13 scripts/p3-browser-i18n.py --en-browser
+      - name: P3 set same logged-in root user profile to Russian using native Config (disposable guest ONLY)
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php ru_RU
+      - name: P3 real Chromium Russian forms / F5 / validation; ensure saved values match EN
+        env:
+          ZAPRET2_P3_NATIVE_LOCALE: '1'
+        run: |
+          set -eu
+          python3.13 scripts/p3-browser-i18n.py --ru-browser
+      - name: P3 restore disposable guest root user language to English via native Config
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
       - name: Save redacted real-browser receipt (no credentials or Config XML)
         uses: actions/upload-artifact@v7
         with:
           name: stage5-real-browser-wan-${{ github.event.pull_request.head.sha || github.sha }}
-          path: dist/stage5-browser-wan-result.json
+          path: |
+            dist/stage5-browser-wan-result.json
+            dist/p3-browser-i18n-en.json
+            dist/p3-browser-i18n-ru.json
           if-no-files-found: error
           retention-days: 7
