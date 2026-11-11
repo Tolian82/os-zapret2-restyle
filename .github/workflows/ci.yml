@@ -620,6 +620,12 @@ jobs:
           sh -n scripts/test-voice-shared-ipsets.sh
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py
           python3.13 -m py_compile scripts/test-voice-profile-compiler.py
+      - name: Stage 1 canonical Python HOSTLIST normalization and shell adapter
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/domain_policy.py scripts/test-domain-policy.py
+          python3.13 scripts/test-domain-policy.py
+          sh -n scripts/test-domain-policy-shell.sh
+          sh scripts/test-domain-policy-shell.sh
       - name: Stage 1 dual-stack IPSET compiler and full-family guards
         run: |
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py
@@ -887,6 +893,7 @@ jobs:
           find src -type f -name "*.inc" -exec php -l {} \;
           php scripts/test-strategy-voice-settings-scope.php
           php scripts/test-ipset-policy-php.php
+          php scripts/test-domain-policy-php.php
           php scripts/test-voice-settings-payload.php
           php scripts/test-voice-candidate-validator.php
           php scripts/test-voice-api-concurrency.php

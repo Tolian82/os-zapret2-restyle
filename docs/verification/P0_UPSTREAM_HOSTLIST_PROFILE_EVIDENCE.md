@@ -1,9 +1,9 @@
 # P0 — source-verified upstream HOSTLIST/profile evidence and remaining native witness
 
-**Status:** P0 IN PROGRESS — immutable upstream tag/source inspection completed; installed native FreeBSD `dvtws2` runtime and OPNsense GUI not yet exercised. P1–P6 NOT STARTED.
+**Status (owner-reconciled 11 November 2026):** P0 COMPLETE from canonical upstream/source review; owner forbids extra engine verification. P1 Python source implementation in progress, P2–P6 not implemented.
 **Baseline:** project `main` `20e8705f5dc058b1dd3ad5d81feaee95f01ed24e` (`v0.6.4_8`) before this source-only research record.
 **Scope:** Approved [specification](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and [P0–P6 plan](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md), [Feature #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936).
-**Proof boundary:** upstream *source* at a particular immutable tag is not proof that a particular owner's installed executable has those semantics. This report records observed source semantics and precise remaining native acceptance work; it does not claim a passed native functional test or executable capability probe.
+**Authority:** official upstream Zapret2 documentation is canon, and the established `dvtws2 --dry-run` is the accepted validation method. This source study adds no extra engine-test obligation, and no physical owner package acceptance is claimed.
 
 ## 1. Exact upstream sources inspected
 
@@ -53,18 +53,13 @@ References: [1.0.6 hostlist](https://github.com/bol-van/zapret2/blob/v1.0.6/nfq2
 | GUI dynamic messages | `general.volt`, `voice.volt`, `diagnostics.volt` use `document.documentElement.lang` and inline RU/EN choices | P3 verify actual OPNsense user-profile locale propagation, not browser-only detection |
 | Installed runtime | separately installed upstream `dvtws2`, managed through current setup/service | P0/P1 must implement verified capability guard; no version-number guess and no silent failure on `!` |
 
-## 4. Exact P0 native verification still required
+## 4. Owner decision supersedes extra native-engine verification
 
-**No native executable was available in the current analysis environment.** The following cases must be run as a scoped, safe verification against actual candidate `dvtws2` on supported OPNsense/FreeBSD, or a proven identical installed engine artifact:
+**11 November 2026 — binding DEV-001/DEV-003 («Суслик») reconciliation:** The owner confirms that the [official Zapret2 English manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) and upstream implementation are authoritative. Existing native `dvtws2 --dry-run` is accepted as the strategy validation contract. **Do not schedule extra actual-engine semantic tests, isolated FreeBSD witness experiments or re-proof of published upstream behavior.** P0 is complete for the feature integration/design purpose; P1 proceeds immediately.
 
-1. Validate positive `^, !, !^, ^!` behavior with controlled hostlist and distinguish `v1.0.6` (no local exemption) from supporting runtime, without modifying a running service or IPFW.
-2. Test lookup for apex vs subdomains and local exclusion within include versus global exclude; record observed output, not only process exit status.
-3. Duplicate hostname with conflicting flags: ensure first-entry native effect is understood and ensure plugin rejects ambiguity instead of falsely claiming both records were applied.
-4. Same-realpath duplicate within one include collection, different profiles, include/exclude collection, and symlink aliases.
-5. Preserve the intended handler/first-match behavior and run native `dvtws2 --dry-run` for generated candidate profiles as part of P2.
-6. Confirm actual installed runtime identity/capability rather than treating `--dry-run` as proof of HOSTLIST `!` matching (the old parser could silently treat it as an unmatched literal).
+The underlying upstream tag/version findings in sections 1–3 remain useful historical context; they are NOT an authorization for more native dvtws2 testing.
 
-**Gate status:** P0 source inspection documented; **P0 NATIVE WITNESS OPEN**. P1 cannot be marked accepted until a safe installed-runtime capability check is in place. This report is an evidence record, not a change to the normative specification or approved development plan.
+**Architecture correction:** the single domain-normalization authority is Python `backend/domain_policy.py`; PHP `DomainSetPolicyBridge.php` and shell `targets.sh` delegate to it. The previous PHP/awk dual-grammar is superseded by the owner's decision. Existing `IPSetPolicyBridge.php` remains and continues to call Python `ipset_policy.py`.
 
 ## 5. Test matrix for P1 (prepared, not executed)
 
@@ -72,10 +67,10 @@ Positive: ordinary, exact, locally exempted, exact+exempt in both orders, case n
 
 Negative: doubled/modifier-conflict on the same hostname, missing domain, exact+wildcard, broken domain labels/length, IP/CIDR pasted into domain-only fields, unsupported effective engine, and any attempt to mutate global excluded-domain handling via new local-list syntax.
 
-Compare PHP normalization, shell normalization, saved Config round-trip, managed target text and native runtime behavior. Error diagnostics must identify field/line and never disclose large user strategies in logs.
+Compare one Python normalizer across PHP GUI bridge, shell adapter, saved Config and managed target text, with the current standard native dry-run. No separate engine experiments. Error diagnostics must identify field/line and never disclose large user strategies in logs.
 
 ## 6. Handoff
 
-Continue P0 with isolated native capability proof; then P1 modifiers and shared PHP/shell test corpus; then P2 profile/dedup semantics. The owner has already approved P0–P6. Escalate only actual contract/architecture conflicts and optional improvements proposed openly.
+P0 completed under the owner decision; proceed with P1 single Python domain policy, then P2 consider safe Python profile parser/normalizer migration, retaining shell entrypoint compatibility. The owner has already approved P0–P6. Escalate only actual contract/architecture conflicts and optional improvements proposed openly.
 
-**State after this report:** native P0 verification OPEN; P1–P6 implementation NOT STARTED; no new native package or stable release.
+**Current owner-reconciled state:** P0 integration/source review COMPLETE (no additional engine witness required); P1 Python implementation SOURCE CANDIDATE; P2–P6 not implemented. No new native package or stable release.

@@ -16,6 +16,7 @@ require_once __DIR__ . '/WanRequirement.php';
 require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
+require_once __DIR__ . '/DomainSetPolicyBridge.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -91,62 +92,6 @@ class SettingsController extends ApiMutableModelControllerBase
             return ['status' => 'error', 'busy' => true, 'reason' => 'post_required'];
         }
         return $this->lifecycleGuard();
-    }
-
-    private function normalizeDomainList(string $text, string $label): array
-    {
-        $normalized = [];
-        $seen = [];
-        $changed = 0;
-        $duplicates = 0;
-
-        foreach (preg_split('/\R/u', $text) as $index => $raw) {
-            $lineNo = $index + 1;
-            $value = trim($raw);
-            if ($value === '') {
-                continue;
-            }
-            $original = $value;
-            $value = preg_replace('#^https?://#i', '', $value);
-            $value = preg_replace('/[\/?#].*$/', '', $value);
-            $value = preg_replace('/^\*\./', '', trim($value));
-            $value = preg_replace('/^[,;:]+|[,;:]+$/', '', $value);
-            $value = trim($value, ". \t\n\r\0\x0B");
-            $value = strtolower($value);
-
-            if ($value === '' || strlen($value) > 253 || strpos($value, '..') !== false) {
-                throw new \InvalidArgumentException(
-                    sprintf("%s, line %d: invalid domain entry '%s'", $label, $lineNo, $raw)
-                );
-            }
-            if (preg_match('/^[0-9.]+$/', $value) || strpos($value, '/') !== false) {
-                throw new \InvalidArgumentException(
-                    sprintf("%s, line %d: IP addresses and networks are not allowed in a domain list ('%s')", $label, $lineNo, $raw)
-                );
-            }
-            foreach (explode('.', $value) as $part) {
-                if (
-                    $part === '' || strlen($part) > 63 ||
-                    !preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/', $part)
-                ) {
-                    throw new \InvalidArgumentException(
-                        sprintf("%s, line %d: invalid domain entry '%s' after normalization to '%s'", $label, $lineNo, $raw, $value)
-                    );
-                }
-            }
-
-            if ($value !== $original) {
-                $changed++;
-            }
-            if (isset($seen[$value])) {
-                $duplicates++;
-                continue;
-            }
-            $seen[$value] = true;
-            $normalized[] = $value;
-        }
-
-        return [implode("\n", $normalized), $changed, $duplicates];
     }
 
     private function backendFailureMessage(string $fallback): string
@@ -279,7 +224,14 @@ class SettingsController extends ApiMutableModelControllerBase
                         $changed = ($value !== rtrim(str_replace(["\r\n", "\r"], "\n", $raw), "\n")) ? 1 : 0;
                         $duplicates = 0;
                     } else {
-                        [$value, $changed, $duplicates] = $this->normalizeDomainList($raw, $label);
+                        try {
+                            $domain = DomainSetPolicyBridge::inspect($raw, $field);
+                        } catch (\InvalidArgumentException $error) {
+                            return $this->validationFailure($field, $error->getMessage());
+                        }
+                        $value = $domain['normalized'];
+                        $changed = $domain['changed'];
+                        $duplicates = $domain['duplicates'];
                     }
                     if ($changed > 0 || $duplicates > 0) {
                         $summary[] = sprintf(

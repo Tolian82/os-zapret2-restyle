@@ -22,8 +22,8 @@
 
 | Stage | Core result | Normative acceptance | Stage exit evidence |
 | --- | --- | --- | --- |
-| **P0** | Establish actual upstream syntax and current source integration map | Prerequisite for A01–A10, A12–A17 | Captured native capability cases, current-code call graph, precise test matrix and language mechanism |
-| **P1** | HOSTLIST `!/^ ` correctness across GUI, Config and backend | A01–A05, A10 | Same-case PHP + shell parity, Config→generator→native dry-run on a real supported runtime, unsupported-runtime refusal |
+| **P0** | Confirm canonical upstream manual and actual project ownership | Prerequisite for A01–A10, A12–A17 | Official upstream/source semantics, code call graph, owner-approved no-extra-engine-test boundary |
+| **P1** | One Python HOSTLIST domain policy across GUI, Config and backend | A01–A05, A10 | Single `domain_policy.py`, thin PHP/shell adapters, same-input test corpus and existing `--dry-run` |
 | **P2** | Native profile/handler order and duplicate-list guard | A06–A09 | Generator/validator cases plus genuine `dvtws2 --dry-run` and no-mutation failure |
 | **P3** | Full existing Strategies and Voice RU/EN localization | A12–A16 | Both locales exercised on OPNsense profile settings, help/F5 and API failures; saved values unchanged |
 | **P4** | Accurate help, Full Help and Strategy Lab guidance | A17 plus A12–A14 | Native-checked examples, cached resource inventory, bilingual Lab GUI and handler-transfer instructions |
@@ -38,7 +38,7 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 **Tasks:**
 
-- Use real available upstream source/binaries (including the selected installed runtime where available) to establish matching behavior for ordinary domain, `^name`, `!name`, `!^name` and `^!name`; verify exact matching, subdomains, accepted combinations, invalid prefixes and runtime capability rejection. Distinguish a demonstrated behavior from an assumption about the engine or older versions.
+- Accept the official upstream Zapret2 manual as canonical for ordinary domain, `^name`, `!name`, `!^name`, `^!name`, native profile semantics and compatibility. The owner explicitly ruled out further executable-engine semantic experiments; existing `dvtws2 --dry-run` is accepted. Determine only plugin integration and safeguards.
 - Verify native `--new` boundaries, first matching profile, multiple sequential `--payload` / `--lua-desync` handlers, list include/exclude and prohibited duplicate references in one profile; check same file in two independent profiles and resolved-file identity.
 - Trace PHP candidate-save path in `src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php`, shared `StrategySettingsPayload.php`, model `Zapret.xml`; trace `src/opnsense/scripts/OPNsense/Zapret/backend/targets.sh`, `target_mode.sh`, `parser.sh`, `profile_pipeline.sh`, `profile_normalizer.sh`, `generator.sh` and `validator.sh`. Verify call order and existing dry-run entrypoint before changing it.
 - Trace `forms/general.xml`, `forms/voice.xml`, `general.volt`, `voice.volt` and `diagnostics.volt`; identify current stock gettext/translation mechanism, existing JavaScript locale handling, popup-help sources and how the OPNsense **user profile locale** propagates to UI/API.
@@ -48,7 +48,7 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 **Gate:** enough direct evidence to code P1 and P2 without inventing native semantics. If the engine contradicts an approved requirement, stop the affected change and present the exact evidence plus options to the owner; do not weaken the requirement silently.
 
-**P0 evidence record:** [upstream v1.0.6/v1.0.7 source findings and native witness still required](../verification/P0_UPSTREAM_HOSTLIST_PROFILE_EVIDENCE.md). This link records research progress only; it does not change this gate or declare P0 accepted.
+**P0 evidence and binding update:** [tagged source findings and owner's canonical-manual/no-extra-engine-verification decision](../verification/P0_UPSTREAM_HOSTLIST_PROFILE_EVIDENCE.md). P0 review is completed under the owner instruction; do not create a new native witness gate.
 
 ## 4. P1 — HOSTLIST modifiers and normalization parity
 
@@ -58,11 +58,11 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 - Parse leading `!` and `^` separately from hostname normalization; preserve exact/exclusion flags and support both ordering forms once verified in P0. Validate domains, pasted URLs, wildcard compatibility, whitespace and casing without lossy policy transformation.
 - Reject `!!`, `^^`, `!^!`, malformed/empty host, invalid exact+wildcard and non-domain inputs with stable error code, field and line; do not merge semantically distinct entries.
-- Implement identical canonical outcomes in PHP `SettingsController.php` and shell `backend/targets.sh`/dependent managed-target path, using one shared fixture corpus (not a new second Config writer). Respect the existing canonical normalization contracts and current model.
+- Implement ONE canonical domain grammar in `backend/domain_policy.py` (alongside `ipset_policy.py`): GUI preflight delegates through a separate `DomainSetPolicyBridge.php`; `SettingsController.php` has no handwritten domain grammar; `backend/targets.sh` calls Python for managed YouTube/User and global Exclude Domains. Preserve the existing `IPSetPolicyBridge.php` unchanged. Test all three entrypoints against one semantics corpus, without creating a second Config writer.
 - Keep local HOSTLIST `!name` distinct from global Exclude Domains and Exclude IPSet. Do not introduce modifier parsing into unrelated excluded-target fields.
 - Validate actual runtime capabilities before mutation; missing/older engine behavior is explicit and non-destructive. Save/readback and model F5 must preserve existing user data and approved empty strategy behavior.
 
-**Evidence:** S0 PHP/shell table-driven parity, invalid-line tests and round-trip; focused CI generator/Config tests; real installed native `dvtws2 --dry-run` when the engine is available; failure snapshot proving running Config/FD9/IPFW unchanged.
+**Evidence:** S0 Python unit/CLI, PHP-bridge and shell-adapter tests of one policy, invalid-line/atomic-output tests and Config round-trip; focused CI generator/Config tests; current native `dvtws2 --dry-run` as the accepted existing validation mechanism. No supplementary engine semantic experiments.
 
 **Gate:** A01–A05 and A10 demonstrated at the appropriate executable boundary; no automatic conversion of local exclusions into global policy.
 
@@ -72,7 +72,7 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 **Work:**
 
-- Inspect then narrow changes to `backend/parser.sh`, `profile_normalizer.sh`, `profile_pipeline.sh`, `generator.sh` and `validator.sh` only where actual evidence establishes a gap.
+- Prefer migrating the profile parsing/normalization implementation from `backend/parser.sh` and `profile_normalizer.sh` to an integrated Python component after mapping the existing `profile_pipeline.sh`, `target_mode.sh`, `generator.sh`, `validator.sh`, Voice and FD9 ownership. Keep thin shell entrypoint compatibility and unchanged `--new`/handler semantics. Perform this as a separate P2 logical PR only if the migration has bounded risk; do not replace the whole functioning pipeline blindly.
 - Preserve one profile's internal sequence of `--payload` and `--lua-desync`, real first-match behavior, `--filter-tcp/udp`, `--filter-l7`, and the distinction between IPFW interception port set and per-profile engine selection.
 - Detect prohibited same-type resolved-file duplicates **within** one profile, distinguishing include/exclude and list type; allow same HOSTLIST/IPSET reference in separate profiles.
 - Do not ban all overlapping target profiles; provide a warning when meaningful and use native dry-run for nontrivial `--template` / `--import` expansion. Validation failure must not activate a broken Config or change a running engine.
