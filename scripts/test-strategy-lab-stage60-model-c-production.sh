@@ -15,9 +15,17 @@ for file in "${ENGINE}" "${OWNER}" "${SELECTOR}" "${ENTRY}"; do
 done
 
 PYTHONPATH="${MODULE_ROOT}" "${PYTHON_BIN}" - <<'PY'
+import grp
 import os
+import pwd
+import stat
+import subprocess
+import sys
 import tempfile
+from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from strategy_lab_py import (
     model_b,
@@ -156,6 +164,61 @@ with tempfile.TemporaryDirectory() as raw:
     assert "iff=strategy_lab_model_c_source_port" in args[ordinary_cond]
     assert not any(value == "--new" for value in args)
 
+    # Owner-live _50 regression: dvtws2 switches to nobody *before* reopening
+    # the Model-C hostlist. The random staging path must be readable to nobody
+    # while the private per-worker session is not made traversable.
+    staged = root / "staged-hostlist"
+    staged.mkdir()
+    # The hosted non-root Linux runner may have user nobody but only the
+    # 'nogroup' group; actual root FreeBSD must resolve the real nobody group.
+    gid = grp.getgrnam("nobody").gr_gid if os.geteuid() == 0 else os.getgid()
+    if os.geteuid() == 0:
+        os.chown(staged, -1, gid)
+        os.chmod(root, 0o711)
+        os.chmod(staged, 0o710)
+    original_session_dir = model_b.session_dir
+    model_b.session_dir = lambda: root / "private-session"
+    chown_guard = nullcontext() if os.geteuid() == 0 else patch.object(stage60_model_c.os, "chown")
+    group_guard = (
+        nullcontext() if os.geteuid() == 0
+        else patch.object(
+            stage60_model_c.grp, "getgrnam",
+            return_value=SimpleNamespace(gr_gid=gid),
+        )
+    )
+    try:
+        with chown_guard, group_guard:
+            with patch.dict(os.environ, {
+                "STRATEGY_LAB_MODEL_C_HOSTLIST_DIR": str(staged),
+                "STRATEGY_LAB_MODEL_C_SELECTOR_LUA": str(selector),
+            }):
+                selection = (mixed[0],)
+                bucket = stage60_model_c._write_bucket_runtime(
+                    selection, [{"endpoint": "example.test", "selected_ip": "192.0.2.1"}],
+                    inventory, {(1, 1): 42000},
+                    {selection[0].node.candidate_id: 1},
+                )
+        staged_file = staged / "hostlist.txt"
+        assert stat.S_IMODE(staged_file.stat().st_mode) == 0o640
+        assert f"--hostlist={staged_file}" in bucket["runtime_arguments"]
+        assert not (root / "private-session" / "workers" / "pass" / "hostlist.txt").exists()
+        if os.geteuid() == 0:
+            uid = pwd.getpwnam("nobody").pw_uid
+            def drop_to_nobody():
+                os.setgroups([gid])
+                os.setgid(gid)
+                os.setuid(uid)
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "from pathlib import Path; import sys; assert Path(sys.argv[1]).read_text() == 'example.test\\n'",
+                 str(staged_file)],
+                preexec_fn=drop_to_nobody, capture_output=True, text=True,
+            )
+            assert result.returncode == 0, result.stderr
+            assert stat.S_IMODE(staged.stat().st_mode) == 0o710
+    finally:
+        model_b.session_dir = original_session_dir
+
     routes = stage60_model_c._bucket_route_slots(3)
     assert len(routes) == 3
     assert len({slot.port for slot in routes}) == 1
@@ -228,6 +291,11 @@ if grep -Fq 'model_c_enabled' "${OWNER}" || grep -Fq 'disable_reason' "${OWNER}"
 fi
 grep -Fq 'cold_fallback_available"] = False' "${OWNER}" || fail 'Model-C-only result does not explicitly disable cold fallback'
 grep -Fq 'model_c_only"] = True' "${OWNER}" || fail 'Model-C-only result policy evidence is missing'
+grep -Fq 'STRATEGY_LAB_MODEL_C_HOSTLIST_DIR' "${MODULE_ROOT}/strategy_lab_stage60_parallel_runner.sh" || fail 'Model-C production runner does not stage its hostlist'
+grep -Fq 'chgrp nobody' "${MODULE_ROOT}/strategy_lab_stage60_parallel_runner.sh" || fail 'Model-C staged hostlist directory is not nobody-searchable'
+grep -Fq 'rmdir "${HOSTLIST_STAGING_DIR}"' "${MODULE_ROOT}/strategy_lab_stage60_parallel_runner.sh" || fail 'Model-C staging directory is not removed after cleanup'
+grep -Fq 'os.chown(hostlist, -1, grp.getgrnam("nobody").gr_gid)' "${ENGINE}" || fail 'Model-C hostlist is not assigned the nobody group'
+grep -Fq 'os.chmod(hostlist, 0o640)' "${ENGINE}" || fail 'Model-C hostlist is not root:nobody 0640'
 grep -Fq '_compatible_batch_segments' "${ENGINE}" || fail 'Model C does not split incompatible profile segments'
 grep -Fq 'profile_segments' "${ENGINE}" || fail 'Model C does not persist profile-segment evidence'
 if grep -Fq 'stage60_parallel._batch_decisions =' "${ENGINE}"; then

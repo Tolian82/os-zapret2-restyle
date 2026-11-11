@@ -6,6 +6,11 @@ on:
       # A real Stage-50 WAN adapter change must requalify its native job,
       # not only source policy. Do not trigger this VM for workflow-YAML edits.
       - scripts/stage2-opnsense-g09-stage60.py
+      # Owner-live _50 exposed a domain-only nobody hostlist failure; the
+      # old literal-IP G09 alone cannot cover this production entrypoint.
+      - scripts/test-strategy-lab-stage60-model-c-production.sh
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/stage60_model_c.py
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage60_parallel_runner.sh
       - src/opnsense/scripts/OPNsense/Zapret/strategy_lab/runtime.sh
   workflow_dispatch:
 permissions:
@@ -68,4 +73,7 @@ jobs:
             export STRATEGY_LAB_CANDIDATE_CLEANUP_RESERVE=2
             export STRATEGY_LAB_STAGE60_TIMEOUT=110
             export STRATEGY_LAB_STANDARD_BUDGET=240
+            # Run the actual hostlist security regression as root on FreeBSD:
+            # it drops uid/gid to nobody and must reopen Model-C's 0640 file.
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-stage60-model-c-production.sh
             /usr/local/bin/python3 scripts/stage2-opnsense-g09-stage60.py run

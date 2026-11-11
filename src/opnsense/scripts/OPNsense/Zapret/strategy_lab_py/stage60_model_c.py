@@ -11,6 +11,7 @@ fallback in the underlying Stage-60 owner.
 
 from __future__ import annotations
 
+import grp
 import json
 import os
 import threading
@@ -222,9 +223,25 @@ def _write_bucket_runtime(
     specs = [decision.node.spec for decision in decisions]
     hostlist: Path | None = None
     if specs[0].target_binding:
-        hostlist = root / "hostlist.txt"
+        # dvtws2 switches to nobody and reopens this path after launch.
+        # The production Stage-60 runner provides a private root:nobody 0710
+        # directory under /var/run; the shared Lab/job tree stays private.
+        staging = os.environ.get("STRATEGY_LAB_MODEL_C_HOSTLIST_DIR", "")
+        if staging:
+            staging_dir = Path(staging)
+            if staging_dir.is_symlink() or not staging_dir.is_dir():
+                raise ModelCInfrastructureError("Model C hostlist staging directory is invalid")
+            hostlist = staging_dir / "hostlist.txt"
+        else:
+            # Direct experimental/model-reference invocations remain isolated
+            # from the production runner and retain their historical paths.
+            hostlist = root / "hostlist.txt"
         hostlist.write_text("".join(f"{endpoint}\n" for endpoint in endpoints), encoding="utf-8")
-        os.chmod(hostlist, 0o644)
+        if staging:
+            os.chown(hostlist, -1, grp.getgrnam("nobody").gr_gid)
+            os.chmod(hostlist, 0o640)
+        else:
+            os.chmod(hostlist, 0o644)
 
     selector_ports: dict[str, tuple[int, ...]] = {}
     for decision in decisions:
@@ -342,12 +359,20 @@ def _bucket_segment(
         startup_ms = round((time.monotonic() - pool_started) * 1000)
         snapshot = pool.get(physical.name, {})
         rss = model_b._rss_summary(pool)
-        if (
-            snapshot.get("ready") is not True
-            or snapshot.get("divert_port") != physical.port
-            or not bool(rss.get("all_numeric"))
-        ):
-            raise ModelCInfrastructureError("Model C bucket did not reach unambiguous readiness")
+        readiness = {
+            "process_identity": snapshot.get("process_identity") is True,
+            "socket_ready": snapshot.get("socket_ready") is True,
+            "log_clean": snapshot.get("log_clean") is True,
+            "stable_ready": snapshot.get("ready") is True,
+            "divert_port_match": snapshot.get("divert_port") == physical.port,
+            "rss_numeric": rss.get("all_numeric") is True,
+        }
+        if not all(readiness.values()):
+            # Never leak command lines, hostlists or target IPs into the job log.
+            predicates = ", ".join(f"{name}={int(ok)}" for name, ok in readiness.items())
+            raise ModelCInfrastructureError(
+                f"Model C bucket did not reach unambiguous readiness: {predicates}"
+            )
 
         barrier = threading.Barrier(len(decisions))
         parallel_started = time.monotonic()

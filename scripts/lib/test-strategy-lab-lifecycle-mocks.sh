@@ -113,6 +113,21 @@ epoch_id=$("${STRATEGY_LAB_JQ}" -er '.epoch_id' "${epoch_file}")
 exit 0
 MOCK
 
+# Lifecycle-only fixture: Stage 60 is a completed no-candidate result. The
+# real root/nobody Model-C runtime is exercised separately on native FreeBSD.
+# Do not invoke the production Stage-60 runner from non-root Linux test jobs.
+cat > "${MOCK_BIN}/expansion" <<'MOCK'
+#!/bin/sh
+job_id="$1"
+result_file="$4"
+epoch_file="${STRATEGY_LAB_JOBS_DIR}/${job_id}/search-epoch.json"
+epoch_id=$("${STRATEGY_LAB_JQ}" -er '.epoch_id' "${epoch_file}")
+"${STRATEGY_LAB_JQ}" -nc --arg epoch_id "${epoch_id}" '
+    {search_epoch_id:$epoch_id,completed:0,working:[],candidates:[],
+     stopped_reason:"graph_exhausted"}
+' > "${result_file}"
+MOCK
+
 cat > "${MOCK_BIN}/service" <<'MOCK'
 #!/bin/sh
 state=$(cat "${MOCK_STATE_FILE}")
@@ -149,5 +164,5 @@ esac
 MOCK
 chmod +x "${MOCK_BIN}/lockf" "${MOCK_BIN}/daemon" "${MOCK_BIN}/service" \
     "${MOCK_BIN}/curl" "${MOCK_BIN}/drill" "${MOCK_BIN}/netstat" \
-    "${MOCK_BIN}/openssl" "${MOCK_BIN}/nc" "${MOCK_BIN}/candidate" \
+    "${MOCK_BIN}/openssl" "${MOCK_BIN}/nc" "${MOCK_BIN}/candidate" "${MOCK_BIN}/expansion" \
     "${MOCK_BIN}/kldstat" "${MOCK_BIN}/kldload" "${MOCK_BIN}/sysctl" "${MOCK_BIN}/ipfw"
