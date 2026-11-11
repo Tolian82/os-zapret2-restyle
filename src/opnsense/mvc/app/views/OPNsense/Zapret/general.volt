@@ -427,10 +427,9 @@
             return translations[message] ||
                 'Предварительная проверка настроек не пройдена. Изменения не применены.';
         }
-        // Keep the API summary contract stable; translate only recognized
-        // field labels and normalization counters for the Russian UI.
+        // Display-only receipt from five fixed SettingsController TARGET_FIELDS.
+        // Unexpected lines must never echo untrusted text or change Apply state.
         function localizeStrategiesNormalizationSummary(lines) {
-            if (!isRussian) return lines;
             const labels = {
                 'YouTube Domains': 'Домены YouTube',
                 'Telegram IPs': 'IPSET Telegram',
@@ -438,13 +437,18 @@
                 'Exclude Domains': 'Исключить домены',
                 'Exclude IPSet': 'Исключить IPSet'
             };
+            const fallback = isRussian
+                ? 'Подробности нормализации недоступны. Проверьте сохранённые настройки.'
+                : 'Normalization details unavailable. Verify saved settings.';
+            if (!Array.isArray(lines)) return [fallback];
             return lines.map(function(line) {
-                const match = /^(.+): normalized ([0-9]+), removed duplicates ([0-9]+)$/.exec(line);
+                if (typeof line !== 'string') return fallback;
+                const match = /^(YouTube Domains|Telegram IPs|User Domains|Exclude Domains|Exclude IPSet): normalized ([0-9]{1,9}), removed duplicates ([0-9]{1,9})$/.exec(line);
                 if (!match || !Object.prototype.hasOwnProperty.call(labels, match[1])) {
-                    return line;
+                    return fallback;
                 }
-                return labels[match[1]] + ': нормализовано ' + match[2] +
-                    ', удалено повторов ' + match[3];
+                return isRussian ? labels[match[1]] + ': нормализовано ' + match[2] +
+                    ', удалено повторов ' + match[3] : line;
             });
         }
 
