@@ -23,7 +23,7 @@
 |---|---|
 | **Full Web/pkg release** | [**v0.6.4**](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) / [`os-zapret2-restyle-0.6.4_1.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4/os-zapret2-restyle-0.6.4_1.pkg) — stable OPNsense 26.7 / FreeBSD:15:amd64, SHA-256 `f9e0fa8ceca542ea618fc1f67e88311c80ceda4bb0bc00d7ac94e5398f860be7`; [SHA256SUMS](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4/SHA256SUMS). Release and Pages/pkg deployment [SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42947369851). |
 | **Previous stable release** | [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) / `0.6.3_1.pkg` remains immutable. |
-| **Current development candidate** | `v0.6.4_3` — **documentation-only v1.3 owner-acceptance record**; no `0.6.4_3.pkg` is built or published. Stable installable package remains `0.6.4_1.pkg`. |
+| **Current development candidate** | `v0.6.4_4` — **GitHub workflow/governance housekeeping only**; no `0.6.4_4.pkg` is built or published. Stable installable package remains `0.6.4_1.pkg`. |
 | **Owner-tested candidate** | [v0.6.3_52](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_52) — the owner confirmed local update, full purge/clean reinstall, STOPPED/empty and RUNNING/populated Lab, domain probe, complete Voice service scope and earlier GUI ordinary uninstall/reinstall saved-setting retention. This is predecessor testing evidence, not installation of the newly released `0.6.4_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
