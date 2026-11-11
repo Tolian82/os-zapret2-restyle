@@ -864,6 +864,20 @@
             const observer = new MutationObserver(updateResourceHelpVisibility);
             observer.observe(resourceHelpIcon, {attributes: true, attributeFilter: ['class']});
         }
+        // The stock OPNsense initFormHelpUI() restores a stored Help preset
+        // by toggling the icon class and then setting 'show' on real help
+        // sources. At the icon mutation, the help source may still be hidden.
+        // Observe that second native transition as well. No new toggle,
+        // synthetic event or polling: a true OFF stays OFF.
+        const resourceHelpNativeSource = document.querySelector(
+            '[id="row_zapret.strategy.trafficargs"] ' +
+            'div[data-for="help_for_zapret.strategy.trafficargs"]'
+        );
+        if (resourceHelpNativeSource && window.MutationObserver) {
+            const sourceObserver = new MutationObserver(updateResourceHelpVisibility);
+            sourceObserver.observe(resourceHelpNativeSource,
+                {attributes: true, attributeFilter: ['class']});
+        }
         updateResourceHelpVisibility();
 
         function extrasLabel(data) {

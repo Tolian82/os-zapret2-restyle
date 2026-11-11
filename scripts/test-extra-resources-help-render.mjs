@@ -127,4 +127,54 @@ assert.equal(isEnabled(false, true, true, true), false, 'hidden native help does
 assert.equal(isEnabled(false, false, true), false, 'popup alone cannot open whole catalog');
 assert.equal(isEnabled(false, false, false), false, 'native Help OFF must stay OFF');
 
+// Regression for the real native OPNsense 26.7 initialization order: the
+// icon mutates first; the stored preset then marks native field help 'show'.
+// Verify the actual source observes the later transition, not only the icon.
+const observerStart = "const resourceHelpNativeSource = document.querySelector(";
+const observerEnd = "        updateResourceHelpVisibility();";
+assert.equal(page.split(observerStart).length, 2, "single native source observer");
+const startAt = page.indexOf(observerStart);
+const stopAt = page.indexOf(observerEnd, startAt);
+assert.ok(stopAt > startAt, "native source observer must precede final visibility sync");
+const observerCode = page.slice(startAt, stopAt).trim();
+let nativeUpdates = 0;
+const observed = [];
+class RecordingObserver {
+  constructor(callback) { this.callback = callback; }
+  observe(target, options) {
+    assert.deepEqual(options.attributeFilter, ["class"]);
+    observed.push({target, callback: this.callback});
+  }
+}
+const nativeSource = { classes: new Set(["hidden"]) };
+const registerObserver = new Function(
+  "document", "window", "MutationObserver", "updateResourceHelpVisibility",
+  observerCode + "\nreturn resourceHelpNativeSource;"
+);
+const result = registerObserver(
+  { querySelector(selector) {
+    assert.match(selector, /help_for_zapret\.strategy\.trafficargs/);
+    return nativeSource;
+  }},
+  { MutationObserver: RecordingObserver }, RecordingObserver,
+  () => nativeUpdates++
+);
+assert.equal(result, nativeSource);
+assert.equal(observed.length, 1, "must subscribe to actual native help class");
+assert.equal(observed[0].target, nativeSource);
+assert.equal(isEnabled(false, true, false, true), false);
+nativeSource.classes.delete("hidden");
+nativeSource.classes.add("show");
+observed[0].callback([{attributeName: "class", target: nativeSource}]);
+assert.equal(nativeUpdates, 1, "native help class change must refresh cache Help");
+assert.equal(isEnabled(false, true, true, false), true,
+             "native preset and visible help must make catalog eligible");
+const missing = registerObserver(
+  { querySelector() { return null; } },
+  { MutationObserver: RecordingObserver }, RecordingObserver,
+  () => { throw new Error("no native help element must mean no callback"); }
+);
+assert.equal(missing, null);
+assert.equal(observed.length, 1, "unknown native source must not create observer");
+
 console.log('PASS P4b: genuine renderer shows cached native files without optional bundle; unknown stays unknown');
