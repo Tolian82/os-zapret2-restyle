@@ -161,7 +161,26 @@ def check_resource_help_cache(page, mode: str) -> str:
     # expect_response event is not guaranteed. Still use the native toggle.
     toggle.click()
     panel = page.locator("#zapretExtraResourceHelp")
-    panel.wait_for(state="visible", timeout=12000)
+    # The cache list lives under a separate collapsible Service table.
+    # Open it using its real GUI header, never force CSS visibility.
+    service_body = page.locator("#zapretServiceBody")
+    need(service_body.count() == 1, "P4B_SERVICE_BODY_MISSING")
+    if not service_body.is_visible():
+        page.locator("#zapretServiceHeader").click()
+        service_body.wait_for(state="visible", timeout=6000)
+    if not panel.is_visible():
+        state = page.evaluate("""() => ({
+            icon_on: document.getElementById('show_all_help_frm_GeneralSettings')
+                     ?.classList.contains('fa-toggle-on') || false,
+            panel_display: document.getElementById('zapretExtraResourceHelp')
+                           ?.style.display || '',
+            service_visible: !!document.getElementById('zapretServiceBody')
+                              ?.getBoundingClientRect().height
+        })""")
+        raise Refusal("P4B_NATIVE_HELP_PANEL_HIDDEN:" +
+                      "icon_on=" + str(state["icon_on"]) +
+                      ":panel_display=" + str(state["panel_display"]) +
+                      ":service_visible=" + str(state["service_visible"]))
     # Read the same production cache-only API with the browser's real
     # authenticated jQuery session. Never forge the response or mutate Config.
     data = page.evaluate("""async () => {

@@ -35,3 +35,7 @@ The two unrelated historical Stage 5 RUNNING/Voice workflows were accidentally t
 ## Exact-head correction after first CI retry
 
 The CI hygiene gate detected a release-note link relative to the wrong directory; it is now ../verification/P4_NATIVE_RESOURCE_HELP.md. Native Chromium also exposed a racy fixture: waiting on a newly emitted inventory HTTP response is unreliable after the native Help toggle has already loaded or reused a cache. The fixture now clicks the actual Full Help switch, makes one bounded authenticated cache-only API request through existing page jQuery, and checks the separately rendered real panel; it does not intercept traffic, synthesize a successful answer, mutate Config or assume a missing cache is empty. Its native PASS remains open until a completed exact-head run.
+
+## Real native section-collapse check (Chromium run #43085166268)
+
+The clean-installed Chromium test reached native Full Help but found its Lua/BIN panel hidden. The actual Help panel is nested inside the separately collapsible Service table, whereas the Full Help toggle is in Settings. The browser test now expands the Service table with its genuine header click when needed, without changing styles or synthesizing elements. If the panel remains hidden, the test fails quickly with non-sensitive evidence: native help icon on/off, panel display and Service table visibility. A product integration defect must still fail; native PASS is not claimed before the new exact-head execution.
