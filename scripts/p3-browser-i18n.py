@@ -298,6 +298,11 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
         advanced_help.wait_for(state="visible", timeout=12000)
     # P4: verify the newly rendered native popup/Full Help, not just source XML.
     p4_token = "входящих/исходящих счётчиков conntrack" if mode == "ru" else "incoming/outgoing conntrack counter"
+    protocol_help = help_source(page, "zapret.strategy.trafficargs")
+    language_note = "не готовые стратегии" if mode == "ru" else "not runnable strategies"
+    need(language_note in protocol_help and "quic_initial" in protocol_help
+         and "wireguard_initiation" in protocol_help,
+         "P4C_PROTOCOL_REFERENCE_NOT_LOCALIZED_" + mode)
     verify_help_cycle(page, "frm_GeneralSettings", "zapret.strategy.trafficargs", p4_token)
     info_token = ("Если Лаборатория подтвердила отдельный профиль" if mode == "ru"
                   else "If the Lab verified an independent profile")
