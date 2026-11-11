@@ -37,7 +37,7 @@ jobs:
   genuine-installed-browser-wan:
     name: Real Chromium WAN and RU/EN on fresh installed OPNsense 26.7
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
         with:
@@ -62,6 +62,21 @@ jobs:
           ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/zapret2-browser-ssh/key"
           install -d -m 0700 dist
           cp "$RUNNER_TEMP/zapret2-browser-ssh/key.pub" stage5-browser-wan-ci.pub
+      - name: Fail early if host DNS cannot install QEMU
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The native VM action needs QEMU on the Ubuntu host before a guest
+          # exists. Do not spend dozens of minutes in apt's DNS retries.
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             command -v qemu-img >/dev/null 2>&1; then
+            echo "P3_QEMU_HOST=already_installed"
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error title=Runner DNS outage::Cannot resolve Ubuntu apt mirror required to install QEMU; installed OPNsense/Chromium NOT TESTED" >&2
+            exit 1
+          else
+            echo "P3_QEMU_HOST=apt_mirror_resolves"
+          fi
       - name: Native OPNsense 26.7 - cached dependencies, genuine current Mk pkg clean install
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
