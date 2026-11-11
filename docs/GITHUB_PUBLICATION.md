@@ -1,7 +1,7 @@
 # GitHub rules — Правила работы с GitHub
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-08
+**Updated:** 2026-11-11
 
 This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
 
@@ -18,7 +18,7 @@ Read this file completely before GitHub mutation.
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
 - validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
-- strict Actions resource budget and workflow throttling: `GH-066`–`GH-070`;
+- strict Actions resource budget, runner selection, bounded native checks and workflow throttling: `GH-066`–`GH-071`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
 - issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
@@ -98,6 +98,12 @@ GH-069. **Четырёхуровневая экономная CI обязате�
 **Четыре уровня S0–S3 не означают четырёх GitHub check runs.** GitHub показывает отдельные jobs (включая SKIPPED), поэтому это число не равно объёму вычислений и не должно выдаваться за «четыре проверки». Рабочая цель обычного функционального PR: быстрый S1 плюс **один** обоснованный нативный S2-набор для затронутой подсистемы. Каждая дополнительная тяжёлая VM требует конкретного объяснения независимого критерия приёмки (например, общая GUI-страница действительно затронула нижний Apply). Полная Strategy Lab corrective matrix для несвязанного first-install, документации или CI-policy запрещена: только изменения Lab/shared runtime либо явно выбранный S3. Полная обязательная релизная квалификация S3 сохраняется. В отчётах различать число workflows, число check runs, реально запущенные VM, SKIPPED и причины запуска. Отдельный PR budget test обязан проверять fan-out **внутри** `CI`, а не только standalone YAML.
 
 GH-070. **Watchdog не должен создавать вторую очередь GitHub Actions.** Предпочитать событие завершения доверенной CI, оставив дедуплицированный *ежечасный* cron fallback и ручной dispatch. Без отдельного решения владельца запрещён опрос каждые 10 минут в дополнение к событийному мониторингу. Сохранить проверку текущего head, определение failure/stall/ready-but-open, dedup уведомлений и реальную проверку доставки. Watchdog не должен запускать нативные CI-матрицы или самостоятельно выполнять несогласованный merge. Быстрый PR gate обязан проверять отдельные YAML path filters и внутренние job `if:` центральной CI: запрещать пакетный fan-out к чужим историческим VM, дублирующие branch-push/PR запуски и broad Makefile/Stage0 triggers. Нарушение бюджета должно давать FAIL до дорогих VM.
+
+GH-071. **Native-test placement, infrastructure readiness, and strict time budgets are mandatory.** Run routine syntax, unit, contract, source, rule, and CI-policy validation as fast S0/S1 checks without provisioning a FreeBSD/OPNsense VM. An S2/S3 native test is justified only by the affected subsystem or an explicit release/acceptance criterion; do not couple a GUI localization or read-only browser smoke to historical RUNNING package upgrades, engine compilation, IPFW, or unrelated lifecycle matrices merely to obtain an installed page. Keep genuine installed OPNsense/FreeBSD and authenticated Chromium where the acceptance criterion requires them; an offline mock, source inspection, or skipped test is **not** native acceptance.
+
+**Native execution environment:** Prefer a qualified, isolated, pre-provisioned KVM/FreeBSD/OPNsense test host (including an approved, maintained self-hosted runner) with a known guest image, installed hypervisor/dependencies, bounded access and reliable restore/cleanup. Treat it as test infrastructure, never silently use the owner's production appliance. A GitHub-hosted runner may be used only when a fast prerequisite gate verifies the **runner's own** QEMU/KVM/image/network/package-manager readiness before any long VM operation. A DNS check from the developer's PC is not evidence of runner connectivity. Cache reusable verified base images and dependency preparation where safe, with identity/invalidation checks; never cache secrets or a private owner Config.
+
+**Budget and failure policy:** Set an explicit job timeout and individual bounds for image download, package installation, boot, SSH readiness and other potentially blocking network/VM steps; a narrow GUI smoke should have a short budget (the P3 browser workflow is capped at 15 minutes), while materially longer S3/release tests require a distinct documented rationale and intentional trigger. Detect inaccessible repositories, DNS, missing hypervisor/KVM, guest boot failure and no-progress states early. Fail closed with an explicit **infrastructure failure / NOT TESTED**, not PASS and not a product regression. Do not rerun a known failing external preflight blindly, start multiple equivalent VM jobs, or push empty commits to retry an outage; repair the environment or move the same exact-source required native test to a qualified alternate host. Preserve the evidence gate before merge/publication and distinguish S0/S1 PASS from outstanding S2/S3 and owner-live acceptance.
 
 ## Issue execution, PR completion and unattended monitoring
 
