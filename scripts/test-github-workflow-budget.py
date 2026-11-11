@@ -159,19 +159,7 @@ class BudgetContracts(unittest.TestCase):
         # DNS/hypervisor outages must fail before an expensive guest launch.
         workflow = (ROOT / '.github/workflows/stage5-native-browser-wan.yml').read_text(
             encoding='utf-8')
-        match = re.search(r'(?m)^    timeout-minutes: (\d+)\s*
-        rules = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
-        for identifier in range(66, 72):
-            self.assertRegex(rules, rf'(?m)^GH-{identifier:03d}\. ')
-        self.assertIn('Четыре уровня S0–S3 не означают четырёх', rules)
-        self.assertIn('Центральная CI', rules)
-        gate = (ROOT / '.github/workflows/pr-title.yml').read_text(encoding='utf-8')
-        self.assertIn('python3 scripts/test-github-workflow-budget.py', gate)
-
-
-if __name__ == '__main__':
-    unittest.main(verbosity=2)
-, workflow)
+        match = re.search(r'(?m)^    timeout-minutes: (\d+)\s*$', workflow)
         self.assertIsNotNone(match, 'native UI job must have an explicit budget')
         self.assertLessEqual(int(match.group(1)), 15)
         self.assertIn('cache-after-prepare: true', workflow)
