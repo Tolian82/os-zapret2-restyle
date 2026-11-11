@@ -42,15 +42,20 @@
         <id>zapret.strategy.trafficargs</id>
         <label>Traffic Strategy</label>
         <type>textbox</type>
-        <help><![CDATA[Complete dvtws2 strategy. Multiple profiles separated by <code>--new</code> are supported.<br/>
-            Domain lists: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>.<br/>
-            IP lists: <code>&lt;IPSET:telegram&gt;</code>.]]></help>
+        <help><![CDATA[
+            Native <code>dvtws2</code> strategy. Independent profiles are separated by <code>--new</code>; the first eligible profile is chosen in engine order. The same HOSTLIST/IPSET target may be used by different profiles.<br/>
+            A single profile may contain multiple ordered <code>--payload</code> and <code>--lua-desync</code> actions. Do not split them with <code>--new</code> unless you intend independent profiles.<br/>
+            <code>--filter-tcp</code>/<code>--filter-udp</code> select profile ports and contribute to IPFW interception coverage; <code>--filter-l7</code> selects the protocol. Range, payload and Lua actions belong to their profile.<br/>
+            Managed targets: <code>&lt;HOSTLIST:youtube&gt;</code>, <code>&lt;HOSTLIST:user&gt;</code>, <code>&lt;IPSET:telegram&gt;</code>. Do not reference the same resolved list file of the same type twice inside one profile. Native dry-run checks syntax/runtime support; it does not prove DPI bypass.
+        ]]></help>
     </field>
     <field>
         <id>zapret.strategy.extraargs</id>
         <label>Extra Arguments</label>
         <type>text</type>
-        <help>Additional global dvtws2 arguments appended to the command line.</help>
+        <help><![CDATA[
+            Appended after Traffic Strategy in the final <code>dvtws2</code> command line. <b>Not necessarily global:</b> profile-scoped options can apply to the last profile. Review the combined command before changing this field; do not assume these options affect every profile.
+        ]]></help>
         <advanced>true</advanced>
     </field>
     <field>
@@ -62,12 +67,9 @@
         <label>Target Mode</label>
         <type>dropdown</type>
         <help><![CDATA[
-            Used only for strategy profiles that do not contain an explicit
-            <code>&lt;HOSTLIST:name&gt;</code> or <code>&lt;IPSET:name&gt;</code> placeholder.<br/>
-            <b>All traffic</b> — do not limit the profile by target lists.<br/>
-            <b>Only listed targets</b> — use YouTube Domains, Telegram IPs and User Domains.<br/>
-            <b>Auto-detect</b> — use all listed targets and the automatically detected blocked-domain list.<br/>
-            Exclude Domains are always excluded globally.
+            Target Mode is used only when a profile has no explicit <code>&lt;HOSTLIST:name&gt;</code> or <code>&lt;IPSET:name&gt;</code> placeholder.<br/>
+            <b>All traffic</b> — do not restrict target lists; <b>Only listed targets</b> — use YouTube, Telegram IPs and User lists; <b>Auto-detect</b> — also include the detected blocked-domain list.<br/>
+            This is engine target selection, not the IPFW interception port filter. Global Exclude Domains / Exclude IPSet remain independent.
         ]]></help>
     </field>
     <field>
@@ -75,8 +77,8 @@
         <label>YouTube Domains</label>
         <type>textbox</type>
         <help><![CDATA[
-            Domain source for <code>&lt;HOSTLIST:youtube&gt;</code>.
-            One full domain or wildcard domain per line.
+            Source for <code>&lt;HOSTLIST:youtube&gt;</code>, one domain per line. <code>example.com</code> follows native subdomain matching; <code>^example.com</code> matches the exact domain only; <code>!example.com</code> locally excludes it from this HOSTLIST; <code>!^example.com</code> excludes only the exact domain.<br/>
+            Pasted HTTP(S) URLs are normalized to hostnames. A wildcard domain cannot be combined with <code>!</code> or <code>^</code>; malformed/repeated modifiers are rejected with a line number. Local <code>!</code> is <b>not</b> global Exclude Domains.
         ]]></help>
     </field>
     <field>
@@ -93,16 +95,18 @@
         <label>User Domains</label>
         <type>textbox</type>
         <help><![CDATA[
-            Domain source for <code>&lt;HOSTLIST:user&gt;</code>.
-            One full domain or wildcard domain per line.
+            Source for <code>&lt;HOSTLIST:user&gt;</code>, one domain per line. <code>example.com</code> follows native subdomain matching; <code>^example.com</code> matches the exact domain only; <code>!example.com</code> locally excludes it; <code>!^example.com</code> excludes the exact domain only.<br/>
+            Pasted HTTP(S) URLs are normalized to hosts. A wildcard cannot be combined with <code>!</code> or <code>^</code>. Duplicate conflicting rules and malformed modifiers are rejected with a line number. Local <code>!</code> does not affect other profiles or global exclusions.
         ]]></help>
     </field>
     <field>
         <id>zapret.hostlist.excludedomains</id>
         <label>Exclude Domains</label>
         <type>textbox</type>
-        <help><![CDATA[Domains to <b>exclude</b> from DPI bypass (one per line). Traffic to these domains will pass through unmodified.<br/>
-            Use this if zapret2 breaks connectivity to specific sites (e.g. government portals, banking sites).]]></help>
+        <help><![CDATA[
+            Globally exclude these domains from DPI bypass, one domain per line. Use this when processing breaks connectivity to a specific site. This is separate from the local <code>!example.com</code> HOSTLIST modifier.<br/>
+            Do not enter <code>!</code> or <code>^</code> here; modifiers are not supported in global Exclude Domains. Domain fields are handled by the native Python policy, which returns the failing line on invalid entries.
+        ]]></help>
     </field>
     <field>
         <id>zapret.hostlist.excludeipset</id>

@@ -79,6 +79,63 @@ assert "preg_match('/^preflight-rejected=(root-gate|" in controller
 assert "reason.indexOf('native-preflight-') === 0" in view
 assert "reason.indexOf('strategies-preflight-') === 0" in view
 
+# P3: Full Help must describe native semantics in BOTH languages.
+# These are existing source help/popup records keyed by immutable model IDs,
+# not a new strategy DSL or alternative runtime parser.
+help_fields = {field.findtext("id"): field.findtext("help", "")
+               for field in form.findall("./field") if field.findtext("id")}
+required_help = {
+    "zapret.strategy.trafficargs": (
+        "--new", "--payload", "--lua-desync", "--filter-tcp",
+        "--filter-udp", "--filter-l7", "IPFW", "HOSTLIST:user",
+        "IPSET:telegram", "dry-run",
+    ),
+    "zapret.strategy.extraargs": (
+        "Not necessarily global", "last profile", "dvtws2",
+    ),
+    "zapret.hostlist.mode": (
+        "HOSTLIST:name", "IPSET:name", "IPFW", "Exclude Domains",
+    ),
+    "zapret.hostlist.youtubedomains": (
+        "^example.com", "!example.com", "!^example.com", "wildcard",
+        "line number", "global Exclude Domains",
+    ),
+    "zapret.hostlist.userdomains": (
+        "^example.com", "!example.com", "!^example.com", "wildcard",
+        "line number", "global exclusions",
+    ),
+    "zapret.hostlist.excludedomains": (
+        "Globally exclude", "!example.com", "modifiers",
+        "line",
+    ),
+}
+for field_id, required in required_help.items():
+    text = help_fields[field_id]
+    for phrase in required:
+        assert phrase in text, (field_id, "missing EN Full Help:", phrase)
+assert "Additional global dvtws2 arguments" not in view
+assert "Additional global dvtws2 arguments" not in help_fields["zapret.strategy.extraargs"]
+# The runtime RU help dictionary has exactly the same 10 existing fields;
+# check that the six enhanced explanations are present there as well.
+help_ru = re.search(
+    r"const strategiesHelpRU = \{(.*?)\n        \};", view, re.DOTALL
+)
+assert help_ru
+for phrase in (
+    "первый подходящий профиль", "синтаксис, а не успех обхода",
+    "Не обязательно глобальные", "последнему профилю",
+    "фильтр портов перехвата IPFW", "!^example.com",
+    "Локальное", "запрещены", "конфликтующие правила",
+):
+    assert phrase in help_ru.group(1), "RU help coverage: " + phrase
+assert "row.find('div[data-for^=\"help_for_\"] small').html(help);" in view
+assert "const visible = row.find('.help-block').first();" in view
+# Neither help path may ever write model, inputs, Config or process state.
+help_segment = view.split("const strategiesHelpRU = {", 1)[1].split(
+    "function localizeExcludeIPSet()", 1
+)[0]
+assert ".val(" not in help_segment and ".value =" not in help_segment
+
 if shutil.which("node"):
     scripts = re.findall(r"<script>(.*?)</script>", view, re.DOTALL)
     assert len(scripts) == 1
