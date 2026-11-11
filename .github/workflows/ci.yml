@@ -1005,6 +1005,12 @@ jobs:
       - name: Test Strategy Lab Python search and extended orchestration
         run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
 
+      - name: Test one Python profile parser, normalization and original shell APIs
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/profile_policy.py scripts/test-profile-policy.py
+          python3.13 scripts/test-profile-policy.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/parser.sh src/opnsense/scripts/OPNsense/Zapret/backend/profile_normalizer.sh scripts/test-profile-policy-shell.sh
+          sh scripts/test-profile-policy-shell.sh
       - name: Test runtime profile normalization
         run: sh scripts/test-profile-normalizer.sh
 
