@@ -67,6 +67,19 @@ def main() -> None:
           "localizedHelp = text.enableHelp" in view and
           "info.text(text.infoText)" in view,
           "RU/EN dynamic help differs from actual shared Apply")
+    check("zapretVoiceInfoSource" in info and "form.find('#zapretVoiceInfoSource')" in view and
+          "row.text().indexOf('This page configures outgoing STUN')" not in view,
+          "Voice info translation must use its stable native form anchor")
+    check("function setFieldLabel(id, translated)" in view and
+          "setFieldLabel('zapret.voice.' + key + '.enabled', display)" in view and
+          "setFieldLabel('zapret.voice.' + key + '.args', display + ' — параметры')" in view and
+          "setFieldLabel('zapret.hostlist.' + key + 'ips', 'IPSET ' + display)" in view and
+          "label.find('*').addBack().contents().filter" in view,
+          "All 15 Voice fields must localize by id without modifying inputs or help icons")
+    check("var original = names[key] + ' Parameters'" not in view and
+          "visible.text().trim()" in view and
+          "Shared IPv4 or CIDR targets/.test(visible.text())" not in view,
+          "Voice label/help translation must not inspect English DOM prose")
     for name in SERVICES:
         enable = model.find(f"./items/voice/{name}/enabled")
         args = model.find(f"./items/voice/{name}/args")
