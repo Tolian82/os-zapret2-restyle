@@ -101,4 +101,30 @@ for (const bad of [null, {status: 'unavailable'},
 const malicious = fixture({status: 'ok', installed: false,
                            lua: [{name: '<script>bad</script>.lua', origin: 'other'}], bin: []});
 assert.ok(!malicious.text().includes('<script>'), 'malformed names must not render as HTML');
+// Native OPNsense full-help preset may reapply with toggleClass(), changing
+// icon class while real field help is still visible. Read the *production*
+// isResourceHelpEnabled function; do not substitute a second implementation.
+const helpStart = 'function isResourceHelpEnabled() {';
+assert.equal(page.split(helpStart).length, 2, 'single real native Help state helper');
+const helpBody = page.slice(page.indexOf(helpStart), page.indexOf(begin)).trim();
+const isEnabled = (iconOn, preset, helpShown, helpHidden = false) => {
+  const nativeHelp = {
+    length: 1,
+    hasClass(c) { return c === 'show' ? helpShown : c === 'hidden' ? helpHidden : false; },
+  };
+  const icon = { hasClass(c) { return c === 'fa-toggle-on' && iconOn; } };
+  const jquery = selector => selector.startsWith('#show_all_help_') ? icon : nativeHelp;
+  const fakeWindow = { sessionStorage: { getItem(k) {
+    assert.equal(k, 'all_help_preset'); return preset ? '1' : '0';
+  }}};
+  return new Function('$', 'window', helpBody +
+    '\nreturn isResourceHelpEnabled;')(jquery, fakeWindow)();
+};
+assert.equal(isEnabled(true, false, false), true, 'native icon ON is authoritative');
+assert.equal(isEnabled(false, true, true), true, 'native preset+help shown survives icon reinit');
+assert.equal(isEnabled(false, true, false), false, 'preset alone is insufficient');
+assert.equal(isEnabled(false, true, true, true), false, 'hidden native help does not qualify');
+assert.equal(isEnabled(false, false, true), false, 'popup alone cannot open whole catalog');
+assert.equal(isEnabled(false, false, false), false, 'native Help OFF must stay OFF');
+
 console.log('PASS P4b: genuine renderer shows cached native files without optional bundle; unknown stays unknown');

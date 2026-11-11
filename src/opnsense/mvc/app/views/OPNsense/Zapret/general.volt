@@ -754,8 +754,26 @@
         updateResourceAdvancedVisibility();
 
         function isResourceHelpEnabled() {
-            // Native OPNsense 26.7 full-help toggle for frm_GeneralSettings.
-            return $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on');
+            // Native OPNsense 26.7 Form Help has two authoritative signals:
+            // the actual toggle class and the per-tab Full Help preset plus
+            // the visible native help source. initFormHelpUI() can reapply a
+            // stored preset with toggleClass() on the icon, leaving the icon
+            // visually OFF while its real help sources remain shown.
+            if ($('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on')) {
+                return true;
+            }
+            let preset = false;
+            try {
+                preset = !!window.sessionStorage &&
+                    window.sessionStorage.getItem('all_help_preset') === '1';
+            } catch (error) {
+                // Storage can be disabled; never infer Full Help from failure.
+                return false;
+            }
+            const nativeHelp = $('[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]');
+            return preset && nativeHelp.length === 1 &&
+                nativeHelp.hasClass('show') && !nativeHelp.hasClass('hidden');
         }
 
         function renderResourceHelpInventory(data) {

@@ -166,16 +166,12 @@ def check_resource_help_cache(page, mode: str) -> str:
     if not was_on:
         toggle.click()
     clicked_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
-    # Stock OPNsense may restore sessionStorage's form Help preset after
-    # asynchronous native form initialization. Let that settle briefly, then
-    # permit at most one *real* native second click if the icon went OFF.
-    page.wait_for_timeout(250)
+    # Stock initFormHelpUI can restore the preset by toggling the icon
+    # class again. Do not repair/force the icon from the test. The production
+    # Help binding must continue showing the catalog while its real native
+    # help source remains visible with the saved preset.
+    page.wait_for_timeout(350)
     settled_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
-    retried_native_click = False
-    if not settled_on:
-        toggle.click()
-        retried_native_click = True
-        page.wait_for_timeout(250)
     panel = page.locator("#zapretExtraResourceHelp")
     if not panel.is_visible():
         state = page.evaluate("""() => ({
@@ -190,7 +186,6 @@ def check_resource_help_cache(page, mode: str) -> str:
                       "was_on=" + str(was_on) +
                       ":clicked_on=" + str(clicked_on) +
                       ":settled_on=" + str(settled_on) +
-                      ":retried_native_click=" + str(retried_native_click) +
                       ":icon_on=" + str(state["icon_on"]) +
                       ":panel_display=" + str(state["panel_display"]) +
                       ":service_visible=" + str(state["service_visible"]))
@@ -243,9 +238,8 @@ def check_resource_help_cache(page, mode: str) -> str:
         rendered = panel.locator("ul.zapret-resource-list > li").all_inner_texts()
         need(rendered == expected, "P4B_NATIVE_RESOURCES_HIDDEN_OR_CHANGED_" + mode)
         status = "ok-optional" if data["installed"] else "ok-native-only"
-    # Leave the user's real Full Help switch as it was before this test.
-    if not was_on:
-        toggle.click()
+    # The isolated authenticated tab is closed by the caller; no state
+    # restoration click is needed, and the real user Config is untouched.
     return status
 
 
