@@ -33,7 +33,12 @@ $(document).ready(function () {
         voiceProfileId: 'Применённый профиль', voiceRule: 'Правило IPFW',
         voicePackets: 'Пакеты', voiceBytes: 'Байты',
         enableHelp: 'Включённый STUN-профиль применяется общей кнопкой «Применить». Для «Сохранить черновик» все голосовые профили должны быть выключены. Параметры и IPSET сохраняются при выключении.',
-        argsHelp: 'Один нативный STUN-профиль dvtws2: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> и необязательные действия <code>--lua-desync</code>. Имя профиля и IPSET задаёт плагин. Не вводите <code>--new</code>, TCP или команды shell. Это не означает, что звонок заработает.',
+        argsHelp: 'Один нативный UDP/STUN-профиль dvtws2. Обязательны <code>--filter-udp=*</code> ' +
+            '(либо числовые порты/диапазоны), <code>--filter-l7=stun</code> и <code>--payload=stun</code>. ' +
+            'Необязательны допустимый <code>--out-range</code> и только проверяемое Voice-действие ' +
+            '<code>--lua-desync=fake:blob=0x01020304</code>; другие Lua-действия эта форма не принимает. ' +
+            'Имя профиля, L3-фильтр и общий IPSET задаёт плагин. Не вводите <code>--new</code>, ' +
+            'TCP-опции, флаги процесса или shell-команды. Проверка синтаксиса не гарантирует успешный звонок.',
         ipHelp: 'Общий со «Стратегиями» IPSET. Один IPv4/IPv6-адрес или CIDR в строке. /0 и полный охват семейства запрещены. Пустой список нельзя применять при включённой службе; нет автоматической замены на любой адрес.'
     } : {
                 infoTitle: 'About Voice Profiles',
@@ -64,7 +69,12 @@ $(document).ready(function () {
         voiceProfileId: 'Applied profile', voiceRule: 'IPFW rule',
         voicePackets: 'Packets', voiceBytes: 'Bytes',
         enableHelp: 'Enabled STUN profiles use the shared Apply button. Save inactive draft requires all Voice profiles to be OFF. Disabled services retain their parameters and destinations.',
-        argsHelp: 'One native dvtws2 STUN profile: <code>--filter-udp</code>, <code>--filter-l7=stun</code>, <code>--payload=stun</code> and optional <code>--lua-desync</code> actions. The plugin supplies profile identity and IPSET. Do not enter <code>--new</code>, TCP options or shell commands. This is not proof of working calls.',
+        argsHelp: 'One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> ' +
+            '(or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. ' +
+            'An accepted <code>--out-range</code> is optional; the only optional Lua action accepted by ' +
+            'the Voice form is <code>--lua-desync=fake:blob=0x01020304</code>. Other Lua actions are rejected. ' +
+            'The plugin supplies the profile name, native L3 filter and shared IPSET. Do not enter ' +
+            '<code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove a working call.',
         ipHelp: 'Shared IPSET, available in Strategies. One IPv4/IPv6 address or CIDR per line. /0 and full-family unions are forbidden. Empty sets must not be enabled or implicitly match any destination.'
     };
     // Validation messages arrive as a fixed, trusted server-side English
