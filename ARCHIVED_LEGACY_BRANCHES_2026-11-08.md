@@ -101,3 +101,29 @@ This immutable audit record captures the **88** retired original branch ref name
 | `work/v0.6.2_145-native-syshook-installed-lifecycle` | `61d4033103d6a4c4012d000b65b36449d875f711` | main ancestry |
 
 **Safety:** Deleting a Git branch ref does not erase its Git commits when reachable from another ref. The archive is a preservation mechanism, not an assertion that abandoned experimental code should be merged. This file is a snapshot, not an executable deletion instruction.
+
+
+## Follow-up archive before stale-branch cleanup — 11 November 2026
+
+After the owner accepted the main lifecycle specification v1.3 and published stable `v0.6.4_1`, a read-only audit found 11 live refs (one `main`, this intentional archive, two stale unmerged experiments, and seven obsolete testing publisher refs). There were **no open pull requests**.
+
+The two divergent and no-longer-active experiment histories below are **preserved as additional Git parents of this new archival commit**, rather than force-merged into active product `main`. Their source-specific test claims are historical, not current acceptance or new work.
+
+| Retired branch | Audited exact tip SHA | Disposition |
+|---|---|---|
+| `diagnostics/g01-process-attestation` | `72371096dadbb74d7bcf0b9ba9a6c06343f4f9d3` | Old G01 process-owner diagnostic experiment; superseded by accepted G01 and stable v0.6.4; history preserved by archive parent |
+| `feature/g10a-two-pass-native-https-regression-20261110` | `1111cab59cb87fd79373148256d27347556f4f0f` | Old G10A Useful Links/Volt-render native diagnostic sequence; GUI Useful Links section deliberately removed under owner's v1.3, history preserved by archive parent |
+
+Publisher-only branch refs are safe to retire without extra parents: the seven immutable testing tags below independently point to the **exact same source commit SHA** as their respective publish branch, and each GitHub Release contains the matching native `.pkg` asset. Removing only a branch ref does not change any tag/asset.
+
+| Published tag / former branch | Exact source SHA | Protected proof |
+|---|---|---|
+| `v0.6.3_29` / `publish/v0.6.3_29` | `0ba0c5fcf041201465c647b94597e51c2a1ac40a` | immutable tag + published package |
+| `v0.6.3_33` / `publish/v0.6.3_33` | `48564cde7910f0c3bb463aed9db65d2d6fbaf42f` | immutable tag + published package |
+| `v0.6.3_40` / `publish/v0.6.3_40` | `698cb7f219a729cfd0423b13a009489538038199` | immutable tag + published package |
+| `v0.6.3_43` / `publish/v0.6.3_43` | `41bd7d5cd70f6cef12928ee264613ee8af2f2e70` | immutable tag + published package |
+| `v0.6.3_47` / `publish/v0.6.3_47` | `f47eb7dbdf37fde1a3a99aaf048bed28e373c25f` | immutable tag + published package |
+| `v0.6.3_50` / `publish/v0.6.3_50` | `ba0d14d5a8d1d35913d8a0549473ea69630f1687` | immutable tag + published package |
+| `v0.6.3_52` / `publish/v0.6.3_52` | `92a883b50466cb33da7ed062f821b743c45c485f` | immutable tag + published package |
+
+**Retention policy:** Keep `main` as the only production branch and `archive/retired-branches-2026-11-08` as the **only historical preservation branch**. The archive itself is NOT a candidate for merger to `main`. Its current Git tip has its previous archival commit as first parent and the above two unmerged branch tips as additional parents; the 34 older retired branch heads remain reachable through the first parent. Temporary cleanup job/workflow is meant to reside on an ephemeral ref only, not persist in `main`. Do not delete/rewrite any historical stable or prerelease tags or GitHub Release assets.
