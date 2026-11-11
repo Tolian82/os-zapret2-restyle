@@ -166,5 +166,136 @@ class ProfilePolicyTests(unittest.TestCase):
             self.assertEqual(success.returncode, 0, success.stderr)
 
 
+    def test_mapped_generator_validator_a06_to_a09(self):
+        """Actual mapped generator + full validator; never touches live Apply."""
+        backend = FILE.parent
+        common = backend / 'common.sh'
+        ports = backend / 'ports.sh'
+        generator = backend / 'generator.sh'
+        validator = backend / 'validator.sh'
+        with tempfile.TemporaryDirectory(prefix='profile-mapped-integration-') as tmp:
+            root = Path(tmp)
+            static = root / 'static'
+            source = root / 'source'
+            managed = source / 'managed'
+            reference = root / 'future-active-release'
+            static.mkdir()
+            managed.mkdir(parents=True)
+            lua = static / 'test.lua'
+            lua.write_text('return true\n')
+            for name, value in (
+                ('hostlist-user.txt', 'example.com\n'),
+                ('hostlist-youtube.txt', 'youtube.com\n'),
+                ('ipset-telegram.txt', '149.154.160.0/20\n'),
+                ('hostlist-exclude.txt', 'blocked.example\n'),
+                ('ipset-exclude.txt', '10.0.0.0/8\n'),
+            ):
+                (managed / name).write_text(value)
+            (managed / 'hostlist-alias.txt').symlink_to('hostlist-user.txt')
+            host = f'--hostlist={reference}/managed/hostlist-user.txt'
+            alias = f'--hostlist={reference}/managed/hostlist-alias.txt'
+            other = f'--hostlist={reference}/managed/hostlist-youtube.txt'
+            ipset = f'--ipset={reference}/managed/ipset-telegram.txt'
+            domain_exclude = f'--hostlist-exclude={reference}/managed/hostlist-exclude.txt'
+            ip_exclude = f'--ipset-exclude={reference}/managed/ipset-exclude.txt'
+            args_file = source / 'dvtws.args'
+            traffic_file = source / 'traffic-user.conf'
+            extra_file = source / 'extra.conf'
+            blobs = source / 'blob-args.conf'
+            exclude_source = source / 'exclude-source.txt'
+            tcp_file = source / 'tcp-ports.txt'
+            udp_file = source / 'udp-ports.txt'
+            blobs.write_text('')
+            exclude_source.write_text('')
+            tcp_file.write_text('80,443\n')
+            udp_file.write_text('')
+            environment = dict(os.environ, BACKEND_DIR=str(backend), PYTHON_RUNTIME=sys.executable)
+            source_prefix = ['sh', '-c', '. "$1"; . "$2"; . "$3"; . "$4"; shift 4; ']
+            shell_paths = ['sh', str(common), str(ports), str(generator), str(validator)]
+            paths = [str(args_file), str(traffic_file), str(tcp_file), str(udp_file),
+                     str(static), str(reference), str(source)]
+            user_profile = '\n'.join((
+                '--filter-tcp=80,443', '--filter-l7=http,tls', host,
+                '--out-range=-d10', '--payload=tls_client_hello',
+                '--lua-desync=fake:blob=fake_default_tls',
+                '--payload=http_req', '--lua-desync=multisplit:pos=method+2',
+            )) + '\n'
+
+            def run(candidate: str, extra: str, *, tcp: str = '80,443',
+                    expect: str | None = None, python: str | None = None) -> str:
+                traffic_file.write_text(candidate)
+                extra_file.write_text(extra)
+                tcp_file.write_text(tcp + '\n')
+                generator_call = subprocess.run(
+                    source_prefix[:-1] + [source_prefix[-1] + 'generator_build_args_mapped "$@"',
+                    *shell_paths, str(args_file), '989', str(traffic_file), str(extra_file),
+                    str(blobs), str(exclude_source), f'{reference}/managed/hostlist-exclude.txt',
+                    str(lua)], capture_output=True, text=True, env=environment)
+                self.assertEqual(generator_call.returncode, 0, generator_call.stderr)
+                generated = args_file.read_bytes()
+                snapshots = {path: path.read_bytes() for path in
+                             (args_file, traffic_file, extra_file, tcp_file, udp_file,
+                              managed / 'hostlist-user.txt', managed / 'ipset-exclude.txt')}
+                current_env = dict(environment)
+                if python is not None:
+                    current_env['PYTHON_RUNTIME'] = python
+                check = subprocess.run(
+                    source_prefix[:-1] + [source_prefix[-1] + 'validator_validate_build_mapped "$@"',
+                    *shell_paths, *paths], capture_output=True, text=True, env=current_env)
+                if expect is None:
+                    self.assertEqual(check.returncode, 0, check.stderr)
+                else:
+                    self.assertNotEqual(check.returncode, 0, generated.decode('utf-8'))
+                    self.assertIn(expect, check.stderr)
+                for path, original in snapshots.items():
+                    self.assertEqual(path.read_bytes(), original, f'validator modified {path.name}')
+                return generated.decode('utf-8')
+
+            with self.subTest(case='A08 one profile two payload+Lua actions'):
+                result = run(user_profile, '')
+                self.assertLess(result.index('--payload=tls_client_hello'),
+                                result.index('--payload=http_req'))
+                self.assertEqual(result.count('--lua-desync='), 2)
+            with self.subTest(case='A06 duplicate supplied through Extra Arguments'):
+                run(user_profile, host + '\n', expect='DUPLICATE_RESOLVED_LIST profile=1')
+            with self.subTest(case='A06 symlink alias supplied through Extra Arguments'):
+                run(user_profile, alias + '\n', expect='DUPLICATE_RESOLVED_LIST profile=1')
+            with self.subTest(case='A06 different files allowed'):
+                run(user_profile, other + '\n')
+            with self.subTest(case='A07 A09 two distinct profiles share HOSTLIST'):
+                two = (f'--filter-tcp=80\n{host}\n--new=named-tls\n'
+                       f'--filter-tcp=443\n{host}\n')
+                text = run(two, '', tcp='80,443')
+                self.assertLess(text.index('--filter-tcp=80'), text.index('--new=named-tls'))
+                self.assertLess(text.index('--new=named-tls'), text.index('--filter-tcp=443'))
+            with self.subTest(case='Extra Arguments belong to last named profile'):
+                two = (f'--filter-tcp=80\n{host}\n--new=named-tls\n'
+                       f'--filter-tcp=443\n{host}\n')
+                run(two, host + '\n', tcp='80,443',
+                    expect='DUPLICATE_RESOLVED_LIST profile=2 option=--hostlist')
+            with self.subTest(case='separate global collections across profiles'):
+                two = (f'--filter-tcp=80,443\n{host}\n{domain_exclude}\n{ip_exclude}\n'
+                       f'--new\n--filter-tcp=443\n{host}\n{domain_exclude}\n{ip_exclude}\n')
+                run(two, '', tcp='80,443')
+            with self.subTest(case='include and exclude independently scoped'):
+                run(user_profile, domain_exclude + '\n' + ip_exclude + '\n')
+            with self.subTest(case='IPSET duplicate at end of same profile'):
+                run(user_profile + ipset + '\n', ipset + '\n',
+                    expect='DUPLICATE_RESOLVED_LIST profile=1 option=--ipset')
+            with self.subTest(case='qualified Python unavailable must fail closed'):
+                run(user_profile, '', expect='PROFILE_POLICY_UNAVAILABLE',
+                    python=str(root / 'missing-python'))
+
+    def test_native_validation_wiring_precedes_activation(self):
+        """Source-order contract, not a claim of an actual engine dry-run."""
+        orchestrator = (FILE.parent / 'orchestrator.sh').read_text()
+        start = orchestrator.index('    validator_validate_build_mapped \\')
+        audit = orchestrator.index('    generator_apply_final_exclusions audit \\', start)
+        native = orchestrator.index('        validator_validate_engine_mapped \\', audit)
+        ready = orchestrator.index('        ready ok "release build is ready"', native)
+        self.assertLess(start, audit)
+        self.assertLess(audit, native)
+        self.assertLess(native, ready)
+
 if __name__ == '__main__':
     unittest.main()
