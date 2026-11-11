@@ -265,6 +265,23 @@
             if (visible.length) visible.html(help);
         }
 
+        // Native OptionField values remain all/list/auto regardless of locale.
+        const targetModeLabelsRU = {
+            all: 'Весь трафик на указанных портах',
+            list: 'Только указанные домены',
+            auto: 'Автоопределение заблокированных доменов'
+        };
+        function localizeTargetModeOptions() {
+            if (!isRussian) return;
+            const select = document.getElementById('zapret.hostlist.mode');
+            if (!select) return;
+            Array.prototype.forEach.call(select.options, function(option) {
+                if (Object.prototype.hasOwnProperty.call(targetModeLabelsRU, option.value)) {
+                    option.textContent = targetModeLabelsRU[option.value];
+                }
+            });
+        }
+
         function reloadSettings() {
             return mapDataToFormUI(data_get_map).done(function() {
                 const currentField = document.getElementById('zapret.hostlist.telegramips');
@@ -272,6 +289,7 @@
                 formatTokenizersUI();
                 localizeStrategiesForm();
                 localizeExcludeIPSet();
+                localizeTargetModeOptions();
                 $('.selectpicker').selectpicker('refresh');
             });
         }
@@ -284,6 +302,26 @@
                 return isRussian
                     ? 'Требуется установка службы zapret2'
                     : 'The zapret2 service must be installed';
+            }
+            // Only fixed, allowlisted native preflight stages supplied by the
+            // PHP contract may be displayed. No raw exception/config text.
+            if (typeof reason === 'string' && reason.indexOf('native-preflight-') === 0) {
+                const stage = reason.slice('native-preflight-'.length);
+                const allowed = /^(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/;
+                if (allowed.test(stage)) {
+                    return isRussian
+                        ? 'Нативная проверка не пройдена (этап: ' + stage + '). Изменения не применены.'
+                        : 'Native Strategies preflight rejected before Apply (' + stage + ')';
+                }
+            }
+            if (typeof reason === 'string' && reason.indexOf('strategies-preflight-') === 0) {
+                const stage = reason.slice('strategies-preflight-'.length);
+                const allowed = /^(lifecycle-guard|model|runtime-status|normalization|candidate-validation|candidate-xml|envelope|dispatch-guard)$/;
+                if (allowed.test(stage)) {
+                    return isRussian
+                        ? 'Предварительная проверка настроек не пройдена (этап: ' + stage + '). Изменения не применены.'
+                        : 'Strategies preflight failed before native Apply (' + stage + ')';
+                }
             }
             if (!isRussian) return message;
             const translations = {

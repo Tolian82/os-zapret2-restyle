@@ -59,10 +59,59 @@ for name in ("strategiesLabelsRU", "strategiesHelpRU"):
     assert match, f"RU dictionary missing: {name}"
     keys = re.findall(r"^\s*'(zapret\.[^']+)':", match.group(1), re.MULTILINE)
     assert len(keys) == 10 and set(keys) == targets, f"RU {name} map incomplete: {keys}"
+# The production model owns these immutable option keys; translating UI text
+# must not change the selected value, submission or English fallback.
+model = ET.parse(root / "src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml").getroot()
+mode = model.find("./items/hostlist/mode/OptionValues")
+assert mode is not None and {item.tag for item in mode} == {"all", "list", "auto"}
+assert "const targetModeLabelsRU = {" in view
+assert "function localizeTargetModeOptions()" in view
+for key in ("all", "list", "auto"):
+    assert re.search(r"^\s*" + key + r": '[^']+',?$", view, re.MULTILINE)
+assert "document.getElementById('zapret.hostlist.mode')" in view
+assert "option.textContent = targetModeLabelsRU[option.value];" in view
+assert "option.value =" not in view
+assert "localizeTargetModeOptions();\n                $('.selectpicker').selectpicker('refresh');" in view
+controller = (root / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php").read_text()
+assert "'reason' => 'native-preflight-' . $match[1]" in controller
+assert "'reason' => 'strategies-preflight-' . $preflightStage" in controller
+assert "preg_match('/^preflight-rejected=(root-gate|" in controller
+assert "reason.indexOf('native-preflight-') === 0" in view
+assert "reason.indexOf('strategies-preflight-') === 0" in view
+
 if shutil.which("node"):
     scripts = re.findall(r"<script>(.*?)</script>", view, re.DOTALL)
     assert len(scripts) == 1
     checked = subprocess.run(["node", "--check"], input=scripts[0], text=True,
                              capture_output=True, check=False)
     assert checked.returncode == 0, checked.stderr
+    # Evaluate the real browser helper, not a copy: fixed stage codes have
+    # localized RU/EN messages, while unknown codes never leak to RU users.
+    helper = re.search(
+        r"        function localizeStrategiesApplyError\(message, reason\) \{.*?^        \}",
+        view, re.MULTILINE | re.DOTALL,
+    )
+    assert helper is not None
+    run = subprocess.run(
+        ["node", "-"],
+        input=(
+            "let isRussian=true;\n" + helper.group(0) + "\n"
+            "function eq(a,b){if(a!==b)throw Error(a+' != '+b);}\n"
+            "eq(localizeStrategiesApplyError('unused','runtime-not-installed'),"
+            "'Требуется установка службы zapret2');\n"
+            "eq(localizeStrategiesApplyError('ignored','native-preflight-candidate-xml'),"
+            "'Нативная проверка не пройдена (этап: candidate-xml). Изменения не применены.');\n"
+            "eq(localizeStrategiesApplyError('ignored','strategies-preflight-normalization'),"
+            "'Предварительная проверка настроек не пройдена (этап: normalization). Изменения не применены.');\n"
+            "eq(localizeStrategiesApplyError('PRIVATE','native-preflight-unknown'),"
+            "'Предварительная проверка настроек не пройдена. Изменения не применены.');\n"
+            "isRussian=false;\n"
+            "eq(localizeStrategiesApplyError('ignored','native-preflight-candidate-xml'),"
+            "'Native Strategies preflight rejected before Apply (candidate-xml)');\n"
+            "eq(localizeStrategiesApplyError('ignored','strategies-preflight-normalization'),"
+            "'Strategies preflight failed before native Apply (normalization)');\n"
+        ),
+        text=True, capture_output=True, check=False,
+    )
+    assert run.returncode == 0, run.stderr
 print("PASS: 10 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")

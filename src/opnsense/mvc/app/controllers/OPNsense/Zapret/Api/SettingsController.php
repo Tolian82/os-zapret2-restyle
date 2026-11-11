@@ -328,6 +328,8 @@ class SettingsController extends ApiMutableModelControllerBase
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
+                    // Only the exact root receipt allowlist can supply this stage.
+                    'reason' => 'native-preflight-' . $match[1],
                     'message' => sprintf(
                         gettext('Native Strategies preflight rejected before Apply (%s)'),
                         $match[1]
@@ -374,6 +376,7 @@ class SettingsController extends ApiMutableModelControllerBase
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
+                    'reason' => 'strategies-preflight-' . $preflightStage,
                     'message' => sprintf(
                         gettext('Strategies preflight failed before native Apply (%s)'),
                         $preflightStage
