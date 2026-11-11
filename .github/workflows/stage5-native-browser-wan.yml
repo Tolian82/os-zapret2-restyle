@@ -72,6 +72,20 @@ jobs:
              command -v qemu-img >/dev/null 2>&1; then
             echo "P3_QEMU_HOST=already_installed"
           elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            # Repair DNS only on this disposable GitHub-hosted runner; the
+            # package feed remains TLS + Ubuntu apt signature verified.
+            # Never alter a user appliance, saved Config or production DNS.
+            if command -v resolvectl >/dev/null 2>&1 &&
+               command -v ip >/dev/null 2>&1; then
+              dns_if="$(ip -o -4 route show default | awk 'NR==1 {print $5}')"
+              if [ -n "$dns_if" ]; then
+                timeout 5 sudo resolvectl dns "$dns_if" 1.1.1.1 8.8.8.8 >/dev/null 2>&1 || true
+                timeout 5 sudo resolvectl flush-caches >/dev/null 2>&1 || true
+              fi
+            fi
+            if timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+              echo "P3_QEMU_HOST=runner_dns_recovered"
+            else
             # The Ubuntu-hosted runner's Azure mirror can fail independently of
             # the official archive and security mirrors. Preserve apt's signed
             # package verification and replace ONLY the disposable runner's
@@ -90,8 +104,9 @@ jobs:
               sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|https://archive.ubuntu.com/ubuntu|g' "$source_list"
               echo "P3_QEMU_HOST=official_archive_fallback"
             else
-              echo "::error title=Runner DNS outage::Azure mirror unavailable and no verified official archive fallback; installed OPNsense/Chromium NOT TESTED" >&2
+              echo "::error title=Runner DNS outage::Azure mirror unavailable after bounded temporary resolver recovery and no verified official archive fallback; installed OPNsense/Chromium NOT TESTED" >&2
               exit 1
+            fi
             fi
           else
             echo "P3_QEMU_HOST=apt_mirror_resolves"
