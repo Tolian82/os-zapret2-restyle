@@ -23,7 +23,7 @@ on:
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
-      - scripts/test-extra-resources-inventory-cache.py
+      - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
@@ -52,7 +52,7 @@ on:
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
-      - scripts/test-extra-resources-inventory-cache.py
+      - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
       - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py

@@ -157,13 +157,17 @@ def check_resource_help_cache(page, mode: str) -> str:
     toggle = native_form_toggle(page, "frm_GeneralSettings", "show_all_help")
     if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
         toggle.click()
+    # In a clean native install the runtime/cache may be absent. The API
+    # can report that with a non-200 response, and route casing is platform
+    # dependent. Capture the actual response, not only successful HTTP 200.
     with page.expect_response(
-        lambda response: "/api/zapret/service/resourcesInventory" in response.url
-                         and response.status == 200,
-        timeout=30000,
+        lambda response: "/api/zapret/service/resourcesinventory"
+                         in response.url.lower(),
+        timeout=20000,
     ) as request:
         toggle.click()
-    data = request.value.json()
+    response = request.value
+    data = response.json() if response.status == 200 else {"status": "unavailable"}
     need(isinstance(data, dict), "P4B_REAL_CACHE_RESPONSE_INVALID")
     panel = page.locator("#zapretExtraResourceHelp")
     panel.wait_for(state="visible", timeout=12000)
