@@ -18,6 +18,8 @@
 
 ## Level 2 — активное ТЗ по полной чистой установке (8 ноября 2026)
 
+- [Stable v0.6.4 release notes](releases/v0.6.4.md) — owner-approved release `v0.6.4_1`, native `FreeBSD:15:amd64` package publication proof, exact source SHA, boundaries of owner testing vs immutable stable artifacts; `_2` is docs-only.
+
 - [Восстановление полного жизненного цикла после чистой установки — ТЗ v1.3](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) — утверждённый lifecycle/девятишаговый acceptance-контракт; реальные исправления и owner-live результаты включены в последующий v0.6.4 candidate, с отдельными ограничениями доказательств.
 - [Поэтапный план восстановления G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) — единственная текущая последовательность реализации: сначала безопасный full-purge, затем обычный GUI uninstall, первая runtime-install, утверждённые 10 доменов + TCP/QUIC, WAN/empty/Voice, RU/EN GUI/Lab, real native/owner-live acceptance. Результаты не подтверждены созданием документа.
 - [G01 — guide to independent full purge](verification/G01_STANDALONE_PURGE_GUIDE.md) — отдельный деструктивный скрипт после обычного удаления пакета; исходник, backup/dry-run, подтверждение, сценарии отказа и границы disposable-native приёмки. До прохождения G01 запрещена автоматическая трактовка source-тестов как полной проверки.
