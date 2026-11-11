@@ -177,6 +177,17 @@ $(document).ready(function () {
         return first ? reason + ': ' + first : reason;
     }
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
+    // The native form XML documents a distinct managed <IPSET:name>
+    // selector for every service. Render this exact selector in both locales
+    // after native form help is translated; never interpolate user input.
+    function sharedVoiceIPSETHelp(fieldId) {
+        var match = /^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.exec(fieldId);
+        if (!match) return null;
+        return text.ipHelp + (ru
+            ? ' В Traffic Strategy используйте '
+            : ' Use this target in Traffic Strategy as ') +
+            '<code>&lt;IPSET:' + match[1] + '&gt;</code>.';
+    }
     function localizeForm() {
         var form = $('#frm_VoiceSettings');
         // OPNsense 26.7 renders section titles in <thead><b> and field
@@ -221,7 +232,7 @@ $(document).ready(function () {
             var localizedHelp = null;
             if (/^zapret\.voice\.[^.]+\.enabled$/.test(id)) localizedHelp = text.enableHelp;
             else if (/^zapret\.voice\.[^.]+\.args$/.test(id)) localizedHelp = text.argsHelp;
-            else if (/^zapret\.hostlist\.(telegram|discord|x|sip|custom)ips$/.test(id)) localizedHelp = text.ipHelp;
+            else localizedHelp = sharedVoiceIPSETHelp(id);
             if (localizedHelp === null) return;
             // OPNsense form_input_tr (26.7) reads help from its native hidden
             // div[data-for="help_for_<field>"] small, NOT .help-block.
