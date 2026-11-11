@@ -102,9 +102,9 @@ class ProfilePolicyTests(unittest.TestCase):
             managed.mkdir(parents=True)
             for name in ('hostlist-user.txt', 'hostlist-youtube.txt', 'ipset-telegram.txt',
                          'ipset-exclude.txt'):
-                (managed / name).write_text('example.com\\n')
+                (managed / name).write_text('example.com\n')
             (managed / 'hostlist-alias.txt').symlink_to('hostlist-user.txt')
-            (static / 'other.txt').write_text('example.org\\n')
+            (static / 'other.txt').write_text('example.org\n')
             host = f'--hostlist={reference}/managed/hostlist-user.txt'
             alias = f'--hostlist={reference}/managed/hostlist-alias.txt'
             other = f'--hostlist={reference}/managed/hostlist-youtube.txt'
@@ -141,7 +141,7 @@ class ProfilePolicyTests(unittest.TestCase):
                     f'--hostlist={reference}/managed/outside.txt'.encode(),
                     static, reference, release)
             argsfile = root / 'dvtws.args'
-            argsfile.write_text(f'{host}\\n{alias}\\n')
+            argsfile.write_text(f'{host}\n{alias}\n')
             before = argsfile.read_bytes()
             argv = [str(argsfile), str(static), str(reference), str(release)]
             cli = subprocess.run([sys.executable, str(FILE), 'check-lists', *argv],
@@ -158,7 +158,7 @@ class ProfilePolicyTests(unittest.TestCase):
             self.assertNotEqual(shell.returncode, 0)
             self.assertIn('DUPLICATE_RESOLVED_LIST', shell.stderr)
             self.assertEqual(argsfile.read_bytes(), before)
-            argsfile.write_text(f'{host}\\n--new=second\\n{alias}\\n')
+            argsfile.write_text(f'{host}\n--new=second\n{alias}\n')
             success = subprocess.run(
                 ['sh', '-c', '. "$1"; shift; validator_check_resolved_lists "$@"',
                  'sh', str(validator), *argv],
