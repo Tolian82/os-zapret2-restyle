@@ -14,92 +14,38 @@
 # placeholders. It does not know GUI field names or permanent installation
 # paths. Managed files are generated under a caller-provided build root.
 
+# The canonical HOSTLIST grammar is Python domain_policy.py. These two
+# functions are transport/ownership adapters only; no AWK/domain grammar here.
+targets_domain_compiler()
+{
+    local compiler_dir="${BACKEND_DIR:-${BACKEND:-}}"
+    [ -n "${compiler_dir}" ] && [ -f "${compiler_dir}/domain_policy.py" ] || {
+        common_error "managed domain policy compiler is unavailable"
+        return 1
+    }
+    printf '%s\n' "${compiler_dir}/domain_policy.py"
+}
+
 targets_normalize_hostlist()
 {
     local input_file="$1"
     local output_file="$2"
     local label="$3"
+    local kind python_bin compiler
 
     [ -f "${input_file}" ] || {
         common_error "${label} input does not exist: ${input_file}"
         return 1
     }
-
-    awk -v label="${label}" '
-    function fail(message) {
-        print "ERROR: " label ", line " NR ": " message > "/dev/stderr"
-        invalid = 1
-    }
-    function trim(value) {
-        sub(/^[[:space:]]+/, "", value)
-        sub(/[[:space:]]+$/, "", value)
-        return value
-    }
-    function valid_domain(domain, count, labels, i, part) {
-        if (length(domain) < 1 || length(domain) > 253)
-            return 0
-        if (domain ~ /\.\./)
-            return 0
-        count = split(domain, labels, ".")
-        for (i = 1; i <= count; i++) {
-            part = labels[i]
-            if (length(part) < 1 || length(part) > 63)
-                return 0
-            if (part !~ /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/)
-                return 0
-        }
-        return 1
-    }
-    {
-        value = $0
-        sub(/\r$/, "", value)
-        value = trim(value)
-        if (value == "")
-            next
-
-        lower = tolower(value)
-        if (lower ~ /^https?:\/\//)
-            sub(/^[Hh][Tt][Tt][Pp][Ss]?:\/\//, "", value)
-
-        # A pasted URL is reduced to its host. Query strings and fragments are
-        # never meaningful in a HOSTLIST entry.
-        sub(/[\/?#].*$/, "", value)
-        value = trim(value)
-
-        # Wildcard hostlists use the base domain because zapret host matching
-        # covers that domain and its subdomains.
-        sub(/^\*\./, "", value)
-
-        # Remove punctuation commonly introduced by copied prose or CSV data.
-        gsub(/^[,;:]+/, "", value)
-        gsub(/[,;:]+$/, "", value)
-        gsub(/^\.+/, "", value)
-        gsub(/\.+$/, "", value)
-        value = tolower(trim(value))
-
-        if (value ~ /^[0-9.]+$/ || value ~ /\//) {
-            fail("IP addresses and networks are not allowed in a domain list: \047" $0 "\047")
-            next
-        }
-        if (!valid_domain(value)) {
-            fail("invalid domain entry \047" $0 "\047 after normalization to \047" value "\047")
-            next
-        }
-
-        if (!seen[value]++)
-            print value
-    }
-    END { exit invalid ? 1 : 0 }
-    ' "${input_file}" > "${output_file}.tmp" || {
-        rm -f "${output_file}.tmp"
-        return 1
-    }
-
-    mv -f "${output_file}.tmp" "${output_file}" || {
-        rm -f "${output_file}.tmp"
-        common_error "could not install normalized ${label}: ${output_file}"
-        return 1
-    }
+    case "${label}" in
+        'YouTube Domains') kind=youtube ;;
+        'User Domains') kind=user ;;
+        'Exclude Domains') kind=exclude ;;
+        *) common_error "unknown managed domain field"; return 1 ;;
+    esac
+    python_bin=$(targets_python_bin) || return 1
+    compiler=$(targets_domain_compiler) || return 1
+    "${python_bin}" "${compiler}" single "${kind}" "${input_file}" "${output_file}"
 }
 
 targets_python_bin()
@@ -108,7 +54,7 @@ targets_python_bin()
     [ -n "${compiler_dir}" ] || { common_error "managed targets backend directory is missing"; return 1; }
     local python_bin="${PYTHON_RUNTIME:-${compiler_dir%/backend}/python_runtime.sh}"
     if [ ! -x "${python_bin}" ]; then
-        common_error "qualified Python runtime is required for managed IPv4/IPv6 targets"
+        common_error "qualified Python runtime is required for managed targets"
         return 1
     fi
     printf '%s\n' "${python_bin}"
