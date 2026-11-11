@@ -21,10 +21,11 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release v0.6.3** | [Release and verified assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) — `0.6.3_1.pkg` and `SHA256SUMS` are delivered by the full-release workflow; [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) remains the preceding immutable release. Check the release page for actual publication status. |
-| **Owner-tested candidate** | [v0.6.2_188](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2_188) — installed on OPNsense; Standard and Extended Strategy Lab Stage 85/90/99, verified shortlist and RUNNING→RUNNING restoration accepted. |
-| **Current development candidate** | `v0.6.3_48` — documentation-only publication-record tail for published testing `_47.pkg`; **no `_48.pkg`** and no stable promotion. Owner G11 remains open. |
-| **Published testing candidate** | [`os-zapret2-restyle-0.6.3_47.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_47/os-zapret2-restyle-0.6.3_47.pkg), SHA-256 `df53719f8c7463caa901af1a2f4eda3efdf6b3858fc1a60af4ebe4963ff237fc`, exact source/tag `f47eb7dbdf37fde1a3a99aaf048bed28e373c25f`, ABI FreeBSD:15:amd64. Native OPNsense 26.7 RUNNING+ordinary+Voice Stage50: 7/7 candidates ready, Stage90/99 PASS. Physical owner G11 and blocked YouTube/IPv6/Voice remain OPEN. |
+| **Current stable release** | [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) / `0.6.3_1.pkg` (immutable historical release). |
+| **Full release in preparation** | **v0.6.4_1** — new semantic version approved on 11 November 2026. **Not published until** the final release workflow verifies the immutable tag, GitHub assets and OPNsense Pages/pkg repository. |
+| **Current development candidate** | `v0.6.4_1` — release-preparation source revision; the final native `.pkg` is not considered published before GitHub Release plus Web/pkg checks pass. |
+| **Owner-tested candidate** | [v0.6.3_52](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_52/os-zapret2-restyle-0.6.3_52.pkg) — owner confirmed local package update and clean reinstall, Strategy Lab with saved WAN in both STOPPED/empty and RUNNING/populated configurations, domain probe, and accepted the Voice Transmission service tests. Ordinary GUI uninstall/reinstall with saved settings had been verified earlier. |
+| **Published testing package** | [`os-zapret2-restyle-0.6.3_52.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_52/os-zapret2-restyle-0.6.3_52.pkg); source/tag `92a883b50466cb33da7ed062f821b743c45c485f`, SHA-256 `6ddf9ff0c3cb3c0a849d86eba32897aa5c65f3c08a56bef910f078ed3129b48e`, ABI `FreeBSD:15:amd64`. A testing prerelease is not the full Web/pkg release. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -32,11 +33,11 @@
 
 `os-zapret2-restyle` integrates the [bol-van/zapret2](https://github.com/bol-van/zapret2) native `dvtws2` engine with OPNsense: transactional Traffic Strategies, automatic Strategy Lab testing, upstream runtime management and a configurable Voice Transmission page. The plugin and upstream Zapret2 engine have separate installation/update lifecycles.
 
-**Known published `v0.6.3_1` clean-install defects (8 November 2026):** owner-live clean GUI install exposed [first upstream GUI installation](https://github.com/Tolian82/os-zapret2-restyle/issues/970), [stale Services menu after normal uninstall](https://github.com/Tolian82/os-zapret2-restyle/issues/971), [ineffective Start/Strategies Apply](https://github.com/Tolian82/os-zapret2-restyle/issues/972), and [blocked-target Laboratory Stage-60 internal error](https://github.com/Tolian82/os-zapret2-restyle/issues/973). These remain **OPEN**. The [owner-approved lifecycle TЗ v1.1](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) and [G01–G11 staged implementation plan](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) require first an optional standalone destructive purge tool, then fixes and exact native/live verification; G01 and G02 have merged with native disposable evidence, but owner-live GUI acceptance is pending. G03 first runtime setup is merged with real disposable-native PASS, but remains unqualified in the owner's browser until a future G10 testing package/G11 acceptance. The **new approved** initial native Config save uses exact ten YouTube domains and TCP+QUIC strategy; real installed first save, readback and saved-empty reinstall PASSED in `_8` ([G04 native proof](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42522906720)), while real native TCP/QUIC Start/Stop (`_9`) and installed HTTPS Apply (`_10`, [native #42530805976](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42530805976)) subsequently passed on disposable OPNsense. **Physical owner-browser acceptance and actual WAN/DPI bypass remain open.** Source-only documentation candidate `v0.6.3_2` does not replace published `0.6.3_1.pkg`.
+**v0.6.4 readiness:** The prior `v0.6.3_1` first-install/update limitations prompted the [G01–G11 lifecycle plan](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md). A normal GUI uninstall/reinstall with Config/upstream/additional-resource preservation was checked by the owner earlier; the latest `_52` report confirms successful in-place update, full purge/clean install, correct Laboratory in both STOPPED/empty and RUNNING/populated states, and domain testing. The owner explicitly accepted Voice Transmission service tests. Code-level fixes include WAN-first, empty ordinary strategies/Voice-only, upstream lifecycle, the no-upstream Apply notice, and Model-C Stage60 hostlist access after dropping privileges to `nobody`. Resolved and historically scoped issues are linked from the [release notes](docs/releases/v0.6.4.md); untested network-specific behavior is not silently counted as PASS.
 
-**Verification limits:** The owner installed immutable testing `v0.6.2_188` and verified both Standard and Extended Strategy Lab jobs through Stage 99 with 3/3 stable candidate replays and restored `RUNNING→RUNNING` service. Native disposable OPNsense 26.7 tests cover clean install, old RUNNING/Voice replacement, shared FD9/service, reboot, scoped IPFW, authenticated HTTPS and resource transactions. These results do **not** prove DPI bypass on a blocked ISP route, installed IPv6 WAN packets, successful Telegram/Discord voice media, arbitrary ISP/QUIC behavior, abrupt power loss or a physical owner Web firmware-upgrade click. IPv6 on the owner's stand was waived, not passed. The intermittent disposable Guest B investigation [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) remains open; a recurring `RESTORE_FAILED` in a required release-candidate check is blocking.
+**Verification limits:** Installed-native OPNsense 26.7 CI covers lifecycle/rollback, shared FD9/IPFW/Voice, staged hostlist access as `nobody`, Standard/Extended Lab in applicable test modes, local package replacement, and recovery. Owner-reported `_52` functional acceptance is distinct from packet-level proof of a bypass against a particular ISP and does not imply every STUN/media/call variant, actual IPv6 WAN traffic or abrupt power-loss recovery was tested. Historic intermittent disposable Guest B GitHub API egress failures remain tracked in [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954); genuine `RESTORE_FAILED` or leaked owned resources during an applicable release verification remain blocking.
 
-**Full-release verification boundary:** The [v0.6.3 release page](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) and [release notes](docs/releases/v0.6.3.md) contain the new native OPNsense delivery. The release workflow must validate and publish the **exact** `0.6.3_1.pkg`, `SHA256SUMS` and matching `FreeBSD:15:amd64` GitHub Pages/pkg repository. Pre-release CI archives and owner-installed `v0.6.2_188` have **different** identities and are not proof of the final published bytes. [Full release gate](docs/verification/STAGE5_FINAL_ACCEPTANCE_MATRIX.md) · [Dual-stack specification](docs/architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md).
+**Full-release boundary:** [Release notes v0.6.4](docs/releases/v0.6.4.md) describe the candidate `v0.6.4_1`. A full release requires an **actual** `FreeBSD:15:amd64` package, immutable `v0.6.4` semantic tag, checksum, matching GitHub Release assets and matching published OPNsense Pages/pkg repository. The published `_52.pkg` is the prior owner-test evidence, **not** proof that the final `v0.6.4_1.pkg` bytes have been built or installed.
 
 ## IPFW rule-number ranges
 
@@ -47,17 +48,17 @@ The plugin uses fixed **IPFW rule numbers** (these are **not TCP/UDP ports**):
 | Normal Zapret2 / Traffic Strategies | `19000–19010` |
 | Strategy Lab | `19100–19131` |
 
-Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The existing `pfctl -d; pfctl -e` path stays unchanged. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [completion plan](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) define current development priorities.
+Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The plugin must not globally disable/re-enable PF as part of normal runtime or release operations. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [completion plan](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) define current development priorities.
 
-## What's new in v0.6.3
+## What's new in v0.6.4
 
-- **Native OPNsense package lifecycle:** official `Mk/plugins.mk` build, system-owned dependencies via OPNsense pkg, safe clean/reinstall/RUNNING transitions, common Strategies/Voice `dvtws2` and preserved native configd/FD9/IPFW integration.
-- **Strategy Lab restored:** fixed Stage-85 shell-adapter readability preflight; owner-tested Standard and Extended jobs both produced three verified shortlist profiles and restored the running service.
-- **GUI and maintenance improvements:** WAN ↔ LAN interface selection repaired; real native Chromium lower Apply/F5 persistence checked; authenticated Strategies, Exclude, Voice and Additional Resources flows qualified within the documented scope.
-- **More maintainable releases:** root `VERSION` is the only product version source; new/changed production paths are checked for compatibility assumptions before expensive CI. The retired `native-product-installed-acceptance.json` release switch is replaced with release-note validation and actual native package/CI verification.
-- Existing global **Exclude IPSet**, dual-stack targets, Strategy Lab and optional Lua/BIN resource management are preserved; the published capabilities are not a claim of successful ISP-side DPI bypass.
+- **Clean install and GUI lifecycle:** scoped full purge with explicit confirmation/backup, native GUI uninstall/reinstall with preserved user configuration and upstream/optional resources, and first-install defaults for YouTube Domains and TCP/QUIC strategies.
+- **WAN-first and service controls:** WAN-only Save without running the engine, empty ordinary strategies and optional Voice-only service, corrected native Start/Apply/Stop/Restart and truthful RU/EN missing-upstream diagnostics.
+- **Strategy Lab reliability:** Standard/Extended testing before first ordinary Start and during RUNNING, preserved prior service state, Stage50/60 explicit fail-closed diagnostics. The user-reproduced Stage60 `Permission denied` is fixed by a tightly scoped `root:nobody` temporary hostlist for Model C without exposing private job state.
+- **Native package safety:** official OPNsense `Mk/plugins.mk`, stock `pkg` hooks, shared FD9, scoped IPFW rules, persisted purge CLI and support for managed Lua/BIN resources. Owner-tested `_52` and native regression evidence are distinguished from final package/published repository proof.
+- **Voice Transmission:** owner accepted its service test scope on the installed testing package. This is not a general claim of successful bypass for every voice service or media path.
 
-[Release details and verification boundaries](docs/releases/v0.6.3.md).
+[Release details, installation and verification limits](docs/releases/v0.6.4.md).
 
 ## Architecture overview
 
@@ -188,7 +189,7 @@ os-zapret2-restyle offers **optional installation and use of an expanded, integr
 
 In the current plugin, **Remove Additional Resources / Удалить дополнительные ресурсы** appears directly below Install **only when Advanced mode is enabled**. After a fresh removal preview, it requires explicit confirmation of the exact resource count (`REMOVE N`). It removes all additional top-level Lua/BIN files **not tracked by the installed upstream Zapret2 Git HEAD**, including manually added files; it preserves the upstream-tracked files and saved Strategies/Voice settings. The native transaction checks current saved configuration, temporarily quarantines the additional files, then uses the existing combined Strategies+Voice Apply/Start path and verifies that Zapret2 is running correctly with standard files only. On a proven failure it restores the original files and previous working service; if restoration cannot be verified, it reports a recovery-required failure instead of claiming success. **Review the planned count and your own custom Lua/BIN files before confirming; removal is not an ordinary hide/disable operation.**
 
-With **Full Help / Справка** enabled, the installed files appear in two cached columns: `.lua` on the left and `.bin` on the right. **Green** identifies resources tracked in the installed upstream Git HEAD, and **blue** identifies other installed files (including optional extras). The GUI reads an atomically published local JSON cache; it does not scan GitHub or Git on each Help view. After removal the Help area shows the not-installed/install explanation, and a new Strategy Lab Job uses the currently installed resource set. The owner confirmed the columns, colors and Help persistence after F5 on installed testing `v0.5.9_47`.
+With **Full Help / Справка** enabled, the installed files appear in two cached columns: `.lua` on the left and `.bin` on the right. **Green** identifies resources tracked in the installed upstream Git HEAD, and **blue** identifies other installed files (including optional extras). The GUI reads an atomically published local JSON cache; it does not scan GitHub or Git on each Help view. After removal the Help area shows the not-installed/install explanation, and a new Strategy Lab Job uses the currently installed resource set. The owner previously confirmed the columns, colors and Help persistence after F5 on an installed testing package.
 
 **Verification means catalog integrity, file provenance, guarded native integration, and the specific observed runtime/GUI tests.** It does **not** prove that every Lua script or BIN payload bypasses DPI, that all strategy/resource combinations interoperate, or that Telegram or other Voice calls succeed. The existing saved configuration is not automatically rewritten or Applied by installing extra resources. [Acceptance details and unrun-case limits](docs/verification/evidence/2026-10-27-v0.5.9_47-stage11-owner-final-acceptance.md).
 
@@ -203,7 +204,7 @@ The **Services → Zapret2 → Voice Transmission / Передача голос�
 - The page shows the shared service state and observable per-profile configuration, IPFW rules and counters. Per-profile status remains beneath its checkbox with help on or off; the three navigation labels localize correctly in Russian on regular page loads. Both GUI corrections were confirmed on the installed test package. These observations do **not** establish packet-level STUN success, bidirectional media or a working call.
 - When Apply or draft-save has an **uncertain** result, reload the page and inspect current configuration/runtime before attempting another change. Do not assume a browser timeout means nothing changed.
 
-**Current verification boundary:** Voice GUI/Config, shared Apply and managed IPFW outbound interception have been verified at their stated evidence levels. Telegram media/call through the owner's direct-provider OPNsense path **did not pass**, and this research campaign was explicitly closed. The previous pfSense direct-reflector `MEDIA_PASS` was on an OpenVPN-routed Telegram subnet, not the same ISP path; no validated Telegram bypass preset is claimed. Other Voice services remain independently unqualified for media, and the Squid/sing-box/SSH/routing lab is not managed by the plugin.
+**Current verification boundary:** The owner explicitly accepted the complete **Voice Transmission service test scope** on the current testing installation. This confirms the plugin's reported GUI/Config/shared runtime behavior in the tested configurations, not a guaranteed successful Telegram/Discord/SIP/X call or media bypass across providers; those network-specific results require separate evidence. The Squid/sing-box/SSH/routing lab is not managed by this plugin.
 
 For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
 
@@ -236,15 +237,15 @@ The repository is transported over HTTPS and uses the project-approved unsigned 
 
 ## Installing a testing package — native `.pkg` ONLY
 
-**Owner decision 10 November 2026:** No new companion `.sh` installers, no SH download links, no wrapper commands. Each testing prerelease publishes one verified native FreeBSD:15:amd64 **`.pkg`** asset with its SHA-256. Example using the immutable published native testing `v0.6.3_43.pkg` (the subsequent `_44` is docs-only):
+**Owner decision 10 November 2026:** No new companion `.sh` installers, no SH download links, no wrapper commands. Each testing prerelease publishes one verified native FreeBSD:15:amd64 **`.pkg`** asset with its SHA-256. Example using the immutable, owner-tested native package `v0.6.3_52.pkg` (the next source revision `_53` was docs-only):
 
 ```sh
-fetch -o /root/os-zapret2-restyle-0.6.3_43.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_43/os-zapret2-restyle-0.6.3_43.pkg
-pkg add -f /root/os-zapret2-restyle-0.6.3_43.pkg
+fetch -o /root/os-zapret2-restyle-0.6.3_52.pkg https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.3_52/os-zapret2-restyle-0.6.3_52.pkg
+pkg add -f /root/os-zapret2-restyle-0.6.3_52.pkg
 pkg info -x os-zapret2-restyle
 ```
 
-**Dependencies:** local `pkg add -f` does not download missing dependencies. On a fresh OPNsense first inspect the verified physical `+MANIFEST` (e.g. `tar -xOf /root/os-zapret2-restyle-0.6.3_43.pkg +MANIFEST`), then install only its missing/outdated package dependencies interactively using **official OPNsense** `pkg install -r OPNsense <missing-package-names>`; review removals/upgrades before confirmation. Never enable stock FreeBSD repositories, force ignored dependencies (`pkg add -M`), bypass native package hooks, or run `pkg install -f <local.pkg>` (previous native solver SIGSEGV). Keep the package's `PLUGIN_DEPENDS` unchanged and no new testing pkg repository. Package SHA-256 is validated during release publication; the owner may verify it independently. Earlier `.sh` release assets and historic installer experiments remain immutable historical records, **not** current installation instructions. This policy supersedes prior SH delivery parts of `CHAT-027`, `GH-060`, `GH-061` and LC-16 without altering the required nine-stage acceptance scope.
+**Dependencies:** local `pkg add -f` does not download missing dependencies. On a fresh OPNsense first inspect the verified physical `+MANIFEST` (e.g. `tar -xOf /root/os-zapret2-restyle-0.6.3_52.pkg +MANIFEST`), then install only its missing/outdated package dependencies interactively using **official OPNsense** `pkg install -r OPNsense <missing-package-names>`; review removals/upgrades before confirmation. Never enable stock FreeBSD repositories, force ignored dependencies (`pkg add -M`), bypass native package hooks, or run `pkg install -f <local.pkg>` (previous native solver SIGSEGV). Keep the package's `PLUGIN_DEPENDS` unchanged and no new testing pkg repository. Package SHA-256 is validated during release publication; the owner may verify it independently. Earlier `.sh` release assets and historic installer experiments remain immutable historical records, **not** current installation instructions. This policy supersedes prior SH delivery parts of `CHAT-027`, `GH-060`, `GH-061` and LC-16 without altering the required nine-stage acceptance scope.
 
 
 ## First setup
@@ -259,9 +260,9 @@ pkg info -x os-zapret2-restyle
 
 The plugin package and the upstream bol-van/zapret2 runtime intentionally have separate lifecycles.
 
-## Approved first-install YouTube defaults (future fix, not yet shipped)
+## Clean-install YouTube defaults
 
-On an **actually clean** first setup, the next implementation must show exactly these ten entries in **YouTube Domains**, without automatically enabling traffic interception:
+On an **actually clean** first setup with no existing Zapret2 configuration, the plugin initializes exactly these ten entries in **YouTube Domains**, without automatically enabling traffic interception. Ordinary reinstall over saved user configuration does not re-seed or overwrite any user-edited or deliberately blank fields:
 
 ~~~text
 youtube.com
@@ -276,7 +277,7 @@ ggpht.com
 ssl.gstatic.com
 ~~~
 
-**Traffic Strategy** must be exactly:
+The initially seeded **Traffic Strategy** is:
 
 ~~~text
 --filter-tcp=80,443
@@ -300,7 +301,7 @@ ssl.gstatic.com
 --lua-desync=fake:blob=fake_default_quic:repeats=5
 ~~~
 
-These profiles use upstream `http_iana_org.bin` (resolved from the plugin shorthand `--blob=http_iana_org`) and built-in `fake_default_quic`, with **no optional Lua/BIN resources**. The default is deliberately different from the historical `tls7` example, which depended on a missing file. The ten-line list and exact two-profile strategy are an **approved future default**, not a claim that the published `v0.6.3_1` already pre-populates the fields or that blocked YouTube access has been verified.
+These profiles use upstream `http_iana_org.bin` (resolved from the plugin shorthand `--blob=http_iana_org`) and built-in `fake_default_quic`, with **no optional Lua/BIN resources**. The default is deliberately different from the historical `tls7` example, which depended on a missing file. These values are created only for a truly empty first-install configuration; saving user-empty fields and ordinary reinstall must not restore them. A seeded strategy does **not** independently prove a working DPI bypass for a particular ISP.
 
 ### Managed domain targets
 
@@ -352,6 +353,10 @@ The Web GUI uses the same authoritative backend available to administrators:
 # Install/reinstall/upgrade/downgrade to an exact release.
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh install v1.0.3
 
+# Uninsatll Purge.
+/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --purge
+/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --dry-run
+
 # Help.
 /usr/local/opnsense/scripts/OPNsense/Zapret/setup.sh --help
 ```
@@ -375,11 +380,11 @@ The two Zapret2 resource directories above hold both installed upstream-tracked 
 
 The managed `dvtws2` process drops privileges to UID/GID `65534`; managed Lua/BLOB files and runtime directories are normalized to permissions appropriate for that boundary.
 
-## Independent full removal — persistent CLI (testing v0.6.3_43)
+## Independent full removal — persistent CLI
 
 **Normal GUI uninstall is not purge.** It preserves user data and the separately owned purge CLI; destructive complete removal requires an explicit confirmation and verified private backup.
 
-The [canonical G01 purge script](scripts/purge-os-zapret2-restyle.sh) is deployed by native `POST_INSTALL` from a package-owned template as a separately owned CLI at `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. **Ordinary GUI/`pkg delete` uninstall preserves this CLI** and user Config/upstream runtime/Lua/BIN; an explicitly confirmed **full purge** removes the plugin if still installed, then all owned Zapret2 remnants and the independent script itself. This correct behavior was verified by the owner on `_40` and is included in the immutable published `_43`. Historical `_33` is defective (interactive stdin EOF and purge-script removed on ordinary uninstall) and must not be used for these operations.
+The [canonical G01 purge script](scripts/purge-os-zapret2-restyle.sh) is deployed by native `POST_INSTALL` from a package-owned template as a separately owned CLI at `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. **Ordinary GUI/`pkg delete` uninstall preserves this CLI** and user Config/upstream runtime/Lua/BIN; an explicitly confirmed **full purge** removes the plugin if still installed, then all owned Zapret2 remnants and the independent script itself. This behavior was checked in previous owner testing, and the owner also reports successful full purge and clean reinstall of the published `_52` package. Historical `_33` is defective (interactive stdin EOF and purge-script removed on ordinary uninstall) and must not be used for these operations.
 
 Read-only root-console inspection:
 
@@ -393,7 +398,7 @@ Only when independently authorizing irreversible complete removal:
 /usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh --purge
 ```
 
-Full purge requires the exact `PURGE OS-ZAPRET2-RESTYLE` phrase through controlling `/dev/tty` **before any mutation**, a verified private `/conf/config.xml` backup under `/root/zapret2-restyle-purge-backups`, and scoped process/FD9/IPFW ownership checks. The same process works if the package was already removed ordinarily; foreign system data, shared dependencies and unrelated services must remain untouched. `--keep-repo` is not full removal; `--yes-disposable` is isolated-CI-only. The «Полезные ссылки» purge card is removed from the Strategies GUI. Review the [G01 guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) and [nine-step G11 acceptance](docs/verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md). **Owner `_43` full G11 is not yet tested.**
+Full purge requires the exact `PURGE OS-ZAPRET2-RESTYLE` phrase through controlling `/dev/tty` **before any mutation**, a verified private `/conf/config.xml` backup under `/root/zapret2-restyle-purge-backups`, and scoped process/FD9/IPFW ownership checks. The same process works if the package was already removed ordinarily; foreign system data, shared dependencies and unrelated services must remain untouched. `--keep-repo` is not full removal; `--yes-disposable` is isolated-CI-only. The «Полезные ссылки» purge card is removed from the Strategies GUI. Review the [G01 guide](docs/verification/G01_STANDALONE_PURGE_GUIDE.md) and [nine-step G11 acceptance](docs/verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md). **The owner has confirmed clean purge/reinstall and prior ordinary GUI uninstall/reinstall preservation; see the v0.6.4 release notes for the separately stated evidence limits.**
 
 ## Removal policy
 
@@ -412,7 +417,7 @@ Version/product semantics are defined by `DEV-027` and the related version rules
 
 Start with [`AGENTS.md`](AGENTS.md). It routes to the current handoff, state, rule books, roadmap and documentation index. The project keeps current state separate from historical evidence so development can continue without reconstructing old decisions from chat history.
 
-The full-release candidate is **[v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3)** / `0.6.3_1.pkg`; the [full release notes](docs/releases/v0.6.3.md) distinguish new native delivery from historical testing-package evidence. The prior [v0.6.2](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.2) tag/assets remain immutable. [Issue #942](https://github.com/Tolian82/os-zapret2-restyle/issues/942) tracks release acceptance; [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) retains intermittent Guest B evidence and fail-closed restoration. No owner Web-update, blocked ISP DPI, live owner IPv6 WAN or Voice media success is implied.
+The approved next full-release candidate is **v0.6.4_1**, with [v0.6.4 release notes](docs/releases/v0.6.4.md). The existing [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) tag and assets remain immutable. [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) tracks intermittent isolated Guest B network egress; any genuine restoration failure remains blocking. Owner-tested `_52` functional behavior is not a claim of owner Web upgrade to *the new, not-yet-published* `v0.6.4_1` artifact or of universal ISP/media/IPv6 results.
 
 Useful entry points:
 
