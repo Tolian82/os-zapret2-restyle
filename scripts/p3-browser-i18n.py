@@ -165,6 +165,7 @@ def check_resource_help_cache(page, mode: str) -> str:
     was_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
     if not was_on:
         toggle.click()
+    clicked_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
     panel = page.locator("#zapretExtraResourceHelp")
     if not panel.is_visible():
         state = page.evaluate("""() => ({
@@ -176,7 +177,9 @@ def check_resource_help_cache(page, mode: str) -> str:
                               ?.getBoundingClientRect().height
         })""")
         raise Refusal("P4B_NATIVE_HELP_PANEL_HIDDEN:" +
-                      "icon_on=" + str(state["icon_on"]) +
+                      "was_on=" + str(was_on) +
+                      ":clicked_on=" + str(clicked_on) +
+                      ":icon_on=" + str(state["icon_on"]) +
                       ":panel_display=" + str(state["panel_display"]) +
                       ":service_visible=" + str(state["service_visible"]))
     # Read the same production cache-only API with the browser's real
@@ -281,7 +284,6 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
          "P4_STRATEGIES_TRANSFER_INFO_MISSING_" + mode)
     help_token = "Не обязательно глобальные" if mode == "ru" else "Not necessarily global"
     verify_help_cycle(page, "frm_GeneralSettings", "zapret.strategy.extraargs", help_token)
-    cache_state = check_resource_help_cache(page, mode)
     need(field.input_value().endswith(marker), "STRATEGY_EDIT_CHANGED_BY_HELP")
     # Restore the unsaved probe before F5, avoiding any native dirty-form
     # browser warning; still assert the persisted value after actual reload.
@@ -289,6 +291,12 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     f5_and_wait(page, "/api/zapret/settings/get")
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
+    # Begin the resource Help probe on a freshly reloaded native form. The
+    # earlier popup/Full Help coverage intentionally toggled the native icon
+    # multiple times and must not leak its transient state into P4b.
+    cache_state = check_resource_help_cache(page, mode)
+    need(value_snapshot(page, FIELDS_GENERAL) == initial,
+         "P4B_RESOURCE_HELP_CHANGED_SAVED_VALUES")
     return initial, cache_state
 
 

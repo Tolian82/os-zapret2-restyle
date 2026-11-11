@@ -43,3 +43,7 @@ The clean-installed Chromium test reached native Full Help but found its Lua/BIN
 ## Native help switch normalization (after run #43086394142)
 
 The exact Chromium refusal reported icon_on=False with the separate Service body already visible, so the prior double-toggle fixture was not a valid proof of a broken Help renderer. The fixture now opens a collapsed Service table with its real header, records whether the native OPNsense Full Help icon was already ON, clicks it only if it was OFF, checks the actual panel and cache-only API, and restores the icon only when the fixture itself changed it. A remaining hidden panel still fails with sanitized icon/visibility diagnostics. No forced DOM styling or product runtime modification.
+
+## Fresh F5 isolation and native toggle evidence
+
+An earlier exact-head Chromium run still found icon_on=False despite a visible Service section. To avoid diagnosing prior popup/Full Help toggles as a product resource catalog bug, the inventory probe now executes **after native F5** with verified unchanged saved field values. It checks again that opening resource Help does not mutate those fields. On a remaining invisible panel it records only native icon state before and immediately after the real click and the final native icon/Service/panel visibility, without dumping private page data or forcing CSS.
