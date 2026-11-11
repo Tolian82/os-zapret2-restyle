@@ -51,3 +51,7 @@ An earlier exact-head Chromium run still found icon_on=False despite a visible S
 ## Bounded native session preset recheck
 
 The observed native toggle changes from OFF to ON immediately after the genuine click but is OFF again before the panel becomes visible. To distinguish an OPNsense form-session preset race from a broken renderer, the test now allows the native state to settle for 250 ms, then at most one additional genuine toggle click if it reverted to OFF, with a second 250 ms settling check. It still requires the actual panel visible and compares the actual cache-only API response with the actual DOM; no synthetic class changes, direct style writes, or retries of a failing network call. Any failure reports both phases as non-sensitive booleans.
+
+## Isolated authenticated native tab for P4b catalog
+
+The native form tests intentionally toggle global Full Help repeatedly to verify popup/F5 semantics. A later resource catalog probe reported a transient native icon ON followed by OFF while its panel stayed hidden, even after a bounded retry. The catalog check now opens a second **real Chromium tab** within the same authenticated OPNsense user context and user-profile locale, loads the installed Settings form and cache-only API naturally, and closes that tab afterward. No new account, synthetic DOM, mocked network response, Config/Apply or other service mutation. The original tab's persisted-value snapshot remains unchanged; failure in the isolated tab is still a real UI integration defect and blocks P4b acceptance.

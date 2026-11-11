@@ -303,10 +303,18 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     f5_and_wait(page, "/api/zapret/settings/get")
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
-    # Begin the resource Help probe on a freshly reloaded native form. The
-    # earlier popup/Full Help coverage intentionally toggled the native icon
-    # multiple times and must not leak its transient state into P4b.
-    cache_state = check_resource_help_cache(page, mode)
+    # P4b runs in a separate real tab sharing this authenticated OPNsense
+    # context/user profile. Earlier Full Help popup probes in the first tab
+    # cannot leak their per-tab native sessionStorage/animation state.
+    inventory_page = page.context.new_page()
+    try:
+        wait_native_load(inventory_page, "/api/zapret/settings/get",
+                         "/ui/zapret", "frm_GeneralSettings")
+        wait_locale(inventory_page, mode)
+        inventory_page.wait_for_timeout(350)
+        cache_state = check_resource_help_cache(inventory_page, mode)
+    finally:
+        inventory_page.close()
     need(value_snapshot(page, FIELDS_GENERAL) == initial,
          "P4B_RESOURCE_HELP_CHANGED_SAVED_VALUES")
     return initial, cache_state
