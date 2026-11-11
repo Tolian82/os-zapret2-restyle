@@ -18,7 +18,8 @@
 
 ## Level 2 — approved current feature requirements (11 November 2026)
 
-- [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3. The specification is recorded; implementation and owner's real OPNsense acceptance are **not** claimed. A development plan is to be presented separately for discussion.
+- [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3.
+- [Owner-approved P0–P6 development plan](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) — exact stage sequence, source ownership, native verification and A01–A19 gates. P0 is the immediate next task; P0–P6 are not implemented and a test package has not been published.
 
 ## Level 2 — completed clean-install lifecycle ТЗ v1.3 (8–11 November 2026)
 
