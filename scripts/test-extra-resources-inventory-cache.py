@@ -48,6 +48,53 @@ class TestInventoryCache(unittest.TestCase):
         (self.root / "lua/extra.lua").write_text("external Lua\n")
         (self.root / "files/fake/extra.bin").write_bytes(b"extra blob")
 
+    def test_first_refresh_creates_missing_state_and_usable_upstream_cache(self):
+        self.state.rmdir()
+        data = refresh(self.root, self.state)
+        self.assertFalse(data["installed"])
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o700)
+        self.assertFalse((self.state / "installed.json").exists())
+        self.assertEqual(read_cached(self.state)["status"], "ok")
+        self.assertEqual(len(read_cached(self.state)["lua"]), 2)
+        # Idempotent package upgrade must preserve existing state.
+        self.assertEqual(refresh(self.root, self.state)["lua"], data["lua"])
+
+    def test_first_refresh_creates_missing_state_parent_safely(self):
+        self.state.rmdir()
+        nested = self.state / "extra-resources"
+        data = refresh(self.root, nested)
+        self.assertFalse(data["installed"])
+        self.assertEqual(self.state.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(nested.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(read_cached(nested)["status"], "ok")
+
+    def test_first_refresh_refuses_unsafe_or_foreign_storage(self):
+        self.state.rmdir()
+        outside = Path(self.tmp.name) / "foreign"
+        outside.mkdir()
+        self.state.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(InventoryCacheError):
+            refresh(self.root, self.state)
+        self.assertFalse((outside / "inventory-cache.json").exists())
+        self.state.unlink()
+        self.state.write_text("foreign file")
+        with self.assertRaises(InventoryCacheError):
+            refresh(self.root, self.state)
+        self.assertEqual(self.state.read_text(), "foreign file")
+        self.state.unlink()
+        # A symlinked ancestor is never used as a write destination.
+        alias = Path(self.tmp.name) / "alias"
+        alias.symlink_to(outside, target_is_directory=True)
+        with self.assertRaises(InventoryCacheError):
+            refresh(self.root, alias / "extra-resources")
+        self.assertFalse((outside / "extra-resources").exists())
+        unsafe_parent = Path(self.tmp.name) / "unsafe-parent"
+        unsafe_parent.mkdir()
+        unsafe_parent.chmod(0o777)
+        with self.assertRaises(InventoryCacheError):
+            refresh(self.root, unsafe_parent / "extra-resources")
+        self.assertFalse((unsafe_parent / "extra-resources").exists())
+
     def test_actual_head_classifies_all_files_and_reads_cache_only(self):
         data = refresh(self.root, self.state)
         self.assertFalse(data["installed"])
