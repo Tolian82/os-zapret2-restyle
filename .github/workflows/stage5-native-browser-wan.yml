@@ -1,4 +1,4 @@
-name: Stage 5 real Chromium WAN lower Apply persistence on native OPNsense
+name: Native OPNsense Chromium WAN and P3 RU/EN (bounded clean install)
 
 on:
   pull_request:
@@ -35,9 +35,9 @@ permissions:
 
 jobs:
   genuine-installed-browser-wan:
-    name: Real Chromium UI WAN / LOWER Apply / F5 on disposable OPNsense 26.7
+    name: Real Chromium WAN and RU/EN on fresh installed OPNsense 26.7
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
@@ -62,29 +62,41 @@ jobs:
           ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/zapret2-browser-ssh/key"
           install -d -m 0700 dist
           cp "$RUNNER_TEMP/zapret2-browser-ssh/key.pub" stage5-browser-wan-ci.pub
-      - name: Native OPNsense 26.7 - real installed predecessor → Mk successor, scoped lo0
+      - name: Native OPNsense 26.7 - cached dependencies, genuine current Mk pkg clean install
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: '26.7'
           sync: rsync
           copyback: true
-          disable-cache: true
-          cpu: 2
+          cpu: 3
           mem: 4096
+          cache-after-prepare: true
           nat: |
             "32222": "22"
+          prepare: |
+            set -eu
+            # These are image-owned dependencies, not source-specific code.
+            # The action caches this prepared disposable image for later PRs.
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for command, seconds in (
+                (["pkg", "update", "-f"], 150),
+                (["pkg", "install", "-y", "git", "ca_root_nss", "jq",
+                  "gmake", "pkgconf", "luajit"], 180),
+            ):
+                print("P3_IMAGE_PREPARE=" + command[1], flush=True)
+                try:
+                    subprocess.run(command, check=True, timeout=seconds)
+                except subprocess.TimeoutExpired:
+                    raise SystemExit("P3_IMAGE_PREPARE_TIMEOUT=" + command[1])
+            PY
           run: |
             set -eu
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
-            pkg update -f
-            pkg install -y git ca_root_nss jq gmake pkgconf luajit
-            fetch -o /tmp/os-zapret2-restyle-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
-            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE0_DISPOSABLE_RUNNING_TEST=1 ZAPRET2_STAGE2_REAL_RUNNING_UPGRADE=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-running-upgrade.py /tmp/os-zapret2-restyle-0.6.2_1.pkg
-            # Issue #893 reports a STOPPED service. Stop the exact disposable
-            # lo0 owner using stock configd before changing WAN in a browser.
-            # Never test a live lo0->WAN migration as a preference-save check.
-            /usr/local/sbin/configctl zapret stop
-            /usr/local/sbin/configctl zapret status | grep -F 'zapret is not running'
+            # P3 needs a genuine installed current package, NOT historical
+            # RUNNING upgrade, upstream-engine compilation or IPFW ownership.
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            pkg info -e os-zapret2-restyle
             test -s stage5-browser-wan-ci.pub
             grep -Eq '^ssh-ed25519 [A-Za-z0-9+/=]+' stage5-browser-wan-ci.pub
             install -d -m 0700 /root/.ssh
