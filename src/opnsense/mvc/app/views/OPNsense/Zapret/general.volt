@@ -140,8 +140,89 @@
         });
         $('#frm_GeneralSettings').append(telegramBaseline);
 
-        // Preserve OPNsense native label/help markup and F5 rendering. Only
-        // localize this one new field; never rewrite a textarea's contents.
+
+        // P3: one UI-only dictionary, keyed by immutable native form IDs.
+        // English native OPNsense form text remains the fallback.
+        const strategiesLabelsRU = {
+            'zapret.general.enabled': 'Включить',
+            'zapret.general.waninterface': 'Интерфейс WAN',
+            'zapret.general.divertport': 'Порт Divert',
+            'zapret.strategy.trafficargs': 'Стратегия обработки трафика',
+            'zapret.strategy.extraargs': 'Дополнительные аргументы',
+            'zapret.hostlist.mode': 'Режим выбора целей',
+            'zapret.hostlist.youtubedomains': 'Домены YouTube',
+            'zapret.hostlist.telegramips': 'IPSET Telegram',
+            'zapret.hostlist.userdomains': 'Пользовательские домены',
+            'zapret.hostlist.excludedomains': 'Исключить домены'
+        };
+        const strategiesHelpRU = {
+            'zapret.general.enabled':
+                'Включить общую службу Zapret2 для стратегий и голосовых профилей.',
+            'zapret.general.waninterface':
+                'Интерфейс WAN, на котором применяется обход DPI. Voice использует тот же WAN.',
+            'zapret.general.divertport':
+                'Порт сокета ipfw divert (обычно 989). Меняйте при конфликте с другой службой.',
+            'zapret.strategy.trafficargs':
+                'Нативная стратегия dvtws2. Независимые профили разделяются <code>--new</code>, ' +
+                'их порядок сохраняется. Цели: <code>&lt;HOSTLIST:youtube&gt;</code>, ' +
+                '<code>&lt;HOSTLIST:user&gt;</code>, <code>&lt;IPSET:telegram&gt;</code>. ' +
+                'Последовательность <code>--payload</code> и <code>--lua-desync</code> сохраняется.',
+            'zapret.strategy.extraargs':
+                'Добавляются в конец итоговой командной строки dvtws2. ' +
+                'Параметры профиля могут относиться к последнему профилю — это не отдельная стратегия.',
+            'zapret.hostlist.mode':
+                'Применяется только к профилям без явного HOSTLIST/IPSET. ' +
+                '«Весь трафик» не ограничивает цели; «Только из списков» использует введённые списки; ' +
+                '«Автоопределение» добавляет обнаруженные заблокированные домены. ' +
+                'Глобальные исключения действуют отдельно.',
+            'zapret.hostlist.youtubedomains':
+                'Источник <code>&lt;HOSTLIST:youtube&gt;</code>. Один домен в строке. ' +
+                '<code>^</code> означает точный домен, <code>!</code> — локальное исключение HOSTLIST.',
+            'zapret.hostlist.telegramips':
+                'Общий со страницей Voice <code>&lt;IPSET:telegram&gt;</code>. ' +
+                'Один IPv4/IPv6-адрес или CIDR в строке, без имён хостов и охвата всего семейства.',
+            'zapret.hostlist.userdomains':
+                'Источник <code>&lt;HOSTLIST:user&gt;</code>. Один домен в строке. ' +
+                '<code>^</code> — точный домен, <code>!</code> — локальное исключение из HOSTLIST.',
+            'zapret.hostlist.excludedomains':
+                'Глобально исключить домены из обработки DPI, по одному на строку. ' +
+                'Это не локальное исключение <code>!domain</code> внутри HOSTLIST.'
+        };
+        const strategiesInfoRU =
+            'Запустите <b>blockcheck2</b> на странице ' +
+            '<a href="/ui/zapret/diagnostics">Диагностика</a> или по SSH:<br/>' +
+            '<code>cd /usr/local/etc/zapret2 &amp;&amp; env IFACE_WAN=your_wan_if /bin/sh blockcheck2.sh</code><br/><br/>' +
+            'Изучите результат <b>SUMMARY</b> и добавьте профиль в поле ' +
+            '<b>Стратегия обработки трафика</b>. HTTP, HTTPS/TLS, TCP и UDP могут ' +
+            'сосуществовать. Независимые профили разделяются <code>--new</code>. ' +
+            'Не заменяйте существующую многопрофильную стратегию без проверки объединения.';
+
+        function localizeStrategiesForm() {
+            if (!isRussian) return;
+            const form = $('#frm_GeneralSettings');
+            const info = form.find('#zapretStrategiesInfoSource');
+            if (info.length) info.html(strategiesInfoRU);
+            Object.keys(strategiesLabelsRU).forEach(function(id) {
+                const input = document.getElementById(id) ||
+                              document.getElementById(id.replace(/\./g, '_'));
+                if (!input) return;
+                const row = $(input).closest('tr');
+                const label = row.find('label').first();
+                // Retain native help icons and the original input/value.
+                label.find('*').addBack().contents().filter(function() {
+                    return this.nodeType === 3 && /\S/.test(this.textContent);
+                }).first().each(function() {
+                    this.textContent = strategiesLabelsRU[id];
+                });
+                const help = strategiesHelpRU[id];
+                // Source for both native popup and F5 Full Help.
+                row.find('div[data-for^="help_for_"] small').html(help);
+                const visible = row.find('.help-block').first();
+                if (visible.length && visible.text().trim()) visible.html(help);
+            });
+        }
+
+        // Preserve the existing Exclude IPSet inline-only F5 help layout.
         function localizeExcludeIPSet() {
             const field = document.getElementById('zapret.hostlist.excludeipset') ||
                           document.getElementById('zapret_hostlist_excludeipset');
@@ -173,6 +254,7 @@
                 const currentField = document.getElementById('zapret.hostlist.telegramips');
                 telegramBaseline.val(currentField ? currentField.value : '');
                 formatTokenizersUI();
+                localizeStrategiesForm();
                 localizeExcludeIPSet();
                 $('.selectpicker').selectpicker('refresh');
             });
