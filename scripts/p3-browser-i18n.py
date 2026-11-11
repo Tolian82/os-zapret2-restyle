@@ -180,7 +180,19 @@ def check_resource_help_cache(page, mode: str) -> str:
             panel_display: document.getElementById('zapretExtraResourceHelp')
                            ?.style.display || '',
             service_visible: !!document.getElementById('zapretServiceBody')
-                              ?.getBoundingClientRect().height
+                              ?.getBoundingClientRect().height,
+            preset_on: (() => {
+                try { return sessionStorage.getItem('all_help_preset') === '1'; }
+                catch (e) { return false; }
+            })(),
+            native_help_shown: document.querySelector(
+                '[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]'
+            )?.classList.contains('show') || false,
+            native_help_hidden: document.querySelector(
+                '[id="row_zapret.strategy.trafficargs"] ' +
+                'div[data-for="help_for_zapret.strategy.trafficargs"]'
+            )?.classList.contains('hidden') || false
         })""")
         raise Refusal("P4B_NATIVE_HELP_PANEL_HIDDEN:" +
                       "was_on=" + str(was_on) +
@@ -188,7 +200,10 @@ def check_resource_help_cache(page, mode: str) -> str:
                       ":settled_on=" + str(settled_on) +
                       ":icon_on=" + str(state["icon_on"]) +
                       ":panel_display=" + str(state["panel_display"]) +
-                      ":service_visible=" + str(state["service_visible"]))
+                      ":service_visible=" + str(state["service_visible"]) +
+                      ":preset_on=" + str(state["preset_on"]) +
+                      ":native_help_shown=" + str(state["native_help_shown"]) +
+                      ":native_help_hidden=" + str(state["native_help_hidden"]))
     # Read the same production cache-only API with the browser's real
     # authenticated jQuery session. Never forge the response or mutate Config.
     data = page.evaluate("""async () => {
