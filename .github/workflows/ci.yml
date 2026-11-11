@@ -1122,6 +1122,9 @@ jobs:
       - name: Test native Voice Transmission form contract
         run: python3.13 scripts/test-voice-gui-contract.py
 
+      - name: Test Strategies native RU/EN form labels and help
+        run: python3.13 scripts/test-strategies-i18n.py
+
       - name: Test automated release trigger contract
         run: sh scripts/test-release-trigger.sh
 
