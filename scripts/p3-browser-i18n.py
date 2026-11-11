@@ -99,6 +99,26 @@ def f5_and_wait(page, endpoint: str) -> None:
         page.reload(wait_until="domcontentloaded", timeout=55000)
 
 
+def native_form_toggle(page, form_id: str, kind: str):
+    # Genuine OPNsense toggle only: exact ID, or a single native toggle
+    # within this form; never create a control or manipulate hidden styles.
+    need(kind in ("show_advanced", "show_all_help"), "BAD_NATIVE_TOGGLE_KIND")
+    exact = page.locator('[id="' + kind + '_' + form_id + '"]')
+    if exact.count() == 1:
+        return exact
+    form = page.locator('form#' + form_id)
+    need(form.count() == 1, "NATIVE_FORM_MISSING_" + form_id)
+    alternatives = form.locator('[id^="' + kind + '_"]')
+    if alternatives.count() == 1:
+        return alternatives
+    ids = page.locator('[id^="' + kind + '_"]').evaluate_all(
+        "els => els.map(x => x.id).filter(x => /^[A-Za-z0-9_]+$/.test(x)).slice(0, 6)"
+    )
+    raise Refusal("NATIVE_TOGGLE_MISSING_OR_AMBIGUOUS_" + kind +
+                  ":in_form=" + str(alternatives.count()) +
+                  ":on_page=" + ",".join(ids))
+
+
 def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
     before = control(page, field).input_value()
     source_text = help_source(page, field)
@@ -112,8 +132,7 @@ def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
     need(source.count() == 1, "NATIVE_HELP_SOURCE_MISSING_" + field)
     icon = page.locator('[id="help_for_' + field + '"]')
     need(icon.count() == 1, "NATIVE_HELP_ICON_MISSING_" + field)
-    toggle = page.locator('[id="show_all_help_' + form_id + '"]')
-    need(toggle.count() == 1, "NATIVE_FULL_HELP_TOGGLE_MISSING_" + form_id)
+    toggle = native_form_toggle(page, form_id, "show_all_help")
     # The global help state may have been restored from sessionStorage.
     # Normalize it through the native UI rather than manipulating DOM/CSS.
     if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
@@ -168,8 +187,7 @@ def check_strategies(page, mode: str) -> dict[str, str]:
     advanced_help = page.locator('[id="help_for_zapret.strategy.extraargs"]')
     need(advanced_help.count() == 1, "STRATEGIES_ADVANCED_HELP_MISSING")
     if not advanced_help.is_visible():
-        advanced = page.locator('[id="show_advanced_frm_GeneralSettings"]')
-        need(advanced.count() == 1, "NATIVE_ADVANCED_TOGGLE_MISSING")
+        advanced = native_form_toggle(page, "frm_GeneralSettings", "show_advanced")
         advanced.click()
         advanced_help.wait_for(state="visible", timeout=12000)
     help_token = "Не обязательно глобальные" if mode == "ru" else "Not necessarily global"
