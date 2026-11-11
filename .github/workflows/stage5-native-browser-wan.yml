@@ -50,9 +50,11 @@ jobs:
           set -eu
           python3.13 -m py_compile scripts/stage5-browser-wan.py scripts/p3-browser-i18n.py
           python3.13 scripts/p3-browser-i18n.py --self-test
-          python3.13 -m pip install playwright
-          python3.13 -m playwright install --with-deps chromium
-          python3.13 scripts/stage5-browser-wan.py --self-test
+          python3.13 -m pip install --disable-pip-version-check playwright
+          chromium_bin="$(command -v chromium || command -v chromium-browser || command -v google-chrome || command -v google-chrome-stable || true)"
+          test -n "$chromium_bin" && test -x "$chromium_bin"
+          printf 'STAGE5_LOCAL_CHROMIUM=%s\n' "$chromium_bin" >> "$GITHUB_ENV"
+          STAGE5_LOCAL_CHROMIUM="$chromium_bin" python3.13 scripts/stage5-browser-wan.py --self-test
       - name: Generate one disposable runner-only SSH key, not a repo credential
         run: |
           set -eu

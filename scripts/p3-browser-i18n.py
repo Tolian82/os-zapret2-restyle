@@ -278,7 +278,8 @@ def browser_run(mode: str) -> None:
     path = RESULT_DIR / ("p3-browser-i18n-" + mode + ".json")
     need(not path.exists() and not path.is_symlink(), "P3_LOCALE_RECEIPT_PREEXISTS")
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
+        browser_args = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+        browser = pw.chromium.launch(headless=True, **browser_args)
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()

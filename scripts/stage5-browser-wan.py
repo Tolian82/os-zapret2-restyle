@@ -35,7 +35,8 @@ def real_browser():
          'REAL_BROWSER_DISPOSABLE_CI_OPTIN_REQUIRED')
     origin = 'https://127.0.0.1:18443'
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
+        browser_args = {'executable_path': os.environ['STAGE5_LOCAL_CHROMIUM']} if os.environ.get('STAGE5_LOCAL_CHROMIUM') else {}
+        browser = pw.chromium.launch(headless=True, **browser_args)
         try:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
