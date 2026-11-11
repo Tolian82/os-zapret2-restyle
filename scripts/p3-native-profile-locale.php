@@ -22,7 +22,13 @@ if (PHP_OS_FAMILY !== 'BSD') {
 }
 // Each identity/precondition guard has a distinct, non-sensitive refusal
 // receipt. A combined "root Config access" code hid the actual native cause.
-if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+// Prove actual root identity even without the optional PHP POSIX module.
+$effectiveUid = function_exists('posix_geteuid')
+    ? (string)posix_geteuid()
+    : (function_exists('shell_exec')
+        ? trim((string)@shell_exec('/usr/bin/id -u 2>/dev/null'))
+        : '');
+if ($effectiveUid !== '0') {
     fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_NOT_ROOT\n");
     exit(2);
 }
@@ -30,9 +36,29 @@ if (!is_file('/conf/config.xml') || is_link('/conf/config.xml')) {
     fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_NOT_REGULAR\n");
     exit(2);
 }
-if (fileowner('/conf/config.xml') !== 0) {
-    fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_OWNER_NOT_ROOT\n");
-    exit(2);
+$fileUid = fileowner('/conf/config.xml');
+if ($fileUid !== 0) {
+    // OPNsense 26.7 Core AppConfig specifies wwwonly:wheel as its
+    // legitimate Config owner. Refuse arbitrary owners: the target must be
+    // root or the exact native wwwonly account, independently resolved.
+    $nativeUid = null;
+    if (function_exists('posix_getpwnam')) {
+        $account = posix_getpwnam('wwwonly');
+        if (is_array($account) && isset($account['uid'])) {
+            $nativeUid = (int)$account['uid'];
+        }
+    }
+    if ($nativeUid === null && function_exists('shell_exec')) {
+        $result = @shell_exec('/usr/bin/id -u wwwonly 2>/dev/null');
+        if (is_string($result) && preg_match('/^[0-9]+$/D', trim($result))) {
+            $nativeUid = (int)trim($result);
+        }
+    }
+    if ($fileUid === false || $nativeUid === null || $fileUid !== $nativeUid ||
+        $nativeUid <= 0) {
+        fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_OWNER_UNEXPECTED\n");
+        exit(2);
+    }
 }
 if (!is_writable('/conf/config.xml')) {
     fwrite(STDERR, "P3_PROFILE_LOCALE=REFUSED_CONFIG_NOT_WRITABLE\n");

@@ -329,8 +329,12 @@ def self_test() -> None:
     guard = (Path(__file__).with_name("p3-native-profile-locale.php")
              .read_text(encoding="utf-8"))
     need("!function_exists('posix_geteuid')" not in guard and
-         "function_exists('posix_geteuid') && posix_geteuid() !== 0" in guard and
-         "fileowner('/conf/config.xml') !== 0" in guard and
+         "function_exists('posix_geteuid')" in guard and
+         "/usr/bin/id -u 2>/dev/null" in guard and
+         "fileowner('/conf/config.xml')" in guard and
+         "posix_getpwnam('wwwonly')" in guard and
+         "/usr/bin/id -u wwwonly" in guard and
+         "REFUSED_CONFIG_OWNER_UNEXPECTED" in guard and
          "is_writable('/conf/config.xml')" in guard and
          "stage5-browser-wan-ci.pub" in guard and
          "REFUSED_GUEST_WITNESS_INVALID" in guard,
