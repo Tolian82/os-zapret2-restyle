@@ -761,15 +761,18 @@
         function renderResourceHelpInventory(data) {
             const panel = $('#zapretExtraResourceHelp');
             panel.empty();
-            if (!data || data.status !== 'ok') {
+            if (!data || data.status !== 'ok' ||
+                typeof data.installed !== 'boolean' ||
+                !Array.isArray(data.lua) || !Array.isArray(data.bin)) {
                 // A missing/corrupt cache is UNKNOWN, never evidence of absence.
                 panel.append($('<p/>').text(extrasText.listUnavailable));
                 return;
             }
-            helpInventoryLastInstalled = !!data.installed;
+            helpInventoryLastInstalled = data.installed;
             if (!data.installed) {
+                // The optional bundle is absent, but the verified cache can
+                // still contain native Zapret2 Lua/BIN. Display both facts.
                 panel.append($('<p/>').text(extrasText.installHelp));
-                return;
             }
             const legend = $('<div/>', {'class': 'zapret-resource-legend'});
             $('<span/>', {'class': 'text-success'}).text(extrasText.native).appendTo(legend);

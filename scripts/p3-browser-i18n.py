@@ -152,7 +152,58 @@ def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
     source.wait_for(state="hidden", timeout=12000)
     need(control(page, field).input_value() == before, "HIDE_HELP_CHANGED_VALUE_" + field)
 
-def check_strategies(page, mode: str) -> dict[str, str]:
+def check_resource_help_cache(page, mode: str) -> str:
+    """Real native Help + backend response, without mocked routing or mutation."""
+    toggle = native_form_toggle(page, "frm_GeneralSettings", "show_all_help")
+    if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
+        toggle.click()
+    with page.expect_response(
+        lambda response: "/api/zapret/service/resourcesInventory" in response.url
+                         and response.status == 200,
+        timeout=30000,
+    ) as request:
+        toggle.click()
+    data = request.value.json()
+    need(isinstance(data, dict), "P4B_REAL_CACHE_RESPONSE_INVALID")
+    panel = page.locator("#zapretExtraResourceHelp")
+    panel.wait_for(state="visible", timeout=12000)
+    if data.get("status") != "ok":
+        text = "Кэш списка ресурсов недоступен" if mode == "ru" else "The resource list cache is unavailable"
+        panel.locator("p").first.wait_for(state="visible", timeout=12000)
+        need(text in panel.inner_text(), "P4B_UNAVAILABLE_MUST_STAY_UNKNOWN_" + mode)
+        need(panel.locator("ul.zapret-resource-list li").count() == 0,
+             "P4B_UNAVAILABLE_MUST_NOT_SHOW_CACHED_FILES")
+        status = "unavailable"
+    else:
+        need(type(data.get("installed")) is bool and
+             isinstance(data.get("lua"), list) and isinstance(data.get("bin"), list),
+             "P4B_REAL_CACHE_SHAPE_INVALID")
+        panel.locator(".zapret-resource-columns").wait_for(state="visible", timeout=12000)
+        optional_note = ("Дополнительные ресурсы пока не установлены" if mode == "ru"
+                         else "Additional Resources have not been installed")
+        if data["installed"]:
+            need(optional_note not in panel.inner_text(),
+                 "P4B_INSTALLED_HAS_FALSE_ABSENCE_NOTICE")
+        else:
+            need(optional_note in panel.inner_text(),
+                 "P4B_NATIVE_ONLY_ABSENCE_NOTICE_MISSING")
+        # Each category can independently be empty. Do not mistakenly
+        # demand zero empty-state rows when the other category has files.
+        empty = "Нет установленных файлов" if mode == "ru" else "No installed files"
+        expected = []
+        for kind in ("lua", "bin"):
+            if data[kind]:
+                expected.extend(entry["name"] for entry in data[kind])
+            else:
+                expected.append(empty)
+        rendered = panel.locator("ul.zapret-resource-list > li").all_inner_texts()
+        need(rendered == expected, "P4B_NATIVE_RESOURCES_HIDDEN_OR_CHANGED_" + mode)
+        status = "ok-optional" if data["installed"] else "ok-native-only"
+    toggle.click()
+    return status
+
+
+def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
     expected = (
@@ -199,6 +250,7 @@ def check_strategies(page, mode: str) -> dict[str, str]:
          "P4_STRATEGIES_TRANSFER_INFO_MISSING_" + mode)
     help_token = "Не обязательно глобальные" if mode == "ru" else "Not necessarily global"
     verify_help_cycle(page, "frm_GeneralSettings", "zapret.strategy.extraargs", help_token)
+    cache_state = check_resource_help_cache(page, mode)
     need(field.input_value().endswith(marker), "STRATEGY_EDIT_CHANGED_BY_HELP")
     # Restore the unsaved probe before F5, avoiding any native dirty-form
     # browser warning; still assert the persisted value after actual reload.
@@ -206,7 +258,7 @@ def check_strategies(page, mode: str) -> dict[str, str]:
     f5_and_wait(page, "/api/zapret/settings/get")
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
-    return initial
+    return initial, cache_state
 
 
 def check_lab_guidance(page, mode: str) -> bool:
@@ -331,7 +383,7 @@ def browser_run(mode: str) -> None:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
             login(page)
-            strategies = check_strategies(page, mode)
+            strategies, cache_state = check_strategies(page, mode)
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -359,6 +411,8 @@ def browser_run(mode: str) -> None:
         "readonly_voice_error_checked": validated,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
+        "resource_help_cache_state": cache_state,
+        "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,
         "model_digest": identity,
         "owner_appliance_touched": False,
