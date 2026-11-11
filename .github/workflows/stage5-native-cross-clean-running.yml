@@ -337,12 +337,7 @@ jobs:
             tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; d=json.load(sys.stdin); assert "git" in d["deps"], "native package lacks git dependency"'
             # Package-only native path: resolve physical manifest dependencies
             # exclusively from the official OPNsense repository, then pkg add.
-            dependencies=$(tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c '
-import json,sys
-m=json.load(sys.stdin)
-d=m["deps"]
-assert isinstance(d,dict) and "git" in d and d
-print(" ".join(sorted(d)))')
+            dependencies=$(tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; m=json.load(sys.stdin); d=m["deps"]; assert isinstance(d,dict) and "git" in d and d; print(" ".join(sorted(d)))')
             test -n "$dependencies"
             pkg install -y -r OPNsense $dependencies
             pkg add -f "$package"
