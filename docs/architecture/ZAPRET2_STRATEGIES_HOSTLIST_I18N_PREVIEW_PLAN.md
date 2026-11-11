@@ -81,6 +81,8 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 **Gate:** A06–A09 PASS on actual source/native boundaries; no invented secondary parser or engine.
 
+**P2 implementation record:** [Python profile-policy migration and exact shell ABI](../verification/P2_PYTHON_PROFILE_POLICY.md) records the first partial P2 increment. The native resolved-file duplicate guard and full A06–A09 acceptance remain pending; the owner has not accepted P2 as a whole.
+
 ## 6. P3 — all Strategies and Voice texts in RU/EN
 
 **User scenario:** A user's OPNsense profile is RU, then EN; each full page and feedback message follows that profile, while strategy/domain/IPSET bytes stay untouched.

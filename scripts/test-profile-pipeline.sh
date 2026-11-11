@@ -5,6 +5,12 @@ set -eu
 REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BACKEND="${REPO_ROOT}/src/opnsense/scripts/OPNsense/Zapret/backend"
 
+# Source-fixture tests use an explicit Python interpreter; production uses
+# the native policy-checked python_runtime.sh adapter.
+BACKEND_DIR="${BACKEND}"
+PYTHON_RUNTIME=$(command -v python3)
+export BACKEND_DIR PYTHON_RUNTIME
+
 . "${BACKEND}/common.sh"
 . "${BACKEND}/parser.sh"
 . "${BACKEND}/registry.sh"

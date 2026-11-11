@@ -1,161 +1,45 @@
 #!/bin/sh
+# Compatibility shell API for the single Python strategy-profile policy.
+# Public API: parser_parse STRATEGY WORKDIR;
+# parser_validate_placeholder_syntax NUMBER PROFILE;
+# parser_index_placeholders PROFILE META_FILE.
+# Does not interpret Zapret2 arguments or own runtime/state.
 
-# Public API:
-#   parser_parse STRATEGY WORKDIR
-#   parser_validate_placeholder_syntax PROFILE_NO PROFILE_FILE
-#   parser_index_placeholders PROFILE_FILE META_FILE
-#
-# The parser only splits profiles and identifies generic <TYPE:NAME>
-# placeholders. It does not know target types, storage paths or dvtws2
-# options.
+parser_policy_python()
+{
+    _parser_policy_backend="${BACKEND_DIR:-${BACKEND:-${SCRIPT_DIR:-/usr/local/opnsense/scripts/OPNsense/Zapret}/backend}}"
+    _parser_policy_launcher="${PYTHON_RUNTIME:-${_parser_policy_backend%/backend}/python_runtime.sh}"
+    [ -x "${_parser_policy_launcher}" ] && [ -f "${_parser_policy_backend}/profile_policy.py" ] || {
+        common_error "qualified Python profile policy is unavailable"
+        return 1
+    }
+}
 
 parser_parse()
 {
-    local input="$1"
-    local workdir="$2"
-    local input_file="${workdir}/traffic.input"
-    local count_file="${workdir}/profile-count"
-
-    mkdir -p "${workdir}" || {
-        common_error "unable to create strategy work directory: ${workdir}"
+    _parser_input="$1"
+    _parser_dir="$2"
+    mkdir -p "${_parser_dir}" || {
+        common_error "unable to create strategy work directory: ${_parser_dir}"
         return 1
     }
-
-    # A reused work directory must never retain profiles from an older parse.
-    rm -f "${workdir}"/profile-*.conf "${count_file}"
-
-    printf '%s\n' "${input}" > "${input_file}" || {
-        common_error "unable to write parser input: ${input_file}"
-        return 1
-    }
-
-    awk -v dir="${workdir}" -v count_file="${count_file}" '
-    function fail(message) {
-        print "ERROR: " message > "/dev/stderr"
-        failed = 1
-        exit 21
-    }
-    function is_blank(value, copy) {
-        copy = value
-        gsub(/[[:space:]]/, "", copy)
-        return copy == ""
-    }
-    BEGIN {
-        profile = 1
-        output = dir "/profile-1.conf"
-        content = 0
-        failed = 0
-    }
-    {
-        # OPNsense may receive CRLF text copied from Windows. Remove only the
-        # carriage return; all other strategy text is preserved verbatim.
-        sub(/\r$/, "")
-
-        separator = $0
-        sub(/^[[:space:]]+/, "", separator)
-        sub(/[[:space:]]+$/, "", separator)
-
-        if (separator == "--new" || separator ~ /^--new=[A-Za-z0-9_.-]+$/) {
-            if (!content)
-                fail("empty strategy profile before --new at line " NR)
-            close(output)
-            profile++
-            output = dir "/profile-" profile ".conf"
-            content = 0
-            if (separator != "--new") {
-                # Keep the native new-profile name without an extra native
-                # boundary after the count-carrying parser splits profiles.
-                print "--name=" substr(separator, 7) >> output
-            }
-            next
-        }
-
-        print $0 >> output
-        if (!is_blank($0))
-            content = 1
-    }
-    END {
-        if (failed)
-            exit 21
-        if (profile == 1 && !content) {
-            # A blank user Strategy has zero ordinary profiles.
-            print 0 > count_file
-            exit
-        }
-        if (!content)
-            fail("empty strategy profile after the final --new")
-        print profile > count_file
-    }
-    ' "${input_file}" || return 1
-
-    [ -s "${count_file}" ] || {
-        common_error "parser did not produce a profile count"
-        return 1
-    }
-    # awk can open profile-1.conf on blank lines. No ghost profile survives.
-    if [ "$(cat "${count_file}")" = "0" ]; then
-        rm -f "${workdir}/profile-1.conf" || return 1
-    fi
-    cat "${count_file}"
+    printf '%s\n' "${_parser_input}" > "${_parser_dir}/traffic.input" || return 1
+    parser_policy_python || return 1
+    "${_parser_policy_launcher}" "${_parser_policy_backend}/profile_policy.py" parse "${_parser_dir}"
 }
 
 parser_validate_placeholder_syntax()
 {
-    local profile_no="$1"
-    local profile_file="$2"
-
-    [ -f "${profile_file}" ] || {
-        common_error "strategy profile ${profile_no} does not exist: ${profile_file}"
-        return 1
-    }
-
-    # Remove every valid generic placeholder from a copy of each line. Any
-    # remaining angle bracket is malformed syntax, including legacy forms such
-    # as <HOSTLIST>, missing names and unmatched brackets.
-    awk -v profile="${profile_no}" '
-    {
-        original = $0
-        clean = $0
-        gsub(/<[A-Z][A-Z0-9_-]*:[A-Za-z0-9][A-Za-z0-9_.-]*>/, "", clean)
-        if (clean ~ /[<>]/) {
-            print "ERROR: invalid placeholder syntax in profile " profile ", line " NR > "/dev/stderr"
-            print "       " original > "/dev/stderr"
-            print "       expected <TYPE:NAME>, for example <HOSTLIST:youtube>" > "/dev/stderr"
-            exit 22
-        }
-    }
-    ' "${profile_file}"
+    _parser_no="$1"
+    _parser_file="$2"
+    parser_policy_python || return 1
+    "${_parser_policy_launcher}" "${_parser_policy_backend}/profile_policy.py" validate "${_parser_no}" "${_parser_file}"
 }
 
 parser_index_placeholders()
 {
-    local profile_file="$1"
-    local meta_file="$2"
-
-    [ -f "${profile_file}" ] || {
-        common_error "cannot index placeholders; profile file does not exist: ${profile_file}"
-        return 1
-    }
-
-    # The metadata format is intentionally small and stable:
-    #   TYPE<TAB>NAME
-    # Duplicates are removed while preserving first-use order.
-    awk '
-    {
-        line = $0
-        while (match(line, /<[A-Z][A-Z0-9_-]*:[A-Za-z0-9][A-Za-z0-9_.-]*>/)) {
-            token = substr(line, RSTART + 1, RLENGTH - 2)
-            separator = index(token, ":")
-            type = substr(token, 1, separator - 1)
-            name = substr(token, separator + 1)
-            key = type SUBSEP name
-            if (!seen[key]++)
-                printf "%s\t%s\n", type, name
-            line = substr(line, RSTART + RLENGTH)
-        }
-    }
-    ' "${profile_file}" > "${meta_file}" || {
-        common_error "unable to write placeholder index: ${meta_file}"
-        return 1
-    }
+    _parser_file="$1"
+    _parser_meta="$2"
+    parser_policy_python || return 1
+    "${_parser_policy_launcher}" "${_parser_policy_backend}/profile_policy.py" index "${_parser_file}" "${_parser_meta}"
 }

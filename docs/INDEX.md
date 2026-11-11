@@ -19,8 +19,9 @@
 ## Level 2 — approved current feature requirements (11 November 2026)
 
 - [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3.
-- [Owner-approved P0–P6 development plan](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) — exact stage sequence, source ownership, native verification and A01–A19 gates. P0 is the immediate next task; P0–P6 are not implemented and a test package has not been published.
+- [Owner-approved P0–P6 development plan](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) — exact stage sequence, source ownership, native verification and A01–A19 gates. P0/P1 source work is recorded; P2 Python migration is in progress, remaining A06–A09 open; no new test package published.
 - [P0 upstream evidence and current owner canon](verification/P0_UPSTREAM_HOSTLIST_PROFILE_EVIDENCE.md) — exact source findings retained, extra native-engine witness superseded by owner's «Суслик» direction and official upstream manual; P1 uses one Python normalizer.
+- [P2 Python profile parser/normalizer integration and bounded tests](verification/P2_PYTHON_PROFILE_POLICY.md) — one Python profile policy with original shell interfaces, unchanged native order/handler behavior, P2 remaining duplicate guard explicitly outstanding.
 
 ## Level 2 — completed clean-install lifecycle ТЗ v1.3 (8–11 November 2026)
 
