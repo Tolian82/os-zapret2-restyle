@@ -157,20 +157,28 @@ def check_resource_help_cache(page, mode: str) -> str:
     toggle = native_form_toggle(page, "frm_GeneralSettings", "show_all_help")
     if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
         toggle.click()
-    # In a clean native install the runtime/cache may be absent. The API
-    # can report that with a non-200 response, and route casing is platform
-    # dependent. Capture the actual response, not only successful HTTP 200.
-    with page.expect_response(
-        lambda response: "/api/zapret/service/resourcesinventory"
-                         in response.url.lower(),
-        timeout=20000,
-    ) as request:
-        toggle.click()
-    response = request.value
-    data = response.json() if response.status == 200 else {"status": "unavailable"}
-    need(isinstance(data, dict), "P4B_REAL_CACHE_RESPONSE_INVALID")
+    # The Full Help cache read may already have fired or completed; a fresh
+    # expect_response event is not guaranteed. Still use the native toggle.
+    toggle.click()
     panel = page.locator("#zapretExtraResourceHelp")
     panel.wait_for(state="visible", timeout=12000)
+    # Read the same production cache-only API with the browser's real
+    # authenticated jQuery session. Never forge the response or mutate Config.
+    data = page.evaluate("""async () => {
+        try {
+            return await new Promise(resolve => {
+                $.ajax({
+                    type: 'POST',
+                    url: '/api/zapret/service/resourcesInventory',
+                    dataType: 'json',
+                    timeout: 10000
+                }).done(resolve).fail(() => resolve({status: 'unavailable'}));
+            });
+        } catch (error) {
+            return {status: 'unavailable'};
+        }
+    }""")
+    need(isinstance(data, dict), "P4B_REAL_CACHE_RESPONSE_INVALID")
     if data.get("status") != "ok":
         text = "Кэш списка ресурсов недоступен" if mode == "ru" else "The resource list cache is unavailable"
         panel.locator("p").first.wait_for(state="visible", timeout=12000)
