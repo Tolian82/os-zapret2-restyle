@@ -24,8 +24,8 @@
         <id>zapret.voice.telegram.args</id>
         <label>Telegram Parameters</label>
         <type>textbox</type>
-        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+        <help><![CDATA[One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> (or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. An accepted <code>--out-range</code> is optional. Only <code>--lua-desync=fake:blob=0x01020304</code> is an optional supported Lua action in this Voice form; other Lua actions are rejected.
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.discord.enabled</id>
@@ -37,8 +37,8 @@
         <id>zapret.voice.discord.args</id>
         <label>Discord Parameters</label>
         <type>textbox</type>
-        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+        <help><![CDATA[One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> (or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. An accepted <code>--out-range</code> is optional. Only <code>--lua-desync=fake:blob=0x01020304</code> is an optional supported Lua action in this Voice form; other Lua actions are rejected.
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.x.enabled</id>
@@ -50,8 +50,8 @@
         <id>zapret.voice.x.args</id>
         <label>X (Twitter) Parameters</label>
         <type>textbox</type>
-        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+        <help><![CDATA[One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> (or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. An accepted <code>--out-range</code> is optional. Only <code>--lua-desync=fake:blob=0x01020304</code> is an optional supported Lua action in this Voice form; other Lua actions are rejected.
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.sip.enabled</id>
@@ -63,8 +63,8 @@
         <id>zapret.voice.sip.args</id>
         <label>SIP (VoIP) Parameters</label>
         <type>textbox</type>
-        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+        <help><![CDATA[One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> (or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. An accepted <code>--out-range</code> is optional. Only <code>--lua-desync=fake:blob=0x01020304</code> is an optional supported Lua action in this Voice form; other Lua actions are rejected.
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove that a voice call works.]]></help>
     </field>
     <field>
         <id>zapret.voice.custom.enabled</id>
@@ -76,8 +76,8 @@
         <id>zapret.voice.custom.args</id>
         <label>Custom Parameters</label>
         <type>textbox</type>
-        <help><![CDATA[One native dvtws2 STUN profile. Include <code>--filter-udp=*</code> or ports, <code>--filter-l7=stun</code> and <code>--payload=stun</code>. Native Lua actions are optional.
-          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. This does not prove that a voice call works.]]></help>
+        <help><![CDATA[One native dvtws2 UDP/STUN profile. Required: <code>--filter-udp=*</code> (or numeric ports/ranges), <code>--filter-l7=stun</code> and <code>--payload=stun</code>. An accepted <code>--out-range</code> is optional. Only <code>--lua-desync=fake:blob=0x01020304</code> is an optional supported Lua action in this Voice form; other Lua actions are rejected.
+          The application supplies the profile name, native L3 filter and shared IPSET. Do not enter <code>--new</code>, TCP options, process flags or shell commands. Syntax validation does not prove that a voice call works.]]></help>
     </field>
     <field>
         <type>header</type>

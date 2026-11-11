@@ -150,6 +150,66 @@ for (const service of ['telegram','discord','x','sip','custom']) {
         check(checked.returncode == 0,
               "Voice per-service RU/EN IPSET popover help contract: " + checked.stderr)
 
+    # Native English help and both dynamic RU/EN popup sources must match
+    # the real VoiceCandidateValidator::parseArgs() contract: mandatory STUN
+    # selectors, only the bounded fake Lua action, no generic Lua language.
+    validator = (
+        SRC / "controllers/OPNsense/Zapret/Api/VoiceCandidateValidator.php"
+    ).read_text(encoding="utf-8")
+    check("array_shift($parts) !== '--lua-desync=fake'" in validator and
+          "foreach (['--filter-udp', '--filter-l7', '--payload'] as $required)" in validator and
+          "self::validateFake($item, $field, $errors)" in validator,
+          "Voice help policy must be grounded in actual strict native validator")
+    required_args = (
+        "--filter-udp=*", "--filter-l7=stun", "--payload=stun",
+        "--out-range", "--lua-desync=fake:blob=0x01020304",
+        "--new", "L3", "IPSET",
+    )
+    for service in SERVICES:
+        native = next((field for field in form.findall("./field")
+                       if field.findtext("id") == f"zapret.voice.{service}.args"), None)
+        help_text = native.findtext("help", "") if native is not None else ""
+        check(all(option in help_text for option in required_args) and
+              "other Lua actions are rejected" in help_text and
+              "Native Lua actions are optional" not in help_text,
+              f"{service}: Voice native help must not imply arbitrary Lua support")
+    dictionary = re.search(
+        r"^    var text = ru \? \{.*?^    \};",
+        view, re.MULTILINE | re.DOTALL,
+    )
+    check(dictionary is not None and
+          "localizedHelp = text.argsHelp" in view,
+          "Voice active popup/F5 argsHelp must be the actual RU/EN text dictionary")
+    if shutil.which("node"):
+        help_script = (
+            "var ru=true;\n" + dictionary.group(0) + "\n"
+            "const helpRu=text.argsHelp;\nru=false;\n"
+            + dictionary.group(0) + "\n"
+            "const helpEn=text.argsHelp;\n"
+            + """for (const help of [helpRu,helpEn]) {
+  for (const token of ['--filter-udp=*','--filter-l7=stun',
+       '--payload=stun','--out-range',
+       '--lua-desync=fake:blob=0x01020304','--new','L3','IPSET']) {
+    if (!help.includes(token)) throw Error('Voice args help missing '+token);
+  }
+  if (help.includes('and optional <code>--lua-desync</code> actions') ||
+      help.includes('и необязательные действия <code>--lua-desync</code>')) {
+    throw Error('unsafe generic Lua advice');
+  }
+}
+if (!helpRu.includes('другие Lua-действия') ||
+    !helpEn.includes('Other Lua actions are rejected')) {
+  throw Error('Lua restriction absent from actual RU/EN text');
+}
+"""
+        )
+        checked = subprocess.run(
+            ["node", "-"], input=help_script,
+            text=True, capture_output=True, check=False,
+        )
+        check(checked.returncode == 0,
+              "Actual Voice RU/EN STUN help must match validator: " + checked.stderr)
+
     for name in SERVICES:
         enable = model.find(f"./items/voice/{name}/enabled")
         args = model.find(f"./items/voice/{name}/args")
