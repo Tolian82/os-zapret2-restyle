@@ -184,26 +184,35 @@ $(document).ready(function () {
                     .each(function () { this.textContent = this.textContent.replace(original, titles[original]); });
             }
         });
-        Object.keys(names).forEach(function (key) {
-            var id = 'zapret.voice.' + key + '.args';
-            var input = document.getElementById(id) || document.getElementById(id.replace(/\./g, '_'));
+        // The info block has a stable id in the native form XML. Do not
+        // infer its identity from translated English prose or its row order.
+        var info = form.find('#zapretVoiceInfoSource');
+        if (info.length) info.text(text.infoText);
+        // Field identifiers are stable across locales; labels and native help
+        // icons are not. Replace only the label's visible text node, never
+        // the input node, its value or the OPNsense help icon markup.
+        function setFieldLabel(id, translated) {
+            var input = document.getElementById(id) ||
+                document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
             var label = $(input).closest('tr').find('label').first();
-            var original = names[key] + ' Parameters';
-            var translated = names[key] + (ru ? ' — параметры' : ' Parameters');
-            // Replacing the label's entire HTML would destroy native help icons.
+            if (!label.length) return;
             label.find('*').addBack().contents().filter(function () {
-                return this.nodeType === 3 && this.textContent.indexOf(original) !== -1;
-            }).each(function () {
-                this.textContent = this.textContent.replace(original, translated);
+                return this.nodeType === 3 && /\S/.test(this.textContent);
+            }).first().each(function () {
+                this.textContent = translated;
             });
-        });
+        }
+        if (ru) {
+            Object.keys(names).forEach(function (key) {
+                var display = key === 'custom' ? 'Пользовательский' : names[key];
+                setFieldLabel('zapret.voice.' + key + '.enabled', display);
+                setFieldLabel('zapret.voice.' + key + '.args', display + ' — параметры');
+                setFieldLabel('zapret.hostlist.' + key + 'ips', 'IPSET ' + display);
+            });
+        }
         form.find('tr').each(function () {
             var row = $(this);
-            if (row.text().indexOf('This page configures outgoing STUN') !== -1) {
-                var info = row.find('td').last();
-                if (info.length) info.text(text.infoText);
-            }
             var field = row.find('input,textarea,select').first();
             var id = (field.attr('id') || '').replace(/_/g, '.');
             var localizedHelp = null;
@@ -216,8 +225,7 @@ $(document).ready(function () {
             // Update the actual source used by icons and the full-help switch.
             row.find('div[data-for^="help_for_"] small').html(localizedHelp);
             var visible = row.find('.help-block').first();
-            if (visible.length && visible.text().trim() &&
-                /Select the outgoing WAN|Apply validates|One native dvtws2|Shared IPv4 or CIDR targets/.test(visible.text())) {
+            if (visible.length && visible.text().trim()) {
                 visible.html(localizedHelp);
             }
         });
