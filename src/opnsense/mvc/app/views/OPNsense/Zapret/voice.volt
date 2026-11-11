@@ -169,39 +169,32 @@ $(document).ready(function () {
     var names = {telegram:'Telegram', discord:'Discord', x:'X (Twitter)', sip:'SIP (VoIP)', custom:'Custom'};
     function localizeForm() {
         var form = $('#frm_VoiceSettings');
-        var titles = {
-            'Voice Transmission Parameters': text.parameters,
-            'About Voice Profiles': text.infoTitle,
-            'Destination IP Addresses': text.destinations
-        };
-        // Use exact original text rather than translating arbitrarily sized
-        // containers: preserve form labels, help icons and native OPNsense chrome.
-        form.find('label,th,h3,b,legend').each(function () {
-            var element = $(this);
-            var original = $.trim(element.text());
-            if (Object.prototype.hasOwnProperty.call(titles, original)) {
-                element.contents().filter(function () { return this.nodeType === 3; })
-                    .each(function () { this.textContent = this.textContent.replace(original, titles[original]); });
-            }
-        });
-        // The info block has a stable id in the native form XML. Do not
-        // infer its identity from translated English prose or its row order.
+        // OPNsense 26.7 renders section titles in <thead><b> and field
+        // captions in div.control-label > b. Identify each section via an
+        // existing model field, not via its original English caption.
+        function setSectionTitle(fieldId, translated) {
+            var field = document.getElementById(fieldId);
+            if (!field) return;
+            $(field).closest('table').children('thead').find('th b').first().text(translated);
+        }
+        setSectionTitle('zapret.voice.telegram.enabled', text.parameters);
+        setSectionTitle('zapret.hostlist.telegramips', text.destinations);
+        // Native form_input_tr renders the info field as <span id=...>.
+        // The XML <text> is not emitted into the HTML by that template.
+        form.find('#control_label_zapretVoiceInfoSource > b').text(text.infoTitle);
         var info = form.find('#zapretVoiceInfoSource');
         if (info.length) info.text(text.infoText);
-        // Field identifiers are stable across locales; labels and native help
-        // icons are not. Replace only the label's visible text node, never
-        // the input node, its value or the OPNsense help icon markup.
+        // Field IDs and native caption <b> are stable. Retain the help icon,
+        // input control and its value while translating its caption and aria-label.
         function setFieldLabel(id, translated) {
             var input = document.getElementById(id) ||
                 document.getElementById(id.replace(/\./g, '_'));
             if (!input) return;
-            var label = $(input).closest('tr').find('label').first();
+            var label = $(input).closest('tr').find('div.control-label > b').first();
             if (!label.length) return;
-            label.find('*').addBack().contents().filter(function () {
-                return this.nodeType === 3 && /\S/.test(this.textContent);
-            }).first().each(function () {
-                this.textContent = translated;
-            });
+            label.text(translated);
+            // aria-label comes from the original native XML caption.
+            $(input).attr('aria-label', translated);
         }
         if (ru) {
             Object.keys(names).forEach(function (key) {

@@ -11,7 +11,8 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 form = ET.parse(root / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/forms/general.xml").getroot()
 view = (root / "src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt").read_text()
-ids = [field.findtext("id") for field in form.findall("./field") if field.findtext("id")]
+ids = [field.findtext("id") for field in form.findall("./field")
+       if field.findtext("id") and field.findtext("type") != "info"]
 targets = {
     "zapret.general.enabled", "zapret.general.waninterface", "zapret.general.divertport",
     "zapret.strategy.trafficargs", "zapret.strategy.extraargs", "zapret.hostlist.mode",
@@ -22,19 +23,33 @@ assert len(ids) == len(set(ids)) and set(ids) == targets | {"zapret.hostlist.exc
 for field in form.findall("./field"):
     if field.findtext("id") in targets:
         assert field.findtext("label") and field.findtext("help"), "English form fallback lost"
-info = next(field.findtext("text", "") for field in form.findall("./field")
-            if field.findtext("type") == "info")
-assert info.count('id="zapretStrategiesInfoSource"') == 1
+info_field = next(field for field in form.findall("./field")
+                  if field.findtext("type") == "info")
+info = info_field.findtext("text", "")
+assert info_field.findtext("id") == "zapretStrategiesInfoSource"
+assert '<span id="zapretStrategiesInfoSource">' not in info
 assert "blockcheck2" in info and "--new" in info
 assert "function localizeStrategiesForm()" in view
 assert "const info = form.find('#zapretStrategiesInfoSource');" in view
-assert "if (info.length) info.html(strategiesInfoRU);" in view
+assert "const strategiesInfoEN =" in view
+assert "if (info.length) info.html(isRussian ? strategiesInfoRU : strategiesInfoEN);" in view
+assert "form.find('#control_label_zapretStrategiesInfoSource > b').text('Как найти стратегию')" in view
+for field_id, translated in (
+    ("zapret.general.enabled", "Общие настройки"),
+    ("zapret.strategy.trafficargs", "Стратегия обхода DPI"),
+    ("zapret.hostlist.mode", "Цели"),
+):
+    assert f"['{field_id}', '{translated}']" in view
+assert "closest('table').children('thead').find('th b').first().text(entry[1]);" in view
 assert "formatTokenizersUI();\n                localizeStrategiesForm();" in view
 assert "localizeExcludeIPSet();" in view
 assert "const isRussian = ((document.documentElement.lang || '')" in view
 assert "row.find('div[data-for^=\"help_for_\"] small').html(help);" in view
 assert "const visible = row.find('.help-block').first();" in view
-assert "this.textContent = strategiesLabelsRU[id];" in view
+assert "row.find('div.control-label > b').first().text(strategiesLabelsRU[id]);" in view
+assert "$(input).attr('aria-label', strategiesLabelsRU[id]);" in view
+assert "row.find('div.control-label > b').first().text('Исключить IPSet');" in view
+assert "row.find('label')" not in view, "OPNsense 26.7 has no HTML label for form captions"
 assert "row.addClass('zapret-exclude-ipset-inline-help-only')" in view
 assert "visibility: hidden !important;" in view
 segment = view.split("function localizeStrategiesForm()", 1)[1].split("function localizeExcludeIPSet()", 1)[0]

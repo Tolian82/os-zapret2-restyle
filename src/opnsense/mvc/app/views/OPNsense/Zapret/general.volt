@@ -197,23 +197,43 @@
             'сосуществовать. Независимые профили разделяются <code>--new</code>. ' +
             'Не заменяйте существующую многопрофильную стратегию без проверки объединения.';
 
+        const strategiesInfoEN =
+            'Run <b>blockcheck2</b> from the ' +
+            '<a href="/ui/zapret/diagnostics">Diagnostics</a> page or via SSH:<br/>' +
+            '<code>cd /usr/local/etc/zapret2 &amp;&amp; env IFACE_WAN=your_wan_if /bin/sh blockcheck2.sh</code><br/><br/>' +
+            'Review the working strategy from the <b>SUMMARY</b> output and add the profile ' +
+            'to the unified <b>Traffic Strategy</b> field. HTTP, HTTPS/TLS, TCP and UDP ' +
+            'profiles may coexist; separate independent profiles with <code>--new</code>. ' +
+            'Do not overwrite an existing multi-profile strategy without checking how to merge.';
+
         function localizeStrategiesForm() {
-            if (!isRussian) return;
             const form = $('#frm_GeneralSettings');
+            // form_input_tr renders <span id=...> for info; XML <text>
+            // is documentation, NOT a rendered DOM anchor.
             const info = form.find('#zapretStrategiesInfoSource');
-            if (info.length) info.html(strategiesInfoRU);
+            if (info.length) info.html(isRussian ? strategiesInfoRU : strategiesInfoEN);
+            if (!isRussian) return;
+            // Native section title lives in the <thead> of its field's
+            // table. Preserve the existing collapse icon and behavior.
+            [
+                ['zapret.general.enabled', 'Общие настройки'],
+                ['zapret.strategy.trafficargs', 'Стратегия обхода DPI'],
+                ['zapret.hostlist.mode', 'Цели']
+            ].forEach(function(entry) {
+                const field = document.getElementById(entry[0]);
+                if (!field) return;
+                $(field).closest('table').children('thead').find('th b').first().text(entry[1]);
+            });
+            form.find('#control_label_zapretStrategiesInfoSource > b').text('Как найти стратегию');
             Object.keys(strategiesLabelsRU).forEach(function(id) {
                 const input = document.getElementById(id) ||
                               document.getElementById(id.replace(/\./g, '_'));
                 if (!input) return;
                 const row = $(input).closest('tr');
-                const label = row.find('label').first();
-                // Retain native help icons and the original input/value.
-                label.find('*').addBack().contents().filter(function() {
-                    return this.nodeType === 3 && /\S/.test(this.textContent);
-                }).first().each(function() {
-                    this.textContent = strategiesLabelsRU[id];
-                });
+                // Stock OPNsense form_input_tr uses div.control-label > b,
+                // not an HTML <label> element. Never replace help icons.
+                row.find('div.control-label > b').first().text(strategiesLabelsRU[id]);
+                $(input).attr('aria-label', strategiesLabelsRU[id]);
                 const help = strategiesHelpRU[id];
                 // Source for both native popup and F5 Full Help.
                 row.find('div[data-for^="help_for_"] small').html(help);
@@ -234,12 +254,8 @@
             // Scoped to one field and both RU/EN; no other native help moves.
             row.addClass('zapret-exclude-ipset-inline-help-only');
             if (!isRussian) return;
-            const caption = row.find('label').first();
-            caption.contents().filter(function() {
-                return this.nodeType === 3 && this.textContent.indexOf('Exclude IPSet') !== -1;
-            }).each(function() {
-                this.textContent = this.textContent.replace('Exclude IPSet', 'Исключить IPSet');
-            });
+            row.find('div.control-label > b').first().text('Исключить IPSet');
+            $(field).attr('aria-label', 'Исключить IPSet');
             const help = 'Глобальное исключение IP-адресов назначения из обхода DPI после подключения нативной политики. ' +
                 'По одному IPv4/IPv6-адресу или CIDR-сети в строке. Пересекающиеся и соседние сети объединяются. ' +
                 'Недопустимы имена доменов, индексы зон IPv6, 0.0.0.0/0, ::/0 и эквивалентный полный охват сети. ' +

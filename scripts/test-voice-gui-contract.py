@@ -36,7 +36,8 @@ def main() -> None:
           "if (!isRussian) return;" in strategies_view and
           "row.find('.help-block').first()" in strategies_view,
           "Exclude IPSet RU/EN inline-only help layout regressed")
-    fields = [f.findtext("id") for f in form.findall("./field") if f.findtext("id")]
+    fields = [f.findtext("id") for f in form.findall("./field")
+              if f.findtext("id") and f.findtext("type") != "info"]
     required = []
     for name in SERVICES:
         required.extend((f"zapret.voice.{name}.enabled", f"zapret.voice.{name}.args"))
@@ -67,15 +68,27 @@ def main() -> None:
           "localizedHelp = text.enableHelp" in view and
           "info.text(text.infoText)" in view,
           "RU/EN dynamic help differs from actual shared Apply")
-    check("zapretVoiceInfoSource" in info and "form.find('#zapretVoiceInfoSource')" in view and
-          "row.text().indexOf('This page configures outgoing STUN')" not in view,
-          "Voice info translation must use its stable native form anchor")
+    info_field = next((f for f in form.findall("./field")
+                       if f.findtext("type") == "info"), None)
+    check(info_field is not None and info_field.findtext("id") == "zapretVoiceInfoSource"
+          and '<span id="zapretVoiceInfoSource">' not in info
+          and "form.find('#zapretVoiceInfoSource')" in view
+          and "form.find('#control_label_zapretVoiceInfoSource > b').text(text.infoTitle)" in view,
+          "Native OPNsense info field must use a real span id and translated caption")
+    check("setSectionTitle('zapret.voice.telegram.enabled', text.parameters)" in view and
+          "setSectionTitle('zapret.hostlist.telegramips', text.destinations)" in view and
+          "closest('table').children('thead').find('th b').first().text(translated)" in view and
+          "var titles = {" not in view,
+          "Voice section headings must use the actual native thead from stable form IDs")
     check("function setFieldLabel(id, translated)" in view and
           "setFieldLabel('zapret.voice.' + key + '.enabled', display)" in view and
           "setFieldLabel('zapret.voice.' + key + '.args', display + ' — параметры')" in view and
           "setFieldLabel('zapret.hostlist.' + key + 'ips', 'IPSET ' + display)" in view and
-          "label.find('*').addBack().contents().filter" in view,
-          "All 15 Voice fields must localize by id without modifying inputs or help icons")
+          "var label = $(input).closest('tr').find('div.control-label > b').first()" in view and
+          "label.text(translated)" in view and
+          "$(input).attr('aria-label', translated)" in view and
+          "closest('tr').find('label')" not in view,
+          "All 15 Voice captions must use the real OPNsense 26.7 div.control-label > b, with accessible labels")
     check("var original = names[key] + ' Parameters'" not in view and
           "visible.text().trim()" in view and
           "Shared IPv4 or CIDR targets/.test(visible.text())" not in view,
