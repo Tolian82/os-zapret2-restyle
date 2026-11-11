@@ -155,19 +155,17 @@ def verify_help_cycle(page, form_id: str, field: str, token: str) -> None:
 def check_resource_help_cache(page, mode: str) -> str:
     """Real native Help + backend response, without mocked routing or mutation."""
     toggle = native_form_toggle(page, "frm_GeneralSettings", "show_all_help")
-    if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
-        toggle.click()
-    # The Full Help cache read may already have fired or completed; a fresh
-    # expect_response event is not guaranteed. Still use the native toggle.
-    toggle.click()
-    panel = page.locator("#zapretExtraResourceHelp")
-    # The cache list lives under a separate collapsible Service table.
-    # Open it using its real GUI header, never force CSS visibility.
+    # Help and Service collapse are independent native controls. Open the
+    # Service table first, and never toggle an already-on help switch OFF.
     service_body = page.locator("#zapretServiceBody")
     need(service_body.count() == 1, "P4B_SERVICE_BODY_MISSING")
     if not service_body.is_visible():
         page.locator("#zapretServiceHeader").click()
         service_body.wait_for(state="visible", timeout=6000)
+    was_on = "fa-toggle-on" in (toggle.get_attribute("class") or "")
+    if not was_on:
+        toggle.click()
+    panel = page.locator("#zapretExtraResourceHelp")
     if not panel.is_visible():
         state = page.evaluate("""() => ({
             icon_on: document.getElementById('show_all_help_frm_GeneralSettings')
@@ -230,7 +228,9 @@ def check_resource_help_cache(page, mode: str) -> str:
         rendered = panel.locator("ul.zapret-resource-list > li").all_inner_texts()
         need(rendered == expected, "P4B_NATIVE_RESOURCES_HIDDEN_OR_CHANGED_" + mode)
         status = "ok-optional" if data["installed"] else "ok-native-only"
-    toggle.click()
+    # Leave the user's real Full Help switch as it was before this test.
+    if not was_on:
+        toggle.click()
     return status
 
 

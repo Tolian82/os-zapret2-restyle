@@ -39,3 +39,7 @@ The CI hygiene gate detected a release-note link relative to the wrong directory
 ## Real native section-collapse check (Chromium run #43085166268)
 
 The clean-installed Chromium test reached native Full Help but found its Lua/BIN panel hidden. The actual Help panel is nested inside the separately collapsible Service table, whereas the Full Help toggle is in Settings. The browser test now expands the Service table with its genuine header click when needed, without changing styles or synthesizing elements. If the panel remains hidden, the test fails quickly with non-sensitive evidence: native help icon on/off, panel display and Service table visibility. A product integration defect must still fail; native PASS is not claimed before the new exact-head execution.
+
+## Native help switch normalization (after run #43086394142)
+
+The exact Chromium refusal reported icon_on=False with the separate Service body already visible, so the prior double-toggle fixture was not a valid proof of a broken Help renderer. The fixture now opens a collapsed Service table with its real header, records whether the native OPNsense Full Help icon was already ON, clicks it only if it was OFF, checks the actual panel and cache-only API, and restores the icon only when the fixture itself changed it. A remaining hidden panel still fails with sanitized icon/visibility diagnostics. No forced DOM styling or product runtime modification.
