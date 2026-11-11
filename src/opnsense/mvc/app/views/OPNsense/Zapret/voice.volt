@@ -24,6 +24,9 @@ $(document).ready(function () {
         sharedApplyRequiresReview: 'Общее применение требует проверки Config, службы и IPFW',
         commonConfigMismatch: 'Сохранённый Config не совпадает с активным профилем — требуется проверка',
         commonProfileUnverified: 'Профиль не подтверждён — проверьте Config и runtime',
+        commonRuntimePartial: 'Общий движок запущен частично: dvtws2 и монитор не согласованы — проверьте службу',
+        commonRuntimeReleaseUnverified: 'Активный выпуск движка не соответствует проверенным файлам — требуется проверка',
+        commonStoppedKernelObjects: 'Служба остановлена, но в ядре остались объекты IPFW — проверьте владельца правил',
         savedVoiceOn: 'Сохранено: ВКЛ', savedVoiceOff: 'Сохранено: ВЫКЛ',
         voiceActive: 'STUN-профиль, dvtws2 и IPFW подтверждены; звонок не проверен',
         voiceStopped: 'Служба остановлена; профиль сохранён',
@@ -60,6 +63,9 @@ $(document).ready(function () {
         sharedApplyRequiresReview: 'Shared Apply needs Config, service and IPFW review',
         commonConfigMismatch: 'Saved Config differs from active profile — review required',
         commonProfileUnverified: 'Profile not verified — inspect Config and runtime',
+        commonRuntimePartial: 'Shared engine is only partially running: dvtws2 and monitor disagree — inspect the service',
+        commonRuntimeReleaseUnverified: 'Active engine release files are not verified — inspection required',
+        commonStoppedKernelObjects: 'Service is stopped but IPFW kernel objects remain — inspect rule ownership',
         savedVoiceOn: 'Saved: ON', savedVoiceOff: 'Saved: OFF',
         voiceActive: 'STUN profile, dvtws2 and IPFW verified; call untested',
         voiceStopped: 'Service stopped; profile saved',
@@ -617,6 +623,36 @@ $(document).ready(function () {
                      profile.rule >= 1 && profile.rule <= 65534));
         });
     }
+    // Only the known native inspect conditions are translated. These details
+    // are read-only explanations, never authority to unlock Start/Stop/Apply.
+    // An unknown or forged condition is deliberately not shown as raw text.
+    function localizeVoiceInspectionDetail(state, condition, unverified) {
+        if (unverified || state === 'unverified-profiles') {
+            return text.commonProfileUnverified;
+        }
+        if (state === 'foreign-or-modified-rules') {
+            return condition === 'common-stopped-with-kernel-objects'
+                ? text.commonStoppedKernelObjects : '';
+        }
+        if (state !== 'interrupted') {
+            return '';
+        }
+        var details = {
+            'shared-apply-prepared': text.sharedApplyPrepared,
+            'shared-apply-activating': text.sharedApplyActivating,
+            'shared-apply-activated': text.sharedApplyActivated,
+            'shared-apply-config-saved': text.sharedApplyConfigSaved,
+            'shared-apply-restore-failed': text.sharedApplyRestoreFailed,
+            'shared-apply-requires-review': text.sharedApplyRequiresReview,
+            'common-config-mismatch': text.commonConfigMismatch,
+            'common-profile-unverified': text.commonProfileUnverified,
+            'common-runtime-partial': text.commonRuntimePartial,
+            'common-runtime-unverified-release': text.commonRuntimeReleaseUnverified
+        };
+        return typeof condition === 'string' &&
+            Object.prototype.hasOwnProperty.call(details, condition)
+                ? details[condition] : '';
+    }
     function refreshVoiceIPFW() {
         var epoch = ++voiceInspectionEpoch;
         voiceInspectionState = null;
@@ -634,24 +670,9 @@ $(document).ready(function () {
                             state === 'interrupted' ? text.ipfwInterrupted :
                             state === 'inspection-error' ? text.ipfwUnknown :
                             text.ipfwBlocked;
-                var details = {
-
-                    'shared-apply-prepared': text.sharedApplyPrepared,
-                    'shared-apply-activating': text.sharedApplyActivating,
-                    'shared-apply-activated': text.sharedApplyActivated,
-                    'shared-apply-config-saved': text.sharedApplyConfigSaved,
-                    'shared-apply-restore-failed': text.sharedApplyRestoreFailed,
-                    'shared-apply-requires-review': text.sharedApplyRequiresReview,
-                    'common-config-mismatch': text.commonConfigMismatch,
-                    'common-profile-unverified': text.commonProfileUnverified
-                };
-                $('#voiceIPFWDetail').text(
-                    unverified ? text.commonProfileUnverified :
-                    state === 'interrupted' && reply &&
-                    typeof reply.condition === 'string' &&
-                    Object.prototype.hasOwnProperty.call(details, reply.condition)
-                        ? details[reply.condition] : ''
-                );
+                $('#voiceIPFWDetail').text(localizeVoiceInspectionDetail(
+                    state, reply && reply.condition, unverified
+                ));
                 showVoiceProfileObservations(unverified ? null : reply);
                 // A ready/stopped code without all five matching attested
                 // profiles (stale or partial common owner) is not actionable.
