@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 
 from extra_resources_reconcile import installed_resources, previous_metadata, tracked_resources
@@ -120,7 +121,32 @@ def read_cached(state: Path) -> dict:
         raise InventoryCacheError("invalid inventory cache") from exc
 
 
+def _ensure_state_for_refresh(state: Path) -> None:
+    """Bootstrap absent storage only; preserve fail-closed unsafe-path checks."""
+    if state.is_symlink() or state.parent.is_symlink():
+        raise InventoryCacheError("unsafe extra-resource state directory")
+    if state.exists():
+        if not state.is_dir():
+            raise InventoryCacheError("unsafe extra-resource state directory")
+        return
+    missing = []
+    current = state
+    while not current.exists() and not current.is_symlink():
+        missing.append(current)
+        current = current.parent
+    if current.is_symlink() or not current.is_dir():
+        raise InventoryCacheError("unsafe extra-resource state directory")
+    for directory in reversed(missing):
+        parent_info = directory.parent.lstat()
+        if (not stat.S_ISDIR(parent_info.st_mode) or
+                parent_info.st_uid != os.geteuid() or
+                parent_info.st_mode & 0o022):
+            raise InventoryCacheError("unsafe extra-resource state parent")
+        directory.mkdir(mode=0o700)
+
+
 def refresh(root: Path = RUNTIME, state: Path = STATE) -> dict:
+    _ensure_state_for_refresh(state)
     data = generate(root, state)
     publish(data, state)
     return data
