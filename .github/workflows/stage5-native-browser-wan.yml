@@ -72,11 +72,33 @@ jobs:
              command -v qemu-img >/dev/null 2>&1; then
             echo "P3_QEMU_HOST=already_installed"
           elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
-            echo "::error title=Runner DNS outage::Cannot resolve Ubuntu apt mirror required to install QEMU; installed OPNsense/Chromium NOT TESTED" >&2
-            exit 1
+            # The Ubuntu-hosted runner's Azure mirror can fail independently of
+            # the official archive and security mirrors. Preserve apt's signed
+            # package verification and replace ONLY the disposable runner's
+            # mirrors when both official alternatives are actually reachable.
+            . /etc/os-release
+            suite="${VERSION_CODENAME:?missing Ubuntu codename}"
+            if timeout 8 getent ahostsv4 archive.ubuntu.com >/dev/null &&
+               timeout 8 getent ahostsv4 security.ubuntu.com >/dev/null &&
+               curl -fIsS --connect-timeout 5 --max-time 10 "https://archive.ubuntu.com/ubuntu/dists/${suite}/InRelease" >/dev/null; then
+              source_list=/etc/apt/sources.list.d/ubuntu.sources
+              if ! test -f "$source_list" ||
+                 ! grep -qF 'mirror+file:/etc/apt/apt-mirrors.txt' "$source_list"; then
+                echo "::error title=Runner apt source unexpected::Cannot safely switch to verified official Ubuntu mirror; OPNsense NOT TESTED" >&2
+                exit 1
+              fi
+              sudo sed -i 's|mirror+file:/etc/apt/apt-mirrors.txt|https://archive.ubuntu.com/ubuntu|g' "$source_list"
+              echo "P3_QEMU_HOST=official_archive_fallback"
+            else
+              echo "::error title=Runner DNS outage::Azure mirror unavailable and no verified official archive fallback; installed OPNsense/Chromium NOT TESTED" >&2
+              exit 1
+            fi
           else
             echo "P3_QEMU_HOST=apt_mirror_resolves"
           fi
+          # Bound apt retries even after a successful host-side DNS check.
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99zapret-ci-bounded-network >/dev/null
       - name: Native OPNsense 26.7 - cached dependencies, genuine current Mk pkg clean install
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
