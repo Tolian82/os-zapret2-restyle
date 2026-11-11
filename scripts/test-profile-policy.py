@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -89,6 +90,80 @@ class ProfilePolicyTests(unittest.TestCase):
             self.assertEqual(zero.stdout.strip(), '0')
             self.assertFalse(list(directory.glob('profile-*.conf')))
             self.assertEqual((directory / 'profile-count').read_text(), '0\n')
+
+    def test_resolved_list_file_identity_and_final_argv_adapter(self):
+        with tempfile.TemporaryDirectory(prefix='resolved-list-policy-') as tmp:
+            root = Path(tmp)
+            static = root / 'static'
+            release = root / 'candidate'
+            managed = release / 'managed'
+            reference = Path('/var/db/zapret2-restyle/runtime/next')
+            static.mkdir()
+            managed.mkdir(parents=True)
+            for name in ('hostlist-user.txt', 'hostlist-youtube.txt', 'ipset-telegram.txt',
+                         'ipset-exclude.txt'):
+                (managed / name).write_text('example.com\\n')
+            (managed / 'hostlist-alias.txt').symlink_to('hostlist-user.txt')
+            (static / 'other.txt').write_text('example.org\\n')
+            host = f'--hostlist={reference}/managed/hostlist-user.txt'
+            alias = f'--hostlist={reference}/managed/hostlist-alias.txt'
+            other = f'--hostlist={reference}/managed/hostlist-youtube.txt'
+            ipset = f'--ipset={reference}/managed/ipset-telegram.txt'
+            excluded = f'--hostlist-exclude={reference}/managed/hostlist-user.txt'
+            ip_exclude = f'--ipset-exclude={reference}/managed/ipset-exclude.txt'
+            cases = (
+                (f'--filter-tcp=80,443 --filter-l7=http,tls {host} '
+                 '--payload=tls_client_hello --lua-desync=fake '
+                 '--payload=http_req --lua-desync=multisplit', None),
+                (f'{host} {host}', 'DUPLICATE_RESOLVED_LIST profile=1 option=--hostlist'),
+                (f'{host} --extra=anything {alias}', 'DUPLICATE_RESOLVED_LIST'),
+                (f'{host} --new --filter-tcp=80 {host}', None),
+                (f'{host} --new=other-tcp {alias}', None),
+                (f'{host} {other} {ipset} {excluded}', None),
+                (f'{ipset} {ipset}', 'DUPLICATE_RESOLVED_LIST'),
+                (f'{host} {excluded}', None),
+                (f'{host} --new=voice-stun {ip_exclude} --new {ip_exclude}', None),
+                (f'--hostlist={static}/other.txt --hostlist={static}/./other.txt',
+                 'DUPLICATE_RESOLVED_LIST'),
+                (f'--hostlist={reference}/managed/missing.txt', 'LIST_REFERENCE_UNSAFE'),
+                ('--hostlist=relative/path', 'LIST_REFERENCE_INVALID'),
+            )
+            for text, failure in cases:
+                with self.subTest(args=text, failure=failure):
+                    if failure:
+                        with self.assertRaisesRegex(policy.ProfilePolicyError, failure):
+                            policy.check_resolved_lists(text.encode(), static, reference, release)
+                    else:
+                        policy.check_resolved_lists(text.encode(), static, reference, release)
+            (managed / 'outside.txt').symlink_to('/etc/passwd')
+            with self.assertRaisesRegex(policy.ProfilePolicyError, 'LIST_REFERENCE_UNSAFE'):
+                policy.check_resolved_lists(
+                    f'--hostlist={reference}/managed/outside.txt'.encode(),
+                    static, reference, release)
+            argsfile = root / 'dvtws.args'
+            argsfile.write_text(f'{host}\\n{alias}\\n')
+            before = argsfile.read_bytes()
+            argv = [str(argsfile), str(static), str(reference), str(release)]
+            cli = subprocess.run([sys.executable, str(FILE), 'check-lists', *argv],
+                                 capture_output=True, text=True)
+            self.assertNotEqual(cli.returncode, 0)
+            self.assertIn('DUPLICATE_RESOLVED_LIST', cli.stderr)
+            validator = ROOT / 'src/opnsense/scripts/OPNsense/Zapret/backend/validator.sh'
+            environment = dict(os.environ, PYTHON_RUNTIME=sys.executable,
+                               BACKEND_DIR=str(FILE.parent))
+            shell = subprocess.run(
+                ['sh', '-c', '. "$1"; shift; validator_check_resolved_lists "$@"',
+                 'sh', str(validator), *argv],
+                env=environment, capture_output=True, text=True)
+            self.assertNotEqual(shell.returncode, 0)
+            self.assertIn('DUPLICATE_RESOLVED_LIST', shell.stderr)
+            self.assertEqual(argsfile.read_bytes(), before)
+            argsfile.write_text(f'{host}\\n--new=second\\n{alias}\\n')
+            success = subprocess.run(
+                ['sh', '-c', '. "$1"; shift; validator_check_resolved_lists "$@"',
+                 'sh', str(validator), *argv],
+                env=environment, capture_output=True, text=True)
+            self.assertEqual(success.returncode, 0, success.stderr)
 
 
 if __name__ == '__main__':

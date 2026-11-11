@@ -2,8 +2,9 @@
 """One Python implementation of the existing staged strategy-profile contract.
 
 Parser and normalizer shell entrypoints keep their external ABI; Python handles
---new boundaries, placeholder syntax/indexing, and selector profile expansion.
-This module does not interpret dvtws2 options, own Config, IPFW, FD9 or Apply.
+--new boundaries, placeholder syntax/indexing, selector profile expansion and
+a bounded resolved-file duplicate guard. Native dvtws2 grammar, Config, IPFW,
+FD9 and Apply remain under their established owners.
 """
 from __future__ import annotations
 
@@ -207,6 +208,67 @@ def command_index(source: Path, target: Path) -> None:
         staged.unlink(missing_ok=True)
 
 
+
+def check_resolved_lists(data: bytes, static_root: Path, reference_root: Path,
+                         source_root: Path) -> None:
+    """Reject duplicate resolved native list files only within one profile/collection.
+
+    This is a bounded final-argv identity guard, not a parser for dvtws2
+    filters, payloads, imports, templates or Lua handler semantics.
+    """
+    try:
+        tokens = data.decode("utf-8").split()
+    except UnicodeDecodeError as exc:
+        raise ProfilePolicyError("LIST_REFERENCE_INVALID_UTF8") from exc
+    profile = 1
+    position = 0
+    seen: dict[tuple[str, Path], int] = {}
+    options = {"--hostlist", "--hostlist-exclude", "--ipset", "--ipset-exclude"}
+    for token in tokens:
+        if token == "--new" or token.startswith("--new="):
+            profile += 1
+            position = 0
+            seen.clear()
+            continue
+        position += 1
+        option, equals, value = token.partition("=")
+        if not equals or option not in options:
+            continue
+        path = Path(value)
+        if not value or not path.is_absolute():
+            raise ProfilePolicyError(
+                f"LIST_REFERENCE_INVALID profile={profile} option={option} position={position}"
+            )
+        if path.is_relative_to(reference_root):
+            source = source_root / path.relative_to(reference_root)
+            root = source_root
+        elif path.is_relative_to(static_root):
+            source = path
+            root = static_root
+        else:
+            raise ProfilePolicyError(
+                f"LIST_REFERENCE_UNMAPPED profile={profile} option={option} position={position}"
+            )
+        try:
+            resolved = source.resolve(strict=True)
+            allowed = root.resolve(strict=True)
+            if not resolved.is_relative_to(allowed) or not resolved.is_file():
+                raise ProfilePolicyError(
+                    f"LIST_REFERENCE_UNSAFE profile={profile} option={option} position={position}"
+                )
+        except (OSError, RuntimeError) as exc:
+            raise ProfilePolicyError(
+                f"LIST_REFERENCE_UNSAFE profile={profile} option={option} position={position}"
+            ) from exc
+        key = (option, resolved)
+        if key in seen:
+            raise ProfilePolicyError(
+                f"DUPLICATE_RESOLVED_LIST profile={profile} option={option} "
+                f"first={seen[key]} repeat={position}"
+            )
+        seen[key] = position
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="command", required=True)
@@ -221,6 +283,11 @@ def main(argv: list[str] | None = None) -> int:
     normalize = subs.add_parser("normalize")
     normalize.add_argument("workdir", type=Path)
     normalize.add_argument("count", type=int)
+    check_lists = subs.add_parser("check-lists")
+    check_lists.add_argument("args_file", type=Path)
+    check_lists.add_argument("static_root", type=Path)
+    check_lists.add_argument("reference_root", type=Path)
+    check_lists.add_argument("source_root", type=Path)
     args = parser.parse_args(argv)
     try:
         if args.command == "parse":
@@ -229,6 +296,9 @@ def main(argv: list[str] | None = None) -> int:
             validate_syntax(_safe_file(args.source), args.number)
         elif args.command == "index":
             command_index(args.source, args.target)
+        elif args.command == "check-lists":
+            check_resolved_lists(_safe_file(args.args_file), args.static_root,
+                                 args.reference_root, args.source_root)
         else:
             print(command_normalize(args.workdir, args.count))
         return 0
