@@ -152,8 +152,37 @@ $(document).ready(function () {
 
     var guidance = $('#strategyLabSummary').empty();
     strategyLabGuidance.forEach(function (paragraph, index) {
-        $('<p/>').text(paragraph).css('margin-bottom', index === strategyLabGuidance.length - 1 ? 0 : '10px').appendTo(guidance);
+        var item = $('<p/>').css('margin-bottom',
+            index === strategyLabGuidance.length - 1 ? 0 : '10px');
+        // The paragraphs are static translations. Render only the native
+        // option tokens as <code>, like Voice's parameter help.
+        paragraph.split(/(--filter-l7|--payload|--in-range|--out-range|--lua-desync|--new)/g)
+            .forEach(function (part) {
+                if (/^--(?:filter-l7|payload|in-range|out-range|lua-desync|new)$/.test(part)) {
+                    item.append($('<code/>').text(part));
+                } else {
+                    item.append(document.createTextNode(part));
+                }
+            });
+        item.appendTo(guidance);
     });
+    // Lab is not a native OPNsense form; provide a matching explicit Help
+    // toggle without touching active jobs, mode, service or results.
+    var labHelpOn = false;
+    function updateLabHelp() {
+        guidance.toggle(labHelpOn);
+        $('#strategyLabHelpToggle')
+            .attr('aria-pressed', labHelpOn ? 'true' : 'false')
+            .find('i').toggleClass('fa-toggle-on', labHelpOn)
+                      .toggleClass('fa-toggle-off', !labHelpOn);
+    }
+    $('#strategyLabHelpLabel').text(isRussian ? 'справка' : 'help');
+    $('#strategyLabHelpToggle').on('click', function (event) {
+        event.preventDefault();
+        labHelpOn = !labHelpOn;
+        updateLabHelp();
+    });
+    updateLabHelp();
     $('#strategyLabUdpHelp').text(ui.udpHelp);
     $('#strategyLabQuicHelp').text(ui.quicHelp);
     applyStaticLocalization();
@@ -672,16 +701,47 @@ $(document).ready(function () {
     text-overflow:ellipsis;
     white-space:nowrap;
 }
+/* The same native Voice parameter-help scale is used on every page. */
+#strategyLabSummary.zapret-context-help {
+    font-family: inherit;
+    font-size: 12px;
+    line-height: 1.5;
+    font-weight: 400;
+    margin: 10px 0 14px;
+}
+.zapret-lab-header { display: flex; justify-content: space-between; align-items: center; }
+.zapret-lab-header h3 { margin-right: 12px; }
+.zapret-lab-help-toggle {
+    background: transparent;
+    color: inherit;
+    border: 0;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 3px 7px;
+}
+.zapret-lab-help-toggle .fa { font-size: 18px; }
+.zapret-lab-help-toggle:focus-visible { outline: 2px solid currentColor; }
 </style>
 
 <div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
-<div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
+<div class="content-box"><div class="content-box-header zapret-lab-header">
+    <h3>{{ lang._('Strategy Lab') }}</h3>
+    <button type="button" id="strategyLabHelpToggle" class="zapret-lab-help-toggle"
+        aria-controls="strategyLabSummary" aria-pressed="false">
+        <span id="strategyLabHelpLabel">help</span>
+        <i class="fa fa-toggle-off" aria-hidden="true"></i>
+    </button>
+</div><div class="content-box-main">
 <div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain / IP') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org / 203.0.113.10 / 2001:db8::10"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div><div class="strategy-lab-mode-control"><span id="strategyLabIpv6Label">IPv6</span><label class="strategy-lab-ipv6-box"><input type="checkbox" id="strategyLabIpv6Enabled" value="1" aria-label="IPv6" /></label></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
 <tr id="strategyLabServiceHostRow" style="display:none;"><td class="zapret-field-label">Host / SNI (optional)</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput" placeholder="example.com"/></td><td colspan="2"><small id="strategyLabServiceHostHelp"></small></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><div class="strategy-lab-file-picker"><button type="button" class="btn btn-default" id="strategyLabUdpPayloadButton" aria-controls="strategyLabUdpPayload">Choose file</button><span id="strategyLabUdpPayloadName" class="text-muted" aria-live="polite">No file selected</span><input type="file" class="strategy-lab-native-file-input" id="strategyLabUdpPayload" tabindex="-1" aria-hidden="true"/></div><small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>
 <tr id="strategyLabQuicRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Enable QUIC') }}</td><td class="zapret-field-value"><input type="checkbox" id="strategyLabEnableQuic" disabled/></td><td colspan="2"><small id="strategyLabQuicHelp"></small></td></tr></tbody></table></div>
-<div id="strategyLabSummary"></div>
+<div id="strategyLabSummary" class="zapret-context-help" style="display:none"></div>
 <div class="form-inline" id="strategyLabSavedJobControls" style="margin:10px 0;">
     <label for="strategyLabSavedJobInput" id="strategyLabSavedJobLabel">Saved job:</label>
     <input type="text" class="form-control input-sm" id="strategyLabSavedJobInput" placeholder="job.XXXXXXXX" maxlength="100" autocomplete="off" style="max-width:220px;" />

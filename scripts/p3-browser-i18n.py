@@ -340,8 +340,18 @@ def check_lab_guidance(page, mode: str) -> bool:
     page.goto(ORIGIN + "/ui/zapret/diagnostics", wait_until="domcontentloaded", timeout=45000)
     wait_locale(page, mode)
     paragraphs = page.locator("#strategyLabSummary p")
-    paragraphs.nth(3).wait_for(timeout=20000)
+    paragraphs.nth(3).wait_for(state="attached", timeout=20000)
     need(paragraphs.count() == 4, "P4_NATIVE_LAB_GUIDANCE_PARAGRAPHS_" + mode)
+    help_switch = page.locator("#strategyLabHelpToggle")
+    need(help_switch.count() == 1 and help_switch.is_visible(),
+         "P6_LAB_HELP_SWITCH_MISSING_" + mode)
+    need(not paragraphs.nth(0).is_visible() and
+         help_switch.get_attribute("aria-pressed") == "false",
+         "P6_LAB_HELP_OFF_LEAK_" + mode)
+    help_switch.click()
+    paragraphs.nth(3).wait_for(state="visible", timeout=12000)
+    need(help_switch.get_attribute("aria-pressed") == "true",
+         "P6_LAB_HELP_ON_MISSING_" + mode)
     transfer = paragraphs.nth(2).inner_text()
     caveat = paragraphs.nth(3).inner_text()
     transfer_token = ("новый --new нужен только для самостоятельного профиля"
@@ -360,6 +370,11 @@ def check_lab_guidance(page, mode: str) -> bool:
     need(copy_token in transfer and unverified_token in transfer,
          "P4_A17_NATIVE_LAB_COPY_PROVENANCE_MISSING_" + mode)
     need(caveat_token in caveat, "P4_NATIVE_LAB_PROTOCOL_SCOPE_MISSING_" + mode)
+    help_switch.click()
+    need(not paragraphs.nth(0).is_visible() and
+         help_switch.get_attribute("aria-pressed") == "false" and
+         page.locator("#strategyLabDomainInput").is_visible(),
+         "P6_LAB_HELP_OFF_CHANGED_FUNCTIONAL_CONTROLS_" + mode)
     return True
 
 

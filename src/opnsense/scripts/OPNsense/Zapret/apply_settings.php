@@ -16,8 +16,12 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SettingsApply.php';
+require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/DomainSetPolicyBridge.php';
+require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/IPSetPolicyBridge.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
+use OPNsense\Zapret\Api\DomainSetPolicyBridge;
+use OPNsense\Zapret\Api\IPSetPolicyBridge;
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
 /**
@@ -50,6 +54,56 @@ final class SharedConfigCommit
         array $target,
         array $changedFields
     ): void {
+        // The native Model owns types/fields/Config serialization, NOT domain
+        // or IPSET syntax. Enforce the canonical Python grammars again under
+        // original FD9 in root preflight AND immediately before Config::save.
+        // Only changed owned leaves are checked, preserving legacy user lists.
+        $domainFields = [];
+        $ipsetFields = [];
+        foreach ($changedFields as $reference) {
+            if (in_array($reference, [
+                'hostlist.youtubedomains', 'hostlist.userdomains',
+                'hostlist.excludedomains'
+            ], true)) {
+                $domainFields[] = substr($reference, strlen('hostlist.'));
+            } elseif (in_array($reference, [
+                'hostlist.telegramips', 'hostlist.discordips',
+                'hostlist.xips', 'hostlist.sipips', 'hostlist.customips',
+                'hostlist.excludeipset'
+            ], true)) {
+                $ipsetFields[] = substr($reference, strlen('hostlist.'));
+            }
+        }
+        if ($domainFields || $ipsetFields) {
+            $hostlist = $target['hostlist'] ?? null;
+            if (!is_array($hostlist)) {
+                throw new \InvalidArgumentException('Missing native hostlist candidate');
+            }
+            foreach ($domainFields as $field) {
+                $value = $hostlist[$field] ?? null;
+                if (!is_string($value) ||
+                    DomainSetPolicyBridge::inspect($value, $field)['normalized'] !== $value) {
+                    throw new \InvalidArgumentException(
+                        'Native domain candidate requires canonical Python normalization: ' . $field
+                    );
+                }
+            }
+            if ($ipsetFields) {
+                $policy = IPSetPolicyBridge::inspect(
+                    IPSetPolicyBridge::allFromHostlist($hostlist)
+                );
+                foreach ($ipsetFields as $field) {
+                    $name = $field === 'excludeipset' ? 'exclude' : substr($field, 0, -3);
+                    $value = $hostlist[$field] ?? null;
+                    if (!is_string($value) ||
+                        $policy['lists'][$name]['normalized'] !== $value) {
+                        throw new \InvalidArgumentException(
+                            'Native IPSET candidate requires canonical Python normalization: ' . $field
+                        );
+                    }
+                }
+            }
+        }
         foreach ($changedFields as $reference) {
             if (!is_string($reference) ||
                 !preg_match('/^[a-z]+(?:\.[a-z]+){1,2}$/D', $reference)) {
