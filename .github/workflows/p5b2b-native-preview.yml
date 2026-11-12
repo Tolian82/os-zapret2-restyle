@@ -1,0 +1,91 @@
+name: P5b2b installed native original detached preview witness
+
+on:
+  pull_request:
+    paths:
+      - scripts/p5b2b-native-witness.py
+  workflow_dispatch:
+
+concurrency:
+  group: p5b2b-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Exact-source P5b2b witness self-test and non-FreeBSD guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Run fast targeted source proof
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/p5b2b-native-witness.py
+          python3.13 scripts/p5b2b-native-witness.py --self-test
+          if GITHUB_ACTIONS=true ZAPRET2_P5B2B_DISPOSABLE_NATIVE=1 \
+            python3.13 scripts/p5b2b-native-witness.py --native >/tmp/p5b2b-refusal.log 2>&1; then
+              echo '::error::native execution accepted on Linux'
+              exit 1
+          fi
+          grep -F 'not-disposable-installed-OPNsense' /tmp/p5b2b-refusal.log
+
+  native:
+    needs: source
+    name: One disposable installed OPNsense P5b2b witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fail fast if QEMU apt DNS unavailable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+             echo '::error::Runner apt DNS unavailable; native witness NOT TESTED'
+             exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p5b2b-bounded-network >/dev/null
+      - name: Real native package install, upstream v1.0.7 and isolated original preview
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cpu: 3
+          mem: 4096
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for argv, deadline in (
+                (['pkg', 'update', '-f'], 150),
+                (['pkg', 'install', '-y', 'git', 'ca_root_nss', 'jq', 'gmake',
+                  'pkgconf', 'luajit'], 180),
+            ):
+                subprocess.run(argv, check=True, timeout=deadline)
+            PY
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_P5B2B_DISPOSABLE_NATIVE=1
+            /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            /usr/local/bin/python3 scripts/p5b2b-native-witness.py --native
