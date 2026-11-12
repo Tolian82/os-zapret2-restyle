@@ -2,7 +2,7 @@
 
 **Status:** APPROVED FUTURE FEATURE / **NOT IMPLEMENTED** (owner's consolidated specification: 11 November 2026; binding Advanced Mode clarification: 12 November 2026).
 **Primary owner authority:** [Issue #1052, consolidated specification comment 6798093626](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
-**Execution companion:** [P0–P5 development plan](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), NOT STARTED. Specification approval and documentation alone do not authorize production modifications.
+**Execution companion:** [P0–P5 development plan](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), P0 source investigation/native feasibility witness IN PROGRESS; P1–P5 NOT STARTED. No product implementation. Specification approval and documentation alone do not authorize production modifications.
 **Related scopes:** [completed #936 HOSTLIST/RU-EN/preview specification](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and separate [future #1040](https://github.com/Tolian82/os-zapret2-restyle/issues/1040). Preserve original owner-accepted #936 behavior and all existing WAN-first, FD9, shared Voice, IPFW, Config, Apply and native package contracts.
 
 The original #1052 issue body remains intact as **discussion history**. Superseded historical ideas (HOSTLIST changes awaiting restart, staged/active list pairs, skipping scheduled restart on unchanged lists, read-only Auto Hostlist and Strategy Lab involvement) are **not** requirements. Consult the [official upstream Zapret2 manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) and actual qualified installed engine source for native semantics. **Strategy Lab must remain untouched at every stage.**

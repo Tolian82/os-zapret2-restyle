@@ -21,7 +21,8 @@
 ## Level 2 — owner-approved future feature #1052 (recorded 12 November 2026, NOT IMPLEMENTED)
 
 - [Normative native Auto-detect / Target Mode / HOSTLIST / Advanced-only Auto Restart specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) — owner-accepted complete requirements from the [consolidated #1052 comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626); native P0 unsafe activation gate.
-- [Future native Auto-detect plan P0–P5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) — staged Python/PSL, raw queue durability, GUI/Advanced-only scheduler and real native/package/owner acceptance. **All stages not started.**
+- [Future native Auto-detect plan P0–P5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) — staged Python/PSL, raw queue durability, GUI/Advanced-only scheduler and real native/package/owner acceptance. **P0 source evidence / one native probe in progress; P1–P5 not started.**
+- [P0 native Auto-detect feasibility and one scoped native observer experiment](verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md) — upstream source rejection of direct auto attachment, proposed trailing no-Lua observer and exact pending OPNsense evidence gate.
 
 ## Level 2 — approved current feature requirements (11 November 2026)
 

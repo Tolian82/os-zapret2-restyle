@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** APPROVED FUTURE PLAN / **P0–P5 NOT STARTED** (12 November 2026).
+**Status:** P0 IN PROGRESS (upstream evidence and one disposable native witness; native proof still OPEN), P1–P5 NOT STARTED (12 November 2026). No production changes.
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** Recording approved intended behavior only; no production code, native engine, cron, UI, Strategy Lab, service state, configuration or native package changes. The prior completed [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) stays accepted. A separate implementation instruction will begin with P0; an issue/plan alone does not run implementation.
 
@@ -23,7 +23,9 @@ Preserve native OPNsense `pkg`/configd/cron, one shared Strategies+Voice `dvtws2
 
 Stages are **logical gates, not promised commit counts or an invitation to expand unrelated verification**. Record source, exact-head CI, native packaged and owner-installed evidence independently; a new build does not prove the user's GUI or traffic.
 
-## 3. P0 — read-only first development action (NOT STARTED)
+## 3. P0 — read-only first development action (SOURCE AUDIT DONE; NATIVE PROOF PENDING)
+
+**Current P0 evidence:** [native profile-selection risk and one targeted non-activating observer experiment](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). The direct auto-on-existing-action-profile path is rejected. A single genuine OPNsense native packet witness is pending; no P0 completion or later-stage implementation is claimed.
 
 1. Compare the [official upstream manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md), actual selected engine [`nfq2/desync.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/desync.c) and [`nfq2/helpers.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/helpers.c) with real current `target_mode.sh` / `profile_policy.py` / dvtws generator.
 2. Map source profiles to final native profile numbers and sole HOSTLIST/unknown by **generation**; account for `--new`, templates, import, Python expansion, Target Mode and Apply.
