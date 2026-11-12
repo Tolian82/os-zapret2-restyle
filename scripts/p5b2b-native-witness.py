@@ -153,93 +153,20 @@ def native():
     need(not list(Path('/tmp').glob('zapret-p5b-*')), 'preexisting-preview-workspace')
     sys.path.insert(0, str(BACKEND))
     import strategy_preview_build as builder
-    # Disposable-test diagnostic marker only. Keep every ORIGINAL module,
-    # orchestrator and argument; identify the last static import on failure.
-    # The marker is private to WORK, removed by the preview coordinator.
-    expected_load = '    . "$BACKEND_DIR/$module.sh"'
-    expected_call = 'done\norchestrator_build_release \\'
-    need(builder.BUILD_SH.count(expected_load) == 1 and
-         builder.BUILD_SH.count(expected_call) == 1,
-         'builder-shell-diagnostic-anchor-unexpected')
-    builder.BUILD_SH = builder.BUILD_SH.replace(
-        expected_load,
-        '    printf "%s" "$module" > "$WORK/p5b2b-checkpoint"\n' +
-        expected_load, 1).replace(
-        expected_call,
-        'done\nprintf "orchestrator" > "$WORK/p5b2b-checkpoint"\n' +
-        'orchestrator_build_release \\', 1)
-    # Diagnostic-only observer: report ONLY the bounded stage/state enum,
-    # never stage message, XML, hostlist, stderr or generated argument bytes.
-    real_build = builder._run_builder
-    original_popen = builder.subprocess.Popen
-
-    def run_with_private_error_category(work):
-        # Another targeted test instruments the same Popen to inject a real
-        # KeyboardInterrupt. Keep that instrumentation untouched.
-        if builder.subprocess.Popen is not original_popen:
-            return real_build(work)
-        logfile = work / 'p5b2b-private-stderr'
-        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_NOFOLLOW', 0)
-        descriptor = os.open(logfile, flags, 0o600)
-        with os.fdopen(descriptor, 'wb') as private_stderr:
-            def capture(*args, **kwargs):
-                if args and isinstance(args[0], list) and \
-                        len(args[0]) >= 4 and args[0][3] == 'p5b2a-build':
-                    kwargs['stderr'] = private_stderr
-                return original_popen(*args, **kwargs)
-            with patch.object(builder.subprocess, 'Popen', side_effect=capture):
-                try:
-                    return real_build(work)
-                except builder.PrivateBuildRefused:
-                    private_stderr.flush()
-                    data = logfile.read_bytes()[:32768].lower()
-                    if not data:
-                        category = 'NO_SHELL_STDERR'
-                    elif b'parameter not set' in data or b'unbound variable' in data:
-                        category = 'UNSET_SHELL_VARIABLE'
-                    elif b'syntax error' in data:
-                        category = 'SHELL_SYNTAX_ERROR'
-                    elif b'permission denied' in data:
-                        category = 'SHELL_PERMISSION'
-                    elif b'not found' in data or b'no such file' in data:
-                        category = 'SHELL_COMMAND_OR_FILE_MISSING'
-                    else:
-                        category = 'OTHER_NATIVE_BUILDER_REFUSAL'
-                    print('P5B2B_SHELL_FAILURE_CLASS=' + category, file=sys.stderr)
-                    raise
-
-    def observe_builder_stage(work):
-        try:
-            return run_with_private_error_category(work)
-        except builder.PrivateBuildRefused:
-            stage_file = work / 'build-stage.status'
-            if stage_file.is_file() and not stage_file.is_symlink() and \
-                    stage_file.stat().st_size <= 4096:
-                fields = stage_file.read_text(errors='replace').split('|', 5)
-                if len(fields) == 6 and fields[2] in (
-                        'config', 'parser', 'targets', 'ports', 'generator',
-                        'validator', 'ready') and fields[3] in (
-                        'running', 'failed', 'ok'):
-                    print('P5B2B_LAST_STAGE=' + fields[2] + ':' + fields[3],
-                          file=sys.stderr)
-            marker = work / 'p5b2b-checkpoint'
-            if marker.is_file() and not marker.is_symlink() and \
-                    marker.stat().st_size < 36:
-                value = marker.read_text(errors='replace').strip()
-                if value in ('common', 'config', 'parser', 'registry', 'storage',
-                             'targets', 'target_mode', 'profile_normalizer',
-                             'profile_pipeline', 'exclude', 'blobs', 'ports',
-                             'firewall', 'generator', 'validator', 'atomic',
-                             'stage', 'launcher', 'supervisor', 'orchestrator',
-                             'apply_runtime'):
-                    print('P5B2B_LAST_LOADED=' + value, file=sys.stderr)
-            raise
-    builder._run_builder = observe_builder_stage
     hold_fd9()
     try:
         _, bad = preview_check(builder, 'invalid-xml', b'<opnsense/>')
         need(isinstance(bad, builder.PrivateBuildRefused) and
              bad.code == 'CANDIDATE_XML_MODEL_INVALID', 'invalid-xml-not-refused')
+    finally:
+        os.close(9)
+    # The original shared Voice+Strategies builder requires a resolvable WAN
+    # even when the current service is STOPPED. Prepare a valid lo0 model on
+    # this disposable guest OUTSIDE each measured preview operation, so a
+    # missing engine cannot be mistaken for a missing-WAN candidate failure.
+    set_guest_lo0()
+    hold_fd9()
+    try:
         need(not ENGINE.exists(), 'missing-runtime-precondition-false')
         result, failure = preview_check(builder, 'missing-runtime', CONFIG.read_bytes())
         need(failure is not None or
@@ -289,7 +216,6 @@ def native():
              'instrumented-cancel-left-workspace')
     finally:
         os.close(9)
-    set_guest_lo0()
     started = False
     try:
         command = run('/usr/local/sbin/configctl', 'zapret', 'start', timeout=100)
