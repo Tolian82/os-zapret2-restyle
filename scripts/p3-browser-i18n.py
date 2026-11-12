@@ -347,8 +347,19 @@ def check_lab_guidance(page, mode: str) -> bool:
     need(bar.count() == 1 and bar.is_visible(), "P6_LAB_PAGE_HELP_BAR_MISSING_" + mode)
     need(bar.locator("#strategyLabHelpToggle").count() == 1,
          "P6_LAB_HELP_NOT_AT_PAGE_TOP_" + mode)
-    need(help_switch.evaluate("(el) => getComputedStyle(el).fontSize") == "13px",
-         "P6_LAB_HELP_SIZE_" + mode)
+    # Follow OPNsense stable/26.7 base_form first table row rather than
+    # a custom dark content-box-header (owner's visual mismatch in _48).
+    need(bar.locator("table.table.table-striped.table-condensed "
+                    "tbody tr td[colspan='3'] .pull-right "
+                    "#strategyLabHelpToggle").count() == 1,
+         "P6_LAB_NATIVE_HELP_TABLE_ROW_MISSING_" + mode)
+    need(bar.locator(".fa-info-circle.text-primary").count() == 1 and
+         bar.locator("small#strategyLabHelpLabel").count() == 1,
+         "P6_LAB_NATIVE_INFO_AND_SMALL_LABEL_MISSING_" + mode)
+    need(bar.locator(".content-box-header").count() == 0,
+         "P6_LAB_CUSTOM_DARK_HEADER_RETURNED_" + mode)
+    need(bar.locator(".fa-toggle-off.text-danger").count() == 1,
+         "P6_LAB_NATIVE_OFF_ICON_MISSING_" + mode)
     need(page.locator("#strategyLabSummary").evaluate(
         "(el) => getComputedStyle(el).fontSize") == "13px",
          "P6_LAB_GUIDANCE_SIZE_" + mode)

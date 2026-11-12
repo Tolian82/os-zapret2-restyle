@@ -47,10 +47,17 @@ assert "id=\"strategyLabHelpToggle\"" in pages["diagnostics"]
 assert 'id="zapretLabHelpBar"' in pages["diagnostics"], "Page-level help bar absent"
 assert pages["diagnostics"].index('id="zapretLabHelpBar"') < pages["diagnostics"].index('id="testDomainTable"') < pages["diagnostics"].index('id="strategyLabInputsTable"'), "Help toggle must precede BOTH Laboratory sections"
 assert pages["diagnostics"].count('id="strategyLabHelpToggle"') == 1, "Duplicate Laboratory Help control"
-assert 'fa fa-info-circle text-info' in pages["diagnostics"]
-assert 'fa fa-toggle-off text-danger' in pages["diagnostics"]
+assert 'fa fa-info-circle fa-sm fa-fw text-primary' in pages["diagnostics"], "Help info icon must use native Form classes"
+assert 'fa fa-toggle-off fa-fw text-danger' in pages["diagnostics"], "Help OFF icon must use native Form classes"
 assert 'fa-toggle-on text-success' in pages["diagnostics"]
 assert 'content-box-header zapret-lab-header' not in pages["diagnostics"], "Help stuck in subsection header"
+assert 'content-box-header zapret-lab-page-header' not in pages["diagnostics"], "Custom dark Lab header still present"
+assert '<table class="table table-striped table-condensed" style="table-layout: fixed; width: 100%;">' in pages["diagnostics"], "Native table header structure missing"
+assert '<td colspan="3">' in pages["diagnostics"], "Native Form header row missing"
+assert '<span class="pull-right">' in pages["diagnostics"], "Help toggle not aligned using native Form markup"
+assert '<small id="strategyLabHelpLabel">help</small>' in pages["diagnostics"], "Native small Help label absent"
+assert 'class="zapret-lab-help-toggle"' not in pages["diagnostics"], "Custom Help button styles remain"
+assert 'role="button"' in pages["diagnostics"], "Keyboard-accessible native Help action missing"
 assert "aria-controls=\"strategyLabSummary\"" in pages["diagnostics"]
 assert "guidance.toggle(labHelpOn)" in pages["diagnostics"]
 assert "strategyLabHelpToggle" in pages["diagnostics"]
