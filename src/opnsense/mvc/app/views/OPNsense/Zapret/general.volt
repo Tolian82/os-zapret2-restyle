@@ -130,6 +130,7 @@
         let currentRuntimeInstalled = false;
         let releaseApplyPending = false;
         let strategiesApplyPending = false;
+        let previewPending = false;
         let strategiesApplyNeedsReview = false;
 
         // The Telegram IPSET is also editable on Voice Transmission. Include
@@ -494,7 +495,7 @@
             // Controls must stay locked for both operations, but each Apply
             // button owns only its own spinner.
             const controlsBusy = !!busy || releaseApplyPending || releaseNeedsReview ||
-                strategiesApplyPending || strategiesApplyNeedsReview ||
+                strategiesApplyPending || strategiesApplyNeedsReview || previewPending ||
                 extraBusy || extraInstallPending || extraNeedsReview || extraRemovePending;
             const releaseAvailable = $('#zapretReleaseSelect option').filter(function() {
                 return /^v[0-9]+(?:\.[0-9]+)+$/.test(this.value);
@@ -508,6 +509,8 @@
             // Lower Strategies Apply is a separate action/spinner, but must
             // never compete with an Additional Resources lifecycle transaction.
             $('#reconfigureAct').prop('disabled', controlsBusy);
+            $('#zapretPreviewAct').prop('disabled', controlsBusy);
+            $('#zapretPreviewProgress').toggleClass('fa fa-spinner fa-pulse', previewPending);
             $('#zapretReleaseApplyText').text(releaseApplyPending ? runtimeText.applying : runtimeText.apply);
             $('#zapretReleaseApplyProgress').toggleClass('fa fa-spinner fa-pulse', releaseApplyPending);
             const extrasAllowed = currentRuntimeInstalled && currentServiceState === 'started' &&
@@ -1338,11 +1341,98 @@
         refreshReleases();
         refreshExtrasStatus();
 
+        $('#zapretPreviewAct span').text(isRussian ? 'Проверить и показать' : 'Validate and Preview');
+        // P5c: use UNSAVED form data; never submit an Apply transaction.
+        $('#zapretPreviewAct').off('click').on('click', function(event) {
+            event.preventDefault();
+            if (previewPending || strategiesApplyPending || strategiesApplyNeedsReview ||
+                runtimeWasBusy || releaseApplyPending || releaseNeedsReview ||
+                extraBusy || extraInstallPending || extraRemovePending || extraNeedsReview) return;
+            previewPending = true;
+            setRuntimeBusy(true);
+            const ru = isRussian;
+            const heading = ru ? 'Проверить и показать' : 'Validate and Preview';
+            const failure = ru
+                ? 'Не удалось проверить несохранённые настройки. Ничего не применено.'
+                : 'Unable to validate unsaved settings. Nothing was applied.';
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/settings/preview',
+                data: getFormData('frm_GeneralSettings'),
+                dataType: 'json',
+                timeout: 170000
+            }).done(function(data) {
+                handleFormValidation('frm_GeneralSettings',
+                    localizeStrategiesFieldErrors((data && data.validations) || {}));
+                if (!data || data.result !== 'preview') {
+                    showRuntimeError(heading, failure);
+                    return;
+                }
+                const shape = data.structure || {};
+                const native = data.native_validation || {};
+                const profiles = Array.isArray(shape.profiles) ? shape.profiles : [];
+                const lines = [
+                    (ru ? 'Проверка: ' : 'Validation: ') + String(data.status || 'unavailable'),
+                    (ru ? 'Нативная проверка: ' : 'Native dry-run: ') +
+                        String(native.engine_native_dry_run || 'not_run'),
+                    (ru ? 'Проверка сопоставления: ' : 'Mapped validator: ') +
+                        String(native.mapped_validation || 'not_run'),
+                    (ru ? 'Профили (структурная оценка): ' : 'Profiles (structural estimate): ') +
+                        String(profiles.length)
+                ];
+                profiles.slice(0, 32).forEach(function(p) {
+                    const ports = p.requested_ports || {};
+                    lines.push('');
+                    lines.push((ru ? 'Профиль ' : 'Profile ') + String(p.number || '?'));
+                    lines.push('TCP: ' + (Array.isArray(ports.tcp) ? ports.tcp.join(', ') : '—') +
+                        ' / UDP: ' + (Array.isArray(ports.udp) ? ports.udp.join(', ') : '—'));
+                    lines.push('L7: ' + (Array.isArray(p.requested_l7) ? p.requested_l7.join(', ') : '—'));
+                    lines.push((ru ? 'Режим выбора целей: ' : 'Target Mode: ') +
+                        String(p.requested_default_mode || '—'));
+                    lines.push((ru ? 'Селекторы: ' : 'Selectors: ') +
+                        (Array.isArray(p.explicit_selectors) ? p.explicit_selectors.join(', ') : '—'));
+                    (Array.isArray(p.lua_actions) ? p.lua_actions : []).slice(0, 16).forEach(function(a) {
+                        lines.push('  ' + String(a.ordinal || '?') +
+                            ': payload=' + String(a.payload || '—') +
+                            ' → Lua=' + String(a.lua || '—'));
+                    });
+                    if (Array.isArray(p.warnings) && p.warnings.length) {
+                        lines.push((ru ? 'Предупреждения: ' : 'Warnings: ') + p.warnings.join(', '));
+                    }
+                });
+                if (profiles.length > 32) {
+                    lines.push(ru ? 'Показаны первые 32 профиля.' : 'Only the first 32 profiles are displayed.');
+                }
+                if (Array.isArray(shape.warnings) && shape.warnings.length) {
+                    lines.push((ru ? 'Предупреждения: ' : 'Warnings: ') + shape.warnings.join(', '));
+                }
+                lines.push('');
+                lines.push(ru
+                    ? 'Предпросмотр ничего не применяет. Даже успешный dry-run не доказывает обход DPI.'
+                    : 'Preview applies nothing. A successful dry-run does not prove DPI bypass.');
+                BootstrapDialog.show({
+                    type: BootstrapDialog.TYPE_INFO,
+                    title: heading,
+                    message: $('<pre/>').text(lines.join('\n').slice(0, 20000))
+                        .css({'white-space': 'pre-wrap', 'overflow-wrap': 'anywhere', 'max-height': '65vh'}),
+                    buttons: [{
+                        label: '{{ lang._("Close") }}',
+                        action: function(dialog) { dialog.close(); }
+                    }]
+                });
+            }).fail(function() {
+                showRuntimeError(heading, failure);
+            }).always(function() {
+                previewPending = false;
+                setRuntimeBusy(runtimeWasBusy);
+            });
+        });
+
         // One original-FD9 Apply, same result handling as Voice. A network
         // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
-            if (strategiesApplyPending || strategiesApplyNeedsReview ||
+            if (strategiesApplyPending || strategiesApplyNeedsReview || previewPending ||
                 extraBusy || extraInstallPending || extraNeedsReview || runtimeWasBusy ||
                 releaseApplyPending) return;
             strategiesApplyPending = true;
@@ -1538,6 +1628,9 @@
             id="reconfigureAct"
             type="button">
             {{ lang._("Apply") }} <i id="reconfigureActProgress"></i>
+        </button>
+        <button class="btn btn-default __mr" id="zapretPreviewAct" type="button">
+            <span>Validate and Preview</span> <i id="zapretPreviewProgress"></i>
         </button>
     </div>
 </section>

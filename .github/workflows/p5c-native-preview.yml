@@ -1,0 +1,97 @@
+name: P5c exact native unsaved Strategies configd preview
+
+on:
+  pull_request:
+    paths:
+      - scripts/p5c-native-witness.py
+      - scripts/test-p5c-preview-route.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/strategy_preview_route.py
+      - src/opnsense/scripts/OPNsense/Zapret/strategy_preview_candidate.php
+      - src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+      - src/opnsense/mvc/app/views/OPNsense/Zapret/general.volt
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - src/opnsense/service/conf/actions.d/actions_zapret.conf
+  workflow_dispatch:
+
+concurrency:
+  group: p5c-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Fast P5c route contract and native-mode refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Focused P5c syntax and mocked route contract
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/p5c-native-witness.py scripts/test-p5c-preview-route.py src/opnsense/scripts/OPNsense/Zapret/backend/strategy_preview_route.py
+          python3.13 scripts/test-p5c-preview-route.py
+          python3.13 scripts/p5c-native-witness.py --self-test
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          if command -v php >/dev/null 2>&1; then
+            php -l src/opnsense/scripts/OPNsense/Zapret/strategy_preview_candidate.php
+            php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
+          fi
+
+  native:
+    needs: source
+    name: One genuine installed P5c FD9 and configd preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bounded runner QEMU readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::Native witness NOT TESTED: runner QEMU/DNS unavailable'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p5c-bounded-network >/dev/null
+      - name: Real Mk install, upstream setup, scoped preview
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cpu: 3
+          mem: 4096
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for argv, deadline in (
+                (['pkg', 'update', '-f'], 150),
+                (['pkg', 'install', '-y', 'git', 'ca_root_nss', 'jq', 'gmake',
+                  'pkgconf', 'luajit'], 180),
+            ):
+                subprocess.run(argv, check=True, timeout=deadline)
+            PY
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_STAGE2_REAL_CLEAN_INSTALL=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_P5C_DISPOSABLE_NATIVE=1
+            /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            /usr/local/bin/python3 scripts/p5c-native-witness.py --native

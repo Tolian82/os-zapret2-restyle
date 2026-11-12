@@ -393,4 +393,114 @@ class SettingsController extends ApiMutableModelControllerBase
         }
     }
 
+    /**
+     * P5c unsaved Strategies preview. No persistent Apply, Config::save,
+     * candidate storage, or native runtime switch is reachable from here.
+     * Native configd owns the same original FD9 used by ordinary Apply.
+     */
+    public function previewAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'failed', 'status' => 'POST_REQUIRED'];
+        }
+        $posted = $this->request->getPost(static::$internalModelName);
+        if (!is_array($posted) || !isset($posted['sync']) ||
+            !is_array($posted['sync']) ||
+            array_keys($posted['sync']) !== ['telegramips_baseline'] ||
+            !is_string($posted['sync']['telegramips_baseline'])
+        ) {
+            return ['result' => 'failed', 'status' => 'PREVIEW_BASELINE_INVALID'];
+        }
+        $sync = $posted['sync'];
+        unset($posted['sync']);
+        try {
+            $config = Config::getInstance();
+            $config->lock();
+            try {
+                $current = (new \OPNsense\Zapret\Zapret())->getNodes();
+                $plan = SettingsApply::prepareStrategies(
+                    $current, $posted, $sync['telegramips_baseline']
+                );
+                // Preserve the ONE Python domain/IPSET normalization authority
+                // for edited lists. Preview never replaces text in the form.
+                $ipset = null;
+                $edits = $plan['changed_fields'];
+                if (in_array('hostlist.telegramips', $edits, true) ||
+                    in_array('hostlist.excludeipset', $edits, true)) {
+                    try {
+                        $ipset = IPSetPolicyBridge::inspect(
+                            IPSetPolicyBridge::allFromHostlist($plan['candidate']['hostlist'] ?? [])
+                        );
+                    } catch (\InvalidArgumentException $error) {
+                        $field = str_contains($error->getMessage(), 'Exclude IPSet')
+                            ? 'excludeipset' : 'telegramips';
+                        return $this->validationFailure($field, $error->getMessage());
+                    }
+                }
+                foreach (self::TARGET_FIELDS as $field => $label) {
+                    if (!in_array('hostlist.' . $field, $edits, true)) {
+                        continue;
+                    }
+                    $raw = (string)($plan['candidate']['hostlist'][$field] ?? '');
+                    if ($field === 'telegramips' || $field === 'excludeipset') {
+                        $normalized = $ipset['lists'][$field === 'excludeipset' ? 'exclude' : 'telegram']['normalized'];
+                    } else {
+                        try {
+                            $normalized = DomainSetPolicyBridge::inspect($raw, $field)['normalized'];
+                        } catch (\InvalidArgumentException $error) {
+                            return $this->validationFailure($field, $error->getMessage());
+                        }
+                    }
+                    if ($normalized !== $raw) {
+                        $posted['hostlist'][$field] = $normalized;
+                    }
+                }
+                // The root worker re-reads Config, stale-tab token and model
+                // after obtaining FD9; this is not an optimistic Apply token.
+                $plan = SettingsApply::prepareStrategies(
+                    $current, $posted, $sync['telegramips_baseline']
+                );
+                $transport = [];
+                foreach ($plan['changed_fields'] as $reference) {
+                    if (!preg_match('/^(general|strategy|hostlist)\.[a-z]+$/D', $reference)) {
+                        throw new \InvalidArgumentException('Invalid preview changed field');
+                    }
+                    [$group, $field] = explode('.', $reference, 2);
+                    $value = $plan['candidate'][$group][$field] ?? null;
+                    if (!is_string($value)) {
+                        throw new \InvalidArgumentException('Invalid preview value');
+                    }
+                    $transport[$group][$field] = $value;
+                }
+                $encoded = SharedApplyEnvelope::encode('strategies', $transport, $sync);
+            } finally {
+                $config->unlock();
+            }
+            $raw = trim((string)(new Backend())->configdpRun(
+                'zapret strategy_preview', [$encoded], false, 160
+            ));
+            if (strlen($raw) > 65536) {
+                throw new \RuntimeException('Preview reply exceeds limit');
+            }
+            $report = json_decode($raw, true);
+            if (!is_array($report) || ($report['result'] ?? null) !== 'preview' ||
+                ($report['saved'] ?? null) !== false ||
+                ($report['applied'] ?? null) !== false ||
+                !is_array($report['structure'] ?? null) ||
+                !is_array($report['native_validation'] ?? null) ||
+                !is_string($report['status'] ?? null)
+            ) {
+                throw new \RuntimeException('Preview receipt unavailable');
+            }
+            return $report;
+        } catch (\Throwable $error) {
+            // Fixed code only. No form content, candidate XML or engine output.
+            error_log('Zapret Strategies preview refused type=' . get_class($error));
+            return [
+                'result' => 'failed', 'status' => 'PREVIEW_UNAVAILABLE',
+                'message' => gettext('Unable to validate the draft without applying it'),
+            ];
+        }
+    }
+
 }
