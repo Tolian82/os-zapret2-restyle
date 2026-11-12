@@ -32,6 +32,10 @@ require "${VIEW}" 'For another Lua handler with the same filters'
 require "${VIEW}" 'use --new only for a genuinely independent profile'
 require "${VIEW}" 'HTTP/TLS, QUIC and generic UDP are not interchangeable'
 require "${VIEW}" 'Strategy Lab never automatically saves a Traffic Strategy.'
+require "${VIEW}" 'Кнопка копирует полный профиль в буфер, но не сохраняет его в Стратегии'
+require "${VIEW}" 'копия остаётся непроверенным кандидатом'
+require "${VIEW}" 'The button copies the complete profile to your clipboard, but does not save it to Traffic Strategy'
+require "${VIEW}" 'the copy remains an unverified candidate'
 
 # Owner-selected deterministic RU/EN diagnostics presentation.
 # Result summary is localized by the existing client-side RU/EN dictionary,
