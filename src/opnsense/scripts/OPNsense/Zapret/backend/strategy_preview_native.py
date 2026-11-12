@@ -30,6 +30,7 @@ TIMEOUT = 24
 CHECK_MAPPED = r'''
 set -eu
 . "$1/common.sh"
+. "$1/ports.sh"
 . "$1/validator.sh"
 validator_validate_build_mapped "$2" "$3" "$4" "$5" "$6" "$7" "$8"
 '''
@@ -148,6 +149,7 @@ def validate_private_release(
     _secure(static_root, directory=True, owner=owner)
     _secure(module_root / "validator.sh", directory=False, owner=owner)
     _secure(module_root / "common.sh", directory=False, owner=owner)
+    _secure(module_root / "ports.sh", directory=False, owner=owner)
     engine = static_root / "binaries/my/dvtws2"
     reference = static_root / "runtime-v2"
     if not reference.is_absolute() or reference == entries["release"]:

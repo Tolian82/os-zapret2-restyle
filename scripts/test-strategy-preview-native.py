@@ -146,6 +146,7 @@ class NativeValidatorTests(unittest.TestCase):
         source = (BACKEND / "strategy_preview_native.py").read_text()
         self.assertIn("validator_validate_build_mapped", source)
         self.assertIn("validator_validate_engine_mapped", source)
+        self.assertIn('. "$1/ports.sh"', source)
         self.assertNotIn("shared_apply_execute_service", source)
         self.assertNotIn("Config::save", source)
         self.assertNotIn("ipfw add", source)
