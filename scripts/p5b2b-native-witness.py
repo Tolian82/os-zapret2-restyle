@@ -171,9 +171,46 @@ def native():
     # Diagnostic-only observer: report ONLY the bounded stage/state enum,
     # never stage message, XML, hostlist, stderr or generated argument bytes.
     real_build = builder._run_builder
+    original_popen = builder.subprocess.Popen
+
+    def run_with_private_error_category(work):
+        # Another targeted test instruments the same Popen to inject a real
+        # KeyboardInterrupt. Keep that instrumentation untouched.
+        if builder.subprocess.Popen is not original_popen:
+            return real_build(work)
+        logfile = work / 'p5b2b-private-stderr'
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_NOFOLLOW', 0)
+        descriptor = os.open(logfile, flags, 0o600)
+        with os.fdopen(descriptor, 'wb') as private_stderr:
+            def capture(*args, **kwargs):
+                if args and isinstance(args[0], list) and \
+                        len(args[0]) >= 4 and args[0][3] == 'p5b2a-build':
+                    kwargs['stderr'] = private_stderr
+                return original_popen(*args, **kwargs)
+            with patch.object(builder.subprocess, 'Popen', side_effect=capture):
+                try:
+                    return real_build(work)
+                except builder.PrivateBuildRefused:
+                    private_stderr.flush()
+                    data = logfile.read_bytes()[:32768].lower()
+                    if not data:
+                        category = 'NO_SHELL_STDERR'
+                    elif b'parameter not set' in data or b'unbound variable' in data:
+                        category = 'UNSET_SHELL_VARIABLE'
+                    elif b'syntax error' in data:
+                        category = 'SHELL_SYNTAX_ERROR'
+                    elif b'permission denied' in data:
+                        category = 'SHELL_PERMISSION'
+                    elif b'not found' in data or b'no such file' in data:
+                        category = 'SHELL_COMMAND_OR_FILE_MISSING'
+                    else:
+                        category = 'OTHER_NATIVE_BUILDER_REFUSAL'
+                    print('P5B2B_SHELL_FAILURE_CLASS=' + category, file=sys.stderr)
+                    raise
+
     def observe_builder_stage(work):
         try:
-            return real_build(work)
+            return run_with_private_error_category(work)
         except builder.PrivateBuildRefused:
             stage_file = work / 'build-stage.status'
             if stage_file.is_file() and not stage_file.is_symlink() and \
