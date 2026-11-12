@@ -7,7 +7,7 @@ on:
       - VERSION
       - compatibility.json
       - scripts/build-pkg.sh
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage5-native-single-artifact.py
   pull_request:
@@ -16,7 +16,7 @@ on:
       - VERSION
       - compatibility.json
       - scripts/build-pkg.sh
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage5-native-single-artifact.py
   workflow_dispatch:

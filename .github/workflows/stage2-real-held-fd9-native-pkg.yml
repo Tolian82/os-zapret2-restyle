@@ -2,7 +2,7 @@ name: Stage 2 actual old FD9 held across authentic native pkg
 on:
   pull_request:
     paths:
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage2-opnsense-real-held-fd9-pkg.py
       - scripts/test-stage2-opnsense-real-held-fd9-pkg.py
       - scripts/stage2-opnsense-real-firmware-unlock-bypass.py

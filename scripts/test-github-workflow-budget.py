@@ -129,6 +129,23 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('      - src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py',
                       (ROOT / '.github/workflows/p0-native-auto-observer.yml').read_text())
 
+    def test_package_provider_checks_do_not_replay_historical_cutover_guests(self):
+        for path in (ROOT / '.github/workflows').glob('*.yml'):
+            text = path.read_text()
+            if 'vmactions/' not in text:
+                continue
+            # The current central CI owns real archive/provider qualification;
+            # do not rebuild it in ten historical lifecycle campaigns as well.
+            self.assertNotIn('      - scripts/native-opnsense-package.py', text, path.name)
+            self.assertNotIn('      - scripts/test-native-opnsense-package.py', text, path.name)
+        for name in ('stage2-real-native-running-upgrade.yml',
+                     'stage2-real-native-unsafe-owner-replacement.yml'):
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertIn('  workflow_dispatch:', text)
+            self.assertIn('      - scripts/stage2-opnsense-real-native-clean-install.py', text)
+        self.assertIn('scripts/native-opnsense-package\\.py$',
+                      (ROOT / '.github/workflows/ci.yml').read_text())
+
     def test_lab_fixture_change_only_uses_scoped_lab_ci_not_both_stage5_s3(self):
         # GH-069: a changed mock-backed Lab e2e fixture belongs to the fast
         # corrective matrix, NOT two unrelated S3 guests that fetch the

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - VERSION
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-voice-http.py
@@ -28,7 +28,7 @@ on:
     branches: [main]
     paths:
       - VERSION
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage2-opnsense-real-native-shared-voice.py
       - scripts/stage2-opnsense-real-native-voice-http.py

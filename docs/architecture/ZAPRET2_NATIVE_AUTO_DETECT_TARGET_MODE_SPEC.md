@@ -2,7 +2,7 @@
 
 **Status:** APPROVED FUTURE FEATURE / **NOT IMPLEMENTED** (owner's consolidated specification: 11 November 2026; binding Advanced Mode clarification: 12 November 2026).
 **Primary owner authority:** [Issue #1052, consolidated specification comment 6798093626](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
-**Execution companion:** [P0–P5 development plan](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), P0 source investigation/native feasibility witness IN PROGRESS; P1–P5 NOT STARTED. No product implementation. Specification approval and documentation alone do not authorize production modifications.
+**Execution companion:** [P0–P5 development plan](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). P0 native feasibility completed with [immutable receipt](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6838843832); [P1 policy/source and package boundary](../verification/P1_AUTO_DETECT_DOMAIN_POLICY.md). P2–P5 remain unimplemented. Production observation and acceptance cannot be inferred from a policy-only increment.
 **Related scopes:** [completed #936 HOSTLIST/RU-EN/preview specification](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and separate [future #1040](https://github.com/Tolian82/os-zapret2-restyle/issues/1040). Preserve original owner-accepted #936 behavior and all existing WAN-first, FD9, shared Voice, IPFW, Config, Apply and native package contracts.
 
 The original #1052 issue body remains intact as **discussion history**. Superseded historical ideas (HOSTLIST changes awaiting restart, staged/active list pairs, skipping scheduled restart on unchanged lists, read-only Auto Hostlist and Strategy Lab involvement) are **not** requirements. Consult the [official upstream Zapret2 manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md) and actual qualified installed engine source for native semantics. **Strategy Lab must remain untouched at every stage.**
@@ -110,7 +110,7 @@ Explicitly qualify `fopen` before replace, writer FD persisting after replace, c
 
 ## 6. One existing Python domain policy: roots, depth and exclusions
 
-Extend existing **`backend/domain_policy.py`**, not a competing PHP/shell parser. It already normalizes syntax, but **does not yet resolve eTLD+1**.
+Extend existing **`backend/domain_policy.py`**, not a competing PHP/shell parser. The [P1 implementation](../verification/P1_AUTO_DETECT_DOMAIN_POLICY.md) extends its existing syntax normalizer with qualified eTLD+1 and multilist planning; it does not yet run the production worker.
 
 - Use qualified [Public Suffix List](https://publicsuffix.org/) data with **ICANN and PRIVATE** entries. `video.example.co.uk` → **`example.co.uk`**, never `co.uk`. `user.github.io` → **`user.github.io`**, not `github.io`. Never simply take the last two labels.
 - `domain.com`, `www.domain.com`, `voice.domain.com` and `a.b.domain.com` → **one `domain.com`** row even with many events in one minute. **Do not automatically prefix `^`**. `*.domain.com` is not supported native HOSTLIST syntax.

@@ -227,7 +227,19 @@ class NativeBuilderTests(unittest.TestCase):
         make = (HERE.parent / "Makefile").read_text()
         self.assertIn("python" + chr(36) + "{PLUGIN_PYTHON}", make)
         self.assertNotIn("PLUGIN_DEPENDS=     python313", make)
-        self.assertEqual(len(mod.EXPECTED_ROLES), 7)
+        self.assertEqual(len(mod.EXPECTED_ROLES), 8)
+        self.assertIn('py' + chr(36) + '{PLUGIN_PYTHON}-idna', make)
+
+    def test_idna_catalog_provider_uses_observed_python(self):
+        roles = {role: {"selected": {"name": role}} for role in mod.provider.REQUIRED}
+        with patch.object(mod.provider, 'resolve', return_value=roles):
+            with self.assertRaisesRegex(mod.Refusal, 'TARGET_PROVIDER_MISSING:domain-policy-idna'):
+                mod.runtime_providers({}, '313')
+            for suffix in ('313', '314'):
+                name = 'py' + suffix + '-idna'
+                selected = {'name': name, 'origin': 'dns/py-idna', 'version': 'observed'}
+                self.assertEqual(mod.runtime_providers({name: selected}, suffix)
+                                 ['domain-policy-idna']['selected'], selected)
 
 
 if __name__ == "__main__":
