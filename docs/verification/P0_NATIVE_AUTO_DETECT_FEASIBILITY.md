@@ -31,6 +31,14 @@ This is **confirmed only for the scoped native loopback witness**, not as a gene
 
 **Evidence:** workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750), native job `131475892342` succeeded; log reports `P0_NATIVE_AUTO_OBSERVER_SELF_TEST=PASS_SOURCE_ONLY` and `P0_NATIVE_AUTO_OBSERVER=PASS_NATIVE_LOOPBACK_OBSERVER_NON_ACTIVATING_ONLY`. The witness confirms a non-activating observer for its tested native HTTP/loopback conditions. This is not proof of full generator integration, all supported filters, real WAN bypass, a production package, or owner-appliance acceptance. Never treat `--dry-run` or an early debug line as packet-level proof. If the targeted native job fails, classify infrastructure versus genuine native behavior; do not repeatedly launch unrelated VM jobs or change production to match a test hypothesis.
 
+## P0 source-identity audit: real accepted profiles (13 November 2026)
+
+The actual target registry supports only `<HOSTLIST:...>` and `<IPSET:...>` selector placeholders. BLOB resources use **native** `--blob=name` shorthand and are handled later by `blobs.sh`; an isolated `<BLOB:name>` example cannot pass normal target resolution, so it must **not** be promoted as a valid broad-profile bug. No production Target Mode source change is justified by that example.
+
+The scoped `v0.6.5_6` test extends the existing `scripts/test-profile-pipeline.sh` using the **actual parser, target_mode.sh and Python normalizer**, not a synthetic second policy: `all` preserves one broad source profile, `list` expands three permitted default selectors, and **as-is** `auto` expands four (including the still-legacy implicit ordinary `<HOSTLIST:auto>` that P3 must remove). Valid native `--blob=name` remains part of each source profile and is not a target selector.
+
+A user-authored `--new` with explicit `<HOSTLIST:user>` bypasses default injection for **that source profile only**, and retains its position after expanded earlier profiles. Crucially, a source with **both** HOSTLIST and IPSET expands into separate final profiles; **a final HOSTLIST-only row is not proof the originating source was HOSTLIST-only**. The product must preserve generation-bound source identity when deciding whether native detection is allowed. This is actual source-pipeline evidence; full `dvtws.args`/native runtime and debug correlation remain separate P0 gates.
+
 ## Status and next action
 
 | Evidence | State |
