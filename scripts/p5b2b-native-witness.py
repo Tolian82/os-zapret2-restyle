@@ -157,16 +157,16 @@ def native():
     # orchestrator and argument; identify the last static import on failure.
     # The marker is private to WORK, removed by the preview coordinator.
     expected_load = '    . "$BACKEND_DIR/$module.sh"'
-    expected_call = 'done\\norchestrator_build_release \\'
+    expected_call = 'done\norchestrator_build_release \\'
     need(builder.BUILD_SH.count(expected_load) == 1 and
          builder.BUILD_SH.count(expected_call) == 1,
          'builder-shell-diagnostic-anchor-unexpected')
     builder.BUILD_SH = builder.BUILD_SH.replace(
         expected_load,
-        '    printf "%s" "$module" > "$WORK/p5b2b-checkpoint"\\n' +
+        '    printf "%s" "$module" > "$WORK/p5b2b-checkpoint"\n' +
         expected_load, 1).replace(
         expected_call,
-        'done\\nprintf "orchestrator" > "$WORK/p5b2b-checkpoint"\\n' +
+        'done\nprintf "orchestrator" > "$WORK/p5b2b-checkpoint"\n' +
         'orchestrator_build_release \\', 1)
     # Diagnostic-only observer: report ONLY the bounded stage/state enum,
     # never stage message, XML, hostlist, stderr or generated argument bytes.
