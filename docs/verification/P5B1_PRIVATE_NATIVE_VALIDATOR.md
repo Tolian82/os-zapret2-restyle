@@ -1,6 +1,6 @@
 # P5b1 — bounded native validator handoff for a prebuilt private preview
 
-**Feature:** #936. **Revision:** source candidate v0.6.4_37. This is an internal verification adapter, **not** the complete P5 Validate and Preview. No .pkg publication or owner-appliance change.
+**Feature:** #936. **Revision:** v0.6.4_37 merged PR #1071 with exact-head CI PASS. This is an internal verification adapter, **not** the complete P5 Validate and Preview. No .pkg publication or owner-appliance change.
 
 ## Why a separate step is necessary
 
