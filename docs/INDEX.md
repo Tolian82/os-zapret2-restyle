@@ -1,5 +1,7 @@
 # os-zapret2-restyle — индекс текущей работы и истории
 
+**Current full-release transition (12 November 2026):** [v0.6.5 full release preparation](releases/v0.6.5.md) — accepted #936/P0–P6 and #1084, owner-authorized `v0.6.5_1`, verified final .pkg/tag/Pages publication **pending**. Previous [v0.6.4](releases/v0.6.4.md) stable archive remains immutable; Auto Restart excluded/deferred.
+
 ## Level 1 — обязательное восстановление контекста
 
 Читать по порядку через EOF:

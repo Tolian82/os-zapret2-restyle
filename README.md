@@ -21,10 +21,10 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | [**v0.6.4**](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) / [`os-zapret2-restyle-0.6.4_1.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4/os-zapret2-restyle-0.6.4_1.pkg) — stable OPNsense 26.7 / FreeBSD:15:amd64, SHA-256 `f9e0fa8ceca542ea618fc1f67e88311c80ceda4bb0bc00d7ac94e5398f860be7`; [SHA256SUMS](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4/SHA256SUMS). Release and Pages/pkg deployment [SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42947369851). |
-| **Previous stable release** | [v0.6.3](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3) / `0.6.3_1.pkg` remains immutable. |
-| **Current development candidate** | `v0.6.4_4` — **GitHub workflow/governance housekeeping only**; no `0.6.4_4.pkg` is built or published. Stable installable package remains `0.6.4_1.pkg`. |
-| **Owner-tested candidate** | [v0.6.3_52](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.3_52) — the owner confirmed local update, full purge/clean reinstall, STOPPED/empty and RUNNING/populated Lab, domain probe, complete Voice service scope and earlier GUI ordinary uninstall/reinstall saved-setting retention. This is predecessor testing evidence, not installation of the newly released `0.6.4_1.pkg`. |
+| **Full Web/pkg release** | **[v0.6.5](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.5) / [`os-zapret2-restyle-0.6.5_1.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5/os-zapret2-restyle-0.6.5_1.pkg)** — owner-authorized full stable release **preparation**; final binary SHA and Pages/pkg publication pending verification. OPNsense 26.7 / FreeBSD:15:amd64. |
+| **Previous stable release** | [v0.6.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) / `0.6.4_1.pkg` remains immutable. |
+| **Current development candidate** | `v0.6.5_1` — full-release source candidate, not a newly installed package until publication. |
+| **Owner-tested candidate** | [v0.6.4_50](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4_50) — owner manually accepted complete #936 functionality and #1084 Laboratory visuals; earlier `_48` joint Apply accepted. This is prior acceptance, not physical installation of `0.6.5_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
 | **OPNsense service** | `zapret` |
@@ -32,11 +32,11 @@
 
 `os-zapret2-restyle` integrates the [bol-van/zapret2](https://github.com/bol-van/zapret2) native `dvtws2` engine with OPNsense: transactional Traffic Strategies, automatic Strategy Lab testing, upstream runtime management and a configurable Voice Transmission page. The plugin and upstream Zapret2 engine have separate installation/update lifecycles.
 
-**v0.6.4 owner-tested readiness and published release:** The prior `v0.6.3_1` first-install/update limitations prompted the [G01–G11 lifecycle plan](docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md). A normal GUI uninstall/reinstall with Config/upstream/additional-resource preservation was checked by the owner earlier; the latest `_52` report confirms successful in-place update, full purge/clean install, correct Laboratory in both STOPPED/empty and RUNNING/populated states, and domain testing. The owner explicitly accepted Voice Transmission service tests. Code-level fixes include WAN-first, empty ordinary strategies/Voice-only, upstream lifecycle, the no-upstream Apply notice, and Model-C Stage60 hostlist access after dropping privileges to `nobody`. Resolved and historically scoped issues are linked from the [release notes](docs/releases/v0.6.4.md); untested network-specific behavior is not silently counted as PASS.
+**v0.6.5 scope:** Owner accepted the complete [feature #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), P0–P6 and Lab Help [#1084](https://github.com/Tolian82/os-zapret2-restyle/issues/1084) on actual OPNsense. Features include native Hostlist `!`/`^`, Python domain policy, multiple native payload/Lua profiles, RU/EN Strategies/Voice, safe read-only Preview and matched Lab Help. Auto Restart is **not included**; it is separately postponed to [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). [Release notes](docs/releases/v0.6.5.md).
 
-**Verification limits:** Installed-native OPNsense 26.7 CI covers lifecycle/rollback, shared FD9/IPFW/Voice, staged hostlist access as `nobody`, Standard/Extended Lab in applicable test modes, local package replacement, and recovery. Owner-reported `_52` functional acceptance is distinct from packet-level proof of a bypass against a particular ISP and does not imply every STUN/media/call variant, actual IPv6 WAN traffic or abrupt power-loss recovery was tested. Historic intermittent disposable Guest B GitHub API egress failures were documented in [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954), now **closed as not reproducible on the real OPNsense**, not declared repaired at source; a future genuine `RESTORE_FAILED` or leaked owned resources during an applicable release verification remains a blocking defect.
+**Verification limits:** Earlier installed `0.6.4_48`/`0.6.4_50` owner acceptance does not prove the exact new `0.6.5_1.pkg` byte artifact or live ISP packet/Voice MEDIA/physical IPv6 behavior. The official native release build, physical hash, immutable tag and Pages/pkg publication require their own verification.
 
-**Stable release evidence:** [v0.6.4 release notes](docs/releases/v0.6.4.md), [GitHub assets](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) and [full release workflow](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42947369851) confirm the immutable `v0.6.4` tag, exact source `b3473d5d95055cb76d8a2c8add176f4615e282d5`, native `0.6.4_1.pkg` manifest for `FreeBSD:15:amd64`, SHA-256 `f9e0fa8ceca542ea618fc1f67e88311c80ceda4bb0bc00d7ac94e5398f860be7`, checksum asset and successful GitHub Pages/pkg deployment. The owner-tested `_52.pkg` is separate from the final stable archive; the owner later **confirmed successful GUI update and clean GUI installation of this stable `_1` archive**; this is real owner acceptance, not automatically a packet capture of every external network/service.
+**Stable release evidence:** Previous [v0.6.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) is immutable and owner-installed. New `v0.6.5_1` publication and final checksum must be evidenced by actual release CI; this source-preparation document cannot preclaim them.
 
 ## IPFW rule-number ranges
 
@@ -49,15 +49,16 @@ The plugin uses fixed **IPFW rule numbers** (these are **not TCP/UDP ports**):
 
 Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The plugin must not globally disable/re-enable PF as part of normal runtime or release operations. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [completion plan](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) define current development priorities.
 
-## What's new in v0.6.4
+## What's new in v0.6.5
 
-- **Clean install and GUI lifecycle:** scoped full purge with explicit confirmation/backup, native GUI uninstall/reinstall with preserved user configuration and upstream/optional resources, and first-install defaults for YouTube Domains and TCP/QUIC strategies.
-- **WAN-first and service controls:** WAN-only Save without running the engine, empty ordinary strategies and optional Voice-only service, corrected native Start/Apply/Stop/Restart and truthful RU/EN missing-upstream diagnostics.
-- **Strategy Lab reliability:** Standard/Extended testing before first ordinary Start and during RUNNING, preserved prior service state, Stage50/60 explicit fail-closed diagnostics. The user-reproduced Stage60 `Permission denied` is fixed by a tightly scoped `root:nobody` temporary hostlist for Model C without exposing private job state.
-- **Native package safety:** official OPNsense `Mk/plugins.mk`, stock `pkg` hooks, shared FD9, scoped IPFW rules, persisted purge CLI and support for managed Lua/BIN resources. Owner-tested `_52` and native regression evidence are distinguished from final package/published repository proof.
-- **Voice Transmission:** owner accepted its service test scope on the installed testing package. This is not a general claim of successful bypass for every voice service or media path.
+- **Native Hostlist `!` / `^`:** local-exclusion and exact-domain matching, safely validated through unified Python policy.
+- **Real Zapret2 profile semantics:** first-match ordering, multiple payload/Lua handlers, `--new` and duplicate-list safeguards.
+- **Complete RU/EN Strategies and Voice:** forms, validation, popup/Full Help, installed Lua/BIN inventory, consistent 13px guidance.
+- **Read-only Validate and Preview:** inspect unsaved profiles and target/filter details without permanent Config/FD9/IPFW/Voice changes.
+- **Native Laboratory appearance:** OPNsense gray top Help row; the owner confirmed visual parity on installed `0.6.4_50.pkg`.
+- **Native lifecycle retained:** WAN-first, original FD9, shared engine/Voice and native pkg hooks. Auto Restart deferred to [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052).
 
-[Release details, installation and verification limits](docs/releases/v0.6.4.md).
+[Full release notes, installation and verification limits](docs/releases/v0.6.5.md).
 
 ## Architecture overview
 
