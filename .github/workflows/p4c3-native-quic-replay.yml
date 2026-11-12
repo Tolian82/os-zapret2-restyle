@@ -1,0 +1,114 @@
+name: P4c3c isolated native QUIC Initial fake handler (lo0 UDP)
+
+on:
+  pull_request:
+    paths:
+      - scripts/test-p4c3-native-quic-loopback.py
+      - .github/workflows/p4c3-native-quic-replay.yml
+  workflow_dispatch:
+
+concurrency:
+  group: p4c3c-quic-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: P4c3c QUIC fixture and non-FreeBSD refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Source self-test and disposable guest refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/test-p4c3-native-quic-loopback.py
+          python3 scripts/test-p4c3-native-quic-loopback.py --self-test
+          if GITHUB_ACTIONS=true ZAPRET2_P4C3_DISPOSABLE_NATIVE=1 \
+             python3 scripts/test-p4c3-native-quic-loopback.py --native /tmp/p4c3-native-not-real \
+             >"${RUNNER_TEMP}/p4c3c-guard.log" 2>&1; then
+            echo '::error::P4c3 accepted native execution on Linux'
+            exit 1
+          fi
+          grep -F 'FREEBSD_ROOT_GUEST_REQUIRED' "${RUNNER_TEMP}/p4c3c-guard.log"
+          echo P4C3C_SOURCE_AND_HOST_GUARD=PASS
+
+  native:
+    needs: fast
+    name: Disposable OPNsense v1.0.7 QUIC UDP packet handler on lo0
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fail fast on unavailable hosted QEMU apt DNS
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             command -v qemu-img >/dev/null 2>&1; then
+            echo P4C3C_QEMU=already_available
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::Runner apt mirror is unavailable; native test NOT TESTED'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p4c3-native-network >/dev/null
+      - name: Pinned upstream QUIC Initial fake UDP handler in isolated OPNsense 26.7
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cpu: 3
+          mem: 4096
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for command, seconds in (
+                (["pkg", "update", "-f"], 150),
+                (["pkg", "install", "-y", "git", "ca_root_nss", "gmake", "pkgconf", "luajit"], 180),
+            ):
+                subprocess.run(command, timeout=seconds, check=True)
+            PY
+          run: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import os
+            from pathlib import Path
+            import shutil
+            import subprocess
+            import sys
+            import tempfile
+
+            expected = '038c97e5819df10f8e8c22a2f1fffe57f2f7379b'
+            root = Path(tempfile.mkdtemp(prefix='p4c3-native-', dir='/tmp'))
+            try:
+                subprocess.run(['git', 'clone', '--quiet', '--depth', '1', '--branch',
+                                'v1.0.7', 'https://github.com/bol-van/zapret2.git',
+                                str(root)], check=True, timeout=120)
+                actual = subprocess.check_output(['git', '-C', str(root), 'rev-parse',
+                                                  'HEAD'], text=True, timeout=8).strip()
+                if actual != expected:
+                    raise RuntimeError('P4C3_REFUSED:UPSTREAM_SHA_MISMATCH')
+                root.chmod(0o755)  # dvtws2 drops privileges before Lua reads
+                subprocess.run(['make', '-C', str(root / 'nfq2')], check=True, timeout=180)
+                env = {**os.environ, 'GITHUB_ACTIONS': 'true',
+                       'ZAPRET2_P4C3_DISPOSABLE_NATIVE': '1'}
+                subprocess.run([sys.executable, 'scripts/test-p4c3-native-quic-loopback.py',
+                                '--native', str(root)], check=True, timeout=110, env=env)
+            finally:
+                shutil.rmtree(root)
+            PY
+      - name: State strict packet-level scope
+        shell: bash
+        run: |
+          echo 'P4C3C_NATIVE_SCOPE=QUIC_INITIAL_FAKE_DISPATCH_AND_LOOPBACK_UDP_PCAP_ONLY'
