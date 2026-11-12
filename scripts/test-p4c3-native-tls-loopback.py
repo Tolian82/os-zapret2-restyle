@@ -79,7 +79,19 @@ def self_test() -> None:
     assert not HANDLER_LOG.search("* lua 'fake.1.1' : desync")
     assert data.startswith(b"\x16\x03") and b"p4c3.example" in data
     assert RULE not in range(19000, 19011) and RULE not in range(19100, 19132)
+    assert safe_default_rules("65535 allow ip from any to any\n")
+    assert not safe_default_rules("19000 divert 989 tcp from any to any\n65535 allow ip from any to any\n")
+    assert not safe_default_rules("65535 count ip from any to any not diverted\n")
     print(MARK + "_SELF_TEST=PASS_SOURCE_ONLY")
+
+
+def safe_default_rules(text: str) -> bool:
+    """Reuse the established native guest default-allow ownership contract."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return (lines.count("65535 allow ip from any to any") == 1 and
+            all(line == "65535 allow ip from any to any" or
+                re.fullmatch(r"65535 count ip from any to any not(?: .*)?", line)
+                for line in lines))
 
 
 def guest_gate(checkout: Path) -> tuple[Path, Path, str]:
@@ -106,6 +118,26 @@ def guest_gate(checkout: Path) -> tuple[Path, Path, str]:
          "INSTALLED_PLUGIN_FORBIDDEN")
     need(cmd("pgrep", "-x", "dvtws2").returncode == 1,
          "ACTIVE_ENGINE_OR_PGREP_FAILURE")
+    # Fresh OPNsense guests can have IPFW entirely UNLOADED. Reuse the
+    # established cold-boot default-accept gate, never load over foreign rules.
+    listing = cmd("/sbin/ipfw", "-q", "list")
+    if listing.returncode != 0:
+        module = cmd("/sbin/kldstat", "-q", "-m", "ipfw")
+        need(listing.returncode == 71 and
+             "retrieving config failed: Protocol not available" in listing.stderr and
+             module.returncode == 1, "IPFW_COLD_LOAD_NOT_SAFE")
+        need(cmd("/bin/kenv", "net.inet.ip.fw.default_to_accept=1").returncode == 0,
+             "DISPOSABLE_DEFAULT_ACCEPT_KENV_FAILED")
+        setting = cmd("/bin/kenv", "-qv", "net.inet.ip.fw.default_to_accept")
+        need(setting.returncode == 0 and setting.stdout.strip() in (
+             'net.inet.ip.fw.default_to_accept="1"',
+             'net.inet.ip.fw.default_to_accept=1'),
+             "DISPOSABLE_DEFAULT_ACCEPT_NOT_ATTESTED")
+        need(cmd("/sbin/kldload", "ipfw").returncode == 0,
+             "DISPOSABLE_IPFW_COLD_LOAD_FAILED")
+        listing = cmd("/sbin/ipfw", "-q", "list")
+    need(listing.returncode == 0 and safe_default_rules(listing.stdout),
+         "NONDEFAULT_IPFW_RULES_PRESENT")
     for key in ("net.inet.ip.fw.one_pass", "net.inet.ip.fw.enable"):
         result = cmd("sysctl", "-n", key)
         need(result.returncode == 0 and result.stdout.strip() == "1",
@@ -117,10 +149,6 @@ def guest_gate(checkout: Path) -> tuple[Path, Path, str]:
              "DISPOSABLE_IPDIVERT_UNAVAILABLE")
     need(cmd("kldstat", "-q", "-m", "ipdivert").returncode == 0,
          "IPDIVERT_NOT_READY")
-    listing = cmd("/sbin/ipfw", "-q", "list")
-    need(listing.returncode == 0 and listing.stdout.strip() and
-         all(line.lstrip().startswith("65535 ") for line in listing.stdout.splitlines()),
-         "NONDEFAULT_IPFW_RULES_PRESENT")
     return root, engine, listing.stdout
 
 
