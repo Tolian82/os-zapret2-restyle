@@ -3,7 +3,8 @@ name: Stage 2 genuine RUNNING old owner to official native OPNsense successor
 on:
   pull_request:
     paths:
-      - scripts/native-opnsense-package.py
+      # Package provider/archive checks are qualified by the current CI native
+      # package build. This historical campaign owns running-service cutover.
       - scripts/stage2-opnsense-real-native-clean-install.py
       - scripts/stage2-opnsense-real-native-stopped-upgrade.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py

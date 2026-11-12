@@ -27,7 +27,7 @@ POLICY_DEST = "share/zapret2-restyle/compatibility.json"
 PROJECT_URL = "https://github.com/Tolian82/os-zapret2-restyle"
 EXPECTED_ROLES = ("python-runtime", "engine-build-make", "engine-build-pkgconf",
                   "engine-runtime-luajit", "setup-git", "setup-json",
-                  "private-trust-CA")
+                  "private-trust-CA", "domain-policy-idna")
 HOOKS = {"+PRE_INSTALL": "pre-install", "+POST_INSTALL": "post-install",
          "+PRE_DEINSTALL": "pre-deinstall", "+POST_DEINSTALL": "post-deinstall"}
 SERVICE = "opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
@@ -143,12 +143,19 @@ def gate():
     return qualified_target()
 
 
+def runtime_providers(catalog, python_suffix):
+    resolved = provider.resolve(catalog, "python" + python_suffix)
+    idna_name = "py" + python_suffix + "-idna"
+    need(idna_name in catalog, "TARGET_PROVIDER_MISSING:domain-policy-idna")
+    resolved["domain-policy-idna"] = {"selected": catalog[idna_name]}
+    return resolved
+
+
 def installed_provider_names():
     observed = private.old.qualify_python_provider()
     raw = provider.command("pkg", "rquery", "-r", "OPNsense", "%n|%o|%v")
     catalog = provider.parse_catalog(raw)
-    resolved = provider.resolve(catalog,
-                                "python" + observed["native_plugin_python"])
+    resolved = runtime_providers(catalog, observed["native_plugin_python"])
     provider.installed_python_crosscheck(resolved, observed)
     expected_names = [resolved[role]["selected"]["name"] for role in EXPECTED_ROLES]
     installed = {}
@@ -186,6 +193,35 @@ def archived_file(pkg, name):
     names = command(["tar", "-tf", str(pkg)]).decode().splitlines()
     member = private.old.exact_installed_tar_member(names, name)
     return command(["tar", "-xOf", str(pkg), member], timeout=35)
+
+
+def verify_packaged_domain_policy(pkg):
+    """Execute the actual archive's policy/data with the native Python/IDNA."""
+    base = "opnsense/scripts/OPNsense/Zapret/backend/"
+    with tempfile.TemporaryDirectory(prefix="zapret2-domain-package-") as scratch:
+        root = Path(scratch)
+        for rel in ("domain_policy.py", "data/public_suffix_list.dat", "data/public_suffix_list.json"):
+            target = root / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(archived_file(pkg, base + rel))
+        status = json.loads(command([sys.executable, str(root / "domain_policy.py"), "psl-status"]))
+        payload = {"discoveries": [
+            {"hostname": "video.example.co.uk", "hostlist": "youtube"},
+            {"hostname": "a.user.github.io", "hostlist": None},
+            {"hostname": "www.faß.de", "hostlist": None}],
+            "hostlists": {"youtube": "", "auto": ""}, "automatic": {}, "global_exclude": ""}
+        request = root / "request.json"
+        request.write_text(json.dumps(payload), encoding="utf-8")
+        with request.open("rb") as stream:
+            result = subprocess.run([sys.executable, str(root / "domain_policy.py"), "auto-plan"],
+                                    stdin=stream, capture_output=True, timeout=30)
+        need(result.returncode == 0, "PACKAGED_DOMAIN_POLICY_FAILED")
+        plan = json.loads(result.stdout)
+        need(plan["additions"] == {"youtube": ["example.co.uk"],
+                                   "auto": ["user.github.io", "xn--fa-hia.de"]} and
+             plan["unprocessed"] == [] and all(status["rules"].values()),
+             "PACKAGED_DOMAIN_PSL_OR_IDNA_MISMATCH")
+        return status
 
 
 def tracked_source_paths():
@@ -342,6 +378,7 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
     marker = archived_file(pkg, "opnsense/version/zapret2-restyle")
     need(sha.encode() in marker and len(marker) >= 40,
          "NATIVE_PROJECT_HASH_ANNOTATION_MISSING")
+    domain_policy = verify_packaged_domain_policy(pkg)
     return {"name": manifest["name"], "version": manifest["version"],
             "actual_file_count": len(files),
             "actual_dependencies": manifest["deps"],
@@ -351,7 +388,8 @@ def verify_native_package(pkg, plugin, sha, deps, bundle, platform, policy_sha):
             "sha256": hashlib.sha256(pkg.read_bytes()).hexdigest(),
             "compatibility_sha256": policy_sha,
             "compatibility_archive_equals_source": True,
-            "compatibility_qualified_abi": platform["freebsd_pkg_abi"]}
+            "compatibility_qualified_abi": platform["freebsd_pkg_abi"],
+            "packaged_domain_policy": domain_policy}
 
 
 def verified_private_source(lock, bundle, platform):

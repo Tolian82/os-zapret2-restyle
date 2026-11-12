@@ -554,6 +554,9 @@ jobs:
           python-version: "3.13"
       - name: Validate fast path routing
         run: python3.13 scripts/ci_owner_journey_scope.py --self-test
+      - name: Install canonical domain policy IDNA dependency
+        if: ${{ needs.changes.outputs.owner_flow == 'true' }}
+        run: python3.13 -m pip install idna
       - name: Check native-model schema, Python root bridge, envelope and GUI contracts
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         shell: bash
@@ -678,6 +681,7 @@ jobs:
           python3.13 -m py_compile scripts/test-voice-profile-compiler.py
       - name: Stage 1 canonical Python HOSTLIST normalization and shell adapter
         run: |
+          python3.13 -m pip install idna
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/domain_policy.py scripts/test-domain-policy.py
           python3.13 scripts/test-domain-policy.py
           python3.13 scripts/test-owner-p6-list-ui.py

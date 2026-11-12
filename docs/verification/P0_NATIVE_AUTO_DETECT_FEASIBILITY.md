@@ -1,6 +1,6 @@
 # P0 #1052: native Auto-detect isolation feasibility
 
-**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); detached generation-bound attribution verified; native generated-profile attribution and coverage still OPEN. No production Auto-detect or package publication. Candidate `v0.6.5_8` includes the native-proven existing global-exclusion import repair plus the noninstalled P0 generated-native witness.
+**Status:** P0 COMPLETE within the bounded generated TCP/HTTP/IPSET/STUN feasibility scope. [Native generated run 43327217834](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43327217834), job `131562724779`, tested head `2393237a81d78ff51b9bea313acbf18aec0d280a` and tree `353d2ea0bbfd9f36f1db0a5f1a30f954d70bb0c9`; same tree merged as `b29de5ca7e9dd3e499d0b7423a8524de90259209` in [PR #1096](https://github.com/Tolian82/os-zapret2-restyle/pull/1096). [CI/native package run 43327217748](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43327217748) also passed. [Immutable execution receipt](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6838843832). The chronological prepared-source/failed-run descriptions below remain historical evidence, not the current stage status. No production Auto-detect or package publication.
 **Authority:** [approved specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan P0–P5](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). The live user appliance, Config, original FD9, Voice, IPFW and Strategy Lab are not touched.
 
 ## Upstream v1.0.7 — verified source facts
@@ -102,7 +102,7 @@ Portable S0: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p0-native-generated
 | Trailing no-Lua observer with RST disabled | **PASS: scoped native OPNsense loopback only** |
 | Real OPNsense packet and native raw append | **PASS: workflow 43302135750, job 131475892342** |
 | Detached full-generator source/selector/generation binding | **SOURCE VERIFIED: executed red→green witness; not installed** |
-| Native generated-profile coverage / first-match and raw/debug attribution | **P0 OPEN** |
-| P1–P5 implementation | **NOT STARTED** |
+| Native generated-profile coverage / first-match and raw/debug attribution | **PASS: run 43327217834, job 131562724779; bounded generated TCP/HTTP/IPSET/STUN** |
+| Later-stage implementation | [P1 canonical policy/source and package boundary](P1_AUTO_DETECT_DOMAIN_POLICY.md); P2–P5 open |
 
-**Next:** resolve the current source PR native generated exit gate; success closes the scoped P0 feasibility stage and advances to P1, failure remains P0. Preserve unknown fallback and do not infer universal coverage or simultaneous `all`/`auto` modes. Production observation stays disabled; no package is published.
+**Next:** follow the [current handoff](../START_HERE.md) and P1/P2 gates. P0 feasibility is complete; production observation/persistence, broader UDP/QUIC coverage, worker, GUI/restarts and final owner acceptance are not implied. No package was published.

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "source": "https://github.com/publicsuffix/list",
+  "commit": "aa004f90b4cbe1c54ea96375622eca83d76059f0",
+  "sha256": "ebdedd64c8ee3807715f3257ffbb983e322352f7c9a14484102e5ec1245a627c",
+  "license": "MPL-2.0"
+}
