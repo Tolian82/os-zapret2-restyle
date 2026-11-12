@@ -1,6 +1,6 @@
 # P0 #1052: native Auto-detect isolation feasibility
 
-**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_5`.
+**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_6`.
 **Authority:** [approved specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan P0–P5](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). The live user appliance, Config, original FD9, Voice, IPFW and Strategy Lab are not touched.
 
 ## Upstream v1.0.7 — verified source facts
