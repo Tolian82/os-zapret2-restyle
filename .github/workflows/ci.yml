@@ -565,6 +565,7 @@ jobs:
           python3.13 scripts/test-ipset-policy.py
           php scripts/test-domain-policy-php.php
           php scripts/test-python-owned-model-validation.php
+          php scripts/test-owner-p6-large-domains.php
           php scripts/test-shared-apply-envelope.php
           python3.13 scripts/test-owner-p6-list-ui.py
           python3.13 scripts/test-strategies-i18n.py

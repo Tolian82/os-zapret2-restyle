@@ -10,6 +10,7 @@ require_once __DIR__ . '/shared_apply_request.php';
 require_once __DIR__ . '/apply_settings.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
+use OPNsense\Zapret\Api\SharedApplyEnvelope;
 
 final class StrategyPreviewCandidate
 {
@@ -27,8 +28,9 @@ final class StrategyPreviewCandidate
         try {
             $model = new \OPNsense\Zapret\Zapret();
             $current = $model->getNodes();
+            $fields = SharedApplyEnvelope::expandStrategies($request['fields'], $current);
             $plan = SettingsApply::prepareStrategies(
-                $current, $request['fields'], $request['sync']['telegramips_baseline']
+                $current, $fields, $request['sync']['telegramips_baseline']
             );
             if (($plan['result'] ?? null) !== 'prepared') {
                 throw new \InvalidArgumentException('Strategies preview candidate refused');

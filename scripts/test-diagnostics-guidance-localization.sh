@@ -125,7 +125,12 @@ require "${VIEW}" 'service_host:serviceHost'
 # the platform-owned page wrapper, like Strategy, rather than creating and then
 # overriding a second page wrapper.
 require "${VIEW}" '<div class="content-box __mb"><div class="content-box-header">'
-require "${VIEW}" '<div class="content-box"><div class="content-box-header zapret-lab-header">'
+require "${VIEW}" 'id="zapretLabHelpBar"'
+require "${VIEW}" '<div class="content-box"><div class="content-box-header"><h3>'
+require "${VIEW}" 'fa fa-info-circle text-info'
+require "${VIEW}" 'fa fa-toggle-off text-danger'
+require "${VIEW}" '#strategyLabSummary.zapret-context-help'
+require "${VIEW}" 'font-size: 13px;'
 require "${VIEW}" '<h3>{{ lang._('
 if grep -Fq 'class="page-content-main"' "${VIEW}" || grep -Fq '.page-content-main {' "${VIEW}"; then
     fail 'Laboratory must not create or override page-content-main; OPNsense owns the page perimeter'

@@ -215,6 +215,7 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('timeout-minutes: 5', ci)
         self.assertIn('php scripts/test-python-owned-model-validation.php', ci)
         self.assertIn('php scripts/test-shared-apply-envelope.php', ci)
+        self.assertIn('php scripts/test-owner-p6-large-domains.php', ci)
         self.assertIn('python3.13 scripts/test-owner-p6-list-ui.py', ci)
         self.assertIn('python3 scripts/ci_owner_journey_scope.py --self-test', ci)
         for job in ('voice-contract', 'validate'):

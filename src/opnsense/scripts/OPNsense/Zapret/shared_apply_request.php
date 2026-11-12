@@ -64,6 +64,11 @@ final class SharedApplyRequest
             throw new \InvalidArgumentException('Select a WAN interface');
         }
         $phase = 'candidate-plan';
+        if ($request['page'] === 'strategies') {
+            $request['fields'] = SharedApplyEnvelope::expandStrategies(
+                $request['fields'], $current
+            );
+        }
         $plan = $request['page'] === 'voice'
             ? SettingsApply::prepareVoice(
                 $current, $request['fields'], $request['sync']['snapshot']

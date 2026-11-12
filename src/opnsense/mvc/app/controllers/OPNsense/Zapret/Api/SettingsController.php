@@ -304,7 +304,8 @@ class SettingsController extends ApiMutableModelControllerBase
                     $transport[$group][$field] = $value;
                 }
                 // Do not relax envelope size checks for actually edited lists.
-                $encoded = SharedApplyEnvelope::encode('strategies', $transport, $sync);
+                $encoded = SharedApplyEnvelope::encode('strategies',
+                    SharedApplyEnvelope::compactStrategies($transport, $current), $sync);
             } finally {
                 $config->unlock();
             }
@@ -472,7 +473,8 @@ class SettingsController extends ApiMutableModelControllerBase
                     }
                     $transport[$group][$field] = $value;
                 }
-                $encoded = SharedApplyEnvelope::encode('strategies', $transport, $sync);
+                $encoded = SharedApplyEnvelope::encode('strategies',
+                    SharedApplyEnvelope::compactStrategies($transport, $current), $sync);
             } finally {
                 $config->unlock();
             }
