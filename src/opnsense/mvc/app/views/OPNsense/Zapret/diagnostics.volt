@@ -173,8 +173,9 @@ $(document).ready(function () {
         guidance.toggle(labHelpOn);
         $('#strategyLabHelpToggle')
             .attr('aria-pressed', labHelpOn ? 'true' : 'false')
-            .find('i').toggleClass('fa-toggle-on', labHelpOn)
-                      .toggleClass('fa-toggle-off', !labHelpOn);
+            .find('i.fa-toggle-on, i.fa-toggle-off')
+                .toggleClass('fa-toggle-on text-success', labHelpOn)
+                .toggleClass('fa-toggle-off text-danger', !labHelpOn);
     }
     $('#strategyLabHelpLabel').text(isRussian ? 'справка' : 'help');
     $('#strategyLabHelpToggle').on('click', function (event) {
@@ -704,18 +705,17 @@ $(document).ready(function () {
 /* The same native Voice parameter-help scale is used on every page. */
 #strategyLabSummary.zapret-context-help {
     font-family: inherit;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 1.5;
     font-weight: 400;
     margin: 10px 0 14px;
 }
-.zapret-lab-header { display: flex; justify-content: space-between; align-items: center; }
-.zapret-lab-header h3 { margin-right: 12px; }
+.zapret-lab-page-header { display:flex; justify-content:flex-end; align-items:center; min-height:36px; }
 .zapret-lab-help-toggle {
     background: transparent;
     color: inherit;
     border: 0;
-    font-size: 12px;
+    font-size: 13px;
     font-family: inherit;
     cursor: pointer;
     display: inline-flex;
@@ -727,16 +727,19 @@ $(document).ready(function () {
 .zapret-lab-help-toggle:focus-visible { outline: 2px solid currentColor; }
 </style>
 
-<div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
-<div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
-<div class="content-box"><div class="content-box-header zapret-lab-header">
-    <h3>{{ lang._('Strategy Lab') }}</h3>
+<div class="content-box __mb" id="zapretLabHelpBar">
+  <div class="content-box-header zapret-lab-page-header">
     <button type="button" id="strategyLabHelpToggle" class="zapret-lab-help-toggle"
         aria-controls="strategyLabSummary" aria-pressed="false">
+        <i class="fa fa-info-circle text-info" aria-hidden="true"></i>
         <span id="strategyLabHelpLabel">help</span>
-        <i class="fa fa-toggle-off" aria-hidden="true"></i>
+        <i class="fa fa-toggle-off text-danger" aria-hidden="true"></i>
     </button>
-</div><div class="content-box-main">
+  </div>
+</div>
+<div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
+<div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
+<div class="content-box"><div class="content-box-header"><h3>{{ lang._('Strategy Lab') }}</h3></div><div class="content-box-main">
 <div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="strategyLabInputsTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Blocked Domain / IP') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabDomainInput" placeholder="rutracker.org / 203.0.113.10 / 2001:db8::10"/></td><td id="strategyLabModeCell"><div class="strategy-lab-mode-control"><span id="strategyLabModeLabel">Mode:</span><select class="form-control" id="strategyLabMode"><option value="standard">{{ lang._('Standard') }}</option><option value="extended">{{ lang._('Extended') }}</option></select></div><div class="strategy-lab-mode-control"><span id="strategyLabIpv6Label">IPv6</span><label class="strategy-lab-ipv6-box"><input type="checkbox" id="strategyLabIpv6Enabled" value="1" aria-label="IPv6" /></label></div></td><td style="width:190px;"><button class="btn btn-primary" id="strategyLabBtn" type="button">{{ lang._('Run') }} <i id="strategyLabBtn_progress"></i></button> <button class="btn btn-warning" id="strategyLabCancelBtn" type="button" disabled>{{ lang._('Stop') }}</button></td></tr>
 <tr id="strategyLabServiceHostRow" style="display:none;"><td class="zapret-field-label">Host / SNI (optional)</td><td class="zapret-field-value"><input type="text" class="form-control" id="strategyLabServiceHostInput" placeholder="example.com"/></td><td colspan="2"><small id="strategyLabServiceHostHelp"></small></td></tr>
 <tr id="strategyLabUdpRow" style="display:none;"><td class="zapret-field-label">{{ lang._('Generic UDP (optional)') }}</td><td class="zapret-field-value"><input type="number" min="1" max="65535" class="form-control" id="strategyLabUdpPort" placeholder="53"/></td><td colspan="2"><div class="strategy-lab-file-picker"><button type="button" class="btn btn-default" id="strategyLabUdpPayloadButton" aria-controls="strategyLabUdpPayload">Choose file</button><span id="strategyLabUdpPayloadName" class="text-muted" aria-live="polite">No file selected</span><input type="file" class="strategy-lab-native-file-input" id="strategyLabUdpPayload" tabindex="-1" aria-hidden="true"/></div><small id="strategyLabUdpHelp"></small><br/><small id="strategyLabUdpPayloadState" class="text-muted"></small></td></tr>

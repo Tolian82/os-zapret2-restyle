@@ -343,6 +343,15 @@ def check_lab_guidance(page, mode: str) -> bool:
     paragraphs.nth(3).wait_for(state="attached", timeout=20000)
     need(paragraphs.count() == 4, "P4_NATIVE_LAB_GUIDANCE_PARAGRAPHS_" + mode)
     help_switch = page.locator("#strategyLabHelpToggle")
+    bar = page.locator("#zapretLabHelpBar")
+    need(bar.count() == 1 and bar.is_visible(), "P6_LAB_PAGE_HELP_BAR_MISSING_" + mode)
+    need(bar.locator("#strategyLabHelpToggle").count() == 1,
+         "P6_LAB_HELP_NOT_AT_PAGE_TOP_" + mode)
+    need(help_switch.evaluate("(el) => getComputedStyle(el).fontSize") == "13px",
+         "P6_LAB_HELP_SIZE_" + mode)
+    need(page.locator("#strategyLabSummary").evaluate(
+        "(el) => getComputedStyle(el).fontSize") == "13px",
+         "P6_LAB_GUIDANCE_SIZE_" + mode)
     need(help_switch.count() == 1 and help_switch.is_visible(),
          "P6_LAB_HELP_SWITCH_MISSING_" + mode)
     need(not paragraphs.nth(0).is_visible() and

@@ -44,6 +44,13 @@ assert "info.addClass('zapret-context-help')" in pages["general"]
 assert "show_all_help_frm_VoiceSettings" in pages["voice"]
 assert ".toggle($('#show_all_help_frm_VoiceSettings').hasClass('fa-toggle-on'))" in pages["voice"]
 assert "id=\"strategyLabHelpToggle\"" in pages["diagnostics"]
+assert 'id="zapretLabHelpBar"' in pages["diagnostics"], "Page-level help bar absent"
+assert pages["diagnostics"].index('id="zapretLabHelpBar"') < pages["diagnostics"].index('id="testDomainTable"') < pages["diagnostics"].index('id="strategyLabInputsTable"'), "Help toggle must precede BOTH Laboratory sections"
+assert pages["diagnostics"].count('id="strategyLabHelpToggle"') == 1, "Duplicate Laboratory Help control"
+assert 'fa fa-info-circle text-info' in pages["diagnostics"]
+assert 'fa fa-toggle-off text-danger' in pages["diagnostics"]
+assert 'fa-toggle-on text-success' in pages["diagnostics"]
+assert 'content-box-header zapret-lab-header' not in pages["diagnostics"], "Help stuck in subsection header"
 assert "aria-controls=\"strategyLabSummary\"" in pages["diagnostics"]
 assert "guidance.toggle(labHelpOn)" in pages["diagnostics"]
 assert "strategyLabHelpToggle" in pages["diagnostics"]
@@ -54,7 +61,7 @@ for page, marker in [("general","#frm_GeneralSettings .zapret-context-help"),
                      ("voice","#frm_VoiceSettings .zapret-context-help"),
                      ("diagnostics","#strategyLabSummary.zapret-context-help")]:
     assert marker in pages[page], "Help style absent " + page
-    assert "font-size: 12px" in pages[page], "Help size absent " + page
+    assert "font-size: 13px" in pages[page], "Owner-approved 13px Help absent " + page
 
 receipt = (ROOT / "docs/verification/evidence/2026-11-12-v0.6.4_42-owner-p6-findings.md").read_text()
 assert "timer" in receipt.lower() and "NOT PRESENT" in receipt

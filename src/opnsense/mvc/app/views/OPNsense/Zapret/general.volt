@@ -1518,7 +1518,7 @@
     #frm_GeneralSettings div[data-for^="help_for_"] small,
     #frm_GeneralSettings .zapret-context-help {
         font-family: inherit;
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.5;
         font-weight: 400;
     }

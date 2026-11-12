@@ -756,7 +756,7 @@ $(document).ready(function () {
     #frm_VoiceSettings div[data-for^="help_for_"] small,
     #frm_VoiceSettings .zapret-context-help {
         font-family: inherit;
-        font-size: 12px;
+        font-size: 13px;
         line-height: 1.5;
         font-weight: 400;
     }

@@ -77,6 +77,39 @@ $input=rtrim(strtr(base64_encode($raw),'+/','-_'),'=');
 $parsed=Request::decode($input);
 must($parsed['page']==='strategies','request parse');
 $out=Request::prepare($parsed,$all,$active);
+// This path must expand the changed huge User Domains under the ORIGINAL
+// FD9 request preparation before normal model, Config XML and lifecycle.
+$largeSaved = $all;
+$largeSaved['hostlist']['userdomains'] = implode("\n", array_map(
+    static fn(int $n): string => sprintf('domain%05d.example.org', $n),
+    range(1, 4400)
+));
+$largeEdited = $largeSaved['hostlist']['userdomains'] . "\n^t.me";
+$largeFields = ['hostlist'=>[
+    'userdomains'=>$largeEdited, 'youtubedomains'=>'^youtube.com',
+]];
+$largeToken = \OPNsense\Zapret\Api\SharedApplyEnvelope::encode(
+    'strategies',
+    \OPNsense\Zapret\Api\SharedApplyEnvelope::compactStrategies(
+        $largeFields, $largeSaved
+    ),
+    ['telegramips_baseline'=>$largeSaved['hostlist']['telegramips']]
+);
+must(strlen($largeToken) < 65536, 'Actual large changed request overflowed configd');
+$largeRoot = Request::prepare(Request::decode($largeToken), $largeSaved, $active);
+must($largeRoot['plan']['candidate']['hostlist']['userdomains'] === $largeEdited &&
+    $largeRoot['plan']['candidate']['hostlist']['youtubedomains'] === '^youtube.com' &&
+    in_array('hostlist.userdomains',$largeRoot['plan']['changed_fields'],true) &&
+    in_array('hostlist.youtubedomains',$largeRoot['plan']['changed_fields'],true),
+    'Original root FD9 did not rebuild genuine two-list changed candidate');
+must(str_contains($largeRoot['xml'], '^t.me') &&
+    str_contains($largeRoot['xml'], '^youtube.com'),
+    'Original root did not render changed large list into detached Config XML');
+$staleLarge = $largeSaved;
+$staleLarge['hostlist']['userdomains'] .= "\nforeign.example.org";
+rejects(fn()=>Request::prepare(Request::decode($largeToken), $staleLarge, $active),
+    'Root accepted stale Config list edit');
+
 must(str_contains($out['xml'],'<trafficargs>--filter-tcp=80</trafficargs>'),
     'Strategies candidate did not generate detached runtime XML');
 must(str_contains($out['xml'],'<hostname>keep</hostname>') &&
