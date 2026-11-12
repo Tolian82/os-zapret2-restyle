@@ -1,7 +1,7 @@
 # Project development rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-08
+**Updated:** 2026-11-12
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
 
@@ -148,6 +148,10 @@ DEV-059. **Generate and cross-check product-version representations from one aut
 
 DEV-060. **Bind cross-environment qualification and publication to the exact tested deliverable.** Record the source revision, qualified environment, relevant input identities and cryptographic digest of the actual output. If distinct clean, running-upgrade, reboot or other environments are said to exercise the same candidate, transfer and verify the same physical bytes instead of rebuilding independently from the same commit. A different digest is a separate artifact with separate acceptance scope. Do not publish an unchecked rebuild as a qualified binary or treat source-only success as installed acceptance. Preserve truthful PASS, PARTIAL, SKIPPED and NOT TESTED evidence boundaries.
 
+## Sufficient verification and automatic stop
+
+DEV-061. **Verification is a bounded means to deliver an accepted result, not an open-ended search for certainty.** Before a logical change, define the observable user outcome, changed production paths and dependencies, required safety invariants, and the smallest checks that can establish the applicable acceptance criteria. Reuse prior qualified evidence for unchanged behavior when its source, relevant dependencies, platform assumptions and execution conditions still apply; never relabel old evidence as a PASS on new bytes. Add or repeat a test only for an affected execution path, a concrete reproducible failure, a credible change-specific safety risk, or an expressly applicable acceptance/release gate. For every additional expensive native/VM test identify the distinct risk, why prior checks are insufficient, and what decision its result can change. Speculative failure possibilities alone do not create new blocking gates or authorize unrelated matrices. **When the preselected applicable checks pass and no actual critical defect or mandatory gate remains, stop expanding tests and proceed to the authorized package, merge or owner acceptance without asking the owner to rein in testing.** A testing `.pkg` is an input to owner acceptance, not a reward after every owner-live row has passed: qualify the exact package and any changed high-risk safety behavior before handoff; keep outstanding physical acceptance marked OPEN. This rule never weakens fail-closed/FD9/Config/IPFW/process/Voice/restoration safety, exact-head merge checks, proven package identity or the full release's genuinely mandatory evidence.
+
 ## Cross-reference registry
 
 ### Outbound references
@@ -195,6 +199,7 @@ DEV-060. **Bind cross-environment qualification and publication to the exact tes
 | `DEV-039` | `DOC-038`, `CHAT-017`, `GH-005`, `GH-039` |
 | `DEV-040` | `CHAT-016`, `GH-005`, `GH-060` |
 | `DEV-042` | `CHAT-021` |
+| `DEV-061` | `GH-069` |
 <!-- RULE-XREF-IN-END -->
 
 ## Rule lifecycle
