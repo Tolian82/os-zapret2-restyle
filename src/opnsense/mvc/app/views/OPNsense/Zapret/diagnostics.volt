@@ -51,12 +51,12 @@ $(document).ready(function () {
     var strategyLabGuidance = isRussian ? [
         'Введите домен, IPv4- или IPv6-адрес, который в настоящее время блокируется вашим интернет-провайдером, и нажмите «Запустить». Для IP-цели при необходимости укажите Host / SNI реального сервиса. Основной режим проверки ограничен 150 секундами, расширенный — 270 секундами. После завершения будут показаны стабильные стратегии, которые обеспечили доступ к цели.',
         'Изучите результат и добавьте необходимый профиль в используемую стратегию на странице «Настройки».',
-        'Сверьте порт TCP/UDP, --filter-l7, HOSTLIST/IPSET и порядок профилей. Для дополнительного Lua-обработчика с теми же фильтрами используйте соответствующие --payload/--in-range/--out-range и --lua-desync внутри существующего профиля; новый --new нужен только для самостоятельного профиля.',
+        'Сверьте порт TCP/UDP, --filter-l7, HOSTLIST/IPSET и порядок профилей. Для дополнительного Lua-обработчика с теми же фильтрами используйте соответствующие --payload/--in-range/--out-range и --lua-desync внутри существующего профиля; новый --new нужен только для самостоятельного профиля. Кнопка копирует полный профиль в буфер, но не сохраняет его в Стратегии; переносите только проверенные строки, не заменяя другие профили. Если финальное воспроизведение не подтверждено, копия остаётся непроверенным кандидатом.',
         'Опирайтесь на финальное подтверждение и явно проверенный протокол: HTTP/TLS, QUIC и произвольный UDP не взаимозаменяемы. Результат по одному протоколу не доказывает остальные, реальный обход у провайдера или успешный голосовой вызов. Лаборатория не сохраняет стратегию автоматически.'
     ] : [
         'Enter a domain, IPv4 or IPv6 address that is currently blocked by your ISP and click “Run.” For an IP target, provide the real service Host / SNI when needed. Standard mode is limited to 150 seconds and extended mode to 270 seconds. Stable strategies that successfully provide access to the target will be reported after completion.',
         'Review the results and add the required profile to the strategy currently in use on the “Settings” page.',
-        'Match the TCP/UDP port, --filter-l7, HOSTLIST/IPSET and profile order. For another Lua handler with the same filters, place --payload/--in-range/--out-range and --lua-desync within the existing profile; use --new only for a genuinely independent profile.',
+        'Match the TCP/UDP port, --filter-l7, HOSTLIST/IPSET and profile order. For another Lua handler with the same filters, place --payload/--in-range/--out-range and --lua-desync within the existing profile; use --new only for a genuinely independent profile. The button copies the complete profile to your clipboard, but does not save it to Traffic Strategy; merge only verified lines without replacing other profiles. If final replay is not verified, the copy remains an unverified candidate.',
         'Use final verified evidence for the specific tested protocol: HTTP/TLS, QUIC and generic UDP are not interchangeable. A result for one protocol does not prove the others, real ISP bypass or a successful voice call. Strategy Lab never automatically saves a Traffic Strategy.'
     ];
     var ui = isRussian ? {
@@ -68,7 +68,7 @@ $(document).ready(function () {
         chooseFile:'Выбрать файл', noFileSelected:'Файл не выбран',
         quicHelp:'Если включено, QUIC-стратегии проверяются даже когда контрольная проверка показывает, что QUIC заблокирован.',
         quicSaveFailed:'Не удалось сохранить настройку Enable QUIC.',
-        copy:'Копировать профиль', copied:'Профиль скопирован.', copyFailed:'Не удалось скопировать профиль.',
+        copy:'Копировать полный профиль', copyUnavailable:'Нет подтверждённого полного профиля в старом результате — копирование фрагмента отключено.', copied:'Полный профиль скопирован в буфер, но не сохранён и не применён. Проверьте порт, L7, payload, Lua и порядок профилей перед ручным переносом.', copiedUnverified:'Неподтверждённый профиль скопирован в буфер; финальное воспроизведение не проверено. Ничего не сохранено и не применено.', copyFailed:'Не удалось скопировать профиль.',
         copyJob:'Копировать Job ID', jobCopied:'Job ID скопирован.', jobCopyFailed:'Не удалось скопировать Job ID.',
         circularTitle:'Временная циклическая проверка', circularHelp:'Только для 3–5 подтверждённых TLS 1.3 стратегий: до 5 минут временно чередует тестовые варианты для проверки сайта в браузере. Запускает отдельный dvtws2 и IPFW-перехват для целевых адресов, что может затронуть другие устройства сети. Настройки Стратегий не сохраняются; после завершения выполняется восстановление Zapret2.',
         savedJobLabel:'Сохранённое задание', openSavedJob:'Открыть результат', savedJobInvalid:'Укажите ID вида job.XXXX.', savedJobUnavailable:'Сохранённый результат не найден или задание не завершено.',
@@ -93,7 +93,7 @@ $(document).ready(function () {
         chooseFile:'Choose file', noFileSelected:'No file selected',
         quicHelp:'When enabled, QUIC candidates are tested even when the control probe reports QUIC as blocked.',
         quicSaveFailed:'The Enable QUIC setting could not be saved.',
-        copy:'Copy profile', copied:'Profile copied.', copyFailed:'The profile could not be copied.',
+        copy:'Copy full profile', copyUnavailable:'No complete profile is available in this older result; fragment copying is disabled.', copied:'Full profile copied to clipboard but not saved or applied. Check port, L7, payload, Lua and profile order before manually merging.', copiedUnverified:'Unverified profile copied; final replay has not been verified. Nothing was saved or applied.', copyFailed:'The profile could not be copied.',
         copyJob:'Copy Job ID', jobCopied:'Job ID copied.', jobCopyFailed:'Could not copy Job ID.',
         circularTitle:'Temporary circular validation', circularHelp:'Only for 3–5 verified TLS 1.3 strategies: temporarily cycles test profiles for up to 5 minutes to check the site in a browser. Runs a separate dvtws2 and IPFW interception for target addresses, potentially affecting other network clients. Saved Traffic Strategies are not changed; Zapret2 is restored afterward.',
         savedJobLabel:'Saved job', openSavedJob:'Open result', savedJobInvalid:'Enter a valid job ID such as job.XXXX.', savedJobUnavailable:'Saved result not found or job is not completed.',
@@ -387,11 +387,12 @@ $(document).ready(function () {
         var items = shortlist(data), html = ''; renderedProfiles = [];
         renderProtocolScope(data, items);
         items.forEach(function (item, index) {
-            var profile = String(item.profile || item.strategy || ''), profileIndex = renderedProfiles.push(profile) - 1;
+            var profile = String(item.profile || item.strategy || ''), fullProfile = typeof item.profile === 'string' && item.profile.trim() !== '';
+            var profileIndex = renderedProfiles.push({text:fullProfile ? profile : '',verified:fullProfile && verifiedReplay(item)}) - 1;
             var mark = index === 0 ? ' <span class="label label-success">#1</span>' : '';
             html += '<tr><td>' + (index + 1) + mark + '</td><td>' + esc(item.protocol || 'tls13') + '</td><td>' + esc(item.port || '—') + '</td>' +
                 '<td>' + esc(item.family || '—') + '</td><td>' + esc(endpointText(item) || '—') + '</td><td>' + esc(replayText(item)) + '</td>' +
-                '<td><pre style="margin:0;white-space:pre-wrap;">' + esc(profile) + '</pre><button type="button" class="btn btn-xs btn-default strategyLabCopyProfile" data-profile-index="' + profileIndex + '">' + esc(ui.copy) + '</button></td></tr>';
+                '<td><pre style="margin:0;white-space:pre-wrap;">' + esc(profile) + '</pre><button type="button" class="btn btn-xs btn-default strategyLabCopyProfile" data-profile-index="' + profileIndex + '"' + (fullProfile ? '' : ' disabled title="' + esc(ui.copyUnavailable) + '"') + '>' + esc(ui.copy) + '</button></td></tr>';
         });
         $('#strategyLabShortlist tbody').html(html); $('#strategyLabShortlistBox').toggle(items.length > 0);
         $('#strategyLabShortlistBox h4').first().text(items.some(function (item) { return !verifiedReplay(item); }) ? ui.savedProfiles : (isRussian ? 'Стабильные кандидаты' : 'Stable candidates'));
@@ -429,8 +430,8 @@ $(document).ready(function () {
         });
     });
     $(document).on('click', '.strategyLabCopyProfile', function () {
-        var profile = renderedProfiles[Number($(this).attr('data-profile-index'))] || ''; if (!profile) return;
-        copyProfile(profile).then(function () { $('#strategyLabMessage').text(ui.copied); }, function () { $('#strategyLabMessage').text(ui.copyFailed); });
+        var selected = renderedProfiles[Number($(this).attr('data-profile-index'))] || null; if (!selected || !selected.text) return;
+        copyProfile(selected.text).then(function () { $('#strategyLabMessage').text(selected.verified ? ui.copied : ui.copiedUnverified); }, function () { $('#strategyLabMessage').text(ui.copyFailed); });
     });
     function openSavedResult(jobId) {
         if (strategyLabBusy) return;

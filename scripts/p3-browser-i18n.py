@@ -352,6 +352,13 @@ def check_lab_guidance(page, mode: str) -> bool:
                     "HTTP/TLS, QUIC and generic UDP are not interchangeable")
     need(transfer_token in transfer and "--in-range" in transfer and
          "--out-range" in transfer, "P4_NATIVE_LAB_TRANSFER_MISSING_" + mode)
+    copy_token = ("Кнопка копирует полный профиль в буфер, но не сохраняет его в Стратегии"
+                  if mode == "ru" else
+                  "The button copies the complete profile to your clipboard, but does not save it to Traffic Strategy")
+    unverified_token = ("копия остаётся непроверенным кандидатом"
+                        if mode == "ru" else "the copy remains an unverified candidate")
+    need(copy_token in transfer and unverified_token in transfer,
+         "P4_A17_NATIVE_LAB_COPY_PROVENANCE_MISSING_" + mode)
     need(caveat_token in caveat, "P4_NATIVE_LAB_PROTOCOL_SCOPE_MISSING_" + mode)
     return True
 
