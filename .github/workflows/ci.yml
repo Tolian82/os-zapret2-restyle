@@ -114,8 +114,9 @@ jobs:
 
           # The expensive Strategy Lab corrective matrix is only relevant
           # to its own code/shared native runtime; never run on a GUI-only fix.
+          # UI shortlist copy checks run directly below, without the full matrix.
           strategy_lab=false
-          if printf '%s\n' "${classified_changed}" | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/zapret_service[.]sh$|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
+          if printf '%s\n' "${classified_changed}" | grep -Ev '^scripts/test-strategy-lab-structured-results[.]sh$' | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/zapret_service[.]sh$|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
             strategy_lab=true
           fi
 
@@ -1054,6 +1055,10 @@ jobs:
       - name: Test Strategy Lab corrective matrix
         if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.strategy_lab == 'true' }}
         run: sh scripts/test-strategy-lab-corrective-matrix.sh
+
+      # UI-only profile-copy provenance always runs as a focused S0 test.
+      - name: Test Strategy Lab structured UI result provenance
+        run: sh scripts/test-strategy-lab-structured-results.sh
 
       - name: Test diagnostics guidance localization
         run: sh scripts/test-diagnostics-guidance-localization.sh
