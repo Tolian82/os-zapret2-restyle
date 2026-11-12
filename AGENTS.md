@@ -28,7 +28,7 @@ If a mandatory document is truncated or paginated, continue to EOF. If required 
 - meaning of owner instructions and owner-facing communication: `CHAT-*`;
 - repository, branch, PR, CI, merge, package, release, and GitHub hygiene: `GH-*`.
 
-GitHub workload and user-journey-first testing hard limits are `GH-066`–`GH-072` in the canonical `docs/GITHUB_PUBLICATION.md`: pre-push fast verification, scoped S0–S3 checks, qualified native/KVM test hosts, fail-fast infrastructure gates, bounded VM time, safe PR supersession and hourly watchdog. This is an authority pointer, not a fifth rule book.
+GitHub workload and user-journey-first testing hard limits are `GH-066`–`GH-072` in the canonical `docs/GITHUB_PUBLICATION.md`: pre-push fast verification, scoped S0–S3 checks, qualified native/KVM test hosts, fail-fast infrastructure gates, bounded VM time, safe PR supersession and hourly watchdog. In particular, `GH-071` governs native-runner readiness and real installed evidence, while `GH-072` requires fast red→green user-path checks before unrelated matrices. This is an authority pointer, not a fifth rule book.
 
 Each current general rule has one normative home. Each book contains an explicit inbound/outbound cross-reference registry; CI verifies that the registries and real rule references agree (`DOC-042`–`DOC-045`).
 
