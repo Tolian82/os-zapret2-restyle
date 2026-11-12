@@ -1,6 +1,6 @@
 # P5a — Canonical read-only structural advisory (NOT full P5)
 
-Feature: issue #936, approved plan docs/architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md, source candidate v0.6.4_36. Exact-head CI and native installed/owner acceptance are pending; stable v0.6.4_1.pkg is unchanged.
+Feature: issue #936, approved plan docs/architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md, source revision v0.6.4_36 (merged PR #1070; exact-head CI PASS). Native installed/owner acceptance remains pending; stable v0.6.4_1.pkg is unchanged.
 
 ## One canonical parser, without mutation
 
