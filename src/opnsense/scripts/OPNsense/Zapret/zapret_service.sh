@@ -2350,6 +2350,12 @@ service_dispatch()
         native-voice-candidate-preflight)
             native_voice_candidate_preflight_service
             ;;
+        strategy-preview)
+            [ "$#" -eq 2 ] || return 64
+            [ -x "${PYTHON_RUNTIME}" ] && [ -r "${BACKEND_DIR}/strategy_preview_route.py" ] ||
+                return 69
+            "${PYTHON_RUNTIME}" "${BACKEND_DIR}/strategy_preview_route.py" preview "$2"
+            ;;
         native-voice-preview-draft)
             native_voice_preview_draft_service "${2:-}" "${3:-}"
             ;;
@@ -2553,7 +2559,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
+            start|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -2750,7 +2756,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

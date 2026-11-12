@@ -112,12 +112,19 @@ jobs:
             stage0_archive_baseline=true
           fi
 
-          # The expensive Strategy Lab corrective matrix is only relevant
-          # to its own code/shared native runtime; never run on a GUI-only fix.
-          # UI shortlist copy checks run directly below, without the full matrix.
+          # Only actual Strategy Lab/shared-runtime changes require the
+          # full corrective matrix. An exact read-only P5c dispatch delta
+          # is exempt solely when independently attested byte-for-byte.
           strategy_lab=false
-          if printf '%s\n' "${classified_changed}" | grep -Ev '^scripts/test-strategy-lab-structured-results[.]sh$' | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/zapret_service[.]sh$|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
+          if printf '%s\n' "${classified_changed}" | grep -Ev '^scripts/test-strategy-lab-structured-results[.]sh$' | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
             strategy_lab=true
+          elif printf '%s\n' "${classified_changed}" | grep -Fxq 'src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh'; then
+            python3 scripts/ci_p5c_service_scope.py --self-test
+            service_base=$(git rev-parse "${base_sha}")
+            service_head=$(git rev-parse "${head_sha}")
+            if [[ "$(python3 scripts/ci_p5c_service_scope.py "${service_base}" "${service_head}")" != "P5C_ONLY_SERVICE_DELTA=true" ]]; then
+              strategy_lab=true
+            fi
           fi
 
           # Resolve ^ fallback and dispatch refs to immutable full Git SHAs.
