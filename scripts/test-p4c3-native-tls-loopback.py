@@ -27,7 +27,9 @@ RULE, DIVERT, PORT = 19350, 19898, 6544
 HOST = "127.0.0.1"
 RULE_ARGS = ["divert", str(DIVERT), "tcp", "from", HOST, "to", HOST,
              str(PORT), "out", "not", "diverted", "not", "sockarg", "xmit", "lo0"]
-HANDLER_LOG = re.compile(\n    r"(?m)^LUA:\\s+multisplit:\\s+sending part ([12]) "\n    r"\\d+-\\d+ len=[1-9]\\d* seqovl=\\d+\\s+:")
+HANDLER_LOG = re.compile(
+    r"(?m)^LUA:\s+multisplit:\s+sending part ([12]) "
+    r"\d+-\d+ len=[1-9]\d* seqovl=\d+\s+:")
 
 
 def need(ok: bool, why: str) -> None:
