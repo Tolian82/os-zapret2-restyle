@@ -161,8 +161,8 @@ The plan **does not** authorize: a second WAN chooser, a second Config writer, a
 
 ## 11. Immediate handoff and working agreement
 
-**Current next task (12 November 2026):** P5c — qualify the authenticated unsaved RU/EN Strategies GUI preview on installed OPNsense. P5b2b original detached candidate builder/validator passed its one exact-head native witness #43206178891 and PR #1075 merged. Then P6 owner testing package. Reuse accepted P0–P4 native proofs; do not restart upstream semantics tests or unrelated Lab matrices. The historical P0/P1 entry conditions are already settled.
+**Current next task (12 November 2026):** P6 physical-owner acceptance on the published [v0.6.4_42.pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4_42/os-zapret2-restyle-0.6.4_42.pkg); direct new P5c button click in authenticated RU+EN remains open. Original detached P5b2b native #43206178891 and P5c genuine installed configd/FD9 #43219785092 PASS, PRs #1075/#1076 merged. P6 package was published with only one native `.pkg` asset; `_43` is a documentation-only GH-061 record. Reuse accepted P0–P4 native proofs; do not restart unrelated Lab matrices.
 
 The owner welcomes optional engineering ideas. Propose them openly, with value, compatibility/safety impact and whether they alter this scope; do not silently treat a suggestion as an approved requirement.
 
-**Current status:** P0–P4 recorded separately; P5b2b source and installed native witness PASS; P5c GUI source candidate pending installed browser, P6 owner acceptance OPEN. No new `v0.6.4_38` package published; stable `v0.6.4_1.pkg` unchanged.
+**Current status:** P0–P4 recorded separately; P5b2b native PASS; P5c source merged and installed native configd/FD9 PASS, direct new-button RU/EN browser and physical A11/A16 OPEN; P6 testing [v0.6.4_42.pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.4_42/os-zapret2-restyle-0.6.4_42.pkg) published from exact source commit, owner full acceptance OPEN. `_43` docs only; stable `v0.6.4_1.pkg` and Pages/pkg repository unchanged.

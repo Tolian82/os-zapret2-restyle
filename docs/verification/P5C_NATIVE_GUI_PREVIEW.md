@@ -1,6 +1,6 @@
 # P5c — authenticated unsaved Strategies GUI preview
 
-**Feature:** #936 / approved P5. **Source candidate:** v0.6.4_42. **State:** source implementation and fast mock route tests; exact installed native P5c / authenticated RU+EN Chromium **NOT TESTED** until a separate same-source receipt. Owner A11/A16 and P6 remain open.
+**Feature:** #936 / approved P5. **Source candidate:** v0.6.4_42, merged to `main` `72a37d443de6318d79564980444eefab6d5da7c5`. **State:** [exact-head installed native P5c configd/FD9 proof #43219785092](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43219785092) PASS (`PASS_NATIVE_CONFIGD_UNSAVED_PREVIEW_NO_MUTATION`, STOPPED/RUNNING/missing-runtime/stale-baseline), plus general [installed Chromium P3 RU/EN](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43219784979) PASS for existing controls; **direct click of the NEW P5c button in authenticated RU+EN Chromium NOT YET TESTED**, owner A11/A16/P6 remain OPEN. [Persistently published testing pkg](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4_42) and [GH-061 evidence](evidence/testing-publications/v0.6.4_42.md).
 
 ## Product path and guarantees
 
