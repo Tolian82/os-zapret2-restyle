@@ -222,10 +222,13 @@ def compose(text: str, domain_source: Path, domain_ref: str,
         if kind == "profile" and use_domains and not (voice or stun) and domain_aware(effective):
             tokens.append("--hostlist-exclude=" + domain_ref)
         if use_ips:
-            # Always append AFTER all --import and user-supplied profile flags;
-            # the template cannot override the mandatory last profile filter.
+            # Templates are copied by --import, including their IPSET collection.
+            # Injecting here AND after import registers the same file twice in
+            # one native collection. Own this mandatory filter only on executable
+            # rows, after all imports; unrelated user template filters stay intact.
             tokens = [t for t in tokens if t != "--ipset-exclude=" + ipset_ref]
-            tokens.append("--ipset-exclude=" + ipset_ref)
+            if kind == "profile":
+                tokens.append("--ipset-exclude=" + ipset_ref)
         output.append(([row[0]] if row[0].startswith("--new=") else []) + tokens)
     native_user_ipsets(output, templates, reference_root, release, static_root)
     blocks = []

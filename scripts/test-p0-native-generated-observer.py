@@ -23,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"))
 from voice_profile_compiler import SERVICES, compile_candidate
+from global_exclusions import segments
 
 MARK = "P0_NATIVE_GENERATED_OBSERVER"
 HOST = "127.0.0.1"
@@ -101,6 +102,9 @@ def fixture(generator, checkout: Path):
              mapping["profiles"][3]["hostlist"] == "youtube" and
              mapping["profiles"][4]["source_number"] == mapping["profiles"][5]["source_number"] == 4,
              "GENERATED_SOURCE_ORDINAL_LOST")
+        template = segments(data["final"].decode())[1]
+        need(not any(t.startswith("--ipset-exclude=") and t in data["overlays"] for t in template),
+             "GENERATED_TEMPLATE_REIMPORTS_GLOBAL_IPSET_EXCLUSION")
         # Make only this synthetic candidate's references usable on the guest.
         test.root.chmod(0o755)
         case.chmod(0o755)

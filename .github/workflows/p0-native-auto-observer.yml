@@ -1,10 +1,11 @@
-name: P0 #1052 generated native Auto-detect observer feasibility
+name: "P0 #1052 generated native Auto-detect observer feasibility"
 
 on:
   pull_request:
     paths:
       - scripts/test-p0-native-auto-observer.py
       - scripts/test-p0-native-generated-observer.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py
   workflow_dispatch:
 
 permissions:

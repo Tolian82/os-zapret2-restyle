@@ -75,7 +75,7 @@ class GlobalExclusionTests(unittest.TestCase):
         self.assertEqual(result, self.render(result))
         audit(result, *self.kw)
 
-    def test_templates_named_new_and_import_are_both_protected(self):
+    def test_importing_profiles_are_protected_without_template_reregistration(self):
         raw = "\n".join([
             "--port=989", "--template=base", "--hostlist=/some/hostlist.txt",
             "--filter-l7=tls", "--new=name1", "--import=base",
@@ -87,12 +87,31 @@ class GlobalExclusionTests(unittest.TestCase):
         rows = segments(result)
         self.assertEqual(len(rows), 4)
         self.assertTrue(rows[1][0] == "--new=name1")
-        for row in rows:
+        self.assertNotIn("--ipset-exclude=" + self.ip_ref, rows[0])
+        for row in rows[1:]:
             self.assertEqual(row.count("--ipset-exclude=" + self.ip_ref), 1)
         self.assertIn("--hostlist-exclude=" + self.domain_ref, rows[1])
         self.assertIn("--hostlist-exclude=" + self.domain_ref, rows[2])
         self.assertNotIn("--hostlist-exclude=" + self.domain_ref, rows[3])
         self.assertEqual(self.render(result), result)
+
+    def test_nested_templates_preserve_user_filter_and_final_global_filter(self):
+        user_file = self.upstream / "user-exclude.txt"
+        user_file.write_text("192.0.2.0/24\n")
+        user = "--ipset-exclude=" + str(user_file)
+        owned = "--ipset-exclude=" + self.ip_ref
+        raw = ("--port=989\n--template=base\n" + user + "\n" + owned +
+               "\n--new\n--template=outer\n--import=base\n--new=active\n"
+               "--import=outer\n--filter-tcp=443\n")
+        result = self.render(raw)
+        rows = segments(result)
+        self.assertIn(user, rows[0])
+        self.assertNotIn(owned, rows[0])
+        self.assertNotIn(owned, rows[1])
+        self.assertEqual(rows[2].count(owned), 1)
+        self.assertEqual(rows[2][-1], owned)
+        self.assertEqual(result, self.render(result))
+        audit(result, *self.kw)
 
     def test_empty_global_ipset_does_not_affect_profiles(self):
         self.ipset.write_text("")
