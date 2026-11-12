@@ -1,6 +1,6 @@
 # Strategies / Hostlist / RU-EN / read-only preview — approved development plan P0–P6
 
-**Status:** OWNER APPROVED IN FULL — 11 November 2026; implementation NOT STARTED and no acceptance evidence claimed.
+**Status:** OWNER APPROVED IN FULL — 11 November 2026. Incremental P0–P4 source/native proofs are recorded separately; P5a pure structural advisory is a v0.6.4_36 source candidate. **Full P5 and A11/A16 owner acceptance remain OPEN.** This plan records requirements, not proof of final feature completion.
 **Normative requirements:** [Strategies / HOSTLIST / bilingual UI / read-only preview specification](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), owner-approved 11 November 2026.
 **Issue:** [FEATURE #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) (remains OPEN until implemented and owner accepted).
 **Authority:** owner explicitly approved the entire P0–P6 plan, including all notes, wording, qualifications, suggestions and acceptance gates, on 11 November 2026. There is no remaining approval gate to start P0, P1 or P2 within this agreed scope. Return to the owner for an actual change of architecture/requirements, or proactively propose optional improvements for discussion without silently adding them to scope.

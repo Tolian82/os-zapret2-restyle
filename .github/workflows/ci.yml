@@ -1057,6 +1057,9 @@ jobs:
         run: sh scripts/test-strategy-lab-corrective-matrix.sh
 
       # UI-only profile-copy provenance always runs as a focused S0 test.
+      - name: P5a read-only canonical structural preview source contract
+        run: python3.13 scripts/test-strategy-preview-shape.py
+
       - name: Test Strategy Lab structured UI result provenance
         run: sh scripts/test-strategy-lab-structured-results.sh
 
