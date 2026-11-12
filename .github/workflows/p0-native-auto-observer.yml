@@ -1,0 +1,120 @@
+name: P0 #1052 isolated native Auto-detect observer feasibility
+
+on:
+  pull_request:
+    paths:
+      - scripts/test-p0-native-auto-observer.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-1052-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast:
+    name: P0 source fixture and native refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Off-target source self-test and strict host guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/test-p0-native-auto-observer.py
+          python3.13 scripts/test-p0-native-auto-observer.py --self-test
+          if GITHUB_ACTIONS=true python3.13 scripts/test-p0-native-auto-observer.py --native \
+               /tmp/p4c3-native-unqualified >"${RUNNER_TEMP}/p0-guard.log" 2>&1; then
+            echo '::error::P0 native probe accepted a non-FreeBSD host'
+            exit 1
+          fi
+          grep -E 'FREEBSD_ROOT_GUEST_REQUIRED|DISPOSABLE_GITHUB_VM_OPT_IN_REQUIRED' \
+            "${RUNNER_TEMP}/p0-guard.log"
+
+  native:
+    needs: fast
+    name: One disposable OPNsense 26.7 dvtws2 auto-observer / first-match witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fail fast if QEMU cannot be provisioned
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             command -v qemu-img >/dev/null 2>&1; then
+            echo P0_QEMU=already_available
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::Runner apt mirror unreachable; native evidence NOT TESTED'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p0-auto-network >/dev/null
+      - name: Single pinned upstream native observer on loopback (no plugin install)
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: rsync
+          copyback: false
+          cpu: 2
+          mem: 4096
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for command, seconds in (
+                (["pkg", "update", "-f"], 150),
+                (["pkg", "install", "-y", "git", "ca_root_nss", "gmake", "pkgconf", "luajit"], 180),
+            ):
+                subprocess.run(command, timeout=seconds, check=True)
+            PY
+          run: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import os
+            from pathlib import Path
+            import shutil
+            import subprocess
+            import sys
+            import tempfile
+
+            expected = "038c97e5819df10f8e8c22a2f1fffe57f2f7379b"
+            root = Path(tempfile.mkdtemp(prefix="p4c3-native-", dir="/tmp"))
+            try:
+                subprocess.run(["git", "clone", "--quiet", "--depth", "1", "--branch",
+                                "v1.0.7", "https://github.com/bol-van/zapret2.git",
+                                str(root)], check=True, timeout=120)
+                actual = subprocess.check_output(
+                    ["git", "-C", str(root), "rev-parse", "HEAD"],
+                    text=True, timeout=8).strip()
+                if actual != expected:
+                    raise RuntimeError("P0_REFUSED:UPSTREAM_SHA_MISMATCH")
+                root.chmod(0o755)
+                subprocess.run(["make", "-C", str(root / "nfq2")],
+                               check=True, timeout=180)
+                env = {**os.environ, "GITHUB_ACTIONS": "true",
+                       "ZAPRET2_P4C3_DISPOSABLE_NATIVE": "1"}
+                subprocess.run(
+                    [sys.executable, "scripts/test-p0-native-auto-observer.py",
+                     "--native", str(root)],
+                    check=True, timeout=90, env=env)
+            finally:
+                shutil.rmtree(root)
+            PY
+      - name: Declare qualified evidence boundary
+        shell: bash
+        run: |
+          echo P0_SCOPE=NATIVE_LOOPBACK_OBSERVER_ONLY
+          echo P0_NOT_CLAIMED=FULL_PROFILE_GENERATION_OR_OWNER_APPLIANCE_OR_PRODUCTION_ACCEPTANCE
