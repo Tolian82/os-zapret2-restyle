@@ -126,6 +126,14 @@ for term in ("If the Lab verified an independent profile",
     assert term in view, ("P4 bilingual transfer guidance", term)
 assert "cache-only" in view or "The resource list cache is unavailable" in view
 
+# P4c1: keep upstream L7/payload documentation symmetric in EN/RU.
+for item in ("http_req", "tls_client_hello", "quic_initial",
+             "wireguard_initiation", "TCP/80", "TCP/443", "UDP/443"):
+    assert item in help_fields["zapret.strategy.trafficargs"], ("P4c EN", item)
+    assert item in view, ("P4c RU", item)
+assert "not runnable strategies" in help_fields["zapret.strategy.trafficargs"]
+assert "не готовые стратегии" in view
+
 assert "Additional global dvtws2 arguments" not in view
 assert "Additional global dvtws2 arguments" not in help_fields["zapret.strategy.extraargs"]
 # The runtime RU help dictionary has exactly the same 10 existing fields;
