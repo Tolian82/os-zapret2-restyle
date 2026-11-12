@@ -1,6 +1,6 @@
 # P4c3a — isolated TLS packet-handler witness (source candidate)
 
-**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), approved P4/A17. **Source revision:** `v0.6.4_29`. **Status:** source-only, **native evidence pending exact-head CI**. The published `v0.6.4_1.pkg` is unchanged.
+**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), approved P4/A17. **Source revision:** `v0.6.4_29`. **Status:** **native disposable-CI PASS**, [PR #1063](https://github.com/Tolian82/os-zapret2-restyle/pull/1063) merged at `2ba9c8edc3c907de8131394443d7f8fa0eb42829`; owner appliance, WAN/ISP bypass, full P4/A17/P6 remain **OPEN**. Published `v0.6.4_1.pkg` unchanged.
 
 ## Why the previous gate is insufficient
 
@@ -18,4 +18,4 @@
 
 `scripts/test-p4c3-native-tls-loopback.py --self-test` runs without a VM, checking the real TLS fixture, handler marker and safe port/rule policy. The standalone `.github/workflows/p4c3-native-tls-replay.yml` first runs a fast non-FreeBSD refusal, then **one** bounded native OPNsense guest after a runner prerequisite gate. No historical package/RUNNING/Voice/Lab matrix, GitHub push-duplication, installed package or owner's production runtime is involved.
 
-**Exit:** exact-head native workflow must show `P4C3_TLS_MULTISPLIT=PASS_NATIVE_TLS_HANDLER_DISPATCH_AND_PCAP_ONLY`. If the VM lacks appropriate scoped IPFW/loopback support, classify as **NOT TESTED / infrastructure refusal**, not product regression or PASS. The selected handler's dispatch and exact test-only loopback segment payloads **do not** prove reliable end-to-end TCP reconstruction, successful TLS handshake, external ISP DPI bypass, Voice/STUN/WireGuard/QUIC execution, or P4/A17/P6 acceptance. Those remain separate gates.
+**Exit — SATISFIED for isolated P4c3a only:** exact-head [native #43141145507](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43141145507) contains `P4C3_TLS_MULTISPLIT_NATIVE_HANDLER=PASS` and `P4C3_TLS_MULTISPLIT=PASS_NATIVE_TLS_HANDLER_DISPATCH_AND_PCAP_ONLY`; [CI #43141145534](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43141145534), FreeBSD #43141145451, title #43141145887 and postmerge `main` [CI #43141609553](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43141609553) also passed. If the VM lacks appropriate scoped IPFW/loopback support, classify as **NOT TESTED / infrastructure refusal**, not product regression or PASS. The selected handler's dispatch and exact test-only loopback segment payloads **do not** prove reliable end-to-end TCP reconstruction, successful TLS handshake, external ISP DPI bypass, Voice/STUN/WireGuard/QUIC execution, or P4/A17/P6 acceptance. Those remain separate gates.
