@@ -1,6 +1,6 @@
 # P4c3b — native HTTP `http_req` / `multisplit:pos=method+2` loopback witness
 
-**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) · **candidate:** `v0.6.4_31` source-only · **status:** exact-head native CI **PENDING**. Stable public package `v0.6.4_1.pkg` unchanged.
+**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) · **qualified source:** `v0.6.4_31` · **status:** isolated native HTTP witness **PASS**, [PR #1065](https://github.com/Tolian82/os-zapret2-restyle/pull/1065) merged into `main` `e782c86db308fc67a080f4e6ab0e75a845e9e8dc`; real WAN/DPI-bypass, owner A17/P4/P6 still **OPEN**. Stable public package `v0.6.4_1.pkg` unchanged.
 
 ## Scope and expected evidence
 
@@ -25,6 +25,6 @@ The test rejects: wrong upstream SHA, installed plugin or preexisting engine, no
 
 The narrow workflow `.github/workflows/p4c3-native-http-replay.yml` runs one fast Linux source/negative guard and **one bounded native OPNsense guest**, not the historical Voice, Strategy Lab or package matrix. Local synthetic PCAP negatives, missing-part/wrong-position logs and foreign-IPFW checks fail closed; they **do not** count as native PASS.
 
-**Exit gate:** exact-head `P4C3_HTTP_MULTISPLIT_NATIVE_HANDLER=PASS` and `P4C3_HTTP_MULTISPLIT=PASS_NATIVE_HTTP_HANDLER_AND_SPLIT_PCAP_ONLY`, with applicable PR CI/policy checks successful and source receipt recorded before merging.
+**Exit gate — SATISFIED for isolated P4c3b only:** [native #43159501934](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43159501934) log contains `P4C3_HTTP_MULTISPLIT_NATIVE_HANDLER=PASS` and `P4C3_HTTP_MULTISPLIT=PASS_NATIVE_HTTP_HANDLER_AND_SPLIT_PCAP_ONLY`. [CI #43159501815](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43159501815), FreeBSD policy [#43159501811](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43159501811), PR title [#43159501895](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43159501895) and postmerge [main CI #43159908476](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43159908476) completed successfully.
 
 **No claim:** HTTP response delivery, full TCP/HTTP transaction, ISP DPI bypass, real WAN, runtime/GUI preset, YouTube or other traffic effectiveness, Voice/QUIC/STUN/WireGuard, P4/A17 owner acceptance or P6 release qualification. No new `.pkg` is generated or published.
