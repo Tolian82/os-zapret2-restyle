@@ -1,8 +1,8 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0 IN PROGRESS (upstream evidence and one scoped genuine native loopback observer witness PASS; full generated-profile coverage/attribution still OPEN), P1–P5 NOT STARTED (13 November 2026). No production changes.
+**Status:** P0 IN PROGRESS (upstream evidence and one scoped genuine native loopback observer witness PASS; detached generation-bound source attribution verified; native generated-profile coverage/attribution still OPEN), P1–P5 NOT STARTED (13 November 2026). No production changes.
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
-**Boundary:** Recording approved intended behavior only; no production code, native engine, cron, UI, Strategy Lab, service state, configuration or native package changes. The prior completed [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) stays accepted. A separate implementation instruction will begin with P0; an issue/plan alone does not run implementation.
+**Boundary:** Owner-authorized P0 feasibility work is in progress. The detached map/witness is noninstalled; production code, native engine, cron, UI, Strategy Lab, service state, configuration and published package remain unchanged. The prior completed [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) stays accepted. P1–P5 depend on the remaining P0 evidence gate; an issue/plan alone does not run implementation.
 
 ## 1. Unchanged architecture and stage order
 
@@ -32,6 +32,8 @@ Stages are **logical gates, not promised commit counts or an invitation to expan
 ## 3. P0 — source audit and bounded native observer witness PASS; full P0 still OPEN
 
 **Current P0 evidence:** [native profile-selection risk and one targeted non-activating observer experiment](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). The direct auto-on-existing-action-profile path is rejected. A single real disposable OPNsense native packet witness **passed** for an isolated trailing no-action observer (run [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)). This does **not** prove all production-generated profiles, coverage or attribution, and no P0 completion or later-stage implementation is claimed.
+
+**Generation-attribution boundary:** the [noninstalled P0 implementation and full-generator fixture](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md#p0-generation-bound-attribution-13-november-2026) now capture original sources, Target Mode and normalized/resolved order, final Voice/Extra assembly and exact final-argv identity. They preserve IPSET ancestry and refuse uncertain imports/tails or a stale generation. This is executed portable source proof, not a production-persisted map or native observation acceptance. The next P0 gate is one bounded real generated-`auto` observer witness using that map, including native first-match/IPSET/Voice isolation and raw/debug generation correlation.
 
 1. Compare the [official upstream manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md), actual selected engine [`nfq2/desync.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/desync.c) and [`nfq2/helpers.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/helpers.c) with real current `target_mode.sh` / `profile_policy.py` / dvtws generator.
 2. Map source profiles to final native profile numbers and sole HOSTLIST/unknown by **generation**; account for `--new`, templates, import, Python expansion, Target Mode and Apply.
@@ -66,4 +68,4 @@ The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AU
 
 The remaining questions concern **real generated `auto` profile coverage/attribution under first-match** (not a fictitious simultaneous `all` mode), FreeBSD FD closure, inode durability/ownership, PSL provision/update and calendar/cron mechanics. They are not permission to reopen agreed domain routing or change the product without owner approval.
 
-**Next task on a separate implementation instruction: P0 only.** This plan is a documentation artifact, **not running implementation, not a published package, not CI PASS and not owner acceptance**.
+**Current authorized task: finish the remaining P0 native generated-observer integration gate.** The owner has authorized execution; no repeated approval is required for this scope. P1–P5 remain unstarted until P0 passes. The plan itself is **not a published package, CI PASS or owner acceptance**.
