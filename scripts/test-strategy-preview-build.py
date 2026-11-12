@@ -232,6 +232,13 @@ class PrivateBuildSourceTests(unittest.TestCase):
                           "orchestrator_native_start"):
             self.assertNotIn(forbidden, code)
 
+    def test_original_builder_uses_native_service_shell_failure_contract(self):
+        self.assertNotIn("set -eu", buildmod.BUILD_SH)
+        self.assertIn(
+            'shared-candidate "$WORK/candidate.xml" || exit $?',
+            buildmod.BUILD_SH)
+        self.assertIn("orchestrator_build_release", buildmod.BUILD_SH)
+
     def test_snapshots_are_read_only_not_claimed_as_full_p5(self):
         code = (BACKEND / "strategy_preview_build.py").read_text(encoding="utf-8")
         self.assertIn('"/sbin/ipfw", "-q", "list"', code)

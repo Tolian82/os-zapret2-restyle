@@ -41,7 +41,9 @@ MODULES = (
 # command dispatcher or any mutation entrypoint. Only the declared work dir
 # and stage file may be created by the original builder.
 BUILD_SH = r'''
-set -eu
+# Match the established zapret_service.sh shell semantics. The original
+# orchestrator owns explicit checked failures; global errexit/nounset can
+# abort its staged error handling before it writes the safe status file.
 SCRIPT_DIR="$1"
 BACKEND_DIR="$2"
 ZAPRET_DIR="$3"
@@ -59,7 +61,7 @@ done
 orchestrator_build_release \
     "$WORK/templates/usr/local/etc/zapret2/zapret.conf" \
     "$ZAPRET_DIR" "$ACTIVE_DIR" "$WORK" "$WORK/release" \
-    "$STAGE_FILE" shared-candidate "$WORK/candidate.xml"
+    "$STAGE_FILE" shared-candidate "$WORK/candidate.xml" || exit $?
 '''
 
 
