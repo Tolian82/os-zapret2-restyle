@@ -153,6 +153,25 @@ def native():
     need(not list(Path('/tmp').glob('zapret-p5b-*')), 'preexisting-preview-workspace')
     sys.path.insert(0, str(BACKEND))
     import strategy_preview_build as builder
+    # Diagnostic-only observer: report ONLY the bounded stage/state enum,
+    # never stage message, XML, hostlist, stderr or generated argument bytes.
+    real_build = builder._run_builder
+    def observe_builder_stage(work):
+        try:
+            return real_build(work)
+        except builder.PrivateBuildRefused:
+            stage_file = work / 'build-stage.status'
+            if stage_file.is_file() and not stage_file.is_symlink() and \
+                    stage_file.stat().st_size <= 4096:
+                fields = stage_file.read_text(errors='replace').split('|', 5)
+                if len(fields) == 6 and fields[2] in (
+                        'config', 'parser', 'targets', 'ports', 'generator',
+                        'validator', 'ready') and fields[3] in (
+                        'running', 'failed', 'ok'):
+                    print('P5B2B_LAST_STAGE=' + fields[2] + ':' + fields[3],
+                          file=sys.stderr)
+            raise
+    builder._run_builder = observe_builder_stage
     hold_fd9()
     try:
         _, bad = preview_check(builder, 'invalid-xml', b'<opnsense/>')
