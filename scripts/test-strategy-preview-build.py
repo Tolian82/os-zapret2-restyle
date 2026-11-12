@@ -156,6 +156,45 @@ class PrivateBuildSourceTests(unittest.TestCase):
                                     "VALIDATOR_REPORT_UNTRUSTED"):
             self.run_preview(validator=lies)
 
+    def test_builder_interrupt_reaps_child_before_workspace_cleanup(self):
+        class InterruptedChild:
+            pid = 47111
+            calls = 0
+
+            def wait(self, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise KeyboardInterrupt()
+                return -9
+
+        child = InterruptedChild()
+        with patch.object(buildmod.subprocess, "Popen", return_value=child), \
+                patch.object(buildmod.os, "killpg") as kill:
+            with self.assertRaises(KeyboardInterrupt):
+                buildmod._run_builder(Path("/tmp/zapret-p5b-cancellation"))
+            kill.assert_called_once_with(child.pid, buildmod.signal.SIGKILL)
+        self.assertEqual(child.calls, 2)
+
+    def test_builder_timeout_uses_same_group_cleanup(self):
+        class TimedOutChild:
+            pid = 47112
+            calls = 0
+
+            def wait(self, timeout=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise buildmod.subprocess.TimeoutExpired("builder", timeout)
+                return -9
+
+        child = TimedOutChild()
+        with patch.object(buildmod.subprocess, "Popen", return_value=child), \
+                patch.object(buildmod.os, "killpg") as kill:
+            with self.assertRaisesRegex(buildmod.PrivateBuildRefused,
+                                        "^ORIGINAL_BUILDER_TIMEOUT$"):
+                buildmod._run_builder(Path("/tmp/zapret-p5b-timeout"))
+            kill.assert_called_once_with(child.pid, buildmod.signal.SIGKILL)
+        self.assertEqual(child.calls, 2)
+
     def test_invalid_xml_is_rejected_before_lock_or_directory(self):
         for candidate, reason in [
             (b"", "CANDIDATE_XML_SIZE_INVALID"),
