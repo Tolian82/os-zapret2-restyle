@@ -340,14 +340,38 @@ jobs:
             dependencies=$(tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; m=json.load(sys.stdin); d=m["deps"]; assert isinstance(d,dict) and "git" in d and d; print(" ".join(sorted(d)))')
             test -n "$dependencies"
             pkg install -y -r OPNsense $dependencies
-            pkg add -f "$package"
+            # pkg can return 0 even if an installed package's POST-INSTALL
+            # script reports failure. An extracted pkgdb entry is not a
+            # successful native OPNsense installation.
+            if install_output=$(pkg add -f "$package" 2>&1); then
+              install_rc=0
+            else
+              install_rc=$?
+            fi
+            printf '%s\n' "$install_output"
+            if [ "$install_rc" -ne 0 ] ||
+               printf '%s\n' "$install_output" | grep -Eq '(POST-INSTALL script failed|ERROR: OPNsense Zapret template could not be rendered)'; then
+              echo 'ERROR: native pkg install or post-install failed in no-git guest D' >&2
+              # Disposable CI guest only: bounded, filtered configd diagnostics.
+              # Do not dump Config XML, candidate strategies or private secrets.
+              if [ -f /var/log/configd/latest.log ]; then
+                grep -Ei 'template|Zapret|Traceback|Exception|error' /var/log/configd/latest.log | tail -n 35 || true
+              fi
+              echo 'DIAGNOSTIC: installed Python and configd worker identity' >&2
+              /usr/local/bin/python3 --version || true
+              /usr/local/sbin/configctl system status || true
+              ps -ax -o pid,command | grep -E '[c]onfigd.py|[p]ython3' | head -n 15 || true
+              exit 1
+            fi
             pkg info -q git
             git --version
             [ "$(pkg query '%R' git)" = OPNsense ] || {
               echo 'ERROR: git did not come from the official OPNsense repository' >&2
               exit 1
             }
+            version=$(tr -d '[:space:]' < VERSION)
             expected=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | tr -d '[:space:]')
+            [ -n "$version" ] && [ -n "$expected" ]
             [ "$(pkg query '%v' os-zapret2-restyle)" = "${version}_${expected}" ] || {
               echo 'ERROR: local native package version was not installed' >&2
               exit 1
