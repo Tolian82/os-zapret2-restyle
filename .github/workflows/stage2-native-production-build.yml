@@ -4,13 +4,12 @@ on:
   pull_request:
     paths:
       - scripts/build-pkg.sh
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/build-curl-impersonate.sh
       - compatibility.json
       - scripts/validate-compatibility.py
       - scripts/stage1-native-policy-static.py
       - scripts/compatibility-bootstrap.sh
-      - scripts/test-native-opnsense-package.py
       - scripts/test_freebsd15_package_ci.py
   workflow_dispatch:
 

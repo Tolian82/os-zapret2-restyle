@@ -6,7 +6,7 @@ on:
     paths:
       - VERSION
       - compatibility.json
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage5-native-single-artifact.py
       - scripts/stage5-g10-preinstall-purge.py
       - scripts/stage5-native-running-voice-artifact.py
@@ -34,7 +34,7 @@ on:
     paths:
       - VERSION
       - compatibility.json
-      - scripts/native-opnsense-package.py
+      # Provider/archive-only builder changes use the central native package gate.
       - scripts/stage5-native-single-artifact.py
       - scripts/stage5-g10-preinstall-purge.py
       - scripts/stage5-native-running-voice-artifact.py

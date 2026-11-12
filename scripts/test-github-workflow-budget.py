@@ -130,10 +130,17 @@ class BudgetContracts(unittest.TestCase):
                       (ROOT / '.github/workflows/p0-native-auto-observer.yml').read_text())
 
     def test_package_provider_checks_do_not_replay_historical_cutover_guests(self):
+        for path in (ROOT / '.github/workflows').glob('*.yml'):
+            text = path.read_text()
+            if 'vmactions/' not in text:
+                continue
+            # The current central CI owns real archive/provider qualification;
+            # do not rebuild it in ten historical lifecycle campaigns as well.
+            self.assertNotIn('      - scripts/native-opnsense-package.py', text, path.name)
+            self.assertNotIn('      - scripts/test-native-opnsense-package.py', text, path.name)
         for name in ('stage2-real-native-running-upgrade.yml',
                      'stage2-real-native-unsafe-owner-replacement.yml'):
             text = (ROOT / '.github/workflows' / name).read_text()
-            self.assertNotIn('      - scripts/native-opnsense-package.py', text)
             self.assertIn('  workflow_dispatch:', text)
             self.assertIn('      - scripts/stage2-opnsense-real-native-clean-install.py', text)
         self.assertIn('scripts/native-opnsense-package\\.py$',
