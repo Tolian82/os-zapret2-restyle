@@ -78,7 +78,7 @@ jobs:
 
           docs_only=false
           if [[ "${EVENT_NAME}" != "workflow_dispatch" && -n "${changed}" ]]; then
-            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*|\.github/workflows/.*|scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py)$' || true)
+            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*|\.github/workflows/.*|scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py|scripts/test-github-branch-hygiene[.]sh)$' || true)
             if [[ -z "${non_docs}" ]]; then
               docs_only=true
             fi

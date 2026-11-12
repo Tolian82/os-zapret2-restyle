@@ -39,6 +39,7 @@ META_PATHS = frozenset({
     'README.md', 'AGENTS.md',
     'scripts/ci_owner_journey_scope.py',
     'scripts/test-github-workflow-budget.py',
+    'scripts/test-github-branch-hygiene.sh',
 })
 
 
@@ -77,7 +78,8 @@ def classify(paths: list[str], force_full: bool = False) -> dict[str, bool]:
 def self_test() -> None:
     for path in ('docs/verification/owner-p6-readonly-probe.py',
                  '.github/workflows/ci.yml',
-                 'scripts/ci_owner_journey_scope.py'):
+                 'scripts/ci_owner_journey_scope.py',
+                 'scripts/test-github-branch-hygiene.sh'):
         assert classify([path]) == dict(owner_flow=False, full_matrix=False,
                                         voice_scope=False), path
     for path in FLOW_ONLY:

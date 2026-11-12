@@ -155,6 +155,7 @@ require_fixed 'docs_only: ${{ steps.paths.outputs.docs_only }}' "${CI}" 'CI does
 require_fixed 'docs/.*' "${CI}" 'docs-only path boundary is missing'
 require_fixed '.github/workflows/.*' "${CI}" 'workflow-only CI scope boundary is missing'
 require_fixed 'scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py' "${CI}" 'CI policy-only scripts are not exempt from product matrices'
+require_fixed 'scripts/test-github-branch-hygiene[.]sh' "${CI}" 'CI governance-only shell test path must not invoke product matrix'
 require_fixed 'name: Validate documentation' "${CI}" 'focused documentation validation job is missing'
 require_fixed "needs.changes.outputs.docs_only == 'true'" "${CI}" 'documentation validation is not gated by docs-only classification'
 require_fixed "needs.changes.outputs.docs_only != 'true'" "${CI}" 'full product validation is not skipped for docs-only PRs'
