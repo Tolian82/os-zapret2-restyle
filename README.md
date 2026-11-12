@@ -21,9 +21,9 @@
 
 | Project | Current release |
 |---|---|
-| **Full Web/pkg release** | **[v0.6.5](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.5) / [`os-zapret2-restyle-0.6.5_1.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5/os-zapret2-restyle-0.6.5_1.pkg)** — owner-authorized full stable release **preparation**; final binary SHA and Pages/pkg publication pending verification. OPNsense 26.7 / FreeBSD:15:amd64. |
+| **Full Web/pkg release** | [**v0.6.5**](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.5) / [`os-zapret2-restyle-0.6.5_1.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5/os-zapret2-restyle-0.6.5_1.pkg) — **STABLE RELEASE PUBLISHED** for OPNsense 26.7 / `FreeBSD:15:amd64`; SHA-256 `c68965787007f4b8ecb257e7ae06b2f5609c948b2b3b2246f0070ebd3fb63dc1`, [SHA256SUMS](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5/SHA256SUMS). [Native release + Pages/pkg SUCCESS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43291066886). |
 | **Previous stable release** | [v0.6.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) / `0.6.4_1.pkg` remains immutable. |
-| **Current development candidate** | `v0.6.5_1` — full-release source candidate, not a newly installed package until publication. |
+| **Current development candidate** | `v0.6.5_2` — release-evidence and current-documentation source revision **ONLY**, not an additional `.pkg`. The immutable stable package remains `0.6.5_1.pkg`. |
 | **Owner-tested candidate** | [v0.6.4_50](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4_50) — owner manually accepted complete #936 functionality and #1084 Laboratory visuals; earlier `_48` joint Apply accepted. This is prior acceptance, not physical installation of `0.6.5_1.pkg`. |
 | **Target platform** | OPNsense 26.7 · FreeBSD 15 amd64 |
 | **Runtime** | bol-van/zapret2 (`dvtws2`) |
@@ -34,9 +34,9 @@
 
 **v0.6.5 scope:** Owner accepted the complete [feature #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), P0–P6 and Lab Help [#1084](https://github.com/Tolian82/os-zapret2-restyle/issues/1084) on actual OPNsense. Features include native Hostlist `!`/`^`, Python domain policy, multiple native payload/Lua profiles, RU/EN Strategies/Voice, safe read-only Preview and matched Lab Help. Auto Restart is **not included**; it is separately postponed to [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). [Release notes](docs/releases/v0.6.5.md).
 
-**Verification limits:** Earlier installed `0.6.4_48`/`0.6.4_50` owner acceptance does not prove the exact new `0.6.5_1.pkg` byte artifact or live ISP packet/Voice MEDIA/physical IPv6 behavior. The official native release build, physical hash, immutable tag and Pages/pkg publication require their own verification.
+**Verification limits:** The final `0.6.5_1.pkg` was officially built for `FreeBSD:15:amd64` and published through GitHub Release and Pages/pkg, with identical source/repository artifact identity verified by the [release pipeline](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43291066886); owner-manual GUI acceptance remains grounded in the earlier installed `0.6.4_48`/`0.6.4_50` feature builds, not a reported physical owner installation of the final `_1.pkg`. No universal ISP bypass, all Telegram MEDIA/CALL, independent owner IPv6 WAN capture or abrupt power-loss recovery is asserted.
 
-**Stable release evidence:** Previous [v0.6.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) is immutable and owner-installed. New `v0.6.5_1` publication and final checksum must be evidenced by actual release CI; this source-preparation document cannot preclaim them.
+**Stable release evidence:** [v0.6.5](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.5) is a genuine stable release, semantic tag points to `64263ef9c29093be05b3bcdda166c6f2e890a735` ([preparation PR #1089](https://github.com/Tolian82/os-zapret2-restyle/pull/1089)); native `0.6.5_1.pkg` GitHub asset is 6,848,651 bytes with SHA-256 `c68965787007f4b8ecb257e7ae06b2f5609c948b2b3b2246f0070ebd3fb63dc1`. The full [release workflow #43291066886](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43291066886) reported PASS for release validation, native OPNsense 26.7 build, immutable Release assets/checksum and Pages/pkg repository deployment. [Exact immutable release publication record](docs/verification/evidence/2026-11-12-v0.6.5-full-release-publication.md). The old [v0.6.4](https://github.com/Tolian82/os-zapret2-restyle/releases/tag/v0.6.4) remains untouched.
 
 ## IPFW rule-number ranges
 
