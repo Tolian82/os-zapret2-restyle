@@ -207,6 +207,63 @@ class BudgetContracts(unittest.TestCase):
                            'scripts/p3-browser-i18n.py --ru-browser'):
             self.assertIn(real_check, workflow)
 
+    def test_user_journey_first_and_full_matrix_only_for_critical_scope(self):
+        """A policy-only or UI edit must not launch both historical matrices."""
+        ci = (ROOT / '.github/workflows/ci.yml').read_text(encoding='utf-8')
+        scope = (ROOT / 'scripts/ci_owner_journey_scope.py').read_text(encoding='utf-8')
+        self.assertIn('name: Fast affected user-path contracts', ci)
+        self.assertIn('timeout-minutes: 5', ci)
+        self.assertIn('php scripts/test-python-owned-model-validation.php', ci)
+        self.assertIn('php scripts/test-shared-apply-envelope.php', ci)
+        self.assertIn('python3.13 scripts/test-owner-p6-list-ui.py', ci)
+        self.assertIn('python3 scripts/ci_owner_journey_scope.py --self-test', ci)
+        for job in ('voice-contract', 'validate'):
+            match = re.search(rf'(?ms)^  {job}:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', ci)
+            self.assertIsNotNone(match, job)
+            header = match.group(1).split('    steps:\n', 1)[0]
+            self.assertIn('needs: [changes, journey]', header, job)
+            self.assertIn("needs.changes.outputs.full_matrix == 'true'", header, job)
+        package = re.search(r'(?ms)^  package:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', ci)
+        self.assertIsNotNone(package)
+        self.assertIn('needs: [changes, journey]', package.group(1).split('    steps:\n', 1)[0])
+        self.assertIn('CRITICAL_FLOW', scope)
+        self.assertIn("API + 'SharedApplyEnvelope.php'", scope)
+        self.assertIn("FORM + 'models/OPNsense/Zapret/Zapret.xml'", scope)
+        self.assertIn('full_matrix = True', scope)
+        self.assertIn("path.startswith('docs/')", scope)
+
+    def test_new_changing_path_router_is_fail_closed_and_offline(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'ci_owner_journey_scope',
+            ROOT / 'scripts/ci_owner_journey_scope.py'
+        )
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.self_test()
+        self.assertTrue(module.classify(
+            ['src/opnsense/scripts/OPNsense/Zapret/new_unknown_runtime.py']
+        )['full_matrix'])
+        self.assertFalse(module.classify(
+            ['docs/verification/owner-p6-readonly-probe.py']
+        )['full_matrix'])
+
+    def test_testing_package_delivery_only_native_on_intentional_dispatch(self):
+        """GH-067/072: publisher-rule-only PR never consumes an OPNsense VM."""
+        wf = (ROOT / '.github/workflows/testing-package-delivery-ci.yml').read_text(
+            encoding='utf-8')
+        self.assertIn('  workflow_dispatch:', wf)
+        self.assertIn('  pull_request:', wf)
+        pkg = re.search(r'(?ms)^  package:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', wf)
+        self.assertIsNotNone(pkg)
+        header = pkg.group(1).split('    steps:\n', 1)[0]
+        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' }}", header)
+        self.assertIn('vmactions/opnsense-vm@', pkg.group(1))
+        gov = re.search(r'(?ms)^  governance:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', wf)
+        self.assertIsNotNone(gov)
+        self.assertIn('scripts/test-github-branch-hygiene.sh', gov.group(1))
+
     def test_native_execution_rule_is_canonical_not_just_p3_notes(self):
         rulebook = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
         agents = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')

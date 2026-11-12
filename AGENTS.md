@@ -28,7 +28,7 @@ If a mandatory document is truncated or paginated, continue to EOF. If required 
 - meaning of owner instructions and owner-facing communication: `CHAT-*`;
 - repository, branch, PR, CI, merge, package, release, and GitHub hygiene: `GH-*`.
 
-GitHub workload hard limits are `GH-066`–`GH-071` in the canonical `docs/GITHUB_PUBLICATION.md`: pre-push fast verification, scoped S0–S3 checks, qualified native/KVM test hosts, fail-fast infrastructure gates, bounded VM time, safe PR supersession and hourly watchdog. This is an authority pointer, not a fifth rule book.
+GitHub workload and user-journey-first testing hard limits are `GH-066`–`GH-072` in the canonical `docs/GITHUB_PUBLICATION.md`: pre-push fast verification, scoped S0–S3 checks, qualified native/KVM test hosts, fail-fast infrastructure gates, bounded VM time, safe PR supersession and hourly watchdog. In particular, `GH-071` governs native-runner readiness and real installed evidence, while `GH-072` requires fast red→green user-path checks before unrelated matrices. This is an authority pointer, not a fifth rule book.
 
 Each current general rule has one normative home. Each book contains an explicit inbound/outbound cross-reference registry; CI verifies that the registries and real rule references agree (`DOC-042`–`DOC-045`).
 
@@ -55,7 +55,7 @@ This is an execution reminder for **existing** canonical rules, not another rule
 
 Before announcing or starting implementation, compare the claimed missing behavior with its real production entrypoint/call path, current tests and applicable CI. Record the proof level separately: **implemented in source**, **verified in CI/package**, or **confirmed owner-live**. An already implemented feature may be reopened only for a demonstrated defect, changed requirement or new evidence (`DEV-004`–`DEV-005`, `DEV-011`–`DEV-013`).
 
-For each increment, apply `DEV-007`: name the observable user scenario and acceptance evidence before code, and resolve a blocking defect before moving to another increment. Report changed / actually verified / still unconfirmed under `CHAT-003`; do not convert CI counts into installed-page acceptance. Architecture changes still require the evidence and authority in `DEV-018`–`DEV-019`.
+For each increment, apply `DEV-007` and `DEV-062`: name the observable user scenario, its pre-fix failing end-to-end reproducer and acceptance evidence before code, and resolve a blocking defect before moving to another increment. Report changed / actually verified / still unconfirmed under `CHAT-003`; do not convert CI counts into installed-page acceptance. Architecture changes still require the evidence and authority in `DEV-018`–`DEV-019`.
 
 After every logical change, reconcile affected facts under `DOC-036`–`DOC-037` and `DOC-047`: replace superseded assertions in `PROJECT_STATE.md`, preserve exactly one next action in `START_HERE.md`, update `ROADMAP.md` only when milestone priorities change, and put per-revision chronology only in the current-line ledger. Do not update documents that have no changed facts, and never append revision diaries to handoff, state, roadmap or TЗ. For every newly completed milestone cite the real entrypoint and verification evidence; a failed/skipped CI job, mock and live experiment have distinct proof status.
 
