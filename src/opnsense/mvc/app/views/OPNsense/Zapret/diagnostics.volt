@@ -710,32 +710,38 @@ $(document).ready(function () {
     font-weight: 400;
     margin: 10px 0 14px;
 }
-.zapret-lab-page-header { display:flex; justify-content:flex-end; align-items:center; min-height:36px; }
-.zapret-lab-help-toggle {
-    background: transparent;
-    color: inherit;
-    border: 0;
-    font-size: 13px;
-    font-family: inherit;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 3px 7px;
+/* Match the OPNsense 26.7 base_form first table row, not a custom
+   content-box-header. Only keyboard focus needs local styling. */
+#strategyLabHelpToggle:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
-.zapret-lab-help-toggle .fa { font-size: 18px; }
-.zapret-lab-help-toggle:focus-visible { outline: 2px solid currentColor; }
 </style>
 
 <div class="content-box __mb" id="zapretLabHelpBar">
-  <div class="content-box-header zapret-lab-page-header">
-    <button type="button" id="strategyLabHelpToggle" class="zapret-lab-help-toggle"
-        aria-controls="strategyLabSummary" aria-pressed="false">
-        <i class="fa fa-info-circle text-info" aria-hidden="true"></i>
-        <span id="strategyLabHelpLabel">help</span>
-        <i class="fa fa-toggle-off text-danger" aria-hidden="true"></i>
-    </button>
-  </div>
+    <div class="table-responsive">
+        <table class="table table-striped table-condensed" style="table-layout: fixed; width: 100%;">
+            <colgroup>
+                <col style="width: 25%;" />
+                <col style="width: 40%;" />
+                <col style="width: 35%;" />
+            </colgroup>
+            <tbody>
+                <tr>
+                    <td colspan="3">
+                        <span class="pull-right">
+                            <i class="fa fa-info-circle fa-sm fa-fw text-primary" aria-hidden="true"></i>
+                            <small id="strategyLabHelpLabel">help</small>
+                            <a href="#" id="strategyLabHelpToggle" role="button"
+                                aria-controls="strategyLabSummary" aria-pressed="false">
+                                <i class="fa fa-toggle-off fa-fw text-danger" aria-hidden="true"></i>
+                            </a>
+                        </span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 <div class="content-box __mb"><div class="content-box-header"><h3>{{ lang._('Test Domain Connectivity') }}</h3></div>
 <div class="content-box-main"><div class="table-responsive"><table class="table table-striped diagnostics-form-table" id="testDomainTable"><tbody><tr><td class="zapret-field-label">{{ lang._('Domain') }}</td><td class="zapret-field-value"><input type="text" class="form-control" id="testDomainInput" placeholder="example.com"/></td><td style="width:150px;"><button class="btn btn-primary" id="testDomainBtn" type="button">{{ lang._('Test') }} <i id="testDomainBtn_progress"></i></button></td></tr></tbody></table></div><pre id="testDomainResult" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ lang._('Enter a domain and click Test to check HTTPS connectivity.') }}</pre></div></div>
