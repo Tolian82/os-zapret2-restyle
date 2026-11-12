@@ -72,8 +72,8 @@ foreach (['youtubedomains','userdomains','excludedomains',
     check(count($modelXml->xpath('/model/items/hostlist/' . $field . '/Mask')) === 0,
         'Duplicate native Mask still blocks the Python policy for ' . $field);
 }
-foreach (['general/divertport','general/ports'] as $path) {
-    check(count($modelXml->xpath('/model/items/' . $path . '/Mask')) === 1,
-        'Native non-policy port/number mask changed');
-}
+check(count($modelXml->xpath('/model/items/general/ports/Mask')) === 1,
+    'Native ports grammar changed');
+check((string)$modelXml->xpath('/model/items/general/divertport')[0]['type'] === 'PortField',
+    'Native Divert PortField type changed');
 echo "PASS: P1 root Python policy wins over native Model Regex without changing Config\n";

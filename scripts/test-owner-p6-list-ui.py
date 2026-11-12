@@ -20,8 +20,8 @@ for name in active:
     assert node is not None and node.attrib.get("type") == "TextField", name
     assert node.find("Mask") is None, "duplicate OPNsense list grammar: " + name
 assert model.find("./items/hostlist/domains/Mask") is not None, "legacy unowned domain mask changed"
-for field in ("ports", "divertport"):
-    assert model.find("./items/general/" + field + "/Mask") is not None, field
+assert model.find("./items/general/ports/Mask") is not None, "ports grammar changed"
+assert model.find("./items/general/divertport").attrib["type"] == "PortField"
 assert model.find("./items/general/waninterface").attrib["type"] == "InterfaceField"
 assert model.find("./items/hostlist/mode").attrib["type"] == "OptionField"
 
