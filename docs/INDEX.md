@@ -18,6 +18,11 @@
 
 Уже прочитанные неизменные документы повторно не загружаются в рамках одного состояния repository; применяются существующие правила чтения. Архивы и lab runbooks не включены в автоматический cold start.
 
+## Level 2 — owner-approved future feature #1052 (recorded 12 November 2026, NOT IMPLEMENTED)
+
+- [Normative native Auto-detect / Target Mode / HOSTLIST / Advanced-only Auto Restart specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) — owner-accepted complete requirements from the [consolidated #1052 comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626); native P0 unsafe activation gate.
+- [Future native Auto-detect plan P0–P5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) — staged Python/PSL, raw queue durability, GUI/Advanced-only scheduler and real native/package/owner acceptance. **All stages not started.**
+
 ## Level 2 — approved current feature requirements (11 November 2026)
 
 - [Approved Strategies / HOSTLIST `!/^ ` / complete RU+EN / preview specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) — normative owner-approved FEATURE #936, independent of accepted lifecycle ТЗ v1.3.
