@@ -1,6 +1,6 @@
 # P0 #1052: native Auto-detect isolation feasibility
 
-**Status:** P0 IN PROGRESS. Upstream and local source analysis established; true native OPNsense packet-level proof PENDING. No product implementation or package publication. Source-only candidate `v0.6.5_5`.
+**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_5`.
 **Authority:** [approved specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan P0–P5](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). The live user appliance, Config, original FD9, Voice, IPFW and Strategy Lab are not touched.
 
 ## Upstream v1.0.7 — verified source facts
@@ -23,13 +23,13 @@
 
 Investigate an **observer-only trailing profile within the same `dvtws2`**, after all legitimate action profiles, with `--hostlist-auto=<inbox.txt>`, **no `--lua-desync` options** and explicit `--hostlist-auto-retrans-reset=0`. This could collect previously unmatched hostnames without applying bypass actions after native inclusion.
 
-This remains **a hypothesis**, not general native proof. A preceding broad profile might consume traffic first and prevent observation; moving an observer ahead could preempt an authorized profile and is forbidden. Distinct known-list origin is established only from a **single unambiguous generation-bound mapping**, otherwise the shared fallback is mandatory. IPSET-only/mixed and Voice must not be silently included. Dynamic hostname/L7 jumps and template/import expansion also require separate P0 source/generator evidence.
+This is **confirmed only for the scoped native loopback witness**, not as a general production implementation. A preceding broad profile could consume traffic first and prevent observation; moving an observer ahead could preempt an authorized profile and is forbidden. However, the GUI's `all` mode and `auto` mode are **mutually exclusive Target Mode choices**: a broad profile from `all` must **not** be projected into the default `auto` mode to manufacture a defect. Only an actual generated `auto` profile, including explicit selectors / `--new` or imported/native profiles, can establish a real coverage problem. Distinct known-list origin is established only from a **single unambiguous generation-bound mapping**, otherwise the shared fallback is mandatory. IPSET-only/mixed and Voice must not be silently included. Dynamic hostname/L7 jumps and template/import expansion also require separate P0 source/generator evidence.
 
 ## One bounded, real FreeBSD/OPNsense witness
 
 [Native disposable test](../../scripts/test-p0-native-auto-observer.py) and [dedicated scoped workflow](../../.github/workflows/p0-native-auto-observer.yml) exercise **one** pinned upstream v1.0.7 `dvtws2` on localhost TCP/HTTP in an isolated OPNsense 26.7 guest. Required observation: legitimate first profile executes its existing Lua, unknown hostname goes to the trailing no-action observer, deliberate localhost failure generates a **real raw append plus correlated debug record**, and unknown HTTP reaches its test server unchanged both before and after native auto inclusion. Guarded bidirectional IPFW divert rules must be restored to identical initial state; the plugin must not be installed. No owner traffic or Strategy Lab operations.
 
-This is not proof of full generator integration, all supported filters, real WAN bypass, a production package, or owner-appliance acceptance. Never treat `--dry-run` or an early debug line as packet-level proof. If the targeted native job fails, classify infrastructure versus genuine native behavior; do not repeatedly launch unrelated VM jobs or change production to match a test hypothesis.
+**Evidence:** workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750), native job `131475892342` succeeded; log reports `P0_NATIVE_AUTO_OBSERVER_SELF_TEST=PASS_SOURCE_ONLY` and `P0_NATIVE_AUTO_OBSERVER=PASS_NATIVE_LOOPBACK_OBSERVER_NON_ACTIVATING_ONLY`. The witness confirms a non-activating observer for its tested native HTTP/loopback conditions. This is not proof of full generator integration, all supported filters, real WAN bypass, a production package, or owner-appliance acceptance. Never treat `--dry-run` or an early debug line as packet-level proof. If the targeted native job fails, classify infrastructure versus genuine native behavior; do not repeatedly launch unrelated VM jobs or change production to match a test hypothesis.
 
 ## Status and next action
 
@@ -37,9 +37,9 @@ This is not proof of full generator integration, all supported filters, real WAN
 | --- | --- |
 | Upstream behavior and local generation source | **SOURCE CONFIRMED** |
 | Native auto directly on an active action profile | **REJECTED AS UNSAFE** |
-| Trailing no-Lua observer with RST disabled | **CANDIDATE ONLY** |
-| Real OPNsense packet and native raw append | **PENDING** |
+| Trailing no-Lua observer with RST disabled | **PASS: scoped native OPNsense loopback only** |
+| Real OPNsense packet and native raw append | **PASS: workflow 43302135750, job 131475892342** |
 | General source-to-generated profile coverage / first-match and attribution | **P0 OPEN** |
 | P1–P5 implementation | **NOT STARTED** |
 
-**Next:** finish only the focused native P0 witness. If successful, check the actual generated-profile coverage and attribution before closing P0; if incompatible with the owner-approved architecture, stop and seek the owner's design decision, leaving production untouched.
+**Next:** inspect actual compiled `Target Mode=auto` profiles (including preserved explicit selectors, `--new` and any import/template semantics) and source→native attribution. Do not mistake a hypothetical `all`-mode broad-first profile for an `auto` defect. Close P0 only with bounded evidence for permitted observation/known-list attribution; if a genuine generated-`auto` incompatibility exists, report that exact reproducible blocker. Production remains untouched.

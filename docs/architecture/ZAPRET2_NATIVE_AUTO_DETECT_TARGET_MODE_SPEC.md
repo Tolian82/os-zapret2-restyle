@@ -41,6 +41,20 @@ The **required** new contract:
 - **No Auto-detect in IPSET-only, `<IPSET:telegram>` or mixed HOSTLIST+IPSET profiles**. IPSET address membership says nothing about a domain's HOSTLIST. Do not change IPSET, Voice or their rules.
 - Do not invent a global unknown-domain bypass strategy; native profile selection retains priority.
 
+### 2.1 Owner clarification: Target Mode choices are not simultaneous operating modes (13 November 2026)
+
+The Strategies GUI selects **one** Target Mode at a time. Do not use the `all` mode's intentionally broad, port-based strategy as though it were a second default strategy concurrently activated by choosing `auto`. This was an illustrative but **inapplicable default-mode conflict**, not a new issue in the owner's accepted product logic.
+
+| Selected Target Mode | Intended behavior for a source profile without explicit targets | Native Auto-detect |
+| --- | --- | --- |
+| **All traffic on specified ports** (`all`) | No default HOSTLIST/IPSET restriction; an authorized broad DPI profile can handle all matching traffic | **Not enabled by this mode**; missing auto discoveries are not a fault of `all` |
+| **Only specified domains** (`list`) | Apply established YouTube/User HOSTLIST and Telegram IPSET default targets, subject to their existing profile expansion | **Not enabled by this mode** |
+| **Auto-detect blocked domains** (`auto`) | Retain applicable default known targets, **remove implicit** `<HOSTLIST:auto>` and enable separately isolated native detection | **Enabled**, but finding a domain does not authorize a DPI profile to use the shared fallback |
+
+**Concrete example:** if `video.example.com` is genuinely discovered in `auto` mode and no sole permitted source HOSTLIST can be proven, the native engine records the raw hostname in `inbox.txt`; the minute Python worker validates it, normalizes it to `example.com` via PSL eTLD+1 and writes it to `auto-domains.txt`. **Without explicit** `<HOSTLIST:auto>` **no strategy applies to that shared entry**. With an unambiguous source `<HOSTLIST:X>`, the normalized entry instead belongs to that list's distinct auto-owned component. This example assumes a confirmed native discovery, not universal detection of every failed connection.
+
+**Technical scope:** Target Mode is a **per-source-profile default**, not a ban on advanced strategy composition. An explicit `<HOSTLIST:...>` or `<IPSET:...>` suppresses default target injection for that source profile; manually authored `--new` profiles, native filters, `--template`/`--import` and Python profile expansion still determine actual ordered profiles. Thus a generic `all`-mode first-match example is **not evidence of an `auto`-mode defect**. P0 must verify only **real generated `auto` configurations** and distinguish their limited discovery coverage, if any, from domain-routing semantics. Do not reopen this settled GUI-mode distinction without a reproducible generated-profile counterexample.
+
 ## 3. Required attribution and routing matrix
 
 | Event or state | Required result |

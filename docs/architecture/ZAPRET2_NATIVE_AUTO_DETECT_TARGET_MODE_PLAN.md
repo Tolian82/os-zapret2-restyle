@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0 IN PROGRESS (upstream evidence and one disposable native witness; native proof still OPEN), P1–P5 NOT STARTED (12 November 2026). No production changes.
+**Status:** P0 IN PROGRESS (upstream evidence and one scoped genuine native loopback observer witness PASS; full generated-profile coverage/attribution still OPEN), P1–P5 NOT STARTED (13 November 2026). No production changes.
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** Recording approved intended behavior only; no production code, native engine, cron, UI, Strategy Lab, service state, configuration or native package changes. The prior completed [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) stays accepted. A separate implementation instruction will begin with P0; an issue/plan alone does not run implementation.
 
@@ -9,6 +9,12 @@
 Preserve native OPNsense `pkg`/configd/cron, one shared Strategies+Voice `dvtws2`, FD9, WAN-first, native IPFW ownership, one Config writer and common atomic Apply. Never add a second production engine/daemon, permanent watcher, second PHP/shell parser, DNS→IPSET conversion, read-only Auto Hostlist or Strategy Lab work.
 
 **P0 must precede production modification.** Native `--hostlist-auto` both records domains and treats its file as an including native HOSTLIST. Prove that observation can occur without violating explicit-only `<HOSTLIST:auto>`/first-match semantics. If native behavior makes that impossible within the approved architecture, **stop and report the concrete technical blocker to the owner**; do not weaken the requirement silently.
+
+### Owner-clarified operating-mode boundary (13 November 2026)
+
+The GUI's **All traffic on specified ports**, **Only specified domains**, and **Auto-detect blocked domains** are mutually exclusive **Target Mode choices**, not three simultaneously active default modes. A broad DPI profile expected in `all` is **not** evidence that Auto-detect is defective in `auto`; `list` does not perform native discovery either. In `auto`, a confirmed `video.example.com` detection is normalized to `example.com`, attributed to an unambiguously known HOSTLIST or saved to the shared `auto-domains.txt`; the shared file is **not** used for bypass absent explicit `<HOSTLIST:auto>`.
+
+**Implementation qualification, not a new owner question:** Mode defaults apply independently to each source profile **without explicit selectors**. Explicit selectors, user-defined `--new` and eventual expanded native profiles retain their existing semantics. P0 should inspect the **actual compiled `auto` profile set** rather than invent a simultaneous `all` mode; any real first-match coverage limitation needs a generated-profile witness. See [normative operating-mode clarification](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md#21-owner-clarification-target-mode-choices-are-not-simultaneous-operating-modes-13-november-2026).
 
 ## 2. Stage map
 
@@ -23,9 +29,9 @@ Preserve native OPNsense `pkg`/configd/cron, one shared Strategies+Voice `dvtws2
 
 Stages are **logical gates, not promised commit counts or an invitation to expand unrelated verification**. Record source, exact-head CI, native packaged and owner-installed evidence independently; a new build does not prove the user's GUI or traffic.
 
-## 3. P0 — read-only first development action (SOURCE AUDIT DONE; NATIVE PROOF PENDING)
+## 3. P0 — source audit and bounded native observer witness PASS; full P0 still OPEN
 
-**Current P0 evidence:** [native profile-selection risk and one targeted non-activating observer experiment](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). The direct auto-on-existing-action-profile path is rejected. A single genuine OPNsense native packet witness is pending; no P0 completion or later-stage implementation is claimed.
+**Current P0 evidence:** [native profile-selection risk and one targeted non-activating observer experiment](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). The direct auto-on-existing-action-profile path is rejected. A single real disposable OPNsense native packet witness **passed** for an isolated trailing no-action observer (run [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)). This does **not** prove all production-generated profiles, coverage or attribution, and no P0 completion or later-stage implementation is claimed.
 
 1. Compare the [official upstream manual](https://github.com/bol-van/zapret2/blob/master/docs/manual.en.md), actual selected engine [`nfq2/desync.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/desync.c) and [`nfq2/helpers.c`](https://github.com/bol-van/zapret2/blob/master/nfq2/helpers.c) with real current `target_mode.sh` / `profile_policy.py` / dvtws generator.
 2. Map source profiles to final native profile numbers and sole HOSTLIST/unknown by **generation**; account for `--new`, templates, import, Python expansion, Target Mode and Apply.
@@ -58,6 +64,6 @@ The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AU
 
 ## 9. Open engineering checks and execution boundary
 
-The remaining questions concern **real native safe observation and first-match, FreeBSD FD closure, inode durability/ownership, PSL provision/update and calendar/cron mechanics**. They are not permission to reopen agreed domain routing or change the product without owner approval.
+The remaining questions concern **real generated `auto` profile coverage/attribution under first-match** (not a fictitious simultaneous `all` mode), FreeBSD FD closure, inode durability/ownership, PSL provision/update and calendar/cron mechanics. They are not permission to reopen agreed domain routing or change the product without owner approval.
 
 **Next task on a separate implementation instruction: P0 only.** This plan is a documentation artifact, **not running implementation, not a published package, not CI PASS and not owner acceptance**.
