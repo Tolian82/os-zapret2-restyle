@@ -22,7 +22,8 @@
 
 - [Normative native Auto-detect / Target Mode / HOSTLIST / Advanced-only Auto Restart specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) — owner-accepted complete requirements from the [consolidated #1052 comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626); native P0 unsafe activation gate.
 - [Future native Auto-detect plan P0–P5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) — staged Python/PSL, raw queue durability, GUI/Advanced-only scheduler and real native/package/owner acceptance. **P0 source evidence / one native probe in progress; P1–P5 not started.**
-- [P0 native Auto-detect feasibility and one scoped native observer experiment](verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md) — upstream source rejection of direct auto attachment, proposed trailing no-Lua observer and exact pending OPNsense evidence gate.
+- [P0 native Auto-detect feasibility, scoped native observer and generation attribution](verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md) — direct-attachment rejection, prior native loopback evidence, actual-generator source map and pending native integration gate.
+- [Noninstalled P0 attribution implementation](verification/p0_profile_attribution.py) and [actual-generator regression witness](verification/test_p0_profile_attribution.py) — exact source/selector/final-argv generation binding, template/skip/default numbering, IPSET/Voice exclusion and stale-generation refusal; source proof only, no runtime caller.
 
 ## Level 2 — approved current feature requirements (11 November 2026)
 
