@@ -153,6 +153,21 @@ def native():
     need(not list(Path('/tmp').glob('zapret-p5b-*')), 'preexisting-preview-workspace')
     sys.path.insert(0, str(BACKEND))
     import strategy_preview_build as builder
+    # Disposable-test diagnostic marker only. Keep every ORIGINAL module,
+    # orchestrator and argument; identify the last static import on failure.
+    # The marker is private to WORK, removed by the preview coordinator.
+    expected_load = '    . "$BACKEND_DIR/$module.sh"'
+    expected_call = 'done\\norchestrator_build_release \\'
+    need(builder.BUILD_SH.count(expected_load) == 1 and
+         builder.BUILD_SH.count(expected_call) == 1,
+         'builder-shell-diagnostic-anchor-unexpected')
+    builder.BUILD_SH = builder.BUILD_SH.replace(
+        expected_load,
+        '    printf "%s" "$module" > "$WORK/p5b2b-checkpoint"\\n' +
+        expected_load, 1).replace(
+        expected_call,
+        'done\\nprintf "orchestrator" > "$WORK/p5b2b-checkpoint"\\n' +
+        'orchestrator_build_release \\', 1)
     # Diagnostic-only observer: report ONLY the bounded stage/state enum,
     # never stage message, XML, hostlist, stderr or generated argument bytes.
     real_build = builder._run_builder
@@ -170,6 +185,17 @@ def native():
                         'running', 'failed', 'ok'):
                     print('P5B2B_LAST_STAGE=' + fields[2] + ':' + fields[3],
                           file=sys.stderr)
+            marker = work / 'p5b2b-checkpoint'
+            if marker.is_file() and not marker.is_symlink() and \
+                    marker.stat().st_size < 36:
+                value = marker.read_text(errors='replace').strip()
+                if value in ('common', 'config', 'parser', 'registry', 'storage',
+                             'targets', 'target_mode', 'profile_normalizer',
+                             'profile_pipeline', 'exclude', 'blobs', 'ports',
+                             'firewall', 'generator', 'validator', 'atomic',
+                             'stage', 'launcher', 'supervisor', 'orchestrator',
+                             'apply_runtime'):
+                    print('P5B2B_LAST_LOADED=' + value, file=sys.stderr)
             raise
     builder._run_builder = observe_builder_stage
     hold_fd9()
