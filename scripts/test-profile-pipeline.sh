@@ -108,4 +108,91 @@ for malformed in '--new' '--new=bad' '--filter-tcp=443
     fi
 done
 
+# #1052 P0: observe the ACTUAL as-is Target Mode profile pipeline with
+# valid native --blob= shorthand (not an unsupported <BLOB:...> placeholder).
+# This is a source-stage witness, not a claim of final dvtws2 attribution.
+fixture_strategy='--filter-tcp=443
+--filter-l7=tls
+--blob=http_iana_org
+--lua-desync=fake'
+auto_root="${TEST_ROOT}/p0-auto-actual"
+mkdir -p "${auto_root}"
+auto_count=$(profile_pipeline_parse "${auto_root}" 0 "${fixture_strategy}")
+auto_count=$(profile_pipeline_target_mode "${auto_root}" "${auto_count}" auto "${registry}")
+auto_count=$(profile_pipeline_normalize "${auto_root}" "${auto_count}")
+# Existing implementation injects legacy <HOSTLIST:auto> as ordinary hostlist.
+# P3 must deliberately update this assertion when removing that injection.
+assert_equal 4 "${auto_count}" "as-is auto expanded profile count"
+auto_no=1
+for selected in '<HOSTLIST:youtube>' '<IPSET:telegram>' '<HOSTLIST:user>' '<HOSTLIST:auto>'; do
+    grep -Fxq -- "${selected}" "${auto_root}/profile-${auto_no}.conf" ||
+        fail "as-is auto profile ${auto_no} has wrong selector"
+    grep -Fxq -- '--blob=http_iana_org' "${auto_root}/profile-${auto_no}.conf" ||
+        fail "as-is auto profile ${auto_no} lost native BLOB shorthand"
+    auto_no=$((auto_no + 1))
+done
+
+list_root="${TEST_ROOT}/p0-list-actual"
+mkdir -p "${list_root}"
+list_count=$(profile_pipeline_parse "${list_root}" 0 "${fixture_strategy}")
+list_count=$(profile_pipeline_target_mode "${list_root}" "${list_count}" list "${registry}")
+list_count=$(profile_pipeline_normalize "${list_root}" "${list_count}")
+assert_equal 3 "${list_count}" "list mode expanded profile count"
+if grep -Fxq -- '<HOSTLIST:auto>' "${list_root}/profile-3.conf"; then
+    fail "list mode injected implicit Auto HOSTLIST"
+fi
+
+all_root="${TEST_ROOT}/p0-all-actual"
+mkdir -p "${all_root}"
+all_count=$(profile_pipeline_parse "${all_root}" 0 "${fixture_strategy}")
+all_before=$(cat "${all_root}/profile-1.conf")
+all_count=$(profile_pipeline_target_mode "${all_root}" "${all_count}" all "${registry}")
+all_count=$(profile_pipeline_normalize "${all_root}" "${all_count}")
+assert_equal 1 "${all_count}" "all mode profile count"
+assert_equal "${all_before}" "$(cat "${all_root}/profile-1.conf")" "all mode strategy changed"
+
+# Auto defaults are applied per ORIGINAL source profile, not globally:
+# --new with an explicit HOSTLIST preserves its selector (and source order).
+new_root="${TEST_ROOT}/p0-auto-explicit-new"
+mkdir -p "${new_root}"
+new_strategy='--filter-tcp=443
+--filter-l7=tls
+--blob=http_iana_org
+--lua-desync=fake
+--new=known-user
+--filter-tcp=443
+<HOSTLIST:user>
+--lua-desync=fake'
+new_count=$(profile_pipeline_parse "${new_root}" 0 "${new_strategy}")
+assert_equal 2 "${new_count}" "source --new count"
+new_count=$(profile_pipeline_target_mode "${new_root}" "${new_count}" auto "${registry}")
+new_count=$(profile_pipeline_normalize "${new_root}" "${new_count}")
+assert_equal 5 "${new_count}" "auto source and explicit native profile count"
+grep -Fxq -- '--name=known-user' "${new_root}/profile-5.conf" ||
+    fail "explicit named --new lost after auto expansion"
+grep -Fxq -- '<HOSTLIST:user>' "${new_root}/profile-5.conf" ||
+    fail "explicit source HOSTLIST lost after auto expansion"
+if grep -Fxq -- '<HOSTLIST:auto>' "${new_root}/profile-5.conf"; then
+    fail "auto mode injected shared list into explicit source"
+fi
+
+# A mixed HOSTLIST+IPSET SOURCE becomes two final profiles. P0 attribution
+# MUST retain source identity; looking only at a final HOSTLIST row is unsafe.
+mixed_root="${TEST_ROOT}/p0-source-mixed"
+mkdir -p "${mixed_root}"
+mixed_strategy='--filter-tcp=443
+<HOSTLIST:youtube>
+<IPSET:telegram>
+--lua-desync=fake'
+mixed_count=$(profile_pipeline_parse "${mixed_root}" 0 "${mixed_strategy}")
+mixed_count=$(profile_pipeline_target_mode "${mixed_root}" "${mixed_count}" auto "${registry}")
+mixed_count=$(profile_pipeline_normalize "${mixed_root}" "${mixed_count}")
+assert_equal 2 "${mixed_count}" "mixed source expanded profile count"
+grep -Fxq -- '<HOSTLIST:youtube>' "${mixed_root}/profile-1.conf" ||
+    fail "mixed source HOSTLIST first-match order lost"
+grep -Fxq -- '<IPSET:telegram>' "${mixed_root}/profile-2.conf" ||
+    fail "mixed source IPSET second profile lost"
+
+echo "P0_GENERATED_SOURCE_PROFILE_MATRIX=PASS"
+
 echo "Profile pipeline tests passed."

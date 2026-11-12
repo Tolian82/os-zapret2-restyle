@@ -1,6 +1,6 @@
 # P0 #1052: native Auto-detect isolation feasibility
 
-**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_5`.
+**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_6`.
 **Authority:** [approved specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan P0–P5](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). The live user appliance, Config, original FD9, Voice, IPFW and Strategy Lab are not touched.
 
 ## Upstream v1.0.7 — verified source facts
@@ -30,6 +30,14 @@ This is **confirmed only for the scoped native loopback witness**, not as a gene
 [Native disposable test](../../scripts/test-p0-native-auto-observer.py) and [dedicated scoped workflow](../../.github/workflows/p0-native-auto-observer.yml) exercise **one** pinned upstream v1.0.7 `dvtws2` on localhost TCP/HTTP in an isolated OPNsense 26.7 guest. Required observation: legitimate first profile executes its existing Lua, unknown hostname goes to the trailing no-action observer, deliberate localhost failure generates a **real raw append plus correlated debug record**, and unknown HTTP reaches its test server unchanged both before and after native auto inclusion. Guarded bidirectional IPFW divert rules must be restored to identical initial state; the plugin must not be installed. No owner traffic or Strategy Lab operations.
 
 **Evidence:** workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750), native job `131475892342` succeeded; log reports `P0_NATIVE_AUTO_OBSERVER_SELF_TEST=PASS_SOURCE_ONLY` and `P0_NATIVE_AUTO_OBSERVER=PASS_NATIVE_LOOPBACK_OBSERVER_NON_ACTIVATING_ONLY`. The witness confirms a non-activating observer for its tested native HTTP/loopback conditions. This is not proof of full generator integration, all supported filters, real WAN bypass, a production package, or owner-appliance acceptance. Never treat `--dry-run` or an early debug line as packet-level proof. If the targeted native job fails, classify infrastructure versus genuine native behavior; do not repeatedly launch unrelated VM jobs or change production to match a test hypothesis.
+
+## P0 source-identity audit: real accepted profiles (13 November 2026)
+
+The actual target registry supports only `<HOSTLIST:...>` and `<IPSET:...>` selector placeholders. BLOB resources use **native** `--blob=name` shorthand and are handled later by `blobs.sh`; an isolated `<BLOB:name>` example cannot pass normal target resolution, so it must **not** be promoted as a valid broad-profile bug. No production Target Mode source change is justified by that example.
+
+The scoped `v0.6.5_6` test extends the existing `scripts/test-profile-pipeline.sh` using the **actual parser, target_mode.sh and Python normalizer**, not a synthetic second policy: `all` preserves one broad source profile, `list` expands three permitted default selectors, and **as-is** `auto` expands four (including the still-legacy implicit ordinary `<HOSTLIST:auto>` that P3 must remove). Valid native `--blob=name` remains part of each source profile and is not a target selector.
+
+A user-authored `--new` with explicit `<HOSTLIST:user>` bypasses default injection for **that source profile only**, and retains its position after expanded earlier profiles. Crucially, a source with **both** HOSTLIST and IPSET expands into separate final profiles; **a final HOSTLIST-only row is not proof the originating source was HOSTLIST-only**. The product must preserve generation-bound source identity when deciding whether native detection is allowed. This is actual source-pipeline evidence; full `dvtws.args`/native runtime and debug correlation remain separate P0 gates.
 
 ## Status and next action
 
