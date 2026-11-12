@@ -1,6 +1,6 @@
 # P4c3c — isolated QUIC Initial UDP fake-handler witness
 
-**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) · **source candidate:** `v0.6.4_33` · **status:** exact-head native CI **PENDING**. Stable published `v0.6.4_1.pkg` unchanged.
+**Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) · **qualified source:** `v0.6.4_33` · **status:** native disposable QUIC fake UDP packet proof **PASS**, [PR #1067](https://github.com/Tolian82/os-zapret2-restyle/pull/1067) merged at `e772418cb45768194e817782eef5247b0c37b1ef`; owner WAN/DPI bypass/A17/P4/P6 remain **OPEN**. Stable published `v0.6.4_1.pkg` unchanged.
 
 ## Native evidence contract
 
@@ -33,6 +33,6 @@ This deliberately uses a distinctive **explicit test blob**, rather than assumin
 
 `scripts/test-p4c3-native-quic-loopback.py --self-test` is an offline synthetic *negative* parser and evidence fixture (not native PASS). The narrow `.github/workflows/p4c3-native-quic-replay.yml` performs fast Linux source/guest-refusal checks, then one disposable OPNsense 26.7 native VM if preflight succeeds. Do not rerun the P4c3a TLS / P4c3b HTTP VMs or a historical broad test matrix for this feature.
 
-**Required exact-head exit markers:** `P4C3_QUIC_INITIAL_NATIVE_HANDLER=PASS` and `P4C3_QUIC_INITIAL=PASS_NATIVE_QUIC_HANDLER_AND_FORGED_UDP_PCAP_ONLY`, with central CI/policy/version gates green before merge.
+**Exit — SATISFIED for isolated P4c3c only:** real [native #43164894619](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43164894619) shows `P4C3_QUIC_INITIAL_NATIVE_HANDLER=PASS` and `P4C3_QUIC_INITIAL=PASS_NATIVE_QUIC_HANDLER_AND_FORGED_UDP_PCAP_ONLY`. Exact-head [CI #43164894478](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43164894478), FreeBSD [#43164894605](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43164894605), title [#43164894543](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43164894543) and postmerge `main` [CI #43165297388](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43165297388) all PASS.
 
 This deliberately **does not prove** cryptographic QUIC decryption, an end-to-end QUIC handshake, a real provider DPI bypass, default production `fake_default_quic` or repeat-count behavior, STUN/WireGuard/Voice, GUI preset validity, owner-appliance A17, full P4 or P6 acceptance. These remain separate tests.
