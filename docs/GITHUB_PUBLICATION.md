@@ -18,7 +18,7 @@ Read this file completely before GitHub mutation.
 - access and preflight: `GH-001`–`GH-008`;
 - branch and PR scope: `GH-010`–`GH-015`;
 - validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
-- strict Actions resource budget, runner selection, bounded native checks and workflow throttling: `GH-066`–`GH-071`;
+- strict Actions resource budget, runner selection, bounded native checks and workflow throttling: `GH-066`–`GH-072`;
 - merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
 - issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
 - repository/secret hygiene: `GH-031`–`GH-033`;
@@ -104,6 +104,8 @@ GH-071. **Native-test placement, infrastructure readiness, and strict time budge
 **Native execution environment:** Prefer a qualified, isolated, pre-provisioned KVM/FreeBSD/OPNsense test host (including an approved, maintained self-hosted runner) with a known guest image, installed hypervisor/dependencies, bounded access and reliable restore/cleanup. Treat it as test infrastructure, never silently use the owner's production appliance. A GitHub-hosted runner may be used only when a fast prerequisite gate verifies the **runner's own** QEMU/KVM/image/network/package-manager readiness before any long VM operation. A DNS check from the developer's PC is not evidence of runner connectivity. Cache reusable verified base images and dependency preparation where safe, with identity/invalidation checks; never cache secrets or a private owner Config.
 
 **Budget and failure policy:** Set an explicit job timeout and individual bounds for image download, package installation, boot, SSH readiness and other potentially blocking network/VM steps; a narrow GUI smoke should have a short budget (the P3 browser workflow is capped at 15 minutes), while materially longer S3/release tests require a distinct documented rationale and intentional trigger. Detect inaccessible repositories, DNS, missing hypervisor/KVM, guest boot failure and no-progress states early. Fail closed with an explicit **infrastructure failure / NOT TESTED**, not PASS and not a product regression. Do not rerun a known failing external preflight blindly, start multiple equivalent VM jobs, or push empty commits to retry an outage; repair the environment or move the same exact-source required native test to a qualified alternate host. Preserve the evidence gate before merge/publication and distinguish S0/S1 PASS from outstanding S2/S3 and owner-live acceptance.
+
+GH-072. **Outcome-first CI routing and real-user boundary priority are mandatory.** For every PR classify exact changed paths into lightweight GUI/domain/IPSET, critical shared Config/FD9/transport, full lifecycle or documentation-only; a new/unclassified production path fails **toward more** checking, never toward silent exemption. First run a bounded (target at most five minutes) real changed-path regression using production Model, Python bridges, shared Apply encoder/root-contract and actual UI render/semantics where portable; it must exercise the input and downstream consumer, not only regex/mocks. A known owner failure must be reproduced *before its fix* by a test that genuinely fails old code, then passes fixed code; a previously green irrelevant matrix does not qualify it. Keep separate correctness for short synthetic checks, installed native browser/FD9, exact qualified .pkg and owner appliance. Only dispatch full legacy 100-step Project/Voice matrices when critical changed paths, unknown paths or intentional manual/full release criteria warrant them; run targeted S2 native browser/FD9 only for those relevant paths. A documentation or CI-policy-only PR, even one containing a noninstalled read-only Python probe under docs/, does not launch product/VM matrices. Preserve original FD9, Config/IPFW/Voice, immutable package identity, exact-head and fail-closed gates. The native package job for actual packaged-source changes waits for the fast user-journey gate; it need not await unrelated whole-project matrices, but required critical checks **must** pass before an authorized merge/release. Record selected/missing checks and their cost in PR, and stop once the justified decisions are established. The current owner-proven User Domains 65,536-byte envelope defect remains BLOCKED until end-to-end changed large-list Apply/Config/HOSTLIST is demonstrated on the corrected package; an existing bounded-argv security test is *not* proof of functional support. This implements `DEV-062` and supplements `GH-069`–`GH-071` without weakening them.
 
 ## Issue execution, PR completion and unattended monitoring
 
@@ -235,6 +237,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
 | `GH-061` | `DOC-037`, `DEV-032`–`DEV-033` |
 | `GH-069` | `DEV-061` |
+| `GH-072` | `DEV-062` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -267,6 +270,7 @@ GH-059. **Deleting or renaming documentation is a repository-wide reference migr
 | `GH-054` | `DOC-047` |
 | `GH-060` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
 | `GH-061` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-072` | `DEV-062` |
 <!-- RULE-XREF-IN-END -->
 
 ## Rule lifecycle

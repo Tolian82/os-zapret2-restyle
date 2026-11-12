@@ -24,6 +24,9 @@ jobs:
       stage0_historical_fd9: ${{ steps.paths.outputs.stage0_historical_fd9 }}
       stage0_archive_baseline: ${{ steps.paths.outputs.stage0_archive_baseline }}
       strategy_lab: ${{ steps.paths.outputs.strategy_lab }}
+      owner_flow: ${{ steps.paths.outputs.owner_flow }}
+      full_matrix: ${{ steps.paths.outputs.full_matrix }}
+      voice_scope: ${{ steps.paths.outputs.voice_scope }}
 
     steps:
       - uses: actions/checkout@v6
@@ -75,7 +78,7 @@ jobs:
 
           docs_only=false
           if [[ "${EVENT_NAME}" != "workflow_dispatch" && -n "${changed}" ]]; then
-            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*\.md)$' || true)
+            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*|\.github/workflows/.*|scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py)$' || true)
             if [[ -z "${non_docs}" ]]; then
               docs_only=true
             fi
@@ -128,6 +131,14 @@ jobs:
           fi
 
           # Resolve ^ fallback and dispatch refs to immutable full Git SHAs.
+          # Run scope regression before any full native/legacy workload.
+          python3 scripts/ci_owner_journey_scope.py --self-test
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            printf '%s\n' "${classified_changed}" | python3 scripts/ci_owner_journey_scope.py --full >> "${GITHUB_OUTPUT}"
+          else
+            printf '%s\n' "${classified_changed}" | python3 scripts/ci_owner_journey_scope.py >> "${GITHUB_OUTPUT}"
+          fi
+
           resolved_base_sha=$(git rev-parse "${base_sha}")
           resolved_head_sha=$(git rev-parse "${head_sha}")
           echo "base_sha=${resolved_base_sha}" >> "${GITHUB_OUTPUT}"
@@ -530,6 +541,36 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  journey:
+    name: Fast affected user-path contracts (not installed Apply)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate fast path routing
+        run: python3.13 scripts/ci_owner_journey_scope.py --self-test
+      - name: Check native-model schema, Python root bridge, envelope and GUI contracts
+        if: ${{ needs.changes.outputs.owner_flow == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ZAPRET_PYTHON_BIN="$(command -v python3.13)"
+          export ZAPRET_PYTHON_POLICY="$GITHUB_WORKSPACE/compatibility.json"
+          python3.13 scripts/test-domain-policy.py
+          python3.13 scripts/test-ipset-policy.py
+          php scripts/test-domain-policy-php.php
+          php scripts/test-python-owned-model-validation.php
+          php scripts/test-shared-apply-envelope.php
+          python3.13 scripts/test-owner-p6-list-ui.py
+          python3.13 scripts/test-strategies-i18n.py
+          python3.13 scripts/test-voice-gui-contract.py
+          sh scripts/test-diagnostics-guidance-localization.sh
+
   validate-docs:
     name: Validate documentation
     if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.docs_only == 'true' }}
@@ -546,6 +587,10 @@ jobs:
 
       - name: Check handoff identity on documentation changes
         run: python3.13 scripts/test-current-handoff-identity.py
+      - name: Check test-budget classifier and scoped CI policy
+        run: |
+          python3.13 scripts/ci_owner_journey_scope.py --self-test
+          python3.13 scripts/test-github-workflow-budget.py
 
       - name: Guard testing-package owner install command against missing dependencies
         run: python3.13 scripts/test-testing-package-install-route.py
@@ -567,9 +612,9 @@ jobs:
 
   voice-contract:
     name: Validate Voice candidates
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && (needs.changes.outputs.full_matrix == 'true' || needs.changes.outputs.voice_scope == 'true')) }}
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, journey]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -757,9 +802,9 @@ jobs:
 
   validate:
     name: Validate Project
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.full_matrix == 'true') }}
     runs-on: ubuntu-latest
-    needs: changes
+    needs: [changes, journey]
     env:
       STRATEGY_LAB_PYTHON_BIN: python3.13
 
@@ -1472,7 +1517,7 @@ jobs:
     name: Build official OPNsense 26.7 native package (source-only CI)
     if: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.package == 'true' }}
     runs-on: ubuntu-latest
-    needs: [changes, validate]
+    needs: [changes, journey]
 
     steps:
       - uses: actions/checkout@v6
