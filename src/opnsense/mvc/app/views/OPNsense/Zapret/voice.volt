@@ -221,6 +221,23 @@ $(document).ready(function () {
         form.find('#control_label_zapretVoiceInfoSource > b').text(text.infoTitle);
         var info = form.find('#zapretVoiceInfoSource');
         if (info.length) info.text(text.infoText);
+        // The native info row is not a built-in help-block. Hide its
+        // whole caption+description when the actual Voice Help icon is OFF.
+        function updateVoiceInfoHelpVisibility() {
+            if (!info.length) return;
+            info.addClass('zapret-context-help').closest('tr')
+                .addClass('zapret-context-help-row')
+                .toggle($('#show_all_help_frm_VoiceSettings').hasClass('fa-toggle-on'));
+        }
+        var helpIcon = document.getElementById('show_all_help_frm_VoiceSettings');
+        if (helpIcon && window.MutationObserver &&
+            !form.data('zapretVoiceHelpObserverBound')) {
+            new MutationObserver(updateVoiceInfoHelpVisibility).observe(
+                helpIcon, {attributes: true, attributeFilter: ['class']}
+            );
+            form.data('zapretVoiceHelpObserverBound', true);
+        }
+        updateVoiceInfoHelpVisibility();
         // Field IDs and native caption <b> are stable. Retain the help icon,
         // input control and its value while translating its caption and aria-label.
         function setFieldLabel(id, translated) {
@@ -733,6 +750,16 @@ $(document).ready(function () {
 </script>
 
 <style>
+    /* Keep all switchable plugin guidance at the native Voice parameter
+       help size, independently of page and the standard large info label. */
+    #frm_VoiceSettings .help-block,
+    #frm_VoiceSettings div[data-for^="help_for_"] small,
+    #frm_VoiceSettings .zapret-context-help {
+        font-family: inherit;
+        font-size: 12px;
+        line-height: 1.5;
+        font-weight: 400;
+    }
     /* Native form_input_tr puts the checkbox and its optional help in
        column two. Always place the read-only observation BELOW the checkbox
        in that same cell, whether help is hidden or shown. OPNsense's native

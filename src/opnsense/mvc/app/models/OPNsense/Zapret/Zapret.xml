@@ -119,44 +119,35 @@
             </domains>
             <youtubedomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </youtubedomains>
             <telegramips type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.</ValidationMessage>
             </telegramips>
             <discordips type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.</ValidationMessage>
             </discordips>
             <xips type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.</ValidationMessage>
             </xips>
             <sipips type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.</ValidationMessage>
             </sipips>
             <customips type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Please enter IPv4/IPv6 addresses or CIDR networks; full-family coverage is forbidden.</ValidationMessage>
             </customips>
             <userdomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </userdomains>
             <excludedomains type="TextField">
                 <Required>N</Required>
-                <Mask>/^[a-zA-Z0-9\.\*\-\n\r\s]*$/</Mask>
             </excludedomains>
             <excludeipset type="TextField">
                 <Required>N</Required>
-                <Mask>/^[0-9a-fA-F:\.\/\n\r\s]*$/</Mask>
                 <ValidationMessage>Enter IPv4/IPv6 address or CIDR per line; /0 and full-family unions are forbidden.</ValidationMessage>
             </excludeipset>
         </hostlist>

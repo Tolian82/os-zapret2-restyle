@@ -864,6 +864,16 @@
             const enabled = isResourceHelpEnabled();
             const panel = $('#zapretExtraResourceHelp');
             panel.toggle(enabled);
+            // The Strategies info field is a separate native info row, NOT
+            // a native help-block. Its label and body obey the visible Help
+            // switch exactly; no persisted preset may override OFF.
+            const info = $('#zapretStrategiesInfoSource');
+            if (info.length) {
+                info.closest('tr').toggle(
+                    $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on')
+                ).addClass('zapret-context-help-row');
+                info.addClass('zapret-context-help');
+            }
             // Every new help opening reads the cheap CACHE again, not Git.
             if (enabled && !resourceHelpWasVisible) {
                 panel.text(extrasText.loading);
@@ -1502,6 +1512,16 @@
 </script>
 
 <style>
+    /* One native Voice-style scale for switchable explanatory text.
+       Do not change the input values, headers or technical code tokens. */
+    #frm_GeneralSettings .help-block,
+    #frm_GeneralSettings div[data-for^="help_for_"] small,
+    #frm_GeneralSettings .zapret-context-help {
+        font-family: inherit;
+        font-size: 12px;
+        line-height: 1.5;
+        font-weight: 400;
+    }
     /* The native help toggle must not create a duplicate third-column help
        for Exclude IPSet. The inline .help-block under its textarea remains
        visible, matching Exclude Domains in RU and EN. */
