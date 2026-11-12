@@ -17,7 +17,10 @@ RU_SECOND='Изучите результат и добавьте необход�
 
 require "${VIEW}" "document.documentElement.lang || ''"
 require "${VIEW}" 'var strategyLabGuidance = isRussian'
-require "${VIEW}" '.text(paragraph)'
+require "${VIEW}" 'item.append(document.createTextNode(part));'
+require "${VIEW}" "item.append(\$('<code/>').text(part));"
+require "${VIEW}" 'guidance.toggle(labHelpOn);'
+require "${VIEW}" 'id="strategyLabHelpToggle"'
 require "${VIEW}" '.appendTo(guidance)'
 require "${VIEW}" "${EN_FIRST}"
 require "${VIEW}" "${EN_SECOND}"
@@ -122,7 +125,8 @@ require "${VIEW}" 'service_host:serviceHost'
 # the platform-owned page wrapper, like Strategy, rather than creating and then
 # overriding a second page wrapper.
 require "${VIEW}" '<div class="content-box __mb"><div class="content-box-header">'
-require "${VIEW}" '<div class="content-box"><div class="content-box-header"><h3>{{ lang._('
+require "${VIEW}" '<div class="content-box"><div class="content-box-header zapret-lab-header">'
+require "${VIEW}" '<h3>{{ lang._('
 if grep -Fq 'class="page-content-main"' "${VIEW}" || grep -Fq '.page-content-main {' "${VIEW}"; then
     fail 'Laboratory must not create or override page-content-main; OPNsense owns the page perimeter'
 fi
