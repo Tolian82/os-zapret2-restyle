@@ -110,6 +110,15 @@ def _write_candidate(work: Path, data: bytes) -> None:
         os.close(fd)
 
 
+def _kill_builder_group(proc: subprocess.Popen) -> None:
+    """Reap only this preview's isolated child session before workspace cleanup."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=5)
+
+
 def _run_builder(work: Path) -> None:
     env = {
         "PATH": "/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin",
@@ -126,14 +135,14 @@ def _run_builder(work: Path) -> None:
             stderr=subprocess.DEVNULL, env=env, start_new_session=True)
         try:
             code = proc.wait(timeout=RUN_TIMEOUT)
-        except subprocess.TimeoutExpired as exc:
-            # Never leave the shell's grandchildren running on a timeout.
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.wait()
+        except subprocess.TimeoutExpired:
+            _kill_builder_group(proc)
             raise PrivateBuildRefused("ORIGINAL_BUILDER_TIMEOUT") from None
+        except BaseException:
+            # Cancellation may interrupt wait(), but must never leave a child
+            # writing into the candidate directory during final cleanup.
+            _kill_builder_group(proc)
+            raise
     except OSError as exc:
         raise PrivateBuildRefused("ORIGINAL_BUILDER_UNAVAILABLE") from None
     if code:
