@@ -28,8 +28,9 @@ HOST = "127.0.0.1"
 RULE_ARGS = ["divert", str(DIVERT), "tcp", "from", HOST, "to", HOST,
              str(PORT), "out", "not", "diverted", "not", "sockarg", "xmit", "lo0"]
 HANDLER_LOG = re.compile(
-    r"(?m)^LUA:\s+multisplit:\s+sending part ([12]) "
-    r"\d+-\d+ len=[1-9]\d* seqovl=\d+\s+:")
+    r"(?m)^LUA:\s+multisplit:\s+sending part (?P<part>[12]) "
+    r"(?P<start>\d+)-(?P<end>\d+) len=(?P<length>[1-9]\d*) "
+    r"seqovl=(?P<overlap>\d+)\s+:")
 
 
 def need(ok: bool, why: str) -> None:
@@ -76,18 +77,47 @@ def self_test() -> None:
     assert engine_args(Path("/tmp/p4c3-native-fixture"))[-4:] == [
         f"--filter-tcp={PORT}", "--filter-l7=tls", "--payload=tls_client_hello",
         "--lua-desync=multisplit:pos=midsld:seqovl=1"]
-    # Real v1.0.7 Lua logs successful per-packet send attempts as
-    # "LUA: multisplit: sending part ...", not as the C-side dispatch string.
-    # Both parts are required for the expected single midsld split.
+    # Require both genuine upstream Lua send-attempt markers. A string-only
+    # Lua initialization / function-existence check must never be enough.
+    split = max(2, len(data) // 2)
     selected = "* lua 'multisplit.1.1' : payload_type 'tls_client_hello' satisfy filter\n"
-    part1 = "LUA: multisplit: sending part 1 0-93 len=95 seqovl=1 : fixture\n"
-    part2 = "LUA: multisplit: sending part 2 94-185 len=92 seqovl=0 : fixture\n"
-    assert observed_log(selected + part1 + part2)
-    assert not observed_log(selected + part2)
-    assert not observed_log(selected + part1)
-    assert not observed_log(part1 + part2)
-    assert not observed_log(selected + "LUA RUN FILE: zapret-antidpi.lua\n")
-    assert not observed_log(selected + "LUA: fake: sending part 1 0-93 len=95 seqovl=1 : fixture\n")
+    part1 = (f"LUA: multisplit: sending part 1 0-{split-1} "
+             f"len={split+1} seqovl=1 : fixture\n")
+    part2 = (f"LUA: multisplit: sending part 2 {split}-{len(data)-1} "
+             f"len={len(data)-split} seqovl=0 : fixture\n")
+    proper_log = selected + part1 + part2
+    assert observed_log(proper_log)
+    assert split_position(proper_log, data) == split
+    for invalid in (selected + part1, selected + part2,
+                    part1 + part2, selected + "LUA RUN FILE: zapret-antidpi.lua\n",
+                    selected + part1.replace("seqovl=1", "seqovl=0") + part2):
+        if observed_log(invalid):
+            try:
+                split_position(invalid, data)
+            except RuntimeError:
+                continue
+            raise RuntimeError("P4C3_STATIC_FALSE_POSITIVE")
+    parser = load_pcap_parser()
+    baseline, active = 55100, 55101
+    make_frame = lambda payload, sport: parser.fixture_frame(
+        socket.AF_INET, payload, srcport=sport, dstport=PORT)
+    baseline_frame = make_frame(data, baseline)
+    fragment_one = make_frame(b"\x00" + data[:split], active)
+    fragment_two = make_frame(data[split:], active)
+    capture = (parser.fixture_pcap(baseline_frame) +
+               parser.fixture_pcap(fragment_one)[24:] +
+               parser.fixture_pcap(fragment_two)[24:])
+    attest_capture(parser, capture, data, split, baseline, active)
+    for incomplete in (parser.fixture_pcap(baseline_frame),
+                       parser.fixture_pcap(baseline_frame) +
+                       parser.fixture_pcap(fragment_one)[24:],
+                       capture[:-1]):
+        try:
+            attest_capture(parser, incomplete, data, split, baseline, active)
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("P4C3_STATIC_INCOMPLETE_PCAP_ACCEPTED")
     assert data.startswith(b"\x16\x03") and b"p4c3.example" in data
     assert RULE not in range(19000, 19011) and RULE not in range(19100, 19132)
     assert safe_default_rules("65535 allow ip from any to any\n")
@@ -215,21 +245,69 @@ def send_hello(data: bytes, *, require_delivery: bool) -> int:
 
 
 def observed_log(log: str) -> bool:
-    # v1.0.7 upstream Lua prints one message per actually attempted segment;
-    # declarations, function existence and mere Lua initialization cannot pass.
-    # A positive native packet counter and independent PCAP are ALSO required.
-    return (set(HANDLER_LOG.findall(log)) == {"1", "2"} and
+    # Loading Lua is insufficient; require both per-packet send markers
+    # and the upstream C-side TLS payload filter decision.
+    return ({m.group("part") for m in HANDLER_LOG.finditer(log)} == {"1", "2"} and
             "payload_type 'tls_client_hello' satisfy filter" in log)
+
+
+def load_pcap_parser():
+    """Use the already-qualified test-only FreeBSD lo0 DLT_NULL decoder."""
+    helper = HERE / "test-freebsd15-native-tls-strategy.py"
+    spec = importlib.util.spec_from_file_location("p4c3_native_pcap_reader", helper)
+    need(spec is not None and spec.loader is not None,
+         "EXISTING_PCAP_READER_REQUIRED")
+    parser = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parser)
+    return parser
+
+
+def split_position(log: str, data: bytes) -> int:
+    """Attest two consistent v1.0.7 TLS multisplit send-attempt shapes."""
+    shapes: dict[str, tuple[int, int, int, int]] = {}
+    for match in HANDLER_LOG.finditer(log):
+        part = match.group("part")
+        shape = tuple(int(match.group(key)) for key in
+                      ("start", "end", "length", "overlap"))
+        if part in shapes and shapes[part] != shape:
+            raise RuntimeError("AMBIGUOUS_NATIVE_SPLIT_LOG")
+        shapes[part] = shape
+    need(set(shapes) == {"1", "2"}, "INCOMPLETE_NATIVE_SPLIT_MARKERS")
+    start1, end1, length1, overlap1 = shapes["1"]
+    start2, end2, length2, overlap2 = shapes["2"]
+    split = start2
+    need(2 <= split < len(data) and start1 == 0 and
+         end1 == split-1 and length1 == split+1 and overlap1 == 1 and
+         end2 == len(data)-1 and length2 == len(data)-split and overlap2 == 0,
+         "NATIVE_MULTISPLIT_LENGTHS_INCONSISTENT_WITH_CLIENTHELLO")
+    return split
+
+
+def attest_capture(parser, capture: bytes, data: bytes, split: int,
+                   baseline: int, active: int) -> None:
+    """Assert unmodified baseline and two actual wire segments of active flow.
+
+    The full active ClientHello is expected to be replaced by multisplit;
+    requiring its unmodified original packet would be a false negative.
+    """
+    need(0 < baseline < 65536 and 0 < active < 65536 and baseline != active,
+         "INVALID_TEST_TCP_FLOW_IDENTITY")
+    full = parser.records(capture, socket.AF_INET, data, ports=(PORT,))
+    first = parser.records(capture, socket.AF_INET,
+                           b"\x00" + data[:split], ports=(PORT,))
+    second = parser.records(capture, socket.AF_INET,
+                            data[split:], ports=(PORT,))
+    need(any(src == baseline and dst == PORT for src, dst, _ in full),
+         "NATIVE_PCAP_MISSING_INTACT_BASELINE_CLIENTHELLO")
+    need(any(src == active and dst == PORT for src, dst, _ in first) and
+         any(src == active and dst == PORT for src, dst, _ in second),
+         "NATIVE_PCAP_MISSING_ATTRIBUTED_SPLIT_SEGMENTS")
 
 
 def native_run(checkout: Path) -> None:
     root, engine, rules_before = guest_gate(checkout)
     self_test()
-    helper_path = HERE / "test-freebsd15-native-tls-strategy.py"
-    spec = importlib.util.spec_from_file_location("p4c3_native_pcap_reader", helper_path)
-    need(spec is not None and spec.loader is not None, "EXISTING_PCAP_READER_REQUIRED")
-    parser = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(parser)
+    parser = load_pcap_parser()
     data = hello_fixture()
     with tempfile.TemporaryDirectory(prefix="p4c3-tls-evidence-") as tmp:
         evidence = Path(tmp)
@@ -301,20 +379,18 @@ def native_run(checkout: Path) -> None:
                 # Do not print raw Lua hex dumps or the intercepted payload,
                 # even in synthetic VM: only bounded evidence counters.
                 tls_filter = "payload_type 'tls_client_hello' satisfy filter" in log
-                parts = set(HANDLER_LOG.findall(log))
+                parts = {m.group("part") for m in HANDLER_LOG.finditer(log)}
                 print(f"{MARK}_TRACE=bytes:{len(log)} lines:{len(log.splitlines())} "
                       f"parts:{','.join(sorted(parts)) or 'none'} "
                       f"tls_filter:{int(tls_filter)}",
                       flush=True)
             need(observed_log(log), "NO_NATIVE_TLS_MULTISPLIT_PACKET_DISPATCH")
+            position = split_position(log, data)
             print(MARK + "_NATIVE_HANDLER=PASS", flush=True)
             need(capture_path.is_file() and capture_path.stat().st_size > 24,
                  "MISSING_NATIVE_LOOPBACK_PCAP")
-            found = parser.records(capture_path.read_bytes(), socket.AF_INET, data,
-                                   ports=(PORT,))
-            observed_ports = {source for source, dest, _ttl in found if dest == PORT}
-            need({baseline, active}.issubset(observed_ports),
-                 "NATIVE_PCAP_LACKS_BASELINE_AND_ACTIVE_CLIENTHELLO")
+            attest_capture(parser, capture_path.read_bytes(), data, position,
+                           baseline, active)
             print(MARK + "=PASS_NATIVE_TLS_HANDLER_DISPATCH_AND_PCAP_ONLY", flush=True)
 
 
