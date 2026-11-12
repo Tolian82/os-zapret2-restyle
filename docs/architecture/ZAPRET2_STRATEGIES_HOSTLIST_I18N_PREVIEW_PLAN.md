@@ -1,6 +1,6 @@
 # Strategies / Hostlist / RU-EN / read-only preview — approved development plan P0–P6
 
-**Status:** OWNER APPROVED IN FULL — 11 November 2026. Incremental P0–P4 source/native proofs are recorded separately; P5a pure structural advisory is a v0.6.4_36 source candidate. **Full P5 and A11/A16 owner acceptance remain OPEN.** This plan records requirements, not proof of final feature completion.
+**Status:** OWNER APPROVED IN FULL — 11 November 2026. Incremental P0–P4 source/native proofs are recorded separately; P5b2a disposable build coordination is present in the v0.6.4_38 source candidate (not yet a full P5 acceptance). **Full P5 and A11/A16 owner acceptance remain OPEN.** This plan records requirements, not proof of final feature completion.
 **Normative requirements:** [Strategies / HOSTLIST / bilingual UI / read-only preview specification](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), owner-approved 11 November 2026.
 **Issue:** [FEATURE #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) (remains OPEN until implemented and owner accepted).
 **Authority:** owner explicitly approved the entire P0–P6 plan, including all notes, wording, qualifications, suggestions and acceptance gates, on 11 November 2026. There is no remaining approval gate to start P0, P1 or P2 within this agreed scope. Return to the owner for an actual change of architecture/requirements, or proactively propose optional improvements for discussion without silently adding them to scope.
@@ -12,7 +12,7 @@
 2. Keep native upstream Zapret2 profile grammar and behavior. Do **not** write another full command-line parser, maintain a separate generated-service process or create a competing hostlist data store.
 3. Capability-check against the actual installed/selected engine and installed Lua/BIN; do not scatter hard-coded engine versions or silently strip `!` / `^`. An unsupported runtime refuses activation safely, with persisted user text and existing running service unchanged.
 4. Keep one exact feature scope per PR; `PLUGIN_REVISION` increments once for each new merged `main` commit, while `VERSION` remains unchanged unless a separately approved real stage change occurs. A source-only revision is not an available `.pkg`.
-5. Apply the tiered CI budget: fast local S0 before push, relevant exact-head S1; only changed-behavior native S2; necessary comprehensive S3 using the same actual native `.pkg` for owner handoff. Never flood unrelated historical VM jobs.
+5. Apply the [sufficient-verification stop rule (DEV-061)](../PROJECT_PRINCIPLES.md) and [tiered CI budget (GH-069)](../GITHUB_PUBLICATION.md): fast S0, exact-head S1, justified changed-path S2 and genuinely required final S3. Select the necessary checks before implementation; after they pass, stop expanding the matrix and move to delivery. An intermediate testing `.pkg` is an input for owner-live acceptance, not contingent on already completing every A01–A19 owner-live row. Never flood unrelated historical VM jobs.
 6. Record each stage's **source**, **CI**, **native installed**, and **owner OPNsense** evidence separately. Treat planned, untested, skipped, partial and failed work truthfully.
 7. P0–P6 are ordered acceptance gates, not a commitment to a fixed count of commits. Close real blockers before advancing; split a stage into small related PRs if needed, never claim partial acceptance of the entire stage.
 8. New/changed user-facing text throughout this scope is bilingual RU/EN based on the OPNsense **profile** locale. Existing Strategies and Voice text is included in the full audit. Preserve user-entered technical strings without translation.
@@ -28,7 +28,7 @@
 | **P3** | Full existing Strategies and Voice RU/EN localization | A12–A16 | Both locales exercised on OPNsense profile settings, help/F5 and API failures; saved values unchanged |
 | **P4** | Accurate help, Full Help and Strategy Lab guidance | A17 plus A12–A14 | Native-checked examples, cached resource inventory, bilingual Lab GUI and handler-transfer instructions |
 | **P5** | Safe `Validate and Preview` action | A11 plus A16 | Generated-profile snapshot, native dry-run/error classification, before/after permanent-state equivalence |
-| **P6** | Product regression and native owner package acceptance | A01–A19 (all) | Exact native `.pkg` identity, controlled upgrade/reinstall tests, owner physical OPNsense GUI acceptance and unchanged stable published asset |
+| **P6** | Product regression and native owner package acceptance | A01–A19 (all) for final stage closure, not as a precondition for an intermediate testing `.pkg` | Exact native `.pkg` identity, controlled upgrade/reinstall tests, owner physical OPNsense GUI acceptance and unchanged stable published asset |
 
 Every stage includes its matching regression checks for existing Voice, Strategies, Lab, WAN-first and shared-service ownership where touched; completing an earlier stage does not imply completing later user acceptance.
 
@@ -133,6 +133,8 @@ Every stage includes its matching regression checks for existing Voice, Strategi
 
 ## 9. P6 — regression, one qualified native package, owner acceptance
 
+**Verification boundary:** Before a requested intermediate testing `.pkg`, run the selected S0/S1, applicable native S2 and package-identity/ABI/changed-safety qualifications; do **not** require the future owner physical GUI/upgrade/purge evidence to exist before delivering the package used to gather it. Subsequent final P6 closure still requires every applicable A01–A19 criterion and its genuinely required evidence. Reuse prior valid baseline proof for unchanged behavior. Native lifecycle or destructive safety checks must be performed whenever the candidate really changes those paths; known critical defects block the affected delivery. An extra VM run needs a written distinct risk and exit decision, not just a possible failure mode.
+
 **User scenario:** An existing installation upgrades using the native `.pkg` procedure and retains settings/working services, and a clean or normal-reinstalled installation also works with the new features.
 
 **Work:**
@@ -159,8 +161,8 @@ The plan **does not** authorize: a second WAN chooser, a second Config writer, a
 
 ## 11. Immediate handoff and working agreement
 
-**Next task:** P0, read-only research and native behavioral verification. Pin current `main` revision first and read this approved plan and specification, then produce a concise evidence matrix and actual code integration map. Continue into P1 and P2 **without re-approving already approved architecture**, unless tested upstream behavior forces a change to the accepted contract.
+**Current next task (12 November 2026):** P5b2b — qualify the existing original detached native candidate builder/validator on disposable installed OPNsense with a bounded no-mutation witness, then P5c authenticated RU/EN GUI integration and P6 owner testing package. Reuse accepted P0–P4 native proofs; do not restart upstream semantics tests or unrelated Lab matrices. The historical P0/P1 entry conditions are already settled.
 
 The owner welcomes optional engineering ideas. Propose them openly, with value, compatibility/safety impact and whether they alter this scope; do not silently treat a suggestion as an approved requirement.
 
-**Status at documentation merge:** P0 NOT STARTED; P1–P6 NOT STARTED; no new package published.
+**Current status:** P0–P4 partial/full source/native evidence recorded under the current state documents; P5b2a source-only, P5b2b/P5c and P6 final acceptance OPEN. No new `v0.6.4_38` package published; stable `v0.6.4_1.pkg` unchanged.
