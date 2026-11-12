@@ -127,3 +127,13 @@ Publisher-only branch refs are safe to retire without extra parents: the seven i
 | `v0.6.3_52` / `publish/v0.6.3_52` | `92a883b50466cb33da7ed062f821b743c45c485f` | immutable tag + published package |
 
 **Retention policy:** Keep `main` as the only production branch and `archive/retired-branches-2026-11-08` as the **only historical preservation branch**. The archive itself is NOT a candidate for merger to `main`. Its current Git tip has its previous archival commit as first parent and the above two unmerged branch tips as additional parents; the 34 older retired branch heads remain reachable through the first parent. Temporary cleanup job/workflow is meant to reside on an ephemeral ref only, not persist in `main`. Do not delete/rewrite any historical stable or prerelease tags or GitHub Release assets.
+
+## Post-acceptance unique-branch preservation — 12 November 2026
+
+The owner accepted the full Strategies / Hostlist / RU-EN / Preview feature [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936), including native UI follow-up [#1084](https://github.com/Tolian82/os-zapret2-restyle/issues/1084), and then authorized stable `v0.6.5_1` delivery plus repository cleanup.
+
+**Audited original ref:** `feature/v0.6.4_14-p3-voice-i18n-form-anchors`, exact head `fd13ff5761d3eee5c3f68a111e34d8e9d844a44f`. Against pre-release production `main` `4910dce3639cc7d93fa437a141738f6fd0bbd27b` this ref was DIVERGED (7 ahead / 41 behind); the seven commits were **not merged into main** and include older Voice form/Volt and source test experiments. They must not be force-merged into production or silently equated with accepted final RU/EN behavior.
+
+**Preservation method:** this archival commit has prior archive tip `573194d644de90d761bfd650ceb73d47fea7c6fd` as its first Git parent, and the exact original feature head `fd13ff5761d3eee5c3f68a111e34d8e9d844a44f` as its additional parent, **without merging its old source files into the archive tree or into `main`**. This keeps all seven unique commits and their original ancestry reachable after removing the obsolete feature branch ref. Release tags and prior archive history remain unchanged.
+
+**Intended ref disposition:** delete `feature/v0.6.4_14-p3-voice-i18n-form-anchors` only after this archive commit is verified and branch deletion permissions/action are available. `main` and `archive/retired-branches-2026-11-08` remain the two long-lived refs.
