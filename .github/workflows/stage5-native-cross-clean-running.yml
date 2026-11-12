@@ -340,6 +340,18 @@ jobs:
             dependencies=$(tar -xOf "$package" +MANIFEST | /usr/local/bin/python3 -c 'import json,sys; m=json.load(sys.stdin); d=m["deps"]; assert isinstance(d,dict) and "git" in d and d; print(" ".join(sorted(d)))')
             test -n "$dependencies"
             pkg install -y -r OPNsense $dependencies
+            # The immutable 26.7 VM image can contain older Expat while
+            # the official OPNsense repository upgrades python313 as a
+            # manifest dependency.  pyexpat from the new Python requires
+            # XML_GetCurrentLineNumber64, introduced with Expat 2.9.
+            # Repair only this already-proven inconsistent OS dependency
+            # through the official OPNsense repo before normal pkg hooks;
+            # never bypass template errors or silently alter owner hosts.
+            if ! /usr/local/bin/python3 -c 'import xml.etree.ElementTree as ET; ET.fromstring("<ok/>")' >/dev/null 2>&1; then
+              echo 'Guest D: repairing official OPNsense Python/Expat ABI mismatch before native plugin installation'
+              pkg install -y -r OPNsense expat
+            fi
+            /usr/local/bin/python3 -c 'import pyexpat; import xml.etree.ElementTree as ET; ET.fromstring("<ok/>")'
             # pkg can return 0 even if an installed package's POST-INSTALL
             # script reports failure. An extracted pkgdb entry is not a
             # successful native OPNsense installation.
