@@ -1,0 +1,137 @@
+name: P4c2 native Zapret2 v1.0.7 profile examples (isolated)
+
+on:
+  pull_request:
+    paths:
+      - scripts/test-p4c2-native-profile-examples.py
+      - .github/workflows/p4c2-native-examples.yml
+  workflow_dispatch:
+
+concurrency:
+  group: p4c2-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: P4c2 pinned-profile source and negative guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Pure source proof and non-FreeBSD refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/test-p4c2-native-profile-examples.py
+          python3 scripts/test-p4c2-native-profile-examples.py --self-test
+          if GITHUB_ACTIONS=true ZAPRET2_P4C2_DISPOSABLE_NATIVE=1 \
+             python3 scripts/test-p4c2-native-profile-examples.py \
+               --native /tmp/p4c2-native-does-not-exist >"$RUNNER_TEMP/p4c2-guard.out" 2>&1; then
+            echo "::error::P4c2 test accepted non-FreeBSD execution"
+            exit 1
+          fi
+          grep -F 'FREEBSD_ROOT_GUEST_REQUIRED' "$RUNNER_TEMP/p4c2-guard.out"
+          echo 'P4C2_NATIVE_HOST_GUARD=PASS'
+
+  native:
+    needs: fast
+    name: "Disposable FreeBSD engine v1.0.7 - HTTP TLS QUIC parse and Lua init"
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Prevent long host QEMU apt DNS retry loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             command -v qemu-img >/dev/null 2>&1; then
+            echo 'P4C2_QEMU=already_available'
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error::Temporary hosted runner cannot resolve Azure apt mirror; native test not run"
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p4c2-native-network >/dev/null
+      - name: Build pinned upstream in disposable OPNsense and test no-intercept native profiles
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cpu: 3
+          mem: 4096
+          cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for command, seconds in (
+                (["pkg", "update", "-f"], 150),
+                (["pkg", "install", "-y", "git", "ca_root_nss", "gmake",
+                  "pkgconf", "luajit"], 180),
+            ):
+                subprocess.run(command, timeout=seconds, check=True)
+            PY
+          run: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import os
+            import pathlib
+            import shutil
+            import subprocess
+            import sys
+            import tempfile
+
+            sha = "038c97e5819df10f8e8c22a2f1fffe57f2f7379b"
+            root = pathlib.Path(tempfile.mkdtemp(prefix="p4c2-native-", dir="/tmp"))
+            try:
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--depth", "1", "--branch",
+                     "v1.0.7", "https://github.com/bol-van/zapret2.git",
+                     str(root)],
+                    timeout=120, check=True,
+                )
+                actual = subprocess.check_output(
+                    ["git", "-C", str(root), "rev-parse", "HEAD"],
+                    text=True, timeout=8).strip()
+                if actual != sha:
+                    raise RuntimeError("P4C2_REFUSED:UPSTREAM_SHA_MISMATCH")
+                # mkdtemp creates mode 0700; dvtws2 drops root privileges
+                # before opening its pinned Lua files. Allow traversal of
+                # this disposable, verified upstream checkout only.
+                root.chmod(0o755)
+                # On FreeBSD, even --intercept=0 initializes rawsend divert
+                # sockets. The disposable guest must provide IPDIVERT; this
+                # does not install IPFW rules or start packet interception.
+                loaded = subprocess.run(
+                    ["kldstat", "-q", "-m", "ipdivert"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=8, check=False,
+                )
+                if loaded.returncode != 0:
+                    subprocess.run(["kldload", "ipdivert"], timeout=12, check=True)
+                subprocess.run(["make", "-C", str(root / "nfq2")],
+                               timeout=180, check=True)
+                env = {**os.environ, "GITHUB_ACTIONS": "true",
+                       "ZAPRET2_P4C2_DISPOSABLE_NATIVE": "1"}
+                subprocess.run(
+                    [sys.executable, "scripts/test-p4c2-native-profile-examples.py",
+                     "--native", str(root)],
+                    env=env, timeout=100, check=True,
+                )
+            finally:
+                shutil.rmtree(root)
+            PY
+      - name: State bounded validation scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'P4C2_NATIVE_SCOPE=CLI_PARSE_AND_LUA_INIT_ONLY'
