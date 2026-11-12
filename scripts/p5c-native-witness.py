@@ -31,6 +31,9 @@ def load_helpers():
 
 def native():
     h = load_helpers()
+    # The existing P5b2b native witness explicitly wires this installed
+    # backend import root before inspecting the original FD9 state.
+    sys.path.insert(0, str(h.BACKEND))
     h.need(
         os.environ.get("GITHUB_ACTIONS") == "true"
         and os.environ.get("ZAPRET2_NATIVE_BUILD_CI") == "1"
