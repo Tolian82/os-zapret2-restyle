@@ -1,6 +1,7 @@
 name: Testing package delivery contract
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -28,6 +29,8 @@ jobs:
 
   package:
     name: Qualify official OPNsense 26.7 testing-package build (source-only)
+    # Manual qualification only: path-only governance edits must not create a VM.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:

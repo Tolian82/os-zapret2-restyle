@@ -249,6 +249,21 @@ class BudgetContracts(unittest.TestCase):
             ['docs/verification/owner-p6-readonly-probe.py']
         )['full_matrix'])
 
+    def test_testing_package_delivery_only_native_on_intentional_dispatch(self):
+        """GH-067/072: publisher-rule-only PR never consumes an OPNsense VM."""
+        wf = (ROOT / '.github/workflows/testing-package-delivery-ci.yml').read_text(
+            encoding='utf-8')
+        self.assertIn('  workflow_dispatch:', wf)
+        self.assertIn('  pull_request:', wf)
+        pkg = re.search(r'(?ms)^  package:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', wf)
+        self.assertIsNotNone(pkg)
+        header = pkg.group(1).split('    steps:\n', 1)[0]
+        self.assertIn("if: ${{ github.event_name == 'workflow_dispatch' }}", header)
+        self.assertIn('vmactions/opnsense-vm@', pkg.group(1))
+        gov = re.search(r'(?ms)^  governance:\n(.*?)(?=^  [a-z][\w-]+:\n|\Z)', wf)
+        self.assertIsNotNone(gov)
+        self.assertIn('scripts/test-github-branch-hygiene.sh', gov.group(1))
+
     def test_native_execution_rule_is_canonical_not_just_p3_notes(self):
         rulebook = (ROOT / 'docs/GITHUB_PUBLICATION.md').read_text(encoding='utf-8')
         agents = (ROOT / 'AGENTS.md').read_text(encoding='utf-8')
