@@ -38,7 +38,8 @@ class AttributionTests(unittest.TestCase):
             spec.loader.exec_module(self.module)
         return self.module
 
-    def generate(self, strategy, mode="auto", *, voice="", extra=""):
+    def generate(self, strategy, mode="auto", *, voice="", extra="",
+                 checkout=None, divert=989, telegram_ips="149.154.160.0/20"):
         """Execute existing parser/default/normalizer/targets/blobs/generator.
 
         Capture origins at their stage boundaries, never recover them by
@@ -46,6 +47,9 @@ class AttributionTests(unittest.TestCase):
         """
         case = self.root / uuid.uuid4().hex
         case.mkdir()
+        self.last_case = case
+        voice = voice(case) if callable(voice) else voice
+        extra = extra(case) if callable(extra) else extra
         (case / "strategy").write_text(strategy)
         (case / "extra.input").write_text(extra)
         (case / "runtime/ipset").mkdir(parents=True)
@@ -55,6 +59,8 @@ class AttributionTests(unittest.TestCase):
         (case / "init.lua").write_text("return true\n")
         env = dict(os.environ, BACKEND_DIR=str(BACKEND), BACKEND=str(BACKEND),
                    PYTHON_RUNTIME=sys.executable, CASE=str(case), MODE=mode,
+                   TEST_TELEGRAM_IPS=telegram_ips, TEST_DIVERT=str(divert),
+                   TEST_CHECKOUT=str(checkout) if checkout else "",
                    PYTHONDONTWRITEBYTECODE="1")
         script = r'''
 set -eu
@@ -72,7 +78,7 @@ while [ "$no" -le "$count" ]; do
 done
 count=$(profile_pipeline_normalize "${CASE}/work" "$count")
 count=$(profile_pipeline_index "${CASE}/work" "$count")
-targets_prepare_managed "${CASE}/release/managed" 'youtube.com' '149.154.160.0/20' 'example.org' '' '' '' '' '10.0.0.0/8'
+targets_prepare_managed "${CASE}/release/managed" 'youtube.com' "${TEST_TELEGRAM_IPS}" 'example.org' '' '' '' '' '10.0.0.0/8'
 printf '%s\n' excluded.example > "${CASE}/release/managed/hostlist-exclude.txt"
 storage_catalog_build "${CASE}/catalog"
 : > "${CASE}/bindings"
@@ -102,7 +108,17 @@ done
 set -eu
 . "${BACKEND}/common.sh"
 . "${BACKEND}/generator.sh"
-generator_build_args_mapped "${CASE}/assembled" 989 "${CASE}/traffic" "${CASE}/extra" "${CASE}/blobs" "${CASE}/release/managed/hostlist-exclude.txt" "${CASE}/active/managed/hostlist-exclude.txt" "${CASE}/init.lua"
+if [ -n "${TEST_CHECKOUT}" ]; then
+    set -- "${TEST_CHECKOUT}/lua/zapret-lib.lua" "${TEST_CHECKOUT}/lua/zapret-antidpi.lua"
+else
+    set -- "${CASE}/init.lua"
+fi
+printf '%s\n' "--port=${TEST_DIVERT}" > "${CASE}/preamble"
+for initializer do
+    printf '%s\n' "--lua-init=@${initializer}" >> "${CASE}/preamble"
+done
+cat "${CASE}/blobs" >> "${CASE}/preamble"
+generator_build_args_mapped "${CASE}/assembled" "${TEST_DIVERT}" "${CASE}/traffic" "${CASE}/extra" "${CASE}/blobs" "${CASE}/release/managed/hostlist-exclude.txt" "${CASE}/active/managed/hostlist-exclude.txt" "$@"
 '''
         result = subprocess.run(["sh", "-c", command], env=env, capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -119,7 +135,7 @@ generator_build_args_mapped "${CASE}/assembled" 989 "${CASE}/traffic" "${CASE}/e
             effective=sequence("effective"), normalized=sequence("normalized"),
             resolved=sequence("resolved"), ordinary=(case / "ordinary").read_bytes(),
             voice=voice.encode(), extra=(case / "extra").read_bytes(),
-            preamble=(f"--port=989\n--lua-init=@{case}/init.lua\n".encode() + (case / "blobs").read_bytes()),
+            preamble=(case / "preamble").read_bytes(),
             assembled=assembled, final=final,
             overlays=(f"--hostlist-exclude={paths[1]}", f"--ipset-exclude={paths[3]}"),
         )

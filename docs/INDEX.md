@@ -24,6 +24,7 @@
 - [Future native Auto-detect plan P0–P5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) — staged Python/PSL, raw queue durability, GUI/Advanced-only scheduler and real native/package/owner acceptance. **P0 source evidence / one native probe in progress; P1–P5 not started.**
 - [P0 native Auto-detect feasibility, scoped native observer and generation attribution](verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md) — direct-attachment rejection, prior native loopback evidence, actual-generator source map and pending native integration gate.
 - [Noninstalled P0 attribution implementation](verification/p0_profile_attribution.py) and [actual-generator regression witness](verification/test_p0_profile_attribution.py) — exact source/selector/final-argv generation binding, template/skip/default numbering, IPSET/Voice exclusion and stale-generation refusal; source proof only, no runtime caller.
+- [P0 generated native exit witness](../scripts/test-p0-native-generated-observer.py) — one disposable OPNsense engine, original Voice/compiler/generator, template/skip/import native numbering, IPSET/STUN exclusion and raw/debug generation correlation. Native evidence is supplied by the scoped exact-head workflow; prepared source is not PASS.
 
 ## Level 2 — approved current feature requirements (11 November 2026)
 
