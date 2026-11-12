@@ -1,9 +1,11 @@
-name: P0 #1052 isolated native Auto-detect observer feasibility
+name: "P0 #1052 generated native Auto-detect observer feasibility"
 
 on:
   pull_request:
     paths:
       - scripts/test-p0-native-auto-observer.py
+      - scripts/test-p0-native-generated-observer.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py
   workflow_dispatch:
 
 permissions:
@@ -15,7 +17,7 @@ concurrency:
 
 jobs:
   fast:
-    name: P0 source fixture and native refusal
+    name: P0 actual generated map fixture and native refusal
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
@@ -29,9 +31,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3.13 -m py_compile scripts/test-p0-native-auto-observer.py
+          python3.13 -m py_compile scripts/test-p0-native-auto-observer.py scripts/test-p0-native-generated-observer.py
           python3.13 scripts/test-p0-native-auto-observer.py --self-test
-          if GITHUB_ACTIONS=true python3.13 scripts/test-p0-native-auto-observer.py --native \
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-p0-native-generated-observer.py --self-test
+          if GITHUB_ACTIONS=true python3.13 scripts/test-p0-native-generated-observer.py --native \
                /tmp/p4c3-native-unqualified >"${RUNNER_TEMP}/p0-guard.log" 2>&1; then
             echo '::error::P0 native probe accepted a non-FreeBSD host'
             exit 1
@@ -41,7 +44,7 @@ jobs:
 
   native:
     needs: fast
-    name: One disposable OPNsense 26.7 dvtws2 auto-observer / first-match witness
+    name: One OPNsense generated map / first-match / IPSET / Voice witness
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -52,6 +55,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if ! sudo test -c /dev/kvm; then
+            echo '::error::Runner KVM unavailable; native evidence NOT TESTED'
+            exit 1
+          fi
           if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
              command -v qemu-img >/dev/null 2>&1; then
             echo P0_QEMU=already_available
@@ -61,7 +68,7 @@ jobs:
           fi
           echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
             sudo tee /etc/apt/apt.conf.d/99p0-auto-network >/dev/null
-      - name: Single pinned upstream native observer on loopback (no plugin install)
+      - name: Single pinned upstream generated observer on loopback (no plugin install)
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: "26.7"
@@ -107,7 +114,7 @@ jobs:
                 env = {**os.environ, "GITHUB_ACTIONS": "true",
                        "ZAPRET2_P4C3_DISPOSABLE_NATIVE": "1"}
                 subprocess.run(
-                    [sys.executable, "scripts/test-p0-native-auto-observer.py",
+                    [sys.executable, "scripts/test-p0-native-generated-observer.py",
                      "--native", str(root)],
                     check=True, timeout=90, env=env)
             finally:
@@ -116,5 +123,5 @@ jobs:
       - name: Declare qualified evidence boundary
         shell: bash
         run: |
-          echo P0_SCOPE=NATIVE_LOOPBACK_OBSERVER_ONLY
-          echo P0_NOT_CLAIMED=FULL_PROFILE_GENERATION_OR_OWNER_APPLIANCE_OR_PRODUCTION_ACCEPTANCE
+          echo P0_SCOPE=NATIVE_GENERATED_AUTO_MAP_HTTP_IPSET_VOICE_LOOPBACK_ONLY
+          echo P0_NOT_CLAIMED=ALL_PROTOCOLS_OR_OWNER_APPLIANCE_OR_INSTALLED_PRODUCTION_ACCEPTANCE

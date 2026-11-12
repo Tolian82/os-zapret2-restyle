@@ -1,6 +1,6 @@
 # P0 #1052: native Auto-detect isolation feasibility
 
-**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); detached generation-bound attribution verified; native generated-profile attribution and coverage still OPEN. No product implementation or package publication. Source-only candidate `v0.6.5_7` (noninstalled P0 proof/tests).
+**Status:** P0 IN PROGRESS. Upstream/local source analysis and one narrowly scoped genuine OPNsense native loopback packet-level witness **PASS** (workflow [43302135750](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43302135750)); detached generation-bound attribution verified; native generated-profile attribution and coverage still OPEN. No production Auto-detect or package publication. Candidate `v0.6.5_8` includes the native-proven existing global-exclusion import repair plus the noninstalled P0 generated-native witness.
 **Authority:** [approved specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan P0–P5](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). The live user appliance, Config, original FD9, Voice, IPFW and Strategy Lab are not touched.
 
 ## Upstream v1.0.7 — verified source facts
@@ -41,7 +41,7 @@ A user-authored `--new` with explicit `<HOSTLIST:user>` bypasses default injecti
 
 ## P0 generation-bound attribution (13 November 2026)
 
-The noninstalled [P0 implementation](p0_profile_attribution.py) and [actual-generator witness](test_p0_profile_attribution.py) establish the next portable P0 boundary. Both live under `docs/verification/`; neither is packaged, called by production, or writes a service map. No production parser, Target Mode, registry, generator, Voice, GUI or Strategy Lab file changed. P2 must integrate the qualified capture with the original generator/FD9/atomic release owner only after the remaining P0 native gate passes.
+This section records the prior source-only `_7` boundary; the `_8` native blocker and product correction are recorded below. The noninstalled [P0 implementation](p0_profile_attribution.py) and [actual-generator witness](test_p0_profile_attribution.py) establish the next portable P0 boundary. Both live under `docs/verification/`; neither is packaged, called by production, or writes a service map. No production parser, Target Mode, registry, generator, Voice, GUI or Strategy Lab file changed. P2 must integrate the qualified capture with the original generator/FD9/atomic release owner only after the remaining P0 native gate passes.
 
 **Preselected observable scenario:** a real source profile containing `<HOSTLIST:youtube>` plus `<IPSET:telegram>` reaches the original parser, Target Mode, normalizer, mapped target resolver, BLOB resolver, original Voice composer/generator and final global-exclusion pass. Its two final rows must retain the **same original source** and **IPSET ancestry**, so its apparent HOSTLIST-only row cannot acquire automatic HOSTLIST ownership. A stale generation or uncertain transformation must yield unknown/refusal, never a guessed known destination. This is an Auto-detect safety precursor, not GUI Apply or live detection acceptance.
 
@@ -69,6 +69,30 @@ This is **source-qualified numbering**, not a newly executed native engine claim
 
 **Verification budget:** portable stage capture/map checks, the existing profile pipeline regression, documentation/identity/rule/link and CI-budget checks only. No product payload changed; no package build, extra native VM, historical laboratory matrix or stable-release publication is justified by this increment. The earlier native loopback witness is reused only for its original tested scope.
 
+## Native-proven import blocker and bounded correction
+
+The first generated native run [43325819019](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43325819019), job `131558044470`, reached the real pinned engine and failed at startup: `failed to register ipset .../managed/ipset-exclude.txt`. KVM, image, official package prerequisites and the native compiler succeeded; this is a demonstrated generated-argv defect, not an infrastructure failure or an observer result.
+
+Pinned [v1.0.7 `ipset.c` registration](https://github.com/bol-van/zapret2/blob/v1.0.7/nfq2/ipset.c) rejects another reference to an already registered realpath in the same collection. Native `IDX_IMPORT` copies the template collection. The original `global_exclusions.compose()` injected the generated global file into both the nonexecutable template and the final importing row, causing exactly that rejection.
+
+The bounded repair stays in that original policy: remove the owned generated IPSET token from templates and append it once on each **executable** final row, after imports, preserving mandatory protection and unrelated user template exclusions. Domain exclusions already followed executable applicability. No second native parser, new Config/FD9/IPFW owner or observation bypass is introduced.
+
+**Executed red→green:** the complete generated fixture's new `GENERATED_TEMPLATE_REIMPORTS_GLOBAL_IPSET_EXCLUSION` check fails on the old policy and passes with the repair. The original global-exclusion suite now checks nested imports, preserved user template filters, exactly one final generated filter, audit/idempotency and unchanged negative cases. The same real native witness must pass on the successor source; the failed run is never reclassified as PASS.
+
+Because one shipped source file changes, the ordinary native package CI build is now required in addition to the one scoped P0 native scenario. The portable exclusion test no longer automatically launches both historical Stage 5 clean/RUNNING/reboot/resource campaigns; they retain explicit manual dispatch and genuine lifecycle triggers. This is a same-scope GH-069/072 workload correction, not removal of required native evidence. No package is published.
+
+## P0 generated native exit gate
+
+The [generated native witness](../../scripts/test-p0-native-generated-observer.py) reuses the existing actual-generator capture helper, original `voice_profile_compiler.compile_candidate`, canonical map and native disposable-host guard. It starts exactly one pinned engine on the final generated argv; no hand-replacement of native target/profile arguments and no installed plugin or Strategy Lab. The older two-profile native experiment is retained as historical evidence and is not repeated by this workflow.
+
+Preselected native acceptance: actual profiles 1 (compiled Telegram STUN), 2 (known HOSTLIST), 3/4 (the same mixed source split HOSTLIST/IPSET), 5 (native import), 6 (trailing no-action observer), default 0; template/skip rows do not consume executable numbers. Separate local ports make the excluded and permitted scopes observable. Native `dp_find` hostname/L7/port search+match records must prove those selections, beyond startup banners. The Voice fixture intentionally has no Lua action; its real compiled STUN/IPSET selection and unchanged UDP request/reply are the scope, not real Telegram media acceptance.
+
+Known/mixed/IPSET/default failing HTTP flows and the STUN exchange must leave raw discovery empty. Exactly one failed unknown HTTP connection in the observer scope must then append the raw hostname. The request must arrive unchanged before and after inclusion; the observer has no Lua/import/IPSET and explicitly disables retransmit RST. The confirmed raw record must match one native positive debug entry with observer number and actual client port, stable raw/debug dev/inodes, unchanged generated argv and the same running engine PID/start identity. Map lookup must return unknown for that observer and refuse a stale generation. Cleanup must restore exact initial IPFW rules and leave no engine.
+
+Portable S0: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p0-native-generated-observer.py --self-test` executes the full generated fixture; a separate non-FreeBSD invocation must refuse before mutation. These are source/host-guard proofs only. The scoped [native workflow](../../.github/workflows/p0-native-auto-observer.yml) first runs this fast gate, requires runner KVM/network readiness, then performs one bounded native scenario; workflow-only/docs/revision changes do not automatically launch it; the exact changed final-exclusion production file does because this witness qualifies its native import behavior. The workflow uses the already qualified pinned engine/OPNsense image and does not install the plugin or publish a package.
+
+**Exit rule:** a successful exact-head native generated witness closes P0 feasibility for the bounded TCP/HTTP observation/attribution design and allows P1. A failing/skipped/infrastructure-blocked native gate keeps P0 open and blocks P1. The immutable execution receipt is recorded in [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052); this prepared-source section alone does not assert native PASS. Production capture/persistence, minute worker, full UDP/QUIC and GUI/package/owner acceptance remain P2/P5, without a claim of universal detection coverage.
+
 ## Status and next action
 
 | Evidence | State |
@@ -81,4 +105,4 @@ This is **source-qualified numbering**, not a newly executed native engine claim
 | Native generated-profile coverage / first-match and raw/debug attribution | **P0 OPEN** |
 | P1–P5 implementation | **NOT STARTED** |
 
-**Next:** use the captured-generation map in one bounded real native generated-`auto` observer witness. Verify native numbers, first-match, IPSET/Voice isolation and actual raw append/debug correlation against that generation before closing P0. Do not infer universal coverage or project `all` mode into `auto`; do not start P1–P5 or persist/activate an unsafe production detector. No new package is published.
+**Next:** resolve the current source PR native generated exit gate; success closes the scoped P0 feasibility stage and advances to P1, failure remains P0. Preserve unknown fallback and do not infer universal coverage or simultaneous `all`/`auto` modes. Production observation stays disabled; no package is published.

@@ -23,7 +23,6 @@ on:
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
       - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
-      - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
   pull_request:
     branches: [main]
@@ -47,7 +46,6 @@ on:
       - scripts/test-extra-resources-transaction.py
       - scripts/test-extra-resources-preflight.py
       - src/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py
-      - scripts/test-global-exclusions.py
       - scripts/test-ipset-policy.py
   workflow_dispatch:
 

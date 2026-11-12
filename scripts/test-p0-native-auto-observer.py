@@ -102,12 +102,13 @@ def self_test() -> None:
     print(MARK + "_SELF_TEST=PASS_SOURCE_ONLY", flush=True)
 
 
-def exchange(host: str, *, force_rst: bool) -> bytes:
+def exchange(host: str, *, force_rst: bool, port: int = PORT,
+             client_ports: list[int] | None = None) -> bytes:
     observed: list[bytes] = []
     failures: list[str] = []
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listener.bind((HOST, PORT))
+        listener.bind((HOST, port))
         listener.listen(1)
         listener.settimeout(5)
 
@@ -135,7 +136,9 @@ def exchange(host: str, *, force_rst: bool) -> bytes:
         worker.start()
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
             client.settimeout(4)
-            client.connect((HOST, PORT))
+            client.connect((HOST, port))
+            if client_ports is not None:
+                client_ports.append(client.getsockname()[1])
             try:
                 client.sendall(request(host))
                 client.recv(4096)

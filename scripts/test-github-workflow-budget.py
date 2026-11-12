@@ -118,6 +118,17 @@ class BudgetContracts(unittest.TestCase):
         self.assertIn('strategy_lab=false', body)
         self.assertIn('scripts/test-strategy-lab-', body)
 
+    def test_global_exclusion_regression_uses_scoped_native_not_s3_campaign(self):
+        for name in ('stage5-native-running-voice.yml',
+                     'stage5-native-cross-clean-running.yml'):
+            text = (ROOT / '.github/workflows' / name).read_text()
+            self.assertNotIn('      - scripts/test-global-exclusions.py', text)
+            self.assertIn('  workflow_dispatch:', text)
+        self.assertIn('python3.13 scripts/test-global-exclusions.py',
+                      (ROOT / '.github/workflows/ci.yml').read_text())
+        self.assertIn('      - src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py',
+                      (ROOT / '.github/workflows/p0-native-auto-observer.yml').read_text())
+
     def test_lab_fixture_change_only_uses_scoped_lab_ci_not_both_stage5_s3(self):
         # GH-069: a changed mock-backed Lab e2e fixture belongs to the fast
         # corrective matrix, NOT two unrelated S3 guests that fetch the
