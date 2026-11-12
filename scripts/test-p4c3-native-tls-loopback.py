@@ -27,7 +27,7 @@ RULE, DIVERT, PORT = 19350, 19898, 6544
 HOST = "127.0.0.1"
 RULE_ARGS = ["divert", str(DIVERT), "tcp", "from", HOST, "to", HOST,
              str(PORT), "out", "not", "diverted", "not", "sockarg", "xmit", "lo0"]
-HANDLER_LOG = re.compile(r"\* lua 'multisplit\.[^']+' : desync")
+HANDLER_LOG = re.compile(\n    r"(?m)^LUA:\\s+multisplit:\\s+sending part ([12]) "\n    r"\\d+-\\d+ len=[1-9]\\d* seqovl=\\d+\\s+:")
 
 
 def need(ok: bool, why: str) -> None:
@@ -74,9 +74,18 @@ def self_test() -> None:
     assert engine_args(Path("/tmp/p4c3-native-fixture"))[-4:] == [
         f"--filter-tcp={PORT}", "--filter-l7=tls", "--payload=tls_client_hello",
         "--lua-desync=multisplit:pos=midsld:seqovl=1"]
-    assert HANDLER_LOG.search("* lua 'multisplit.1.1' : desync")
-    assert not HANDLER_LOG.search("desync function 'multisplit' does exist")
-    assert not HANDLER_LOG.search("* lua 'fake.1.1' : desync")
+    # Real v1.0.7 Lua logs successful per-packet send attempts as
+    # "LUA: multisplit: sending part ...", not as the C-side dispatch string.
+    # Both parts are required for the expected single midsld split.
+    selected = "* lua 'multisplit.1.1' : payload_type 'tls_client_hello' satisfy filter\n"
+    part1 = "LUA: multisplit: sending part 1 0-93 len=95 seqovl=1 : fixture\n"
+    part2 = "LUA: multisplit: sending part 2 94-185 len=92 seqovl=0 : fixture\n"
+    assert observed_log(selected + part1 + part2)
+    assert not observed_log(selected + part2)
+    assert not observed_log(selected + part1)
+    assert not observed_log(part1 + part2)
+    assert not observed_log(selected + "LUA RUN FILE: zapret-antidpi.lua\n")
+    assert not observed_log(selected + "LUA: fake: sending part 1 0-93 len=95 seqovl=1 : fixture\n")
     assert data.startswith(b"\x16\x03") and b"p4c3.example" in data
     assert RULE not in range(19000, 19011) and RULE not in range(19100, 19132)
     assert safe_default_rules("65535 allow ip from any to any\n")
@@ -204,8 +213,10 @@ def send_hello(data: bytes, *, require_delivery: bool) -> int:
 
 
 def observed_log(log: str) -> bool:
-    # Debug log must report the real per-packet dispatch, not mere Lua load.
-    return (HANDLER_LOG.search(log) is not None and
+    # v1.0.7 upstream Lua prints one message per actually attempted segment;
+    # declarations, function existence and mere Lua initialization cannot pass.
+    # A positive native packet counter and independent PCAP are ALSO required.
+    return (set(HANDLER_LOG.findall(log)) == {"1", "2"} and
             "payload_type 'tls_client_hello' satisfy filter" in log)
 
 
@@ -285,16 +296,14 @@ def native_run(checkout: Path) -> None:
             if not observed_log(log):
                 # Disposable synthetic traffic only; bounded troubleshooting
                 # receipt. Never print full engine log or packet content.
-                lines = [line.strip() for line in log.splitlines() if
-                         any(token in line.lower() for token in
-                             ("lua", "payload", "profile", "l7", "tcp"))]
+                # Do not print raw Lua hex dumps or the intercepted payload,
+                # even in synthetic VM: only bounded evidence counters.
                 tls_filter = "payload_type 'tls_client_hello' satisfy filter" in log
+                parts = set(HANDLER_LOG.findall(log))
                 print(f"{MARK}_TRACE=bytes:{len(log)} lines:{len(log.splitlines())} "
-                      f"related:{len(lines)} handler:{int(bool(HANDLER_LOG.search(log)))} "
+                      f"parts:{','.join(sorted(parts)) or 'none'} "
                       f"tls_filter:{int(tls_filter)}",
                       flush=True)
-                for line in lines[-12:]:
-                    print(MARK + "_TRACE_LINE=" + line[:180], flush=True)
             need(observed_log(log), "NO_NATIVE_TLS_MULTISPLIT_PACKET_DISPATCH")
             print(MARK + "_NATIVE_HANDLER=PASS", flush=True)
             need(capture_path.is_file() and capture_path.stat().st_size > 24,
