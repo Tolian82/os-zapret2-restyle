@@ -112,12 +112,1563 @@ jobs:
             stage0_archive_baseline=true
           fi
 
-          # The expensive Strategy Lab corrective matrix is only relevant
-          # to its own code/shared native runtime; never run on a GUI-only fix.
-          # UI shortlist copy checks run directly below, without the full matrix.
+          # Only semantic Strategy Lab/shared-runtime edits need the
+          # expensive corrective matrix. The strictly additive, read-only
+          # P5c service dispatch is proven against the exact original body,
+          # not waived by an untrusted filename or a broad substring.
           strategy_lab=false
-          if printf '%s\n' "${classified_changed}" | grep -Ev '^scripts/test-strategy-lab-structured-results[.]sh$' | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/zapret_service[.]sh$|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
+          if printf '%s\n' "${classified_changed}" | grep -Ev '^scripts/test-strategy-lab-structured-results[.]sh
+
+          # Resolve ^ fallback and dispatch refs to immutable full Git SHAs.
+          resolved_base_sha=$(git rev-parse "${base_sha}")
+          resolved_head_sha=$(git rev-parse "${head_sha}")
+          echo "base_sha=${resolved_base_sha}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${resolved_head_sha}" >> "${GITHUB_OUTPUT}"
+          echo "stage0_historical_fd9=${stage0_historical_fd9}" >> "${GITHUB_OUTPUT}"
+          echo "stage0_archive_baseline=${stage0_archive_baseline}" >> "${GITHUB_OUTPUT}"
+          echo "strategy_lab=${strategy_lab}" >> "${GITHUB_OUTPUT}"
+          echo "SCOPE package=${package} stage0_archive=${stage0_archive_baseline} historical_fd9=${stage0_historical_fd9} scheduler=${stage0_pkg_scheduler} elf=${stage0_private_elf} native_ipfw=${native_wan_process} strategy_lab=${strategy_lab}"
+          echo "stage0_pkg_scheduler=${stage0_pkg_scheduler}" >> "${GITHUB_OUTPUT}"
+          echo "stage0_private_elf=${stage0_private_elf}" >> "${GITHUB_OUTPUT}"
+          echo "native_wan_process=${native_wan_process}" >> "${GITHUB_OUTPUT}"
+          echo "docs_only=${docs_only}" >> "${GITHUB_OUTPUT}"
+          echo "package=${package}" >> "${GITHUB_OUTPUT}"
+
+      - name: Validate changed production sources against the single compatibility policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/stage1-native-policy-static.py \
+            --base-sha "${{ steps.paths.outputs.base_sha }}" \
+            --head-sha "${{ steps.paths.outputs.head_sha }}"
+
+  stage0-package-baseline:
+    name: Stage 0 published old-package archive baseline
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_archive_baseline == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate archive inspector and its negative/positive contract fixtures
+        run: |
+          python3.13 -m py_compile scripts/stage0-published-package-audit.py scripts/test-stage0-published-package-audit.py
+          python3.13 scripts/test-stage0-published-package-audit.py
+          python3.13 -m py_compile scripts/stage0-private-elf-audit.py scripts/test-stage0-private-elf-audit.py
+          python3.13 scripts/test-stage0-private-elf-audit.py
+      - name: Obtain exact historical GitHub assets and required archive decompressor
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v zstd >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y zstd
+          fi
+          mkdir -p "${RUNNER_TEMP}/stage0-packages"
+          cd "${RUNNER_TEMP}/stage0-packages"
+          curl -fL --retry 3 --retry-delay 2 -sS \
+            https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.1_30/os-zapret2-restyle-0.6.1_30.pkg \
+            -o os-zapret2-restyle-0.6.1_30.pkg
+          curl -fL --retry 3 --retry-delay 2 -sS \
+            https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg \
+            -o os-zapret2-restyle-0.6.2_1.pkg
+          printf '%s\n' \
+            'f14be8fa63ee51dfd3fa9c3bbdcb340bde2945fddff61bd278aa54a87d97826d  os-zapret2-restyle-0.6.1_30.pkg' \
+            '1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f  os-zapret2-restyle-0.6.2_1.pkg' \
+            | sha256sum --check
+      - name: Compare owner-observed predecessor and published stable baseline archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 scripts/stage0-published-package-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.1_30.pkg" \
+            --expected-version '0.6.1_30' \
+            --expected-sha256 f14be8fa63ee51dfd3fa9c3bbdcb340bde2945fddff61bd278aa54a87d97826d \
+            --json "${RUNNER_TEMP}/stage0-installed-predecessor-0.6.1_30.json"
+          python3.13 scripts/stage0-published-package-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.2_1.pkg" \
+            --expected-version '0.6.2_1' \
+            --expected-sha256 1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f \
+            --json "${RUNNER_TEMP}/stage0-stable-0.6.2_1.json"
+      - name: Verify static private ELF loader and DT_NEEDED from both published old packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v readelf
+          python3.13 scripts/stage0-private-elf-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.1_30.pkg" \
+            --expected-package-sha256 f14be8fa63ee51dfd3fa9c3bbdcb340bde2945fddff61bd278aa54a87d97826d \
+            --expected-elf-sha256 e4af7ba05b6ad8dd997aefeae3a9c15a08be2700534d043cd93c7987f97c451f \
+            --json "${RUNNER_TEMP}/stage0-private-elf-0.6.1_30.json"
+          python3.13 scripts/stage0-private-elf-audit.py \
+            --package "${RUNNER_TEMP}/stage0-packages/os-zapret2-restyle-0.6.2_1.pkg" \
+            --expected-package-sha256 1e21fbcac847529b94fea940241b4da7f86a42d33c129b7003ad04a72f4e5a0f \
+            --expected-elf-sha256 e4af7ba05b6ad8dd997aefeae3a9c15a08be2700534d043cd93c7987f97c451f \
+            --json "${RUNNER_TEMP}/stage0-private-elf-0.6.2_1.json"
+      - name: Upload read-only old-package manifest and file/mode/hook evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-old-package-baseline-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/stage0-installed-predecessor-0.6.1_30.json
+            ${{ runner.temp }}/stage0-stable-0.6.2_1.json
+            ${{ runner.temp }}/stage0-private-elf-0.6.1_30.json
+            ${{ runner.temp }}/stage0-private-elf-0.6.2_1.json
+          if-no-files-found: error
+          retention-days: 30
+
+
+
+  stage0-historical-hook-fd9:
+    name: Stage 0 actual archived four hooks and native FreeBSD 15.1 FD9
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_historical_fd9 == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Verify exact historical archive and sandbox protection fixtures (offline)
+        run: |
+          python3.13 -m py_compile scripts/stage0-archived-hooks-native-fd9.py scripts/test-stage0-archived-hooks-native-fd9.py
+          python3.13 scripts/test-stage0-archived-hooks-native-fd9.py -v
+          python3.13 -m py_compile scripts/stage0-installed-pkgdb-native.py scripts/test-stage0-installed-pkgdb-native.py
+          python3.13 scripts/test-stage0-installed-pkgdb-native.py -v
+          python3.13 -m py_compile scripts/stage0-installed-predecessor-readonly.py scripts/test-stage0-installed-predecessor-readonly.py
+          python3.13 scripts/test-stage0-installed-predecessor-readonly.py -v
+      - name: Execute original published 0.6.2_1 hooks using real lockf in disposable FreeBSD 15.1
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          prepare: pkg install -y python313
+          run: |
+            set -eu
+            fetch -o stage0-historical-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3.13 scripts/stage0-archived-hooks-native-fd9.py \
+              --archive stage0-historical-0.6.2_1.pkg \
+              --json stage0-historical-real-fd9.json
+            /usr/local/bin/python3.13 scripts/stage0-installed-pkgdb-native.py \
+              --disposable-freebsd-vm \
+              --archive stage0-historical-0.6.2_1.pkg
+      - name: Preserve actual historical four-hook and native FD9 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-archived-hooks-native-fd9-${{ github.event.pull_request.head.sha }}
+          path: stage0-historical-real-fd9.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  stage0-real-pkg-scheduler:
+    name: Stage 0 real FreeBSD 15.1 pkg hook phase order (synthetic fixtures)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_pkg_scheduler == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate immutable archive and phase order refusal contracts before actual pkg
+        run: |
+          python3.13 -m py_compile scripts/stage0-real-pkg-scheduler.py scripts/test-stage0-real-pkg-scheduler.py
+          python3.13 scripts/test-stage0-real-pkg-scheduler.py -v
+      - name: Use actual pkg add/forced replacement on isolated FreeBSD 15.1 guest
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          prepare: pkg install -y python313
+          run: |
+            set -eu
+            fetch -o stage0-old-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3.13 scripts/stage0-real-pkg-scheduler.py \
+              --archive stage0-old-0.6.2_1.pkg \
+              --json stage0-real-pkg-scheduler.json
+      - name: Preserve true pkg scheduling vs historical hook execution distinction
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-real-pkg-scheduler-${{ github.event.pull_request.head.sha }}
+          path: stage0-real-pkg-scheduler.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  stage0-private-elf-native-runtime:
+    name: Stage 0 exact published ELF FreeBSD 15.1 dynamic runtime
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.stage0_private_elf == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate archive probe negative/syntax contracts before VM
+        run: |
+          python3.13 -m py_compile scripts/stage0-private-curl-native-runtime.py scripts/test-stage0-private-curl-native-runtime.py
+          python3.13 scripts/test-stage0-private-curl-native-runtime.py -v
+      - name: Execute immutable published 0.6.2_1 ELF in isolated FreeBSD 15.1 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          prepare: pkg install -y python313
+          run: |
+            set -eu
+            fetch -o stage0-stable-0.6.2_1.pkg 'https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.2/os-zapret2-restyle-0.6.2_1.pkg'
+            /usr/local/bin/python3.13 scripts/stage0-private-curl-native-runtime.py \
+              --package stage0-stable-0.6.2_1.pkg \
+              --json stage0-private-elf-native-0.6.2_1.json
+      - name: Preserve exact stable private ELF runtime qualification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-private-elf-native-${{ github.event.pull_request.head.sha }}
+          path: stage0-private-elf-native-0.6.2_1.json
+          if-no-files-found: error
+          retention-days: 30
+
+  stage0-source-audit:
+    name: Stage 0 exact-head read-only source inventory
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Validate Stage 0 audit parser and CLI on a real fixture Git index
+        run: |
+          python3.13 -m py_compile scripts/stage0-source-audit.py scripts/test-stage0-source-audit.py
+          python3.13 scripts/test-stage0-source-audit.py
+      - name: Validate exact configd actions and PHP caller inventory with negative Git fixture tests
+        run: |
+          python3.13 -m py_compile scripts/stage0-configd-callpath-audit.py scripts/test-stage0-configd-callpath-audit.py
+          python3.13 scripts/test-stage0-configd-callpath-audit.py
+      - name: Verify independent official OPNsense 26.7 public key and fail-closed local keystore (offline)
+        run: |
+          python3.13 -m py_compile scripts/stage0-verify-opnsense-official-key.py scripts/test-stage0-verify-opnsense-official-key.py
+          python3.13 scripts/test-stage0-verify-opnsense-official-key.py -v
+      - name: Test OPNsense isolated signed catalog and installed ELF target witness (no network)
+        run: |
+          python3.13 -m py_compile scripts/stage0-target-trust-runtime.py scripts/test-stage0-target-trust-runtime.py
+          python3.13 scripts/test-stage0-target-trust-runtime.py -v
+      - name: Test legacy FreeBSD.conf read-only ownership-refusal scenarios
+        run: |
+          python3.13 -m py_compile scripts/stage0-legacy-repo-ownership.py scripts/test-stage0-legacy-repo-ownership.py
+          python3.13 scripts/test-stage0-legacy-repo-ownership.py -v
+      - name: Test public OPNsense package candidates and official source guards offline
+        run: |
+          python3.13 -m py_compile scripts/stage0-opnsense-public-providers.py scripts/test-stage0-opnsense-public-providers.py
+          python3.13 scripts/test-stage0-opnsense-public-providers.py -v
+          python3.13 -m py_compile scripts/stage0-opnsense-repo-trust-source.py scripts/test-stage0-opnsense-repo-trust-source.py
+          python3.13 scripts/test-stage0-opnsense-repo-trust-source.py -v
+      - name: Test exact-HEAD package hook FD9, signal and owner inventory with real Git fixtures
+        run: |
+          python3.13 -m py_compile scripts/stage0-hook-lifecycle-audit.py scripts/test-stage0-hook-lifecycle-audit.py
+          python3.13 scripts/test-stage0-hook-lifecycle-audit.py -v
+      - name: Verify installed predecessor provenance refusal contracts (offline only)
+        run: |
+          python3.13 -m py_compile scripts/stage0-installed-predecessor-readonly.py scripts/test-stage0-installed-predecessor-readonly.py
+          python3.13 scripts/test-stage0-installed-predecessor-readonly.py -v
+      - name: Preflight read-only OPNsense target witness without appliance
+        run: sh scripts/test-stage0-target-opnsense-readonly.sh
+      - name: Record full tracked path/mode/blob and active path/line evidence
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-source-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-source-inventory.json" \
+            --markdown "${RUNNER_TEMP}/stage0-source-inventory.md"
+      - name: Report exact-head configd direct entrypoints and PHP caller references
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-configd-callpath-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-configd-callpath.json" \
+            --markdown "${RUNNER_TEMP}/stage0-configd-callpath.md"
+      - name: Inspect public OPNsense 26.7 candidate names and pinned official source contracts
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/stage0-public-opnsense"
+          cd "${RUNNER_TEMP}/stage0-public-opnsense"
+          # The five immutable official files are fetched through GitHub's
+          # authenticated Contents API: no raw.githubusercontent.com redirect.
+          # Pin both the commit and the known Git blob SHA; verify API metadata,
+          # decoded byte length and the actual blob before any source analysis.
+          # Never replace the independent official repository/mirror checks.
+          fetch_pinned_github_blob() {
+            local repo="$1" revision="$2" source="$3" expected_blob="$4" destination="$5"
+            local metadata
+            metadata="$(mktemp)"
+            curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+              --connect-timeout 10 --max-time 40 \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              --header "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "https://api.github.com/repos/${repo}/contents/${source}?ref=${revision}" \
+              -o "${metadata}"
+            jq --exit-status --arg path "${source}" --arg expected "${expected_blob}" '
+              .type == "file" and .path == $path and .encoding == "base64" and
+              (.sha == $expected) and
+              (.size | type == "number") and (.size > 0 and .size <= 4194304) and
+              (.content | type == "string")
+            ' "${metadata}" >/dev/null
+            jq --raw-output '.content' "${metadata}" | base64 --decode > "${destination}"
+            if [ "$(git hash-object "${destination}")" != "${expected_blob}" ] ||
+               [ "$(wc -c < "${destination}" | tr -d '[:space:]')" != "$(jq -r '.size' "${metadata}")" ]; then
+              echo "ERROR: pinned official OPNsense Git blob bytes/size mismatch: ${source}" >&2
+              return 1
+            fi
+            printf 'Verified pinned official source: %s %s %s\n' "${repo}" "${revision}" "${expected_blob}"
+            rm -f "${metadata}"
+          }
+          core_ref=ac08367416c1d66dea87df0ef0de24c315b5d5bc
+          plugins_ref=79a5f88b7b27a706c10511ea5587c9d0e0dbdced
+          fetch_pinned_github_blob opnsense/core "${core_ref}" plist \
+            4f828c1e0c61772073dc28bc1e18fb68c0874c11 core-plist
+          fetch_pinned_github_blob opnsense/core "${core_ref}" \
+            src/etc/pkg/repos/OPNsense.conf.shadow.in \
+            7089c7bdaa3916f07d004f44453c24b6060e8c9d official-repo-main.conf.in
+          fetch_pinned_github_blob opnsense/core "${core_ref}" \
+            src/etc/pkg/repos/OPNsense-aux.conf.shadow.in \
+            0de1663f869164c74a3317699c292aaacd87b055 official-repo-aux.conf.in
+          fetch_pinned_github_blob opnsense/plugins "${plugins_ref}" Mk/defaults.mk \
+            a5cde8b77de5ff3e08372f521a40ba6f2d52a127 defaults.mk
+          fetch_pinned_github_blob opnsense/plugins "${plugins_ref}" Mk/plugins.mk \
+            bab88694c006deb8dc582ca9067e5681121d1407 plugins.mk
+          # The public directory listing is an UNSIGNED candidate inventory,
+          # never installed/package origin proof. Prefer the official OPNsense
+          # package service; if that mirror times out, try other public mirrors
+          # but accept ONLY a listing that passes the unchanged strict parser
+          # (correct FreeBSD 15/26.7 path, >=50 filenames, required packages,
+          # and the five independent pinned upstream source/ABI contracts).
+          official_listing_verified=false
+          for public_mirror in \
+            'https://pkg.opnsense.org/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.telepoint.bg/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirror.wdc1.us.leaseweb.net/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/' \
+            'https://mirrors.nycbug.org/pub/opnsense/FreeBSD%3A15%3Aamd64/26.7/latest/All/'
+          do
+            echo "Fetching unsigned directory listing from ${public_mirror}"
+            if curl --fail --location --silent --show-error --retry 1 --retry-delay 1 \
+                 --connect-timeout 8 --max-time 25 --max-filesize 2097152 \
+                 "${public_mirror}" -o public-packages.html &&
+               python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-public-providers.py" \
+                 --archive-html public-packages.html --core-plist core-plist \
+                 --defaults-mk defaults.mk --plugins-mk plugins.mk \
+                 --json "${RUNNER_TEMP}/stage0-public-opnsense-providers.json"; then
+              official_listing_verified=true
+              echo "Accepted validated unsigned OPNsense package listing: ${public_mirror}"
+              break
+            fi
+          done
+          [ "${official_listing_verified}" = true ] || {
+            echo 'ERROR: no validated public OPNsense 26.7 package listing from official mirrors' >&2
+            exit 1
+          }
+          python3.13 "${GITHUB_WORKSPACE}/scripts/stage0-opnsense-repo-trust-source.py" \
+            --main-repo official-repo-main.conf.in --aux-repo official-repo-aux.conf.in \
+            --json "${RUNNER_TEMP}/stage0-official-repo-trust-source.json"
+      - name: Preserve unsigned mirror candidates and pinned official repository trust source evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-public-opnsense-providers-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/stage0-public-opnsense-providers.json
+            ${{ runner.temp }}/stage0-official-repo-trust-source.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Record exact-head four hook execution calls, FD9 and signal risks
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python3.13 scripts/stage0-hook-lifecycle-audit.py \
+            --expected-head "${EXPECTED_HEAD}" \
+            --json "${RUNNER_TEMP}/stage0-hook-lifecycle.json"
+      - name: Preserve read-only source inventory artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage0-source-inventory-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/stage0-source-inventory.json
+            ${{ runner.temp }}/stage0-source-inventory.md
+            ${{ runner.temp }}/stage0-configd-callpath.json
+            ${{ runner.temp }}/stage0-configd-callpath.md
+            ${{ runner.temp }}/stage0-hook-lifecycle.json
+          if-no-files-found: error
+          retention-days: 30
+
+  validate-docs:
+    name: Validate documentation
+    if: ${{ github.event_name == 'pull_request' && needs.changes.outputs.docs_only == 'true' }}
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python for documentation checks
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Check handoff identity on documentation changes
+        run: python3.13 scripts/test-current-handoff-identity.py
+
+      - name: Guard testing-package owner install command against missing dependencies
+        run: python3.13 scripts/test-testing-package-install-route.py
+
+      - name: Validate documentation-governance scripts
+        run: |
+          sh -n scripts/test-release-trigger.sh
+          sh -n scripts/test-github-branch-hygiene.sh
+          sh -n scripts/test-repository-hygiene.sh
+
+      - name: Test automated release trigger contract
+        run: sh scripts/test-release-trigger.sh
+
+      - name: Test GitHub delivery governance
+        run: sh scripts/test-github-branch-hygiene.sh
+
+      - name: Test repository documentation integrity
+        run: sh scripts/test-repository-hygiene.sh
+
+  voice-contract:
+    name: Validate Voice candidates
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Bind explicit source-only Python test fixture
+        shell: bash
+        run: |
+          echo "ZAPRET_PYTHON_BIN=$(command -v python3.13)" >> "$GITHUB_ENV"
+          echo "ZAPRET_PYTHON_POLICY=$GITHUB_WORKSPACE/compatibility.json" >> "$GITHUB_ENV"
+      - name: Stage 5 installed OPNsense one-shot read-only eligibility preflight
+        run: |
+          python3.13 -m py_compile scripts/stage5-installed-evidence.py scripts/test-stage5-installed-evidence.py scripts/stage5-installed-one-shot.py scripts/test-stage5-installed-one-shot.py
+          python3.13 scripts/test-stage5-installed-evidence.py
+          python3.13 scripts/test-stage5-installed-one-shot.py
+      - name: Stage 5 read-only WAN target selector and evidence boundary
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-target-preflight.py scripts/test-stage5-wan-target-preflight.py
+          python3.13 scripts/test-stage5-wan-target-preflight.py
+      - name: Stage 5 TLS Phase-A offline configured Lua action signatures
+        run: |
+          python3.13 -m py_compile scripts/stage5-tls-profile-signature.py scripts/test-stage5-tls-profile-signature.py scripts/stage5-tls-phase-a-offline.py scripts/test-stage5-tls-phase-a-offline.py
+          python3.13 scripts/test-stage5-tls-profile-signature.py
+          python3.13 scripts/test-stage5-tls-phase-a-offline.py
+      - name: Stage 5 offline WAN TCP PCAP attribution, both IP families
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-pcap-attribution.py scripts/test-stage5-wan-pcap-attribution.py
+          python3.13 scripts/test-stage5-wan-pcap-attribution.py
+      - name: Stage 5 offline review of one already-retained baseline PCAP
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-baseline-offline-review.py scripts/test-stage5-wan-baseline-offline-review.py
+          python3.13 scripts/test-stage5-wan-baseline-offline-review.py
+      - name: Stage 5 non-executing WAN acquisition plan, both IP families
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-acquisition-plan.py scripts/test-stage5-wan-acquisition-plan.py
+          python3.13 scripts/test-stage5-wan-acquisition-plan.py
+      - name: Stage 5 consent-gated baseline WAN capture lifecycle
+        run: |
+          python3.13 -m py_compile scripts/stage5-wan-baseline-capture.py scripts/test-stage5-wan-baseline-capture.py
+          python3.13 scripts/test-stage5-wan-baseline-capture.py
+      - name: Python 3.11 Stage 5 installed diagnostic compatibility
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Execute read-only Stage 5 diagnostic contracts under Python 3.11
+        run: |
+          python3.11 -m py_compile scripts/stage5-installed-evidence.py scripts/stage5-wan-target-preflight.py scripts/stage5-wan-acquisition-plan.py scripts/stage5-wan-baseline-capture.py scripts/stage5-wan-pcap-attribution.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py
+          python3.11 scripts/test-stage5-installed-evidence.py
+          python3.11 scripts/test-stage5-wan-target-preflight.py
+          python3.11 scripts/test-stage5-wan-acquisition-plan.py
+          python3.11 scripts/test-stage5-wan-baseline-capture.py
+          python3.11 -m py_compile scripts/stage5-wan-baseline-offline-review.py scripts/test-stage5-wan-baseline-offline-review.py
+          python3.11 scripts/test-stage5-wan-baseline-offline-review.py
+      - name: Validate Voice shell and Python syntax
+        run: |
+          sh -n scripts/test-voice-shared-ipsets.sh
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py
+          python3.13 -m py_compile scripts/test-voice-profile-compiler.py
+      - name: Stage 1 canonical Python HOSTLIST normalization and shell adapter
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/domain_policy.py scripts/test-domain-policy.py
+          python3.13 scripts/test-domain-policy.py
+          sh -n scripts/test-domain-policy-shell.sh
+          sh scripts/test-domain-policy-shell.sh
+      - name: Stage 1 dual-stack IPSET compiler and full-family guards
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/ipset_policy.py
+          python3.13 scripts/test-ipset-policy.py
+      - name: Stage 3 global exclusions across final native profiles
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/global_exclusions.py
+          python3.13 scripts/test-global-exclusions.py
+      - name: Isolated real-engine Exclude IPSet generator rehearsal
+        run: |
+          python3.13 -m py_compile scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
+          python3.13 -m py_compile scripts/test-freebsd15-native-strategy-lab-ipfw.py
+          python3.13 scripts/test-freebsd15-native-strategy-lab-ipfw.py --static
+          python3.13 -m py_compile scripts/owner-batch-readonly-v0.6.1_30.py
+          python3.13 -m py_compile scripts/test-freebsd15-stage6-three-acceptance.py scripts/test-freebsd15-native-strategy-lab-engine.py
+          python3.13 scripts/test-freebsd15-native-strategy-lab-engine.py --static
+          python3.13 scripts/test-freebsd15-native-engine-exclude.py --static
+          python3.13 scripts/test-freebsd15-native-strategy-mutation.py --static
+          python3.13 scripts/test-freebsd15-native-tls-strategy.py --static
+          python3.13 scripts/test-freebsd15-native-tls-fake.py --static
+          python3.13 -m py_compile scripts/test-freebsd15-native-tls-process-identity.py
+          python3.13 scripts/test-freebsd15-native-tls-process-identity.py --static
+      - name: Voice shared IPv4 targets
+        run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Validate dvtws2 process census before shared Apply
+        run: sh scripts/test-voice-common-engine-census.sh
+      - name: Shared runtime activation and rollback
+        run: sh scripts/test-voice-common-apply-runtime.sh
+      - name: Voice fail-closed compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+      - name: Voice destination-scoped IPFW capture planning
+        run: python3.13 scripts/test-voice-capture-plan.py
+      - name: Stage 4 existing Voice dual-stack boundary contracts
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
+          python3.13 scripts/test-voice-dualstack-ipset-boundaries.py
+      - name: Persisted Voice model to candidate and capture plan
+        run: python3.13 scripts/test-voice-model-export.py
+      - name: Voice inactive staging with managed IPSET and resolved WAN
+        run: python3.13 scripts/test-voice-release-stage.py
+      - name: Real orchestrator native Voice candidate build
+        run: python3.13 scripts/test-voice-native-build-wire.py
+      - name: First common Voice Apply from running legacy Strategies
+        run: python3.13 scripts/test-voice-first-common-handoff.py
+      - name: First common Apply shell preflight ownership
+        run: sh scripts/test-voice-first-common-entry.sh
+      - name: Native Voice engine --dry-run in private FD9 runtime workspace
+        run: python3.13 scripts/test-voice-engine-private-dryrun.py
+      - name: Voice staged candidate into native dvtws2 arguments and IPFW plan
+        run: python3.13 scripts/test-voice-generator-interop.py
+      - name: Native Voice saved Config and journal lifecycle router (read-only)
+        run: python3.13 scripts/test-voice-native-lifecycle-router.py
+      - name: Native Voice operator-only PREPARED Apply routing
+        run: python3.13 scripts/test-voice-native-apply-route.py
+      - name: Native Voice saved XML and rendered OPNsense template generation parity
+        run: python3.13 scripts/test-voice-native-saved-pair-guard.py
+      - name: Native Voice saved GUI OFF draft root-only Config candidate under FD9
+        run: python3.13 scripts/test-voice-native-saved-draft-candidate.py
+      - name: Native Voice saved GUI read-only FD9 preflight contract
+        run: python3.13 scripts/test-voice-native-draft-preview-route.py
+      - name: Voice non-destructive atomic runtime rollback preflight
+        run: sh scripts/test-voice-atomic-rollback-preflight.sh
+      - name: Voice IPSET integration with shared production Targets normalizer
+        run: python3.13 scripts/test-voice-targets-integration.py
+      - name: Voice and ordinary single-engine traffic merging
+        run: python3.13 scripts/test-voice-traffic-merge.py
+      - name: Shared Voice and Strategies full runtime candidate
+        run: python3.13 scripts/test-voice-common-runtime.py
+      - name: Voice owned IPFW transaction and rollback simulation
+        run: python3.13 scripts/test-voice-firewall-transaction.py
+      - name: Stage 5 native dual-stack IPFW ownership and rollback
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py src/opnsense/scripts/OPNsense/Zapret/backend/voice_firewall_transaction.py
+          python3.13 scripts/test-dualstack-ipfw.py
+      - name: FreeBSD IPFW adapter exact argv and parsing contract
+        run: python3.13 scripts/test-voice-ipfw-adapter.py
+      - name: Voice native saved-ON staging guard
+        run: sh scripts/test-voice-staged-runtime-guard.sh
+      - name: Voice read-only live IPFW ownership inspector
+        run: python3.13 scripts/test-voice-live-inspect.py
+      - name: Voice saved Config and five-profile GUI status API
+        run: php scripts/test-voice-inspect-config-runtime.php
+      - name: Voice one-engine five-profile runtime attestation
+        run: python3.13 scripts/test-voice-common-engine-status.py
+      - name: Interrupted native Config-saved cold recovery and refusal matrix
+        run: sh scripts/test-shared-apply-saved-recovery.sh
+      - name: Interrupted ACTIVATED staged IPFW rollback through common backend
+        run: sh scripts/test-shared-apply-activated-staged.sh
+      - name: Original FD9 shared native stop and restart contract
+        run: sh scripts/test-shared-apply-stop.sh
+      - name: "Common committed native reboot: Config/runtime/IPFW startup"
+        run: sh scripts/test-shared-apply-boot.sh
+      - name: Shared runtime candidate bundle content seal and crash refusal
+        run: python3.13 scripts/test-shared-apply-seal.py
+      - name: Single native Voice and Strategies Apply through existing configd action
+        run: sh scripts/test-shared-apply-run.sh
+      - name: Validate GitHub workflow step name quoting
+        run: |
+          python3.13 - <<'PY'
+          from pathlib import Path
+          import re
+          for flow in Path('.github/workflows').glob('*.yml'):
+              for number, line in enumerate(flow.read_text().splitlines(), 1):
+                  if re.match(r'^\s*- name: [^"\x27].*:\s', line):
+                      raise SystemExit(f'{flow}:{number}: quote name with colon')
+          PY
+      - name: Shared FD9 native Config/runtime transaction fault matrix
+        run: sh scripts/test-shared-apply-execute.sh
+      - name: Native detached OPNsense templates for full shared candidate
+        run: python3.13 scripts/test-shared-apply-render.py
+      - name: Shared FD9 Apply operation record and lifecycle guard
+        run: python3.13 scripts/test-shared-apply-operation.py
+      - name: Reviewed first Voice handoff attestation refuses unsafe old ownership
+        run: sh scripts/test-shared-apply-reviewed-legacy.sh
+      - name: Voice GUI model and localization contract
+        run: python3.13 scripts/test-voice-gui-contract.py
+      - name: OPNsense 26.7 real Voice UI Router and missing-handler regression
+        run: php scripts/test-voice-ui-route.php src/opnsense
+
+  validate:
+    name: Validate Project
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.docs_only != 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+    env:
+      STRATEGY_LAB_PYTHON_BIN: python3.13
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Strategy Lab Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Bind explicit source-only Python test fixture
+        shell: bash
+        run: |
+          echo "ZAPRET_PYTHON_BIN=$(command -v python3.13)" >> "$GITHUB_ENV"
+          echo "ZAPRET_PYTHON_POLICY=$GITHUB_WORKSPACE/compatibility.json" >> "$GITHUB_ENV"
+      - name: Parse production-rendered Zapret shell before costly validation
+        run: |
+          python3.13 -m pip install --disable-pip-version-check 'Jinja2==3.1.6'
+          python3.13 -m py_compile scripts/test-native-template-heredoc.py
+          python3.13 scripts/test-native-template-heredoc.py
+
+      - name: Check packaged G01 purge exact bytes, executable mode and GUI safety path
+        run: |
+          python3.13 -m py_compile scripts/test-g10a-packaged-purge.py
+          python3.13 scripts/test-g10a-packaged-purge.py -v
+
+      - name: Fail-closed GitHub PR watchdog unit and negative security contracts
+        run: |
+          python3.13 -m py_compile scripts/github_pr_watchdog.py scripts/test_github_pr_watchdog.py
+          python3.13 scripts/test_github_pr_watchdog.py -v
+
+      - name: Verify preinstalled PHP and XML parsing capability
+        run: |
+          set -euo pipefail
+          command -v php
+          php -r 'if (PHP_VERSION_ID < 80200 || PHP_VERSION_ID >= 90000) exit(1); echo PHP_VERSION, PHP_EOL;'
+          python3.13 -c 'import xml.etree.ElementTree'
+
+      - name: Validate fail-closed current source revision before the costly matrix
+        run: |
+          python3.13 -m py_compile scripts/stage2_source_revision.py scripts/test-stage2-source-revision.py
+          python3.13 scripts/test-stage2-source-revision.py -v
+
+      - name: Regression test prospective revision-governance gate
+        run: bash scripts/test-pr-revision-policy.sh
+      - name: Check primary revision metadata before costly test matrix
+        run: python3.13 scripts/test-current-handoff-identity.py
+      - name: Guard testing-package owner install command before costly test matrix
+        run: python3.13 scripts/test-testing-package-install-route.py
+      - name: Validate single Stage 1 production compatibility policy before costly matrix
+        run: |
+          python3.13 -m py_compile scripts/validate-compatibility.py scripts/test-compatibility.py scripts/test-stage1-native-compatibility.py scripts/stage1-native-policy-static.py
+          sh -n scripts/compatibility-bootstrap.sh
+          python3.13 scripts/validate-compatibility.py
+          python3.13 scripts/test-compatibility.py
+          python3.13 scripts/test-stage1-native-compatibility.py
+          python3.13 scripts/stage1-native-policy-static.py
+
+      - name: Fast real native Remove trial and original owner rollback contracts
+        run: |
+          python3.13 scripts/test-extra-resources-native-saved-build.py
+          python3.13 scripts/test-extra-resources-transaction.py
+          python3.13 scripts/test-shared-apply-operation.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          sh scripts/test-extra-resources-native-trial.sh
+          sh scripts/test-extra-resources-native-prepared-recovery.sh
+
+      - name: Check upstream recovery syntax and fault tests before costly matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -c 'import ast, pathlib; ast.parse(pathlib.Path("src/opnsense/scripts/OPNsense/Zapret/extra_resources_upstream_guard.py").read_text())'
+          python3.13 scripts/test-extra-resources-upstream-guard.py
+          sh scripts/test-setup-runtime-transaction.sh
+          python3.13 scripts/test-upstream-interruption-recovery.py
+
+      - name: Test isolated prospective upstream resource view and native Blob resolver
+        run: python3.13 scripts/test-extra-resources-upstream-view.py
+
+      - name: Test full native Strategies candidate against upstream-only resources
+        run: python3.13 scripts/test-extra-resources-native-strategies.py
+
+      - name: Test pinned saved XML and native rendered Strategies pair against future resources
+        run: python3.13 scripts/test-extra-resources-saved-config.py
+
+      - name: Test locked saved Config plus original native detached renderer and upstream-only view
+        run: python3.13 scripts/test-extra-resources-native-locked-config.py
+
+      - name: Test original setup lock and native FD9 saved Strategies read-only route
+        run: python3.13 scripts/test-extra-resources-native-saved-route.py
+
+      - name: Test production inert prospective native Strategies compiler shell
+        run: python3.13 scripts/test-extra-resources-inert-compile.py
+
+      - name: Test original candidate-argv Lua and BIN file witnesses
+        run: python3.13 scripts/test-extra-resources-lua-inputs.py
+
+      - name: Test Lua exported-function source shape with bounded lexical scanner
+        run: python3.13 scripts/test-extra-resources-lua-source-shape.py
+
+      - name: Test shared Lua declaration scanner for Strategy Lab and removal
+        run: python3.13 scripts/test-shared-lua-declarations.py
+
+      - name: Test installed engine ELF Lua ABI no-exec read-only hints
+        run: python3.13 scripts/test-extra-resources-engine-abi.py
+
+      - name: Validate project identity and version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid VERSION: ${VERSION_VALUE}"
+            exit 1
+          }
+
+          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
+          grep -Eq '^PLUGIN_VERSION!=[[:space:]]+/bin/cat \$\{\.CURDIR\}/VERSION$' Makefile
+          grep -Eq '^PLUGIN_MAINTAINER=[[:space:]]+tolian82IPB@gmail\.com$' Makefile
+
+          echo "Project: os-zapret2-restyle"
+          echo "Package: os-zapret2-restyle"
+          echo "Internal service: zapret"
+          echo "Version: ${VERSION_VALUE}"
+
+      - name: Verify native PHP uses original held FD9
+        run: sh scripts/test-shared-apply-lock.sh
+
+      - name: Validate XML files
+        run: |
+          set -euo pipefail
+          python3.13 - <<'PY'
+          from pathlib import Path
+          from xml.etree import ElementTree as ET
+          sources = sorted(Path('src').rglob('*.xml'))
+          if not sources:
+              raise SystemExit('NO_PRODUCTION_XML_FILES')
+          for invalid in ('<root>', '<root a="1" a="2"/>'):
+              try:
+                  ET.fromstring(invalid)
+              except ET.ParseError:
+                  pass
+              else:
+                  raise SystemExit('INVALID_XML_ACCEPTED')
+          for source in sources:
+              try:
+                  ET.parse(source)
+              except ET.ParseError as exc:
+                  raise SystemExit(f'{source}: {exc}') from exc
+          print(f'XML_WELLFORMED_PASS={len(sources)}')
+          PY
+
+      - name: Lint PHP files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # One identical lint/API suite regardless of runtime source.
+          # Runner PHP avoids anonymous Docker Hub rate-limit outages;
+          # the pinned PHP 8.2 image remains a fallback if not installed.
+          php_checks=$(cat <<'PHP_CHECKS'
+          set -e
+          find src -type f -name "*.php" -exec php -l {} \;
+          find src -type f -name "*.inc" -exec php -l {} \;
+          php scripts/test-strategy-voice-settings-scope.php
+          php scripts/test-ipset-policy-php.php
+          php scripts/test-domain-policy-php.php
+          php scripts/test-voice-settings-payload.php
+          php scripts/test-voice-candidate-validator.php
+          php scripts/test-voice-api-concurrency.php
+          php scripts/test-voice-config-flock-release.php
+          php scripts/test-voice-apply-candidate.php
+          php scripts/test-voice-native-config-commit.php
+          php scripts/test-shared-apply-request.php
+          php scripts/test-shared-apply-envelope.php
+          php scripts/test-shared-apply-config.php
+          php scripts/test-g04-initial-config.php
+          php scripts/test-voice-candidate-xml.php
+          php scripts/test-voice-draft-selection.php
+          PHP_CHECKS
+          )
+          if command -v php >/dev/null 2>&1 &&
+             php -r 'exit(PHP_VERSION_ID >= 80200 && PHP_VERSION_ID < 90000 ? 0 : 1);'; then
+            php --version | head -n 1
+            sh -c "${php_checks}"
+          else
+            echo "Compatible host PHP not available; using php:8.2-cli container"
+            docker run --rm -v "${PWD}":/app -w /app php:8.2-cli sh -c "${php_checks}"
+          fi
+
+      - name: Verify Voice GUI and backend parser parity
+        run: python3.13 scripts/test-voice-validator-parity.py
+
+      - name: Validate shell scripts
+        run: |
+          find src -type f -name "*.sh" -exec sh -n {} \;
+          find pkg -type f -exec sh -n {} \;
+          # Project helpers explicitly using bash must be parsed with bash,
+          # not silently reported as POSIX sh syntax errors by find -exec.
+          find scripts -type f -name "*.sh" -print |
+            while IFS= read -r script; do
+              case "$(head -n 1 "$script")" in
+                '#!/usr/bin/env bash'|'#!/bin/bash') bash -n "$script" ;;
+                *) sh -n "$script" ;;
+              esac
+            done
+          sh -n src/etc/rc.syshook.d/start/20-zapret
+          sh -n src/etc/rc.syshook.d/stop/20-zapret
+          sh -n tools/telegram-voice-lab/run-a1-opnsense.sh
+
+      - name: Validate read-only independent-control inventory script
+        run: |
+          sh -n tools/telegram-voice-lab/run-control-inventory-opnsense.sh
+          python3.13 tools/telegram-voice-lab/tests/test_control_path_inventory.py
+
+      - name: Test independent Docker A1 saved-GUI diagnostics (no appliance access)
+        run: python3.13 tools/telegram-voice-lab/tests/test_a1_saved_strategy_preflight.py
+
+      - name: Test single qualified native Python launcher and FD9 exec
+        run: ZAPRET_TEST_PYTHON=python3.13 sh scripts/test-qualified-python-runtime.sh
+
+      - name: Test Python-down native service Status Stop under FD9
+        run: sh scripts/test-native-python-down-service.sh
+
+      - name: Test Strategy Lab Python foundation
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-foundation.sh
+
+      - name: Test Strategy Lab Python state persistence
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-state-persistence.sh
+
+      - name: Test Strategy Lab Python orchestration
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-orchestration.sh
+
+      - name: Test Strategy Lab Python request and probe execution
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-probes.sh
+      - name: Stage 6 IPv6 literal, AAAA-only and dual-family candidate binding
+        run: |
+          python3.13 -m py_compile scripts/test-strategy-lab-ipv6-targets.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/target.sh src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php
+          python3.13 scripts/test-strategy-lab-ipv6-targets.py
+      - name: Stage 6 selected IPv6 GUI-to-native job and probe contract
+        run: |
+          python3.13 -m py_compile scripts/test-strategy-lab-ipv6-opt-in.py src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py
+          php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLabController.php
+          sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/launch.sh
+          sh -n src/opnsense/scripts/OPNsense/Zapret/strategy_lab/state.sh
+          python3.13 scripts/test-strategy-lab-ipv6-opt-in.py
+
+      - name: Test private Chrome ECH-disabled policy
+        run: sh scripts/test-curl-impersonate-ech-policy.sh
+
+      - name: Test stopped committed owner with cold IPFW kernel
+        run: python3.13 scripts/test-common-cold-ipfw-kernel.py
+
+      - name: Test Strategy Lab Python candidate and family screening
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-family.sh
+
+      - name: Test Stage 85 readable shell adapter handoff
+        run: sh scripts/test-strategy-lab-profile-adapter-mode.sh
+
+      - name: Test Strategy Lab Python CandidateSpec and ResourceInventory
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-candidate-spec.sh
+
+      - name: Verify exact IPv4/IPv6 curl family in Stage50 and Stage85 candidate probes
+        run: |
+          python3.13 -m py_compile scripts/test-strategy-lab-candidate-ipv6-curl.py
+          python3.13 scripts/test-strategy-lab-candidate-ipv6-curl.py
+
+      - name: Test Strategy Lab native Zapret2 search graph
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-search-graph.sh
+
+      - name: Test Strategy Lab adaptive planner, search epoch, and timing telemetry
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-adaptive-planner.sh
+
+      - name: Test Strategy Lab Python search and extended orchestration
+        run: STRATEGY_LAB_TEST_PYTHON=python3.13 sh scripts/test-strategy-lab-python-search-extended.sh
+
+      - name: Test one Python profile parser, normalization and original shell APIs
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/profile_policy.py scripts/test-profile-policy.py
+          python3.13 scripts/test-profile-policy.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/parser.sh src/opnsense/scripts/OPNsense/Zapret/backend/profile_normalizer.sh scripts/test-profile-policy-shell.sh
+          sh scripts/test-profile-policy-shell.sh
+      - name: Test runtime profile normalization
+        run: sh scripts/test-profile-normalizer.sh
+
+      - name: Test count-carrying profile pipeline
+        run: sh scripts/test-profile-pipeline.sh
+
+      - name: Test configuration activation contract
+        run: sh scripts/test-config-activation-contract.sh
+
+      - name: Test shared Voice IPSET registration and normalization
+        run: sh scripts/test-voice-shared-ipsets.sh
+
+      - name: Test fail-closed Voice profile compiler
+        run: python3.13 scripts/test-voice-profile-compiler.py
+
+      - name: Test Strategy Lab corrective matrix
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.strategy_lab == 'true' }}
+        run: sh scripts/test-strategy-lab-corrective-matrix.sh
+
+      # UI-only profile-copy provenance always runs as a focused S0 test.
+      - name: P5b2a disposable original native candidate build contract
+        run: python3.13 scripts/test-strategy-preview-build.py
+
+      - name: P5b1 private native mapped validator handoff
+        run: python3.13 scripts/test-strategy-preview-native.py
+
+      - name: P5a read-only canonical structural preview source contract
+        run: python3.13 scripts/test-strategy-preview-shape.py
+
+      - name: Test Strategy Lab structured UI result provenance
+        run: sh scripts/test-strategy-lab-structured-results.sh
+
+      - name: Test diagnostics guidance localization
+        run: sh scripts/test-diagnostics-guidance-localization.sh
+
+      - name: Test lifecycle lock descriptor isolation
+        run: sh scripts/test-lifecycle-lock-fd.sh
+
+      - name: Test package lifecycle service refresh
+        run: sh scripts/test-package-lifecycle-restart.sh
+
+      - name: Test native cold installed service refusal and mutation negatives
+        run: python3.13 scripts/test-stage2-opnsense-real-native-cold-service.py
+
+      - name: Test installed real active service lifecycle refusal and rollback contracts
+        run: python3.13 scripts/test-stage2-opnsense-real-native-active-service.py
+
+      - name: Test installed real configctl active lifecycle contracts
+        run: python3.13 scripts/test-stage2-opnsense-real-native-active-configctl.py
+
+      - name: Test native clean shutdown and real reboot syshook contracts
+        run: python3.13 scripts/test-stage2-opnsense-real-native-boot-syshook.py
+
+      - name: Test installed shared Strategies and Voice owner negative contracts
+        run: python3.13 scripts/stage2-opnsense-real-native-shared-voice.py --self-test
+
+      - name: Test real native Voice HTTP form and token negative contracts
+        run: python3.13 scripts/stage2-opnsense-real-native-voice-http.py --self-test
+
+      - name: Test identical archive SHA across two installed modes and tamper-refusal contracts
+        run: python3.13 scripts/stage5-native-running-voice-artifact.py --self-test
+
+      - name: Test native firmware uninstall registration and config retention
+        run: python3.13 scripts/test-stage2-opnsense-real-native-remove.py
+
+      - name: Test native package hook archive-refusal contracts
+        run: python3.13 scripts/test-native-package-hook-regression-contracts.py
+
+      - name: Test package replacement on attested cold kernel
+        run: python3.13 scripts/test-package-cold-kernel.py
+
+      - name: Test standalone old-package cold-IPFW read-only inspection
+        run: python3.13 scripts/test-legacy-cold-ipfw-preflight.py
+
+      - name: Test setup release selection
+        run: sh scripts/test-setup-release-selection.sh
+
+      - name: Test native OPNsense dependency ownership and no stock repo mutation
+        run: sh scripts/test-setup-native-dependencies.sh
+
+      - name: Test extra-resources read-only preflight
+        run: python3.13 scripts/test-extra-resources-preflight.py
+
+      - name: Test read-only prospective removal plan with real Git HEAD
+        run: python3.13 scripts/test-extra-resources-remove-plan.py
+
+      - name: Test durable resource transaction and rollback
+        run: python3.13 scripts/test-extra-resources-transaction.py
+
+      - name: Test native Additional Resources Remove API confirmation and status
+        run: php scripts/test-extra-resources-remove-api.php
+
+      - name: Check extra-resources native lifecycle and launcher wiring
+        run: python3.13 scripts/test-extra-resources-native-wiring.py
+
+      - name: Test owned resources across upstream updates
+        run: python3.13 scripts/test-extra-resources-upstream-guard.py
+
+      - name: Test bilingual manual extra-resources GUI contract
+        run: python3.13 scripts/test-extra-resources-gui-contract.py
+
+      - name: Test job-local managed Lua/BIN capability classification
+        run: python3.13 scripts/test-extra-capabilities.py
+
+      - name: Test dynamic runnable Lua/BIN Stage-60 search graph
+        run: python3.13 scripts/test-extra-resources-dynamic-graph.py
+      - name: Test cached installed Lua/BIN names and Git ownership
+        run: python3.13 scripts/test-extra-resources-inventory-cache.py
+
+      - name: Test two-column resource help and cache-only GUI wiring
+        run: python3.13 scripts/test-extra-resources-inventory-gui.py
+
+      - name: Test original upstream setup transaction under shared lock
+        run: sh scripts/test-setup-runtime-transaction.sh
+
+      - name: Test GUI runtime management
+        run: sh scripts/test-gui-runtime-management.sh
+
+      - name: Test native OPNsense WAN without primary IPv4
+        run: python3.13 scripts/test-wan-assigned-device-resolution.py
+
+      - name: Test native Voice Transmission form contract
+        run: python3.13 scripts/test-voice-gui-contract.py
+
+      - name: Test Strategies native RU/EN form labels and help
+        run: python3.13 scripts/test-strategies-i18n.py
+
+      - name: Test P3 Strategies and Voice field validation locale
+        run: python3.13 scripts/test-p3-field-errors.py
+
+      - name: Test automated release trigger contract
+        run: sh scripts/test-release-trigger.sh
+
+      - name: Test Node 24 release actions
+        run: sh scripts/test-release-node24-actions.sh
+
+      - name: Test native CI changed-path classifier (historic PR #827 regression)
+        run: python3.13 scripts/test-stage2-native-package-ci-classifier.py
+
+      - name: Test FreeBSD 15 package CI contract
+        run: sh scripts/test-freebsd15-package-ci.sh
+
+      - name: Test GitHub delivery governance
+        run: sh scripts/test-github-branch-hygiene.sh
+
+      - name: Test repository artifact hygiene
+        run: sh scripts/test-repository-hygiene.sh
+
+      - name: Check required project files
+        run: |
+          set -eu
+
+          for file in \
+            AGENTS.md \
+            VERSION \
+            Makefile \
+            pkg-descr \
+            LICENSE \
+            NOTICE \
+            README.md \
+            docs/CHANGELOG.md \
+            docs/REQUIREMENTS.md \
+            docs/ARCHITECTURE.md \
+            docs/DEVLOG.md \
+            docs/GITHUB_PUBLICATION.md \
+            docs/decisions/DEC-2026-08-05-efficient-github-delivery.md \
+            docs/decisions/DEC-2026-08-05-universal-versioned-github-titles.md \
+            docs/devlog/2026-08-05-universal-versioned-github-titles.md \
+            docs/patches/v0.3.2_2.md \
+            docs/patches/v0.3.2_3.md \
+            docs/devlog/2026-08-04-blockcheck-guidance-localization.md \
+            src/etc/rc.syshook.d/start/20-zapret \
+            src/etc/rc.syshook.d/stop/20-zapret \
+            src/etc/inc/plugins.inc.d/zapret.inc \
+            src/opnsense/service/conf/actions.d/actions_zapret.conf \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/telemetry.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search_graph.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py \
+            src/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh \
+            pkg/+PRE_INSTALL \
+            pkg/+POST_INSTALL \
+            pkg/+PRE_DEINSTALL \
+            pkg/+POST_DEINSTALL \
+            scripts/build-pkg.sh \
+            scripts/test-domain-diagnostics-contract.sh \
+            scripts/test-strategy-lab-corrective-matrix.sh \
+            scripts/test-strategy-lab-corrective-matrix-contract.sh \
+            scripts/test-strategy-lab-python-foundation.sh \
+            scripts/test-strategy-lab-python-state-persistence.sh \
+            scripts/test-strategy-lab-python-orchestration.sh \
+            scripts/test-strategy-lab-python-probes.sh \
+            scripts/test-strategy-lab-python-candidate-spec.sh \
+            scripts/test-strategy-lab-python-candidate-family.sh \
+            scripts/test-strategy-lab-python-search-graph.sh \
+            scripts/test-strategy-lab-python-adaptive-planner.sh \
+            scripts/test-strategy-lab-python-search-extended.sh \
+            scripts/test-diagnostics-guidance-localization.sh \
+            scripts/test-package-lifecycle-restart.sh \
+            scripts/test-setup-release-selection.sh \
+            scripts/test-gui-runtime-management.sh \
+            scripts/test-release-trigger.sh \
+            scripts/test-release-node24-actions.sh \
+            scripts/test-freebsd15-package-ci.sh \
+            scripts/test-github-branch-hygiene.sh \
+            scripts/test-repository-hygiene.sh \
+            .github/workflows/cleanup-merged-branch.yml \
+            .github/workflows/release.yml \
+            .github/workflows/release-trigger.yml
+          do
+            test -f "${file}" || {
+              echo "Missing required file: ${file}"
+              exit 1
+            }
+          done
+
+          for file in \
+            scripts/build-pkg.sh \
+            scripts/test-strategy-lab-python-foundation.sh \
+            scripts/test-strategy-lab-python-state-persistence.sh \
+            scripts/test-strategy-lab-python-probes.sh \
+            scripts/test-strategy-lab-python-candidate-spec.sh \
+            scripts/test-strategy-lab-python-adaptive-planner.sh \
+            scripts/test-release-trigger.sh \
+            scripts/test-package-lifecycle-restart.sh \
+            scripts/test-diagnostics-guidance-localization.sh \
+            scripts/test-freebsd15-package-ci.sh \
+            scripts/test-github-branch-hygiene.sh \
+            scripts/test-repository-hygiene.sh
+          do
+            test -x "${file}" || {
+              echo "Required executable is not executable: ${file}"
+              exit 1
+            }
+          done
+
+      - name: Check repository independence
+        run: |
+          set -eu
+
+          # Check shipped code and build tooling, not the technical source
+          # citations in docs/ or attribution/legal/history records.
+          if grep -RniE \
+            'github\.com/ugorur/os-zapret2|mail@ugorur|os-zapret2-[0-9]|pkg delete os-zapret2([^_-]|$)' \
+            src pkg scripts repository
+          then
+            echo "Legacy project dependency found in executable/package paths"
+            exit 1
+          fi
+
+  native-ipfw-table:
+    name: Isolated FreeBSD 15.1 native IPFW tables and IPv6 UDP divert
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.native_wan_process == 'true') }}
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - uses: actions/checkout@v6
+      - name: Probe native IPFW tables and loopback IPv6 packets in disposable VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          usesh: true
+          prepare: pkg install -y python313 git luajit pkgconf jq curl
+          run: |
+            # The isolated FreeBSD test runs source, not an installed OPNsense package.
+            # Bind the canonical source policy explicitly; never use this fallback on appliance.
+            export ZAPRET_PYTHON_POLICY="$PWD/compatibility.json"
+            freebsd-version -u | grep -Eq '^15[.]1([.-]|$)'
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-process-continuity.py scripts/test-freebsd15-native-tls-process-identity.py
+            process_witness_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_PROCESS_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-process-continuity.py 2>&1)" || {
+              printf '%s\n' "$process_witness_output"
+              exit 1
+            }
+            printf '%s\n' "$process_witness_output"
+            printf '%s\n' "$process_witness_output" | grep -Fqx 'NATIVE_WAN_PROCESS_CONTINUITY=PASS: FreeBSD15.1 native PID/start-time, restart, refusal and cleanup' || {
+              echo 'Native FreeBSD 15.1 process witness must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-native-wan-baseline-lifecycle.py scripts/stage5-wan-baseline-capture.py scripts/stage5-wan-pcap-attribution.py
+            baseline_capture_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_BASELINE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-wan-baseline-lifecycle.py 2>&1)" || {
+              printf '%s\n' "$baseline_capture_output"
+              exit 1
+            }
+            printf '%s\n' "$baseline_capture_output"
+            printf '%s\n' "$baseline_capture_output" | grep -Fqx 'NATIVE_WAN_BASELINE_LIFECYCLE=PASS: FreeBSD15.1 real lo0 IPv4/IPv6 tcpdump readiness, bounded termination, unsupported-DLT refusal and cleanup' || {
+              echo 'Native FreeBSD 15.1 tcpdump lifecycle must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            /usr/local/bin/python3.13 -m py_compile scripts/test-freebsd15-stage6-three-acceptance.py scripts/test-freebsd15-native-strategy-lab-engine.py scripts/test-freebsd15-native-strategy-lab-ipfw.py scripts/test-freebsd15-native-ipfw-table.py scripts/test-freebsd15-native-ipfw-packet.py scripts/test-freebsd15-native-ipfw-transaction.py scripts/test-freebsd15-native-engine-exclude.py scripts/test-freebsd15-native-strategy-mutation.py scripts/test-freebsd15-native-tls-strategy.py scripts/test-freebsd15-native-tls-fake.py
+            native_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-table.py 2>&1)" || {
+              printf '%s\n' "$native_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$native_probe_output"
+            printf '%s\n' "$native_probe_output" | grep -Fqx 'STAGE5_NATIVE_TABLE=PASS: FreeBSD15 live kernel add/list/swap/restore/cleanup' || {
+              echo 'Native FreeBSD 15 IPFW smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            packet_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_IPV6_PACKET_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-packet.py 2>&1)" || {
+              printf '%s\n' "$packet_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$packet_probe_output"
+            printf '%s\n' "$packet_probe_output" | grep -Fqx 'STAGE5_NATIVE_IPV6_PACKET=PASS: FreeBSD15.1 lo0 IPv6 UDP divert/reinject and STUN port scope' || {
+              echo 'Native FreeBSD 15.1 IPv6 packet smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            lab_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_STRATEGY_LAB_IPFW_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-strategy-lab-ipfw.py 2>&1)" || {
+              printf '%s\n' "$lab_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$lab_probe_output"
+            printf '%s\n' "$lab_probe_output" | grep -Fqx 'STAGE6_NATIVE_LAB_IPFW=PASS: production Stage40 dual-stack pins, actual IPFW lo0 IPv4/IPv6 divert/reinject/counters, bypass, cleanup and failed-install restoration' || {
+              echo 'Real FreeBSD15 Strategy Lab production adapter IPv4/IPv6 packet witness must PASS; SKIP is not accepted' >&2
+              exit 1
+            }
+            transaction_probe_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_TRANSACTION_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-ipfw-transaction.py 2>&1)" || {
+              printf '%s\n' "$transaction_probe_output"
+              exit 1
+            }
+            printf '%s\n' "$transaction_probe_output"
+            printf '%s\n' "$transaction_probe_output" | grep -Fqx 'STAGE5_NATIVE_TRANSACTION=PASS: FreeBSD15.1 real dual-stack install/fault/rollback/commit/retire/cleanup' || {
+              echo 'Native FreeBSD 15.1 IPFW rollback smoke must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+
+            # Test the same two loopback destinations with identical UDP
+            # payloads using the real pinned upstream native dvtws2. No WAN,
+            # installed OPNsense filesystem or production service involved.
+            native_engine_source="$(mktemp -d)"
+            trap 'rm -rf "$native_engine_source"' EXIT
+            git clone --quiet --branch v1.0.6 --depth 1 https://github.com/bol-van/zapret2.git "$native_engine_source"
+            test "$(git -C "$native_engine_source" rev-parse HEAD)" = "221d7dff24bfec0cd5ac0a5070b8acef2008af3d"
+            make -C "$native_engine_source/nfq2"
+            test -x "$native_engine_source/nfq2/dvtws2"
+            # Native kernel NUL-delimited argv + PID/start-time for pinned TLS fake engine.
+            native_tls_identity_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_WAN_PROCESS_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-tls-process-identity.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_tls_identity_output"
+              exit 1
+            }
+            printf '%s\n' "$native_tls_identity_output"
+            printf '%s\n' "$native_tls_identity_output" | grep -Fqx 'NATIVE_TLS_PROCESS_ARGV_IDENTITY=PASS: FreeBSD15.1 real dvtws2 kernel NUL-argv equals exact expected profile; PID/start unchanged, stale/reordered refused, cleaned' || {
+              echo 'Native TLS kernel argv identity MUST PASS; no SKIP is allowed' >&2
+              exit 1
+            }
+            lab_engine_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_STRATEGY_LAB_ENGINE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-strategy-lab-engine.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$lab_engine_output"
+              exit 1
+            }
+            printf '%s\n' "$lab_engine_output"
+            printf '%s\n' "$lab_engine_output" | grep -Fqx 'STAGE6_NATIVE_LAB_ENGINE=PASS: production Stage40 CandidateSpec, real dvtws2 IPv4/IPv6 TLS delivery, IPFW counters and exact cleanup; BPF active header not claimed' || {
+              echo 'Real Strategy Lab Stage40-to-dvtws2 IPv4/IPv6 TLS BPF witness must PASS; SKIP is not accepted' >&2
+              exit 1
+            }
+            # Exactly three new Stage6 acceptance scenarios, no matrix expansion.
+            three_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_THREE_ACCEPTANCE=1 /usr/local/bin/python3.13 scripts/test-freebsd15-stage6-three-acceptance.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$three_output"
+              exit 1
+            }
+            printf '%s\n' "$three_output"
+            for marker in \
+              'STAGE6_THREE_ACCEPTANCE_1=PASS: AAAA-only real Stage85 3/3 verified TLS and IPFW' \
+              'STAGE6_THREE_ACCEPTANCE_2=PASS: native IPv6 OFF/ON Stage30 and real A+AAAA TLS candidate' \
+              'STAGE6_THREE_ACCEPTANCE_3=PASS: real untrusted TLS fails closed; no owned process/IPFW remains' \
+              'STAGE6_THREE_ACCEPTANCE=PASS: 1=AAAA-only real Stage85 CA-verified 3/3; 2=IPv6 OFF/ON and real A+AAAA pinned TLS; 3=wrong-CA failure and exact cleanup'
+            do
+              printf '%s\n' "$three_output" | grep -Fqx "$marker" || {
+                echo "All three exact Stage6 native acceptance results must PASS; no SKIP accepted" >&2
+                exit 1
+              }
+            done
+            native_exclude_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-engine-exclude.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_exclude_output"
+              exit 1
+            }
+            printf '%s\n' "$native_exclude_output"
+            printf '%s\n' "$native_exclude_output" | grep -Fqx 'NATIVE_ENGINE_EXCLUDE_WIRE=PASS: real dvtws2 v1.0.6 IPv4/IPv6 three-profile baseline DROP, nonmatching Exclude DROP, matching Exclude pass' || {
+              echo 'Native FreeBSD 15.1 real-engine IPv4/IPv6 Exclude three-phase negative-control packet test must PASS' >&2
+              exit 1
+            }
+            # Independent real TCP bytes: selected upstream HTTP Host-case
+            # strategy vs identical input and matching/nonmatching global Exclude.
+            native_strategy_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-strategy-mutation.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_strategy_output"
+              exit 1
+            }
+            printf '%s\n' "$native_strategy_output"
+            printf '%s\n' "$native_strategy_output" | grep -Fqx 'NATIVE_STRATEGY_PACKET_ATTRIBUTION=PASS: native HTTP strategy modifies IPv4/IPv6 TCP bytes; nonmatching Exclude modifies; exact matching Exclude preserves; owned IPFW restored' || {
+              echo 'Native actual-strategy byte-attribution trial must PASS; SKIP is not acceptance' >&2
+              exit 1
+            }
+            # Real OpenSSL ClientHello, real upstream pktmod and native lo0
+            # BPF packet-header attribution with exact positive/negative Exclude.
+            native_tls_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-tls-strategy.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_tls_output"
+              exit 1
+            }
+            printf '%s\n' "$native_tls_output"
+            printf '%s\n' "$native_tls_output" | grep -Fqx 'NATIVE_TLS_CLIENTHELLO_HEADER=PASS: native TLS ClientHello selected pktmod TTL IPv4/IPv6, nonmatching Exclude modifies, exact matching Exclude preserves, IPFW/pcap cleaned' || {
+              echo 'Isolated native TLS ClientHello packet mutation witness must PASS; no SKIP is allowed' >&2
+              exit 1
+            }
+            # Real upstream TLS fake, unique forged payload and genuine ClientHello.
+            # IPv4/IPv6, matching/nonmatching native Exclude, exact TCP flow.
+            native_fake_output="$(ZAPRET2_ISOLATED_FREEBSD_VM_TABLE_TEST=1 ZAPRET2_ISOLATED_FREEBSD_VM_EXCLUDE_WIRE_TEST=1 /usr/local/bin/python3.13 scripts/test-freebsd15-native-tls-fake.py "$native_engine_source/nfq2/dvtws2" 2>&1)" || {
+              printf '%s\n' "$native_fake_output"
+              exit 1
+            }
+            printf '%s\n' "$native_fake_output"
+            printf '%s\n' "$native_fake_output" | grep -Fqx 'NATIVE_TLS_FAKE_PACKET=PASS: real TLS fake IPv4/IPv6 captured only without matching Exclude; original ClientHello attributed on wire; IPFW cleaned' || {
+              echo 'Native TLS fake packet attribution MUST PASS; no SKIP is allowed' >&2
+              exit 1
+            }
+
+  package:
+    name: Build official OPNsense 26.7 native package (source-only CI)
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && needs.changes.outputs.package == 'true' }}
+    runs-on: ubuntu-latest
+    needs: [changes, validate]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Read package version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+
+          if [[ -n "${REVISION}" && "${REVISION}" != "0" ]]; then
+            FULL_VERSION="${VERSION_VALUE}_${REVISION}"
+          else
+            FULL_VERSION="${VERSION_VALUE}"
+          fi
+
+          echo "version=${FULL_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build package inside qualified OPNsense 26.7 VM
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: tar
+          copyback: true
+          disable-cache: true
+          mem: 4096
+          cpu: 2
+          run: |
+            set -eu
+            /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+            test "$(opnsense-version -a)" = "26.7"
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-foundation.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-state-persistence.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-orchestration.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-probes.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-candidate-spec.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-candidate-family.sh
+            sh scripts/test-strategy-lab-profile-adapter-mode.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-search-graph.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-adaptive-planner.sh
+            STRATEGY_LAB_TEST_PYTHON=/usr/local/bin/python3 sh scripts/test-strategy-lab-python-search-extended.sh
+            /usr/local/bin/python3 scripts/test-voice-ipfw-adapter.py
+            /usr/local/bin/python3 scripts/test-voice-live-inspect.py
+            /usr/local/bin/python3 scripts/test-voice-generator-interop.py
+            /usr/local/bin/python3 scripts/test-voice-common-runtime.py
+            /usr/local/bin/python3 scripts/test-voice-native-build-wire.py
+            /usr/local/bin/python3 scripts/test-voice-native-lifecycle-router.py
+            sh scripts/test-voice-atomic-rollback-preflight.sh
+            /usr/local/bin/python3 scripts/test-ipset-policy.py
+            /usr/local/bin/python3 scripts/test-voice-targets-integration.py
+            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" sh scripts/build-pkg.sh
+
+      - name: Inspect native OPNsense 26.7 package
+        run: |
+          set -eu
+          contents=$(mktemp)
+          manifest=$(mktemp)
+          trap 'rm -f "${contents}" "${manifest}"' EXIT
+
+          ls -lh dist/
+          tar -tf dist/*.pkg > "${contents}"
+          if grep -Eq '(^|/)(__pycache__/|[^/]+[.]pyc$)' "${contents}"; then
+            echo "ERROR: untracked Python bytecode leaked into native package" >&2
+            exit 1
+          fi
+          head -30 "${contents}"
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_((prepare|apply)_route|forward_apply|forward_stage_prepare|previous_evidence_prepare|initial_ipfw_seed|forward_prepare|forward_ipfw|forward_supervisor|candidate_engine_start|forward_stop)[.]py$' "${contents}"; then
+            echo "ERROR: retired private Voice backend leaked into native OPNsense package" >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/voice_native_(render_saved|build_release)[.]sh$' "${contents}"; then
+            echo "ERROR: retired operator Voice workers leaked into native OPNsense package" >&2
+            exit 1
+          fi
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python_launcher.sh' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_python.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/compat.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/state.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/orchestrator.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/request.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/probe.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/endpoint_epoch.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/telemetry.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/resources.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate_spec.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/candidate.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/family.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search_graph.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/search.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/extended.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_candidate_adapter.sh' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/strategy_lab_stage_adapter.sh' "${contents}"
+          if grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/telegram_voice.sh' "${contents}"; then
+            echo "ERROR: retired Telegram Phase-B PoC shipped in package" >&2
+            exit 1
+          fi
+          # The old cutover-only process actuator has no shared Apply caller.
+          if grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_native_process_lifecycle.sh' "${contents}"; then
+            echo "ERROR: retired private Voice process actuator shipped in package" >&2
+            exit 1
+          fi
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_ipfw_adapter.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_live_inspect.py' "${contents}"
+          # Retired Telegram PoC executors, cutover journals and private
+          # five-resource backup paths must never return to the FreeBSD package.
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/(voice_cutover_|voice_ipfw_runtime[.]py$|voice_native_(boot_recovery_review|five_resource_recovery|recovery_quiescence|forward_runtime|process_actions|process_probe|kernel_argv|live_preflight|file_observer|full_observer)[.]py$)' "${contents}"; then
+            echo "ERROR: retired Telegram PoC private backend leaked into FreeBSD package" >&2
+            exit 1
+          fi
+          if grep -Eq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/(voice_native_legacy_[A-Za-z_]+|voice_migration_plan)[.]py$' "${contents}"; then
+            echo "ERROR: retired Telegram PoC migration/rollback leaked into FreeBSD package" >&2
+            exit 1
+          fi
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_profile_compiler.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_capture_plan.py' "${contents}"
+          grep -Fq 'usr/local/opnsense/scripts/OPNsense/Zapret/backend/voice_traffic_merge.py' "${contents}"
+          # Validate the installed paths, not only the git/source tree.
+          if ! command -v php >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y php-cli
+          fi
+          extracted=$(mktemp -d)
+          trap 'rm -f "${contents}" "${manifest}"; rm -rf "${extracted}"' EXIT
+          tar -xf dist/*.pkg -C "${extracted}"
+          php scripts/test-voice-ui-route.php "${extracted}/usr/local/opnsense"
+          tar -xOf dist/*.pkg +MANIFEST > "${manifest}"
+          jq -e '.abi == "FreeBSD:15:amd64" and .arch == "freebsd:15:x86:64" and (.deps | keys | length == 7) and (.deps | has("git") and has("jq") and has("gmake") and has("pkgconf") and has("luajit") and has("ca_root_nss")) and (.deps | has("php85-posix") | not)' "${manifest}" >/dev/null
+          head -80 "${manifest}"
+
+      - name: Verify real native package hook bodies and isolated lifecycle regressions
+        run: |
+          set -eu
+          python3 scripts/test-native-package-hook-regression.py dist/*.pkg
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: os-zapret2-restyle-${{ steps.version.outputs.version }}
+          path: dist/os-zapret2-restyle-*.pkg
+          if-no-files-found: error
+
+  main-integrity:
+    name: Verify main integrity
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    needs: changes
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Check committed diff, title identity, and core identity
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BEFORE_SHA}" && ! "${BEFORE_SHA}" =~ ^0+$ ]]; then
+            git diff --check "${BEFORE_SHA}" "${CURRENT_SHA}"
+          fi
+
+          VERSION_VALUE=$(tr -d '[:space:]' < VERSION)
+          REVISION=$(sed -n 's/^PLUGIN_REVISION=[[:space:]]*//p' Makefile | head -1)
+          [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          printf '%s\n' "${REVISION}" | grep -Eq '^[0-9]+$'
+
+          EXPECTED="v${VERSION_VALUE}"
+          if [[ -n "${REVISION}" && "${REVISION}" != "0" ]]; then
+            EXPECTED="${EXPECTED}_${REVISION}"
+          fi
+
+          SUBJECT=$(git show -s --format=%s "${CURRENT_SHA}")
+          case "${SUBJECT}" in
+            "${EXPECTED}: "*)
+              echo "Main commit subject matches package candidate ${EXPECTED}."
+              ;;
+            *)
+              echo "Invalid main commit subject: ${SUBJECT}" >&2
+              echo "Required format: ${EXPECTED}: <logical change>" >&2
+              exit 1
+              ;;
+          esac
+
+          grep -Eq '^PLUGIN_NAME=[[:space:]]+zapret2-restyle$' Makefile
+          sh -n scripts/test-github-branch-hygiene.sh
+          sh scripts/test-github-branch-hygiene.sh
+ | grep -Eq '^(scripts/test-strategy-lab-|src/opnsense/scripts/OPNsense/Zapret/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/strategy_lab|src/opnsense/scripts/OPNsense/Zapret/backend/(orchestrator|supervisor|apply_runtime)[.]sh$|src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/StrategyLab)'; then
             strategy_lab=true
+          elif printf '%s\n' "${classified_changed}" | grep -Fxq 'src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh'; then
+            python3 scripts/ci_p5c_service_scope.py --self-test
+            service_base=$(git rev-parse "${base_sha}")
+            service_head=$(git rev-parse "${head_sha}")
+            if [[ "$(python3 scripts/ci_p5c_service_scope.py "${service_base}" "${service_head}")" != "P5C_ONLY_SERVICE_DELTA=true" ]]; then
+              strategy_lab=true
+            fi
           fi
 
           # Resolve ^ fallback and dispatch refs to immutable full Git SHAs.

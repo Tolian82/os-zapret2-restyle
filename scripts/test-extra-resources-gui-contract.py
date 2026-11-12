@@ -159,7 +159,8 @@ let extraBusy=false, extraInstallPending=false, extraRemovePending=false,
     extraNeedsReview=false, currentRuntimeInstalled=true,
     currentServiceState='started', extraStateKnown=true,
     releaseApplyPending=false, releaseNeedsReview=false,
-    strategiesApplyPending=false, strategiesApplyNeedsReview=false;
+    strategiesApplyPending=false, strategiesApplyNeedsReview=false,
+    previewPending=false;
 const runtimeText={applying:'',apply:''};
 const extrasText={firstStart:'',review:'',install:''};
 """ + busy_renderer.group(0) + """
@@ -170,7 +171,7 @@ function check(install, remove, busy, installingSpinner, removingSpinner) {
     assert.equal(dom['#zapretExtraRemoveProgress:spinner'], removingSpinner);
     const locked=install || remove || busy;
     for (const id of ['#zapretExtraInstall','#zapretExtraRemove',
-                      '#zapretServiceControl','#reconfigureAct'])
+                      '#zapretServiceControl','#reconfigureAct','#zapretPreviewAct'])
         assert.equal(dom[id+':disabled'],locked);
 }
 check(false,false,false,false,false); // idle
@@ -180,6 +181,12 @@ check(false,true,false,false,true); // remove queued
 check(false,true,true,false,true);  // remove active
 check(false,true,true,false,true);  // F5 reattached during remove
 check(false,false,true,true,false); // existing generic busy fallback
+previewPending=true;
+setRuntimeBusy(false);
+assert.equal(dom['#reconfigureAct:disabled'], true);
+assert.equal(dom['#zapretPreviewAct:disabled'], true);
+assert.equal(dom['#zapretPreviewProgress:spinner'], true);
+previewPending=false;
 """)
     checked = subprocess.run(["node", str(spinner_probe)],
                              text=True, capture_output=True)
