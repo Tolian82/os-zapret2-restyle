@@ -485,6 +485,10 @@ def build():
 def main():
     try:
         report = build()
+        # Copyback consumers compare actual provider/manifest identities rather
+        # than keeping a second hardcoded dependency count in workflow YAML.
+        (ROOT / "dist/native-build-evidence.json").write_text(
+            json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     except (Refusal, private.old.Refusal, provider.Refusal,
             ValueError, TypeError, OSError, KeyError) as exc:
         print("NATIVE_OPNSENSE_PACKAGE=REFUSED:" + str(exc), file=sys.stderr)

@@ -66,6 +66,8 @@ Follow [GH-016, GH-062 and GH-069](../GITHUB_PUBLICATION.md) with [DEV-061/DEV-0
 
 The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md#10-mandatory-acceptance-matrix) must all receive applicable real evidence, including IPSET exclusion, all file races, PSL/private suffixes, GUI concurrency, native advanced visibility with hidden-value persistence, scheduled unchanged-list restart, stopped service, upgrade/remove/purge behavior and **no Strategy Lab change**. A testing package is the input for owner's real verification, not proof of it.
 
+**P5 preparation identified during P1:** the historical installed-receipt shape readers in `scripts/stage5-native-single-artifact.py` and `scripts/stage5-native-running-voice-artifact.py` still assume seven dependencies. Adapt them to the qualified archive/provider identity before their P5 installed campaigns; IDNA is now a declared eighth provider. Their obsolete-head metadata refusals are not P1 policy/package-execution failures or a completed P5 proof. The current P1 copyback gate already compares exact actual dependencies rather than a fixed count.
+
 ## 9. Open engineering checks and execution boundary
 
 The remaining integration questions concern persisted generation/debug correlation and additional UDP/QUIC observation scope, FreeBSD FD closure, inode durability/ownership and calendar/cron mechanics. P1 fixes offline PSL provision/update through normal packages. These are not permission to reopen agreed routing, repeat the completed P0 bounded witness or involve Strategy Lab.

@@ -66,7 +66,7 @@ jobs:
           [[ "$revision" =~ ^[1-9][0-9]*$ ]]
           package="dist/os-zapret2-restyle-${version}_${revision}.pkg"
           test -f "$package"
-          tar -xOf "$package" +MANIFEST | jq -e --arg expected "${version}_${revision}" '.name == "os-zapret2-restyle" and .version == $expected and (.deps | keys | length == 7)'
+          tar -xOf "$package" +MANIFEST | jq -e --arg expected "${version}_${revision}" --slurpfile built dist/native-build-evidence.json '.name == "os-zapret2-restyle" and .version == $expected and .deps == $built[0].real_native_pkg.actual_dependencies and ((.deps | keys) == ($built[0].evaluated_native_make.PLUGIN_DEPENDS | split(" ") | sort))'
           member=$(tar -tf "$package" | grep -E '(^|/)share/zapret2-restyle/compatibility[.]json$')
           test "$(printf '%s\n' "$member" | wc -l)" -eq 1
           tar -xOf "$package" "$member" | cmp - compatibility.json
