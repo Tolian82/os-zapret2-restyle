@@ -282,6 +282,19 @@ def native_run(checkout: Path) -> None:
                 need(not cleanup_errors, ";".join(cleanup_errors))
             logfile.flush()
             log = log_path.read_text(errors="replace")
+            if not observed_log(log):
+                # Disposable synthetic traffic only; bounded troubleshooting
+                # receipt. Never print full engine log or packet content.
+                lines = [line.strip() for line in log.splitlines() if
+                         any(token in line.lower() for token in
+                             ("lua", "payload", "profile", "l7", "tcp"))]
+                tls_filter = "payload_type 'tls_client_hello' satisfy filter" in log
+                print(f"{MARK}_TRACE=bytes:{len(log)} lines:{len(log.splitlines())} "
+                      f"related:{len(lines)} handler:{int(bool(HANDLER_LOG.search(log)))} "
+                      f"tls_filter:{int(tls_filter)}",
+                      flush=True)
+                for line in lines[-12:]:
+                    print(MARK + "_TRACE_LINE=" + line[:180], flush=True)
             need(observed_log(log), "NO_NATIVE_TLS_MULTISPLIT_PACKET_DISPATCH")
             print(MARK + "_NATIVE_HANDLER=PASS", flush=True)
             need(capture_path.is_file() and capture_path.stat().st_size > 24,
