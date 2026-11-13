@@ -117,7 +117,10 @@ require "${INDEX}" 'DOCUMENTATION_RULES.md'
 require "${INDEX}" 'PROJECT_PRINCIPLES.md'
 require "${INDEX}" 'CHAT_RULES.md'
 require "${INDEX}" 'GITHUB_PUBLICATION.md'
-require "${INDEX}" 'STRATEGY_LAB_QUIC_CONTROL.md'
-require "${INDEX}" 'STRATEGY_LAB_UDP_INPUT.md'
+# The Level-1 index routes specialists through the architecture catalog;
+# it is not a flat list of every currently authoritative contract.
+require "${INDEX}" 'architecture/README.md'
+require "${ROOT_DIR}/docs/architecture/README.md" 'STRATEGY_LAB_QUIC_CONTROL.md'
+require "${ROOT_DIR}/docs/architecture/README.md" 'STRATEGY_LAB_UDP_INPUT.md'
 
 printf 'PASS: live-matrix contract follows active line %s and current candidate %s (%s) without stale version/revision pins\n' "${line}" "${candidate_tag}" "${candidate_pkg}"
