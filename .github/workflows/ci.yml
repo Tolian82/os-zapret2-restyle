@@ -593,10 +593,6 @@ jobs:
         run: python3.13 scripts/test-current-handoff-identity.py
       - name: Test P0 detached generation-bound profile attribution
         run: PYTHONDONTWRITEBYTECODE=1 python3.13 docs/verification/test_p0_profile_attribution.py
-      - name: Test P2c read-only shared generation owner refusal and provenance
-        run: |
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owner.py scripts/test-auto-detect-owner.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-owner.py
       - name: Check test-budget classifier and scoped CI policy
         run: |
           python3.13 scripts/ci_owner_journey_scope.py --self-test
@@ -1110,6 +1106,10 @@ jobs:
 
       - name: Test P0 detached generation-bound profile attribution
         run: PYTHONDONTWRITEBYTECODE=1 python3.13 docs/verification/test_p0_profile_attribution.py
+      - name: Test P2c read-only shared generation owner refusal and provenance
+        run: |
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owner.py scripts/test-auto-detect-owner.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-owner.py
 
       - name: Test configuration activation contract
         run: sh scripts/test-config-activation-contract.sh
