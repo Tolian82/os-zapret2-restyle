@@ -4,9 +4,9 @@
 
 ## Exact source boundary
 
-**13 November 2026 — `v0.6.5_21`** (`VERSION=0.6.5`, `PLUGIN_REVISION=21`). This source increment adds a **nonactivating P2j same-generation pending-cycle bridge**, connecting the existing P2a queue, P2b FD state and P2c owner proof through explicit still-missing debug and durable destination adapters. Interrupted link-before-replace is recoverable within the same owner generation; a different/untagged generation is preserved and refused. No `_21.pkg` is published. The owner-installed immutable stable package remains `os-zapret2-restyle-0.6.5_1.pkg`.
+**13 November 2026 — `v0.6.5_22`** (`VERSION=0.6.5`, `PLUGIN_REVISION=22`). This source increment adds the **nonactivating P2k1 generation-bound debug/raw window reader**. It requires exact native observer profile, trusted file inode/mode, byte-offset/prefix hash and complete ordered positive debug/raw correspondence, but **never authorizes pending acknowledgment or advances a durable cursor**. No `_22.pkg` is published. The owner-installed immutable stable package remains `os-zapret2-restyle-0.6.5_1.pkg`.
 
-**Current handoff identity:** `v0.6.5_21` · `VERSION=0.6.5` · `PLUGIN_REVISION=21` · prospective `os-zapret2-restyle-0.6.5_21.pkg` **NOT PUBLISHED**.
+**Current handoff identity:** `v0.6.5_22` · `VERSION=0.6.5` · `PLUGIN_REVISION=22` · prospective `os-zapret2-restyle-0.6.5_22.pkg` **NOT PUBLISHED**.
 
 The 13 November documentation review remains in force: all historical information was preserved in the [review archive](history/stages/documentation-2026-11-13/README.md). [All-file inventory](audit/DOCS-2026-11-13-INVENTORY.md), [findings](audit/DOCS-2026-11-13.md), and [owner clarification](decisions/DEC-2026-11-13-documentation-review-owner-clarifications.md) govern the retained support and long-term Voice UDP/extra IPv6/P2P scope.
 
@@ -24,11 +24,13 @@ Source `_20` adds the targeted [P2i original-preview native loopback witness](ve
 
 Source `_21` adds the [P2j dormant pending-cycle bridge](verification/P2J_SAME_GENERATION_DURABLE_CYCLE.md): each saved inode is tagged with its authentic 32-hex shared-Apply generation, stale/unknown pending is never silently reassigned to another process, and a same-generation crash after hardlink is recoverable before FD/debug/commit acknowledgment. Source-only injected adapter tests are not live FD/debug/destination proof; its public worker entry refuses unconditionally. Existing P2i native first-match and upstream chown evidence remain valid.
 
+Source `_22` adds [P2k1 bounded native debug/raw candidate windows](verification/P2K1_DEBUG_RAW_WINDOW.md). Upstream logs `adding to` **before** actual raw append, so even a well-formed debug positive is not proof. The import-only reader requires the exact P2c generation and original trailing observer, root-controlled debug inode and its byte-offset/prefix digest, and complete same-order matching raw lines. It emits only an in-memory **proposed** cursor, not a persisted checkpoint or P2j `True` result. P2j still refuses native invocation.
+
 This is **not** an implemented or accepted live observer, changed release argv, actual native writer event, sealed authorized schema-2 generation, real process/FD drain correlation, durable destination writes or active cron worker. P2 remains open; P3–P5 remain open. Exact-head source/CI checks must be recorded separately from P2e's prior native success.
 
 ## One next action
 
-Next P2 gate (P2k): implement and qualify trustworthy **generation-specific raw/debug offset correlation** and a **durably idempotent destination-commit adapter**, including safe recovery of previous-generation pending after reboot/Apply; **no guessing from the current process**. Then qualify original FD9 startup ownership restoration after native privilege drop and before IPFW, seal an authorized schema-2 with the single shared owner and enable the bounded minute configd worker only after all safety gates pass.
+Next P2 gate (P2k2): persist a **root-owned generation-specific debug epoch/cursor receipt** with old-generation sealed source/FD evidence, then implement a **durable, idempotent auto-owned destination-commit transaction** tied to the actual pending inode; demonstrate restart/reboot, pre-debug raw write failure and a concurrent GUI edit without data loss. Only after this and the original FD9 `nobody`→root startup reownership **before IPFW** are qualified may the original owner seal authorized schema-2 and activate its single bounded configd/cron worker. No guesses from a new process about old pending.
 
 Do not activate the one-minute configd/cron worker or write auto-owned final lists until their preceding P2 proof gates pass. No second engine, Config writer, FD9 owner, IPFW manager, WAN or Voice lifecycle; Strategy Lab stays untouched.
 
@@ -36,6 +38,6 @@ Do not activate the one-minute configd/cron worker or write auto-owned final lis
 
 1. [#1052 specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md).
 2. [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
-3. [P2j generation-bound pending cycle](verification/P2J_SAME_GENERATION_DURABLE_CYCLE.md), [P2i original-preview real-native loopback gate](verification/P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md), [P2h original FD9 sealed preview](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md), [P2g protected native writer contract](verification/P2G_NATIVE_WRITER_STORAGE.md), [P2f source-only observer proposal](verification/P2F_OFFLINE_OBSERVER_PLAN.md), [P2e original-builder qualification](verification/P2E_ORIGINAL_SHARED_BUILDER.md), [P2d producer](verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md), and [P2c running-owner contract](verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
+3. [P2k1 bounded raw/debug offset candidate](verification/P2K1_DEBUG_RAW_WINDOW.md), [P2j generation-bound pending cycle](verification/P2J_SAME_GENERATION_DURABLE_CYCLE.md), [P2i original-preview real-native loopback gate](verification/P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md), [P2h original FD9 sealed preview](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md), [P2g protected native writer contract](verification/P2G_NATIVE_WRITER_STORAGE.md), [P2f source-only observer proposal](verification/P2F_OFFLINE_OBSERVER_PLAN.md), [P2e original-builder qualification](verification/P2E_ORIGINAL_SHARED_BUILDER.md), [P2d producer](verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md), and [P2c running-owner contract](verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
 
 Reuse unchanged P0/P1/P2e evidence. Source, CI/package qualification and owner-installed appliance acceptance are distinct.
