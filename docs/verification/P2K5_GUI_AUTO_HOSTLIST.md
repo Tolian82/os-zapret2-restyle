@@ -1,6 +1,6 @@
 # #1052 P2k5 — native Strategies Auto Hostlist, shared root lock and explicit-only target
 
-**Owner supersession notice (13 November 2026):** The P2k5 root Auto Hostlist editor, revision CAS and explicit-only selector remain valid. However, the legacy `zapret-hosts-auto.txt` first-copy documented below is **not approved any longer** and must be removed from active source. Keep the historical proof below as an accurate record of `_27`, not an active product requirement. [Current specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md).
+**Owner supersession notice (13 November 2026):** The P2k5 root Auto Hostlist editor, revision CAS and explicit-only selector remain valid. However, the legacy `zapret-hosts-auto.txt` first-copy documented below is **not approved any longer** and was removed from active source in `_30`. Keep the historical proof below as an accurate record of `_27`, not an active product requirement. [Current specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md).
 
 **Source candidate:** `v0.6.5_27` (13 November 2026), no published `_27.pkg`; owner-installed stable `0.6.5_1.pkg` untouched. Not a P2 native observer/worker acceptance.
 

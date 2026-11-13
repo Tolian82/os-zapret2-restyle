@@ -54,7 +54,6 @@ class AttributionTests(unittest.TestCase):
         (case / "extra.input").write_text(extra)
         (case / "runtime/ipset").mkdir(parents=True)
         (case / "runtime/files/fake").mkdir(parents=True)
-        (case / "runtime/ipset/zapret-hosts-auto.txt").write_text("")
         (case / "runtime/files/fake/http_iana_org.bin").write_bytes(b"P0 fixture only")
         (case / "init.lua").write_text("return true\n")
         env = dict(os.environ, BACKEND_DIR=str(BACKEND), BACKEND=str(BACKEND),
