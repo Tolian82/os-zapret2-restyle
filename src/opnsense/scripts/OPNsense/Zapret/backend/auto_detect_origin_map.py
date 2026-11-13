@@ -260,12 +260,22 @@ def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
     root = "/var/db/zapret2/auto-detect/"
     if raw_path != root + "inbox.txt" or debug_path != root + "debug.log":
         raise AttributionError("unqualified observation file paths")
-    if not isinstance(tcp_ports, str) or not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", tcp_ports):
+    if (not isinstance(tcp_ports, str) or
+            not re.fullmatch(r"[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*", tcp_ports)):
         raise AttributionError("invalid TCP observer ports")
-    ports = [int(port) for port in tcp_ports.split(",")]
-    if (len(ports) > 256 or len(ports) != len(set(ports))
-            or not all(1 <= port <= 65535 for port in ports)):
-        raise AttributionError("invalid TCP observer ports")
+    items = tcp_ports.split(",")
+    if len(items) > 256:
+        raise AttributionError("too many TCP observer port selectors")
+    seen_ports: set[int] = set()
+    for item in items:
+        start, dash, stop = item.partition("-")
+        first, last = int(start), int(stop) if dash else int(start)
+        if not 1 <= first <= last <= 65535:
+            raise AttributionError("invalid TCP observer port range")
+        selected = set(range(first, last + 1))
+        if selected & seen_ports:
+            raise AttributionError("overlapping TCP observer ports")
+        seen_ports.update(selected)
 
     source_profiles = mapping.get("profiles")
     if not isinstance(source_profiles, list) or not 1 <= len(source_profiles) <= 255:
@@ -346,11 +356,12 @@ CAPTURE = "auto-detect-capture"
 NONACTIVATING = "ORIGINAL_SHARED_GENERATOR_CAPTURE_NONACTIVATING"
 
 
-def _capture_file(path: Path) -> bytes:
+def _capture_file(path: Path, limit: int = ARGS_LIMIT, owner_uid: int | None = None) -> bytes:
     import stat
     before = path.lstat()
     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-            or before.st_mode & 0o022 or before.st_size > ARGS_LIMIT):
+            or before.st_mode & 0o022 or before.st_size > limit
+            or (owner_uid is not None and before.st_uid != owner_uid)):
         raise AttributionError("unsafe staged original-generator artifact")
     fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     try:
@@ -358,9 +369,9 @@ def _capture_file(path: Path) -> bytes:
         if (before.st_ino, before.st_dev, before.st_size) != (
                 actual.st_ino, actual.st_dev, actual.st_size):
             raise AttributionError("changed original-generator stage")
-        content = os.read(fd, ARGS_LIMIT + 1)
+        content = os.read(fd, limit + 1)
         final = os.fstat(fd)
-        if (len(content) > ARGS_LIMIT or
+        if (len(content) > limit or
                 (actual.st_dev, actual.st_ino, actual.st_size, actual.st_mtime_ns) !=
                 (final.st_dev, final.st_ino, final.st_size, final.st_mtime_ns)):
             raise AttributionError("racing original-generator stage")
@@ -456,16 +467,71 @@ def publish_origin_map(workspace: Path, release: Path, mode: str) -> dict:
     return result
 
 
+
+def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
+    """Read-only preflight under the *existing* FD9 after native PHP Config proof.
+
+    A verified source map and plan belong to the same shared-work ID; the
+    candidate digest is obtained by the caller from native
+    shared_apply_config preflight, never recomputed from a second parser.
+    This returns a bounded proof *only to the caller*. No files are written,
+    and it cannot create an authorized schema-2 map or process owner.
+    """
+    work = Path(workspace)
+    uid = os.geteuid()
+    if (not re.fullmatch(r"[a-f0-9]{32}", work.name)
+            or not re.fullmatch(r"[a-f0-9]{64}", candidate_digest)
+            or work.is_symlink() or not work.is_dir()
+            or work.stat().st_uid != uid or work.stat().st_mode & 0o077):
+        raise AttributionError("untrusted original common candidate workspace")
+    release = work / "release"
+    if (release.is_symlink() or not release.is_dir()
+            or release.stat().st_uid != uid):
+        raise AttributionError("untrusted shared release")
+    plan = json.loads(_capture_file(work / "plan.json",
+                                    limit=4 * 1024 * 1024, owner_uid=uid))
+    if (not isinstance(plan, dict) or plan.get("page") not in {"voice", "strategies"}
+            or not isinstance(plan.get("candidate"), dict)
+            or not isinstance(plan.get("changed_fields"), list)
+            or not isinstance(plan.get("dependencies"), str)
+            or not re.fullmatch(r"[a-f0-9]{64}", plan["dependencies"])):
+        raise AttributionError("untrusted original native Apply plan")
+    source = json.loads(_capture_file(release / ORIGIN_FILE, owner_uid=uid))
+    original = _capture_file(release / "dvtws.args", owner_uid=uid)
+    tcp = _capture_file(release / "tcp-ports.txt", owner_uid=uid).decode("ascii").strip()
+    proposed, mapping = plan_trailing_observer(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest,
+        raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+        debug_path="/var/db/zapret2/auto-detect/debug.log",
+        tcp_ports=tcp,
+    )
+    if mapping["evidence"] != "P2F_OFFLINE_PLAN_ONLY":
+        raise AttributionError("observer proposal unexpectedly authorizes activation")
+    return {
+        "evidence": "P2F_ORIGINAL_FD9_PREFLIGHT_NONACTIVATING",
+        "generation": work.name,
+        "native_candidate_sha256": candidate_digest,
+        "original_args_sha256": hashlib.sha256(original).hexdigest(),
+        "proposed_args_sha256": hashlib.sha256(proposed).hexdigest(),
+        "observer_native_number": mapping["observer_native_number"],
+    }
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] != "emit":
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight"}:
         return 64
     workspace = Path(argv[2])
     try:
-        publish_origin_map(workspace, workspace / "release", argv[3])
-    except (AttributionError, OSError, ValueError, UnicodeError) as exc:
-        # The original Apply remains valid on a source-map failure because
-        # P2c cannot authorize a missing map. No partial map is published.
-        print("P2d origin capture unavailable: " + str(exc), file=sys.stderr)
+        if argv[1] == "preflight":
+            print(json.dumps(preflight_original_observer(workspace, argv[3]),
+                             sort_keys=True, separators=(",", ":")))
+        else:
+            publish_origin_map(workspace, workspace / "release", argv[3])
+    except (AttributionError, OSError, ValueError, UnicodeError, TypeError) as exc:
+        # Neither read-only observation nor source-map publication can
+        # authorize native observer activation or block a normal Apply.
+        print("P2 source-only provenance unavailable: " + str(exc), file=sys.stderr)
         return 69
     return 0
 

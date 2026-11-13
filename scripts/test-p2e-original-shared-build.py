@@ -220,6 +220,90 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
 
 
 
+    def test_p2f_original_fd9_preflight_is_read_only_and_binds_candidate(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        original = args.read_bytes()
+        source = mapped.read_bytes()
+        digest = "b" * 64  # Supplied by the original PHP native preflight in production.
+        proof = origin.preflight_original_observer(self.work, digest)
+        self.assertEqual(proof["generation"], self.work.name)
+        self.assertEqual(proof["native_candidate_sha256"], digest)
+        self.assertEqual(proof["observer_native_number"], 2)
+        self.assertEqual(proof["evidence"],
+                         "P2F_ORIGINAL_FD9_PREFLIGHT_NONACTIVATING")
+        self.assertNotEqual(proof["proposed_args_sha256"],
+                            proof["original_args_sha256"])
+        self.assertEqual(original, args.read_bytes())
+        self.assertEqual(source, mapped.read_bytes())
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        self.assertFalse((self.release / "auto-detect-observer.args").exists())
+        self.assertFalse((self.work / "auto-detect" / "inbox.txt").exists())
+        with self.assertRaises(origin.AttributionError):
+            origin.preflight_original_observer(self.work, "invalid")
+        self.assertEqual(original, args.read_bytes())
+
+    def test_p2f_preflight_refuses_stale_or_symlinked_plan_and_port_overlap(self):
+        mapped, args = self.build(
+            "--filter-tcp=443-445\n<HOSTLIST:user>\n--lua-desync=fake\n")
+        plan = self.work / "plan.json"
+        plan.write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        source = json.loads(mapped.read_text())
+        proposed, _ = origin.plan_trailing_observer(
+            source, args.read_bytes(), owner_id=self.work.name,
+            owner_candidate_sha256="b" * 64,
+            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            tcp_ports="443-445",
+        )
+        self.assertIn(b"--filter-tcp=443-445", proposed)
+        self.assertEqual(origin.preflight_original_observer(
+            self.work, "b" * 64)["observer_native_number"], 2)
+        for invalid in ("443-445,444", "445-443", "0-443", "443-65536",
+                        "443-444,0443", "443,,444"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(origin.AttributionError):
+                    origin.plan_trailing_observer(
+                        source, args.read_bytes(), owner_id=self.work.name,
+                        owner_candidate_sha256="b" * 64,
+                        raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+                        debug_path="/var/db/zapret2/auto-detect/debug.log",
+                        tcp_ports=invalid,
+                    )
+        old = args.read_bytes()
+        args.write_bytes(old + b"--new\n")
+        with self.assertRaises(origin.AttributionError):
+            origin.preflight_original_observer(self.work, "b" * 64)
+        args.write_bytes(old)
+        plan.rename(self.work / "plan-original.json")
+        plan.symlink_to(self.work / "plan-original.json")
+        with self.assertRaises(origin.AttributionError):
+            origin.preflight_original_observer(self.work, "b" * 64)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+
+    def test_p2f_fd9_hook_runs_after_php_preflight_and_before_activation(self):
+        service = (BACKEND.parent / "zapret_service.sh").read_text()
+        begin = service.index("shared_apply_execute_service()\n")
+        end = service.index("shared_apply_wan_save_service()\n", begin)
+        body = service[begin:end]
+        self.assertLess(body.index('shared_apply_native_config preflight'),
+                        body.index('auto_detect_origin_map.py" preflight'))
+        self.assertLess(body.index('auto_detect_origin_map.py" preflight'),
+                        body.index('apply_runtime_probe "$_shared_apply_root/release"'))
+        self.assertLess(body.index('auto_detect_origin_map.py" preflight'),
+                        body.index('shared_apply_record_service prepared'))
+        self.assertIn('"$_shared_apply_mode" = 1', body)
+        self.assertIn('"$_shared_apply_candidate" >/dev/null 2>&1 || :', body)
+
+
+
 if __name__ == "__main__":
     result = unittest.main(verbosity=2, exit=False).result
     if result.wasSuccessful():

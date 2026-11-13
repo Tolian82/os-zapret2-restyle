@@ -1,6 +1,6 @@
 # #1052 P2f — original-builder trailing observer proposal (nonactivating)
 
-**Source candidate:** `v0.6.5_16`. This is a bounded preparatory P2f change, **not an operational Auto-detect collector**. P0/P1 and the native P2e original-builder qualification remain closed in their documented scopes.
+**Source candidates:** `_16` in-memory proposal; `_17` bounded original-FD9 read-only preflight. This is a bounded preparatory P2f change, **not an operational Auto-detect collector**. P0/P1 and the native P2e original-builder qualification remain closed in their documented scopes.
 
 ## Observable source result
 
@@ -20,6 +20,14 @@ Run the changed-path check: `PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2e-
 
 
 **CI hygiene correction (scope-limited):** the initial candidate's full Project check exposed an inherited, obsolete `scripts/test_freebsd15_package_ci.py` requirement for `docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md` after the approved documentation review archived that completed plan. This change updates the test reference to its actual preserved `docs/history/stages/extra-resources-2026-10-27/` location and keeps the existing `native GUI-path prechecks` content assertion. It does not restore a completed plan as active authority, change native package code, or claim a product regression.
+
+## Original FD9 nonactivating candidate preflight (`v0.6.5_17`)
+
+The existing `shared_apply_execute_service()` receives the **real** candidate digest from `shared_apply_native_config preflight`, under its original FD9 owner and before recording any durable Apply phase. If the common candidate is enabled and contains the P2d source map, it invokes `auto_detect_origin_map.py preflight <original-shared-work> <native-PHP-candidate-digest>`. This read-only probe requires the original 32-hex workspace ID and root-owned private workspace, original plan/source-map/final-argv/TCP-ports artifacts, matching map generation/final digest and validated candidate metadata. It **does not recompute the PHP snapshot in a second parser**. The native original port extractor's TCP ranges are now accepted with bounded overlap/reversal checks.
+
+The resulting in-memory digest/observer summary is discarded; it is neither recorded in a second journal nor published as `auto-detect-generation.json`. This path never writes Config, managed lists, engine arguments, raw/debug, pending, or the shared release; it cannot block an otherwise valid ordinary Apply on missing/refused optional source attribution. `P2F_OFFLINE_PLAN_ONLY` still fails the running-owner attester. A passing preflight is **not proof of a running observer or process/FD match**.
+
+The existing changed-path original-builder test includes read-only candidate-digest/source-map matching, native range handling, stale final args, unsafe plan symlink rejection, and a source-order assertion for the canonical FD9 hook. Native real observer activation, real raw/debug append, and the original process/FD generation correlation are explicitly **OPEN**.
 
 ## Next authorized step
 
