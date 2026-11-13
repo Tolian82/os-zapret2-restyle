@@ -188,13 +188,15 @@ class EpochReceipts:
         _directory(folder, self.uid)
         entries = os.listdir(folder)
         expected_prefix = "intent-" + generation + "-"
-        if (len(entries) > 2 or any(
-                name != "epoch.json" and not (
+        if (len(entries) > 3 or any(
+                name not in ("epoch.json", "destination") and not (
                     name.startswith(expected_prefix) and
                     re.fullmatch(r"intent-[a-f0-9]{32}-[a-f0-9]{32}\.txt\.json", name))
                 for name in entries) or
                 sum(name.startswith("intent-") for name in entries) > 1):
             raise ReceiptRefused("foreign_or_ambiguous_generation_receipt")
+        if "destination" in entries:
+            _directory(folder / "destination", self.uid)
         return folder
 
     def begin(self, proof: GenerationProof, cursor: Cursor) -> None:
