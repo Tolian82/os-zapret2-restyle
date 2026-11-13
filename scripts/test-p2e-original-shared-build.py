@@ -161,8 +161,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         planned, proposed = origin.plan_trailing_observer(
             source, original, owner_id=self.work.name,
             owner_candidate_sha256="c" * 64,
-            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            raw_path="/var/db/zapret2-auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2-auto-detect/debug.log",
             tcp_ports="443",
         )
         self.assertEqual(args.read_bytes(), original)
@@ -175,7 +175,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                          {"native_number": 2, "status": "observer", "hostlist": None})
         self.assertTrue(planned.endswith(
             b"--new\n--filter-tcp=443\n--filter-l7=http,tls\n"
-            b"--hostlist-auto=/var/db/zapret2/auto-detect/inbox.txt\n"
+            b"--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt\n"
             b"--hostlist-auto-fail-threshold=1\n"
             b"--hostlist-auto-retrans-reset=0\n"))
         self.assertEqual(planned.count(b"--hostlist-auto-debug="), 1)
@@ -196,8 +196,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         planned, proposed = origin.plan_trailing_observer(
             source, args.read_bytes(), owner_id=self.work.name,
             owner_candidate_sha256="c" * 64,
-            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            raw_path="/var/db/zapret2-auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2-auto-detect/debug.log",
             tcp_ports="443",
         )
         self.assertEqual(proposed["profiles"][0]["status"], "excluded-voice")
@@ -213,8 +213,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             origin.plan_trailing_observer(
                 source, args.read_bytes(), owner_id=self.work.name,
                 owner_candidate_sha256="c" * 64,
-                raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-                debug_path="/var/db/zapret2/auto-detect/debug.log",
+                raw_path="/var/db/zapret2-auto-detect/inbox.txt",
+                debug_path="/var/db/zapret2-auto-detect/debug.log",
                 tcp_ports="443",
             )
 
@@ -259,8 +259,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         proposed, _ = origin.plan_trailing_observer(
             source, args.read_bytes(), owner_id=self.work.name,
             owner_candidate_sha256="b" * 64,
-            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            raw_path="/var/db/zapret2-auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2-auto-detect/debug.log",
             tcp_ports="443-445",
         )
         self.assertIn(b"--filter-tcp=443-445", proposed)
@@ -273,8 +273,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     origin.plan_trailing_observer(
                         source, args.read_bytes(), owner_id=self.work.name,
                         owner_candidate_sha256="b" * 64,
-                        raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-                        debug_path="/var/db/zapret2/auto-detect/debug.log",
+                        raw_path="/var/db/zapret2-auto-detect/inbox.txt",
+                        debug_path="/var/db/zapret2-auto-detect/debug.log",
                         tcp_ports=invalid,
                     )
         old = args.read_bytes()

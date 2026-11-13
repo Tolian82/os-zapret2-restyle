@@ -14,6 +14,8 @@ from pathlib import Path
 import re
 import sys
 
+from auto_detect_storage import RAW_PATH, DEBUG_PATH
+
 import profile_policy
 from global_exclusions import ARGS_LIMIT, BASE, ExclusionError, is_stun, segments, templates_and_imports, visible
 
@@ -257,8 +259,7 @@ def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
     if (len(args) < 2 or not args[0].startswith("--port=")
             or any(a.startswith("--hostlist-auto") for a in args)):
         raise AttributionError("existing auto observer or unsupported argv")
-    root = "/var/db/zapret2/auto-detect/"
-    if raw_path != root + "inbox.txt" or debug_path != root + "debug.log":
+    if raw_path != str(RAW_PATH) or debug_path != str(DEBUG_PATH):
         raise AttributionError("unqualified observation file paths")
     if (not isinstance(tcp_ports, str) or
             not re.fullmatch(r"[0-9]+(?:-[0-9]+)?(?:,[0-9]+(?:-[0-9]+)?)*", tcp_ports)):
@@ -502,8 +503,8 @@ def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
     proposed, mapping = plan_trailing_observer(
         source, original, owner_id=work.name,
         owner_candidate_sha256=candidate_digest,
-        raw_path="/var/db/zapret2/auto-detect/inbox.txt",
-        debug_path="/var/db/zapret2/auto-detect/debug.log",
+        raw_path=str(RAW_PATH),
+        debug_path=str(DEBUG_PATH),
         tcp_ports=tcp,
     )
     if mapping["evidence"] != "P2F_OFFLINE_PLAN_ONLY":

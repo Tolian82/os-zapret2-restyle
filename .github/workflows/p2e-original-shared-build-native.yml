@@ -1,4 +1,4 @@
-name: "P2e #1052 original common generator FreeBSD source map"
+name: "P2e/P2g #1052 original generator and native writer permissions"
 
 on:
   pull_request:
@@ -7,6 +7,10 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_origin_map.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
+      - scripts/test-auto-detect-storage.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py
       - .github/workflows/p2e-original-shared-build-native.yml
 
 permissions:
@@ -60,8 +64,11 @@ jobs:
                 raise SystemExit("P2E_REFUSED_NOT_ROOT_FREEBSD")
             PY
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
+            GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
       - name: Declare exact native evidence boundary
         shell: bash
         run: |
           echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
-          echo P2E_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_TRAFFIC_RAW_DEBUG_OR_OBSERVER_OR_QUEUE_ACK
+          echo P2G_SCOPE=DISPOSABLE_FREEBSD_NOBODY_FILE_ACCESS_AND_DURABLE_QUEUE_PERMISSIONS
+          echo P2E_P2G_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_TRAFFIC_RAW_DEBUG_OR_OBSERVER_OR_QUEUE_ACK

@@ -63,7 +63,7 @@ class FDPortable(unittest.TestCase):
         original_fstat = os.fstat
         def as_root(fd):
             st = original_fstat(fd)
-            return SimpleNamespace(st_uid=0, st_mode=st.st_mode, st_dev=st.st_dev,
+            return SimpleNamespace(st_uid=0, st_gid=st.st_gid, st_mode=st.st_mode, st_dev=st.st_dev,
                                    st_ino=st.st_ino, st_nlink=st.st_nlink,
                                    st_size=st.st_size, st_mtime_ns=st.st_mtime_ns)
         with mock.patch.object(mod.os, "geteuid", return_value=0), \
@@ -78,6 +78,19 @@ class FDPortable(unittest.TestCase):
         self.assertEqual(len(r.commands), 3)
         self.assertIn("-p", r.commands[1])
         self.assertEqual(r.commands[1][-1], str(self.segment))
+
+    def test_qualified_group_writer_requires_explicit_engine_group(self):
+        self.segment.chmod(0o660)
+        self.stat = self.segment.stat()
+        self.assertEqual(self.probe(FakeRunner()), mod.FDState.UNKNOWN)
+        if self.stat.st_gid > 0:
+            self.assertEqual(self.probe(FakeRunner(), writer_gid=self.stat.st_gid),
+                             mod.FDState.DRAINED)
+            self.assertEqual(self.probe(FakeRunner(), writer_gid=self.stat.st_gid + 1),
+                             mod.FDState.UNKNOWN)
+        self.segment.chmod(0o666)
+        self.assertEqual(self.probe(FakeRunner(), writer_gid=max(self.stat.st_gid, 1)),
+                         mod.FDState.UNKNOWN)
 
     def test_open_writer_blocks_acknowledgement(self):
         body = f"root dvtws2 123 4 {self.devid} {self.stat.st_ino} 100600 8 w {self.segment}\n"

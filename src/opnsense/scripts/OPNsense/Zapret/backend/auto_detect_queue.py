@@ -22,10 +22,19 @@ class QueueSafetyError(RuntimeError):
     """A content-free failure; never delete or truncate unacknowledged input."""
 
 
-def _stat_regular(path: Path, uid: int, *, max_size: int | None = None) -> os.stat_result:
+def _stat_regular(path: Path, uid: int, *, max_size: int | None = None,
+                  writer_gid: int | None = None) -> os.stat_result:
     result = path.lstat()  # no symlink following
-    if not stat.S_ISREG(result.st_mode) or result.st_uid != uid or result.st_mode & 0o022:
+    if not stat.S_ISREG(result.st_mode) or result.st_uid != uid:
         raise QueueSafetyError("unsafe_file")
+    if writer_gid is None:
+        if result.st_mode & 0o022:
+            raise QueueSafetyError("unsafe_file")
+    elif (result.st_gid != writer_gid or
+          stat.S_IMODE(result.st_mode) != 0o660):
+        # Only the explicitly qualified nobody-group producer inode is
+        # group-writable. Old pending hardlinks retain this exact mode.
+        raise QueueSafetyError("unsafe_native_producer_file")
     if max_size is not None and result.st_size > max_size:
         raise QueueSafetyError("oversized_segment")
     return result
@@ -35,6 +44,16 @@ def _check_directory(path: Path, uid: int) -> None:
     result = path.lstat()
     if not stat.S_ISDIR(result.st_mode) or result.st_uid != uid or result.st_mode & 0o077:
         raise QueueSafetyError("unsafe_directory")
+
+
+def _check_producer_root(path: Path, uid: int, gid: int) -> None:
+    parent = path.parent.lstat()
+    root = path.lstat()
+    if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != uid
+            or parent.st_mode & 0o022 or not parent.st_mode & 0o001
+            or not stat.S_ISDIR(root.st_mode) or root.st_uid != uid
+            or root.st_gid != gid or stat.S_IMODE(root.st_mode) != 0o710):
+        raise QueueSafetyError("unsafe_native_producer_directory")
 
 
 def _sync_directory(path: Path) -> None:
@@ -51,12 +70,16 @@ def _identity(path: Path) -> tuple[int, int]:
 
 
 class DurableInbox:
-    def __init__(self, root: Path, *, owner_uid: int = 0):
+    def __init__(self, root: Path, *, owner_uid: int = 0,
+                 writer_gid: int | None = None):
         self.root = Path(root)
         self.pending = self.root / "pending"
         self.inbox = self.root / "inbox.txt"
         self.lock = self.root / "worker.lock"
         self.uid = owner_uid
+        if writer_gid is not None and (type(writer_gid) is not int or writer_gid <= 0):
+            raise QueueSafetyError("unqualified_native_writer_group")
+        self.writer_gid = writer_gid
         self._held = False
 
     def _require_lock(self) -> None:
@@ -66,12 +89,15 @@ class DurableInbox:
     def _verify(self) -> None:
         # Parent must be a trusted root-owned directory too; do not create a
         # hierarchy in worker or silently traverse a symlink-controlled state.
-        _check_directory(self.root.parent, self.uid)
-        _check_directory(self.root, self.uid)
+        if self.writer_gid is None:
+            _check_directory(self.root.parent, self.uid)
+            _check_directory(self.root, self.uid)
+        else:
+            _check_producer_root(self.root, self.uid, self.writer_gid)
         _check_directory(self.pending, self.uid)
         if self.root.stat().st_dev != self.pending.stat().st_dev:
             raise QueueSafetyError("cross_device_pending")
-        _stat_regular(self.inbox, self.uid)
+        _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
 
     @contextmanager
     def exclusive(self):
@@ -105,14 +131,14 @@ class DurableInbox:
         for path in files:
             if not path.name.endswith(".txt") or path.name.startswith("."):
                 raise QueueSafetyError("unknown_pending_entry")
-            _stat_regular(path, self.uid)
+            _stat_regular(path, self.uid, writer_gid=self.writer_gid)
         return files
 
     def rotate(self) -> Path | None:
         """Must be called under exclusive(); recover link-before-replace."""
         self._require_lock()
         self._verify()
-        old = _stat_regular(self.inbox, self.uid)
+        old = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
         existing = self.segments()
         same = [path for path in existing if _identity(path) == (old.st_dev, old.st_ino)]
         if len(same) > 1:
@@ -133,6 +159,9 @@ class DurableInbox:
         try:
             fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, old.st_mode & 0o777)
             os.fchown(fd, old.st_uid, old.st_gid)
+            # Creation umask must not strip the qualified native writer's
+            # exact group-write permission on the replacement inbox.
+            os.fchmod(fd, old.st_mode & 0o777)
             os.fsync(fd)
             os.close(fd)
             fd = None
@@ -170,7 +199,8 @@ class DurableInbox:
         segment = Path(segment)
         if segment.parent != self.pending or segment not in self.segments():
             raise QueueSafetyError("foreign_segment")
-        before = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT)
+        before = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,
+                               writer_gid=self.writer_gid)
         if _identity(self.inbox) == (before.st_dev, before.st_ino):
             return False  # crash after hardlink, before replace
         if before.st_nlink != 1:
@@ -188,7 +218,8 @@ class DurableInbox:
             return False  # never discard incomplete last line
         if not committed(data):
             return False
-        after = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT)
+        after = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,
+                              writer_gid=self.writer_gid)
         if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
             after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns
         ):
