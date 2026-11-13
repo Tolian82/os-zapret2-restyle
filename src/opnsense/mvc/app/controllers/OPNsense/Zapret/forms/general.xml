@@ -69,7 +69,7 @@
         <type>dropdown</type>
         <help><![CDATA[
             Target Mode is used only when a profile has no explicit <code>&lt;HOSTLIST:name&gt;</code> or <code>&lt;IPSET:name&gt;</code> placeholder.<br/>
-            <b>All traffic</b> — do not restrict target lists; <b>Only listed targets</b> — use YouTube, Telegram IPs and User lists; <b>Auto-detect</b> — also include the detected blocked-domain list.<br/>
+            <b>All traffic</b> — do not restrict target lists; <b>Only listed targets</b> — use YouTube, Telegram IPs and User lists; <b>Auto-detect</b> — enables isolated discovery; only a profile with an explicit <code>&lt;HOSTLIST:auto&gt;</code> uses the shared final list.<br/>
             This is engine target selection, not the IPFW interception port filter. Global Exclude Domains / Exclude IPSet remain independent.
         ]]></help>
     </field>

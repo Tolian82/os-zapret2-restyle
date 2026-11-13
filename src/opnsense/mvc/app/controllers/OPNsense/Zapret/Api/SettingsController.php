@@ -395,6 +395,90 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
+     * P2k5: the Auto Hostlist belongs to a root-owned final file, never
+     * the mutable Config model or the full shared Apply. The root configd
+     * action holds the same checked flock as P2k4 destination commits.
+     */
+    public function autoHostlistReadAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'reason' => 'post_required'];
+        }
+        try {
+            $output = (string)(new Backend())->configdRun(
+                'zapret auto_hostlist_read', false, 30
+            );
+            if (strlen($output) > 50000) {
+                throw new \RuntimeException('Auto Hostlist reply too large');
+            }
+            $data = json_decode(trim($output), true);
+            if (!is_array($data) || !in_array($data['result'] ?? null, ['ok', 'error'], true)) {
+                throw new \RuntimeException('Invalid Auto Hostlist response');
+            }
+            if ($data['result'] === 'ok' &&
+                (!in_array($data['status'] ?? null, ['missing', 'empty', 'populated'], true) ||
+                 !is_string($data['content'] ?? null) ||
+                 !is_string($data['revision'] ?? null) ||
+                 preg_match('/^[a-f0-9]{64}$/D', $data['revision']) !== 1)
+            ) {
+                throw new \RuntimeException('Invalid Auto Hostlist snapshot');
+            }
+            return $data;
+        } catch (\Throwable $error) {
+            error_log('Zapret Auto Hostlist read unavailable: ' . get_class($error));
+            return ['result' => 'error', 'reason' => 'unavailable'];
+        }
+    }
+
+    public function autoHostlistSaveAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'reason' => 'post_required'];
+        }
+        $this->throwReadOnly();
+        $post = $this->request->getPost('auto_hostlist');
+        if (!is_array($post) || count($post) !== 2 ||
+            !isset($post['revision'], $post['content']) ||
+            !is_string($post['revision']) || !is_string($post['content']) ||
+            preg_match('/^[a-f0-9]{64}$/D', $post['revision']) !== 1 ||
+            strlen($post['content']) > 40960) {
+            return ['result' => 'error', 'reason' => 'invalid_request'];
+        }
+        try {
+            $json = json_encode(
+                ['revision' => $post['revision'], 'content' => $post['content']],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+            );
+            $token = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
+            if (strlen($token) > 57000) {
+                return ['result' => 'error', 'reason' => 'input_too_large'];
+            }
+            $output = (string)(new Backend())->configdpRun(
+                'zapret auto_hostlist_save', [$token], false, 30
+            );
+            if (strlen($output) > 50000) {
+                throw new \RuntimeException('Auto Hostlist save reply too large');
+            }
+            $data = json_decode(trim($output), true);
+            if (!is_array($data) || !in_array($data['result'] ?? null,
+                    ['saved', 'conflict', 'error'], true)) {
+                throw new \RuntimeException('Invalid Auto Hostlist save response');
+            }
+            if ($data['result'] === 'saved' &&
+                (!is_string($data['revision'] ?? null) ||
+                 preg_match('/^[a-f0-9]{64}$/D', $data['revision']) !== 1 ||
+                 !is_string($data['content'] ?? null) ||
+                 !in_array($data['status'] ?? null, ['empty', 'populated'], true))) {
+                throw new \RuntimeException('Invalid Auto Hostlist save receipt');
+            }
+            return $data;
+        } catch (\Throwable $error) {
+            error_log('Zapret Auto Hostlist save unavailable: ' . get_class($error));
+            return ['result' => 'error', 'reason' => 'unavailable'];
+        }
+    }
+
+    /**
      * P5c unsaved Strategies preview. No persistent Apply, Config::save,
      * candidate storage, or native runtime switch is reachable from here.
      * Native configd owns the same original FD9 used by ordinary Apply.

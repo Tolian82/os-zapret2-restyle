@@ -40,7 +40,7 @@ target_mode_policy()
             printf 'HOSTLIST\tyoutube\n'
             printf 'IPSET\ttelegram\n'
             printf 'HOSTLIST\tuser\n'
-            printf 'HOSTLIST\tauto\n'
+            # Discovery is separate; only explicit <HOSTLIST:auto> opts in.
             ;;
         *)
             common_error "unsupported Target Mode '${target_mode}'"

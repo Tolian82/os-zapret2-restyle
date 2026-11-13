@@ -120,11 +120,10 @@ mkdir -p "${auto_root}"
 auto_count=$(profile_pipeline_parse "${auto_root}" 0 "${fixture_strategy}")
 auto_count=$(profile_pipeline_target_mode "${auto_root}" "${auto_count}" auto "${registry}")
 auto_count=$(profile_pipeline_normalize "${auto_root}" "${auto_count}")
-# Existing implementation injects legacy <HOSTLIST:auto> as ordinary hostlist.
-# P3 must deliberately update this assertion when removing that injection.
-assert_equal 4 "${auto_count}" "as-is auto expanded profile count"
+# P2k5: Auto mode does not implicitly opt any profile into shared Auto.
+assert_equal 3 "${auto_count}" "explicit-only auto expanded profile count"
 auto_no=1
-for selected in '<HOSTLIST:youtube>' '<IPSET:telegram>' '<HOSTLIST:user>' '<HOSTLIST:auto>'; do
+for selected in '<HOSTLIST:youtube>' '<IPSET:telegram>' '<HOSTLIST:user>'; do
     grep -Fxq -- "${selected}" "${auto_root}/profile-${auto_no}.conf" ||
         fail "as-is auto profile ${auto_no} has wrong selector"
     grep -Fxq -- '--blob=http_iana_org' "${auto_root}/profile-${auto_no}.conf" ||
@@ -167,12 +166,12 @@ new_count=$(profile_pipeline_parse "${new_root}" 0 "${new_strategy}")
 assert_equal 2 "${new_count}" "source --new count"
 new_count=$(profile_pipeline_target_mode "${new_root}" "${new_count}" auto "${registry}")
 new_count=$(profile_pipeline_normalize "${new_root}" "${new_count}")
-assert_equal 5 "${new_count}" "auto source and explicit native profile count"
-grep -Fxq -- '--name=known-user' "${new_root}/profile-5.conf" ||
+assert_equal 4 "${new_count}" "auto source and explicit native profile count"
+grep -Fxq -- '--name=known-user' "${new_root}/profile-4.conf" ||
     fail "explicit named --new lost after auto expansion"
-grep -Fxq -- '<HOSTLIST:user>' "${new_root}/profile-5.conf" ||
+grep -Fxq -- '<HOSTLIST:user>' "${new_root}/profile-4.conf" ||
     fail "explicit source HOSTLIST lost after auto expansion"
-if grep -Fxq -- '<HOSTLIST:auto>' "${new_root}/profile-5.conf"; then
+if grep -Fxq -- '<HOSTLIST:auto>' "${new_root}/profile-4.conf"; then
     fail "auto mode injected shared list into explicit source"
 fi
 
