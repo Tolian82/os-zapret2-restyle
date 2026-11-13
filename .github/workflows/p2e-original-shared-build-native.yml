@@ -1,4 +1,4 @@
-name: "P2e/P2g #1052 original generator and native writer permissions"
+name: "P2e/P2g/P2i #1052 original generator and native preview loopback"
 
 on:
   pull_request:
@@ -8,6 +8,7 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-auto-detect-storage.py
+      - scripts/test-p2i-original-preview-native.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py
@@ -29,6 +30,18 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fast P2i preview parser and off-target native refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
+          if GITHUB_ACTIONS=true PYTHONDONTWRITEBYTECODE=1 python3 \
+               scripts/test-p2i-original-preview-native.py --native \
+               /tmp/p4c3-native-invalid >"${RUNNER_TEMP}/p2i-refusal.log" 2>&1; then
+            echo '::error::P2i native probe accepted a non-FreeBSD runner'
+            exit 1
+          fi
+          grep -q 'FREEBSD_ROOT_ONLY' "${RUNNER_TEMP}/p2i-refusal.log"
       - name: Fail fast if disposable VM host cannot start
         shell: bash
         run: |
@@ -55,6 +68,17 @@ jobs:
           cpu: 2
           mem: 4096
           cache-after-prepare: true
+          prepare: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import subprocess
+            for command, seconds in (
+                (["pkg", "update", "-f"], 150),
+                (["pkg", "install", "-y", "git", "ca_root_nss", "gmake",
+                  "pkgconf", "luajit"], 180),
+            ):
+                subprocess.run(command, timeout=seconds, check=True)
+            PY
           run: |
             set -eu
             /usr/local/bin/python3 - <<'PY'
@@ -66,9 +90,46 @@ jobs:
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
             GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
+            # Reuse THIS SAME disposable OPNsense guest; no extra VM job.
+            /usr/local/bin/python3 - <<'PY'
+            import os
+            from pathlib import Path
+            import shutil
+            import subprocess
+            import sys
+            import tempfile
+
+            expected = "038c97e5819df10f8e8c22a2f1fffe57f2f7379b"
+            checkout = Path(tempfile.mkdtemp(prefix="p4c3-native-", dir="/tmp"))
+            try:
+                subprocess.run(["git", "clone", "--quiet", "--depth", "1",
+                                "--branch", "v1.0.7",
+                                "https://github.com/bol-van/zapret2.git",
+                                str(checkout)], check=True, timeout=120)
+                head = subprocess.check_output(["git", "-C", str(checkout),
+                                                "rev-parse", "HEAD"],
+                                               text=True, timeout=8).strip()
+                if head != expected:
+                    raise RuntimeError("P2I_PINNED_UPSTREAM_SHA_MISMATCH")
+                checkout.chmod(0o755)
+                subprocess.run(["make", "-C", str(checkout / "nfq2")],
+                               check=True, timeout=180)
+                env = {**os.environ, "GITHUB_ACTIONS": "true",
+                       "ZAPRET2_P2I_DISPOSABLE_NATIVE": "1",
+                       "ZAPRET2_P4C3_DISPOSABLE_NATIVE": "1",
+                       "PYTHONDONTWRITEBYTECODE": "1"}
+                subprocess.run([sys.executable,
+                                "scripts/test-p2i-original-preview-native.py",
+                                "--native", str(checkout)],
+                               check=True, timeout=90, env=env)
+            finally:
+                shutil.rmtree(checkout)
+            PY
       - name: Declare exact native evidence boundary
         shell: bash
         run: |
           echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
           echo P2G_SCOPE=DISPOSABLE_FREEBSD_NOBODY_FILE_ACCESS_AND_DURABLE_QUEUE_PERMISSIONS
-          echo P2E_P2G_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_TRAFFIC_RAW_DEBUG_OR_OBSERVER_OR_QUEUE_ACK
+          echo P2I_SCOPE=ORIGINAL_GENERATOR_P2H_SEALED_PREVIEW_PINNED_DVTWS2_LOOPBACK_RAW_DEBUG_ONLY
+          echo P2I_NOT_CLAIMED=INSTALLED_FD9_OWNER_OR_CONTINUOUS_DRAIN_OR_WORKER_OR_PRODUCTION_TRAFFIC
+          echo P2E_P2G_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_OWNER_APPLIANCE_OR_QUEUE_ACK

@@ -21,6 +21,8 @@ The new backend `auto_detect_storage.py` is import-only and has no production ca
 
 Existing `DurableInbox` retains its strict default private-only contract. An explicitly qualified `writer_gid` enables the root:group `0660` live inbox/pending-inode variant with exact `0710` root and root-private pending. New replacement files explicitly restore the original mode after umask. `auto_detect_fd.probe_pending_fd` similarly defaults to its old strict mode and accepts `0660` only when passed the exact qualified writer GID; this alone never authorizes acknowledgement.
 
+**New P2i observation (13 November):** running upstream v1.0.7 `dvtws2 --user=nobody` on the protected inbox has been observed to change its UID to `nobody` during startup, even though mode/group and inode remain the same. This **breaks** P2g's root-owner invariant; the previous credential-only test did not launch the actual engine. See [P2i mitigation experiment](P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md). Accepting nobody-owned durable segments is **not** an approved workaround; real installed FD9 startup must reconcile and attest root owner before packet diversion, and the process/FD/worker proof remains open.
+
 **Limit:** The `nobody` UID/GID is shared with other possible local processes. These permissions exclude unrelated Unix credentials but do **not** authenticate who wrote the raw/debug bytes among peers with the same credentials. Raw/debug remain untrusted evidence until actual common-owner process/FD and native output correlation are established. Do not claim an anti-tamper guarantee from mode bits.
 
 ## One bounded verification
