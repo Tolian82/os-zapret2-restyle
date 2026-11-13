@@ -519,12 +519,122 @@ def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
     }
 
 
+def _secure_new_file(path: Path, content: bytes) -> None:
+    """Sealed-candidate workspace only; never replace an existing witness."""
+    if path.exists() or path.is_symlink() or not isinstance(content, bytes):
+        raise AttributionError("original generation output already exists")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 getattr(os, "O_NOFOLLOW", 0), 0o644)
+    try:
+        os.fchmod(fd, 0o644)
+        with os.fdopen(fd, "wb", closefd=False) as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _authorized_projection(work: Path, digest: str) -> tuple[bytes, bytes, bytes, dict]:
+    # Use the exact P2f original-FD9 gate; never infer origin from final argv.
+    preflight_original_observer(work, digest)
+    release = work / "release"
+    original = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    source = json.loads(_capture_file(release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    tcp = _capture_file(release / "tcp-ports.txt", owner_uid=os.geteuid()).decode("ascii").strip()
+    proposed, record = plan_trailing_observer(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=digest, raw_path=str(RAW_PATH),
+        debug_path=str(DEBUG_PATH), tcp_ports=tcp)
+    record["evidence"] = "ORIGINAL_SHARED_GENERATOR_CAPTURE"
+    encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    # The production owner's schema-2 verifier remains the one authority.
+    from auto_detect_owner import _valid_map
+    _valid_map(encoded, {"id": work.name, "candidate": digest}, proposed)
+    return original, proposed, encoded, record
+
+
+def stage_original_preview(workspace: Path, candidate_digest: str) -> dict:
+    """Seal a real common-FD9 *inert* observer candidate, not a running map.
+
+    Original engine argv is never changed. Unlike a live --hostlist-auto,
+    this cannot collect raw events while the minute worker is absent.
+    """
+    work = Path(workspace)
+    original, proposed, encoded, record = _authorized_projection(work, candidate_digest)
+    release = work / "release"
+    if _capture_file(release / "dvtws.args", owner_uid=os.geteuid()) != original:
+        raise AttributionError("original engine argv changed during preview")
+    record["evidence"] = "P2H_ORIGINAL_FD9_SEALED_PREVIEW_NONACTIVATING"
+    record["activation_authorized"] = False
+    raw = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    # There is deliberately no auto-detect-generation.json: the running-owner
+    # consumer MUST reject the preview and ordinary dvtws.args is unchanged.
+    names = ("auto-detect-observer-preview.args", "auto-detect-observer-preview.json")
+    for name in names:
+        if (release / name).exists() or (release / name).is_symlink():
+            raise AttributionError("observer preview already staged")
+    _secure_new_file(release / names[0], proposed)
+    _secure_new_file(release / names[1], raw)
+    folder = os.open(release, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
+                     getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(folder)
+    finally:
+        os.close(folder)
+    verify_original_preview(work, candidate_digest)
+    return record
+
+
+def verify_original_preview(workspace: Path, candidate_digest: str) -> dict:
+    """Regenerate and compare this sealed inert proposal with original bytes."""
+    work = Path(workspace)
+    original, proposed, _, expected = _authorized_projection(work, candidate_digest)
+    release = work / "release"
+    observed_args = _capture_file(release / "auto-detect-observer-preview.args",
+                                  owner_uid=os.geteuid())
+    observed = json.loads(_capture_file(release / "auto-detect-observer-preview.json",
+                                        owner_uid=os.geteuid()))
+    expected["evidence"] = "P2H_ORIGINAL_FD9_SEALED_PREVIEW_NONACTIVATING"
+    expected["activation_authorized"] = False
+    if (observed_args != proposed or observed != expected
+            or _capture_file(release / "dvtws.args", owner_uid=os.geteuid()) != original
+            or (release / "auto-detect-generation.json").exists()
+            or (release / "auto-detect-generation.json").is_symlink()):
+        raise AttributionError("original FD9 preview is stale, changed, or activated")
+    # The real running-owner gate must refuse a nonactivating preview.
+    from auto_detect_owner import _valid_map, GenerationRefused
+    try:
+        _valid_map(json.dumps(expected).encode(), {"id": work.name,
+                   "candidate": candidate_digest}, proposed)
+    except GenerationRefused:
+        pass
+    else:
+        raise AttributionError("preview incorrectly authorizes running engine")
+    return expected
+
+
+def _require_original_fd9_cli(work: Path) -> None:
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0
+            or work.parent != Path("/var/db/zapret2/shared-work")):
+        raise AttributionError("original native FD9 staging only")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] not in {"emit", "preflight"}:
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preview", "verify-preview"}:
         return 64
     workspace = Path(argv[2])
     try:
-        if argv[1] == "preflight":
+        if argv[1] in {"preview", "verify-preview"}:
+            _require_original_fd9_cli(workspace)
+            record = (stage_original_preview(workspace, argv[3])
+                      if argv[1] == "preview" else
+                      verify_original_preview(workspace, argv[3]))
+            print(json.dumps({"observer_native_number": record["observer_native_number"],
+                              "generation": workspace.name}, sort_keys=True))
+        elif argv[1] == "preflight":
             print(json.dumps(preflight_original_observer(workspace, argv[3]),
                              sort_keys=True, separators=(",", ":")))
         else:

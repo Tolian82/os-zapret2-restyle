@@ -1104,13 +1104,18 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
-    # P2f: original FD9 and native PHP have now authenticated this candidate.
-    # Cross-check its ORIGINAL source map and generated TCP observer proposal
-    # in memory only. P2c cannot authorize this preview; an absent/refused
-    # capture never changes the existing shared Apply or its runtime argv.
+    # Sealed nonactivating preview may be reverified without enabling a
+    # second process, raw append, native auto HOSTLIST or worker.
     if [ "$_shared_apply_mode" = 1 ] &&
-       [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
-        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/auto_detect_origin_map.py" preflight \
+       [ -f "$_shared_apply_root/release/auto-detect-observer-preview.json" ]; then
+        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+            verify-preview "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+            printf '%s\n' preflight-rejected=observer-generation
+            return 0
+        fi
+    elif [ "$_shared_apply_mode" = 1 ] &&
+         [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
+        "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" preflight \
             "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null 2>&1 || :
     fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
@@ -1453,6 +1458,33 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
+    # P2h: inside the existing FD9, bind the genuine PHP candidate to the
+    # original generated profiles BEFORE seal. Stage only an inert proposal;
+    # leave the real dvtws.args untouched while no durable worker exists.
+    if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
+        _shared_auto_page=$(/usr/local/bin/jq -er \
+            '.page | select(.=="voice" or .=="strategies")' \
+            "$_shared_work/plan.json") || {
+            printf '%s\n' preflight-rejected=runtime-build
+            return 0
+        }
+        _shared_auto_preflight=$(shared_apply_native_config preflight \
+            "$1" "$_shared_auto_page") || {
+            printf '%s\n' preflight-rejected=runtime-build
+            return 0
+        }
+        _shared_auto_mode=$(printf "%s\n" "$_shared_auto_preflight" |
+            shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
+        _shared_auto_digest=$(printf "%s\n" "$_shared_auto_preflight" |
+            shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+        if [ "$_shared_auto_mode" = 1 ]; then
+            if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                preview "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                printf '%s\n' preflight-rejected=runtime-build
+                return 0
+            fi
+        fi
+    fi
     # Normal Start/Reconfigure make their release 0755 before activation.
     # The native shared candidate needs the same normalization BEFORE SEAL.
     shared_apply_finalize_release_modes "$_shared_work/release" || {

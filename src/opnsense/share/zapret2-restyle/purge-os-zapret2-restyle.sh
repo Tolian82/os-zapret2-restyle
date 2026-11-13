@@ -30,7 +30,7 @@ KLDSTAT = "/sbin/kldstat"
 # Explicit Zapret-owned namespaces, not a filesystem wildcard.
 OWNED_TREES = (
     "/usr/local/etc/zapret2", "/var/db/zapret2-restyle",
-    "/var/db/zapret2", "/var/log/zapret2",
+    "/var/db/zapret2", "/var/db/zapret2-auto-detect", "/var/log/zapret2",
     "/var/run/zapret2-restyle", "/usr/local/share/zapret2-restyle",
     "/usr/local/libexec/zapret2-restyle",
     "/usr/local/opnsense/service/templates/OPNsense/Zapret",

@@ -46,6 +46,7 @@ class PurgeFastTest(unittest.TestCase):
         self.assertTrue(all(x.startswith(("/usr/local/", "/var/")) for x in paths))
         self.assertFalse(any("*" in x for x in paths))
         self.assertIn("/usr/local/opnsense/service/templates/OPNsense/Zapret", paths)
+        self.assertIn("/var/db/zapret2-auto-detect", paths)
 
     def test_symlink_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
