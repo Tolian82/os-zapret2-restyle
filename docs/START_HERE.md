@@ -4,9 +4,9 @@
 
 ## Exact source boundary
 
-**13 November 2026 — `v0.6.5_19`** (`VERSION=0.6.5`, `PLUGIN_REVISION=19`). This source increment binds an **inert, sealed P2h observer preview** to the genuine original FD9 shared Apply's PHP candidate before the single seal; live `dvtws.args` is unchanged and the running owner rejects the preview. No `_19.pkg` is published. The owner-installed immutable stable package remains `os-zapret2-restyle-0.6.5_1.pkg`.
+**13 November 2026 — `v0.6.5_20`** (`VERSION=0.6.5`, `PLUGIN_REVISION=20`). This source increment adds a **real pinned-upstream FreeBSD loopback witness of the original P2h observer-preview bytes** to the existing P2e/P2g disposable VM, using protected P2g native writer files. The product runtime is unchanged; no `_20.pkg` is published. The owner-installed immutable stable package remains `os-zapret2-restyle-0.6.5_1.pkg`.
 
-**Current handoff identity:** `v0.6.5_19` · `VERSION=0.6.5` · `PLUGIN_REVISION=19` · prospective `os-zapret2-restyle-0.6.5_19.pkg` **NOT PUBLISHED**.
+**Current handoff identity:** `v0.6.5_20` · `VERSION=0.6.5` · `PLUGIN_REVISION=20` · prospective `os-zapret2-restyle-0.6.5_20.pkg` **NOT PUBLISHED**.
 
 The 13 November documentation review remains in force: all historical information was preserved in the [review archive](history/stages/documentation-2026-11-13/README.md). [All-file inventory](audit/DOCS-2026-11-13-INVENTORY.md), [findings](audit/DOCS-2026-11-13.md), and [owner clarification](decisions/DEC-2026-11-13-documentation-review-owner-clarifications.md) govern the retained support and long-term Voice UDP/extra IPv6/P2P scope.
 
@@ -20,11 +20,13 @@ Source `_18` resolves a demonstrated path/permission incompatibility: the real s
 
 Source `_19` also writes only a **sealed, nonactivating** observer preview plus refusal-marked metadata in the original FD9 release after native PHP preflight, revalidating them before kernel/Config actions. It intentionally does not create real raw/debug files or change live engine argv: without a running durable worker, early native discovery could grow without bound. [P2h exact scope](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md).
 
+Source `_20` adds the targeted [P2i original-preview native loopback witness](verification/P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md) to the **existing disposable** P2e/P2g OPNsense VM. It uses the genuine P2h preview and pinned upstream engine rather than a constructed second profile. The native result is a **separate gate**: source-only work must never be reported as passing native packet/raw-debug tests unless the exact-head VM proves them. Product native recording stays switched off.
+
 This is **not** an implemented or accepted live observer, changed release argv, actual native writer event, sealed authorized schema-2 generation, real process/FD drain correlation, durable destination writes or active cron worker. P2 remains open; P3–P5 remain open. Exact-head source/CI checks must be recorded separately from P2e's prior native success.
 
 ## One next action
 
-Next P2 gate: qualify the now-sealed original FD9 preview with **actual** native `dvtws2` first-match/raw+debug append in the disposable FreeBSD guest using P2g permissions; prepare verified process/FD and durable pending/commit proofs **before** enabling native recording in installed Apply. Then attach the authorized schema-2 under the one existing FD9 owner, provision/retain/purge the producer root safely, and activate the one-minute configd/cron worker without a second engine or Config writer. Qualify a focused native scenario for these changed boundaries. Do **not** repeat P2e's already completed offline native test as a surrogate for this new native proof.
+Next P2 gate: use the scoped P2i actual original-preview native result to design and prove **bounded crash-safe minute-worker ingestion**, same-generation writer FD drain/ack and original owner PID/argv correlation before authorizing live collection. Only then wire native `--hostlist-auto` and the protected producer lifecycle/purge into the existing FD9 shared Apply, with sealed authorized schema-2 and native configd/cron. Do not infer installed traffic safety from the isolated native loopback experiment.
 
 Do not activate the one-minute configd/cron worker or write auto-owned final lists until their preceding P2 proof gates pass. No second engine, Config writer, FD9 owner, IPFW manager, WAN or Voice lifecycle; Strategy Lab stays untouched.
 
@@ -32,6 +34,6 @@ Do not activate the one-minute configd/cron worker or write auto-owned final lis
 
 1. [#1052 specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md).
 2. [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
-3. [P2h original FD9 sealed preview](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md), [P2g protected native writer contract](verification/P2G_NATIVE_WRITER_STORAGE.md), [P2f source-only observer proposal](verification/P2F_OFFLINE_OBSERVER_PLAN.md), [P2e original-builder qualification](verification/P2E_ORIGINAL_SHARED_BUILDER.md), [P2d producer](verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md), and [P2c running-owner contract](verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
+3. [P2i original-preview real-native loopback gate](verification/P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md), [P2h original FD9 sealed preview](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md), [P2g protected native writer contract](verification/P2G_NATIVE_WRITER_STORAGE.md), [P2f source-only observer proposal](verification/P2F_OFFLINE_OBSERVER_PLAN.md), [P2e original-builder qualification](verification/P2E_ORIGINAL_SHARED_BUILDER.md), [P2d producer](verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md), and [P2c running-owner contract](verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
 
 Reuse unchanged P0/P1/P2e evidence. Source, CI/package qualification and owner-installed appliance acceptance are distinct.

@@ -1,0 +1,25 @@
+# #1052 P2i — native packet proof for the original P2h preview
+
+**Source candidate:** `v0.6.5_20`. This is a **disposable OPNsense/FreeBSD test**, not a deployed collector, authorized owner or new installed runtime. Previous P0 generated/synthetic tests do **not** qualify the exact P2h output.
+
+## User-observable boundary and blocker
+
+User-approved Auto Target Mode must be able to record previously unmatched TCP/HTTP domains **without changing how known HOSTLIST strategies or unknown HTTP are transmitted**. The current source P2h produces a sealed observer preview from the actual original `orchestrator_build_release()`, with original PHP candidate binding, but deliberately leaves live `dvtws.args` unchanged. Until now, the preview's real native packet matching/actual write to P2g `0660` protected files had **not** been tested. Structural P2h/P2g checks alone cannot prove that the real process opens these paths after dropping to `nobody` or that `--hostlist-auto` does not introduce covert actions.
+
+## Focused witness
+
+`scripts/test-p2i-original-preview-native.py` runs **inside the existing P2e/P2g disposable OPNsense 26.7 guest**, after its original generator and storage tests. No second VM job is introduced. It obtains the exact pinned upstream `bol-van/zapret2 v1.0.7` commit `038c97e5819df10f8e8c22a2f1fffe57f2f7379b`, builds its genuine `nfq2/dvtws2`, and invokes the original `scripts/test-p2e-original-shared-build.py` builder fixture with a real upstream Lua path and a single known YouTube HOSTLIST strategy. The P2h `auto-detect-observer-preview.args` and metadata come from `stage_original_preview` and `verify_original_preview`, not a second independently coded observer builder; P2c still rejects its refusal-marked preview.
+
+The fixture's private common Apply workspace stays `0700`; only the already-existing **native validator's managed-file remapping** copies its generated `managed/*.txt` references into a disposable public root. The preview's TCP/profile filters and observation paths stay unchanged. One `dvtws2 --dry-run --user=nobody` invocation checks parser acceptance without writing raw/debug. The packet stage uses the same tokens with **one diagnostic `--debug=1` addition**, not a changed production artifact; `--user=nobody` forces actual post-drop access to the P2g `root:nobody` `0710` producer directory and `0660` `inbox.txt` / `debug.log`.
+
+Reused P0 default-IPFW guard authorizes only two temporary, bidirectional `lo0` rules for TCP port 6545 on divert 19899, outside the product's IPFW ranges. Existing-known `youtube.com` HTTP must select the original Lua-bound profile and leave native raw untouched; previously unknown `unknown.p2i.invalid` is synthetically reset by its local HTTP server and must append **exactly once**, yield correlated profile-number/debug evidence and preserve the original HTTP bytes before and after inclusion. Real process UID/birth and running state, native IPFW counters, exact file modes, and complete cleanup of test engine, rules, temporary workspace and producer root are mandatory. The test never touches the user's router, any live WAN, shared FD9 journal, Config, final HOSTLIST, cron or Strategy Lab.
+
+## Proof levels
+
+- **Before exact-head native run:** this is a test implementation, **NOT TESTED**, never count a green source-only parser test as packet proof.
+- **If native run succeeds:** attest only the pinned native loopback TCP/HTTP first-match/raw+debug behavior of the actual original P2h **preview bytes with narrow validator remapping and diagnostic debug flag**. It remains distinct from a true installed active owner.
+- **Still open:** real installed original FD9 owner PID/FD/birth binding, bounded crash-safe minute-worker ingestion/ack and P3 routing, original release sealed *authorized* schema 2 and production raw/debug generation safety; multi-protocol production performance; owner-appliance acceptance. No `--hostlist-auto` is added to live `dvtws.args` by P2i, no package is published, no second engine is installed or launched in production.
+
+Acceptance/failure is recorded in the [#1052 issue](https://github.com/Tolian82/os-zapret2-restyle/issues/1052) against the exact merged source/head. A DNS/QEMU/compilation failure counts as *NOT TESTED*, not a product pass or an excuse to weaken the guard. Prefer this one native witness and normal changed-path CI; do not rerun the completed broad P0 campaign.
+
+[Source P2h preview contract](P2H_ORIGINAL_FD9_SEALED_PREVIEW.md) · [P2g credentials](P2G_NATIVE_WRITER_STORAGE.md) · [Original P0 live experiment](P0_NATIVE_AUTO_DETECT_FEASIBILITY.md) · [Current staged plan](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
