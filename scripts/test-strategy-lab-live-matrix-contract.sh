@@ -49,12 +49,15 @@ require "${STATE}" "\`${candidate_pkg}\`"
 require "${START_HERE}" "Current handoff identity:** \`${candidate_tag}\`"
 require "${START_HERE}" "\`VERSION=${version}\`"
 require "${START_HERE}" "\`PLUGIN_REVISION=${revision}\`"
-# ROADMAP is a milestone plan, not a second moving package-revision identity.
-# Exact _N identity remains checked in START_HERE, PROJECT_STATE and release docs.
-require "${ROADMAP}" "## Текущий приоритет"
+# The active ROADMAP was deliberately rewritten with an English current
+# priority heading during the documented 13-November archive migration.
+# Exact _N identity belongs only to START_HERE and PROJECT_STATE.
+require "${ROADMAP}" "## Current priority"
 require "${INDEX}" "history/current/${line}.md"
 require "${release_doc}" "# os-zapret2-restyle v${version}"
-require "${release_doc}" "\`${candidate_pkg}\`"
+# Release documentation describes the IMMUTABLE published artifact, never
+# the unpublished working _N candidate tracked in the two current handoffs.
+require "${release_doc}" "**Status:** PUBLISHED STABLE"
 
 # Rule books remain the authority for state/documentation/publication handling.
 require "${DOC_RULES}" 'DOC-015.'
