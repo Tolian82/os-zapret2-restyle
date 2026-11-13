@@ -577,6 +577,12 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py scripts/test-auto-detect-storage.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-storage.py
+      - name: Test P2j one-tick generation/FD/debug/commit bridge (inert)
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_cycle.py scripts/test-auto-detect-cycle.py scripts/test-auto-detect-queue.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-queue.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-cycle.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
