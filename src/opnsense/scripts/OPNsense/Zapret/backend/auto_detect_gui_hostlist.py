@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """#1052: native root-owned GUI editor for the shared final Auto HOSTLIST.
 
-Only `read` and explicit revisioned `save` are exposed via configd. This does
+Only revisioned `read`, `save` and explicit reviewed legacy `migrate` use configd. This does
 not install or enable the native auto-detect observer, a cron worker or any
 additional Config writer. Native domain syntax stays in domain_policy.py.
 """
@@ -21,12 +21,16 @@ from auto_detect_destination_commit import (
     DestinationRefused, _target, _replace, _sync, exclusive_destination_lock,
 )
 from domain_policy import DomainPolicyError, AutoDomainPolicyError, normalize
+from auto_detect_epoch_receipts import (ReceiptRefused, _write_once,
+                                        _read as _read_receipt, _directory, _canonical)
 
 AUTO_HOSTLIST = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
 AUTO_LOCK = Path('/usr/local/etc/zapret2/ipset/.auto-domains.lock')
 LEGACY_HOSTLIST = Path('/usr/local/etc/zapret2/ipset/zapret-hosts-auto.txt')
 MAX_GUI_BYTES = 40 * 1024  # bounded configd argv; native hostlist may be larger
 MAX_TOKEN = 57000
+MIGRATION_DIR = ".auto-domains-legacy-migration"
+MAX_MERGE_ADDITIONS = 4096
 HASH = re.compile(r'[a-f0-9]{64}\Z', re.ASCII)
 ENCODED = re.compile(r'[A-Za-z0-9_-]{1,57000}\Z', re.ASCII)
 
@@ -75,7 +79,9 @@ def read_current(path: Path = AUTO_HOSTLIST, lock: Path = AUTO_LOCK, *,
     with exclusive_destination_lock(lock, owner_uid):
         _migrate_legacy_if_missing(path, legacy, owner_uid)
         data = _read_current(path, owner_uid)
+        legacy_state = _legacy_status(path, legacy, data, owner_uid)
         return {
+            'legacy': legacy_state,
             'result': 'ok',
             'status': 'missing' if data is None else ('empty' if not data else 'populated'),
             'revision': _revision(data),
@@ -141,6 +147,197 @@ def save_current(revision: str, content: str, path: Path = AUTO_HOSTLIST,
                 'content': encoded.decode('utf-8')}
 
 
+
+def _root_migration(path: Path, uid: int, *, create: bool = False) -> Path:
+    """A one-shot root-private receipt; never replace it on subsequent reads."""
+    folder = path.parent / MIGRATION_DIR
+    if create and not folder.exists() and not folder.is_symlink():
+        folder.mkdir(mode=0o700)
+        _sync(path.parent)
+    if folder.exists() or folder.is_symlink():
+        _directory(folder, uid)
+        if set(os.listdir(folder)) - {'plan.json', 'done.json'}:
+            raise AutoHostlistRefused('foreign_migration_receipts')
+    return folder
+
+
+def _receipt_state(folder: Path, uid: int) -> tuple[dict | None, dict | None]:
+    if not folder.exists() and not folder.is_symlink():
+        return None, None
+    plan_path, done_path = folder / 'plan.json', folder / 'done.json'
+    if not plan_path.exists() and not plan_path.is_symlink():
+        # Crash after mkdir but before the first immutable plan: retry safely.
+        if not list(folder.iterdir()):
+            return None, None
+        raise AutoHostlistRefused('missing_migration_plan')
+    raw = _read_receipt(plan_path, uid)
+    plan = json.loads(raw)
+    if (not isinstance(plan, dict) or set(plan) != {'schema', 'kind', 'legacy',
+            'before', 'after', 'added'} or type(plan['schema']) is not int or plan['schema'] != 1 or
+            plan['kind'] != 'auto-hostlist-legacy-merge' or
+            any(type(plan[k]) is not str or not HASH.fullmatch(plan[k])
+                for k in ('legacy', 'before', 'after')) or
+            type(plan['added']) is not int or not (0 <= plan['added'] <= 4096)):
+        raise AutoHostlistRefused('invalid_migration_plan')
+    done = None
+    if done_path.exists() or done_path.is_symlink():
+        done = json.loads(_read_receipt(done_path, uid))
+        if (not isinstance(done, dict) or set(done) != {'schema', 'plan_sha256'} or
+                type(done['schema']) is not int or done['schema'] != 1 or done['plan_sha256'] != hashlib.sha256(raw).hexdigest()):
+            raise AutoHostlistRefused('invalid_migration_completion')
+    return plan, done
+
+
+def _write_done(folder: Path, plan: dict, uid: int) -> None:
+    _write_once(folder, 'done.json', _canonical({
+        'schema': 1, 'plan_sha256': hashlib.sha256(_canonical(plan)).hexdigest()
+    }), uid)
+
+
+def _domain_row(line: str) -> tuple[str, str, bool, bool]:
+    prefix = line[:len(line)-len(line.lstrip('!^'))]
+    host = line[len(prefix):]
+    return line, host, '!' in prefix, '^' in prefix
+
+
+def _overlaps(first: tuple, second: tuple) -> bool:
+    a, b = first[1], second[1]
+    if a == b:
+        return True
+    return ((not first[3] and b.endswith('.' + a)) or
+            (not second[3] and a.endswith('.' + b)))
+
+
+def _merge_bytes(current: bytes, legacy: bytes) -> tuple[bytes, int]:
+    """Append ONLY previously absent normalized rows, keeping manual bytes.
+
+    A mixed positive/negative overlap or duplicate host with different flags
+    is ambiguous: leave BOTH files untouched for user review, never guess.
+    """
+    try:
+        new_rows = normalize(current.decode('utf-8'), 'user')['normalized'].splitlines()
+        old_rows = normalize(legacy.decode('utf-8'), 'user')['normalized'].splitlines()
+    except (UnicodeError, DomainPolicyError, AutoDomainPolicyError) as exc:
+        raise AutoHostlistRefused('legacy_requires_manual_review') from exc
+    present = {_domain_row(line)[1]: _domain_row(line) for line in new_rows}
+    inserted: list[str] = []
+    for line in old_rows:
+        row = _domain_row(line)
+        existing = present.get(row[1])
+        if existing:
+            if existing != row:
+                raise AutoHostlistRefused('legacy_modifier_conflict')
+            continue
+        # An exclusion that matches another positive from either file is
+        # ambiguous under native local ! semantics, even for deep subdomains.
+        for other in present.values():
+            if _overlaps(row, other) and row[2] != other[2]:
+                raise AutoHostlistRefused('legacy_exclusion_conflict')
+        if len(inserted) >= MAX_MERGE_ADDITIONS:
+            raise AutoHostlistRefused('legacy_merge_row_limit')
+        present[row[1]] = row
+        inserted.append(line)
+    extra = (b'' if not inserted else
+             (b'\n' if current and not current.endswith(b'\n') else b'') +
+             ('\n'.join(inserted) + '\n').encode('utf-8'))
+    if len(current) + len(extra) > MAX_GUI_BYTES:
+        raise AutoHostlistRefused('migration_would_exceed_gui_limit')
+    return current + extra, len(inserted)
+
+
+def _legacy_status(path: Path, legacy: Path, current: bytes | None,
+                   uid: int) -> dict:
+    """Read-only preview except safe same-content one-shot receipt seeding."""
+    if current is None:
+        return {'status': 'none'}
+    try:
+        if path == legacy or path.parent != legacy.parent:
+            raise AutoHostlistRefused('unsafe_legacy_source')
+        old = _read_current(legacy, uid)
+        if old is None:
+            return {'status': 'none'}
+        folder = _root_migration(path, uid)
+        plan, done = _receipt_state(folder, uid)
+        digest = _revision(old)
+        if plan is not None:
+            if digest != plan['legacy']:
+                return {'status': 'review_required', 'reason': 'legacy_changed'}
+            if done is not None:
+                return {'status': 'already_imported'}
+            if _revision(current) in (plan['before'], plan['after']):
+                return {'status': 'resume_available', 'digest': digest, 'added': plan['added']}
+            return {'status': 'review_required', 'reason': 'interrupted_migration_conflict'}
+        result, added = _merge_bytes(current, old)
+        if result == current:
+            # This also seals the old P2k5 first-copy path: a later user
+            # deletion cannot become an implicit import candidate.
+            plan = _record_migration(path, uid, digest, current, result, 0)
+            _write_done(_root_migration(path, uid), plan, uid)
+            return {'status': 'already_imported'}
+        return {'status': 'available', 'digest': digest, 'added': added}
+    except (AutoHostlistRefused, DestinationRefused, ReceiptRefused,
+            ValueError, OSError, TypeError):
+        return {'status': 'review_required', 'reason': 'legacy_unsafe_or_conflicting'}
+
+
+def _record_migration(path: Path, uid: int, digest: str,
+                      before: bytes, after: bytes, added: int) -> dict:
+    folder = _root_migration(path, uid, create=True)
+    plan = {'schema': 1, 'kind': 'auto-hostlist-legacy-merge',
+            'legacy': digest, 'before': _revision(before),
+            'after': _revision(after), 'added': added}
+    _write_once(folder, 'plan.json', _canonical(plan), uid)
+    return plan
+
+
+def migrate_current(revision: str, legacy_digest: str,
+                    path: Path = AUTO_HOSTLIST, lock: Path = AUTO_LOCK, *,
+                    legacy: Path = LEGACY_HOSTLIST, owner_uid: int = 0) -> dict:
+    """Explicit user-confirmed one-time legacy union; no removal of source."""
+    if (type(revision) is not str or type(legacy_digest) is not str or
+            not HASH.fullmatch(revision) or not HASH.fullmatch(legacy_digest)):
+        raise AutoHostlistRefused('invalid_migration_tokens')
+    if path == legacy or path.parent != legacy.parent:
+        raise AutoHostlistRefused('unsafe_legacy_source')
+    with exclusive_destination_lock(lock, owner_uid):
+        current = _read_current(path, owner_uid)
+        old = _read_current(legacy, owner_uid)
+        if current is None or old is None or _revision(current) != revision or \
+                _revision(old) != legacy_digest:
+            return {'result': 'conflict', 'reason': 'source_changed'}
+        folder = _root_migration(path, owner_uid)
+        plan, done = _receipt_state(folder, owner_uid)
+        if plan is not None:
+            if plan['legacy'] != legacy_digest or done is not None:
+                return {'result': 'conflict', 'reason': 'already_imported_or_changed'}
+            if _revision(current) == plan['after']:
+                _write_done(folder, plan, owner_uid)
+                return {'result': 'migrated', 'revision': _revision(current),
+                        'added': plan['added']}
+            if _revision(current) != plan['before']:
+                return {'result': 'conflict', 'reason': 'source_changed_after_prepare'}
+            after, count = _merge_bytes(current, old)
+            if _revision(after) != plan['after'] or count != plan['added']:
+                raise AutoHostlistRefused('migration_plan_diverged')
+        else:
+            after, count = _merge_bytes(current, old)
+            plan = _record_migration(path, owner_uid, legacy_digest, current, after, count)
+            folder = _root_migration(path, owner_uid)
+        if after != current:
+            # Reconfirm the independently writable legacy source immediately
+            # before replacing the new file: a changed inode/content refuses.
+            if _revision(_read_current(legacy, owner_uid)) != legacy_digest:
+                return {'result': 'conflict', 'reason': 'legacy_changed'}
+            _replace(path, current, after, owner_uid)
+        # A native writer might ignore our GUI lock on the *legacy* source.
+        # Never seal completion if that source changed during replacement.
+        if _revision(_read_current(legacy, owner_uid)) != legacy_digest:
+            return {'result': 'conflict', 'reason': 'legacy_changed_during_merge'}
+        _write_done(folder, plan, owner_uid)
+        return {'result': 'migrated', 'revision': _revision(after),
+                'added': count}
+
+
 def _unpack(arg: str) -> tuple[str, str]:
     if not isinstance(arg, str) or not ENCODED.fullmatch(arg) or len(arg) > MAX_TOKEN:
         raise AutoHostlistRefused('invalid_envelope')
@@ -157,15 +354,17 @@ def _unpack(arg: str) -> tuple[str, str]:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
-            not argv or argv[0] not in ('read', 'save') or
+            not argv or argv[0] not in ('read', 'save', 'migrate') or
             (argv[0] == 'read' and len(argv) != 1) or
-            (argv[0] == 'save' and len(argv) != 2)):
+            (argv[0] == 'save' and len(argv) != 2) or
+            (argv[0] == 'migrate' and len(argv) != 3)):
         print(json.dumps({'result': 'error', 'reason': 'native_request_refused'}))
         return 0
     try:
-        result = (read_current() if argv[0] == 'read'
-                  else save_current(*_unpack(argv[1])))
-    except (AutoHostlistRefused, DestinationRefused, OSError, ValueError,
+        result = (read_current() if argv[0] == 'read' else
+                  save_current(*_unpack(argv[1])) if argv[0] == 'save' else
+                  migrate_current(argv[1], argv[2]))
+    except (AutoHostlistRefused, DestinationRefused, ReceiptRefused, OSError, ValueError,
             UnicodeError, TypeError, KeyError) as exc:
         # Never log user domains or the contents of a failed transport.
         result = {'result': 'error', 'reason': str(exc) if isinstance(exc, AutoHostlistRefused)
