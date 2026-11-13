@@ -67,6 +67,7 @@ class OriginalSharedGeneration(unittest.TestCase):
         for lua in ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua"):
             (self.static / "lua" / lua).write_text("-- inert original builder fixture\n")
         (self.static / "ipset" / "zapret-hosts-auto.txt").write_text("legacy.test.example\n")
+        (self.static / "ipset" / "auto-domains.txt").write_text("")
         # Intentionally no engine executable: this is the normal offline
         # shared release builder, not a new or installed dvtws2 instance.
 
@@ -149,7 +150,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         mapped, args = self.build("--filter-tcp=443\n--lua-desync=fake\n")
         data = self.check_nonactivating(mapped, args)
         candidates = [r for r in data["profiles"] if r["role"] == "strategy"]
-        self.assertEqual(len(candidates), 4)
+        self.assertEqual(len(candidates), 3)  # explicit-only auto, no implicit shared HOSTLIST
         self.assertTrue(all(r["hostlist"] is None for r in candidates))
         self.assertTrue(any(r["status"] == "excluded-ipset" for r in candidates))
 

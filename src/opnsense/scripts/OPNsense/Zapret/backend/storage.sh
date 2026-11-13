@@ -29,7 +29,7 @@ storage_catalog_build()
     {
         printf 'hostlist.youtube\tmanaged\thostlist-youtube.txt\n'
         printf 'hostlist.user\tmanaged\thostlist-user.txt\n'
-        printf 'hostlist.auto\truntime\tipset/zapret-hosts-auto.txt\n'
+        printf 'hostlist.auto\truntime\tipset/auto-domains.txt\n'
         printf 'ipset.telegram\tmanaged\tipset-telegram.txt\n'
         printf 'ipset.discord\tmanaged\tipset-discord.txt\n'
         printf 'ipset.x\tmanaged\tipset-x.txt\n'

@@ -118,6 +118,41 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int) -> None:
             _sync(path.parent)
 
 
+
+@contextmanager
+def exclusive_destination_lock(gui_lock: Path, owner_uid: int):
+    """Shared native root flock for GUI save/read and P2k4 destination writes.
+
+    This lock is intentionally independent of queue/FD9/Config locks; GUI
+    edits neither assume nor acquire authority to mutate config.xml.
+    """
+    path = Path(gui_lock)
+    if not path.is_absolute():
+        raise DestinationRefused("unsafe_gui_lock_path")
+    parent = path.parent.lstat()
+    if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != owner_uid
+            or parent.st_mode & 0o022):
+        raise DestinationRefused("unsafe_gui_lock_directory")
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        st = os.fstat(fd)
+        name = path.lstat()
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != owner_uid or
+                stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1 or
+                (st.st_dev, st.st_ino) != (name.st_dev, name.st_ino)):
+            raise DestinationRefused("unsafe_gui_lock")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise DestinationRefused("gui_writer_busy") from None
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 class DestinationCommit:
     """A prepared-intent journal: prepare -> per-file CAS -> checkpoint.
 
@@ -193,37 +228,15 @@ class DestinationCommit:
 
     @contextmanager
     def exclusive_targets(self):
-        """One shared target transaction lock for P1 planning and writing.
-
-        P3 GUI must acquire THIS lock before a read+revisioned save; absent
-        that integration the native adapter remains disabled. No lock is
-        retained between separate file edits or between cron invocations.
-        """
+        """Lock the P1 snapshot and P2k2b CAS under the same root flock."""
         if getattr(self, "_gui_held", False):
             raise DestinationRefused("gui_lock_already_held")
-        lock_parent = self.gui_lock.parent
-        p = lock_parent.lstat()
-        if not stat.S_ISDIR(p.st_mode) or p.st_uid != self.receipts.uid or p.st_mode & 0o022:
-            raise DestinationRefused("unsafe_gui_lock_directory")
-        fd = os.open(self.gui_lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-        try:
-            st = os.fstat(fd)
-            if (not stat.S_ISREG(st.st_mode) or st.st_uid != self.receipts.uid or
-                    stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1 or
-                    (st.st_dev, st.st_ino) !=
-                    (self.gui_lock.lstat().st_dev, self.gui_lock.lstat().st_ino)):
-                raise DestinationRefused("unsafe_gui_lock")
-            try:
-                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise DestinationRefused("gui_writer_busy") from None
+        with exclusive_destination_lock(self.gui_lock, self.receipts.uid):
             self._gui_held = True
             try:
                 yield self
             finally:
                 self._gui_held = False
-        finally:
-            os.close(fd)
 
     def _locked_commit(self, folder: Path, intent: dict, raw: bytes,
                        effects: dict) -> dict:
