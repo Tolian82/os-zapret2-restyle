@@ -25,6 +25,10 @@ MODS = ("common", "config", "parser", "registry", "storage", "targets",
         "blobs", "ports", "generator", "validator", "stage", "orchestrator")
 MARKER = "P2E_ORIGINAL_SHARED_GENERATOR_MAP"
 
+sys.path.insert(0, str(BACKEND))
+import auto_detect_origin_map as origin
+import auto_detect_owner as owner
+
 
 def write_xml(dest: Path, *, voice_on: bool) -> None:
     root = ET.Element("opnsense")
@@ -148,6 +152,72 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertEqual(len(candidates), 4)
         self.assertTrue(all(r["hostlist"] is None for r in candidates))
         self.assertTrue(any(r["status"] == "excluded-ipset" for r in candidates))
+
+
+    def test_p2f_observer_plan_is_trailing_but_not_authorized(self):
+        mapped, args = self.build("--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        original = args.read_bytes()
+        source = self.check_nonactivating(mapped, args)
+        planned, proposed = origin.plan_trailing_observer(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="c" * 64,
+            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            tcp_ports="443",
+        )
+        self.assertEqual(args.read_bytes(), original)
+        self.assertEqual(source["evidence"], origin.NONACTIVATING)
+        self.assertEqual(proposed["evidence"], "P2F_OFFLINE_PLAN_ONLY")
+        self.assertEqual(proposed["observer_native_number"], 2)
+        self.assertEqual(proposed["profiles"][0]["status"], "known-hostlist")
+        self.assertEqual(proposed["profiles"][0]["hostlist"], "youtube")
+        self.assertEqual(proposed["profiles"][-1],
+                         {"native_number": 2, "status": "observer", "hostlist": None})
+        self.assertTrue(planned.endswith(
+            b"--new\n--filter-tcp=443\n--filter-l7=http,tls\n"
+            b"--hostlist-auto=/var/db/zapret2/auto-detect/inbox.txt\n"
+            b"--hostlist-auto-fail-threshold=1\n"
+            b"--hostlist-auto-retrans-reset=0\n"))
+        self.assertEqual(planned.count(b"--hostlist-auto-debug="), 1)
+        self.assertNotIn(b"--hostlist-auto=", original)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        # A structural preview must never be mistaken for running FD9 proof.
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_map(json.dumps(proposed).encode("utf-8"),
+                             {"id": self.work.name, "candidate": "c" * 64},
+                             planned)
+
+    def test_p2f_voice_mixed_origin_never_promoted_to_known(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:user>\n<IPSET:telegram>\n--lua-desync=fake\n",
+            voice_on=True,
+        )
+        source = self.check_nonactivating(mapped, args)
+        planned, proposed = origin.plan_trailing_observer(
+            source, args.read_bytes(), owner_id=self.work.name,
+            owner_candidate_sha256="c" * 64,
+            raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+            debug_path="/var/db/zapret2/auto-detect/debug.log",
+            tcp_ports="443",
+        )
+        self.assertEqual(proposed["profiles"][0]["status"], "excluded-voice")
+        self.assertTrue(all(
+            p["status"] == "excluded-ipset" and p["hostlist"] is None
+            for p in proposed["profiles"][1:-2]
+        ))
+        self.assertTrue(planned.endswith(b"--hostlist-auto-retrans-reset=0\n"))
+        source["profiles"][1]["status"] = "known-hostlist"
+        source["profiles"][1]["hostlist"] = "user"
+        source["profiles"][1]["selector"] = "<HOSTLIST:user>"
+        with self.assertRaises(origin.AttributionError):
+            origin.plan_trailing_observer(
+                source, args.read_bytes(), owner_id=self.work.name,
+                owner_candidate_sha256="c" * 64,
+                raw_path="/var/db/zapret2/auto-detect/inbox.txt",
+                debug_path="/var/db/zapret2/auto-detect/debug.log",
+                tcp_ports="443",
+            )
+
 
 
 if __name__ == "__main__":

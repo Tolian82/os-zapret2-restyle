@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0/P1 complete; P2a–P2e source/proof merged. The scoped P2e original-builder native witness passed before this review; [recorded qualification](../verification/P2E_ORIGINAL_SHARED_BUILDER.md#recorded-qualification). P2 remains open for the real observer/owner/raw-debug generation, durable destinations and minute configd worker. P3–P5 remain open. Moving implementation facts belong to PROJECT_STATE.
+**Status:** P0/P1 complete; P2a–P2e merged with the already qualified P2e native original-builder witness; [recorded qualification](../verification/P2E_ORIGINAL_SHARED_BUILDER.md#recorded-qualification). Source `_16` adds only a nonactivating P2f observer **proposal** and focused original-generator assertions, not active observation or owner proof; [P2f scope](../verification/P2F_OFFLINE_OBSERVER_PLAN.md). P2 remains open for actual original FD9 observer/authorized schema-2/raw-debug, durable destinations and minute configd worker. P3–P5 remain open. Moving implementation facts belong to PROJECT_STATE.
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
@@ -57,6 +57,12 @@ One native cron tick every **60 seconds**, configd registered action and one loc
 **P2c boundary:** source-only original common owner/argv verifier cannot assert a genuine source→native map until its producer is integrated into the original generator, sealed by FD9 Apply. Never infer an origin from native argv alone or promote a synthetic map fixture to live ownership. See [P2c proof contract](../verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
 
 **P2d boundary:** real original generator source-stage capture and a schema=1 map can be sealed before FD9 Apply without changing `dvtws.args`. It is deliberately **not** P2c's schema=2 `auto-detect-generation.json`; missing/invalid origin refuses Auto-detect but does not abort an ordinary shared Apply. Details: [P2d same-build proof](../verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md).
+
+### P2f preparatory source boundary (nonactivating)
+
+A source-only planner now consumes the P2d `ORIGINAL_SHARED_GENERATOR_CAPTURE_NONACTIVATING` map and the exact original final `dvtws.args` to propose the last low-priority no-action observer and native source numbers. The proposed schema-2-shaped data is marked `P2F_OFFLINE_PLAN_ONLY` and **cannot** pass the original running-owner attestation. This step proves neither safe live raw/debug inode provisioning nor genuine native engine first-match, FD9 owner/candidate seal, process birth or writer-FD drain. See [P2f evidence boundary](../verification/P2F_OFFLINE_OBSERVER_PLAN.md).
+
+**Next P2f work:** integrate the verified observer in original shared FD9 generation with protected same-generation raw/debug files, native argv validation and authorized schema-2 sealing before real packet/raw/debug and FD qualification. Retain unknown/Voice/STUN/mixed IPSET exclusion. Do not activate a destination writer or cron while this authorization remains open; do not rerun completed P2e qualification as a substitute.
 
 ## 6. P3 — lists, migration and native reload
 

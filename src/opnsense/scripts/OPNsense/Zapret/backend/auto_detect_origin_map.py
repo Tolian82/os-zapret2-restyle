@@ -223,6 +223,102 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
                 strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(), profiles=records)
 
 
+def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
+                           owner_candidate_sha256: str, raw_path: str,
+                           debug_path: str, tcp_ports: str) -> tuple[bytes, dict]:
+    """Plan the P0 no-action tail from the original same-build source map.
+
+    This is strictly an OFFLINE proposal: it never edits the sealed release,
+    creates input/debug files, starts dvtws2, or authorizes a committed owner.
+    Its schema-2-shaped output deliberately uses a non-authorizing marker.
+    The original FD9 integration must separately validate file ownership,
+    final native argv, real process and raw/debug identity before sealing an
+    authorized schema-2 map. A proposed map MUST NOT reach the running owner.
+    """
+    if (not isinstance(original, bytes) or not original or len(original) > 256 * 1024
+            or b"\x00" in original):
+        raise AttributionError("invalid original argv")
+    try:
+        args = original.decode("utf-8").split()
+    except UnicodeError as exc:
+        raise AttributionError("invalid original encoding") from exc
+    if (not isinstance(mapping, dict) or mapping.get("schema") != 1
+            or mapping.get("mode") != "auto"
+            or mapping.get("evidence") != NONACTIVATING
+            or mapping.get("observer_attached") is not False
+            or mapping.get("activation_authorized") is not False
+            or mapping.get("final_args_sha256") != hashlib.sha256(original).hexdigest()
+            or not isinstance(owner_id, str)
+            or not re.fullmatch(r"[a-f0-9]{32}", owner_id)
+            or mapping.get("generation") != owner_id
+            or not isinstance(owner_candidate_sha256, str)
+            or not re.fullmatch(r"[a-f0-9]{64}", owner_candidate_sha256)):
+        raise AttributionError("untrusted original source map or owner")
+    if (len(args) < 2 or not args[0].startswith("--port=")
+            or any(a.startswith("--hostlist-auto") for a in args)):
+        raise AttributionError("existing auto observer or unsupported argv")
+    root = "/var/db/zapret2/auto-detect/"
+    if raw_path != root + "inbox.txt" or debug_path != root + "debug.log":
+        raise AttributionError("unqualified observation file paths")
+    if not isinstance(tcp_ports, str) or not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", tcp_ports):
+        raise AttributionError("invalid TCP observer ports")
+    ports = [int(port) for port in tcp_ports.split(",")]
+    if (len(ports) > 256 or len(ports) != len(set(ports))
+            or not all(1 <= port <= 65535 for port in ports)):
+        raise AttributionError("invalid TCP observer ports")
+
+    source_profiles = mapping.get("profiles")
+    if not isinstance(source_profiles, list) or not 1 <= len(source_profiles) <= 255:
+        raise AttributionError("invalid original native profiles")
+    rows = []
+    numbers = []
+    defaults = 0
+    for row in source_profiles:
+        if not isinstance(row, dict):
+            raise AttributionError("invalid original profile row")
+        no, status, hostlist = row.get("native_number"), row.get("status"), row.get("hostlist")
+        if no is not None:
+            if type(no) is not int or not 0 <= no <= 254:
+                raise AttributionError("invalid original profile number")
+            numbers.append(no)
+        if no == 0:
+            defaults += 1
+            if status != "unknown-native-default" or hostlist is not None:
+                raise AttributionError("invalid implicit native default")
+        if status == "known-hostlist":
+            if (row.get("role") != "strategy" or row.get("authored_has_ipset")
+                    or row.get("source_has_ipset") or not isinstance(hostlist, str)
+                    or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", hostlist)
+                    or row.get("selector") != f"<HOSTLIST:{hostlist}>"):
+                raise AttributionError("untrusted known HOSTLIST provenance")
+        elif hostlist is not None:
+            raise AttributionError("non-HOSTLIST origin unexpectedly labeled")
+        rows.append({"native_number": no, "status": status, "hostlist": hostlist})
+    positives = [no for no in numbers if no > 0]
+    if (defaults != 1 or len(numbers) != len(set(numbers))
+            or set(positives) != set(range(1, len(positives) + 1))
+            or len(positives) >= 255):
+        raise AttributionError("nonsequential original executable profile order")
+
+    observer = len(positives) + 1
+    planned = [args[0], f"--hostlist-auto-debug={debug_path}", *args[1:],
+               "--new", f"--filter-tcp={tcp_ports}", "--filter-l7=http,tls",
+               f"--hostlist-auto={raw_path}", "--hostlist-auto-fail-threshold=1",
+               "--hostlist-auto-retrans-reset=0"]
+    output = ("\n".join(planned) + "\n").encode("utf-8")
+    if len(output) > 256 * 1024:
+        raise AttributionError("planned native arguments exceed safety limit")
+    rows.append({"native_number": observer, "status": "observer", "hostlist": None})
+    proposal = {"schema": 2, "generation": owner_id,
+                "evidence": "P2F_OFFLINE_PLAN_ONLY",
+                "owner_operation_id": owner_id,
+                "owner_candidate_sha256": owner_candidate_sha256,
+                "final_args_sha256": hashlib.sha256(output).hexdigest(),
+                "mode": "auto", "raw_path": raw_path, "debug_path": debug_path,
+                "observer_native_number": observer, "profiles": rows}
+    return output, proposal
+
+
 def lookup(mapping: dict, generation: str, final: bytes, native_number: int) -> dict | None:
     """A stale/missing number is unknown; the future worker uses shared fallback.
 
