@@ -583,6 +583,11 @@ jobs:
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_cycle.py scripts/test-auto-detect-cycle.py scripts/test-auto-detect-queue.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-queue.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-cycle.py
+      - name: Test P2k bounded native debug/raw cursor candidates (read-only, not worker)
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_debug_window.py scripts/test-auto-detect-debug-window.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-debug-window.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
