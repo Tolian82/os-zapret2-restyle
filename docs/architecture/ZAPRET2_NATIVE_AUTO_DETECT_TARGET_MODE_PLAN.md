@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0/P1 completed; P1 native archive/provider qualified, PR #1097 / main v0.6.5_9. P2a durable queue primitive portable-tested in source v0.6.5_10 ([evidence](../verification/P2_AUTO_DETECT_QUEUE.md)), P2 NOT completed until native FD, generation/raw/debug, durable ownership and cron/configd. P3–P5 remain open (13 November 2026).
+**Status:** P0/P1 completed; P2a protected pending queue merged as v0.6.5_10; P2b FreeBSD read-only FD inspector source and scoped native surrogate workflow candidate v0.6.5_11 ([P2b contract](../verification/P2B_AUTO_DETECT_FREEBSD_FD.md)). P2 remains OPEN: real shared dvtws2 owner/generation/raw-debug binding, durable ownership/results and cron/configd not activated. P3–P5 remain open (13 November 2026).
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
@@ -52,6 +52,8 @@ One native cron tick every **60 seconds**, configd registered action and one loc
 
 **P2a evidence boundary:** the import-only `auto_detect_queue.py` enforces a single lock, fsynced hard-link/replace and protected acknowledgement; portable test proof cannot substitute for FreeBSD native engine FD, generation or committed ownership. No production cron/observer activated. Continue remaining P2 gates above.
 
+**P2b checkpoint:** the FreeBSD `fstat` inspector reports only `BUSY`/`DRAINED`/`UNKNOWN` and is not connected to the queue; no real shared dvtws2 owner or durable generation map was supplied. Native surrogate testing alone does not meet the P2 engine-owner gate. See [scoped evidence](../verification/P2B_AUTO_DETECT_FREEBSD_FD.md).
+
 ## 6. P3 — lists, migration and native reload
 
 Route an attributed discovery immediately to that known HOSTLIST's **auto-owned** component, separate from manual YouTube/User text and Config. Unknown/ambiguous events go to final **`/usr/local/etc/zapret2/ipset/auto-domains.txt`**; no duplicate shared unknown store. Migrate any existing accumulated entries safely and idempotently without losing `!/^` or overwriting destination content. Remove current implicit `<HOSTLIST:auto>` from `Target Mode=auto`. **Only the explicitly authored placeholder** enables a specific profile to use the final shared file through ordinary `--hostlist`; detection can still collect without this selector. Preserve unchanged IPSET, Voice, WAN-first, FD9, IPFW/Apply and native file hot reload. Never use raw `inbox.txt` as a GUI/readable final HOSTLIST.
@@ -74,4 +76,4 @@ The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AU
 
 The remaining integration questions concern persisted generation/debug correlation and additional UDP/QUIC observation scope, FreeBSD FD closure, inode durability/ownership and calendar/cron mechanics. P1 fixes offline PSL provision/update through normal packages. These are not permission to reopen agreed routing, repeat the completed P0 bounded witness or involve Strategy Lab.
 
-**Current authorized task:** complete P2 after the dormant queue primitive: native owner-bound writer FD verification, production generation/raw/debug map and durable ownership/result replay, then native 60-second cron/configd worker. No P3–P5 premature activation.
+**Current authorized task:** qualify the P2b native fstat held-FD proof, bind the true shared dvtws2 owner and persisted generation/raw/debug identity, then build durable ownership/result replay and a short 60-second cron/configd worker. No P3–P5 premature activation.

@@ -1,0 +1,84 @@
+name: "P2b #1052 FreeBSD pending writer-FD semantics"
+
+on:
+  pull_request:
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py
+      - scripts/test-auto-detect-fd.py
+      - .github/workflows/p2-native-fstat.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2b-1052-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast:
+    name: P2b portable FD parser and unsafe-host refusal
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Nine exact-source fail-closed cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py scripts/test-auto-detect-fd.py
+          python3.13 scripts/test-auto-detect-fd.py --self-test
+          if GITHUB_ACTIONS=true ZAPRET_P2B_DISPOSABLE=1 python3.13 scripts/test-auto-detect-fd.py --native >"${RUNNER_TEMP}/p2b-off-target.log" 2>&1; then
+            echo '::error::Non-FreeBSD attempted to claim native FD evidence'
+            exit 1
+          fi
+          grep -F P2B_DISPOSABLE_OPNSENSE_GUEST_REQUIRED "${RUNNER_TEMP}/p2b-off-target.log"
+
+  native:
+    needs: fast
+    name: One OPNsense 26.7 kernel fstat held/open/closed/reaped FD witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fail fast if disposable QEMU host cannot start
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! sudo test -c /dev/kvm; then
+            echo '::error::KVM unavailable; native fstat NOT TESTED'
+            exit 1
+          fi
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 && command -v qemu-img >/dev/null 2>&1; then
+            echo P2B_QEMU=already_available
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::VM dependency mirror unavailable; native fstat NOT TESTED'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p2b-network >/dev/null
+      - name: Verify actual native kernel held descriptor and closure without engine or IPFW
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: rsync
+          copyback: false
+          cpu: 2
+          mem: 4096
+          cache-after-prepare: true
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true ZAPRET_P2B_DISPOSABLE=1
+            /usr/local/bin/python3 scripts/test-auto-detect-fd.py --native
+      - name: Record exact native scope
+        shell: bash
+        run: |
+          echo P2B_SCOPE=NATIVE_FREEBSD_FSTAT_HELD_CLOSED_AND_PID_EXIT_ONLY
+          echo P2B_NOT_CLAIMED=Genuine_dvtws2_generation_owner_or_production_pending_ack
