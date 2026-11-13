@@ -148,6 +148,16 @@ class NativeLegacyMerge(unittest.TestCase):
             self.migrate(self.read_without_lock_reentry())
         self.assertEqual(self.path.read_text(), 'new.example\n')
 
+    def test_overlimit_merge_refuses_before_creating_journal(self):
+        self.put('new.example\n', 'one.example\ntwo.example\nthree.example\n')
+        import auto_detect_gui_hostlist as mod
+        with patch.object(mod, 'MAX_MERGE_ADDITIONS', 2):
+            self.assertEqual(self.read()['legacy']['status'], 'review_required')
+            with self.assertRaisesRegex(AutoHostlistRefused, 'legacy_merge_row_limit'):
+                self.migrate(self.read_without_lock_reentry())
+        self.assertFalse((self.base / MIGRATION_DIR).exists())
+        self.assertEqual(self.path.read_text(), 'new.example\n')
+
     def test_native_entry_does_not_serve_non_freebsd(self):
         import auto_detect_gui_hostlist as mod
         self.assertEqual(mod.main(['migrate', 'a'*64, 'b'*64]), 0)

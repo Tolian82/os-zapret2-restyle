@@ -30,6 +30,7 @@ LEGACY_HOSTLIST = Path('/usr/local/etc/zapret2/ipset/zapret-hosts-auto.txt')
 MAX_GUI_BYTES = 40 * 1024  # bounded configd argv; native hostlist may be larger
 MAX_TOKEN = 57000
 MIGRATION_DIR = ".auto-domains-legacy-migration"
+MAX_MERGE_ADDITIONS = 4096
 HASH = re.compile(r'[a-f0-9]{64}\Z', re.ASCII)
 ENCODED = re.compile(r'[A-Za-z0-9_-]{1,57000}\Z', re.ASCII)
 
@@ -232,6 +233,8 @@ def _merge_bytes(current: bytes, legacy: bytes) -> tuple[bytes, int]:
         for other in present.values():
             if _overlaps(row, other) and row[2] != other[2]:
                 raise AutoHostlistRefused('legacy_exclusion_conflict')
+        if len(inserted) >= MAX_MERGE_ADDITIONS:
+            raise AutoHostlistRefused('legacy_merge_row_limit')
         present[row[1]] = row
         inserted.append(line)
     extra = (b'' if not inserted else
