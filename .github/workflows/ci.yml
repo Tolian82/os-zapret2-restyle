@@ -558,6 +558,12 @@ jobs:
         run: |
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owner.py scripts/test-auto-detect-owner.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-owner.py
+      - name: Test P2d original generator source map without observer activation
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_origin_map.py scripts/test-auto-detect-origin-producer.py docs/verification/p0_profile_attribution.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
+          python3.13 scripts/test-auto-detect-origin-producer.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna

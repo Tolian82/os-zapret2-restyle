@@ -207,6 +207,18 @@ orchestrator_build_release()
             "native Voice ON requires the completed transactional runtime"
         return 1
     }
+    # P2d: snapshot original generator intermediates ONLY for the common
+    # Auto-detect candidate, never for an ordinary Start or Strategy Lab.
+    # This emits a *nonactivating* source map after final validation; failure
+    # to capture is safe and must not change a working Shared Apply result.
+    _orchestrator_origin_capture=
+    if [ "${_orchestrator_build_variant}" = "shared-candidate" ] &&
+       [ "${HOSTLIST_MODE}" = "auto" ]; then
+        _orchestrator_origin_capture="${_orchestrator_build_workspace}/auto-detect-capture"
+        mkdir -p "${_orchestrator_origin_capture}/effective" \
+            "${_orchestrator_origin_capture}/normalized" \
+            "${_orchestrator_origin_capture}/resolved" || _orchestrator_origin_capture=
+    fi
     # A genuinely empty Traffic Strategy is allowed; the parser still
     # rejects empty --new segments and invalid nonempty profiles.
     orchestrator_stage \
@@ -259,6 +271,16 @@ orchestrator_build_release()
             return 1
         }
 
+    if [ -n "${_orchestrator_origin_capture}" ] && ! (
+        _orchestrator_origin_no=1
+        while [ "${_orchestrator_origin_no}" -le "${_orchestrator_build_profile_count}" ]; do
+            cp "${_orchestrator_build_workspace}/profile-${_orchestrator_origin_no}.conf" \
+                "${_orchestrator_origin_capture}/effective/${_orchestrator_origin_no}" || exit 1
+            _orchestrator_origin_no=$((_orchestrator_origin_no + 1))
+        done
+    ); then
+        _orchestrator_origin_capture=
+    fi
     : > "${_orchestrator_build_error}"
     _orchestrator_build_profile_count=$(profile_pipeline_normalize \
         "${_orchestrator_build_workspace}" \
@@ -285,6 +307,16 @@ orchestrator_build_release()
             return 1
         }
 
+    if [ -n "${_orchestrator_origin_capture}" ] && ! (
+        _orchestrator_origin_no=1
+        while [ "${_orchestrator_origin_no}" -le "${_orchestrator_build_profile_count}" ]; do
+            cp "${_orchestrator_build_workspace}/profile-${_orchestrator_origin_no}.conf" \
+                "${_orchestrator_origin_capture}/normalized/${_orchestrator_origin_no}" || exit 1
+            _orchestrator_origin_no=$((_orchestrator_origin_no + 1))
+        done
+    ); then
+        _orchestrator_origin_capture=
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 2 "${_orchestrator_build_total}" \
         parser ok "strategy parsed and normalized" || return 1
@@ -356,6 +388,30 @@ orchestrator_build_release()
                 "Target resolution failed"
             return 1
         }
+    if [ -n "${_orchestrator_origin_capture}" ] && ! (
+        _orchestrator_origin_no=1
+        while [ "${_orchestrator_origin_no}" -le "${_orchestrator_build_profile_count}" ]; do
+            cp "${_orchestrator_build_workspace}/profile-${_orchestrator_origin_no}.resolved.conf" \
+                "${_orchestrator_origin_capture}/resolved/${_orchestrator_origin_no}" || exit 1
+            _orchestrator_origin_no=$((_orchestrator_origin_no + 1))
+        done
+        : > "${_orchestrator_origin_capture}/bindings" || exit 1
+        # The same original registry/storage resolver, not a guessed argv
+        # filename. Failure only disables attribution, not common Apply.
+        while IFS="$(printf '\t')" read -r _origin_kind _origin_name \
+            _origin_option _origin_key _origin_required; do
+            [ -n "${_origin_kind}" ] || continue
+            _origin_path=$(storage_resolve_roots "${_origin_key}" \
+                "${_orchestrator_build_managed_reference}" \
+                "${_orchestrator_build_zapret_dir}" \
+                "${_orchestrator_build_catalog}") || exit 1
+            printf '<%s:%s>\t%s=%s\n' "${_origin_kind}" "${_origin_name}" \
+                "${_origin_option}" "${_origin_path}" \
+                >> "${_orchestrator_origin_capture}/bindings" || exit 1
+        done < "${_orchestrator_build_registry}"
+    ); then
+        _orchestrator_origin_capture=
+    fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 3 "${_orchestrator_build_total}" \
         targets ok "Targets resolved" || return 1
@@ -487,6 +543,22 @@ orchestrator_build_release()
                 "argument generation failed"
             return 1
         }
+    if [ -n "${_orchestrator_origin_capture}" ] && ! (
+        cp "${_orchestrator_build_args}" "${_orchestrator_origin_capture}/assembled" || exit 1
+        {
+            printf '%s\n' "--port=${DIVERT_PORT}"
+            printf '%s\n' "--lua-init=@${_orchestrator_build_zapret_dir}/lua/zapret-lib.lua" \
+                "--lua-init=@${_orchestrator_build_zapret_dir}/lua/zapret-antidpi.lua" \
+                "--lua-init=@${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua"
+            cat "${_orchestrator_build_blob_args}"
+        } > "${_orchestrator_origin_capture}/preamble" || exit 1
+        printf '%s\n' \
+            "--hostlist-exclude=${_orchestrator_build_exclude_reference}" \
+            "--ipset-exclude=${_orchestrator_build_managed_reference}/ipset-exclude.txt" \
+            > "${_orchestrator_origin_capture}/overlays" || exit 1
+    ); then
+        _orchestrator_origin_capture=
+    fi
     # Mandatory global IP exclusions are profile-scoped native options.
     # Apply after Extra and Voice composition, before any dry-run or sealing.
     : > "${_orchestrator_build_error}"
@@ -632,6 +704,19 @@ orchestrator_build_release()
                     "${_orchestrator_build_error}" "installed engine rejected candidate"
                 return 1
             }
+    fi
+    # P2d: the output is a nonactivating P0 source map in the same release
+    # that Shared Apply will seal under original FD9. This does NOT append
+    # --hostlist-auto or create the P2c authorized schema=2 map. Any missing
+    # or uncertain stage refuses attribution without blocking ordinary Apply.
+    if [ -n "${_orchestrator_origin_capture}" ]; then
+        _orchestrator_origin_python="${PYTHON_RUNTIME:-${BACKEND_DIR%/backend}/python_runtime.sh}"
+        if [ -x "${_orchestrator_origin_python}" ] &&
+           [ -r "${BACKEND_DIR}/auto_detect_origin_map.py" ]; then
+            "${_orchestrator_origin_python}" "${BACKEND_DIR}/auto_detect_origin_map.py" \
+                emit "${_orchestrator_build_workspace}" "${HOSTLIST_MODE}" \
+                2>"${_orchestrator_origin_capture}/refusal.log" || :
+        fi
     fi
     orchestrator_stage \
         "${_orchestrator_build_stage_file}" 7 "${_orchestrator_build_total}" \
