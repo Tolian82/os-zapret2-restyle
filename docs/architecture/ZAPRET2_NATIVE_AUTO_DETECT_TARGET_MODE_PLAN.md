@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0/P1 complete; P2a protected queue and P2b kernel FreeBSD FD reader merged. P2c `v0.6.5_12` implements a detached common Apply/seal/actual-exec/required same-build profile-map read-side verifier ([P2c gate](../verification/P2C_AUTO_DETECT_OWNER_GENERATION.md)); real original generator does not yet emit/seal this map, so production remains unactivated. P2 still OPEN for native real-owner generation/raw/debug, durable ownership and minute cron/configd, P3–P5 open (13 November 2026).
+**Status:** P0/P1 complete, P2a crash-safe queue/P2b FreeBSD FD/P2c detached common owner merged; P2d `v0.6.5_13` now captures original shared generator source stages in a sealed **nonactivating** source map ([P2d contract](../verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md)). No original trailing observer or schema=2 owner + raw/debug production source exists yet. P2 still OPEN for native real owner/observer/event confirmation, durable destinations and 60-second configd/cron; P3–P5 OPEN (13 November 2026).
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
@@ -56,6 +56,8 @@ One native cron tick every **60 seconds**, configd registered action and one loc
 
 **P2c boundary:** source-only original common owner/argv verifier cannot assert a genuine source→native map until its producer is integrated into the original generator, sealed by FD9 Apply. Never infer an origin from native argv alone or promote a synthetic map fixture to live ownership. See [P2c proof contract](../verification/P2C_AUTO_DETECT_OWNER_GENERATION.md).
 
+**P2d boundary:** real original generator source-stage capture and a schema=1 map can be sealed before FD9 Apply without changing `dvtws.args`. It is deliberately **not** P2c's schema=2 `auto-detect-generation.json`; missing/invalid origin refuses Auto-detect but does not abort an ordinary shared Apply. Details: [P2d same-build proof](../verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md).
+
 ## 6. P3 — lists, migration and native reload
 
 Route an attributed discovery immediately to that known HOSTLIST's **auto-owned** component, separate from manual YouTube/User text and Config. Unknown/ambiguous events go to final **`/usr/local/etc/zapret2/ipset/auto-domains.txt`**; no duplicate shared unknown store. Migrate any existing accumulated entries safely and idempotently without losing `!/^` or overwriting destination content. Remove current implicit `<HOSTLIST:auto>` from `Target Mode=auto`. **Only the explicitly authored placeholder** enables a specific profile to use the final shared file through ordinary `--hostlist`; detection can still collect without this selector. Preserve unchanged IPSET, Voice, WAN-first, FD9, IPFW/Apply and native file hot reload. Never use raw `inbox.txt` as a GUI/readable final HOSTLIST.
@@ -78,4 +80,4 @@ The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AU
 
 The remaining integration questions concern persisted generation/debug correlation and additional UDP/QUIC observation scope, FreeBSD FD closure, inode durability/ownership and calendar/cron mechanics. P1 fixes offline PSL provision/update through normal packages. These are not permission to reopen agreed routing, repeat the completed P0 bounded witness or involve Strategy Lab.
 
-**Current authorized task:** bind P2c read-side owner proof to an actual original-generator native map/raw-debug production artifact under the existing shared release+FD9 lifecycle; qualify real dvtws2 owner, then durable destination ownership/replay, 60s configd/cron. No P3–P5 premature activation.
+**Current authorized task:** qualify P2d actual sealed source map on original native common engine; next append strictly approved trailing observer, bind generation/raw/debug with current shared owner, then durable destination/ownership replay and minute cron/configd. P3–P5 not yet activated.

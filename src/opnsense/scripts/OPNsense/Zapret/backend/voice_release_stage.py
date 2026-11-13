@@ -252,6 +252,9 @@ def stage_common_runtime(output: Path, active_root: Path, content: dict[str, str
     }
     artifacts = {
         "traffic.conf": content["traffic.conf"],
+        # Nonactivating P2d captures the original Voice prefix *before* the
+        # common composer adds Strategies; no guessing Voice from final argv.
+        "voice.conf": content["voice.conf"],
         "voice-plan.json": json.dumps(plan, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
     }
     if any((output / name).exists() or (output / name).is_symlink() for name in artifacts):
