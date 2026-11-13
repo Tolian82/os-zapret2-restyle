@@ -12,6 +12,7 @@ import fcntl
 import os
 from pathlib import Path
 import secrets
+import re
 import stat
 
 MAX_PENDING = 512
@@ -134,8 +135,16 @@ class DurableInbox:
             _stat_regular(path, self.uid, writer_gid=self.writer_gid)
         return files
 
-    def rotate(self) -> Path | None:
-        """Must be called under exclusive(); recover link-before-replace."""
+    def rotate(self, *, generation: str | None = None) -> Path | None:
+        """Under exclusive(); recover link-before-replace with exact generation.
+
+        Legacy callers retain the P2a behavior; the not-yet-enabled P2j
+        coordinator requires a 32-hex original shared-Apply generation tag so
+        a pending inode can never be guessed to belong to a NEW engine.
+        """
+        if generation is not None and (type(generation) is not str or
+                                       re.fullmatch(r"[a-f0-9]{32}", generation) is None):
+            raise QueueSafetyError("invalid_producer_generation")
         self._require_lock()
         self._verify()
         old = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
@@ -147,12 +156,15 @@ class DurableInbox:
             if old.st_nlink != 2:
                 raise QueueSafetyError("unexpected_live_links")
             segment = same[0]
+            if generation is not None and not segment.name.startswith(generation + "-"):
+                raise QueueSafetyError("crash_recovery_generation_changed")
         else:
             if not old.st_size:
                 return None
             if old.st_nlink != 1 or len(existing) >= MAX_PENDING:
                 raise QueueSafetyError("unsafe_inbox_links_or_capacity")
-            segment = self.pending / (secrets.token_hex(16) + ".txt")
+            segment = self.pending / ((generation + "-" if generation is not None else "") +
+                                      secrets.token_hex(16) + ".txt")
         # A new inode is fully synced before the live name is replaced.
         temp = self.root / (".new-inbox-" + secrets.token_hex(16))
         fd = None

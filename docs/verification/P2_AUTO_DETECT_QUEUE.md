@@ -19,6 +19,10 @@ python3 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_q
 
 **Results:** 9 of 9 portable tests PASS and py_compile PASS on Linux. Cases include open writer through replace, link-before-replace crash, new inbox separation, failed FD/commit proof, lock contention, partial last line, malicious pending/symlink, oversized pending, and retried failed commit. These are portable filesystem tests, **not native FreeBSD/OPNsense or live dvtws2 evidence**. No engine, WAN, FD9, Config, IPFW, Voice, Strategy Lab, GUI, cron or owner OPNsense was operated.
 
+## Subsequent dormant P2j composition
+
+The later [P2j generation-bound cycle](P2J_SAME_GENERATION_DURABLE_CYCLE.md) extends `DurableInbox.rotate()` with an **optional** validated 32-hex common-generation tag in `pending/<generation>-<random>.txt` while retaining this original P2a API behavior when the tag is omitted. The internal coordinator refuses old or untagged generations, completes link-before-replace recovery for the *same* generation and only delegates acknowledgment to the original P2a implementation after explicit FD/debug/commit tests. This does **not** supply the missing genuine debug cursor, idempotent permanent sink, authorized owner map or installed worker.
+
 ## Remaining mandatory P2 gate
 
 1. Qualify FreeBSD `fstat -n -p` (dev/inode/write mode) against actual verified shared dvtws2 process with held FD, process exit/reuse, unavailable inspector and reboot. Native proof is not an inferred Linux result.
