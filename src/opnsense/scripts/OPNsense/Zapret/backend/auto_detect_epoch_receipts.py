@@ -284,11 +284,11 @@ class EpochReceipts:
                 after = os.fstat(fd)
             finally:
                 os.close(fd)
-            if (pinned.st_dev, pinned.st_ino, pinned.st_size, pinned.st_mtime_ns) != (
+            if ((pinned.st_dev, pinned.st_ino, pinned.st_size, pinned.st_mtime_ns) != (
                     before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) or
                     (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (
                     before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) or
-                    len(data) != before.st_size:
+                    len(data) != before.st_size):
                 raise ReceiptRefused("pending_changed_during_receipt")
         except OSError as exc:
             raise ReceiptRefused("pending_snapshot_unavailable") from exc
