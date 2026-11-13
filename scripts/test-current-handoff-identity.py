@@ -26,7 +26,6 @@ expect = {
         f"{q}PLUGIN_REVISION={revision}{q}",
         f"{q}{package}{q}",
     ],
-
 }
 for path, tokens in expect.items():
     body = (root / path).read_text()
