@@ -33,7 +33,7 @@ class OwnerToken:
 _HEADER = ("USER", "CMD", "PID", "FD", "DEV", "INUM", "MODE", "SZ|DV", "R/W", "NAME")
 _START = re.compile(r"^[A-Z][a-z]{2} [A-Z][a-z]{2}\s+\d{1,2} "
                     r"\d{2}:\d{2}:\d{2} \d{4}$", re.ASCII)
-_DEVICE = re.compile(r"^(\d+),(\d+)$", re.ASCII)
+_DEVICE = re.compile(r"^0x[0-9a-fA-F]+$", re.ASCII)
 _FD = re.compile(r"^\d+$", re.ASCII)
 
 
@@ -57,7 +57,7 @@ def _owner_snapshot(token: OwnerToken, runner) -> bool:
     return born == token.started and executable == token.executable
 
 
-def _rows(output: str, pid: int, device: tuple[int, int], inode: int) -> FDState:
+def _rows(output: str, pid: int, device: int, inode: int) -> FDState:
     lines = output.splitlines()
     if not lines or tuple(lines[0].split()) != _HEADER:
         return FDState.UNKNOWN
@@ -71,7 +71,7 @@ def _rows(output: str, pid: int, device: tuple[int, int], inode: int) -> FDState
         found_dev = _DEVICE.fullmatch(columns[4])
         if not found_dev or not columns[5].isdigit() or not columns[6].isdigit():
             return FDState.UNKNOWN
-        if tuple(map(int, found_dev.groups())) != device or int(columns[5]) != inode:
+        if int(found_dev.group(0), 16) != device or int(columns[5]) != inode:
             return FDState.UNKNOWN  # -p + file filter must not return another inode.
         if columns[8] not in {"r", "w", "rw"}:
             return FDState.UNKNOWN
@@ -114,8 +114,9 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
             return FDState.UNKNOWN
         evidence = _command(["/usr/bin/fstat", "-n", "-v", "-p", str(owner.pid),
                              str(path)], runner)
-        device = (os.major(before.st_dev), os.minor(before.st_dev))
-        state = _rows(evidence, owner.pid, device, inode)
+        # FreeBSD 15 fstat prints vn_fsid as a single hex dev_t (0x...),
+        # NOT a major,minor pair. getfname() filters on st_dev/st_ino.
+        state = _rows(evidence, owner.pid, before.st_dev, inode)
         if state == FDState.UNKNOWN or not _owner_snapshot(owner, runner):
             return FDState.UNKNOWN
         after = os.fstat(fd)

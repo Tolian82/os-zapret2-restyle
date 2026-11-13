@@ -10,6 +10,10 @@ If the existing `dvtws2` append FD still refers to an old inode protected by `pe
 
 **Critical owner boundary:** a PID file or freshly observed `ps` record alone is **not** an authenticated original shared-service generation. The authentic `OwnerToken` must be provisioned by the later persisted generation/owner binder; this module does not create such a token. In P2b `auto_detect_queue.acknowledge()` has **no production caller** and the new inspector cannot delete a pending segment. Do not treat a passing `fstat` check as exactly-once or completed domain processing.
 
+### FreeBSD 15 wire-format correction discovered by the first native gate
+
+The initial scoped native runner failed **at the held-writer assertion**, rather than being declared PASS. Review of the [exact FreeBSD stable/15 fstat.c](https://github.com/freebsd/freebsd-src/blob/stable/15/usr.bin/fstat/fstat.c) revealed the cause: the numeric `DEV` column is printed using `%#5jx` as a **single hexadecimal filesystem ID**, not a major/minor pair. Its filename filter compares the same `st_dev` + `st_ino` values. The targeted correction compares that hex `DEV` directly to `st_dev`, and the fixture reproduces the true on-wire format. The superseded failed run remains failed; actual native proof requires a new exact-head green run.
+
 ## Verification selected before PR
 
 S0 exact staged source: `python3 -m py_compile` plus `python3 scripts/test-auto-detect-fd.py --self-test`, **9 portable cases PASS**: valid closed evidence, held writer and reader, foreign inode/device, changed birth/executable, damaged/missing/truncated output, error/stderr, off-target refusal, symlink/replaced inode. The new native script has a fail-closed non-OPNsense guard.

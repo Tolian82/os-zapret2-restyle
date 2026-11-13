@@ -55,7 +55,7 @@ class FDPortable(unittest.TestCase):
         self.segment.chmod(0o600)
         self.stat = self.segment.stat()
         self.owner = mod.OwnerToken(123, STAMP, EXE)
-        self.devid = f"{os.major(self.stat.st_dev)},{os.minor(self.stat.st_dev)}"
+        self.devid = hex(self.stat.st_dev)
 
     def probe(self, runner, **kwargs):
         # Portable Linux CI runs unprivileged. Preserve production root-only
@@ -98,7 +98,7 @@ class FDPortable(unittest.TestCase):
                 self.assertEqual(self.probe(FakeRunner(fstat=text)), mod.FDState.UNKNOWN)
 
     def test_foreign_inode_or_dev_in_filtered_rows_is_unknown(self):
-        for dev, inode in ((self.devid, self.stat.st_ino + 1), ("99,77", self.stat.st_ino)):
+        for dev, inode in ((self.devid, self.stat.st_ino + 1), ("0xdeadbeef", self.stat.st_ino)):
             row = f"root dvtws2 123 4 {dev} {inode} 100600 8 rw {self.segment}\n"
             self.assertEqual(self.probe(FakeRunner(fstat=HEADER + row)), mod.FDState.UNKNOWN)
 
@@ -159,8 +159,17 @@ sys.stdin.readline()
             stat_before = segment.stat()
             probe = lambda: mod.probe_pending_fd(segment, stat_before.st_dev,
                                                    stat_before.st_ino, owner=token)
-            if probe() != mod.FDState.BUSY:
-                raise RuntimeError("NATIVE_HELD_WRITER_WAS_NOT_DETECTED")
+            held = probe()
+            if held != mod.FDState.BUSY:
+                # This test has only synthetic input and a disposable child.
+                # Report the native kernel formatting, not any user traffic.
+                inspected = subprocess.run(["/usr/bin/fstat", "-n", "-v", "-p",
+                                            str(process.pid), str(segment)],
+                                           capture_output=True, text=True, timeout=5)
+                print(f"P2B_TEST_FSTAT_DIAGNOSTIC={inspected.returncode}:"
+                      f"{inspected.stdout[:1024]!r}:{inspected.stderr[:256]!r}",
+                      file=sys.stderr, flush=True)
+                raise RuntimeError(f"NATIVE_HELD_WRITER_WAS_NOT_DETECTED:{held.value}")
             process.stdin.write("close\n")
             process.stdin.flush()
             if process.stdout.readline().strip() != "CLOSED":
