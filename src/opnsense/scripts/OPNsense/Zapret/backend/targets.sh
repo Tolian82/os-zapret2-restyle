@@ -81,7 +81,7 @@ targets_prepare_managed()
     local sip_text="${7-}"
     local custom_text="${8-}"
     local exclude_text="${9-}"
-    local input_root python_bin compiler manifest_root target_name target_text
+    local input_root python_bin compiler composer_dir manifest_root target_name target_text
 
     [ -n "${build_root}" ] || {
         common_error "targets_prepare_managed requires a build root"
@@ -117,6 +117,17 @@ targets_prepare_managed()
         "User Domains" || return 1
 
     python_bin=$(targets_python_bin) || return 1
+    # Compose sealed known automatic rows with the already validated manual
+    # domains, only inside this detached release candidate. The source stays
+    # separate from Config; no observer, worker or reload is enabled.
+    composer_dir="${BACKEND_DIR:-${BACKEND:-}}"
+    [ -n "${composer_dir}" ] && [ -f "${composer_dir}/auto_detect_effective_known.py" ] || {
+        common_error "effective known HOSTLIST composer is unavailable"
+        return 1
+    }
+    "${python_bin}" "${composer_dir}/auto_detect_effective_known.py" compose \
+        "${input_root}/hostlist-youtube.out" \
+        "${input_root}/hostlist-user.out" || return 1
     compiler=$(targets_ipset_compiler) || return 1
     manifest_root=$(dirname -- "${build_root}") || return 1
     "${python_bin}" "${compiler}" batch \
