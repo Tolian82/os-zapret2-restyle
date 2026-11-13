@@ -34,6 +34,7 @@ Read through EOF in this order:
 | P2k3 original owner / P1 planning gate | [Read-only pending/FD/debug-to-canonical-domain policy](verification/P2K3_VERIFIED_PENDING_POLICY.md); no deployed observer, writer or ack |
 | P2k4 locked fallback transaction | [Current-owner/P1 policy to durable target write + empty-effects checkpoint](verification/P2K4_LOCKED_FALLBACK_COMMIT.md); import-only, no active GUI/FD9/worker/ack |
 | P2k8a native Config/hostlist read-only snapshot | [Locked original OPNsense model + protected final-file read, extended by P2k8b; write forbidden](verification/P2K8A_CONFIG_READONLY_SNAPSHOT.md) |
+| P2k8f original queue/Config FD handoff | [Actual queue→PHP Config→Python same-OFD locked-cycle with portable process tests](verification/P2K8F_ORIGINAL_LOCK_FD_HANDOFF.md); native FD9/ACK and appliance acceptance OFF |
 | P2k8e original Config-held synchronous path | [Native Config-lock-held Model source through the existing P2k8d/P2k2b durable transaction](verification/P2K8E_ORIGINAL_CONFIG_HELD_TRANSACTION.md); real queue/FD9 process binding and ACK still closed |
 | P2k8d known-owned durable relocation | [Original P2k3/P1 into existing P2k2b multi-target journal, crash-safe known-owned → shared fallback](verification/P2K8D_DURABLE_OWNED_RELOCATION.md); native Config/worker/ACK unwired |
 | P2k8c known-list effective generator | [Canonical manual + sealed auto-owned composition on the real managed builder](verification/P2K8C_EFFECTIVE_KNOWN_GENERATOR.md); live writer/ACK remains inactive |

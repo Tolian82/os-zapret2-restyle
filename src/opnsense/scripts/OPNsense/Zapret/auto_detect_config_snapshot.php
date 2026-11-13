@@ -25,6 +25,7 @@ final class AutoDetectConfigSnapshot
     private const MAX_NATIVE_REPLY = 150000;
     private const NATIVE_PYTHON = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
     private const FINAL_READER = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owned_sources.py';
+    private const FD_COMMIT = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py';
 
     /**
      * Extract exactly the MANUAL HOSTLIST owners currently registered by the
@@ -187,6 +188,139 @@ final class AutoDetectConfigSnapshot
         }
     }
 
+    /**
+     * #1052 P2k8f: real queue-lock descriptor -> native PHP Config lock
+     * -> Python same-open-description destination transaction.
+     *
+     * No second queue lock, Config parser, daemon or Config writer. The
+     * original worker already holds queue/worker.lock before invoking PHP.
+     * Only the fixed native CLI uses this; injected file/argv parameters are
+     * for portable source tests, NOT a registered configd action.
+     */
+    public static function commitWithInheritedOriginalLocks(
+        object $config, callable $modelFactory, int $queueFd,
+        string $queuePath, string $configPath, array $pythonCommand
+    ): array {
+        if ($queueFd < 3 || $queueFd > 1024 || $queuePath === '' ||
+            $configPath === '' || !str_starts_with($queuePath, '/') ||
+            !str_starts_with($configPath, '/') ||
+            !$pythonCommand || !array_is_list($pythonCommand) ||
+            array_filter($pythonCommand, static fn($arg) => !is_string($arg) || $arg === '')) {
+            throw new \RuntimeException('Unqualified original queue/Config bridge');
+        }
+        return self::withLockedOriginalModel(
+            $config, $modelFactory,
+            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand): array {
+                // Both descriptors come from their ORIGINAL owners. The
+                // child receives duped open-file descriptions, not newly
+                // opened paths or guessed flock ownership.
+                $original = new \ReflectionObject($config);
+                if (!$original->hasProperty('config_file_handle') ||
+                    !$original->hasProperty('config_file')) {
+                    throw new \RuntimeException('Original Config handle unavailable');
+                }
+                $handle = $original->getProperty('config_file_handle')->getValue($config);
+                $path = $original->getProperty('config_file')->getValue($config);
+                if (!is_resource($handle) || $path !== $configPath ||
+                    !is_array($cfgSt = @fstat($handle)) ||
+                    !is_array($namedSt = @lstat($configPath)) ||
+                    $cfgSt['dev'] !== $namedSt['dev'] ||
+                    $cfgSt['ino'] !== $namedSt['ino']) {
+                    throw new \RuntimeException('Original Config descriptor replaced');
+                }
+                $queueStream = @fopen('php://fd/' . $queueFd, 'r+');
+                if (!is_resource($queueStream)) {
+                    throw new \RuntimeException('Inherited original queue descriptor unavailable');
+                }
+                try {
+                    $queueSt = @fstat($queueStream);
+                    $namedQueue = @lstat($queuePath);
+                    if (!is_array($queueSt) || !is_array($namedQueue) ||
+                        $queueSt['dev'] !== $namedQueue['dev'] ||
+                        $queueSt['ino'] !== $namedQueue['ino']) {
+                        throw new \RuntimeException('Foreign original queue descriptor');
+                    }
+                    $pipes = [];
+                    $process = @proc_open(
+                        $pythonCommand,
+                        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
+                         2 => ['file', '/dev/null', 'a'],
+                         3 => $queueStream, 4 => $handle],
+                        $pipes, null, ['LC_ALL' => 'C']
+                    );
+                    if (!is_resource($process)) {
+                        throw new \RuntimeException('Original locked Python child unavailable');
+                    }
+                    try {
+                        $input = json_encode($source, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+                        if (strlen($input) > 3 * 1048576) {
+                            throw new \RuntimeException('Original Model transport oversized');
+                        }
+                        $view = $input;
+                        while ($view !== '') {
+                            $n = fwrite($pipes[0], $view);
+                            if ($n === false || $n === 0) {
+                                throw new \RuntimeException('Original Model transport interrupted');
+                            }
+                            $view = substr($view, $n);
+                        }
+                        fclose($pipes[0]);
+                        unset($pipes[0]);
+
+                        // A bounded native child: no abandoned PHP Config
+                        // lock or unbounded 60-second worker overlap.
+                        stream_set_blocking($pipes[1], false);
+                        $reply = '';
+                        $deadline = microtime(true) + 120;
+                        while (!feof($pipes[1])) {
+                            if (microtime(true) >= $deadline || strlen($reply) > 16384) {
+                                throw new \RuntimeException('Original locked child timed out');
+                            }
+                            $read = [$pipes[1]];
+                            $write = [];
+                            $except = [];
+                            $ready = @stream_select($read, $write, $except, 1);
+                            if ($ready === false) {
+                                throw new \RuntimeException('Original locked child I/O failure');
+                            }
+                            if ($ready > 0) {
+                                $part = fread($pipes[1], 16385 - strlen($reply));
+                                if ($part === false) {
+                                    throw new \RuntimeException('Original locked child read failure');
+                                }
+                                $reply .= $part;
+                            }
+                        }
+                        fclose($pipes[1]);
+                        unset($pipes[1]);
+                        $exit = proc_close($process);
+                        $process = null;
+                        if ($exit !== 0 || $reply === '' || strlen($reply) > 16384) {
+                            throw new \RuntimeException('Original locked child refused');
+                        }
+                        $value = json_decode($reply, true, 8, JSON_THROW_ON_ERROR);
+                        if (!is_array($value)) {
+                            throw new \RuntimeException('Unqualified original child result');
+                        }
+                        return $value;  // validated by withLockedOriginalModel()
+                    } finally {
+                        foreach ($pipes as $pipe) {
+                            if (is_resource($pipe)) {
+                                fclose($pipe);
+                            }
+                        }
+                        if (is_resource($process)) {
+                            proc_terminate($process);
+                            proc_close($process);
+                        }
+                    }
+                } finally {
+                    fclose($queueStream);
+                }
+            }
+        );
+    }
+
     /** Original Config remains held during one shared final/owned file lock. */
     public static function nativeFinalRead(): array
     {
@@ -231,24 +365,39 @@ final class AutoDetectConfigSnapshot
 
     public static function main(array $argv): int
     {
-        if (count($argv) !== 2 || $argv[1] !== 'read' ||
-            PHP_OS_FAMILY !== 'BSD' || !function_exists('posix_geteuid') ||
-            posix_geteuid() !== 0) {
-            fwrite(STDERR, "ERROR: native root read-only Config snapshot required\n");
+        if (PHP_OS_FAMILY !== 'BSD' || !function_exists('posix_geteuid') ||
+            posix_geteuid() !== 0 ||
+            (count($argv) !== 2 && count($argv) !== 4)) {
+            fwrite(STDERR, "ERROR: root native original Config required\n");
             return 64;
         }
         try {
             require_once('script/load_phalcon.php');
             $config = \OPNsense\Core\Config::getInstance();
-            $result = self::capture(
-                $config, static fn() => new \OPNsense\Zapret\Zapret(),
-                static fn() => self::nativeFinalRead()
-            );
+            if (count($argv) === 2 && $argv[1] === 'read') {
+                $result = self::capture(
+                    $config, static fn() => new \OPNsense\Zapret\Zapret(),
+                    static fn() => self::nativeFinalRead()
+                );
+            } elseif (count($argv) === 4 && $argv[1] === 'commit-with-fds' &&
+                      preg_match('/^[0-9]{1,4}$/D', $argv[2]) === 1 &&
+                      preg_match('/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
+                // No direct worker, no independent Config/XML writer. A
+                // native parent must already hold the P2a worker.lock.
+                $result = self::commitWithInheritedOriginalLocks(
+                    $config, static fn() => new \OPNsense\Zapret\Zapret(),
+                    (int)$argv[2], '/var/db/zapret2-auto-detect/worker.lock',
+                    '/conf/config.xml',
+                    [self::NATIVE_PYTHON, self::FD_COMMIT, 'commit-fds', $argv[3]]
+                );
+            } else {
+                return 64;
+            }
             echo json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
             return 0;
         } catch (\Throwable $error) {
-            // No user domains, raw Config or Python stderr in failure output.
-            fwrite(STDERR, "ERROR: read-only native Config/Hostlist snapshot unavailable\n");
+            // No domains, FD details, original Config or Python stderr.
+            fwrite(STDERR, "ERROR: original native Config/Hostlist operation unavailable\n");
             return 69;
         }
     }
