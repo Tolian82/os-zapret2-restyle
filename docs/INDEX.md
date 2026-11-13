@@ -32,6 +32,7 @@ Read through EOF in this order:
 | P2k2a immutable original epoch | [Root-private epoch and pending intent receipt](verification/P2K2A_IMMUTABLE_EPOCH_INTENT.md); prepared only, no destination commit/ack |
 | P2k2b destination checkpoint | [Root-private plan, atomic multi-file CAS and post-write cursor checkpoint](verification/P2K2B_DESTINATION_CHECKPOINT.md); import-only, no FD9/GUI/ack activation |
 | P2k3 original owner / P1 planning gate | [Read-only pending/FD/debug-to-canonical-domain policy](verification/P2K3_VERIFIED_PENDING_POLICY.md); no deployed observer, writer or ack |
+| P2k4 locked fallback transaction | [Current-owner/P1 policy to durable target write + empty-effects checkpoint](verification/P2K4_LOCKED_FALLBACK_COMMIT.md); import-only, no active GUI/FD9/worker/ack |
 | Long-term Voice UDP ports / extra IPv6 / P2P | [Retained future design](architecture/VOICE_PORTS_IPV6_P2P_FUTURE.md) |
 | Active-line chronology | [v0.6.x ledger](history/current/v0.6.x.md) |
 | Overall design and source ownership | [ARCHITECTURE](ARCHITECTURE.md), [architecture map](architecture/README.md) |
