@@ -4,7 +4,7 @@
 **Observed:** 2026-09-04
 **Host:** TerraMaster TOS 7 · `linux/amd64`
 **Container network:** Docker `host`
-**Architecture authority:** [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md)
+**Architecture authority:** [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md)
 **Canonical TOS recipe:** [`compose.tos.yml`](../../../tools/telegram-voice-lab/compose.tos.yml)
 
 ## Scope and result

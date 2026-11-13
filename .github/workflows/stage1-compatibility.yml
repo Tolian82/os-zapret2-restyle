@@ -16,7 +16,7 @@ on:
       - Makefile
       - docs/START_HERE.md
       - docs/PROJECT_STATE.md
-      - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
+      - docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
       - docs/verification/evidence/2026-11-02-v0.6.2_67-stage1-compatibility-schema.md
       - docs/verification/evidence/2026-11-02-v0.6.2_68-stage1-native-policy-parity.md
       - .github/workflows/ci.yml

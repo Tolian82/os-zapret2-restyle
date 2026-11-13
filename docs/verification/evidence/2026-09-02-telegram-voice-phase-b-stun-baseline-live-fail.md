@@ -4,7 +4,7 @@
 **Observed:** 2026-09-02
 **Appliance:** OPNsense 26.7.3_8
 **Package:** `os-zapret2-restyle-0.5.0_3`
-**Research authority:** [`TELEGRAM_VOICE_UDP.md`](../../research/TELEGRAM_VOICE_UDP.md)
+**Research authority:** [`TELEGRAM_VOICE_UDP.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_UDP.md)
 
 ## Scope and privacy boundary
 
@@ -115,4 +115,4 @@ A fragmentation candidate may test whether the provider still parses the origina
 
 On 2026-09-02 the installed Zapret2 `v1.0.4` runtime capability was confirmed. A STUN-only ordered position-8 `_4` source branch was prepared but not opened, qualified, merged, published or live-tested.
 
-On 2026-09-03 the owner selected a stronger next boundary: establish an automatic fixed-endpoint Telegram reflector media oracle before another package candidate. Phase B selected only STUN and left all 90 Reflector Hello packets unchanged, so it does not predict a reflector-specific strategy result. Current direction is [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
+On 2026-09-03 the owner selected a stronger next boundary: establish an automatic fixed-endpoint Telegram reflector media oracle before another package candidate. Phase B selected only STUN and left all 90 Reflector Hello packets unchanged, so it does not predict a reflector-specific strategy result. Current direction is [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md).

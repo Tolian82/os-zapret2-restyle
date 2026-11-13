@@ -6,7 +6,7 @@
 
 **Scope:** temporary console laboratory; package identity remains `0.5.0_3`
 
-Current task: [`START_HERE.md`](../../START_HERE.md). Acceptance: [laboratory architecture](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md). Preceding comparison: [reverse position-32](2026-09-23-telegram-voice-reverse32.md).
+Current task: [`START_HERE.md`](../../START_HERE.md). Acceptance: [laboratory architecture](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md). Preceding comparison: [reverse position-32](2026-09-23-telegram-voice-reverse32.md).
 
 ## Identity and timing
 

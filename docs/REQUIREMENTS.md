@@ -1,103 +1,29 @@
-# os-zapret2-restyle — Requirements
+# os-zapret2-restyle — product requirements
 
-Project: **os-zapret2-restyle**
-Current version line: **0.6.x**. The older requirements below retain historical approved milestones and code-state assertions at their recorded dates; the current owner-approved next target is explicitly identified below.
+This file owns product-level behavior and the BH reachability requirements. Detailed subsystem contracts have one primary home. Implementation facts and test outcomes live in [PROJECT_STATE](PROJECT_STATE.md); [START_HERE](START_HERE.md) owns the immediate task. General engineering/governance rules are referenced from the four canonical rule books.
 
-## Owner-approved future native Auto-detect / Target Mode / HOSTLIST / Auto Restart (#1052, 12 November 2026)
+## Contract map
 
-**APPROVED FUTURE REQUIREMENTS, NOT IMPLEMENTED:** [approved #1052 Auto-detect normative specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), [future P0–P5 implementation plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md); [owner original](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626). `Target Mode=auto` means detection, no implicit `<HOSTLIST:auto>` or universal bypass profile; only explicit placeholder may activate final shared `auto-domains.txt`. Native `--hostlist-auto` writes protected raw `inbox.txt`; hard-linked pending is durably processed once per minute by cron/configd and an idempotent Python worker, with verified FreeBSD old-inode writer-FD drain. `domain_policy.py` derives safe registrable roots via PSL ICANN+PRIVATE and respects global/cross-HOSTLIST exclusions and native `!/^ ` modifiers. Known origins update auto-owned list components, ambiguous ones final `/usr/local/etc/zapret2/ipset/auto-domains.txt` without IPSET attribution; modified HOSTLISTs reload natively without Apply/Restart. Editable RU/EN Auto Hostlist appears after User Domains. Separate scheduled Auto Restart has exactly five choices (Off default; hour/day/week/month); both label/dropdown are visible **only with standard OPNsense Advanced Mode ON**, while hidden selection and schedule remain active, and a planned restart happens even with unchanged lists. **P0 real native proof of non-activating observation is required first; P0–P5 not started.** Keep Strategy Lab untouched and preserve one shared `dvtws2`, Voice/FD9/WAN-first/IPFW/Config/Apply, native package data/lifecycle. This documentation revision changes no runtime, service, CI evidence or published package.
+| Product boundary | Detailed authority | Scope / status |
+|---|---|---|
+| Native packaging, dependencies and lifecycle hooks | [Native packaging specification](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) | Current product contract; completed execution plan is historical |
+| Clean install, saved defaults, WAN-first, empty Strategy, uninstall and full purge | [Lifecycle v1.3](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) | Accepted; no repeated development/acceptance queue |
+| HOSTLIST modifiers, Python list/profile policy, native profiles, RU/EN and preview | [Strategies #936](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) | Completed / owner accepted; requirements remain active |
+| Mixed-family lists, global Exclude IPSet and Laboratory IPv6 | [Dual-stack DS-01–DS-26](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) | Shipped; owner live IPv6 waiver remains distinct from native CI |
+| Additional Resources | [Install](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md), [Remove](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) | Native transactions and resource ownership; no universal bypass claim |
+| Voice Transmission | [Five-service shared-backend contract](architecture/VOICE_TRANSMISSION_GUI.md) | Current STUN/IPSET feature; media/call evidence is independent |
+| Laboratory | [Lab architecture](architecture/STRATEGY_LAB.md), [browser probes](architecture/STRATEGY_LAB_BROWSER_HTTP.md) | Current asynchronous Python/Model-C product |
+| Auto-detect / Auto Hostlist / scheduled restart | [#1052 specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) | Approved work with partial source implementation; [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) and state own progress |
 
-**P0 concrete engineering evidence (12 November 2026):** [P0 upstream source findings and isolated real-native witness](verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md); direct native `--hostlist-auto` insertion into an existing Lua/action profile is unsafe and rejected, while a trailing no-Lua/no-RST observer is being tested on one disposable native localhost witness. **Not P0 accepted; no feature installed or package built.**
+## Product identity
 
-## Owner-approved Strategies / Hostlist / native profiles / full RU+EN / read-only preview feature (11 November 2026)
-
-**APPROVED REQUIREMENTS; IMPLEMENTATION IN PROGRESS:** [single normative feature ТЗ](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) is the owner's explicit full approval of [FEATURE #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). Supports native Hostlist `!/^ ` for YouTube/User with one canonical Python domain normalizer called through PHP and shell adapters; canonical upstream Zapret2 documentation and existing `dvtws2 --dry-run` (no separate engine semantic tests); real Zapret2 profile/action and duplicate-file handling; **all existing** Strategies and Voice text localized to OPNsense user-profile RU/EN (including rendered help, Full Help, API errors and controls); Lab guidance; strict read-only `Validate and Preview` based on existing generator/validator and real `dvtws2 --dry-run`. Preserve shared WAN/FD9/Config/IPFW/Apply, old saved values and native `.pkg`. Separate from **COMPLETED/ACCEPTED** lifecycle ТЗ v1.3. The owner subsequently **fully approved the complete [P0–P6 development plan](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md)** on 11 November 2026. P0 source/design review is complete under the owner's binding update; P1 one-Python domain policy is source-integrated; P2 Python profile-policy migration is source-implemented subject to regression gates, with native duplicate-list guard and A06–A09 still open. Plan approval is not implementation or installed-package acceptance.
-
-## Owner-approved clean-install lifecycle (8 November 2026)
-
-[Нормативное ТЗ v1.3](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) и [пошаговый план G01–G11](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md) утверждают: первый отдельный полный purge; обычный безопасный GUI uninstall; первую GUI-установку движка; **ровно 10 утверждённых YouTube-доменов и точный двухпрофильный TCP+QUIC default** с upstream `http_iana_org.bin` и встроенным `fake_default_quic` (без optional resources и прежнего `tls7`); WAN Save независимо от службы/стратегии; **WAN-first для любого запуска dvtws2/Voice/Standard/Extended/Circular Lab: первым `wan-required`/ `wan-invalid`, RU/EN; Save/Stop/setup не блокировать**; реальный тест пустого FreeBSD `dvtws2`, безопасный Voice-only, Lab до первого Start и пять локализованных RU/EN статусов. Совместимость по исходникам не равно пройденному реальному installed-native Apply; пустой двигатель тоже NOT TESTED. ТЗ дополняет native packaging v1.5, не ослабляет штатный pkg/FD9/IPFW. Опубликованный `v0.6.3_1` продолжает содержать подтверждённые дефекты #970–#973.
-
-**Дополнение владельца от 10.11.2026:** [ТЗ §8.1](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md) задаёт приоритет **обновление существующей установки → полная регрессия → обычный GUI uninstall → локальная reinstall → сохранение всех параметров → полная регрессия → полный packaged self-removing purge → локальная чистая reinstall → полная clean-приёмка**. До owner-live обязателен G10A native 9-stage pass, включая наличие скрипта в пакете и главных «Полезных ссылках»; README актуализируется к релизу. **Новое решение владельца 10.11.2026:** только нативный `.pkg`, **SH-установщики отменены**. Установка по `CHAT-027`: `fetch` точного GitHub `.pkg` → `pkg add -f` → `pkg info`; только для отсутствующих зависимостей разрешено явное штатное `pkg install -r OPNsense` по manifest с подтверждением транзакции. SHA и ABI проверяются при публикации, отдельный testing pkg repo не вводится.
-
-## Project identity
-
-`os-zapret2-restyle` is an independent OPNsense plugin project.
-
-An earlier project was used as an initial code base and its copyright is preserved in `LICENSE`. New development, package identity, versioning, architecture, documentation, installation, releases, and maintenance belong to this repository.
-
-The finished plugin must install and operate on a supported OPNsense system without depending on another OPNsense zapret plugin or its repository.
-
-The zapret2 engine remains an external runtime component managed by this plugin.
-
-## General development rules
-
-General project-development principles are canonical only in [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) (`DEV-*`). This file defines product-specific requirements and does not duplicate that general rule book.
-
-## Текущий приоритет — закончить нативный плагин OPNsense (5 ноября 2026)
-
-Утверждено [ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [конкретный план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md). Основные требования: штатные `pkg`/ `Mk/plugins.mk`, целевые зависимости OPNsense, единый квалифицированный Python, нативный `configd`/rc/GUI/сервис/hooks и установленный конечный пакет.
-
-**Отменены:** собственная авторизация обновлений `pkg`, внешний SQLite-свидетель, криптографические grant, предупреждения и перехватчики прямого root-`pkg`, обязательный универсальный PRE_INSTALL-veto, новые проверки/распределение чужих IPFW-правил, шейпер-flush monitoring и переход на OPNsense-only `pfilctl`. Существующий `pfctl -d; pfctl -e` остаётся.
-
-**IPFW номера правил (не сетевые порты):** обычный Zapret2/Strategies `19000–19010`, Strategy Lab `19100–19131`. Уже реализованная безопасная холодная загрузка IPFW не переписывается без дефекта.
-
-**Исполнение:** `_137` принят и слит: отменённые pkg-approval source/CI удалены, 15/15 exact-head CI PASS, реальная сборка и чистая установка официального Mk-пакета на одноразовой OPNsense 26.7 PASS. `_138` принят: native `PLUGIN_DEPENDS`, без повторных pkg-install/FreeBSD repo writes, 15/15 exact-head PASS и postmerge main CI PASS. `_139` принят в PR #909: generic Python для реальных callers, 15/15 exact-head CI PASS и main CI SUCCESS. `_140` принят (15/15 exact-head PASS, postmerge CI): verified ordinary native Stop/Status without Python and installed cold Start refusal. `_141` source candidate exercises real native pkg removal (four verified hook bodies) then **official OPNsense firmware registration removal**, with preserved unrelated/saved Config and no global package autoremove. Active shared-owner safe Stop, full Web/boot lifecycle and final SHA remain open.
-
-Ниже сохранены ранее принятые функциональные требования к IPv4/IPv6/Exclude. Они не являются текущим новым этапом разработки и не отменяют ограничение на повторные испытания.
-
-## Ранее принятые функциональные требования — IPv4/IPv6 and global Exclude IPSet (2026-10-28)
-
-**Implemented in source and native CI; bounded owner-installed acceptance now available:** [Technical specification](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md) (DS-01–DS-26; acceptance A01–A26) and [staged implementation plan](architecture/ZAPRET2_EXCLUDE_IPSET_PLAN.md). Both documents have precedence for this **new** work over older IPv4-only *future* language elsewhere in this historical requirements file; they do **not** retroactively change descriptions of currently installed IPv4-only behavior.
-
-- Introduce one `Exclude IPSet` field directly below `Exclude Domains` in normal/Advanced Strategies, with mixed IPv4/IPv6 and RU/EN help; enforce destination IP exclusion across all executable Strategies and Voice profiles, including profile boundaries, templates, imports and Extra Arguments. Generate the mandatory owned exclusion only on executable final profiles, after imports; nonexecutable templates must not carry a duplicate generated reference that native import would register twice. Preserve unrelated user template filters.
-- Keep `Exclude Domains` domain-only, with no DNS-to-A/AAAA resolution or injection into Voice/STUN. Keep YouTube/User Domains HOSTLIST and one existing OPNsense Config/common Apply/`zapret` owner.
-- Migrate all managed Targets and existing five Voice IPSETs to dual-stack through one Python batch compilation and immutable manifest; stage IPv4/IPv6 Voice IPFW tables and qualify Strategy Lab IPv6 through existing runtime/probes.
-- Forbid `0.0.0.0/0`, `::/0` and equivalent full-family union (including complementary `/1`) in **every** user-managed include and exclude IP list, including all five Voice services. Never synthesize global capture from a blank list.
-- In **Strategy Lab only**, add the separate owner-approved `IPv6` checkbox directly beneath `Режим:` / `Mode:` in the existing Mode column, label left/indicator aligned under the selector; unchecked by default. OFF selects IPv4 only even for A+AAAA domains; ON permits independently pinned A and AAAA tests when present and routed. Literal IPv4 stays IPv4 only; IPv6 literals require ON. Set one total per-job duration of Standard **150 seconds single-family / 200 seconds dual-family**, Extended **270 / 350 seconds**; checkbox alone cannot increase the budget without both eligible families. Preserve current adaptive Model-C and safe restoration while reconciling budgets in Stage 6.
-- New **Voice-page** `UDP ports` fields, Voice IPv6 checkbox, port-only destination-any P2P capture, media protocol strategies and empty-IPSET P2P enablement are **not part of this task**; preserve their discussion in [DECISIONS.md](DECISIONS.md). Real installed FreeBSD15 evidence is required before claiming the feature complete.
-
-**Current release gate (31 October 2026):** Stages 1–7 implementation/source/native CI completed; three owner-limited real FreeBSD15 IPv6 acceptance scenarios PASS. The installed `_30` read-only audit passed 18 checks; owner observed the IPv4 Strategy Lab success/restoration and explicitly waived unavailable live IPv6. Real installed A07/A08 WAN packet effects and Voice media/calls are not proven. Owner approved the full stable `v0.6.2_1` publication; README and release workflow, package integrity and FreeBSD15 Web/pkg delivery must be verified, not inferred.
-
-## Additional Zapret2 Lua/BLOB resources — owner-approved GUI (2026-10-22)
-
-**Approved target; not implemented yet.** The normative technical specification is [ZAPRET2_EXTRA_RESOURCES_GUI.md](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md).
-
-- Source repository: [Tolian82/zapret2-extra-resources](https://github.com/Tolian82/zapret2-extra-resources), currently 19 supplementary Lua modules and 54 deduplicated packet-payload BIN files; inventory is revision-driven, not a fixed total.
-- The **Strategies** page (existing `general.volt`) must show a **separate manual button below the left-side «Статус:» block**, with definitive labels RU **«Установить дополнительные ресурсы»**, EN **“Install Additional Resources”**. Lua scripts and BLOB payloads are called *resources*, not *models*. Do not move or repurpose Start/Stop, upstream-release Apply or Strategies Apply. Native RU/EN status and help are mandatory.
-- The button initiates a separate, asynchronous, serialized install/update transaction with pinned source revision, per-file integrity checks, collision avoidance for the selected bol-van/zapret2 runtime, no user-file overwrite, and rollback. **An actual Zapret2 service Stop→Start and health verification are mandatory after every successful manual installation or repeat, even if the resource content is unchanged; copying files alone is not success.** Use the existing service lifecycle; do **not** reboot OPNsense. For an unambiguously mandatory restart, permit this manual button only when the service is already `Started`; when `Stopped`, disable it and prompt the user to start Zapret2 first. After restart failure, rollback resources and restore the previously working service or report explicit restore failure. **Do not download additions automatically during ordinary upstream install, package upgrade, or service restart**; retain previously installed managed extras safely across upstream version changes.
-- Successful installation must expose new Lua/BIN in a fresh job-scoped **ResourceInventory**, without altering snapshots for completed jobs.
-- **Dynamically** extend the **native Strategy Lab search graph** and `CandidateSpec` from the **actual installed Lua/BIN files** recorded by a new Job's `ResourceInventory`, using generic native candidate families plus resource capability metadata as data, **not a hardcoded list of resource filenames or a fixed number of files in plugin code**. Adding/removing compatible files and their Lua call/dependency descriptions must change new Job candidate eligibility without a plugin patch/rebuild. File presence without a safe callable/protocol contract is recorded as `unsupported`, not executed blindly. See the [approved five-stage implementation plan](architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
-- Load only the Lua modules required by each candidate (plus existing mandatory common modules), preserving the bounded Model-C batching/ordered dependency behavior.
-- Preserve adaptive scheduling, final budgets and per-stage cancellation/restore; **never form a blind Cartesian product of all installed resources**.
-- Do not alter existing user-authored strategies, Voice Transmission settings or HOSTLIST/IPSET values; the historical strategies predate this catalog and remain independent of installing it.
-
-Implementation, installed-package acceptance and release require separate changes. This requirement is documentation-only and does not claim that the GUI button or expanded search works today.
-
-## Voice UDP/STUN — approved product scope (2026-10-08)
-
-Implement the native **«Передача голоса»** page now, between Strategies and Laboratory, using the same native form design. It provides one Voice WAN selector, per-service enable checkbox and multiline parameters, and separate shared IPv4/CIDR IPSET fields for **Telegram, Discord, X (Twitter), SIP (VoIP), Custom**. No LAN selector or local-UDP/boot-restore toggles: matching local and forwarded outgoing UDP are included, and the saved selection restores through normal Zapret2 startup. Global service OFF remains respected. Exact UI, native input context, parameter capabilities, migration and acceptance live in [VOICE_TRANSMISSION_GUI.md](architecture/VOICE_TRANSMISSION_GUI.md).
-
-**Backend architecture approved 2026-10-13:** Voice and Strategies reuse one OPNsense model, full-runtime generator, serialized Apply/rollback and normal service lifecycle. Voice adds STUN profiles and destination-scoped UDP/IPSET rules; it has no independent Config writer, process owner or normal Apply protocol. Frontend, all five services and full acceptance remain unchanged. The normative contract is [section 12](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026). The architecture is recorded; the detailed [v0.5.2 code-change plan and controls](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) are accepted for execution by the owner’s instruction to start programming according to that plan. The owner opened this development stage without a release; implementation is still unfinished. A one-profile check is not a reduced deliverable.
-
-This owner decision supersedes the October 1 restriction postponing all GUI/persistence development until a successful call and limiting initial UI to one switch in existing Settings. The page is configuration machinery, **not a proven strategy preset or embedded testing controller**. Qualification remains separate: repeated current-oracle `MEDIA_PASS` through OPNsense/SAME ISP, followed by a real remote Windows/Android P2P-disabled `CALL_PASS` with sustained bidirectional UDP and audible two-way speech. No service is declared working merely because its form or interception works.
-
-Use a single normal dvtws2 and transactional destination-scoped UDP rules/tables. Replace transient PoC request authority with persistent OPNsense configuration and configurable STUN profiles; retain compatible Telegram configctl commands on that same state. Preserve native first-match/action semantics, detect conflicting scope, normalize shared targets and reject invalid candidates before affecting current service. WAN selection controls interception, not routing. No testbed-specific IP/interface/divert/rule identities become product defaults; no empty-IPSET global fallback, second daemon, recurring Cron or parallel boot restorer.
-
-Non-STUN remains in ordinary Strategies, including the current Telegram `unknown` A2 profile. Telegram's IPSET is one shared dataset on both pages, not a copied list. Additional service names require managed target registration; they do not imply native L7 detectors or tested Discord/X/SIP presets. IPv4-only target validation remains in force. The new configuration fields and page are **not implemented in the currently documented `0.5.0_3` package**.
-
-**Binding research premise:** the owner reports local ISP DPI restricting Telegram voice UDP. The goal remains reproducible real calls through **OPNsense `192.168.1.2` and the same provider**, not another VPN/UDP relay/gateway. Intact WAN output with no reply does not independently locate a drop. Docker screening remains first; independent same-endpoint working-path control is optional causal diagnosis, not a mandatory alternate-egress project.
-
-**Preserve the working TCP lane:** the owner's existing Squid GUI external parent is `185.203.117.88:33128`; selected LAN/SOCKS HTTP/HTTPS parent tests passed. Squid's HTTP parent does not carry voice UDP; sing-box UDP direct still traverses applicable output firewall/Zapret2. TCP/TLS proxy integration, Squid, sing-box, PF proxy redirects, SOCKS implementation, TNAS routes and a persistent voice testing controller remain outside this plugin feature.
-
-The separate three-origin laboratory still requires LAN/router-local/SOCKS Telegram TCP-parent and UDP-Zapret2 behavior, including OPNsense reboot recovery. Current manual Voice enable does not satisfy persistence. TNAS's two host routes are deliberately repaired **manually** through the existing OPNsense SSH script after TNAS reboot; Docker starts only on demand (`restart=no`). No route Cron/configd/boot automation or Docker autostart. Router-local Telegram selection is not blanket console proxying. Read [operations](architecture/TELEGRAM_LAB_OPERATIONS.md), [traffic policy](architecture/TELEGRAM_TRAFFIC_POLICY.md), [helper reference](architecture/TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md) and [oracle](architecture/TELEGRAM_VOICE_EMULATION_LAB.md) for facts and remaining qualification.
-
-All plugin source/model/GUI/lifecycle changes use the normal GitHub branch/PR/CI/merge procedure; no direct installed-source patches. Lab proxies/routes remain independently managed. A configuration/boot PASS must never substitute for `MEDIA_PASS` or `CALL_PASS`.
+`os-zapret2-restyle` is an independent OPNsense plugin with internal service namespace `zapret`. Preserve inherited copyrights and external-runtime attribution. Installation must not depend on another OPNsense zapret plugin or its repository. Zapret2 remains a separately managed upstream runtime. Project identity/version and supported external dependencies have their established machine-readable sources, not independent constants in each document.
 
 ## Traffic Strategy
 
 One multiline field replaces separate HTTP and HTTPS fields.
 
-Profiles are separated by standalone:
+Native profile boundaries include standalone:
 
 ```text
 --new
@@ -126,83 +52,16 @@ Only `HOSTLIST:*` and `IPSET:*` selector families are supported. `GROUP`, `TARGE
 
 User-authored standalone `--new` separators remain part of the Traffic Strategy syntax. The backend may generate additional runtime `--new` boundaries during normalization. The parser must not contain target-name-specific strategy behavior.
 
-## Targets
+Named native profiles/templates/imports and duplicate resolved-list validation follow the [Strategies specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md).
 
-Current GUI fields:
+## Targets and exclusions
 
-- Target Mode
-- YouTube Domains
-- Telegram IPs
-- User Domains
-- Exclude Domains
-
-### HOSTLIST
-
-One domain per line:
-
-```text
-example.com
-*.example.com
-```
-
-Both normalize to:
-
-```text
-example.com
-```
-
-The canonical entry applies to the base domain and subdomains.
-
-HOSTLIST fields reject IPs, networks, malformed domains, and unrelated text.
-
-### IPSET
-
-One IPv4 address or IPv4 CIDR network per line:
-
-```text
-149.154.160.1
-149.154.160.0/20
-```
-
-IPSET fields reject domains, malformed addresses, invalid prefixes, and unrelated text.
-
-IPv6 target lists remain outside the approved target-list contract.
-
-### Strategy Lab target identity
-
-Strategy Lab accepts either a normalized domain or a canonical IPv4 address.
-
-For an IPv4 target, an optional separate **Host / SNI** service identity may be supplied. The entered IPv4 remains the fixed destination used for routing, interception, attribution and final `--ipset-ip=<target>` selection, while the service hostname is used for TLS/HTTP/QUIC identity and certificate verification.
-
-Bare IPv4 TLS certificate-identity failure is not proof that DPI bypass failed. When HTTPS identity cannot be established without a service name, Strategy Lab must return truthful `PARTIAL` guidance asking for Host/SNI rather than a misleading empty `NO_CANDIDATE` result.
-
-IPv6 is detected as an optional network capability but is not currently accepted as a Strategy Lab target. IPv6 Laboratory target support requires a separate explicit architecture scope.
-
-### Normalization
-
-Successful Apply:
-
-- trims whitespace;
-- removes empty lines;
-- lowercases domains;
-- normalizes wildcard domains;
-- canonicalizes IPv4/CIDR values;
-- removes duplicates;
-- stores normalized values;
-- reloads normalized values into the GUI;
-- reports normalization.
-
-Invalid values are never silently discarded.
-
-## Exclude Domains
-
-Exclude Domains is a global HOSTLIST exclusion mechanism, not a strategy placeholder. It does not apply to IPSET values.
-
-## Target Mode
-
-Target Mode applies only to profiles without explicit target placeholders.
-
-Explicit placeholders override Target Mode for their profile.
+- One Python domain policy validates YouTube, User and Exclude Domains. Native `!`/`^` modifiers, wildcard handling, IDNA and duplicate semantics follow the Strategies specification. Invalid content produces a field/line error rather than silent loss.
+- One Python IP policy validates managed IPv4/IPv6 addresses and CIDRs, including all five Voice lists and Exclude IPSet. Explicit or effective whole-family `/0` is forbidden. Empty lists do not imply destination-any capture.
+- Exclude Domains is domain-only and is not translated to IPs or injected into Voice/STUN. Exclude IPSet applies to every executable ordinary/Voice profile after native imports/templates, preserving profile semantics.
+- Explicit HOSTLIST/IPSET placeholders select their own profile targets; Target Mode applies to profiles without an explicit selector. #1052 does not implicitly turn `Target Mode=auto` into `<HOSTLIST:auto>` or a universal bypass profile.
+- Laboratory accepts domains and fixed addresses with the applicable Host/SNI and explicit IPv6 family rules. Missing IPv6 capability is reported honestly and does not break IPv4.
+- On Apply, normalize only the approved/changed inputs through the same privileged and unprivileged policies, persist through the single native Config owner and show canonical saved values. Keep invalid user input available for correction.
 
 ## Transactional Apply
 
@@ -232,12 +91,12 @@ Product requirements:
 - a reported bypass candidate contains at least one native Zapret2 Lua action; a no-action profile is baseline/pass-through evidence;
 - `--out-range=-d10` is not a global Strategy Lab requirement; output range is candidate data and may be another valid value or absent when the native strategy does not need it;
 - known native/owner-proven Zapret2 strategies are retained as golden representation and search-reachability regressions, not universal provider presets;
-- normal adaptive discovery is centered on IPv4/TCP/TLS while preserving the current domain and fixed-IPv4 target contracts;
+- normal adaptive discovery preserves domain, fixed-IP/Host-SNI, endpoint-family and explicit IPv6 eligibility under the dual-stack specification;
 - candidate execution must retain deterministic endpoint attribution, controlled source-port leasing, temporary firewall ownership and bounded cleanup;
 - mass discovery and finalist validation are separate evidence levels;
 - strict stability remains 3/3 but stops immediately after a failure makes 3/3 impossible;
 - the best two to three candidates normally receive finalist validation and form the early-stop target; a smaller truthful result remains valid;
-- finalist validation uses a real bounded GET and records whether at least 16 KiB of body data was obtained; a valid shorter resource is `inconclusive` for the 16-KiB depth criterion rather than falsely reported as PASS;
+- finalist validation uses the exact complete profile and requested transport; body size/depth are diagnostic, not additional reachability gates under BH-08;
 - authenticated/intercepted HTTP `4xx`/`5xx` is application-layer status, not automatic DPI-path failure; such a response may remain accepted reachability evidence when endpoint/profile/interception proof succeeds;
 - operation, candidate, stage and job deadlines form a measured containing hierarchy and must be reviewed from timing telemetry rather than copied indefinitely as constants;
 - **Enable QUIC** is an explicit persisted setting, defaults OFF, and enables the QUIC catalog when the job reaches Extended Stage 80; direct target accessibility, cancellation, finite budgets and missing required Host/SNI retain their own termination/eligibility boundaries;
@@ -249,7 +108,7 @@ Product requirements:
 
 ## Strategy Lab — browser-profile reachability target
 
-**Status:** Approved modernization requirements, amended by the owner on 21 October 2026; implementation has not started. The definitive accessibility rule is a logical **OR**: a verified target TLS handshake, a verified target QUIC handshake, **or a genuine final HTTP response from the target** is individually sufficient. A valid HTTP response is affirmative evidence, not just optional diagnostic data. No HTTP response is required if the intended handshake already succeeded. See [PROJECT_STATE](PROJECT_STATE.md) for implemented status and the [detailed development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) for the full algorithm, stages and acceptance matrix.
+**Status:** Current accepted product requirements. Implementation and evidence limits are recorded in [PROJECT_STATE](PROJECT_STATE.md); the [browser probe contract](architecture/STRATEGY_LAB_BROWSER_HTTP.md) owns technical details.
 
 ### Target outcome
 
@@ -284,44 +143,17 @@ Keep three SHA-256 identities distinct: the byte digest of the final plugin `.pk
 
 Browser-like profile selection is not a promise of JavaScript, DOM or full-browser page rendering. Generic UDP retains its own client and exact-byte contract. This task does not reopen closed Telegram Voice testing, replace Python/Model C with blockcheck2, introduce a new recovery subsystem or publish a stable release.
 
-## Service lifecycle
+## Service and GUI
 
-- Start validates saved configuration before launch.
-- Restart/Reconfigure validates a candidate while the old runtime works.
-- Stop stops the service without modifying configuration.
-- Failed candidates must not stop a working service.
-- Post-activation failure must restore the previous runtime.
-
-## GUI
-
-- Native OPNsense appearance.
-- Explicit visible Apply button.
-- Field-specific validation messages.
-- No essential button text supplied only by hidden JavaScript.
-- No syntax highlighting requirement.
-- No font change requirement.
-- Line numbering may be added later.
-- Field width remains unchanged until verified rendered markup is deliberately inspected.
-- The Settings page must contain a native collapsible `Zapret2 Service` section after the existing configuration sections.
-- On desktop widths, service status, exact installed release tag, Start/Stop, repository release selector, and the runtime Apply button must occupy one horizontal line. Narrow layouts may wrap without changing the control order.
-- Service status is restricted to Started, Stopped, or Error and uses the standard success, neutral, and danger visual states. Runtime version is reported separately from service health and is empty when the installed tree is not at an exact valid tag.
-- The repository selector presents at most the four current stable releases returned by `setup.sh show`. Drafts, prereleases, malformed tags, and arbitrary user values must not be accepted.
-- Runtime Apply starts `setup.sh install VERSION` asynchronously through configd, disables conflicting controls while the operation is active, polls read-only status, and points the user to `/var/log/zapret2/setup.log` after failure.
-- The GUI follows the language selected in OPNsense. English is the default; custom Zapret2 labels and operation messages also provide Russian text. The plugin must not introduce its own language selector.
-- Laboratory uses the native OPNsense content frame/grid and exposes domain-or-IPv4 target input, conditional Host/SNI, Standard/Extended mode, persisted Enable QUIC, optional Generic UDP input, progress/status, stable result profiles and exact evidence without requiring a separate UI application.
+- Start validates the saved candidate; Restart/Reconfigure validates before replacing a working runtime. Stop does not rewrite saved settings. Post-activation failure restores the previous same-operation state or reports restoration failure.
+- Use native OPNsense appearance, explicit Apply, field-specific errors, user-profile English/Russian locale and native Help/Advanced controls. Full #936 wording, 13px Help and read-only preview behavior follow its specification.
+- Lifecycle display uses the five-state contract in lifecycle v1.3; do not restore the older three-state-only display rule. Runtime release identity and service health remain separate.
+- The existing upstream selector and asynchronous `setup.sh` route expose only qualified published stable upstream tags. Setup progress and failure remain visible; Start/Apply do not install or compile the engine.
+- No automatic permanent strategy modification or assumed DPI/media success follows from a Lab result, syntax check or package installation. Manual transfer and requested #1052 behavior retain their separate contracts.
 
 ## Packaging
 
-The package identity is:
-
-```text
-PLUGIN_NAME=zapret2-restyle
-PLUGIN_VERSION!= /bin/cat ${.CURDIR}/VERSION
-```
-
-The final package must include all project-owned MVC, service, backend, template, hook, package-script, and setup files required for a fresh OPNsense installation.
-
-Runtime files, live configuration, logs, PID files, downloaded engine trees, and secrets must not be packaged from a development firewall.
+Native package metadata derives its project version from `VERSION` and source revision from `PLUGIN_REVISION`. Include all required current MVC/backend/template/hook/setup files and qualified private client/licenses. Exclude runtime directories, owner Config, logs, PID files, downloaded engine trees and secrets.
 
 ## Plugin installation and runtime preparation
 
@@ -339,24 +171,22 @@ Runtime files, live configuration, logs, PID files, downloaded engine trees, and
 - `setup.sh --help` and `setup.sh -h` must provide concise command usage.
 - Drafts, prereleases, and non-numeric release tags must not be presented or selected as stable releases.
 - Release discovery must remain read-only and must fail clearly when GitHub cannot be reached or returns no usable stable releases.
-- Runtime setup must install only missing dependencies, restore temporary pkg repository changes, checkout the selected published release, compile, and verify dvtws2.
+- Runtime setup verifies manifest-declared native dependencies, checks out the selected published release, compiles and verifies dvtws2. Native OPNsense `pkg` owns system dependency provisioning; setup does not enable a stock FreeBSD repository or install/replace system packages.
 - Start, Restart, Reconfigure, and Apply must not install or update runtime components. They must fail clearly when no usable dvtws2 exists.
 - Package removal must synchronously stop the service before plugin files disappear.
-- The replacement package's pre-install phase must remember whether the service was fully running, stop and verify it before the old deinstall hook and file replacement, abort when stop fails, and start replacement code only when the pre-upgrade service was running. A stopped service must remain stopped.
+- The replacement package preserves the verified initial RUNNING/STOPPED lifecycle state under the current native package contract. Inspect process ownership and original FD9 before replacement; a hook refusal is not a universal native pkg veto guarantee. Start replacement code only for a previously running owner, keep a stopped service stopped, and fail closed on unknown state.
 - Package removal must preserve plugin configuration, downloaded runtime content, logs, and shared dependencies.
 - `+POST_DEINSTALL` must not restart configd.
 - Destructive runtime/dependency cleanup must be a separate explicit maintenance action.
 - Runtime setup operations must be logged and safe against concurrent runs.
 - `setup.sh install` must capture complete service state before runtime mutation. After dvtws2 verification it must refresh and verify a service that was running, preserve and verify a service that was stopped, reject incomplete/unknown initial state, and never report ready when the required final state is not reached.
 
-## Current implementation and verification state
+## Scope exclusions and history
 
-Current facts do not live in this requirements contract. Read [`PROJECT_STATE.md`](PROJECT_STATE.md) for the current `v0.5.x` state, [`START_HERE.md`](START_HERE.md) for the exact candidate/release handoff, and [`history/current/v0.5.x.md`](history/current/v0.5.x.md) for current-line chronology and proof.
-
-The completed `v0.4.x` final-state archive is [`history/archive/v0.4.x.md`](history/archive/v0.4.x.md). Historical audit, devlog, release, patch and evidence records remain history/proof only and do not override current specialist authority/current state (`DOC-004`–`DOC-005`).
+Voice UDP ports, an additional IPv6 checkbox and P2P remain deferred long-term requirements/proposals in the [active future design](architecture/VOICE_PORTS_IPV6_P2P_FUTURE.md), under the owner's latest 13 November instruction. They do not change present capture semantics. Closed Telegram media research, cancelled external pkg approval and superseded IPv4-only requirements are retained in the [historical source snapshot](history/stages/documentation-2026-11-13/snapshots/REQUIREMENTS.md) and [history map](history/README.md). [Owner clarification](decisions/DEC-2026-11-13-documentation-review-owner-clarifications.md).
 
 ## BLOB requirement interpretation
 
-- shorthand `--blob=<name>` addresses `files/fake/<name>.bin` directly;
-- actual preset blob names must correspond to installed files;
-- implicit aliases are not a product requirement.
+- Shorthand `--blob=<name>` addresses `files/fake/<name>.bin` directly.
+- Actual preset blob names must correspond to installed files.
+- Implicit aliases are not a product requirement.

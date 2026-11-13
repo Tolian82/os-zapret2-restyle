@@ -47,7 +47,7 @@ The plugin uses fixed **IPFW rule numbers** (these are **not TCP/UDP ports**):
 | Normal Zapret2 / Traffic Strategies | `19000–19010` |
 | Strategy Lab | `19100–19131` |
 
-Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The plugin must not globally disable/re-enable PF as part of normal runtime or release operations. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) and [completion plan](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) define current development priorities.
+Divert socket ports are separate. Per the owner-approved native integration scope, no new system-wide IPFW collision scanner, shaper-flush listener, dynamic rule allocation or `pfilctl` conversion is planned. The plugin must not globally disable/re-enable PF as part of normal runtime or release operations. [Native OPNsense TЗ v1.5](docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) defines the current technical contract; its [completed implementation plan](docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) is retained as history. [Current priorities](docs/ROADMAP.md).
 
 ## What's new in v0.6.5
 
@@ -206,7 +206,7 @@ The **Services → Zapret2 → Voice Transmission / Передача голос�
 
 **Current verification boundary:** The owner explicitly accepted the complete **Voice Transmission service test scope** on the current testing installation. This confirms the plugin's reported GUI/Config/shared runtime behavior in the tested configurations, not a guaranteed successful Telegram/Discord/SIP/X call or media bypass across providers; those network-specific results require separate evidence. The Squid/sing-box/SSH/routing lab is not managed by this plugin.
 
-For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/VOICE_CODE_COMPLETION_GATE.md).
+For details see the [current Voice specification](docs/architecture/VOICE_TRANSMISSION_GUI.md) and [completion gate](docs/history/stages/telegram-voice-2026-10-20/VOICE_CODE_COMPLETION_GATE.md).
 
 ## Zapret2 Service manager
 
@@ -425,7 +425,7 @@ Useful entry points:
 - [`docs/PROJECT_STATE.md`](docs/PROJECT_STATE.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/INDEX.md`](docs/INDEX.md)
-- [`Native Voice TNAS lab`](docs/architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md)
+- [`Native Voice TNAS lab`](docs/history/stages/telegram-voice-2026-10-20/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md)
 - [`docs/architecture/`](docs/architecture/)
 - [`docs/verification/`](docs/verification/)
 

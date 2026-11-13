@@ -6,7 +6,7 @@
 
 **Scope:** temporary console laboratory; package identity remains `0.5.0_3`
 
-Current task and exact next action: [`START_HERE.md`](../../START_HERE.md). Acceptance: [laboratory architecture](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md). Earlier reported success: [separate observation](2026-09-22-telegram-voice-reverse8-call-observation.md).
+Current task and exact next action: [`START_HERE.md`](../../START_HERE.md). Acceptance: [laboratory architecture](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md). Earlier reported success: [separate observation](2026-09-22-telegram-voice-reverse8-call-observation.md).
 
 ## Owner clarification and restored topology
 

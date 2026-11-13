@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — specification v1.0
 
-**Status:** APPROVED FUTURE FEATURE / **NOT IMPLEMENTED** (owner's consolidated specification: 11 November 2026; binding Advanced Mode clarification: 12 November 2026).
+**Status:** APPROVED CURRENT WORK / PARTIAL SOURCE IMPLEMENTATION. Production Auto-detect automation, Auto Hostlist and scheduled restart are not complete; [PROJECT_STATE](../PROJECT_STATE.md) owns exact progress.
 **Primary owner authority:** [Issue #1052, consolidated specification comment 6798093626](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Execution companion:** [P0–P5 development plan](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). P0 native feasibility completed with [immutable receipt](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6838843832); [P1 policy/source and package boundary](../verification/P1_AUTO_DETECT_DOMAIN_POLICY.md). P2–P5 remain unimplemented. Production observation and acceptance cannot be inferred from a policy-only increment.
 **Related scopes:** [completed #936 HOSTLIST/RU-EN/preview specification](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and separate [future #1040](https://github.com/Tolian82/os-zapret2-restyle/issues/1040). Preserve original owner-accepted #936 behavior and all existing WAN-first, FD9, shared Voice, IPFW, Config, Apply and native package contracts.
@@ -182,4 +182,4 @@ For an enabled interval, perform the **normal shared service restart on schedule
 
 Remaining issues are **technical proof, not owner policy**: safe non-activating native observation, FreeBSD writer FD closure, inode durability/permissions, PSL provisioning and native cron calendar. Do **not** involve Strategy Lab.
 
-**Execution boundary:** Issue #1052 is future feature documentation, **not implementation**. The [consolidated comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626) remains the verbatim Russian source; the original issue history remains unchanged. This English document is its engineering specification for the repository.
+**Execution boundary:** This is the approved behavior specification; PROJECT_STATE separately identifies partial source implementation and the remaining production boundary. The [consolidated comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626) remains the verbatim Russian source; the original issue history remains unchanged. This English document is its engineering specification for the repository.

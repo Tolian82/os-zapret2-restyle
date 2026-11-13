@@ -1,10 +1,10 @@
 # Using Strategy Lab
 
-This guide describes the current packaged client. The approved [Chrome HTTP development plan](architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) is not implemented yet; its future behavior must not be inferred from an old QUIC result.
+This guide describes the accepted packaged Laboratory behavior. The [private Chrome reachability contract](architecture/STRATEGY_LAB_BROWSER_HTTP.md) defines the current probes; older saved jobs retain only their originally measured evidence.
 
 Open **Services → Zapret2 → Diagnostics**.
 
-Enter a domain that your ISP blocks. Use **Standard** for the primary TLS 1.3 search, with a finite adaptive budget whose configured Standard base is 150 seconds. Use **Extended** when TLS 1.2, plain HTTP, optional QUIC bypass testing, or a configured request-response UDP check is also needed; Extended has a configured additional 120-second base; actual finite budgets depend on eligible work.
+Enter a domain that your ISP blocks. Use **Standard** for the primary HTTPS/TLS search using natural Chrome TLS negotiation, with a finite adaptive budget whose configured Standard base is 150 seconds. Use **Extended** when TLS 1.2, plain HTTP, optional QUIC bypass testing, or a configured request-response UDP check is also needed; Extended has a configured additional 120-second base; actual finite budgets depend on eligible work.
 
 ## Enable QUIC
 
@@ -44,4 +44,8 @@ Read the final replay evidence for each *specific* port, protocol and endpoint b
 
 Сначала изучите итоговое подтверждение для **конкретного** порта, протокола и конечной точки. Сравните результат с сохранённой стратегией: порядок профилей и первое совпадение, `--filter-tcp`/`--filter-udp`, `--filter-l7`, HOSTLIST/IPSET. Если нужен дополнительный Lua-обработчик внутри того же профиля, разместите подходящие `--payload`, `--in-range` и `--out-range` перед его `--lua-desync` **внутри этого профиля**. Эти фильтры действуют на следующие Lua-вызовы до переопределения. Самостоятельный профиль добавляйте через `--new`, проверив приоритет уже существующих профилей. Не заменяйте несвязанные профили и не меняйте пользовательские значения. Успех HTTP/TLS сам по себе не подтверждает QUIC/UDP, STUN/WireGuard и Voice media; `--dry-run` и результат лаборатории не гарантируют обход DPI.
 
-**A17 candidate note (source revision `v0.6.4_35`):** The Lab's button copies the complete profile only; it does **not** save/apply it. Final `profile_replay.verified` is retained per displayed row so that a saved/unverified candidate cannot receive the verified-success message. Compare transport/port, L7, payload, range and Lua actions with the existing first-match profile before a manual edit. Insert a matching additional handler inside its profile; create an independent profile only with `--new`. Other profiles and Voice must remain untouched. The installed RU/EN GUI test and owner A17 remain pending until evidenced.
+## IPv6 and evidence
+
+The separate IPv6 checkbox is OFF by default. OFF selects IPv4; ON allows eligible, independently pinned IPv4/IPv6 endpoints under the [dual-stack contract](architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md). Lack of usable IPv6 does not turn working IPv4 into a failure. Standard has one total 150-second single-family / 200-second dual-family envelope; Extended 270 / 350 seconds. Merely checking IPv6 does not grant the dual-family addition.
+
+A verified intended TLS handshake, genuine target HTTP response, or applicable target QUIC handshake is reachability evidence for that requested endpoint/transport. The interface reports the actually measured protocol; HTTP body size is not a mandatory success gate. Finalist replay and restoration remain required. The Copy button copies a full profile and never saves/applies it; consult the per-row verification result before manual transfer.

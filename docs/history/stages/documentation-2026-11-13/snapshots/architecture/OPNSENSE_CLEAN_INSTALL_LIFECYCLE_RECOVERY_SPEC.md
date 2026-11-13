@@ -1,0 +1,269 @@
+# Historical source — docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md
+
+**ARCHIVED / LEVEL 3.** Original text at `277ef0536b217841ab6728ae9561dbc4792fef01` (`v0.6.5_14`), relocated during the 13 November 2026 documentation review. Its dated statuses, commands, proposed work and duplicated rules are historical, not current instructions. Local links are rebased; original prose is preserved. Current authority: [documentation index](/docs/INDEX.md).
+
+# Восстановление полного жизненного цикла Zapret2 Restyle после чистой установки — ТЗ v1.3
+
+**Статус: COMPLETED / ACCEPTED, 11.11.2026.** Основное ТЗ v1.3 и реализация G01–G11 приняты владельцем; физическая OPNsense подтвердила установку и обновление стабильного `v0.6.4_1` из GUI, работающую лабораторию, WAN, Voice, обычное удаление/переустановку с сохранённой конфигурацией и полный Purge/чистую установку. Подробности и границы доказательств — в [G11](../../../../../verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md). Исторические требования, описания прежних отказов и старые `OPEN` ниже оставлены для трассировки разработки; они не являются актуальными блокерами принятого ТЗ. [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) — будущая **feature** по отдельному ТЗ, вне v1.3; [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) закрыт как не воспроизводимый на реальной OPNsense, без утверждения о root-cause fix.
+**Базовый дефектный пакет:** опубликованный `os-zapret2-restyle-0.6.3_1.pkg`.
+**Целевая платформа первой приёмки:** OPNsense 26.7 / FreeBSD:15:amd64.
+**Проект:** `Tolian82/os-zapret2-restyle`; служебный ключ `zapret`.
+**Версия ТЗ `v1.3` редакционная, независима от `VERSION` / `PLUGIN_REVISION` и публикаций.**
+**Связанные дефекты:** [#970](https://github.com/Tolian82/os-zapret2-restyle/issues/970), [#971](https://github.com/Tolian82/os-zapret2-restyle/issues/971), [#972](https://github.com/Tolian82/os-zapret2-restyle/issues/972), [#973](https://github.com/Tolian82/os-zapret2-restyle/issues/973).
+
+## 0. Цель, границы и критерий завершения
+
+Пользователь без предварительно созданной конфигурации и без SSH должен иметь возможность **штатно установить пакет в GUI OPNsense, выбрать и установить релиз движка, сохранить WAN, пользоваться обычной/расширенной лабораторией до первого запуска службы, включить службу, применить стратегии, перезагрузить систему, остановить, обновить, удалить и переустановить плагин**. Обычное удаление корректно убирает меню и процессы, сохраняя пользовательские данные. По отдельной явно деструктивной команде пользователь может уничтожить также все данные плагина для действительно чистого повторного теста.
+
+Работа ведётся по действующим `DEV-*` / `GH-*` / `DOC-*` и [ТЗ штатной интеграции v1.5](OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md). Применять обычные OPNsense `pkg`, `configd`, модели Config, штатные hooks и имеющийся original FD9. Не вводить внешние SQLite-свидетели, approval-серверы, второй менеджер пакетов, динамический распределитель IPFW-правил, общий аудит чужих правил или обход `pkg`. Управление IPFW ограничено правилами Zapret2 `19000–19010` и Laboratory `19100–19131`; чужие процессы, правила, настройки PF и общие зависимости не трогать. Не делать несанкционированных `pfctl -d/-e` либо глобальных рестартов.
+
+**Проверка применимости:** сначала подтвердить конкретные исходные вызовы, затем доказать поведение на одноразовом OPNsense 26.7 с настоящим пакетом, а далее в пользовательской GUI-приёмке. Положительный source/CI результат не равен owner-live PASS. Не публиковать релиз без отдельного разрешения.
+
+## 1. ПЕРВЫЙ этап: самостоятельный скрипт полного удаления («чистый лист»)
+
+**ID CL-01, P0.** Поддерживаемый безопасный purge уже существует как исходный `scripts/purge-os-zapret2-restyle.sh`. **Новое обязательное условие готового продукта:** включить его исполняемую копию в стандартный пакет по фиксированному локальному пути `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`. Пользователь на шаге 7 запускает именно локальную установленную копию, а не отдельно скачанный скрипт. После подтверждения она выполняет штатное удаление пакета и очищает все подтверждённые остатки, **включая собственный установленный файл**, без утраты выполнения при удалении своего inode/пути; при сбое — безопасная диагностика и возможность повторного завершения. Исходный независимый файл в GitHub сохраняется для восстановления/тестов уже удалённого пакета, но не является обязательной ручной загрузкой на шаге 7. Запуск purge никогда не является частью обычного GUI/pkg uninstall. **Решение владельца от 10.11.2026: безвозвратно убрать со страницы «Стратегии» весь раздел «Полезные ссылки» о полном удалении.** В GUI **не отображать** ни ссылку на исходник purge, ни команды `--dry-run`/`--purge`, ни заголовок, предупреждения и локализованный JavaScript этого блока. Скрипт по-прежнему включается в `.pkg`, запускается только вручную из root-консоли; README/G01/G11 содержат точный путь `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`, синтаксис, последствия, backup и подтверждение. **Решение владельца от 10.11.2026, уточнение CL-01-PERSIST:** обычное GUI/pkg-удаление плагина НЕ удаляет `/usr/local/opnsense/scripts/OPNsense/Zapret/purge-os-zapret2-restyle.sh`; он остаётся root-owned mode 0755 вне учёта `pkg` и доступен как для `--dry-run`, так и для подтверждённого `--purge` уже ПОСЛЕ удаления пакета. Для этого `.pkg` содержит проверенный исходный шаблон скрипта, а нативный `+POST_INSTALL` устанавливает точную копию по фиксированному пути атомарно с отказом при symlink/чужом владельце. После ordinary uninstall сохраняются также Config/upstream/Lua/BIN, но меню и остальная пакетная часть исчезают. Если запустить полный `--purge` при установленном плагине, скрипт обязан сначала штатно удалить сам пакет с hooks, затем собственный сохранённый скрипт, остатки runtime/Voice/Lab/Lua/BIN, настройки и выделенный repo, оставив только проверенный приватный backup. Если пакет уже удалён, тот же скрипт без повторной установки пакета удаляет все оставшиеся данные, включая собственный файл, с теми же проверками FD9/IPFW/чужих компонентов и backup. После этого система готова к настоящей чистой установке с первичными defaults. Ни отдельной загрузки скрипта, ни внешнего SH-установщика не требуется.
+
+### 1.1. Режимы и согласие
+
+1. Запуск без деструктивного флага: только инвентаризация/`--dry-run`. Показать наличие пакета/репозитория, регистраций, модели `OPNsense.Zapret`, engine checkout, бинарников, Lua/BIN (включая дополнительные), runtime-state/rollback/extra-resources/Strategy Lab, логов, PID/lock, меню/cache и диапазонов собственных IPFW.
+2. До удаления создать резервную копию **конфигурации OPNsense** в приватном каталоге под `/root` (права 0700/0600, имя с датой) и проверенную инвентаризацию удаляемого. Не печатать содержимое Config, токены, конфиденциальные IP-листы и секреты в общий лог.
+3. Деструктивная операция только отдельным `--purge` с явным подтверждением точной фразы `PURGE OS-ZAPRET2-RESTYLE`; автоматизация тестового стенда может использовать документированный явный флаг подтверждения без интерактивного ввода, но НЕ обычный default/no-args. **Исправление LC-01-TTY (10.11.2026):** поскольку программа Python передаётся через shell heredoc в stdin, `input()` всегда приводит к EOF. Подтверждение **обязательно читать только из реального интерактивного `/dev/tty`** и до резервной копии и каких-либо мутаций; отсутствие TTY/неверная фраза/EOF/неполная строка — жёсткий отказ без изменений. Не разрешать подтверждение через pipe/stdin и не ослаблять CI-only `--yes-disposable`. Автоматическим тестом проверить успех при вводе через PTY и отказ без терминала; на OPNsense проверить, что точная фраза действительно запрашивается и принимается. Наблюдавшийся на опубликованном `_33.pkg` `PURGE REFUSED: EOF when reading a line` является воспроизводимым дефектом, а **не успешным выполнением purge**.
+4. При обнаружении неизвестного/чужого владельца процесса, FD9, подозрительного IPFW-правила, неподтверждённой принадлежности файла, ошибки сохранения backup или незавершённой транзакции — отказ **до соответствующей необратимой операции** с понятным отчётом. Никаких принудительных `killall`, `rm -rf` неопределённых корней, очистки всего `config.xml` или общего `pkg autoremove`.
+5. При подтверждённом **полном** purge удалить также **только** выделенный файл репозитория проекта (`/usr/local/etc/pkg/repos/zapret2-restyle.conf`), проверив, что это файл именно Zapret2Restyle. Отдельный флаг `--keep-repo` позволяет сохранить его для быстрой переустановки через Firmware GUI; тогда это явно отмеченный *не полностью чистый по репозиторию* режим. Никогда не удалять другие `pkg`-репозитории. В dry-run и результате указать, остаётся ли доступна повторная установка через Firmware GUI.
+
+### 1.2. Область очистки
+
+- Штатно удалить `os-zapret2-restyle` через родной пакетный/firmware путь, если он установлен, соблюдая его native pre/post hooks и проверку владельца; отдельно снять firmware registration только через OPNsense-supported механизм. Случай «пакет уже удалён» должен поддерживаться.
+- **Обязательная двухсторонняя проверка CL-01-PERSIST:** (а) installed → confirmed full purge → отсутствуют pkg, исполняемый purge, Config/runtime/resources/IPFW; (б) installed → native Firmware GUI uninstall → установленный по прежнему пути purge исполняется и делает `--dry-run` при package absent → confirmed full purge → исчезает также сам скрипт, сохраняются посторонние данные. Обычный uninstall никогда не запрашивает destructive consent и не делает backup/очистку.
+- Остановить **только подтверждённый** Zapret2 runtime/Voice/Lab, проверить отсутствие принадлежащих ему `dvtws2`/supervisor/worker процессов и освобождение собственных IPFW-правил. Не трогать чужие диапазоны/объекты и не отключать PF.
+- Удалить **только** `OPNsense.Zapret` subtree из нативного OPNsense Config API под Config lock; сохранить все иные разделы `config.xml`, в том числе системные, другие плагины, interfaces, firewall и firmware metadata вне штатного unregister. Перегенерировать/инвалидировать меню поддерживаемым механизмом.
+- Удалить полностью подтверждённые Zapret2-only runtime и данные: `/usr/local/etc/zapret2` (включая upstream Git, скомпилированные бинарники, пользовательские/дополнительные Lua/BIN и runtime config), `/var/db/zapret2-restyle` и другие точно принадлежащие плагину runtime/rollback/extra-resources/Strategy Lab каталоги, `/var/log/zapret2`, подтверждённые `/var/run/zapret2*`, принадлежащие пакету или оставшиеся orphan-пути меню/скриптов/templates/actions. Проверять ownership/realpath/symlink границы до удаления; не следовать внешним symlink.
+- Сначала инвентаризировать все дополнительные каталоги из текущей реализации. Не считать приведённый список путей исчерпывающим и не удалять по широкому шаблону без проверки фактических пользователей.
+- Не удалять общие зависимости (`git`, `jq`, `luajit`, `python`, `curl-impersonate` и т.п.), OPNsense/FreeBSD-модули, пользовательские внешние ресурсы или не принадлежащие плагину общие логи.
+
+### 1.3. Подтверждение результата
+
+`CL-01 PASS` только при подтверждённых **обоих** путях (пакет установлен / пакет уже удалён обычным способом) с сохранившимся до purge CLI и отсутствующим после него файлом; только если после полного purge: пакет, firmware registration и выделенный конфиг репозитория Zapret2Restyle отсутствуют (кроме явного `--keep-repo`); все ссылки GUI Zapret2 отсутствуют **без F5/Ctrl+F5 как обязательного обхода**; нет `OPNsense.Zapret` в Config, runtime, собственных worker/PID/state/jobs/logs/extra Lua/BIN, собственных IPFW-правил; другие плагины/Config/pkg repos/общие пакеты не изменились; повторный dry-run не обнаруживает остатков и безопасно повторяется (идемпотентность). Результат — русско/английское отчётное сообщение по локали при интеграции с GUI, машинный exit-code и приватный диагностический отчёт. Backup сохраняется вне очищаемых директорий до отдельного действия пользователя.
+
+**Отдельный контракт:** обычное удаление пакета **НЕ** использует `CL-01` и НЕ удаляет сохранённые параметры, загруженный upstream, Lua/BIN и extra-resources; оно только штатно останавливает службу и удаляет страницы/регистрацию пакета (см. `LC-02`), **оставляя самостоятельный root CLI purge-файл по прежнему пути**.
+
+## 2. Обычное удаление из OPNsense GUI
+
+**ID LC-02, P0, #971.** После `System → Firmware → Plugins → Uninstall` пункты `Services → Zapret DPI Bypass → Strategy / Voice Transmission / Laboratory` исчезают сразу после завершения штатной операции и перестают существовать в серверном меню. Никаких «Страница не найдена» от старых пунктов после F5 и Ctrl+F5. Исправить штатную регенерацию/invalidation меню OPNsense и firmware registration; установить точную причину до выбора изменения в post-deinstall. Не требовать purge, удаления Config или перезапуска всего OPNsense. Проверять другие меню и повторную установку.
+
+Сохранение пункта **доступного пакета** в Community Plugins при включённом Zapret2Restyle-репозитории — нормальное поведение, не путать с устаревшим меню Services.
+
+## 3. Пакет, upstream и первая установка через GUI
+
+**ID LC-03, P0, #970.** На чистой OPNsense native `pkg` устанавливает плагин и показывает страницы GUI; upstream runtime может устанавливаться как отдельный этап **только через штатную верхнюю кнопку «Применить»** на выбранном релизе. Отсутствие `dvtws2` не блокирует верхнюю кнопку. GUI делает реальный POST `/api/zapret/service/install` и показывает принятие/ход/успех/ошибку.
+
+**ID LC-04, P0.** Контроллер `ServiceController.php` → configd `setup_install` → `setup_launcher.sh` → `setup_transaction.sh` → `setup.sh` поддерживает **первую установку без предыдущего Git HEAD, предыдущего release marker и previous binaries**. Не подделывать старую идентичность и не отключать original FD9, `setup.lock`, проверку владельца или действующую транзакционность обновлений. Для первого запуска отдельная семантика отсутствующего предыдущего состояния: до мутации безопасные preflight; после неуспеха — доказуемое возвратное «нет установленного runtime» либо сохранённая явно диагностируемая recovery-ситуация, а не мнимый успешный setup. Существующий update/downgrade/reinstall сохраняет прежний полноценный rollback до старого runtime. Состояния частичного Git checkout, отсутствующего executable, прерванной компиляции и повторной установки проверяются отдельно.
+
+Нельзя переносить сетевую компиляцию/обновление системных `pkg` в `+POST_INSTALL`. Без SSH/ручного `setup.sh` должен существовать полный путь через GUI. Публикуемый README и postinstall-текст должны описывать один поддерживаемый GUI-first сценарий; ручная CLI-команда остаётся диагностическим/экспертным вариантом.
+
+## 4. Стартовые значения полей после истинно чистой установки
+
+**ID LC-05, P0 (уточнено владельцем 8 ноября 2026).** При самой первой установке пакета, если **в штатном `config.xml` отсутствует весь сохранённый узел `OPNsense.Zapret`**, под нативной блокировкой Config один раз записать и сохранить через штатную модель `OPNsense\Zapret\Zapret`, `serializeToConfig()` и `Config::save()` два **точно заданных владельцем** значения. Страница GUI впоследствии только читает сохранённые данные, как если бы пользователь сам ввёл и сохранил их. В обоих случаях сохраняются **строки и порядок**, без дополнительных доменов, скрытых профилей или автоматической нормализации стратегии.
+
+**YouTube Domains** (`<HOSTLIST:youtube>`, ровно десять строк):
+
+~~~text
+youtube.com
+googlevideo.com
+yt.be
+youtu.be
+ytimg.com
+youtubei.googleapis.com
+youtube.googleapis.com
+youtube-nocookie.com
+ggpht.com
+ssl.gstatic.com
+~~~
+
+**Traffic Strategy** — один совмещённый TCP HTTP/TLS профиль и второй UDP/QUIC профиль; **один** разделитель `--new` между ними, **без** завершающего `--new`:
+
+~~~text
+--filter-tcp=80,443
+--filter-l7=http,tls
+<HOSTLIST:youtube>
+--blob=http_iana_org
+--out-range=-d10
+--payload=http_req
+--lua-desync=fake:blob=http_iana_org:tcp_md5
+--lua-desync=multisplit:pos=method+2
+--payload=tls_client_hello
+--lua-desync=multisplit:pos=midsld:seqovl=1
+
+--new
+
+--filter-udp=443
+--filter-l7=quic
+<HOSTLIST:youtube>
+--out-range=-d10
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=5
+~~~
+
+`Enabled` по умолчанию **OFF**, `WAN Interface` не выбирается автоматически; первоначальная запись не должна запускать службу, создавать rules или автоматически скачивать дополнительные ресурсы. **Единственное разрешённое место записи стартовых данных — штатная initial-Config операция из `+POST_INSTALL`, после firmware registration и до template reload.** Используются только два поля `strategy.trafficargs` и `hostlist.youtubedomains` с утверждёнными строками. Никаких `<Default>` в XML-модели, `init()`-подстановок, GUI/read-time fallback, флагов `first_run`, отдельного конфигурационного хранилища и повторного «backfill» быть не должно. GUI показывает уже **сохранённые** данные до установки upstream runtime; они видны после F5. Если узел `OPNsense.Zapret` существует **даже полностью пустой или с удалённой пользователем стратегией**, никакая инициализация и никакой `Config::save()` не выполняются ни при F5, ни при обновлении, переустановке или восстановлении. Только явно деструктивный purge CL-01 удаляет весь узел и делает новую истинно чистую установку возможной. Не путать отсутствие Zapret-конфигурации с нормальным присутствием системных секций `config.xml` OPNsense.
+
+### 4.1. Проверенная исходная совместимость и обязательный installed-native тест
+
+**Evidence реализации LC-05 (9 ноября 2026):** PR [#982](https://github.com/Tolian82/os-zapret2-restyle/pull/982), merge `151a8054` (`v0.6.3_8`), закрепил штатную однократную запись двух полей в `/conf/config.xml` через модель + `Config::save()` из `+POST_INSTALL`; без read-time defaults и без изменений при существующем/пустом узле Zapret. [Настоящий установленный OPNsense 26.7 witness](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42522906720): `PASS_G04_INITIAL_NATIVE_CONFIG_AND_EMPTY_REINSTALL`, включая повторную установку одного физического пакета с сохранёнными пустыми пользовательскими значениями. Это **SOURCE + INSTALLED-CI PASS только для native Config**, не проверка браузера/F5 у владельца и не доказательство A06 `dvtws2`/Apply/Start. Остальные требования этого раздела остаются обязательными.
+
+**Evidence реального A06 parser/engine Start/Stop (9 ноября 2026):** [PR #983](https://github.com/Tolian82/os-zapret2-restyle/pull/983), merge `ba4d4d4f`, [installed OPNsense 26.7 native #42526188241](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42526188241) SUCCESS: оригинальный `v1.0.7` собран через штатную установку, два сохранённых TCP/QUIC профиля и десять доменов разрешены, реальный `dvtws2 --dry-run` принят, отдельные TCP/UDP divert-правила на `lo0` и реальный PID подтверждены, Stop и повторная установка одного физического пакета прошли. **Это не подтверждает вызов через GUI/HTTPS Apply**, физический browser-click, WAN или успех обхода DPI. Следующий точечный G04 `_10` проверяет именно установленный авторизованный Settings Apply с CSRF и общей транзакцией FD9.
+
+- `bol-van/zapret2 v1.0.7` штатно содержит `files/fake/http_iana_org.bin`, функции `fake` и `multisplit`, а также встроенный `fake_default_quic`. **Не нужны дополнительные Lua/BIN-пакеты** для предложенного стартового профиля.
+- `--blob=http_iana_org` — **синтаксис сокращения нашего плагина**: `backend/blobs.sh` обязан развернуть его в настоящий upstream аргумент `--blob=http_iana_org:@.../files/fake/http_iana_org.bin`; передача сокращения непосредственно сырому `dvtws2` без резолвера не считается поддержанным сценарием. Для QUIC отдельный файл `fake_default_quic.bin` не нужен, это встроенная переменная.
+- `--payload=http_req` и `--payload=tls_client_hello` делят действия по пейлоаду внутри одного профиля TCP; `--new` отделяет второй профиль UDP, а **завершающий `--new` в нашем `backend/parser.sh` запрещён**, поскольку создаёт пустой профиль.
+- До приёмки выполнить **полный настоящий native parser → hostlist resolver → blob resolver → generator → validator → `dvtws2 --dry-run` → service Apply/Start** на чистой OPNsense 26.7 / FreeBSD 15 с оригинальным `v1.0.7`, без optional Additional Resources, на **ровно десяти доменах и неизменном тексте стратегии**. Проверить созданные TCP/UDP scoped IPFW правила, корректный active process и возможность Stop; отдельно тестировать разные HTTP/TLS/QUIC запросы, не выдавая обычную доступность цели за результат DPI-bypass. **Installed-native parser/engine/lo0 Start/Stop PASS на `_9`**, но GUI/API Apply с cookie/CSRF и физический браузер владельца остаются отдельными проверками до завершения G04/G11.
+- `tls7.bin` **не требуется** и не должен попадать в стартовую конфигурацию. Исторический отказ прежнего шаблона остаётся записанным в исторических файлах, но прежний **активный** blocker «добыть tls7.bin» **снят новым выбором владельца**. Если настоящий native тест обнаружит другую ошибку, устранить именно её, не подменяя утверждённый шаблон.
+
+## 5. Независимое сохранение WAN и пустая стратегия
+
+**ID LC-06, P0.** `WAN Interface` сохраняется при пустых `Traffic Strategy`, Domain Lists и IPSet, при выключенном `Enabled`, при отсутствующем или остановленном upstream, без запуска runtime и без изменения IPFW. Валидировать существование/назначение интерфейса штатными средствами OPNsense; сохранять только реальные изменённые поля. Не пропускать безопасное сохранение WAN через обязательную сборку непустых dvtws-аргументов. Совместить с действующей моделью Config lock/FD9 и атомарностью обычного активного Apply. При уже работающей службе смена WAN — полноценная защищённая runtime-транзакция, не «только Save».
+
+### 5.1. Обязательный для всего проекта инвариант WAN-first
+
+**ID LC-06A, P0, решение владельца 9 ноября 2026.** Сохранённый в штатном OPNsense `general.waninterface` WAN — **первичная обязательная предпосылка любого запуска dvtws2**: обычный Start/Restart/reboot, общий Strategies+Voice, Voice-only, Standard/Extended/Circular Laboratory, прямой configd и внутренний worker. **Первым предметным preflight до бинарника/upstream, стратегии, списков, Voice-параметров, создания Job, подготовки engine и изменения IPFW** проверить, выбран ли WAN. Если отсутствует: стабильный код `wan-required`, **RU:** «Укажите WAN интерфейс»; **EN:** “Select a WAN interface”. Если отсутствует и WAN, и движок, и валидная стратегия — первым сообщается только WAN. Если WAN непустой, но не сопоставляется с реально назначенным kernel interface (включая TUN/OPT без IPv4), выдавать отдельную ошибку `wan-invalid` с причиной. Использовать сохранённое/эффективное значение, а не несохранённый dropdown.
+
+**ID LC-06B, P0.** WAN выбирается и сохраняется **до upstream, первого dvtws2 и IPFW**, при Enabled=OFF, пустых пользовательских профилях/списках: только existing Config, SharedConfigCommit и original FD9, без нового Config writer. `WAN-only Save` не вызывает runtime-build/запуск/правила и не требует уже существующего владельца процесса. Отсутствие WAN **не блокирует** Stop, штатные установку/setup, удаление, recovery и пассивное сохранение настроек (без запуска). Если есть действующий/зарегистрированный общий владелец, сохранять native transactional Apply/rollback. Отсутствие PID не доказывает отсутствие аварийно оставшихся IPFW-правил: scoped owner/kernel safety gates сохраняются.
+
+**ID LC-06C, P0.** Обязательная проектная ревизия всех входов GUI/API/configd/CLI, reboot, Shared Apply, обычной службы, Voice и лабораторий, включая прямые рабочие скрипты: нельзя обойти раннюю проверку WAN другим входом, а generic runtime/preflight не должен скрывать `wan-required`. В одном Apply можно явно назначить WAN и другие параметры; проверять *кандидатный* WAN до проверки остальных полей и до запуска. Пустой кандидат запрещает только активирующие операции, но не инертные черновики. Ранний guard дополняет, а не отменяет последующие проверки допустимости интерфейса, процессов, FD9, IPFW и rollback.
+
+**ID LC-06E, P0, уточнение после owner-live `_43`, заменяет излишне узкий допуск LC-06D.** На первой чистой установке плагин заполняет *настоящий* `config.xml` стратегией TCP+QUIC и десятью YouTube Domains даже когда пользователь ничего не вводил. Нижний пассивный Strategies Apply, когда `general.enabled=0`, все Voice OFF и read-only native status достоверно подтверждает `installed=0`, обязан показывать RU **«Требуется установка службы zapret2»** / EN **“The zapret2 service must be installed”** независимо от предзаполненной стратегии, реально неизменённого POST или *ещё не сохранённой* очистки этих полей. Изменение WAN всегда проходит существующую первичную проверку и транзакцию, а не этот shortcut; фактическая активация и изменения WAN-first не маскируются. Никаких Config/IPFW/процессов/Job/FD9 мутаций; native G11 тестировать **с начальным seed**, а не после вызова фикстуры, удаляющей его.
+
+**Owner-live LC-06E P0 re-opened on published v0.6.3_47 (10.11.2026):** After real full purge and clean package installation, lower inactive Strategies Apply with missing upstream still returned the generic RU preflight refusal. The missing-upstream check must run before any full candidate overlay and normalization when WAN stays unchanged and no engine or Voice activation is requested, even when the first-install configuration is preseeded or optional Voice nodes are absent. API must provide stable reason `runtime-not-installed`; RU/EN browser localization must select the exact requested notification independently of PHP gettext locale. Verification requires actual rendered RU and EN GUI text, unchanged Config/IPFW/processes, continued WAN-first priority and independent WAN-only Save. Stage50 owner failures with `process-and-divert-unavailable` on the same physical package remain P0 OPEN; do not assume permissions or timeouts until bounded runtime evidence identifies the cause.
+
+**ID LC-06D, P0, уточнение владельца по результатам G11 10.11.2026.** При *одновременно* отсутствующем установленном upstream/runtime и полностью пустых полях первого неактивирующего нижнего «Применить», которое не содержит сохраняемого изменения, вместо общего сообщения «Предварительная проверка настроек не пройдена. Изменения не применены.» выводить **RU** «Требуется установка службы zapret2», **EN** “The zapret2 service must be installed”. Это строго ограниченный диагностический отказ без изменения Config, Job, процессов или IPFW. **Не подменять им** обязательное WAN-first (`wan-required`/`wan-invalid`) для любого фактического запуска/активации dvtws2 и **не блокировать** сохраняемое WAN-only изменение до установки upstream, включая пустую стратегию/Enabled=OFF. Проверить реальный ответ backend и штатный dropdown WAN в GUI при полностью пустой конфигурации; статус/локаль должны быть основаны на достоверном read-only runtime-состоянии, не на слепом переводе любого preflight FAIL.
+
+**ID LC-07, P0.** Явная пользовательская пустая `Traffic Strategy` допустима как сохранённое значение. Проверить **на настоящем FreeBSD `dvtws2 v1.0.7`** работу без пользовательских профилей: upstream `nfq2/nfqws.c` создаёт `no_action` и не содержит прямого запрета нулевых десинхронизационных действий, но это **лишь исходное свидетельство**, не доказанный реальный запуск. Тест отдельно: executable+`--dry-run` с валидным DIVERT-портом; реальное включение в изолированной OPNsense; отсутствие действий над пакетами, устойчивость PID, Stop/Restart, конфигурация и IPFW.
+
+- **Если реально подтверждено**, снять ненужные локальные запреты `TRAFFIC_ARGS` из `orchestrator.sh`, `generator.sh`, `validator.sh` и остальных call sites именно для семантически пустого безопасного профиля. Движок может запуститься с нулём пользовательских действий, но **не устанавливать IPFW-перехват обычного трафика без применимых обычных профилей**.
+- **Если реальный dvtws2 не поддерживает устойчивый пустой запуск**, реализовать минимальное управляемое «enabled, no active ordinary profile» без ошибочного захвата трафика и без ложного отчёта «Запущена»: сохранение `Enabled` разрешено, GUI однозначно отражает реальное состояние (например, `Остановлена` до появления действующего engine-профиля), а переход после добавления профиля происходит обычным Apply. Не создавать фиктивную активную стратегию.
+- При добавлении первой валидной стратегии — штатный транзакционный Apply запускает/переконфигурирует runtime и только соответствующие правила; при удалении последней — перевод обратно в безопасный неактивный режим с полной проверкой снятия своих правил.
+- **Voice Transmission при пустой обычной стратегии:** если пользователь включил валидные Voice-профили, один общий native `dvtws2` продолжает обслуживать только эти UDP/Voice правила без обязательной обычной TCP-стратегии; никакого второго независимого движка. Переход Voice-only ↔ Voice+Strategies ↔ no-active-profiles атомарен и сохраняет original FD9, процессы и ownership.
+- Предустановленную непустую стратегию из `LC-05` можно **целиком удалить вручную**, затем сохранять пустое значение без автоматического повторного заполнения. Это обязательно тестировать.
+
+**ID LC-08, P0, #972.** Из настоящего чистого состояния обеспечить через GUI Start, Stop, Restart, Apply, последующий reboot-start и повторную настройку; проверять runtime/process/IPFW, а не только HTTP 200. Если установленная служба не стартовала — показывать точную безопасную причину (например, disabled, WAN missing, asset missing, invalid strategy, native preflight, runtime build) вместо молчаливого обновления статуса. При отсутствии WAN обязательный первичный диагностический отказ `wan-required`, до остальных проверок. Если выбранный WAN неразрешим — `wan-invalid`; дальше проверять фактические ошибки.
+
+## 6. Ровно пять пользовательских статусов и локализация
+
+**ID LC-09, P0.** Только перечисленные **пять** видимых категорий (с переводом, соответствующим локали OPNsense):
+
+| Фактическое состояние | Русский | English |
+|---|---|---|
+| Движок отсутствует, установки не было | Не установлен | Not installed |
+| Идёт подтверждённая операция установки | Установка… | Installing… |
+| Движок установлен, обычная служба остановлена | Остановлена | Stopped |
+| Служба фактически запущена, готовность проверена | Запущена | Started |
+| Реальная ошибка установки/управления, неполное/неопределённое состояние | Ошибка | Error |
+
+**Никаких «Требуется проверка» как шестого статуса.** В неизвестном или неоднозначном состоянии backend не может объявлять `installed=0` или `stopped` лишь для красоты: он обязан проверять признаки действительной установки, PID, бинарник, release marker, setup/result и признаки неполной транзакции; безопасно классифицировать как `Ошибка` и **показывать конкретное диагностическое описание/код** без опасного автоматического восстановления. GUI не лжёт о запущенном движке: `Запущена` — только после верифицированного действительного active runtime. Отдельные этапы/диагностика могут быть показаны под статусом, но не заменять его.
+
+**ID LC-10, P1.** Все сообщения setup/install/start/stop/restart/apply/validation/Strategy Lab/cleanup, ошибки/причины и кнопки — на **русском или английском по настройкам пользователя**. Технические коды могут быть машинными, но содержимое GUI — локализованным; ошибки не скрывать ни в success, ни в fail AJAX callback. API возвращает устойчивую семантику ошибок для обоих языков, не заменяет ошибку общим «preflight failed» без доступной причины/этапа. Одновременная загрузка/таймаут не считается доказанным отказом: запрос коррелировать со status/recovery, избегая дублирующей транзакции.
+
+## 7. Лаборатория до первого старта Zapret2
+
+**ID LC-11, P0, #972/#973.** Обе лаборатории — `Standard` и `Extended` — можно запускать даже если `Enabled=OFF`, общий сервис `Stopped` и ни разу не запускался; необходимо только корректно установленное upstream-ядро, сохранённый и разрешаемый WAN и целевая проверка. Не требовать наличия настоящей Traffic Strategy, ранее запущенного `dvtws2`, обычных hostlists/IPSet или готового штатного runtime-профиля. Lab получает временную собственную стратегию и завершает проверенное восстановление первоначального состояния, не записывая стратегию в Config автоматически.
+
+**ID LC-12, P0.** До создания Job или любых побочных действий одинаковый на GUI и сервере preflight с **таким порядком**:
+
+1. **Первым — сохранённый WAN.** Если отсутствует, немедленный отказ `wan-required` — **RU:** «Укажите WAN интерфейс» / **EN:** “Select a WAN interface”, в том числе если upstream тоже отсутствует. Выбранный, но неразрешимый WAN — отдельный `wan-invalid` с точной причиной, до Job/PID/IPFW.
+2. **Вторым — движок.** Если upstream действительно отсутствует: **RU:** «Служба zapret2 не установлена» / **EN:** “The zapret2 service is not installed”.
+3. Если обе проверки PASS — запустить Lab при `Stopped` либо `Started`; сохранить исходный state, single FD9 owner, корректно остановить/временно заменить runtime при необходимости и строго восстановить состояние/свои IPFW после completion, cancel, error, timeout и неуспешного поиска.
+4. Проверять именно **сохранённый WAN**, а не несохранённый dropdown в другой вкладке. Для впервые выбранного WAN пользователь может сначала сохранить его посредством `LC-06` без службы/стратегий. Действующая WAN/IPv6 family policy Lab сохраняется.
+
+**ID LC-12A, P0, owner-live `v0.6.3_40` (10.11.2026).** Stage 50 не должен иметь отдельный неполный WAN resolver: использовать штатный `config_resolve_interface()` с сохранённым/сгенерированным WAN, защищённым предыдущим WAN-first admission, и его проверенным `pluginctl -4` → `pluginctl -g interfaces.<logical>.if` fallback для назначенных TUN/OPT без IPv4. Запрещено обходить original FD9, заменять `wan-invalid` на NO_CANDIDATE либо считать инфраструктурный сбой успешным поиском. В нативной OPNsense воспроизвести STOPPED и RUNNING Stage50 с реальным назначенным WAN, проверить подготовку и очистку собственных правил, дальнейшие стадии и строгую Stage90 восстановительную проверку.
+
+**ID LC-12B, P0, owner-live `v0.6.3_40` (10.11.2026).** При настоящем `RUNNING` с семантически пустой стратегией/no-action и нулём обычных IPFW-правил Stage10 обязан принимать доказанный `normal_firewall_hash=empty` как **законный**, а не автоматически как `INCOMPLETE`, но только после независимого штатного `strategy-lab-status` и проверки PID/supervisor, effective Config, args, FD9 и владельца. STOPPED по-прежнему требует отсутствия firewall; corrupt/foreign state, потерянный PID, mismatch pre/post hashes или остатки временных IPFW остаются отказом. Проверить RUNNING→RUNNING и STOPPED→STOPPED, Voice-only, no-action, отрицательные owners и реальные Stage90/99; исторический PASS на непустом профиле не закрывает этот gate.
+
+**ID LC-12C, P0, подтверждено owner-live на `v0.6.3_43` (10.11.2026).** Запрещён любой независимый источник WAN для кандидата Stage50, включая устаревший/отсутствующий генератор `/usr/local/etc/zapret2/zapret.conf`. После обязательного WAN-first из сохранённого OPNsense Config адаптер должен получать **проверенный физический интерфейс из того же native `wan_preflight`**, включая назначенные OPT/TUN без IPv4; отсутствие или устаревание сгенерированного файла не влияет на это разрешение. В native OPNsense проверять реальный Stage50 при отсутствии и несоответствии generated WAN_IF без правки реального Config и owned IPFW, затем требовать отдельную PID/process/divert/readiness верификацию **каждого** кандидата и исходный Stage90 STOPPED/RUNNING. Действующий `STRATEGY_LAB_WAN_DEVICE` не может по умолчанию обходить WAN-first: только явный изолированный FreeBSD/mock fixture opt-in, не production authority. Полученный от владельца `candidate system adapter wan failed` до `dvtws2` не является `candidate runtime did not become ready`: второе сообщение требует реального `readiness.json`, PID/socket/log диагностики, не подлежит исправлению предположениями.
+
+**ID LC-12D, P0, диагностика временного `dvtws2` на owner RUNNING (10.11.2026).** Если Stage50 прошёл WAN/правила и сделал `launch`, но readiness не достигнута, сохранять фактическую отдельную причину (`process-and-divert-unavailable`, `process-identity-unverified`, `divert-socket-unavailable`, `readiness-not-stable`, `engine-fatal-log`, `snapshot-unavailable`) и количество реально проведённых наблюдений вместе с безопасным PID/socket/log evidence. Не подменять её одним общим `candidate runtime did not become ready`, не выводить пользовательские аргументы, hostlist, секреты или весь stderr. Три начальных readiness poll остаются до появления доказательств обратного; запрещено выдавать увеличение таймаута за устранение причины без квалификации на физическом владельце. Stage90, FD9, foreign IPFW и RUNNING→RUNNING обязательны.
+
+**ID LC-12E, P0, G11 RUNNING Stage50 owner-failure coverage (10.11.2026).** Existing G06 native CI previously canceled the RUNNING Lab job as soon as Stage10 completed, therefore it could not qualify owner-live `candidate runtime did not become ready` after initial RUNNING. Extend the **same** disposable OPNsense 26.7 G06 guest after native original-FD9 Apply with nonempty ordinary strategy and enabled Voice: select a genuinely routed **public TCP/443-negative control**, run native Lab until **all Stage50 families** finish, require each temporary candidate's exact `runtime.ready=true`, process identity, divert socket, clean log, and >=2 stable samples, then cancel via normal API and require Stage90+99 PASS with final RUNNING, same FD9 commit id, byte-identical user Config and runtime artifacts, identical owned rules/foreign IPFW and no active Lab job. Keep the existing cold/no-action Stage10 witness separately; no new VM workflow, no second writer, no process/IPFW mutation outside the original disposable-gated native runner. A public network-negative control proves **runtime infrastructure only**, never real blocked YouTube/DPI or owner hardware qualification. Do not publish a new test package or close P0 #1022 solely on this fixture.
+
+**ID LC-12F, P0, реальная owner-live диагностика v0.6.3_47 (10.11.2026), #1022.** В двух сохранённых заданиях с реальным WAN vtnet1 и в watch на физической OPNsense Stage50 dvtws2 успешно загрузил hostlist, открыл divert4, затем после перехода в UID/GID 65534 (nobody) завершился с `file_open_test: Permission denied` / `cannot access hostlist file`. Это **не** WAN/IPFW/timeout root cause: путь `/var/run/zapret2-restyle/strategy-lab/jobs/job.*/candidate-runtime/hostlist.txt` пересекает родительский каталог `/var/run/zapret2-restyle=0750 root:wheel`, недоступный nobody несмотря на file 0644, job dir 0711 и candidate-runtime 0755. Требование: **не изменять права общего runtime** и не отключать `--user=nobody`. Передавать движку только атомарно подготовленную временную hostlist-копию в root-owned непривилегированно-незаписываемом пространстве `/var/run` с точным владельцем `root:nobody`, режимом `0640` и проверенным достижимым путём; остальные Job/Config/runtime остаются приватными. После завершения, отказа и отмены копия удаляется только после подтверждения остановки принадлежащего процесса; чужие файлы/правила и FD9 сохраняются. Любой `file_open_test`, `cannot access hostlist file` или `Permission denied` в dvtws2.log — настоящая фатальная ошибка `engine-fatal-log`, а не `log_clean=true`. Регрессия: живое чтение hostlist от UID nobody при родителе Job 0750; отдельный запрет чтения private Job/hostlist другим UID, проверка обратной очистки и native Stage50/90/99 STOPPED+RUNNING при оригинальном FD9. Иначе реальная G11 остаётся OPEN; успех тестового lo0 не доказывает owner DPI.
+
+**ID LC-13, P0, #973.** Исследовать действительный exit/error Stage 60 из сохранённого Job, включая Stage-50 no-family и worker/parallel runner/log. При корректном отсутствии кандидатов — завершать с честным `NO_CANDIDATE` (не внутренним Stage-60 `ERROR`); при настоящей ошибке сохранить диагностическое основание и строгий Stage-90 cleanup. Не скрывать её как PASS и не возвращать старое успешное доказательство на уже доступном сайте как проверку заблокированного TLS-сценария.
+
+## 8. Обновления, переустановка, Voice, Extra Resources и безопасность
+
+**ID LC-14, P0.** Тот же продукт обязан оставаться корректным при обычном `pkg`/GUI update, version downgrade/reinstall, повторном Apply/Start/Stop, reboot, выключенном и запущенном общем сервисе, включённых Voice-профилях и дополнительных Lua/BIN. Важные инварианты:
+
+- Условия `RUNNING→RUNNING`, `STOPPED→STOPPED` и атомарный отказ/восстановление сохранены там, где речь о существующем runtime; no-profile и first-install — **новые явные состояния**, а не повод ослабить охрану существующих.
+- Сохранение чужого Config, scope-only IPFW, профилей Voice, managed/unmanaged additional Lua/BIN, полей `!`/`^` и native dvtws2 синтаксиса.
+- Обычный uninstall сохраняет перечисленные пользовательские данные и после reinstall возвращает их без дубликатов меню, демонов, rules и первичных defaults.
+- Не допускать скрытого старта ранее включённой Voice только от переустановки пакета, если штатная политика сохраняет STOPPED. При явном Start использовать конфигурацию Voice как сохранена и гарантировать общий owner.
+
+## 8.1. Новый обязательный порядок предварительной и пользовательской приёмки (10.11.2026)
+
+**ID LC-16, P0.** Сначала обновление **уже установленного** плагина, затем штатное удаление с сохранением данных и повторная установка, только затем полный purge и чистая установка. Прежняя пятишаговая последовательность G11 заменена следующей **строго девятишаговой** последовательностью; раздельные прогоны нельзя выдавать за полную приёмку.
+
+**Поставка (решение владельца 10.11.2026): только неизменяемый GitHub `.pkg` — без внешнего SH-установщика.** `CHAT-027` требует `fetch -o /root/os-zapret2-restyle-<версия>.pkg <URL>` → `pkg add -f /root/os-zapret2-restyle-<версия>.pkg` → `pkg info -x os-zapret2-restyle`. Версия, ABI, SHA-256 и манифест проверяются перед публикацией. На чистой системе отсутствующие зависимости сначала разрешают по манифесту только через официальный `pkg install -r OPNsense`, в штатной интерактивной транзакции; `pkg add -f` не загружает их автоматически. Без отдельного testing pkg-репозитория, без сторонних FreeBSD репозиториев, без `pkg add -M`/обхода hooks, без `pkg install -f /path/to/archive.pkg` (зарегистрирован сбой solver). Опубликованные в прошлом `.sh`-файлы являются неизменяемыми историческими assets, но больше не предлагаются к установке.
+
+1. **Обновить действующую установку без предварительного удаления:** тем же опубликованным локальным `.pkg` через штатный `pkg add -f` по `CHAT-027`, с реальными `pkg` hooks; запомнить предыдущее состояние и проверить сохранность конфигурации.
+2. **Полностью проверить функции после обновления:** GUI и все настройки, WAN-first, Strategies, Exclude/Targets, Voice, Extra Lua/BIN, Start/Stop/Restart/Apply, Standard/Extended Lab и восстановление, статусы RU/EN, перезагрузку. При дефекте остановиться до удаления.
+3. **Штатно удалить плагин в GUI** (без purge), убедившись в исчезновении пунктов меню/службы/собственных IPFW при сохранённых Config/upstream/resources.
+4. **Переустановить опубликованный локальный пакет**, снова через тот же `fetch → pkg add -f → pkg info` без нового pkg-репозитория и без самостоятельной проверки SHA.
+5. **Подтвердить сохранение ВСЕХ пользовательских параметров:** включая сознательно пустые поля, WAN, стратегии, Exclude, Voice, пользовательские Lua/BIN; не записывать начальные шаблоны в существующую конфигурацию.
+6. **Повторить всю функциональную проверку из шага 2** после обычного удаления и переустановки.
+7. **Выполнить полный purge установленным вместе с пакетом локальным скриптом:** сначала `--dry-run`, затем отдельный `--purge` с действующим подтверждением/приватным backup. Скрипт выполняет штатное удаление плагина и проверенную очистку Zapret-only данных, включая **самого себя** (поддержать безопасное продолжение работы после удаления файла из pkg). Проверить отсутствие остаточного меню, файлов, Config-поддерева, runtime, принадлежащих процессов/IPFW и сохранность чужих настроек.
+8. **Снова установить тот же опубликованный локальный пакет** штатной последовательностью `.pkg`: `fetch → pkg add -f → pkg info`; без какого-либо внешнего установщика, отдельного тестового репозитория или пропуска штатных hooks. В `config.xml` на этот раз нет прежних параметров плагина.
+9. **Выполнить полную приёмку чистой установки** по A01–A22: точные первоначальные YouTube Domains/Traffic Strategy, первый upstream setup через GUI, WAN-only Save, пустая стратегия и Voice-only, Lab до первого старта, реальные Start/Apply/Stop, RU/EN, Stage 60, reboot/recovery и отсутствие регрессий.
+
+**Обязательное условие ДО начала пользовательской приёмки:** разработчик предварительно испытывает точно эту последовательность на одноразовой OPNsense 26.7/FreeBSD 15 с настоящим опубликованным `.pkg`, штатными hooks и установленным purge-скриптом. Проверяются и RUNNING/STOPPED upgrade, и обычное удаление/восстановление данных, и self-delete скрипта с backup, и полный применимый функционал до/после. Отдельно отмечаются только проверки, принципиально требующие реального оборудования/внешней сети пользователя: их нельзя объявлять прошедшими. Любой найденный дефект блокирует приглашение к финальной приёмке до исправления и повторного прогона. Релиз не публикуется автоматически.
+
+**Контракт публикации (решение владельца 10.11.2026):** в GUI «Стратегии» **не отображать** никакой раздел «Полезные ссылки» и никакие команды purge. Инструкции остаются только вне GUI: README, G01 guide, G11 runbook; пакет содержит исполняемый CLI-скрипт. `--dry-run` не изменяет состояние; `--purge` без подтверждения, в том числе при EOF, отказывает до очистки и backup. Обычный uninstall сохраняет пользовательские данные. Отсутствие запакованного скрипта или неполный девятишаговый gate блокирует полную приёмку.
+
+## 9. Обязательная матрица нативной приёмки
+
+**ID LC-15, P0.** Результат считается завершённым только для проверенного **точного source SHA и пакетного SHA**, на одноразовой настоящей OPNsense 26.7 и отдельно при owner-live GUI:
+
+| Проверка | Ожидаемый результат |
+|---|---|
+| A01 — Сначала CL-01 dry-run и полный purge на disposable госте | Чистый Config/runtime/pkg/repo/menu без повреждений других компонентов; повторный dry-run пуст |
+| A02 — Чистый локальный `.pkg` через `pkg add -f` (или штатный GUI в полном релизе) | GUI доступен; upstream `not installed`, сервис выключен, без SQL/manual-shell обходов |
+| A03 — Первый GUI выбранный `v1.0.7` + верхняя «Применить» | Реальный endpoint/transaction, installed runtime, установленный release, штатный STOPPED |
+| A04 — Заведомо прерванный первый setup + повтор | Без ложного previous release, безопасный rollback к отсутствию либо диагностируемое восстановление |
+| A05 — Первая страница настроек | Ровно 10 доменов в заданном порядке и точная TCP+QUIC стратегия с единственным `--new` между профилями; no automatic Enabled/WAN; после F5 пользовательские пустые значения не перезаписаны |
+| A06 — Стандартные upstream ресурсы и стартовые TCP+QUIC профили | Без Additional Resources: `http_iana_org.bin` найден, built-in `fake_default_quic` разрешён, placeholder/`--blob` обработаны; реальный parser/validator/`dvtws2 --dry-run`/GUI Apply/Start на чистом пакете PASS |
+| A07 — Выбор WAN при выключенном/отсутствующем runtime и пустых списках | Сохранено через GUI, reload/F5 сохраняет WAN, никаких owned IPFW-правил |
+| A08 — Удаление предустановленной стратегии и Apply | Пустое значение остаётся пустым, автоматически не восстановлено |
+| A09 — Empty `dvtws2` реальный тест | Однозначно доказана возможность бездействующего запуска ИЛИ честный управляемый inactive mode; ноль нежелательных IPFW-перехватов |
+| A10 — Первая валидная стратегия → Enabled → Apply → Start | Рабочий реальный PID/FD9/IPFW, честная GUI-индикация |
+| A11 — Voice-only при пустой ordinary strategy и переходы | Один native `dvtws2`, только Voice IPFW; сохранены пять профилей |
+| A12 — Standard Lab при Installed+WAN, обычная служба никогда не Start | Job создаётся, реальный поиск и restore STOPPED |
+| A13 — Extended Lab в том же состоянии | Job создаётся, реальный поиск и restore STOPPED |
+| A14 — Lab без runtime / без WAN | При обоих дефектах первым `wan-required`; после сохранения WAN без upstream — «не установлена». RU/EN до job/pid/rules в Standard/Extended/Circular |
+| A15 — Stage-50 no-family → Stage 60 | Необоснованный ERROR устранён; честная классификация без ложного PASS |
+| A16 — WAN отсутствует + invalid strategy/blob/runtime; недопустимый WAN | `wan-required` раньше остальных ошибок; для непустого, но неразрешимого WAN — `wan-invalid`; RU/EN и отсутствие IPFW/Config mutation |
+| A17 — Reboot, Start/Stop/Restart, WAN change | Состояние/Config/GUI/IPFW согласованы, original FD9/Voice сохранены |
+| A18 — Обычный GUI Uninstall | НЕТ меню Services/мёртвых ссылок; данные runtime/Config/resources сохранены |
+| A19 — GUI reinstall после обычного uninstall | Пользовательские поля на месте; нет дублирования, потери Extra или нежелательного автозапуска |
+| A20 — Полный purge после обычного uninstall | Сохранённые поля, upstream, additional Lua/BIN, состояния, регистрация/меню удалены; другие плагины целы |
+| A21 — Update/downgrade/force reinstall existing RUNNING/STOPPED | Ранее принятые транзакционные гарантии не регрессировали |
+| A22 — Faults, competition, cancellation, timeouts | Неизвестная операция не продублирована, чужой FD9/IPFW не затронут, rollback/cleanup проверен |
+
+Проверять **реальные** OPNsense GUI кнопки, POST и reload, не только unit/mocked тесты; для сетевых тестов различать `TARGET_ACCESSIBLE` и реальный DPI-bypass. При отсутствии живой IPv6/Voice-media сети указывать `NOT TESTED`, а не PASS. Для RUS/ENG локализации проводить отдельные GUI-прогоны. CL-01 должен быть доступен прежде любых иных acceptance-тестов, как средство воспроизводимого чистого состояния.
+
+## 10. Обязательный поэтапный порядок разработки
+
+**Единый исполнимый план, критерии переходов G01–G11 и статус каждого этапа:** [OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md](../../../lifecycle-2026-11-11/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
+
+**Первоначальный порядок G01–G10 сохраняется как история реализации; новый обязательный завершающий инкремент G10A — запакованный локальный CL-01, полный девятишаговый native gate и только затем G11 owner-live.** Тестируем именно обновление прежней установки прежде clean-install. Не требовать ручного SHA или тестового pkg-репозитория. Этот раздел не дублирует граф этапов: normative user-visible requirements и A01–A22 остаются в данном ТЗ, порядок исполнения и gates принадлежат плану.
+
+## 11. Что не считать выполнением ТЗ
+
+Не считается приёмкой: ручной `setup.sh install` вместо неработающего GUI; изменение только кнопки без первой rollback-транзакции; «красивый» статус без рабочего процесса; самовольное возвращение прежнего `tls7`-шаблона или добавление дополнительных ресурсов как обязательного условия старта; пустой артефакт портов с активным IPFW перехватом; Lab на ранее запущенной службе вместо никогда не стартовавшей; успешная лаборатория на заведомо доступном домене вместо теста заблокированной цели; `pkg delete` CLI вместо проверки серверного меню GUI; очистка путей без проверки других плагинов; скрытое уничтожение saved Config при обычном uninstall; публикация исправляющего релиза без отдельного разрешения.
+
+### Текущее состояние доказательств на дату утверждения
+
+- В `main` `v0.6.3_1` upper Apply молча отказывается при `installed=0`; `setup_transaction.sh` требует старый release/HEAD; полноценная первая установка по GUI сломана (#970).
+- Ручной `setup.sh install v1.0.7` на owner OPNsense успешно собрал engine; GUI Start/нижний Apply после этого не обеспечили рабочую службу, причина нативного отказа не установлена (#972).
+- Лаборатория на owner-стенде возвращала Stage-60 internal ERROR при отсутствующей TLS-семье и успешно восстановила STOPPED (#973); это не гарантия нативного поиска.
+- Обычный GUI uninstall оставлял ссылки меню после F5/Ctrl+F5; гипотеза cache не доказана отдельно (#971).
+- Upstream `v1.0.7` содержит `no_action` fallback profile (`nfq2/nfqws.c`), но **положительный пустой dvtws2/service запуск ещё не выполнен**.
+- По новому решению владельца первоначальный шаблон **заменён** на точный TCP+QUIC-профиль с десятью доменами. `http_iana_org.bin` есть в upstream, `fake_default_quic` встроен; требование `tls7.bin` **отменено**. Доказательство именно installed-native Apply/Start новой конфигурации **пока не получено**.
+
+**Ссылки:** [upstream v1.0.7](https://github.com/bol-van/zapret2/tree/v1.0.7), [GUI/runtime architecture](ZAPRET2_SERVICE.md), [состояние текущей работы](../PROJECT_STATE.md), [индекс проекта](../INDEX.md).

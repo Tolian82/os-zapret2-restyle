@@ -1,6 +1,6 @@
 # Additional Resources — acceptance board M0–M7
 
-**Status:** owner-approved delivery scope, 24 October 2026. **No installed-candidate PASS is inferred from source CI.** This file is the sole live acceptance scoreboard. Normative scope: [requirements](../architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md); milestone meanings and gates: [implementation plan](../architecture/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
+**Status:** owner-approved delivery scope, 24 October 2026. **No installed-candidate PASS is inferred from source CI.** This file is the sole live acceptance scoreboard. Normative scope: [requirements](../architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md); milestone meanings and gates: [implementation plan](../history/stages/extra-resources-2026-10-27/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
 
 **Release preparation (24 October 2026):** Owner accepted the final report and H1 UI testing and authorized `v0.5.8` release. This board tracks exact release execution separately; M6 is owner-closed with cold boot **NOT RUN**, not falsely accepted as a tested boot. [Final owner sign-off](evidence/2026-10-24-v0.5.8-owner-acceptance-and-release-authorization.md).
 ## Current baseline

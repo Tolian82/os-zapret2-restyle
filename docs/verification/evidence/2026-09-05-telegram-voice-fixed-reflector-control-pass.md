@@ -3,7 +3,7 @@
 **Status:** OWNER-LIVE EVIDENCE · EXACT-ENDPOINT CONTROL `MEDIA_PASS` · OPNsense PROVIDER BASELINE NOT YET RUN
 **Observed:** 2026-09-05
 **Package identity:** `VERSION=0.5.0`, `PLUGIN_REVISION=3` — unchanged
-**Architecture authority:** [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md)
+**Architecture authority:** [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md)
 
 ## Scope and result
 

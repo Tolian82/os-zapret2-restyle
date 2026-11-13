@@ -1,9 +1,6 @@
 # Strategy Lab explicit QUIC control contract
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
-**Updated:** 2026-10-21 (source audit and approved transition)
-**Execution gate introduced by:** `v0.4.1_14`
-**Owner-visible observability/localization published in:** `v0.4.1_15`
 
 ## Authority
 
@@ -30,7 +27,7 @@ The UI may hide this control outside Extended mode because Stage 80 itself is an
 
 The saved **Enable QUIC** checkbox is the sole product decision that determines whether Stage 80 runs QUIC candidate tests when the stage is reached and endpoint/time prerequisites are satisfied. It does not override `TARGET_ACCESSIBLE`, cancellation, finite deadlines, or the requirement for Host/SNI on a bare IPv4 target. A successful direct HTTPS baseline terminates the job before Stage 80 even when Enable QUIC is ON.
 
-The approved [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md) preserves this early exit. Its future target reachability rule accepts a proven TLS handshake, a proven QUIC handshake, **or a genuine final HTTP response** independently; an HTTP3 GET response is not mandatory after a valid QUIC handshake. That modernization is not yet implemented. The current four-candidate path still uses OpenSSL handshake evidence.
+The current [browser reachability contract](STRATEGY_LAB_BROWSER_HTTP.md) preserves this early exit and accepts a proven target TLS handshake, target QUIC handshake, or genuine target HTTP response independently. A measured HTTP/3 GET is not mandatory after a valid QUIC handshake. Older OpenSSL-only/four-candidate evidence keeps its original attribution; current candidates use the qualified private-client path.
 
 Stage-30 QUIC control evidence (`quic_ipv4=available|closed`):
 
@@ -155,14 +152,6 @@ Repository tests prove at least:
 
 Automated `_15` source acceptance and persistent testing-package publication are complete. Machine publication evidence is in [`../verification/evidence/testing-publications/v0.4.1_15.md`](../verification/evidence/testing-publications/v0.4.1_15.md).
 
-## Historical `_15` owner-live acceptance scope
+## Source history
 
-After installing the published `_15` testing package:
-
-- Enable QUIC ON while ordinary QUIC remains blocked must show `QUIC закрыт`/equivalent plus **search enabled**, not skipped;
-- Stage 80 must show `tested > 0` and attempted candidate IDs;
-- Enable QUIC OFF must show natural disabled wording;
-- RU and EN help/Stage-30/Stage-80 presentation must follow selected UI language;
-- normal restoration/resource-cleanup requirements remain unchanged.
-
-The selected installed QUIC ON/OFF, preference-persistence and fixed-IP/Host-SNI rows were subsequently accepted in the [live matrix](../verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md). They do not prove the planned HTTP3 GET. New acceptance is scoped by the browser HTTP plan.
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_QUIC_CONTROL.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.

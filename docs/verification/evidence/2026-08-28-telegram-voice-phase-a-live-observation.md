@@ -3,7 +3,7 @@
 **Status:** OWNER-LIVE EVIDENCE · PHASE A COMPLETE
 **Observed:** 2026-08-28
 **Appliance package:** `os-zapret2-restyle-0.5.0_2`
-**Research authority:** [`TELEGRAM_VOICE_UDP.md`](../../research/TELEGRAM_VOICE_UDP.md)
+**Research authority:** [`TELEGRAM_VOICE_UDP.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_UDP.md)
 
 ## Scope and privacy boundary
 
@@ -119,4 +119,4 @@ This evidence record is documentation-only. It adds no raw capture, source chang
 
 ## Subsequent research boundary
 
-Phase B later proved that the STUN zero-fake helper acted correctly but restored no TURN reply, while the reflector packets remained completely untouched. Official pinned `tgcalls_cli` can exercise a real reflector and bidirectional media without Telegram API signaling or TCP fallback. The current Phase C plan therefore measures reflector strategies independently rather than continuing to assume that reflector work must wait for TURN success. See [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
+Phase B later proved that the STUN zero-fake helper acted correctly but restored no TURN reply, while the reflector packets remained completely untouched. Official pinned `tgcalls_cli` can exercise a real reflector and bidirectional media without Telegram API signaling or TCP fallback. The current Phase C plan therefore measures reflector strategies independently rather than continuing to assume that reflector work must wait for TURN success. See [`TELEGRAM_VOICE_EMULATION_LAB.md`](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md).

@@ -1,18 +1,4 @@
-# os-zapret2-restyle
-
-## Approved transition — shared Voice/Strategies backend, 2026-10-13
-
-The owner approved one shared model, full-runtime generator and Apply/lifecycle owner for Strategies and Voice. Voice adds STUN profiles and scoped UDP/IPSET capture; frontend and full requirements are unchanged. This is an approved target, not an implemented-source claim. [Section 12 of the Voice specification](architecture/VOICE_TRANSMISSION_GUI.md#12-общий-backend-со-стратегиями-утверждено-13102026) owns the contract; [v0.5.2 implementation plan](architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) owns the proposed code changes and controls. Stage `v0.5.2_1` was opened without release; the owner has now instructed execution of the detailed plan. Existing frontend/backend behavior is unchanged by that version transition. Legacy private Voice transactions are reuse/transition material, not a second authoritative production architecture.
-
-## Текущая нативная архитектура — утверждённое направление (5 ноября 2026)
-
-[ТЗ v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) и [план v1.5](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md) требуют одного нативного пакета OPNsense через `Mk/plugins.mk`, штатных зависимостей `pkg`, квалифицированного Python и управления `configd`/rc/четырьмя hooks. Существующие `scripts/build-pkg.sh` и `scripts/native-opnsense-package.py` являются базой, не объектами повторного переписывания.
-
-**Отменённая архитектура:** отдельный сервер/SQLite-свидетель/подписанные разрешения, root-`pkg` interceptor, самостоятельный шлюз обновления, новые исследования IPFW/PF. Связанные экспериментальные pkg-approval файлы удалены в слитом `_137`; они не являются производственным runtime или релизным барьером. Старые свидетельства остаются историей, а не текущим контрактом.
-
-**Системные зависимости (_138 принят):** `Makefile`/`PLUGIN_DEPENDS` и штатный OPNsense `pkg` являются единственным владельцем установки системных инструментов. `setup.sh` только проверяет их присутствие и не включает/не исправляет FreeBSD.conf; отдельный выбор и сборка upstream Zapret2 сохранены. **Python (_139 принят):** один `python_runtime.sh` проверяет установленный compatibility manifest и generic `/usr/local/bin/python3` до `exec` с сохранением FD9/argv/stdout; реальные shell/PHP/configd/Strategy Lab/Voice/Extra Resources/POST_INSTALL пути переводятся на него. PRE_INSTALL использует generic Python напрямую по ограничениям hook-фазы. **Native Stop/Status (_140 accepted):** только verified ordinary Strategies под FD9 без shared/Voice журнала и pending ресурсов может безопасно остановиться без Python; уже STOPPED — no-op, неполное владение — отказ. Shared owner всё ещё зависит от Python, его безопасная приёмка впереди. **Firmware removal (_141 source candidate):** на disposable OPNsense после real pkg add и read-only configctl выполняются штатные `pkg delete` и `register.php remove`, без самостоятельного менеджера удаления и без `pkg autoremove`; проверяются 4 hook bodies, pkgdb/file removal и сохранность Config вне firmware plugins/revision.
-
-**Номера правил IPFW (не порты):** основной Zapret2/Strategies `19000–19010`; Strategy Lab `19100–19131`. Новые проверки чужих правил, динамический allocator, мониторинг shaper flush и механизм восстановления не разрабатываются. Существующая холодная загрузка IPFW и `pfctl -d; pfctl -e` сохраняются без изменений. OPNsense-only `sync_fw_hooks.py`/ `pfilctl` не вводятся; перенос на pfSense — будущая отдельная задача.
+# os-zapret2-restyle — system architecture
 
 ## Document role
 
@@ -27,6 +13,14 @@ sequences belong in decisions/devlog/patch/evidence records.
 Read after:
 `docs/PROJECT_STATE.md` and the task-selected specialist architecture documents.
 
+## Current native integration
+
+The official OPNsense `Mk/plugins.mk` package owns plugin files and declared system dependencies. Native `pkg`, configd, rc/syshooks and the existing package hooks remain the integration boundaries. `setup.sh` manages the separately selected upstream Zapret2 runtime; it verifies system dependencies rather than provisioning a competing package environment. The [native packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) owns the details.
+
+The shared Strategies/Voice model, builder and lifecycle are implemented and accepted within the [current-state evidence](PROJECT_STATE.md). Historical transition plans do not describe a pending second architecture.
+
+Domain lists use `backend/domain_policy.py`, IP lists `backend/ipset_policy.py`, and profile parsing/normalization `backend/profile_policy.py`; the PHP bridges and retained shell entrypoints adapt those policies. IPFW rule ranges and the WAN-first contract belong to the [lifecycle specification](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md).
+
 ## Identity and source of truth
 
 Repository: `https://github.com/Tolian82/os-zapret2-restyle`
@@ -34,7 +28,7 @@ Primary branch: `main`
 Project/package: `os-zapret2-restyle`
 Internal service/configd namespace: `zapret`
 Version source: `VERSION`
-Required packaged runtime: Python 3.13 on supported OPNsense / FreeBSD 15 amd64.
+Supported runtime, ABI, dependency providers and pinned private inputs are declared in the root `compatibility.json` and native `Makefile` package metadata; they are not independently versioned here.
 
 Committed source describes actual implemented behavior. Current project direction and
 approved transition state are recorded in current documentation. A stale historical
@@ -67,18 +61,11 @@ while preserving non-selector lines, order and user-authored `--new` boundaries.
 
 ## Settings apply
 
-```text
-/ui/zapret
-  -> Settings API validation/normalization
-  -> persistent save
-  -> configctl zapret reconfigure
-  -> zapret_service.sh
-  -> Backend-v2 candidate build/validation
-  -> atomic runtime switch or rollback
-```
+The actual Strategies entrypoint is `SettingsController::applyAction()`. Native model validation and the Python list bridges produce the bounded `SharedApplyEnvelope`. The existing configd shared-Apply route takes original FD9, rereads the current Config, reconstructs and revalidates eligible list deltas, renders the detached candidate and uses the original full builder/validator. Runtime activation and the native root Config commit belong to that one transaction; there is no earlier GUI-side `Config::save()`.
 
-Only an exact successful configd response completes Apply. On failure, persistent model,
-generated template and runtime are restored to the prior valid state.
+`SharedConfigCommit::persist()` owns the native save. A verified stopped WAN-only save uses the existing shared WAN route without requiring runtime installation or a nonempty strategy. A running/common owner uses full runtime Apply/rollback. Definitive preflight refusal, uncertain commit and verified success remain distinct.
+
+The separate Validate and Preview action reuses candidate preparation/generation/native validation without saving or activating. Product details live in the [Strategies contract](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and [lifecycle contract](architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md).
 
 ## Menu localization
 
@@ -130,7 +117,7 @@ configd
         ↓
 thin compatibility launcher
         ↓
-Python 3.13 Strategy Lab orchestration
+Validated Python Strategy Lab orchestration
         ↓
 small explicit FreeBSD/OPNsense adapters
         ↓
@@ -237,28 +224,9 @@ Specialist authority:
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` and
 `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
-## Current measurement decisions
 
-The following measurement questions are closed for the current architecture unless the
-owner, roadmap, a material architecture change or fresh reproducible evidence reopens
-them:
 
-- Lua initialization: no production reduction justified;
-- current-width BLOB preload/common set: no material startup/RSS penalty and no lazy-BLOB
-  production change justified;
-- discovery: bounded GET-4K retained;
-- cross-batch keep-warm/reuse: not justified after the `_11/_12` lifecycle/readiness
-  corrections.
 
-Do not restore an old experiment sequence merely because older documentation mentions it.
-
-## Dns / network fact boundary
-
-The previously reported local/container DNS slowness/failure is historical and closed:
-**the owner fixed DNS**. Current work treats DNS as working.
-
-A future DNS issue requires fresh direct reproducible evidence. An old timeout, old log,
-old document or new-session memory gap is not sufficient to classify DNS as broken again.
 
 ## Shortlist and circular validation
 
@@ -301,7 +269,7 @@ on incomplete/unknown state or unsuccessful stop/setup verification.
 
 - FreeBSD `/bin/sh` compatibility remains required for retained shell adapters;
 - owner console examples target root `csh` unless explicitly entering `sh`;
-- Python runtime uses the supported OPNsense Python 3.13 dependency model;
+- Python invocation and dependency capabilities use the single compatibility policy and `python_runtime.sh`;
 - OPNsense configuration/configd are the integration boundary;
 - candidate validation precedes activation;
 - generated runtime is never committed;
@@ -313,3 +281,7 @@ on incomplete/unknown state or unsuccessful stop/setup verification.
 Current state is in `docs/PROJECT_STATE.md`; exact handoff in `docs/START_HERE.md`;
 future sequence in `docs/ROADMAP.md`; historical rationale/evidence in decisions,
 patches, devlogs and verification records.
+
+## Current and historical references
+
+[Current architecture map](architecture/README.md) · [product contracts](REQUIREMENTS.md) · [current facts](PROJECT_STATE.md). The [source snapshot](history/stages/documentation-2026-11-13/snapshots/ARCHITECTURE.md) preserves prior transition notes, measurement conclusions and superseded implementation descriptions in full.

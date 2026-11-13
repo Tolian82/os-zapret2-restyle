@@ -35,7 +35,7 @@ atomic automated-job `status.json`/`events.ndjson` persistence. The active/lates
 files remain the existing small shell persistence surface. Private circular-session
 `state.json` remains a separate shell-owned contract.
 
-## Patch 8 transient-read reconciliation
+## Transient-read reconciliation
 
 Migration Patch 8 (`v0.3.3_25` source) makes automatic Diagnostics discovery consume the
 persisted state contract without confusing transport failures with retained job state.
@@ -86,3 +86,7 @@ status from job state, and launcher FD isolation.
 The end-to-end suite continues to verify the historical backend recovery contract
 independently of GUI initialization. Owner-assisted appliance evidence is still required to
 close the frozen `_17` reload/presentation defect.
+
+## Source history
+
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_PERSISTED_RESULT_RELOAD.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.

@@ -27,4 +27,4 @@
 
 ## Текущая работа
 
-[START_HERE](../../../START_HERE.md) · [PROJECT_STATE](../../../PROJECT_STATE.md) · [план v0.5.2](../../../architecture/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [неизменное ТЗ](../../../architecture/VOICE_TRANSMISSION_GUI.md).
+[START_HERE](../../../START_HERE.md) · [PROJECT_STATE](../../../PROJECT_STATE.md) · [план v0.5.2](../telegram-voice-2026-10-20/VOICE_TRANSMISSION_COMPLETION_PLAN.md) · [неизменное ТЗ](../../../architecture/VOICE_TRANSMISSION_GUI.md).

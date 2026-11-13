@@ -58,4 +58,4 @@ Full release evidence: `docs/verification/evidence/2026-08-16-v0.5.0-release-pub
 
 ## Approved browser HTTP transition — not yet verified
 
-The [detailed Chrome HTTP development plan](../architecture/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) defines new rows V1–V11 against requirements BH-01–BH-12. None has been executed for the planned client. Accepted rows above retain their original package/evidence scope and do not prove Chrome fingerprint selection, natural TLS negotiation or an HTTP3 GET. Record new package-specific results when implementation reaches the selected acceptance boundary; do not reopen unrelated closed rows.
+The [detailed Chrome HTTP development plan](../history/stages/browser-http-2026-10-22/STRATEGY_LAB_BROWSER_HTTP_PLAN.md) defines new rows V1–V11 against requirements BH-01–BH-12. None has been executed for the planned client. Accepted rows above retain their original package/evidence scope and do not prove Chrome fingerprint selection, natural TLS negotiation or an HTTP3 GET. Record new package-specific results when implementation reaches the selected acceptance boundary; do not reopen unrelated closed rows.

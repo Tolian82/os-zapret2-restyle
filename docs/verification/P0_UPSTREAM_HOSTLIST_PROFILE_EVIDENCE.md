@@ -2,7 +2,7 @@
 
 **Status (owner-reconciled 11 November 2026):** P0 COMPLETE from canonical upstream/source review; owner forbids extra engine verification. P1 Python source implementation in progress, P2–P6 not implemented.
 **Baseline:** project `main` `20e8705f5dc058b1dd3ad5d81feaee95f01ed24e` (`v0.6.4_8`) before this source-only research record.
-**Scope:** Approved [specification](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and [P0–P6 plan](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md), [Feature #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936).
+**Scope:** Approved [specification](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md) and [P0–P6 plan](../history/stages/strategies-2026-11-12/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md), [Feature #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936).
 **Authority:** official upstream Zapret2 documentation is canon, and the established `dvtws2 --dry-run` is the accepted validation method. This source study adds no extra engine-test obligation, and no physical owner package acceptance is claimed.
 
 ## 1. Exact upstream sources inspected

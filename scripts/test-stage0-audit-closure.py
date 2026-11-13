@@ -45,7 +45,7 @@ class Stage0ClosureTests(unittest.TestCase):
         original=m.read
         def fake(root,path):
             content=original(root,path)
-            if path==Path("docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"):
+            if path==Path("docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"):
                 return content.replace("**Stage 1 status: SOURCE/NATIVE-CI ACCEPTED**",
                                        "**Stage 1 status: UNKNOWN**")
             return content

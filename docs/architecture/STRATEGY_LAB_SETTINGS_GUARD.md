@@ -19,15 +19,9 @@ guard output is fail-closed in the Settings API.
 
 ## Apply transaction
 
-`SettingsController::applyAction()` checks the guard:
+`SettingsController::applyAction()` checks lifecycle availability before taking the native Config lock and again after releasing that lock, immediately before dispatching the shared Apply. Model/Python validation and candidate rendering happen without a GUI-side persistent save. The original configd/FD9 transaction owns root revalidation, runtime mutation, native Config commit and same-operation rollback.
 
-- before acquiring the configuration lock or changing the in-memory model;
-- again under the configuration lock after normalization and validation but before save.
-
-A busy result raises a user-visible lifecycle error and leaves persistent configuration
-unchanged. The existing reconfigure path remains protected by the shared lifecycle lock;
-if ownership begins after the second guard check, reconfigure fails and the existing
-rollback restores the previous model and generated configuration.
+A busy/unknown guard result leaves persistent configuration unchanged. A race after the advisory checks remains protected by the original shared owner and fail-closed transaction; the GUI does not hold a second Config writer or Config lock across configd dispatch.
 
 ## Read endpoint
 
@@ -38,7 +32,7 @@ status and future proactive button control. It does not mutate lifecycle state.
 
 - no JavaScript-only enforcement;
 - no model mutation before the first guard check;
-- no save before the second guard check;
+- no GUI-side save before the original root transaction;
 - `restore_failed` circular sessions remain blocking;
 - unknown, invalid, or unavailable guard state fails closed;
 - normal Settings validation and rollback behavior remains unchanged.
@@ -48,3 +42,7 @@ status and future proactive button control. It does not mutate lifecycle state.
 The focused test exercises idle, automated owner, circular restoration failure, and raw
 lifecycle-lock occupancy, and statically verifies both API guard points and the configd
 action.
+
+## Source history
+
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_SETTINGS_GUARD.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.

@@ -1,52 +1,8 @@
-# Strategy Lab corrective contract
+# Strategy Lab — corrective safety and state contracts
 
-==================================================
-DOCUMENT ROLE
-==================================================
+**Status:** CURRENT CONTRACTS; the original corrective implementation campaign is completed. Use these invariants with the current Model-C, browser/IPv6 and selected verification scope. The [original full source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_CORRECTIVE_CONTRACT.md) preserves the audit context and serial patch plan.
 
-Question answered:
-What runtime, state-machine, cancellation, timeout, restoration, GUI, and verification
-contracts must the activated Strategy Lab satisfy before live OPNsense validation?
-
-Purpose:
-Record the approved corrective contract derived from the 2026-08-05 source audit of
-package candidate `0.3.2_15` and later live corrective evidence.
-
-Authority:
-This document supplements `docs/architecture/STRATEGY_LAB.md` and supersedes any
-conflicting implementation assumptions in earlier Strategy Lab delivery documents.
-The existing product architecture remains valid unless explicitly corrected here.
-
-Search-policy amendment:
-`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` supersedes this document
-only where it describes family hard gating, QUIC candidate search, fixed candidate count,
-fixed output range or one-cold-process search as a permanent policy. State, cancellation,
-restoration and lifecycle safety remain authoritative. `_28` through `_31` implement their
-dedicated slices; remaining behavior stays unchanged until the corresponding `_32`–`_33`
-source patch changes it.
-
-Approved by the project owner on 2026-08-05 and extended by the `_6` corrective series.
-
-==================================================
-CORRECTIVE OBJECTIVE
-==================================================
-
-The activated Strategy Lab must become a deterministic asynchronous transaction that:
-
-- progresses through an explicit monotonic stage sequence;
-- records cancellation atomically and honors it during active probes;
-- produces truthful terminal `state`, `outcome`, and localized messages;
-- enforces one overall deadline in addition to per-operation and per-stage limits;
-- constructs the final shortlist only after every applicable search branch;
-- restores the initial Zapret2 semantic service state before exposing circular tests;
-- never reports restoration failure as normal completion;
-- retains completed partial evidence after cancel or timeout;
-- keeps the saved Traffic Strategy immutable;
-- is covered by an end-to-end regression state-machine test before live validation.
-
-==================================================
-EXPLICIT STAGE MACHINE
-==================================================
+## Explicit stage machine
 
 The only approved user-visible stage order is:
 
@@ -77,9 +33,7 @@ are never bypassed after normal runtime mutation begins.
 Worker orchestration must use explicit stage functions. Loading order must not select
 control flow by overriding the same shell function from successive modules.
 
-==================================================
-JOB STATE AND OUTCOME CONTRACT
-==================================================
+## Job state and outcome contract
 
 Machine-readable `state` describes lifecycle position. `outcome` describes the final
 product result.
@@ -129,9 +83,7 @@ The status document records at minimum:
 
 All status replacements are atomic.
 
-==================================================
-CANCELLATION CONTRACT
-==================================================
+## Cancellation contract
 
 A cancel request is a persistent state transition, not only a response body.
 
@@ -175,9 +127,7 @@ Russian: `SKIPPED — отменено`
 
 English: `SKIPPED — canseled`
 
-==================================================
-TIME BUDGET CONTRACT
-==================================================
+## Time budget contract
 
 Timeouts exist at operation, stage, and overall-job levels.
 
@@ -221,9 +171,7 @@ When a search budget is exhausted:
 The GUI must not promise `1–3 minutes` unless the implemented mode and displayed budget
 make that statement true. Standard and extended estimates are displayed separately.
 
-==================================================
-SHORTLIST AND CIRCULAR ELIGIBILITY
-==================================================
+## Shortlist and circular eligibility
 
 Stage 85 constructs the final shortlist only after:
 
@@ -248,9 +196,7 @@ boundary.
 Circular controls must not overwrite a more important terminal or restoration message.
 The GUI displays `state` and `outcome` separately.
 
-==================================================
-CANDIDATE RUNTIME OWNERSHIP CONTRACT
-==================================================
+## Candidate runtime ownership contract
 
 A temporary candidate executed by Strategy Lab is job-owned runtime. In the current cold
 Model-A implementation the candidate PID file
@@ -284,9 +230,7 @@ formats the child differently.
 Failure to prove candidate absence remains an internal error. The correction does not
 permit stage 50 to continue while a candidate process or listener remains active.
 
-==================================================
-RESTORATION CONTRACT
-==================================================
+## Restoration contract
 
 Restoration means semantic equivalence, not reuse of the same PID.
 
@@ -344,22 +288,18 @@ stage 99=FAIL
 The recovery attempt does not weaken this outcome contract. A successful command exit
 without semantic RUNNING/evidence equivalence is not restoration success.
 
-==================================================
-TARGET CONTRACT
-==================================================
+## Target contract
 
 The primary GUI workflow accepts a domain target.
 
 A domain contract includes DNS, hostname/SNI, TLS version, required endpoint list, and
 TCP/443 probe semantics.
 
-A raw IP target is not treated as an implicit HTTPS domain. Future or backend-only IP
-support must require an explicit target type, port, and probe contract. A raw IP must
+A raw IP target is not treated as an implicit HTTPS domain. Current fixed-IP support requires an explicit target type, port, applicable
+Host/SNI and probe contract under the browser/dual-stack specifications. A raw IP must
 not silently invent DNS or SNI semantics.
 
-==================================================
-MESSAGE CONTRACT
-==================================================
+## Message contract
 
 Messages are generated from mode, state, outcome, and recorded stage results. Module
 load order must not replace the final message contract.
@@ -378,9 +318,7 @@ Required truthful distinctions:
 No final message may claim that extended branches ran in standard mode. No final
 message may claim that circular validation is inactive when the feature is active.
 
-==================================================
-REGRESSION CONTRACT
-==================================================
+## Regression contract
 
 Focused tests remain required, but the corrective series must add one complete
 mock-driven integration path:
@@ -417,33 +355,3 @@ Required scenarios:
 
 Tests must assert the event order and final persisted JSON, not only grep for source
 strings.
-
-==================================================
-CORRECTIVE PATCH ORDER
-==================================================
-
-The approved implementation series is strictly serial:
-
-1. corrective contract and documentation;
-2. atomic cancel-state persistence;
-3. cancellation-aware active runners;
-4. explicit monotonic stage machine;
-5. terminal state/outcome/message correction;
-6. shared overall time budget;
-7. stronger semantic restoration verification;
-8. GUI and backend circular eligibility;
-9. explicit domain/IP target contract;
-10. end-to-end regression harness;
-11. repository hygiene;
-12. live-evidence candidate ownership correction;
-13. live-evidence bounded restoration recovery.
-
-Each patch follows:
-
-`one logical change -> one task branch -> focused tests -> CI/package build -> one squash
-merge -> post-merge verification -> verified branch deletion`.
-
-For the `_6` live-evidence corrective pair, the owner explicitly requested repository
-CI/package verification and merge to `main` without an intermediate manual OPNsense test.
-Owner-assisted OPNsense scenario 1 is repeated only after both source corrections are in
-`main`.

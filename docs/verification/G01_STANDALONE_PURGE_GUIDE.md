@@ -2,7 +2,7 @@
 
 **Статус (8 ноября 2026): G01 INSTALLED-CI PASS, owner-live NOT TESTED.** Source `v0.6.3_3` merged through PR #975 (main `b247b725`), 25/25 CI, 37 fast checks and [G01 native PASS](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/42505329364). Disposable OPNsense 26.7 exercised genuine v1.0.7 installed purge, post-uninstall leftovers and RUNNING lo0/dvtws2 with owned IPFW and private Config backup. **Нельзя запускать `--purge` на рабочем шлюзе без отдельного явного согласия и backup.** Owner-live GUI not tested; stable released package remains `v0.6.3_1`.
 
-**Источники:** [утверждённое ТЗ v1.1](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [строгий план G01–G11](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md), [автономный скрипт](../../scripts/purge-os-zapret2-restyle.sh), [позитивно-негативные source-тесты](../../scripts/test-purge-os-zapret2-restyle.py), [одноразовый native-guest smoke](../../scripts/stage2-opnsense-real-native-purge.py) и [CI workflow](../../.github/workflows/g01-native-disposable-purge.yml).
+**Источники:** [утверждённое ТЗ v1.1](../architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md), [строгий план G01–G11](../history/stages/lifecycle-2026-11-11/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md), [автономный скрипт](../../scripts/purge-os-zapret2-restyle.sh), [позитивно-негативные source-тесты](../../scripts/test-purge-os-zapret2-restyle.py), [одноразовый native-guest smoke](../../scripts/stage2-opnsense-real-native-purge.py) и [CI workflow](../../.github/workflows/g01-native-disposable-purge.yml).
 
 ## Назначение и границы
 

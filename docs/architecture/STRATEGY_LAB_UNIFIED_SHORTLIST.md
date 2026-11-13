@@ -1,8 +1,6 @@
-# Strategy Lab — current unified shortlist contract
+# Strategy Lab — unified shortlist contract
 
-**Status:** current source contract, audited at restyle `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f` on 2026-10-20; documentation reconciled 2026-10-21.
-
-The approved [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md) changes the client and future HTTP3 evidence. It is not implemented yet. This document records the actual publication path so implementation does not target a retired compatibility function.
+**Status:** CURRENT. The accepted browser reachability and dual-stack specifications supersede former client/family assumptions. Current results carry only the evidence actually measured.
 
 ## Production ownership
 
@@ -26,15 +24,15 @@ Current protocol ranks are:
 
 Within a protocol, sorting uses line count, character count and stable candidate ID; duplicate protocol/port/strategy combinations are removed. The normal configured limit is three. Standard selects up to that limit; Extended selects the best source per protocol and applies the same overall limit. Thus a lower-ranked protocol may remain in its stage result without entering the top three. The first verified selected item is the recommendation.
 
-The new Chrome plan must not use the legacy `tls13` identifier as proof of the negotiated TLS version. Its future primary branch uses natural negotiation and reports the measured protocol.
+The legacy `tls13` identifier is not proof of the negotiated TLS version. The current private-Chrome primary branch uses natural negotiation and reports the measured protocol.
 
 ## Stability and exact replay
 
 Primary candidates already passed fail-fast 3/3 stability in Stage 70. The production adaptive Stage-85 path performs **one cold deep replay** per admitted finalist using the complete user-ready profile, pinned endpoint epoch and existing candidate lifecycle. It records `attempt_count=1` and a separate deep-validation outcome. It does not rerun three deep transfers for every finalist.
 
-A source/replay from another epoch, a changed profile, failed endpoint or missing required interception cannot produce a verified recommendation. The web depth target is 16 KiB. A fully completed shorter resource leaves that depth criterion inconclusive while remaining eligible as valid reachability evidence. The installed `truthful_result_support` preserves authenticated/intercepted HTTP 4xx/5xx semantics.
+A source/replay from another epoch, a changed profile, failed endpoint or missing required interception cannot produce a verified recommendation. Web body/depth observations are diagnostic under BH-08. They do not add a mandatory size gate to otherwise valid reachability evidence. The installed `truthful_result_support` preserves authenticated/intercepted HTTP 4xx/5xx semantics.
 
-**Current QUIC limitation:** Stage 80 accepts the first all-pass handshake candidate and does not supply the primary Stage-70 3/3 sequence. Deep classification currently treats `quic` as non-HTTP. Therefore current QUIC publication does not prove either HTTP3 GET or new HTTP3 3/3 acceptance. Both limitations are explicit work in stage 3 of the browser HTTP plan; an old result must not be retroactively relabelled.
+**QUIC evidence boundary:** Use the current [private-Chrome/QUIC contract](STRATEGY_LAB_BROWSER_HTTP.md) and its requested transport, identity, attempts and replay evidence. An old saved handshake/candidate result is not retroactively a measured HTTP/3 response or a new 3/3 sequence. Historical pre-migration limitations remain in the [source snapshot](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_UNIFIED_SHORTLIST.md).
 
 ## Circular boundary
 

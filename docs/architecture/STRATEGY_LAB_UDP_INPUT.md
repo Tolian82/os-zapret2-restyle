@@ -1,16 +1,10 @@
 # Strategy Lab generic UDP input contract
 
 **Status:** CURRENT SPECIALIST ARCHITECTURE
-**Updated:** 2026-09-03
-**Direct UDP/control-observation implementation:** `v0.4.1_15`
-**Browser handoff correction published in:** `v0.4.1_16`
-**Owner-live configured-path acceptance:** PASS on `v0.4.1_16`
 
 ## Purpose
 
 Expose Generic UDP request/response bypass testing through Diagnostics without accepting arbitrary server-side file paths, misclassifying UDP silence, or retaining payload bytes after a job ends.
-
-The final `_16` owner-live result establishes that the configured browser-to-job path works when the payload actually satisfies the documented byte limit. Earlier repeated size failures were caused by selecting files around **140 KiB**, not by a confirmed upload-directory or filesystem-permissions defect.
 
 ## Important transport fact
 
@@ -115,7 +109,7 @@ Generic UDP remains a raw exact-payload request/reply tool. It is not a Telegram
 - a captured 40-byte Reflector Hello cannot be blindly replayed as a valid call because its tags and peer state are per run;
 - the current UDP catalog stops after a synthetic success and has no `MEDIA_PASS` state.
 
-The Telegram Voice design may reuse Generic UDP lifecycle, fixed-endpoint epochs, profile assembly, counters, restoration and result storage, but it requires a separate runner or explicit external-probe mode with a narrowly attributed forwarded-flow rule and protocol-aware oracles. Pre/post-NAT source visibility is an explicit implementation gate. The current contract is defined in [`TELEGRAM_VOICE_EMULATION_LAB.md`](TELEGRAM_VOICE_EMULATION_LAB.md).
+The Telegram Voice design may reuse Generic UDP lifecycle, fixed-endpoint epochs, profile assembly, counters, restoration and result storage, but it requires a separate runner or explicit external-probe mode with a narrowly attributed forwarded-flow rule and protocol-aware oracles. Pre/post-NAT source visibility is an explicit implementation gate. The current contract is defined in [`TELEGRAM_VOICE_EMULATION_LAB.md`](../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md).
 
 ## Candidate execution and Stage 80
 
@@ -130,55 +124,6 @@ Every executed candidate is appended to structured `tested`. Ordinary RU/EN Stag
 
 `udp-payload.bin` and `udp-port` are removed during normal restoration and error/cancel/stale-worker cleanup. Terminal evidence may retain metadata/control results but not payload bytes.
 
-## `_16` automated/publication acceptance — PASS
+## Source history
 
-Repository acceptance proves:
-
-1. the file input has a `change` handler;
-2. selection is immediately read and stored in application-owned state;
-3. exact decoded-byte validation occurs before staging;
-4. the normal Run path uses staged Base64 rather than depending exclusively on `input.files[0]`;
-5. RU/EN ready-to-send filename/byte evidence exists;
-6. exact 140-byte backend decode remains PASS;
-7. missing/unwritable job-directory and other server preparation failures are attributed by explicit code;
-8. direct selected-port/payload observation and non-gating UDP-silence semantics remain intact;
-9. complete Strategy Lab corrective matrix PASS;
-10. FreeBSD-15 package qualification PASS.
-
-Published testing identity:
-
-- tag: `v0.4.1_16`;
-- candidate/tag target: `1a7baa7d1afee032170e654c6840cfb4e3b55ea2`;
-- package: `os-zapret2-restyle-0.4.1_16.pkg`;
-- SHA-256: `819498c34ab4dacd34f38cb04cf353ed9b46633dbf8fc6b85f73d8d229deb415`;
-- publication workflow run: `31882091770`;
-- stable Pages/pkg repository promoted: no.
-
-Machine publication evidence: [`../verification/evidence/testing-publications/v0.4.1_16.md`](../verification/evidence/testing-publications/v0.4.1_16.md).
-
-## Owner-live `_16` acceptance — PASS
-
-Controlled live fixture:
-
-- Windows-created `udp-140.bin` verified as exactly `140` bytes;
-- target `rutracker.org`;
-- Extended mode;
-- port `53`;
-- Enable QUIC OFF;
-- job `job.j09XUc`.
-
-Observed live:
-
-- GUI immediately displayed `Файл подготовлен к отправке: udp-140.bin, 140 байт.`;
-- Stage 80 showed port `53`, payload `140` bytes and endpoint `172.67.182.196`;
-- direct UDP reply was not observed;
-- UI explicitly stated that no reply does not mean the port is closed;
-- all three current UDP candidates executed: `udp-ipfrag-8`, `udp-ipfrag-16`, `udp-ipfrag-32`;
-- no working UDP strategy was found, which is a valid negative result;
-- QUIC OFF was shown naturally as strategy search disabled;
-- Stage 90 visibly restored Zapret2 and removed temporary processes/rules;
-- overall job result was `SUCCESS`.
-
-Durable evidence: [`../verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md`](../verification/evidence/2026-08-15-v0.4.1_16-generic-udp-owner-live-pass.md).
-
-The earlier upload/filesystem suspicion is not a confirmed product defect for this scenario. The repeated size error was explained by the owner selecting files around **140 KiB**, while the contract is `1..4096 bytes`.
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_UDP_INPUT.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.
