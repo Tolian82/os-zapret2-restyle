@@ -601,6 +601,12 @@ jobs:
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
+      - name: Test P2k3 original pending / FD / canonical P1 policy preview (inert)
+        if: ${{ needs.changes.outputs.owner_flow == 'true' }}
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_verified_batch.py scripts/test-auto-detect-verified-batch.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-verified-batch.py
       - name: Check native-model schema, Python root bridge, envelope and GUI contracts
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         shell: bash
