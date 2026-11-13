@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_34`** (`VERSION=0.6.5`, `PLUGIN_REVISION=34`, prospective `os-zapret2-restyle-0.6.5_34.pkg` **NOT PUBLISHED**). P2k8d joins genuine unknown-source P2k3/P1 decisions with existing P2k2b physical two-destination CAS/checkpoint: previously sealed **automatic** known-list rows can be relocated to shared Auto Hostlist with crash replay, while manual Config/GUI values are untouched. The bridge is import-only and uses test-injected Config/FD evidence; no installed original Config lock across the mutation, new attributed known additions, FD9/cron/worker/ACK or owner appliance acceptance. `commit_authorized=false`.
+Current source increment: **`v0.6.5_35`** (`VERSION=0.6.5`, `PLUGIN_REVISION=35`, prospective `os-zapret2-restyle-0.6.5_35.pkg` **NOT PUBLISHED**). P2k8e adds a synchronous native Config-held Model→P1/P2k2b callable path plus an original-Model Python adapter using the existing destination lock and durable P2k8d relocation, preserving manual Config and returning unacknowledged checkpoints. It is source-only: the **real queue-before-Config process owner is still unwired**, and no proof yet covers `Config::save()` lock release, FD9/native observer, new known-list additions, pending ACK/cron/worker or owner-installed acceptance. `commit_authorized=false`.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=34`; P2k8d sealed known-owned → shared durable relocation (inactive native bridge); P2k8c effective generator retained | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=35`; P2k8e native original-Config-held synchronous callable + original-Model→P2k8d/P2k2b adapter; no registered native worker | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_34.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_35.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

@@ -100,4 +100,77 @@ $c=new TestConfig;
 expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel(nativeModel()),function(){throw new RuntimeException('reader failed');}),'failure propagation');
 check(!$c->held&&$c->unlocks===1,'exception releases lock');++$count;
 check(Snapshot::main(['script','read'])===64,'Linux CLI must refuse native authority');++$count;
-echo "P2k8a native Config+final-HOSTLIST lock/read-only contract PASS ($count scenarios)\n";
+
+// P2k8e: queue owner is established by the upstream worker BEFORE this
+// method. The native Config owner then spans the *whole* synchronous
+// policy->physical commit callback, not a detached read-only snapshot.
+$queueHeld=true;
+$c=new TestConfig;
+$syncCalls=0;
+$originalDigest=null;
+$done=Snapshot::withLockedOriginalModel(
+    $c,
+    function() use($c,$queueHeld):TestModel {
+        check($queueHeld&&$c->held,'original Config lock must follow queue ownership');
+        return new TestModel(nativeModel());
+    },
+    function(array $source) use($c,&$syncCalls,&$originalDigest):array {
+        check($c->held,'destination operation escaped original Config lock');
+        check(array_keys($source)===['manual_hostlists','global_exclude','config_snapshot_sha256'],
+              'must pass only original Model fields; no Config object or XML writer');
+        check($source['manual_hostlists']['youtube']==="youtube.com\n!^test.invalid\n",
+              'real original YouTube Model input required');
+        check($source['global_exclude']==="bad.example\n",'original Exclude input required');
+        $originalDigest=$source['config_snapshot_sha256'];
+        ++$syncCalls;
+        return ['kind'=>'destination-and-cursor-committed','ack_authorized'=>false];
+    }
+);
+check($syncCalls===1 && $c->locks===1 && $c->unlocks===1 &&
+      !$c->held && $c->writes===0 && $done['ack_authorized']===false &&
+      strlen($originalDigest)===64,
+      'original Config lock not held for complete synchronous operation');
+++$count;
+
+$c=new TestConfig;
+expectFailure(
+    fn()=>Snapshot::withLockedOriginalModel(
+        $c,
+        fn()=>new TestModel(nativeModel()),
+        function(array $source) use($c):array {
+            check($c->held,'callback exception escaped Config lock');
+            throw new RuntimeException('destination write interrupted');
+        }),
+    'P2k2b failure must release original Config and retain pending'
+);
+check(!$c->held && $c->unlocks===1 && $c->writes===0,'failure lock discipline');
+++$count;
+
+$c=new TestConfig;
+expectFailure(fn()=>Snapshot::withLockedOriginalModel(
+    $c,fn()=>new TestModel(nativeModel()),
+    fn($source)=>['kind'=>'destination-and-cursor-committed','ack_authorized'=>true]
+),'no synchronous callback may authorize acknowledgment');
+check(!$c->held && $c->unlocks===1 && $c->writes===0,'unsafe checkpoint refusal');
+++$count;
+
+// If the original source fields drift while the callback runs, the original
+// Config generation must no longer be reported as successfully committed.
+$c=new TestConfig;
+$modified=false;
+expectFailure(fn()=>Snapshot::withLockedOriginalModel(
+    $c,
+    function() use(&$modified):TestModel {
+        $nodes=nativeModel();
+        if($modified){$nodes['hostlist']['excludedomains']="new-block.example\n";}
+        return new TestModel($nodes);
+    },
+    function(array $source) use(&$modified):array {
+        $modified=true;
+        return ['kind'=>'destination-and-cursor-committed','ack_authorized'=>false];
+    }
+),'original Model generation changed while callback was active');
+check(!$c->held && $c->unlocks===1 && $c->writes===0,'changed generation lock discipline');
+++$count;
+
+echo "P2k8a/P2k8e original native Config lock/read/transaction contracts PASS ($count scenarios)\n";

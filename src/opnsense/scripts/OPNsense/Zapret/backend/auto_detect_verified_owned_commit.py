@@ -152,6 +152,46 @@ def commit_verified_owned_relocation(writer: DestinationCommit, pending: Path, *
             raise VerifiedOwnedRefused('original_owner_policy_or_owned_destination_refused') from exc
 
 
+def commit_with_locked_original_model(writer: DestinationCommit, pending: Path, *,
+                                      manual_hostlists: dict[str, str],
+                                      global_exclude: str, owned_root: Path,
+                                      attest: Callable = attest_running_generation,
+                                      inspect: Callable = probe_pending_fd,
+                                      psl: PublicSuffixList | None = None) -> dict:
+    """Use a fresh original Config-locked Model, not an old P2k8a snapshot.
+
+    Call only while the ORIGINAL OPNsense Config::lock() owner remains held,
+    after the native queue has been locked. The caller must synchronously
+    keep that PHP owner alive until this durable transaction returns. This
+    import-only adapter grants no native caller/FD9 authorization.
+    """
+    if (not isinstance(writer, DestinationCommit) or
+            not writer.queue._held or
+            not isinstance(manual_hostlists, dict) or
+            set(manual_hostlists) != set(KNOWN_HOSTLISTS) or
+            any(type(text) is not str or len(text.encode('utf-8')) > (1 << 20)
+                for text in manual_hostlists.values()) or
+            type(global_exclude) is not str or
+            len(global_exclude.encode('utf-8')) > (1 << 20)):
+        raise VerifiedOwnedRefused('original_locked_model_required')
+
+    # Only original Config provides the manual values. The editable final and
+    # private auto-owned physical files are read under the SAME destination
+    # flock already acquired by commit_verified_owned_relocation(); no stale
+    # PHP final-file reader and no nested GUI flock.
+    def snapshot():
+        current, _ = _target(writer.targets['auto'], writer.receipts.uid)
+        known = read_owned(Path(owned_root), owner_uid=writer.receipts.uid)
+        if known is None:
+            raise VerifiedOwnedRefused('unknown_known_owned_origin')
+        return ({**manual_hostlists, 'auto': current.decode('utf-8')},
+                known, global_exclude)
+
+    return commit_verified_owned_relocation(
+        writer, pending, owned_root=owned_root, snapshot=snapshot,
+        attest=attest, inspect=inspect, psl=psl)
+
+
 def run_native_verified_owned_worker() -> None:
     raise VerifiedOwnedRefused('native_config_fd9_and_ack_not_authorized')
 

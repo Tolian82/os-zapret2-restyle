@@ -132,6 +132,61 @@ final class AutoDetectConfigSnapshot
         }
     }
 
+    /**
+     * P2k8e: the original OPNsense Config owner remains locked across the
+     * complete synchronous P1 -> P2k2b operation. The native queue lock must
+     * already belong to the caller (queue -> Config -> HOSTLIST order).
+     *
+     * There is deliberately NO public 'commit' CLI: the only current native
+     * command remains 'read'. A future qualified worker must call this from
+     * its original queue/FD9 owner, not from a detached stale read snapshot.
+     * The operation receives original Model values, NOT a second XML parser
+     * or permission to call Config::save().
+     */
+    public static function withLockedOriginalModel(
+        object $config, callable $modelFactory, callable $operation
+    ): array {
+        $config->lock();
+        try {
+            $model = $modelFactory();
+            if (!is_object($model) || !method_exists($model, 'getNodes')) {
+                throw new \RuntimeException('Original Config model unavailable');
+            }
+            $nodes = $model->getNodes();
+            if (!is_array($nodes)) {
+                throw new \RuntimeException('Original Config model invalid');
+            }
+            $manual = self::manualFromModel($nodes);
+            $digest = VoiceSettingsSnapshot::digest($nodes);
+            // The synchronous child must acquire the shared destination lock
+            // *after* native Config; no preliminary final-file lock here.
+            $result = $operation([
+                'manual_hostlists' => $manual['lists'],
+                'global_exclude' => $manual['global_exclude'],
+                'config_snapshot_sha256' => $digest,
+            ]);
+            if (!is_array($result) ||
+                ($result['kind'] ?? null) !== 'destination-and-cursor-committed' ||
+                ($result['ack_authorized'] ?? null) !== false) {
+                throw new \RuntimeException('Unqualified destination checkpoint');
+            }
+            // No Config::save() in this method. A child that changes the
+            // original Model generation cannot claim a valid final decision.
+            $after = $modelFactory();
+            if (!is_object($after) || !method_exists($after, 'getNodes')) {
+                throw new \RuntimeException('Original Config model changed');
+            }
+            $afterNodes = $after->getNodes();
+            if (!is_array($afterNodes) ||
+                !hash_equals($digest, VoiceSettingsSnapshot::digest($afterNodes))) {
+                throw new \RuntimeException('Original Config changed during transaction');
+            }
+            return $result;  // always unacknowledged; no source deletion here
+        } finally {
+            $config->unlock();
+        }
+    }
+
     /** Original Config remains held during one shared final/owned file lock. */
     public static function nativeFinalRead(): array
     {
