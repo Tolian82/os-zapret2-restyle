@@ -25,6 +25,7 @@ Read through EOF in this order:
 | P2e completed original-builder qualification | [Original shared-builder witness](verification/P2E_ORIGINAL_SHARED_BUILDER.md); [P0–P2 proof map](verification/README.md) |
 | P2f source-only observer proposal | [Nonactivating P2f contract](verification/P2F_OFFLINE_OBSERVER_PLAN.md); owner/FD9 and raw/debug qualification remains open |
 | P2g protected raw/debug producer permissions | [Native writer and queue path contract](verification/P2G_NATIVE_WRITER_STORAGE.md); production observer inactive |
+| P2h original FD9 preview | [Sealed nonactivating generation preview](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md); live native first-match/worker still open |
 | Long-term Voice UDP ports / extra IPv6 / P2P | [Retained future design](architecture/VOICE_PORTS_IPV6_P2P_FUTURE.md) |
 | Active-line chronology | [v0.6.x ledger](history/current/v0.6.x.md) |
 | Overall design and source ownership | [ARCHITECTURE](ARCHITECTURE.md), [architecture map](architecture/README.md) |

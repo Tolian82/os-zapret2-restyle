@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_18`** (`VERSION=0.6.5`, `PLUGIN_REVISION=18`, prospective `os-zapret2-restyle-0.6.5_18.pkg` **NOT PUBLISHED**, dormant P2g protected native producer storage).
+Current source increment: **`v0.6.5_19`** (`VERSION=0.6.5`, `PLUGIN_REVISION=19`, prospective `os-zapret2-restyle-0.6.5_19.pkg` **NOT PUBLISHED**, genuine original-FD9 sealed **nonactivating** observer preview).
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=18`; protected P2g raw/debug writer/queue file contract, still nonactivating | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=19`; sealed P2h original-FD9 preview, still no native recording | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_18.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_19.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -50,3 +50,5 @@ Current chronology is the [v0.6.x ledger](history/current/v0.6.x.md). Superseded
 ## Completed version-line archives
 
 [v0.1.x archive](history/archive/v0.1.x.md) · [v0.2.x archive](history/archive/v0.2.x.md) · [v0.3.x archive](history/archive/v0.3.x.md) · [v0.4.x archive](history/archive/v0.4.x.md) · [v0.5.x archive](history/archive/v0.5.x.md) · [v0.5.x chronology](history/archive/v0.5.x-ledger.md).
+
+Source `_19` inserts a nonactivating, refusal-marked observer preview in the original shared FD9 release after native PHP preflight and before the one seal; engine argv is unchanged. [P2h contract](verification/P2H_ORIGINAL_FD9_SEALED_PREVIEW.md).

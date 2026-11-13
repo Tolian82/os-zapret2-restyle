@@ -288,6 +288,77 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             origin.preflight_original_observer(self.work, "b" * 64)
         self.assertFalse((self.release / owner.MAP_NAME).exists())
 
+    def test_p2h_original_fd9_sealed_preview_is_inert_and_generation_bound(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n",
+            voice_on=True)
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        self.assertEqual(source["profiles"][0]["status"], "excluded-voice")
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        digest = "b" * 64
+        preview = origin.stage_original_preview(self.work, digest)
+        self.assertEqual(preview["evidence"],
+                         "P2H_ORIGINAL_FD9_SEALED_PREVIEW_NONACTIVATING")
+        self.assertFalse(preview["activation_authorized"])
+        self.assertEqual(preview["owner_candidate_sha256"], digest)
+        self.assertEqual(preview["generation"], self.work.name)
+        self.assertEqual(args.read_bytes(), original)
+        self.assertEqual(mapped.read_bytes(), json.dumps(source, sort_keys=True,
+                         separators=(",", ":")).encode() + b"\n")
+        proposed = (self.release / "auto-detect-observer-preview.args").read_bytes()
+        self.assertNotEqual(proposed, original)
+        self.assertIn(b"--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt", proposed)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        self.assertFalse((self.release / "dvtws.original.args").exists())
+        self.assertEqual(origin.verify_original_preview(self.work, digest),
+                         preview)
+        preview_map = (self.release / "auto-detect-observer-preview.json")
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_map(preview_map.read_bytes(),
+                             {"id": self.work.name, "candidate": digest}, proposed)
+        with self.assertRaises(origin.AttributionError):
+            origin.stage_original_preview(self.work, digest)
+        with self.assertRaises(origin.AttributionError):
+            origin.verify_original_preview(self.work, "c" * 64)
+        proposed_path = self.release / "auto-detect-observer-preview.args"
+        proposed_path.write_bytes(proposed + b"--new\n")
+        with self.assertRaises(origin.AttributionError):
+            origin.verify_original_preview(self.work, digest)
+        proposed_path.write_bytes(proposed)
+        preview_map.write_text(preview_map.read_text().replace(
+            "P2H_ORIGINAL_FD9_SEALED_PREVIEW_NONACTIVATING",
+            "ORIGINAL_SHARED_GENERATOR_CAPTURE"))
+        with self.assertRaises(origin.AttributionError):
+            origin.verify_original_preview(self.work, digest)
+        self.assertEqual(args.read_bytes(), original)
+
+    def test_p2h_original_fd9_preview_before_seal_and_verify_before_kernel(self):
+        service = (BACKEND.parent / "zapret_service.sh").read_text()
+        begin = service.index("shared_apply_prepare_service()\n")
+        end = service.index("extra_resources_native_previous_owner_service()\n", begin)
+        body = service[begin:end]
+        self.assertLess(body.index("orchestrator_build_release"),
+                        body.index("shared_apply_native_config preflight"))
+        self.assertLess(body.index('auto_detect_origin_map.py"'),
+                        body.index("shared_apply_bundle_service seal"))
+        self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', body)
+        begin = service.index("shared_apply_execute_service()\n")
+        end = service.index("shared_apply_wan_save_service()\n", begin)
+        applied = service[begin:end]
+        self.assertLess(applied.index("shared_apply_native_config preflight"),
+                        applied.index('auto_detect_origin_map.py" verify-preview'))
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-preview'),
+                        applied.index('shared_apply_record_service prepared'))
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-preview'),
+                        applied.index('apply_runtime_probe "$_shared_apply_root/release"'))
+        self.assertIn("preflight-rejected=observer-generation", applied)
+        self.assertNotIn("auto-detect-generation.json", body)
+        self.assertNotIn("auto-detect-generation.json", applied)
+
     def test_p2f_fd9_hook_runs_after_php_preflight_and_before_activation(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
         begin = service.index("shared_apply_execute_service()\n")
