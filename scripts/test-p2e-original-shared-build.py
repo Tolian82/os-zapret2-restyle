@@ -54,7 +54,10 @@ class OriginalSharedGeneration(unittest.TestCase):
         self.work.mkdir(mode=0o700)
         self.release = self.work / "release"
         self.static = self.root / "static"
-        self.active = self.root / "active"
+        # The genuine Voice compiler correctly refuses arbitrary active
+        # roots. Use its canonical *reference*, not a disposable fake path;
+        # this read-only build never creates or touches that live directory.
+        self.active = Path("/usr/local/etc/zapret2/runtime-v2")
         for sub in ("lua", "files/fake", "ipset"):
             (self.static / sub).mkdir(parents=True, exist_ok=True)
         for lua in ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua"):
