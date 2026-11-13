@@ -417,7 +417,7 @@
                 autoHostlistButtons();
                 const text = $('#zapretAutoHostlistField').val();
                 $.ajax({
-                    type: 'POST', url: '/api/zapret/settings/auto_hostlist_save',
+                    type: 'POST', url: '/api/zapret/settings/autoHostlistSave',
                     data: {auto_hostlist: {revision: autoHostlistRevision, content: text}},
                     dataType: 'json', timeout: 45000
                 }).done(function(data) {
@@ -462,7 +462,7 @@
             autoHostlistButtons();
             autoHostlistState(isRussian ? 'Загрузка…' : 'Loading…', false);
             $.ajax({
-                type: 'POST', url: '/api/zapret/settings/auto_hostlist_read',
+                type: 'POST', url: '/api/zapret/settings/autoHostlistRead',
                 dataType: 'json', timeout: 45000
             }).done(function(data) {
                 if (data && data.result === 'ok' &&
