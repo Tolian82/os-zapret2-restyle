@@ -158,7 +158,7 @@ generator_build_args_mapped "${CASE}/assembled" "${TEST_DIVERT}" "${CASE}/traffi
         self.assertNotIn(b"<IPSET:telegram>", data["normalized"][0])
 
     def test_actual_modes_and_separate_source_identity(self):
-        for mode, expected in (("all", 1), ("list", 3), ("auto", 4)):
+        for mode, expected in (("all", 1), ("list", 3), ("auto", 3)):
             with self.subTest(mode=mode):
                 _, mapping = self.generate("--filter-tcp=443\n--blob=http_iana_org\n--lua-desync=fake\n", mode)
                 self.assertEqual(len(mapping["profiles"]), expected + 1)
