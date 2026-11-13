@@ -20,6 +20,7 @@ from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
 from auto_detect_verified_owned_commit import (VerifiedOwnedRefused, commit_verified_owned_relocation,
+                                               commit_with_locked_original_model,
                                                run_native_verified_owned_worker)
 from auto_detect_owned_sources import bootstrap_empty, read_owned
 from auto_detect_verified_commit import (commit_verified_fallback,
@@ -267,6 +268,54 @@ class GenuineSourceToDestinationTests(unittest.TestCase):
         self.assertFalse(self.run_owned()["ack_authorized"])
         self.assertEqual(self.owned_youtube.read_text(), "example.co.uk\n")
         self.assertEqual(self.auto.read_text(), "!untouched.example\n")
+
+
+    def run_locked_original_model(self, manual=None, excluded=None):
+        with self.queue.exclusive():
+            return commit_with_locked_original_model(
+                self.writer, self.segment, owned_root=self.owned_root,
+                manual_hostlists=(
+                    {'youtube': self.youtube, 'user': ''}
+                    if manual is None else manual
+                ),
+                global_exclude=(
+                    self.global_exclude if excluded is None else excluded
+                ),
+                attest=lambda: self.proof,
+                inspect=lambda *a, **k: self.fd_state)
+
+    def test_original_model_locked_adapter_reuses_real_p2k8d_destination(self):
+        self.setup_owned_relocation()
+        receipt = self.run_locked_original_model()
+        self.assertFalse(receipt['ack_authorized'])
+        self.assertEqual(self.auto.read_text(), '!untouched.example\nexample.co.uk\n')
+        self.assertEqual(self.owned_youtube.read_text(), '')
+        self.assertTrue(self.segment.exists())
+        self.assertEqual(self.run_locked_original_model(), receipt)
+        self.assertEqual(self.auto.read_text().count('example.co.uk\n'), 1)
+
+    def test_original_model_locked_adapter_preserves_exclusion_and_manual(self):
+        self.setup_owned_relocation()
+        before = self.youtube
+        result = self.run_locked_original_model(
+            manual={'youtube': '!example.co.uk\n', 'user': ''})
+        self.assertFalse(result['ack_authorized'])
+        self.assertEqual(self.auto.read_text(), '!untouched.example\n')
+        self.assertEqual(self.owned_youtube.read_text(), 'example.co.uk\n')
+        self.assertEqual(self.youtube, before)
+        self.assertTrue(self.segment.exists())
+
+    def test_original_model_locked_adapter_rejects_incomplete_snapshot(self):
+        self.setup_owned_relocation()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(VerifiedOwnedRefused, 'original_locked_model_required'):
+                commit_with_locked_original_model(
+                    self.writer, self.segment, owned_root=self.owned_root,
+                    manual_hostlists={'youtube': 'youtube.com\n'},
+                    global_exclude='', attest=lambda: self.proof,
+                    inspect=lambda *a, **k: self.fd_state)
+        self.assertTrue(self.segment.exists())
+        self.assertFalse(self.checkpoint().exists())
 
 
 if __name__ == "__main__":
