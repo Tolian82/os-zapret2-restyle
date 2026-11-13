@@ -613,12 +613,14 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_verified_commit.py scripts/test-auto-detect-verified-commit.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-verified-commit.py
-      - name: Test P2k5 revisioned root GUI Auto Hostlist and explicit target mode
+      - name: Test P2k5/P2k8 native root Auto Hostlist read and known-owned sources
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: |
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_gui_hostlist.py scripts/test-auto-detect-gui-hostlist.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-gui-hostlist.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owned_sources.py scripts/test-auto-detect-owned-sources.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-owned-sources.py
           php -l src/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php
           php -l scripts/test-auto-detect-config-snapshot.php
           php scripts/test-auto-detect-config-snapshot.php
