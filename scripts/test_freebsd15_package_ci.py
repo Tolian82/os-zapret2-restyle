@@ -131,6 +131,6 @@ if "scripts/test-freebsd-lua-jail" in workflow or "scripts/test-extra-resources-
     fail("cancelled Jail trial remains wired to CI")
 require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md",
         "real installed Zapret2 service")
-require("docs/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md",
+require("docs/history/stages/extra-resources-2026-10-27/ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md",
         "native GUI-path prechecks")
 print(f"PASS: Official OPNsense 26.7 package CI accepts current candidate {candidate} with Model-C-only production routing, retained lifecycle diagnostics, and explicit Model B/A reference tooling")
