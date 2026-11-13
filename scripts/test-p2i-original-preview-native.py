@@ -139,7 +139,7 @@ def _remap_managed(case, planned: bytes) -> list[str]:
     return result
 
 
-def _native_file_modes(gid: int) -> None:
+def _native_file_modes(gid: int, *, phase: str) -> None:
     root = PRODUCER.lstat()
     pending = (PRODUCER / "pending").lstat()
     need(stat.S_ISDIR(root.st_mode) and root.st_uid == 0 and
@@ -153,10 +153,12 @@ def _native_file_modes(gid: int) -> None:
          "UNEXPECTED_NATIVE_PRODUCER_ARTIFACT")
     for file in (RAW_PATH, DEBUG_PATH):
         info = file.lstat()
+        actual_mode = stat.S_IMODE(info.st_mode)
         need(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and
-             stat.S_IMODE(info.st_mode) == 0o660 and
-             info.st_uid == 0 and info.st_gid == gid,
-             "NATIVE_FILE_OWNER_OR_MODE_CHANGED")
+             actual_mode == 0o660 and info.st_uid == 0 and info.st_gid == gid,
+             f"NATIVE_FILE_OWNER_OR_MODE_CHANGED:{phase}:{file.name}:"
+             f"mode={actual_mode:04o}:uid={info.st_uid}:gid={info.st_gid}:"
+             f"expected_gid={gid}:links={info.st_nlink}")
 
 
 def _debug_match(content: str, number: int) -> bool:
@@ -191,12 +193,14 @@ def _native(checkout: Path) -> None:
     try:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
-        _native_file_modes(nobody.pw_gid)
+        _native_file_modes(nobody.pw_gid, phase="prepared")
+        print(MARK + "_PREPARED_NATIVE_PRODUCER=PASS", flush=True)
         args = _remap_managed(case, planned)
         # First check the uninstrumented preview with real native parser.
         dry = subprocess.run([str(engine), *args, "--user=nobody", "--dry-run"],
                              capture_output=True, timeout=15, check=False)
         need(dry.returncode == 0, "NATIVE_ORIGINAL_PREVIEW_DRY_RUN_REJECTED")
+        print(MARK + "_DRY_RUN=PASS_NATIVE_PARSER", flush=True)
         need(RAW_PATH.read_bytes() == b"" and DEBUG_PATH.read_bytes() == b"",
              "DRY_RUN_PRODUCED_RAW_OR_DEBUG")
         # Inject ONLY native --debug for flow-selection evidence; it is not a
@@ -244,7 +248,7 @@ def _native(checkout: Path) -> None:
                 need(count.returncode == 0 and
                      re.search(rf"(?m)^0*{rule}\s+[1-9]\d*\s+", count.stdout),
                      "LOOPBACK_DIVERT_RULE_NOT_EXERCISED")
-            _native_file_modes(nobody.pw_gid)
+            _native_file_modes(nobody.pw_gid, phase="after-native-append")
     finally:
         failures = []
         for rule in reversed(installed):
