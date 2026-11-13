@@ -1,6 +1,6 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-**Status:** P0/P1 complete, P2a crash-safe queue/P2b FreeBSD FD/P2c detached common owner merged; P2d `v0.6.5_13` now captures original shared generator source stages in a sealed **nonactivating** source map ([P2d contract](../verification/P2D_ORIGINAL_GENERATOR_ORIGIN.md)). No original trailing observer or schema=2 owner + raw/debug production source exists yet. P2 still OPEN for native real owner/observer/event confirmation, durable destinations and 60-second configd/cron; P3–P5 OPEN (13 November 2026).
+**Status:** P0/P1 complete, P2a–P2d source/proof merged. P2e `v0.6.5_14` tests original `orchestrator_build_release()` in a disposable offline candidate instead of inferring P2d producer success from synthetic P0 or `.pkg` build ([P2e boundary](../verification/P2E_ORIGINAL_SHARED_BUILDER.md)); P2 STILL OPEN for native FreeBSD original builder, real observer/owner/raw/debug, durable destination and minute configd. P3–P5 open (13 November 2026).
 **Normative specification:** [Issue #1052 approved feature contract v1.0](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), translated from the [owner's full consolidated issue comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626).
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
@@ -80,4 +80,4 @@ The **ten acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AU
 
 The remaining integration questions concern persisted generation/debug correlation and additional UDP/QUIC observation scope, FreeBSD FD closure, inode durability/ownership and calendar/cron mechanics. P1 fixes offline PSL provision/update through normal packages. These are not permission to reopen agreed routing, repeat the completed P0 bounded witness or involve Strategy Lab.
 
-**Current authorized task:** qualify P2d actual sealed source map on original native common engine; next append strictly approved trailing observer, bind generation/raw/debug with current shared owner, then durable destination/ownership replay and minute cron/configd. P3–P5 not yet activated.
+**Current authorized task:** qualify actual original shared builder P2d origin map in isolated source/native FreeBSD; then generate approved no-action observer and schema=2 current real engine/raw-debug linkage before any durable destination/cron or P3–P5 activation.
