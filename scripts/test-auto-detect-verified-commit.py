@@ -19,6 +19,9 @@ from auto_detect_fd import FDState, OwnerToken
 from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
+from auto_detect_verified_owned_commit import (VerifiedOwnedRefused, commit_verified_owned_relocation,
+                                               run_native_verified_owned_worker)
+from auto_detect_owned_sources import bootstrap_empty, read_owned
 from auto_detect_verified_commit import (commit_verified_fallback,
                                          VerifiedCommitRefused,
                                          run_native_verified_commit_worker)
@@ -168,6 +171,102 @@ class GenuineSourceToDestinationTests(unittest.TestCase):
             run_native_verified_commit_worker()
         self.run_commit()
         self.assertTrue(self.segment.exists())
+
+
+    def setup_owned_relocation(self):
+        self.owned_root = self.base / "auto-detect-owned"
+        bootstrap_empty(self.owned_root, original_config_sha256="b" * 64,
+                        owner_uid=os.geteuid(), authorized_clean_start=True)
+        self.owned_youtube = self.owned_root / "youtube.txt"
+        self.owned_user = self.owned_root / "user.txt"
+        self.owned_youtube.write_text("example.co.uk\n")
+        self.writer = DestinationCommit(self.receipts, self.queue,
+            {"auto": self.auto, "youtube": self.owned_youtube,
+             "user": self.owned_user}, self.lock)
+
+    def owned_snapshot(self):
+        return ({"auto": self.auto.read_text(), "youtube": self.youtube, "user": ""},
+                read_owned(self.owned_root, owner_uid=os.geteuid()),
+                self.global_exclude)
+
+    def run_owned(self, snapshot=None):
+        with self.queue.exclusive():
+            return commit_verified_owned_relocation(
+                self.writer, self.segment, owned_root=self.owned_root,
+                snapshot=snapshot or self.owned_snapshot,
+                attest=lambda: self.proof, inspect=lambda *a, **k: self.fd_state)
+
+    def test_owned_relocation_moves_only_private_source_and_preserves_gui_deletion(self):
+        self.setup_owned_relocation()
+        previous_manual = self.youtube
+        done = self.run_owned()
+        self.assertFalse(done["ack_authorized"])
+        self.assertEqual(self.auto.read_text(), "!untouched.example\nexample.co.uk\n")
+        self.assertEqual(self.owned_youtube.read_text(), "")
+        self.assertEqual(self.youtube, previous_manual)
+        self.assertTrue(self.segment.exists())
+        self.assertEqual(self.run_owned(), done)
+        self.auto.write_text("!untouched.example\n")
+        self.assertEqual(self.run_owned(), done)
+        self.assertEqual(self.auto.read_text(), "!untouched.example\n")
+
+    def _owned_relocation_crash(self, checkpoint_crash):
+        import auto_detect_destination_commit as module
+        self.setup_owned_relocation()
+        orig_replace, orig_write = module._replace, module._write_once
+        def replace(path, *args):
+            if not checkpoint_crash and path == self.owned_youtube:
+                raise OSError("injected second-target failure")
+            return orig_replace(path, *args)
+        def write(folder, name, data, uid):
+            if checkpoint_crash and name == "checkpoint.json":
+                raise OSError("injected checkpoint failure")
+            return orig_write(folder, name, data, uid)
+        with patch.object(module, "_replace", side_effect=replace), \
+             patch.object(module, "_write_once", side_effect=write):
+            with self.assertRaisesRegex(VerifiedOwnedRefused, "original_owner_policy"):
+                self.run_owned()
+        self.assertEqual(self.auto.read_text(), "!untouched.example\nexample.co.uk\n")
+        self.assertFalse(self.checkpoint().exists())
+        self.assertTrue(self.segment.exists())
+        result = self.run_owned()
+        self.assertFalse(result["ack_authorized"])
+        self.assertEqual(self.owned_youtube.read_text(), "")
+        self.assertEqual(self.auto.read_text().count("example.co.uk"), 1)
+
+    def test_owned_relocation_crash_after_first_write(self):
+        self._owned_relocation_crash(False)
+
+    def test_owned_relocation_crash_before_checkpoint(self):
+        self._owned_relocation_crash(True)
+
+    def test_owned_relocation_stale_owned_and_config_or_gui_lock_refuse(self):
+        self.setup_owned_relocation()
+        def stale():
+            return (self.owned_snapshot()[0], {"youtube": "", "user": ""}, "")
+        with self.assertRaisesRegex(VerifiedOwnedRefused, "stale_original_config"):
+            self.run_owned(stale)
+        self.owned_user.write_text("UPPER.example\n")
+        with self.assertRaisesRegex(VerifiedOwnedRefused, "original_owner_policy"):
+            self.run_owned()
+        self.owned_user.write_text("")
+        fd = os.open(self.lock, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(DestinationRefused):
+                self.run_owned()
+        finally:
+            os.close(fd)
+        self.assertEqual(self.owned_youtube.read_text(), "example.co.uk\n")
+
+    def test_owned_relocation_exclusion_and_native_cli_remain_closed(self):
+        self.setup_owned_relocation()
+        with self.assertRaisesRegex(VerifiedOwnedRefused, "not_authorized"):
+            run_native_verified_owned_worker()
+        self.global_exclude = "example.co.uk\n"
+        self.assertFalse(self.run_owned()["ack_authorized"])
+        self.assertEqual(self.owned_youtube.read_text(), "example.co.uk\n")
+        self.assertEqual(self.auto.read_text(), "!untouched.example\n")
 
 
 if __name__ == "__main__":

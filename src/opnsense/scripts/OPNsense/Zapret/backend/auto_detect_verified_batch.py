@@ -77,7 +77,8 @@ def prepare_verified_batch(queue: DurableInbox, receipts: EpochReceipts,
                            automatic: dict[str, str], global_exclude: str = "", *,
                            attest: Callable = attest_running_generation,
                            inspect: Callable = probe_pending_fd,
-                           psl: PublicSuffixList | None = None) -> VerifiedBatch:
+                           psl: PublicSuffixList | None = None,
+                           allow_owned_relocation: bool = False) -> VerifiedBatch:
     """Read current original P2c/P2b + P2k1/P2k2a; invoke P1 exactly once.
 
     The caller must hold `queue.exclusive()` across this procedure. Historical
@@ -87,7 +88,8 @@ def prepare_verified_batch(queue: DurableInbox, receipts: EpochReceipts,
     """
     if (not isinstance(queue, DurableInbox) or not queue._held or
             not isinstance(receipts, EpochReceipts) or
-            not callable(attest) or not callable(inspect)):
+            not callable(attest) or not callable(inspect) or
+            type(allow_owned_relocation) is not bool):
         raise BatchRefused("original_queue_lock_and_native_evidence_required")
     try:
         proof = attest()
@@ -130,11 +132,14 @@ def prepare_verified_batch(queue: DurableInbox, receipts: EpochReceipts,
         plan = plan_auto_additions(discoveries, hostlists, automatic,
                                    global_exclude, psl=psl)
         if (plan["result"] != "ok" or plan["unprocessed"] or
-                plan["removals"] or
+                (plan["removals"] and not allow_owned_relocation) or
+                (allow_owned_relocation and
+                 set(plan["removals"]) - {"youtube", "user"}) or
                 any(name != "auto" for name in plan["additions"]) or
                 any(row["destination"] != "auto" for row in plan["routes"])):
-            # P3 must own multi-list relocation and persistent auto-origin
-            # identity; never discard an old owned row from a stale snapshot.
+            # Even with an opted-in known-owned relocation transaction, the
+            # genuine trailing observer NEVER gains known-list attribution.
+            # Old owned rows move only via a separately authenticated sink.
             raise BatchRefused("policy_requires_unimplemented_owned_relocation")
         if attest() != proof:
             raise BatchRefused("original_common_generation_changed_during_plan")
