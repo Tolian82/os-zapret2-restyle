@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Текущий этап — **`v0.6.5_15`** (`VERSION=0.6.5`, `PLUGIN_REVISION=15`, prospective `os-zapret2-restyle-0.6.5_15.pkg` **NOT PUBLISHED**, documentation only).
+Current source increment: **`v0.6.5_16`** (`VERSION=0.6.5`, `PLUGIN_REVISION=16`, prospective `os-zapret2-restyle-0.6.5_16.pkg` **NOT PUBLISHED**, nonactivating P2f source contract).
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=15`; documentation-only `v0.6.5_15` | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=16`; source-only P2f observer proposal `v0.6.5_16` | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_15.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_16.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -31,7 +31,7 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 P0 generated-native observer feasibility and P1 canonical domain/PSL policy are complete. P2a protected queue, P2b genuine FreeBSD FD inspection, P2c detached common-owner attestation and P2d nonactivating original-generator source map are merged. [P2e](verification/P2E_ORIGINAL_SHARED_BUILDER.md) adds the actual original shared-builder witness at `_14`; the original `orchestrator_build_release()` runs against a disposable offline candidate, with only the kernel-interface resolver locally stubbed.
 
-The scoped native original-builder run [#43392107224](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43392107224) passed before the `_14` merge. This does not implement a running native observer, a sealed schema-2 real-process raw/debug generation, durable routing into final list components, pending acknowledgement, cron/configd processing, editable Auto Hostlist or scheduled Auto Restart. P2 and P3–P5 remain open under the [approved plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). Exact next action belongs only to [START_HERE](START_HERE.md).
+The scoped native original-builder run [#43392107224](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43392107224) passed before the `_14` merge. Source `_16` adds a **nonactivating in-memory P2f trailing no-action observer proposal** from that original same-build map, plus two focused original-builder assertions. It returns a deliberately unauthorized schema-2-shaped preview (`P2F_OFFLINE_PLAN_ONLY`) that the running-owner attester refuses; it does not modify original `dvtws.args`, provision raw/debug files, or change any active runtime. [P2f contract](verification/P2F_OFFLINE_OBSERVER_PLAN.md). Exact `_16` CI/native qualification and installed acceptance are independent of P2e's earlier run. A running native observer, authorized sealed schema-2 real-process raw/debug generation, durable routing, pending acknowledgement, cron/configd, editable Auto Hostlist and scheduled Auto Restart **remain unimplemented**. P2 and P3–P5 remain open under the [approved plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). Exact next action belongs only to [START_HERE](START_HERE.md).
 
 ## Retained constraints and evidence limits
 
