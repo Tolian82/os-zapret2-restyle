@@ -9,7 +9,7 @@ Complete owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Resta
 | P0 | Nonactivating native observer feasibility and generation attribution | Completed within recorded scope |
 | P1 | One domain policy, strict IDNA and offline ICANN+PRIVATE PSL | Completed |
 | P2 | Durable queue and native cron/configd worker with real owner, FD drain and generation proof | Partial: P2a–P2e source/proof; offline native builder qualified; observer/schema-2/owned writes remain |
-| P3 | Auto-owned destination lists, migration and native reload | Open |
+| P3 | Auto-owned destination lists, obsolete-path retirement and native reload | Open |
 | P4 | Editable Auto Hostlist and independent scheduled restart in native Advanced Mode | Open |
 | P5 | Proportionate source/native checks, exact testing package and owner acceptance | Open |
 
