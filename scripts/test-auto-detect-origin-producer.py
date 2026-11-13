@@ -66,7 +66,17 @@ class OriginalProducerTests(unittest.TestCase):
         result = api.publish_origin_map(work, release, "auto")
         stored = json.loads((release / api.ORIGIN_FILE).read_text())
         self.assertEqual(result, stored)
-        self.assertEqual(stored["profiles"], expected["profiles"])
+        self.assertEqual(
+            [{key: value for key, value in row.items() if key != "id"}
+             for row in stored["profiles"]],
+            [{key: value for key, value in row.items() if key != "id"}
+             for row in expected["profiles"]],
+        )
+        # The ORIGINAL shared-work transaction is a different generation
+        # from the detached P0 fixture. Their profile IDs must not alias.
+        self.assertNotEqual(stored["generation"], expected["generation"])
+        self.assertNotEqual(stored["profiles"][0]["id"], expected["profiles"][0]["id"])
+        self.assertEqual(stored["profiles"][0]["id"].split(":")[0], work.name)
         self.assertEqual(stored["evidence"], api.NONACTIVATING)
         self.assertFalse(stored["observer_attached"])
         self.assertFalse(stored["activation_authorized"])
