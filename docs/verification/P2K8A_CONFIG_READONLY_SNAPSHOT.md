@@ -1,6 +1,6 @@
 # #1052 P2k8a — native Config/HOSTLIST read-only lock-coupled snapshot
 
-**Source candidate:** `v0.6.5_31`, 13 November 2026. **Nonactivating first piece of the P2/P3 authoritative snapshot gate.** This is source/CI qualification, not owner's installed OPNsense acceptance.
+**Source candidate:** `v0.6.5_31`, 13 November 2026. **Follow-up:** `_32` [P2k8b](P2K8B_OWNED_SOURCES.md) replaces the single final-file read with one root-protected read of final **and** separate known-owned components under the same destination flock, still `commit_authorized=false`. The `_31` proof below is retained for its original read-only snapshot behavior. **Nonactivating first piece of the P2/P3 authoritative snapshot gate.** This is source/CI qualification, not owner's installed OPNsense acceptance.
 
 ## Actual user risk before the change
 

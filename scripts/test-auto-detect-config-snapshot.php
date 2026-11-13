@@ -24,7 +24,8 @@ function correctFile(?string $text):array
 {
     return ['result'=>'ok', 'status'=>$text===null?'missing':($text===''?'empty':'populated'),
       'revision'=>hash('sha256',$text===null?"missing\0":"present\0".$text),
-      'content'=>$text ?? ''];
+      'content'=>$text ?? '',
+      'auto_owned_components'=>null,'auto_owned_complete'=>false];
 }
 function nativeModel():array {return ['hostlist'=>[
     'youtubedomains'=>"youtube.com\n!^test.invalid\n",
@@ -52,6 +53,14 @@ check($r['manual_hostlists'] === ['youtube'=>"youtube.com\n!^test.invalid\n",'us
 check($r['shared_auto']==="!^negative.test\nnew.example\n"&&$r['global_exclude']==="bad.example\n",'complete current registered domain sources');
 check($r['auto_owned_components']===null&&$r['auto_owned_complete']===false&&$r['commit_authorized']===false,'ledger absence must refuse authorization');
 check(strlen($r['config_snapshot_sha256'])===64,'full native model digest');
+$r2=correctFile('new.example\n');
+$r2['auto_owned_components']=['youtube'=>'', 'user'=>'known.example\n'];
+$r2['auto_owned_complete']=true;
+$c2=new TestConfig;
+$known=Snapshot::capture($c2,fn()=>new TestModel(nativeModel()),fn()=>$r2);
+check($known['auto_owned_complete']===true && $known['auto_owned_components']===$r2['auto_owned_components'] && !$known['commit_authorized'],'proven owned components remain read-only');
+check(!$c2->held&&$c2->writes===0,'proven read never writes');
+++$count;
 ++$count;
 
 foreach ([null,'',"manual.example\n"] as $content) {
@@ -79,7 +88,10 @@ check(!$c->held,'oversized model lock release');++$count;
 foreach ([['status'=>'populated','content'=>'','revision'=>correctFile('')['revision'],'result'=>'ok'],
           ['status'=>'populated','content'=>'tampered.example','revision'=>str_repeat('0',64),'result'=>'ok'],
           ['status'=>'missing','content'=>'unexpected','revision'=>correctFile(null)['revision'],'result'=>'ok'],
-          ['result'=>'error','reason'=>'gui_writer_busy'] ] as $bad) {
+          ['result'=>'error','reason'=>'gui_writer_busy'],
+          array_merge(correctFile(''), ['auto_owned_components'=>[], 'auto_owned_complete'=>true]),
+          array_merge(correctFile(''), ['auto_owned_components'=>['youtube'=>'!bad.example\n','user'=>''], 'auto_owned_complete'=>true]),
+          array_merge(correctFile(''), ['auto_owned_components'=>['youtube'=>''], 'auto_owned_complete'=>false]) ] as $bad) {
     $c=new TestConfig;expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel(nativeModel()),fn()=>$bad),'untrusted native reader reply');
     check(!$c->held&&$c->unlocks===1,'reader refusal must release native lock');
     ++$count;

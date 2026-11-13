@@ -5,9 +5,10 @@
  * snapshot. No standalone parser for config.xml and no Config writer.
  *
  * The one original Config lock remains held while the existing P2k5 native
- * reader obtains its own checked HOSTLIST lock. A later file transaction MAY
+ * reader obtains its own checked HOSTLIST lock for both the final file and
+ * root-owned known-list components. A later file transaction MAY
  * NOT use this returned snapshot as authorization: the file lock has been
- * released and a durable owned-source ledger does not yet exist.
+ * released and no trusted owner is installed to authorize an auto-owned update.
  *
  * There is no configd action for this CLI, no timer, no FD9 ownership claim,
  * no pending acknowledgement and no runtime or IPFW change.
@@ -21,9 +22,9 @@ use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 final class AutoDetectConfigSnapshot
 {
     private const MAX_MODEL_TEXT = 1048576;
-    private const MAX_NATIVE_REPLY = 50000;
+    private const MAX_NATIVE_REPLY = 150000;
     private const NATIVE_PYTHON = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
-    private const FINAL_READER = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_gui_hostlist.py';
+    private const FINAL_READER = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owned_sources.py';
 
     /**
      * Extract exactly the MANUAL HOSTLIST owners currently registered by the
@@ -59,8 +60,8 @@ final class AutoDetectConfigSnapshot
 
     /**
      * The caller supplies a *real fresh native Model factory* and a read-only
-     * P2k5 final-file reader. Both operations are inside Config::lock.
-     * Failure releases Config; there is never an auto-owned empty-dict guess.
+     * P2k8b single-locked final/known-owned file reader. Both are under
+     * Config::lock. Missing unbootstrapped ownership never becomes {}.
      */
     public static function capture(object $config, callable $modelFactory,
                                    callable $finalReader): array
@@ -95,6 +96,22 @@ final class AutoDetectConfigSnapshot
                 ($status === 'populated' && $content === '')) {
                 throw new \RuntimeException('Native final Hostlist revision mismatch');
             }
+            $complete = $final['auto_owned_complete'] ?? false;
+            $owned = $final['auto_owned_components'] ?? null;
+            if (!is_bool($complete) ||
+                ($complete && (!is_array($owned) || array_keys($owned) !== ['youtube', 'user'])) ||
+                (!$complete && $owned !== null)) {
+                throw new \RuntimeException('Untrusted automatic owned-source snapshot');
+            }
+            if ($complete) {
+                foreach ($owned as $value) {
+                    if (!is_string($value) || strlen($value) > 40960 ||
+                        preg_match('/(?:^|\n)[!^]/', $value) === 1 ||
+                        str_contains($value, "\r")) {
+                        throw new \RuntimeException('Unsafe owned-source component');
+                    }
+                }
+            }
             return [
                 'schema_version' => 1,
                 'status' => 'read_only_unqualified',
@@ -104,9 +121,10 @@ final class AutoDetectConfigSnapshot
                 'shared_auto_revision' => $final['revision'],
                 'global_exclude' => $manual['global_exclude'],
                 'config_snapshot_sha256' => VoiceSettingsSnapshot::digest($nodes),
-                // Never confuse "not yet implemented" with "known empty".
-                'auto_owned_components' => null,
-                'auto_owned_complete' => false,
+                // Strictly distinguish a proven sealed empty baseline from
+                // uninitialized/missing ownership; neither authorizes writes.
+                'auto_owned_components' => $owned,
+                'auto_owned_complete' => $complete,
                 'commit_authorized' => false,
             ];
         } finally {
@@ -114,7 +132,7 @@ final class AutoDetectConfigSnapshot
         }
     }
 
-    /** Direct root-native invocation. No call through shared Apply/configd. */
+    /** Original Config remains held during one shared final/owned file lock. */
     public static function nativeFinalRead(): array
     {
         $pipes = [];
@@ -124,7 +142,7 @@ final class AutoDetectConfigSnapshot
             $pipes, null, ['LC_ALL' => 'C']
         );
         if (!is_resource($process)) {
-            throw new \RuntimeException('Native root final Hostlist reader unavailable');
+            throw new \RuntimeException('Native root Hostlist/ownership reader unavailable');
         }
         try {
             fclose($pipes[0]);
@@ -136,7 +154,7 @@ final class AutoDetectConfigSnapshot
             $exit = proc_close($process);
             $process = null;
             if ($exit !== 0 || !is_string($text) || strlen($text) > self::MAX_NATIVE_REPLY) {
-                throw new \RuntimeException('Native root Hostlist read failed');
+                throw new \RuntimeException('Native root Hostlist/ownership read failed');
             }
             $result = json_decode($text, true, 8, JSON_THROW_ON_ERROR);
             if (!is_array($result)) {
