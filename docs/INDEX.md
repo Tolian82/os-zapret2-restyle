@@ -34,6 +34,7 @@ Read through EOF in this order:
 | P2k3 original owner / P1 planning gate | [Read-only pending/FD/debug-to-canonical-domain policy](verification/P2K3_VERIFIED_PENDING_POLICY.md); no deployed observer, writer or ack |
 | P2k4 locked fallback transaction | [Current-owner/P1 policy to durable target write + empty-effects checkpoint](verification/P2K4_LOCKED_FALLBACK_COMMIT.md); import-only, no active GUI/FD9/worker/ack |
 | P2k8a native Config/hostlist read-only snapshot | [Locked original OPNsense model + protected final-file read, extended by P2k8b; write forbidden](verification/P2K8A_CONFIG_READONLY_SNAPSHOT.md) |
+| P2k8d known-owned durable relocation | [Original P2k3/P1 into existing P2k2b multi-target journal, crash-safe known-owned → shared fallback](verification/P2K8D_DURABLE_OWNED_RELOCATION.md); native Config/worker/ACK unwired |
 | P2k8c known-list effective generator | [Canonical manual + sealed auto-owned composition on the real managed builder](verification/P2K8C_EFFECTIVE_KNOWN_GENERATOR.md); live writer/ACK remains inactive |
 | P2k8b known auto-owned physical sources | [Root-private per-HOSTLIST components, explicit sealed clean bootstrap, strict final+owned one-lock read](verification/P2K8B_OWNED_SOURCES.md); no active writer or commit authorization |
 | P2k5 editable Auto Hostlist | [Native GUI and revisioned final-list edit, explicit-only selector](verification/P2K5_GUI_AUTO_HOSTLIST.md); historical old-file first-copy removed in `_30` |
