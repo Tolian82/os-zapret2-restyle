@@ -34,6 +34,7 @@ Read through EOF in this order:
 | P2k3 original owner / P1 planning gate | [Read-only pending/FD/debug-to-canonical-domain policy](verification/P2K3_VERIFIED_PENDING_POLICY.md); no deployed observer, writer or ack |
 | P2k4 locked fallback transaction | [Current-owner/P1 policy to durable target write + empty-effects checkpoint](verification/P2K4_LOCKED_FALLBACK_COMMIT.md); import-only, no active GUI/FD9/worker/ack |
 | P2k5 editable Auto Hostlist | [Native GUI and root configd revisioned list editing, legacy first-copy and explicit-only selector](verification/P2K5_GUI_AUTO_HOSTLIST.md); source-only pending installed acceptance |
+| P2k6 explicit legacy migration | [Dual-populated-file conflict-aware user-confirmed merge + immutable replay receipts](verification/P2K6_LEGACY_HOSTLIST_MERGE.md); preserves legacy and later user deletions |
 | Long-term Voice UDP ports / extra IPv6 / P2P | [Retained future design](architecture/VOICE_PORTS_IPV6_P2P_FUTURE.md) |
 | Active-line chronology | [v0.6.x ledger](history/current/v0.6.x.md) |
 | Overall design and source ownership | [ARCHITECTURE](ARCHITECTURE.md), [architecture map](architecture/README.md) |

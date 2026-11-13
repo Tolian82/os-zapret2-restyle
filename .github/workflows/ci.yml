@@ -619,6 +619,8 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_gui_hostlist.py scripts/test-auto-detect-gui-hostlist.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-gui-hostlist.py
+          python3.13 -m py_compile scripts/test-auto-detect-legacy-merge.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-legacy-merge.py
           php -l src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/target_mode.sh
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/storage.sh

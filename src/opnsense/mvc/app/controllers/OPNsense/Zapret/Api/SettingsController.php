@@ -479,6 +479,54 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
+     * P2k6 explicit, one-shot two-populated-file legacy union. The root
+     * configd action (not this PHP process) holds the P2k5 destination flock
+     * across revision checks, durable migration intent and atomic replacement.
+     * No Config/Apply/FD9 operation can be reached.
+     */
+    public function autoHostlistMigrateAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'reason' => 'post_required'];
+        }
+        $this->throwReadOnly();
+        $posted = $this->request->getPost('migration');
+        if (!is_array($posted) || count($posted) !== 2 ||
+            !isset($posted['revision'], $posted['legacy_digest']) ||
+            !is_string($posted['revision']) ||
+            !is_string($posted['legacy_digest']) ||
+            preg_match('/^[a-f0-9]{64}$/D', $posted['revision']) !== 1 ||
+            preg_match('/^[a-f0-9]{64}$/D', $posted['legacy_digest']) !== 1) {
+            return ['result' => 'error', 'reason' => 'invalid_request'];
+        }
+        try {
+            $raw = (string)(new Backend())->configdpRun(
+                'zapret auto_hostlist_migrate',
+                [$posted['revision'], $posted['legacy_digest']], false, 30
+            );
+            if (strlen($raw) > 4096) {
+                throw new \RuntimeException('Unexpected legacy merge reply');
+            }
+            $receipt = json_decode(trim($raw), true);
+            if (!is_array($receipt) ||
+                !in_array($receipt['result'] ?? null, ['migrated', 'conflict', 'error'], true)) {
+                throw new \RuntimeException('Missing native legacy merge receipt');
+            }
+            if (($receipt['result'] ?? null) === 'migrated' &&
+                (!is_string($receipt['revision'] ?? null) ||
+                 preg_match('/^[a-f0-9]{64}$/D', $receipt['revision']) !== 1 ||
+                 !is_int($receipt['added'] ?? null) ||
+                 $receipt['added'] < 0 || $receipt['added'] > 4096)) {
+                throw new \RuntimeException('Invalid native legacy merge receipt');
+            }
+            return $receipt;
+        } catch (\Throwable $error) {
+            error_log('Zapret Auto Hostlist migration unavailable: ' . get_class($error));
+            return ['result' => 'error', 'reason' => 'unavailable'];
+        }
+    }
+
+    /**
      * P5c unsaved Strategies preview. No persistent Apply, Config::save,
      * candidate storage, or native runtime switch is reachable from here.
      * Native configd owns the same original FD9 used by ordinary Apply.

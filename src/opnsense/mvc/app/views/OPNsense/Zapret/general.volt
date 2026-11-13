@@ -351,6 +351,8 @@
         let autoHostlistRevision = '';
         let autoHostlistBusy = false;
         let autoHostlistReady = false;
+        let legacyMigrationDigest = '';
+        let legacyMigrationStatus = '';
         function autoHostlistState(text, bad) {
             $('#zapretAutoHostlistState').text(text).toggleClass('text-danger', !!bad);
         }
@@ -358,6 +360,8 @@
             $('#zapretAutoHostlistSave').prop('disabled',
                 autoHostlistBusy || !autoHostlistReady);
             $('#zapretAutoHostlistReload').prop('disabled', autoHostlistBusy);
+            $('#zapretAutoHostlistMigrate').prop('disabled',
+                autoHostlistBusy || !autoHostlistReady || !legacyMigrationDigest);
         }
         function mountAutoHostlistEditor() {
             const original = document.getElementById('zapret.hostlist.userdomains');
@@ -385,7 +389,13 @@
                         id: 'zapretAutoHostlistReload', type: 'button',
                         'class': 'btn btn-default'
                     }).text(isRussian ? 'Обновить список' : 'Reload List'),
+                    $('<button/>', {
+                        id: 'zapretAutoHostlistMigrate', type: 'button',
+                        'class': 'btn btn-default', disabled: true
+                    }).text(isRussian ? 'Перенести старый список' : 'Import Legacy List').hide(),
                     $('<span/>', {id: 'zapretAutoHostlistState', role: 'status',
+                                   'aria-live': 'polite'}),
+                    $('<span/>', {id: 'zapretAutoHostlistLegacyState', role: 'status',
                                    'aria-live': 'polite'})
                 )
             );
@@ -425,6 +435,9 @@
                         typeof data.revision === 'string' &&
                         typeof data.content === 'string') {
                         autoHostlistRevision = data.revision;
+                        legacyMigrationDigest = '';
+                        $('#zapretAutoHostlistMigrate').hide();
+                        $('#zapretAutoHostlistLegacyState').text('');
                         $('#zapretAutoHostlistField').val(data.content)
                             .data('loadedText', data.content);
                         autoHostlistState(isRussian
@@ -454,11 +467,62 @@
                     autoHostlistButtons();
                 });
             });
+            $('#zapretAutoHostlistMigrate').on('click', function(e) {
+                e.preventDefault();
+                if (!autoHostlistReady || autoHostlistBusy || !legacyMigrationDigest) return;
+                if ($('#zapretAutoHostlistField').val() !==
+                    $('#zapretAutoHostlistField').data('loadedText')) {
+                    autoHostlistState(isRussian
+                        ? 'Сначала сохраните или отмените несохранённые изменения.'
+                        : 'Save or discard your unsaved edits before importing.', true);
+                    return;
+                }
+                const question = isRussian
+                    ? 'Перенести недостающие домены из старого файла? '
+                      + 'Оба исходных файла сохраняются. Конфликтующие исключения будут отклонены.'
+                    : 'Import missing entries from the legacy file? '
+                      + 'Both source files are kept. Conflicting exclusions are refused.';
+                if (!window.confirm(question)) return;
+                autoHostlistBusy = true;
+                autoHostlistButtons();
+                let successful = false;
+                $.ajax({
+                    type: 'POST', url: '/api/zapret/settings/autoHostlistMigrate',
+                    data: {migration: {revision: autoHostlistRevision,
+                                      legacy_digest: legacyMigrationDigest}},
+                    dataType: 'json', timeout: 45000
+                }).done(function(data) {
+                    if (data && data.result === 'migrated') {
+                        successful = true;
+                    } else {
+                        autoHostlistReady = false;
+                        autoHostlistState(isRussian
+                            ? 'Перенос не подтверждён или список изменился. '
+                              + 'Сохраните ваши правки и обновите список.'
+                            : 'Import unconfirmed or lists changed. '
+                              + 'Keep your edits and reload before retrying.', true);
+                    }
+                }).fail(function() {
+                    autoHostlistReady = false;
+                    autoHostlistState(isRussian
+                        ? 'Результат переноса неизвестен. Обновите список.'
+                        : 'Import outcome unknown. Reload before retrying.', true);
+                }).always(function() {
+                    autoHostlistBusy = false;
+                    legacyMigrationDigest = '';
+                    $('#zapretAutoHostlistMigrate').hide();
+                    autoHostlistButtons();
+                    if (successful) loadAutoHostlist();
+                });
+            });
         }
         function loadAutoHostlist() {
             if (autoHostlistBusy || !$('#zapretAutoHostlistRow').length) return;
             autoHostlistBusy = true;
             autoHostlistReady = false;
+            legacyMigrationDigest = '';
+            $('#zapretAutoHostlistMigrate').hide();
+            $('#zapretAutoHostlistLegacyState').text('');
             autoHostlistButtons();
             autoHostlistState(isRussian ? 'Загрузка…' : 'Loading…', false);
             $.ajax({
@@ -480,6 +544,31 @@
                         : {missing: 'File missing', empty: 'List is empty',
                            populated: 'List loaded'};
                     autoHostlistState(labels[data.status], false);
+                    const legacy = data.legacy || {};
+                    legacyMigrationStatus = legacy.status || '';
+                    if ((legacyMigrationStatus === 'available' ||
+                         legacyMigrationStatus === 'resume_available') &&
+                        /^[a-f0-9]{64}$/.test(legacy.digest) &&
+                        Number.isInteger(legacy.added) &&
+                        legacy.added >= 0 && legacy.added <= 4096) {
+                        legacyMigrationDigest = legacy.digest;
+                        $('#zapretAutoHostlistMigrate').text(isRussian
+                            ? (legacyMigrationStatus === 'resume_available'
+                                ? 'Завершить перенос' : 'Перенести старый список')
+                            : (legacyMigrationStatus === 'resume_available'
+                                ? 'Finish Legacy Import' : 'Import Legacy List')).show();
+                        $('#zapretAutoHostlistLegacyState').text(isRussian
+                            ? 'Старый файл: новых записей ' + legacy.added
+                            : 'Legacy entries to import: ' + legacy.added);
+                    } else if (legacyMigrationStatus === 'review_required') {
+                        $('#zapretAutoHostlistLegacyState').text(isRussian
+                            ? 'Старый список требует ручной проверки; автоматический перенос запрещён.'
+                            : 'Legacy file requires manual review; automatic import refused.');
+                    } else if (legacyMigrationStatus === 'already_imported') {
+                        $('#zapretAutoHostlistLegacyState').text(isRussian
+                            ? 'Старый список уже перенесён.'
+                            : 'Legacy import already recorded.');
+                    }
                 } else {
                     autoHostlistState(isRussian
                         ? 'Невозможно прочитать список. Сохранение недоступно.'
