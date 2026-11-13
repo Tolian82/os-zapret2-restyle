@@ -8,6 +8,11 @@ from pathlib import Path
 import tempfile
 import unittest
 from dataclasses import replace
+import sys
+
+BACKEND = (Path(__file__).resolve().parents[1] /
+           "src/opnsense/scripts/OPNsense/Zapret/backend")
+sys.path.insert(0, str(BACKEND))
 
 from auto_detect_fd import OwnerToken
 from auto_detect_owner import GenerationProof
