@@ -20,9 +20,9 @@ import subprocess
 import sys
 
 from auto_detect_fd import OwnerToken, _owner_snapshot
-from global_exclusions import segments
-from shared_apply_operation import SharedApplyOperation, committed_owner, TERMINAL
-from shared_apply_seal import WORK, verify_seal
+from global_exclusions import ExclusionError, segments
+from shared_apply_operation import SharedApplyOperation, SharedOperationError, committed_owner, TERMINAL
+from shared_apply_seal import WORK, SharedBundleError, verify_seal
 from voice_live_inspect import (
     CHILD_EXEC, CHILD_PID, MONITOR_EXEC, MONITOR_PID, COMMON_ACTIVE,
 )
@@ -259,7 +259,8 @@ def attest_running_generation(*, journal: Path = Path("/var/db/zapret2/shared-ap
         return _attest_core(journal=journal, work_root=work_root, active=active,
                             child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
                             runner=runner, owner_uid=0)
-    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
+            SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("generation_owner_not_attested") from exc
 
 

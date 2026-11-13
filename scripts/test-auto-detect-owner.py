@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_owner as owner_mod
-from shared_apply_seal import create_seal
+from shared_apply_seal import SharedBundleError, create_seal
+from shared_apply_operation import SharedOperationError
 
 EXE = owner_mod.CHILD_EXEC
 MONITOR = owner_mod.MONITOR_EXEC
@@ -140,7 +141,8 @@ class OwnerGenerationTests(unittest.TestCase):
         )
 
     def refuses(self):
-        with self.assertRaises((owner_mod.GenerationRefused, ValueError, OSError)):
+        with self.assertRaises((owner_mod.GenerationRefused, SharedBundleError,
+                                SharedOperationError, ValueError, OSError)):
             self.witness()
 
     def test_qualified_synthetic_owner_and_source_profiles(self):
