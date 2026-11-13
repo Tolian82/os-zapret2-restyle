@@ -7,6 +7,8 @@ coordinate every GUI writer on the supplied destination lock. No ack here.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+
 import fcntl
 import hashlib
 import json
@@ -180,12 +182,25 @@ class DestinationCommit:
         primitive cannot derive original native attribution or authorize ack.
         """
         folder, intent, raw = self._source(proof, Path(pending))
-        if (not isinstance(effects, dict) or not effects or
+        if (not isinstance(effects, dict) or
                 any(k not in self.targets or not isinstance(e, dict) or
                     set(e) != {"add", "remove"} or
                     (k == "auto" and bool(e["remove"]))
                     for k, e in effects.items())):
             raise DestinationRefused("unqualified_effects")
+        with self.exclusive_targets():
+            return self._locked_commit(folder, intent, raw, effects)
+
+    @contextmanager
+    def exclusive_targets(self):
+        """One shared target transaction lock for P1 planning and writing.
+
+        P3 GUI must acquire THIS lock before a read+revisioned save; absent
+        that integration the native adapter remains disabled. No lock is
+        retained between separate file edits or between cron invocations.
+        """
+        if getattr(self, "_gui_held", False):
+            raise DestinationRefused("gui_lock_already_held")
         lock_parent = self.gui_lock.parent
         p = lock_parent.lstat()
         if not stat.S_ISDIR(p.st_mode) or p.st_uid != self.receipts.uid or p.st_mode & 0o022:
@@ -195,18 +210,25 @@ class DestinationCommit:
             st = os.fstat(fd)
             if (not stat.S_ISREG(st.st_mode) or st.st_uid != self.receipts.uid or
                     stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1 or
-                    st.st_ino != self.gui_lock.lstat().st_ino):
+                    (st.st_dev, st.st_ino) !=
+                    (self.gui_lock.lstat().st_dev, self.gui_lock.lstat().st_ino)):
                 raise DestinationRefused("unsafe_gui_lock")
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 raise DestinationRefused("gui_writer_busy") from None
-            return self._locked_commit(folder, intent, raw, effects)
+            self._gui_held = True
+            try:
+                yield self
+            finally:
+                self._gui_held = False
         finally:
             os.close(fd)
 
     def _locked_commit(self, folder: Path, intent: dict, raw: bytes,
                        effects: dict) -> dict:
+        if not getattr(self, "_gui_held", False):
+            raise DestinationRefused("gui_lock_required")
         journal = folder / "destination"
         if not journal.exists() and not journal.is_symlink():
             journal.mkdir(mode=0o700)
