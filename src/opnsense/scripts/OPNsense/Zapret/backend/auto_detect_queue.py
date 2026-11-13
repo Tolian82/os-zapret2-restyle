@@ -82,6 +82,15 @@ class DurableInbox:
             raise QueueSafetyError("unqualified_native_writer_group")
         self.writer_gid = writer_gid
         self._held = False
+        self._lock_fd: int | None = None
+
+    @property
+    def locked_fd(self) -> int:
+        """The already-held original queue FD, for a same-OFD native child."""
+        self._require_lock()
+        if self._lock_fd is None:
+            raise QueueSafetyError("no_original_queue_fd")
+        return self._lock_fd
 
     def _require_lock(self) -> None:
         if not self._held:
@@ -116,12 +125,64 @@ class DurableInbox:
             if self._held:
                 raise QueueSafetyError("already_locked")
             self._held = True
+            self._lock_fd = fd
+            try:
+                yield self
+            finally:
+                self._lock_fd = None
+                self._held = False
+        finally:
+            os.close(fd)
+
+    @contextmanager
+    def inherited_exclusive(self, fd: int):
+        """Borrow the ORIGINAL queue lock's inherited open-file description.
+
+        The queue owner must already have acquired exclusive() in the
+        original parent. A child must not try to take a second queue lock:
+        that would deadlock the queue -> OPNsense Config -> target order.
+        An unrelated or unlocked descriptor cannot impersonate this one.
+        """
+        if type(fd) is not int or fd < 3 or self._held:
+            raise QueueSafetyError("unqualified_inherited_queue_fd")
+        self._verify()
+        try:
+            held = os.fstat(fd)
+            named = _stat_regular(self.lock, self.uid)
+            if (not stat.S_ISREG(held.st_mode) or
+                    (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino) or
+                    held.st_uid != self.uid or held.st_nlink != 1):
+                raise QueueSafetyError("inherited_queue_inode_mismatch")
+            # A separate open description MUST be blocked: otherwise a
+            # caller could smuggle an unlocked descriptor into this API.
+            separate = os.open(self.lock, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                try:
+                    fcntl.flock(separate, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    pass
+                else:
+                    fcntl.flock(separate, fcntl.LOCK_UN)
+                    raise QueueSafetyError("inherited_queue_was_not_locked")
+            finally:
+                os.close(separate)
+            # A dup/inherited original lock succeeds; a competing, unrelated
+            # open description does not. Never call LOCK_UN on this FD:
+            # the original queue owner continues to hold it through PHP.
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise QueueSafetyError("foreign_queue_open_description") from None
+            self._verify()
+            self._lock_fd = fd
+            self._held = True
             try:
                 yield self
             finally:
                 self._held = False
-        finally:
-            os.close(fd)
+                self._lock_fd = None
+        except OSError as exc:
+            raise QueueSafetyError("inherited_queue_fd_unavailable") from exc
 
     def segments(self) -> list[Path]:
         self._require_lock()
