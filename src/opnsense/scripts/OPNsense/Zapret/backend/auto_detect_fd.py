@@ -81,7 +81,8 @@ def _rows(output: str, pid: int, device: int, inode: int) -> FDState:
 
 def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
                      owner: OwnerToken, runner=subprocess.run,
-                     platform: str | None = None) -> FDState:
+                     platform: str | None = None,
+                     writer_gid: int | None = None) -> FDState:
     """Inspect one saved hardlink after rotation. No deletion or service touch.
 
     The caller MUST bind OwnerToken to the original common engine lifecycle;
@@ -107,8 +108,14 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0))
         before = os.fstat(fd)
         if (not stat.S_ISREG(before.st_mode) or before.st_dev != device_id or
-                before.st_ino != inode or before.st_nlink != 1 or
-                before.st_mode & 0o022 or before.st_uid != 0):
+                before.st_ino != inode or before.st_nlink != 1 or before.st_uid != 0):
+            return FDState.UNKNOWN
+        if writer_gid is None:
+            if before.st_mode & 0o022:
+                return FDState.UNKNOWN
+        elif (type(writer_gid) is not int or writer_gid <= 0 or
+              before.st_gid != writer_gid or
+              stat.S_IMODE(before.st_mode) != 0o660):
             return FDState.UNKNOWN
         if not _owner_snapshot(owner, runner):
             return FDState.UNKNOWN

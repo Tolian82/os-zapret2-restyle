@@ -572,6 +572,11 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile scripts/test-p2e-original-shared-build.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-p2e-original-shared-build.py
+      - name: Test P2g protected native producer layout and queue policy (portable)
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py scripts/test-auto-detect-storage.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-storage.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
