@@ -101,7 +101,7 @@ class PackagedPurgeTest(unittest.TestCase):
 
     def test_cli_only_policy_remains_in_spec_and_plan(self):
         for path in ("docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md",
-                     "docs/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md"):
+                     "docs/history/stages/lifecycle-2026-11-11/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md"):
             doc = (ROOT / path).read_text()
             self.assertIn("не отображать", doc)
             self.assertIn("Полезные ссылки", doc)

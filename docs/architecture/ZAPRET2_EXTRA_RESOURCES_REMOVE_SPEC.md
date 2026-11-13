@@ -1,11 +1,8 @@
 # Remove Additional Resources — approved requirements
 
-**Project:** os-zapret2-restyle (OPNsense 26.7.x, FreeBSD 15)
-**Owner decision:** 24 October 2026; **superseding decision:** 26 October 2026
-**Status:** APPROVED REVISED SPECIFICATION — native transaction with temporary resource quarantine and actual service restart. Earlier Jail/isolated-engine proof requirement CANCELLED by owner; implementation and installed acceptance still pending.
-**Related contracts:** [Additional Resources installation/GUI](ZAPRET2_EXTRA_RESOURCES_GUI.md), [new implementation plan](ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md).
+**Status:** Current native Remove/quarantine/Apply/rollback contract. Stage 11 was owner closed with the recorded limitations; subsequent release/lifecycle evidence is separately attributed. Jail-based validation remains cancelled.
 
-**Owner-approved Config persistence boundary (26 October 2026):** Ordinary Strategies/Voice GUI Apply persists changed settings through the **native OPNsense model** and `OPNsense\Core\Config::save()` (via the existing shared `SharedConfigCommit::persist()`); there is no independent plugin-specific settings writer. Remove changes **no** saved Strategies/Voice settings: use the existing common `prepareSavedUnchanged` compiler and fresh full Config `preflight`/`saved` readback with `changed_fields=[]`, but do not call `Config::save()` or create an extra Config revision. The Remove trial's shared phase `config-saved` means verified already-persisted unchanged Config, not a fresh save. Its eventual interrupted-state recovery must restore the exact original native common owner through existing attested Apply/runtime/IPFW mechanisms, **not** blindly call normal `shared_apply_recover_saved_service` (which may activate the new release). Unproven restoration retains journals and fails closed. [Approved rationale](../DECISIONS.md).
+[Current facts](../PROJECT_STATE.md) · [historical full source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md).
 
 ## 1. Scope and invariants
 
@@ -48,7 +45,7 @@ Compute the exact upstream-only removal plan using current local Git HEAD and or
 
 **Critical distinction:** `start_service()` is the old ordinary path and may refuse saved Voice ON; a blind `restart`/`shared_apply_boot_service()` may boot an already-compiled cached release, not compile the saved user configuration without extra files. Neither alone qualifies the trial. Reuse the common GUI Apply candidate build AND its native runtime activation/health checks, preserving unchanged saved Config. Do not invoke GUI Apply in a way that writes Config again; any minimal internal orchestration must call the same already existing compiler and actuator internals rather than cloning them. A failed built-in check blocks the operation with zero service/file mutation. Read-only plan/preview is not sufficient to approve deletion without a real trial start.
 
-Do **not** change `Exclude Domains`, its existing `--hostlist-exclude` handling, or add `--ipset-exclude` to this feature. These topics are explicitly deferred to a separate future owner decision.
+Resource removal does not redefine global list semantics. Preserve `Exclude Domains` and the already shipped global `Exclude IPSet` behavior under the dual-stack specification; the original decision to defer that separate feature is historical.
 
 ### 3.2 Saved Voice behavior
 

@@ -136,7 +136,7 @@ Containment invariant remains:
 
 Candidate/operation admission uses remaining absolute budget; cleanup/restoration is never made unbounded to gain more search time.
 
-The current parent-budget policy is `eligible-work-v1`; see `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
+The current parent-budget policy is `eligible-families-v2`; see `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`.
 
 The previously observed containment question concerned the retired transitional `C -> B` replay path and did not justify preserving or optimizing that path. If Model-C-only operation later exposes a concrete timeout/deadline defect, investigate it as a separate evidence-based task.
 
@@ -154,8 +154,6 @@ Every reported candidate remains explainable from persisted evidence including:
 
 Runtime preload/dispatcher details do not silently become user strategy semantics.
 
-## Current implementation handoff
+## Implementation and history
 
-`v0.4.1_13` finalizes normal production as Model-C-only without changing this search graph, CandidateSpec, resource, endpoint, discovery or result contract.
-
-After `_13` automated qualification and the selected owner-live Model-C-only regression, return to the current `docs/ROADMAP.md` rather than reopening historical A/B/C selection or old `_32/_33` sequencing by default.
+Model C is normal production. Current source facts live in [PROJECT_STATE](../PROJECT_STATE.md) and the exact next action in [START_HERE](../START_HERE.md). The [former source snapshot](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md) preserves the `_13` handoff and closed A/B/C sequence.

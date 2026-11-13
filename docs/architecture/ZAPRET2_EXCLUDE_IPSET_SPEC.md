@@ -1,12 +1,8 @@
 # Dual-stack IPv4/IPv6 and global Exclude IPSet — implementation specification
 
-**Project:** `os-zapret2-restyle`
-**Specification ID:** `DS-EXCLUDE-2026-10-28`
-**Status:** Owner-directed **current first-priority development specification**; implementation, installed-system qualification, and any new package are **not yet complete**.
-**Baseline:** published stable `v0.6.0`, `VERSION=0.6.0`, `PLUGIN_REVISION=1`; immutable released artifacts are not modified.
-**Execution plan:** [ZAPRET2_EXCLUDE_IPSET_PLAN.md](ZAPRET2_EXCLUDE_IPSET_PLAN.md).
-**Forward-only development boundary (29 October 2026):** The OPNsense appliance is a test stand; current-format IPv4/IPv6 inputs are supported, but older sealed runtime layouts, migration-only compatibility exceptions and dormant fallback implementations are not. Remove such executable branches rather than retaining them alongside the new single-parser, single-owner architecture. Keep same-transaction cleanup and integrity on failed Apply; see [DEV-050](../PROJECT_PRINCIPLES.md).
-**Owner's final clarification (28 October 2026):** `0.0.0.0/0` and `::/0`, including equivalent full-family unions, are forbidden in **every user-controlled IP list**, both inclusion and exclusion, including Voice.
+**Status:** Current dual-stack/global-exclusion contract DS-EXCLUDE-2026-10-28. Shipped in stable v0.6.2; native qualification and the owner live-IPv6 waiver remain distinct. The completed staged plan is historical.
+
+[Current facts](../PROJECT_STATE.md) · [historical full source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/ZAPRET2_EXCLUDE_IPSET_SPEC.md).
 
 ## 1. Objective and boundaries
 
@@ -14,7 +10,7 @@ Make existing managed targets, all five shared Voice IPSETs (Telegram, Discord, 
 
 Keep `Exclude Domains` strictly domain-based: no implicit DNS A/AAAA lookup, no domain-to-IP transformation, no hostlist exclusion in Voice/STUN. `Exclude IPSet` is the only global destination-address exclusion for Voice.
 
-**Explicitly out of scope:** all deferred Voice/P2P page redesign from the 28 October engineering discussion: additional per-service `UDP ports` inputs, shared Voice-page IPv6 checkbox, destination-any P2P branch/rules, P2P-only activation without a destination IPSET, new Discord/SIP/RTP/media protocols or broadened STUN-only allowlist. Do not create a separate Voice process, Config store/writer, IPFW owner, cron, DNS cache/watcher, or new Strategy Lab engine. Do not rework NAT/WAN routing, IPv6 network provisioning, Additional Resources Install/Remove architecture, or third-party Lua/BIN content. Historical ideas remain in [`docs/DECISIONS.md`](../DECISIONS.md), not in this delivery.
+**Explicitly out of scope:** all deferred Voice/P2P page redesign from the 28 October engineering discussion: additional per-service `UDP ports` inputs, shared Voice-page IPv6 checkbox, destination-any P2P branch/rules, P2P-only activation without a destination IPSET, new Discord/SIP/RTP/media protocols or broadened STUN-only allowlist. Do not create a separate Voice process, Config store/writer, IPFW owner, cron, DNS cache/watcher, or new Strategy Lab engine. Do not rework NAT/WAN routing, IPv6 network provisioning, Additional Resources Install/Remove architecture, or third-party Lua/BIN content. Historical ideas remain in [`docs/DECISIONS.md`](../history/stages/documentation-2026-11-13/legacy-registers/DECISIONS.md), not in this delivery.
 
 **Owner scope correction (30 October 2026):** Cross-project Python interpreter/runtime unification (central interpreter resolver, version-independent executable paths, shell/PHP/configd/shebang conversion, and related compatibility migration) is **CANCELLED IN THIS SPECIFICATION**, not merely postponed to a later stage of it. It is not an implementation requirement, acceptance gate, prerequisite, or reason to increment a package revision in the current Exclude IPSet / IPv4/IPv6 work. Any eventual Python unification requires a **new, separate owner-approved technical specification and plan after this work**. This cancellation does **not** remove the already approved Python `ipset_policy.py` semantic IPv4/IPv6 compiler, justify ignoring defects actually found in the current features, or repeal general [DEV-052](../PROJECT_PRINCIPLES.md). The unmerged [PR #740](https://github.com/Tolian82/os-zapret2-restyle/pull/740) and [issue #732](https://github.com/Tolian82/os-zapret2-restyle/issues/732) grant no execution authority within this specification.
 
@@ -116,7 +112,7 @@ Both `0.0.0.0/1` plus `128.0.0.0/1`, and `::/1` plus `8000::/1`, are **invalid**
 
 ### Owner-approved Strategy Lab IPv6 control and time policy (28 October 2026)
 
-**Current implementation target only; not present in published v0.6.0_1.** The Laboratory's Mode column becomes two vertically aligned rows, as in the owner's screenshot: `Режим:` / `Mode:` and the existing Standard/Extended dropdown on the first row; `IPv6` at the left and its **single independent checkbox** to the right, aligned beneath the dropdown's left edge, on the second. Use a checkbox control (even if the approved visual indicator is round), not an exclusive radio-group mode. Do not move Run/Stop or introduce a second Laboratory. Default OFF on a fresh page/job. Disable editing the checkbox while the job is running. Record the effective selection in each immutable job result, so reopening results cannot reinterpret family coverage.
+**Current shipped UI contract.** The old v0.6.0_1 implementation-target note is historical. The Laboratory's Mode column becomes two vertically aligned rows, as in the owner's screenshot: `Режим:` / `Mode:` and the existing Standard/Extended dropdown on the first row; `IPv6` at the left and its **single independent checkbox** to the right, aligned beneath the dropdown's left edge, on the second. Use a checkbox control (even if the approved visual indicator is round), not an exclusive radio-group mode. Do not move Run/Stop or introduce a second Laboratory. Default OFF on a fresh page/job. Disable editing the checkbox while the job is running. Record the effective selection in each immutable job result, so reopening results cannot reinterpret family coverage.
 
 **The user setting always controls domain A/AAAA eligibility:**
 
@@ -178,4 +174,4 @@ The only live Apply is existing `shared_apply_prepare_service()` → `orchestrat
 
 **Current baseline sources:** [`START_HERE.md`](../START_HERE.md), [`PROJECT_STATE.md`](../PROJECT_STATE.md), [`REQUIREMENTS.md`](../REQUIREMENTS.md), current native backend and [Voice specification](VOICE_TRANSMISSION_GUI.md). **Upstream:** `bol-van/zapret2/docs/manual.en.md` for profile-scoped excludes, IPv4/IPv6 IPSET semantics, template/import/new, and L3 filters; FreeBSD 15 `ipfw(8)` for actual mixed-family table/capture behavior. These external platform facts remain **required live verification**, not claims of installed success.
 
-This specification is **approved intended behavior, not implementation evidence**. The corresponding [per-file plan](ZAPRET2_EXCLUDE_IPSET_PLAN.md) assigns implementation, tests and documentation to stages. Deferred Voice/P2P exploration is preserved only in [`DECISIONS.md`](../DECISIONS.md).
+This specification is **approved intended behavior, not implementation evidence**. The corresponding [per-file plan](../history/stages/dual-stack-2026-10-31/ZAPRET2_EXCLUDE_IPSET_PLAN.md) assigns implementation, tests and documentation to stages. Deferred Voice/P2P exploration is preserved only in [`DECISIONS.md`](../history/stages/documentation-2026-11-13/legacy-registers/DECISIONS.md).

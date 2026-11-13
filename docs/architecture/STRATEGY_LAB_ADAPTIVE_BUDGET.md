@@ -1,124 +1,30 @@
-# Strategy Lab adaptive workload budget architecture
+# Strategy Lab — finite family-qualified job budgets
 
-Status: **CURRENT**
+**Status:** CURRENT CONTRACT. Production policy is `eligible-families-v2`, schema 2, owned by [adaptive_budget.py](../../src/opnsense/scripts/OPNsense/Zapret/strategy_lab_py/adaptive_budget.py). [DS-25/DS-26](ZAPRET2_EXCLUDE_IPSET_SPEC.md) own the accepted family/budget requirements. The former `eligible-work-v1` endpoint/protocol bonuses and Stage-30 handoff are [historical](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md).
 
-This file answers: **How are finite parent budgets derived without changing search/runtime semantics?**
+## Ownership and eligibility
 
-Read with:
+Budget policy owns finite parent envelopes and child admission. It does not select/rank candidates, change Model-C production, reinterpret network outcomes or replace restoration. Every deadline stays anchored to the original job `started_epoch`; adaptation never restarts the clock.
 
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`;
-- `docs/architecture/STRATEGY_LAB_MODEL_C.md`.
+The current `AdaptiveBudgetOrchestrator` adapts after Stage 40 returns without a terminal outcome. It requires resolved endpoints and an available selected family. IPv6 route availability or a checked box alone does not earn extra time. The matrix uses `ipv6_enabled`, target kind, selected network and actual Stage-40 endpoint-family evidence with PASS/FAIL observations. Missing per-family evidence earns no dual-family bonus while preserving otherwise valid IPv4 jobs. IPv6-only operation requires its opted-in available family and evidence; IPv4 is no longer universally mandatory.
 
-Current implementation origin: `docs/patches/v0.4.0_26.md`.
+## Single per-job envelope
 
-## Ownership boundary
+| Mode | One eligible family, including IPv6-only | Eligible A+AAAA work |
+|---|---:|---:|
+| Standard | 150 seconds | 200 seconds |
+| Extended, total | 270 seconds | 350 seconds |
 
-Budget policy owns only finite parent time envelopes and admission against remaining absolute time. It does **not** choose candidates, reorder the adaptive graph, select runtime models, alter source-port ownership, reinterpret PASS/FAIL, rank results or change restoration semantics.
+Default Standard/Extended portions are 150/120 seconds. Dual-family work adds 50 seconds to Standard and 30 to the Extended portion, producing 200+150=350. Stage 80 remains within the Extended portion and the overall parent. The calculator keeps lower configured test budgets and caps original portions with `min(base, 150)` / `min(base, 120)` before the family addition. Cached original bases prevent compounding on recalculation.
 
-Therefore the `_13` retirement of automatic B/A production replay does not change this budget policy, provided Model-C child work remains contained by the same absolute stage/job parents.
+Extra endpoint count, QUIC availability and Generic UDP configuration remain observable workload dimensions but do not add independent job-wide bonuses. A domain without eligible AAAA work, an IPv4 literal, checked-only IPv6 or a lone IPv6 literal keeps a single-family envelope.
 
-Invariant:
+## Deadlines and persisted evidence
 
-`bounded child operation <= stage parent <= finite job parent`.
+`standard_deadline = started_epoch + effective_standard`; the Standard overall deadline is the same. Extended overall deadline is `started_epoch + effective_standard + effective_extended`. A Stage-80 operation is bounded by both its finite local parent and overall deadline. Candidate/child bounds remain below their stage/job parents.
 
-An adaptive extension is never permission for an unbounded child and never restarts the job clock.
+`adaptive-budget.json` records schema/policy, requested IPv6, eligible family matrix, original bases, the two family additions and effective Standard/Extended/search/Stage-80 seconds. Existing status fields and telemetry expose the effective budget/deadlines. Malformed required state or no available selected network family fails explicitly; old jobs never provide current capability evidence.
 
-## When the plan becomes authoritative
+## Verification and history
 
-Initial configured budgets exist from job start because early stages already require finite parents.
-
-The workload-derived plan becomes authoritative only after Stage 30 PASS, when Strategy Lab has:
-
-- validated endpoint count;
-- measured IPv4/IPv6/QUIC capability state;
-- validated Standard/Extended mode;
-- validated Generic UDP request state.
-
-All resulting deadlines remain anchored to the original job `started_epoch`.
-
-## Input matrix
-
-Canonical workload dimensions:
-
-`endpoint count × IPv4/IPv6 capability × TLS/QUIC eligibility × Generic UDP eligibility × mode`.
-
-Current semantics:
-
-- IPv4 must be available for the search plan to proceed;
-- native Stage-60 search epoch remains IPv4;
-- IPv6 adds only currently implemented eligible baseline work;
-- QUIC/Generic UDP additions apply only when their existing Extended branches are actually eligible;
-- unavailable/skipped work adds no budget.
-
-## Base floors
-
-Environment-configured minimums remain:
-
-- `STRATEGY_LAB_STANDARD_BUDGET`, default `150 s`;
-- `STRATEGY_LAB_EXTENDED_BUDGET`, default `120 s`;
-- `STRATEGY_LAB_STAGE80_TIMEOUT`, default `120 s`.
-
-The proven reference two-endpoint topology keeps the existing Extended total floor of `270 s` when no optional additions are eligible. The policy does not reduce a known-safe configured floor merely because one observed run was faster.
-
-## `eligible-work-v1` additions
-
-Current bounded weights:
-
-- endpoint count above two: `+30 s` per extra endpoint to Standard;
-- extra endpoints in Extended mode: another `+15 s` per extra endpoint to Extended/Stage 80;
-- IPv6 available: `+5 s` per endpoint to Standard;
-- Extended QUIC available: `+20 s`;
-- Extended Generic UDP configured: `+15 s`.
-
-Calculation is additive/monotonic and starts from cached original configured bases so recalculation cannot compound additions.
-
-## Deadlines
-
-Let `t0` be original job start time.
-
-After adaptation:
-
-- `standard_deadline = t0 + effective_standard`;
-- Standard `overall_deadline = standard_deadline`;
-- Extended `overall_deadline = t0 + effective_standard + effective_extended`;
-- Stage-80 deadline remains the minimum of its finite local parent and the overall deadline.
-
-Children remain subject to their own bounded operation/candidate admission below these parents.
-
-## Evidence
-
-Successful adaptation persists `adaptive-budget.json` with:
-
-- policy/schema;
-- exact workload matrix;
-- weights/additions;
-- configured bases;
-- effective Standard/Extended/search/Stage-80 seconds.
-
-`status.json` exposes public effective budget/deadline fields and timing telemetry records the same adaptation event.
-
-## Fail-closed rules
-
-Planning fails closed when required Stage-30 state is malformed, no endpoint exists or IPv4 is not actually available. It does not infer capability from old jobs, DNS names, historical telemetry or expectation.
-
-Optional unavailable work contributes zero seconds.
-
-## Relationship to Model-C-only `_13`
-
-Normal Stage 60 is Model-C-only from `v0.4.1_13`. Automatic B/A replay is no longer part of the production workload.
-
-This budget policy neither requires nor permits enlarging parent budgets to recreate a retired fallback path. A Model-C infrastructure failure remains an explicit bounded structural failure below the existing finite parents.
-
-If Model-C-only operation later exposes a concrete containment defect, investigate it as its own evidence-based timeout task rather than reintroducing fallback or silently enlarging budgets.
-
-## Verification
-
-Source contract: `scripts/test-strategy-lab-adaptive-budget.sh`.
-
-The accepted `_26` owner-live gate established `eligible-work-v1` operation, workload/effective-budget evidence, no unexpected timeout/fallback and clean semantic restoration for its tested topology. `_13` changes runtime fallback policy only and preserves this budget contract.
-
-## Approved future Stage-6 IPv6 selector and time-budget transition (28 October 2026)
-
-The present `eligible-work-v1` adaptive behavior above describes the **existing** production source; it is not yet modified. The owner now approved a new user-selectable IPv6 test scope, specified in [dual-stack/Exclude IPSet DS-25/DS-26](ZAPRET2_EXCLUDE_IPSET_SPEC.md) and implemented under [Stage 6](ZAPRET2_EXCLUDE_IPSET_PLAN.md). These newer requirements supersede any conflicting **future** budget assumptions here, without retroactively asserting current production behavior.
-
-The revised future **single per-job total** must be Standard 150 seconds for one eligible family and **200 seconds for A+AAAA**; Extended 270 seconds for one eligible family and **350 seconds for A+AAAA**. The 50/80-second additions require actual dual-family eligibility and scheduled tests; an ON checkbox without IPv6, or a single literal IPv6, does not gain the dual-family bonus. Store the requested checkbox state, actual eligible family set, chosen total and effective deadline in the same existing job state. Reconcile `eligible-work-v1` workload additions (including its current IPv6 per-endpoint bonus), Stage-80 and Model-C candidate admission **within** these new owner-approved totals, avoiding double IPv6 bonuses or hidden extra overall duration. Do not introduce a second independent time-budget owner, reset deadlines per family, or weaken cleanup/restoration. Test both available and missing/unusable IPv6 routes during the Stage-6 implementation; until then all new totals are **future requirements, not implemented facts**.
+[Existing adaptive-budget regression](../../scripts/test-strategy-lab-adaptive-budget.sh) verifies the current calculator. Current qualified native/owner evidence belongs to PROJECT_STATE and the dual-stack records; the old `_26` owner result is evidence for its historical `eligible-work-v1` topology, not a new run of v2. This documentation correction changes no runtime policy or tests.

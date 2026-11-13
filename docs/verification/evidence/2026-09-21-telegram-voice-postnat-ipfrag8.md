@@ -12,7 +12,7 @@
 
 This record consolidates owner-supplied console results and packet/runtime archives. It does not claim a new test was executed while writing the documentation. Raw captures, peer/session tags and complete private logs are not committed.
 
-Current task: [`START_HERE.md`](../../START_HERE.md). Interpretation: [research](../../research/TELEGRAM_VOICE_UDP.md). Runner contract: [laboratory architecture](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
+Current task: [`START_HERE.md`](../../START_HERE.md). Interpretation: [research](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_UDP.md). Runner contract: [laboratory architecture](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md).
 
 ## Outcome
 

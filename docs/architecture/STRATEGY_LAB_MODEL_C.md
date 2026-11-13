@@ -1,6 +1,6 @@
 # Strategy Lab Model C — current Stage-60 runtime contract
 
-Status: **CURRENT THROUGH v0.4.1_13 · MODEL-C-ONLY PRODUCTION**
+Status: **CURRENT — MODEL-C-ONLY PRODUCTION**
 
 This file answers: **How does the current Model-C Stage-60 production runtime execute candidates, and what failure boundary is authoritative?**
 
@@ -128,22 +128,8 @@ Cancellation remains cancellation, not infrastructure fallback.
 
 The old Model-C compatibility module and Model-B module remain available to measurements/reference tooling, but their fallback behavior is not reachable from the normal packaged production entry point.
 
-## `_13` acceptance
+Recorded `_13` tests and owner-live acceptance remain in the source history; they are not a new mandatory full matrix for every change. Current family and client eligibility follow the [dual-stack](ZAPRET2_EXCLUDE_IPSET_SPEC.md) and [browser probe](STRATEGY_LAB_BROWSER_HTTP.md) contracts. The IPv4/TCP/443 dispatcher example describes that branch, not an IPv4-only restriction on the whole Laboratory.
 
-Automated:
+## Source history
 
-- production Stage 60 routes through the Model-C-only owner;
-- injected Model-C infrastructure failure produces explicit bounded failure with no B/A replay;
-- cleanup succeeds on success/failure/cancel;
-- leasing and attribution remain exact;
-- logical-batch/segment evidence remains intact;
-- full Strategy Lab corrective matrix and FreeBSD-15 package qualification PASS.
-
-Owner-live:
-
-- one selected normal Model-C-only run;
-- correct result handling;
-- semantic restoration PASS;
-- no temporary IPFW/process/socket residue.
-
-Do not reopen A/B/C selection after `_13`. Any later timeout, containment or Model-C defect requires its own concrete evidence and task boundary.
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_MODEL_C.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.

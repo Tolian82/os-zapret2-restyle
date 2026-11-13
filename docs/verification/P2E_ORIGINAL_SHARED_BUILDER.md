@@ -21,3 +21,6 @@ Any missing map is a safe refusal to attribute, not evidence that production Aut
 After qualified native real-generator output, design and qualify a trailing no-action observer and the exact schema=2 owner+generation-bound raw/debug and complete FreeBSD FD-drained event correlation; only then idempotent domain ownership journaling, pending acknowledgement, and one-minute configd/cron activation. P3 shared fallback/explicit placeholder, P4 GUI/restart, P5 installed owner acceptance follow.
 
 **State:** source and CI validation tracked in #1052; distinguish offline builder proof from native original FD9 process/traffic acceptance.
+## Recorded qualification
+
+The scoped [native OPNsense 26.7 run #43392107224](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43392107224) completed successfully on exact PR source `84b82a9d2c6b93d483d0afb47c94c5375a0b911f`, before the `_14` merge `277ef0536b217841ab6728ae9561dbc4792fef01`. This qualifies the same isolated original-builder/map witness on FreeBSD. It does not establish an actual running FD9 owner, observer, raw/debug collection or pending acknowledgement. The subsequent observer/schema-2 worker boundary remains open under P2; this completed native qualification is not the next task.

@@ -18,6 +18,6 @@ This preserves the valuable historical Android/upstream match but **does not** e
 
 ## Integration decision
 
-The source identities and the corrected limitation belong in this historical evidence, not in the active TOS build recipe. The proposal in PR #287 to pin the earlier `e3069322...` test binary and its corresponding lexical CI checks is superseded: the project has since qualified the active `efd330ca...` binary. See [current build evidence](2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md), the [research](../../research/TELEGRAM_VOICE_UDP.md) and the [current handoff](../../START_HERE.md).
+The source identities and the corrected limitation belong in this historical evidence, not in the active TOS build recipe. The proposal in PR #287 to pin the earlier `e3069322...` test binary and its corresponding lexical CI checks is superseded: the project has since qualified the active `efd330ca...` binary. See [current build evidence](2026-09-20-telegram-voice-current-tgcalls-owner-live-pass.md), the [research](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_UDP.md) and the [current handoff](../../START_HERE.md).
 
 Do not infer parity for the currently distributed Windows/Android clients from this historical comparison. Future client-parity work requires newly resolved source and actual client/configuration identities.

@@ -1,6 +1,6 @@
 # P4a — Strategies and Strategy Lab safe profile/handler help
 
-**Candidate:** `v0.6.4_25` (source-only; not released). **Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Normative:** [approved P4 plan](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md).
+**Candidate:** `v0.6.4_25` (source-only; not released). **Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Normative:** [approved P4 plan](../history/stages/strategies-2026-11-12/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md).
 
 ## User-visible increment
 

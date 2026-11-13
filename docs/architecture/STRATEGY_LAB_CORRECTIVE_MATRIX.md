@@ -2,11 +2,11 @@
 
 ## Authority
 
-`scripts/test-strategy-lab-corrective-matrix.sh` is the single CI entry point for Strategy Lab source verification. The GitHub workflow invokes it exactly once.
+`scripts/test-strategy-lab-corrective-matrix.sh` is the retained full Strategy Lab source matrix entrypoint. When that matrix is selected, invoke it once. Current automatic routing and affected-path selection are governed by GH-069–GH-072; a documentation or unrelated GUI change does not automatically select the full matrix.
 
 The matrix first runs the focused domain-connectivity contract, then discovers every `scripts/test-strategy-lab-*.sh` file in stable lexical order. Every discovered file is syntax-checked. Focused contracts run directly once except four cleanup-sensitive contracts deliberately delegated to the end-to-end test: active cancellation, candidate runtime, semantic restoration, and time budget. E2E invokes each delegated contract exactly once.
 
-New focused Strategy Lab tests become mandatory automatically when added to the repository unless they are explicitly added to the small delegated set with matching matrix-contract evidence.
+The full matrix discovers new focused Strategy Lab tests unless they are deliberately delegated with matching matrix-contract evidence. This describes matrix composition, not an obligation to run the full historical matrix on every PR.
 
 ## Nonrecursive contract
 

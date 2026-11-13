@@ -3,7 +3,7 @@ name: Stage 0 audit closure evidence-only contract
 on:
   pull_request:
     paths:
-      - docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
+      - docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md
       - docs/verification/evidence/2026-11-02-v0.6.2_66-stage0-audit-closure.md
       - scripts/stage0-audit-closure.py
       - scripts/test-stage0-audit-closure.py

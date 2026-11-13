@@ -1,0 +1,19 @@
+# telegram-voice-2026-10-20 — historical stage records
+
+**ARCHIVED / LEVEL 3.** Full completed plans, closed measurements or cancelled designs retain their original wording and evidence limits. They do not define the current implementation queue. [Current authority](/docs/INDEX.md).
+
+The UDP-port/extra-IPv6/P2P future direction is retained **outside this archive** in the [long-term design](/docs/architecture/VOICE_PORTS_IPV6_P2P_FUTURE.md). This directory contains the closed historical campaign, not a cancellation of that future work.
+
+- [TELEGRAM_LAB_OPERATIONS.md](TELEGRAM_LAB_OPERATIONS.md)
+- [TELEGRAM_NATIVE_VOICE_TNAS_LAB.md](TELEGRAM_NATIVE_VOICE_TNAS_LAB.md)
+- [TELEGRAM_OPENWRT_PROXY_UDP_REFERENCE.md](TELEGRAM_OPENWRT_PROXY_UDP_REFERENCE.md)
+- [TELEGRAM_TRAFFIC_POLICY.md](TELEGRAM_TRAFFIC_POLICY.md)
+- [TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md](TELEGRAM_VOICE_DOCKER_STRATEGY_CAMPAIGN.md)
+- [TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md](TELEGRAM_VOICE_DPI_TOPOLOGY_AND_TTL.md)
+- [TELEGRAM_VOICE_EMULATION_LAB.md](TELEGRAM_VOICE_EMULATION_LAB.md)
+- [TELEGRAM_VOICE_INDEPENDENT_CONTROL.md](TELEGRAM_VOICE_INDEPENDENT_CONTROL.md)
+- [TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md](TELEGRAM_VOICE_LAB_BOOT_RECOVERY.md)
+- [TELEGRAM_VOICE_UDP.md](TELEGRAM_VOICE_UDP.md)
+- [VOICE_CODE_COMPLETION_GATE.md](VOICE_CODE_COMPLETION_GATE.md)
+- [VOICE_LIVE_TRIAL.md](VOICE_LIVE_TRIAL.md)
+- [VOICE_TRANSMISSION_COMPLETION_PLAN.md](VOICE_TRANSMISSION_COMPLETION_PLAN.md)

@@ -1,3 +1,16 @@
+# Current release additions
+
+## [v0.6.5] — stable Web/pkg release, 2026-11-12
+
+- Ship the owner-accepted #936 Strategies/HOSTLIST/modifiers/RU-EN/read-only preview feature and #1084 native Laboratory Help appearance.
+- Publish immutable `os-zapret2-restyle-0.6.5_1.pkg`, checksum and native FreeBSD15 Pages/pkg delivery; the owner confirms successful stable GUI installation. [Release](releases/v0.6.5.md) and [publication evidence](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md).
+- Auto-detect/Auto Restart #1052 remains a separate workstream; later source revisions do not imply another published package.
+
+## [v0.6.4] — native lifecycle accepted, 2026-11-11
+
+- Deliver accepted G01–G11 clean install, saved defaults, WAN-first/empty Strategy, native uninstall/reinstall preservation, full purge and Laboratory lifecycle corrections.
+- Stable `os-zapret2-restyle-0.6.4_1.pkg` published; owner GUI update and clean installation confirmed. [Release](releases/v0.6.4.md).
+
 # Changelog
 
 Project: **os-zapret2-restyle**
@@ -51,7 +64,7 @@ Full stable OPNsense Web/pkg release: `os-zapret2-restyle-0.5.2_194.pkg`, FreeBS
 - CI/FreeBSD package and release publication PASS; real OPNsense GUI/BOOT/STUN/MEDIA/CALL PENDING. [Evidence](verification/evidence/2026-10-16-v0.5.2-release-publication.md).
 
 
-## [Unreleased]
+## [v0.4.1_4] — historical BLOB common-set measurement, 2026-08-12
 
 ### Added
 

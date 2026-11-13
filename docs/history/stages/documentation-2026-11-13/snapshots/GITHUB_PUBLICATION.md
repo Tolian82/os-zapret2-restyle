@@ -1,0 +1,284 @@
+# Historical source — docs/GITHUB_PUBLICATION.md
+
+**ARCHIVED / LEVEL 3.** Original text at `277ef0536b217841ab6728ae9561dbc4792fef01` (`v0.6.5_14`), relocated during the 13 November 2026 documentation review. Its dated statuses, commands, proposed work and duplicated rules are historical, not current instructions. Local links are rebased; original prose is preserved. Current authority: [documentation index](/docs/INDEX.md).
+
+# GitHub rules — Правила работы с GitHub
+
+**Status:** CANONICAL · MANDATORY LEVEL 1
+**Updated:** 2026-11-12
+
+This file is the fourth canonical rule book and the single normative home for working with GitHub in this project: repository access, preflight, branches, PRs, CI, merges, testing packages, full releases, documentation synchronization, and repository hygiene. The filename `GITHUB_PUBLICATION.md` is intentionally retained; its scope is all GitHub work, not publication only.
+
+Other canonical rule domains:
+
+- [`DOCUMENTATION_RULES.md`](../../../../DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
+- [`PROJECT_PRINCIPLES.md`](PROJECT_PRINCIPLES.md) — project-development/version/product rules (`DEV-*`);
+- [`CHAT_RULES.md`](../../../../CHAT_RULES.md) — owner/assistant communication semantics (`CHAT-*`).
+
+Read this file completely before GitHub mutation.
+
+## Quick route by task
+
+- access and preflight: `GH-001`–`GH-008`;
+- branch and PR scope: `GH-010`–`GH-015`;
+- validation and CI: `GH-016`–`GH-023`, `GH-062` (mandatory local fast preflight before PR/full CI);
+- strict Actions resource budget, runner selection, bounded native checks and workflow throttling: `GH-066`–`GH-072`;
+- merge, post-merge verification, cleanup: `GH-024`–`GH-030`, `GH-064`;
+- issue, PR completion and unattended monitoring: `GH-063`–`GH-065`;
+- repository/secret hygiene: `GH-031`–`GH-033`;
+- testing package: `GH-034`–`GH-038`, `GH-060`–`GH-061`;
+- full release: `GH-039`–`GH-048`;
+- release-trigger behavior: `GH-049`–`GH-052`;
+- documentation/process synchronization: `GH-053`–`GH-059`.
+
+## GitHub access and preflight
+
+GH-001. **Use the connected GitHub plugin/connector first for every supported repository operation.** It is the primary repository interface for reads and writes.
+
+GH-002. **A fallback transport is narrow and evidence-based.** Use it only when the GitHub plugin is responding but one exact required operation or permission is confirmed missing, or when a necessary read-only bulk operation is not exposed. Do not replace the connector as the normal workflow.
+
+GH-003. **If required authoritative GitHub state cannot be read safely, stop mutation.** Do not guess branch heads, PR heads, release identity, CI state, or permissions.
+
+GH-004. **Pin the exact `main` SHA before mutation.** The task branch base and broad investigation references are tied to an explicit current commit, not an assumed moving branch.
+
+GH-005. **Read current package identity before a delivery.** Resolve `VERSION` and `PLUGIN_REVISION` and apply `DEV-027`–`DEV-040`; never infer candidate identity from a stale title, tag, README, or previous chat.
+
+GH-006. **Complete the mandatory cold-start/current-authority reading before mutation.** Apply `DOC-016`, then read every current-task specialist document selected by `START_HERE.md` through EOF. Reuse of already-read unchanged Level-1 material is allowed only under `DOC-049`.
+
+GH-007. **Preflight is scope/risk based.** Always check exact `main`, candidate identity, current handoff/state, and relevant same-scope open PR state. Expand to CI runs, permissions, releases, branches, artifacts, or full tree only when scope/risk requires them.
+
+GH-008. **Broad investigation uses one pinned recursive tree as an index when practical.** Resolve the exact SHA once and fetch only the files/objects needed from that immutable snapshot rather than repeatedly rediscovering repository structure.
+
+GH-009. **[ОТМЕНЕНО] Owner-canon/documentation reconciliation is broad by definition.** This rule previously required inspection of every active/current-looking authority whenever owner canon was recorded. The owner cancelled it on 2026-08-14 because permanent rule IDs, explicit dependency registries, targeted reconciliation under `DOC-008`, link validation, and scope/risk-based inspection provide stronger consistency without forcing a repository-wide audit for every canon change. The ID and original meaning remain permanently reserved.
+
+## Branch and logical-scope discipline
+
+GH-010. **One logical engineering/source scope uses one task branch and one source PR.** Branch from the exact verified `main` SHA; unrelated work gets another scope. The bounded post-publication documentation-record PR required by `GH-060`–`GH-061` is the explicit delivery-tail exception because immutable publication facts do not exist before the source merge and publication; that tail contains no product/package change.
+
+GH-011. **Same-root-cause corrections stay in the same PR.** A stale test, fixture, documentation contract, or CI assertion exposed by the intended change is repaired in that PR; this is the GitHub application of `DEV-017`.
+
+GH-012. **Do not mix unrelated opportunistic cleanup into a task branch.** Preserve reviewability and causality.
+
+GH-013. **A Ready PR is the default for complete intended work.** Use Draft only for intentionally incomplete work that must be published before it is merge-ready.
+
+GH-014. **Every PR into `main` must introduce exactly the next revision of its actual base: same `VERSION` requires base `_N` -> PR head `_N+1`; an approved `VERSION` transition requires `_1`.** The PR title and squash subject must use the *new head candidate*, and every branch commit's title must reflect its actual contemporaneous candidate. Repeated fixups on one unmerged branch do not each consume another `main` revision; the full PR must have exactly one revision increment relative to its currently mergeable `main` base. Revalidate/rebase if `main` advances; never merge two PRs targeting the same stale `_N+1`. Earlier immutable history is never rewritten to backfill this new policy (`DEV-027`–`DEV-035`).
+
+GH-015. **Docs/governance/tests/CI-only PRs also increment `PLUGIN_REVISION` exactly once for the resulting `main` commit.** They update the version/handoff metadata consistently, but do not by themselves require a FreeBSD package build, testing publication or a stable release. State the latest published/installed package separately from the newer source-only revision; apply `DEV-033`.
+
+## Validation and CI failure handling
+
+GH-016. **Validate the latest head with checks proportionate to the changed scope.** Pure documentation changes run the documentation, rule-reference, link, release-governance, and repository-integrity checks that can be affected, without mechanically running the full product matrix. Product or packaged-source changes run the scope-applicable product checks, not every historical regression by default. CI/workflow changes run their affected CI contracts, expanding to the general validation matrix only when its semantics actually change and require that evidence. Select the bounded check set before execution; stop adding unrelated tests after the gate passes. Never merge based on an unverified older head.
+
+GH-017. **Read exact failed-job evidence before changing source, tests, workflow, or branch state.** Apply `DEV-012`; a plausible explanation is not enough.
+
+GH-018. **A confirmed same-scope defect is corrected in the same PR.** Update the PR head and rerun applicable checks.
+
+GH-019. **A stale test or CI assertion is corrected, not obeyed as obsolete product authority.** Apply `DEV-013` and preserve current intended architecture.
+
+GH-020. **An external runner, network, action, service, or dependency outage does not justify speculative source changes.** Apply `DEV-014` and diagnose infrastructure first.
+
+GH-021. **Only successful checks for the latest mergeable head authorize merge.** If the head changes, prior successful checks do not prove the new head.
+
+GH-022. **Never report a skipped or unrun job as PASS.** A legitimately path-skipped build is `SKIPPED`, not successful qualification, under `DEV-011`.
+
+GH-023. **Path-gated package builds remain meaningful.** Packaged-source or package/CI-infrastructure changes run required FreeBSD package qualification; pure docs/governance changes may skip package build when the workflow classifies them as non-package changes.
+
+GH-062. **Быстрые локальные проверки — обязательный входной контроль ДО открытия PR и запуска длинной CI-матрицы.** Перед публикацией ветки/открытием PR с изменённым кодом, тестами или конфигурацией разработчик **самостоятельно выполняет на точных подготовленных файлах** доступные быстрые проверки синтаксиса и форматирования, целевые unit/contract/regression-тесты для изменённого поведения и **запускает каждый новый или изменённый тест**, а не только проверяет его текст. Проверяются также относящиеся к изменению версия/ревизия, заголовок PR и элементарные ошибки тестовых фикстур, регулярных выражений, shell, PHP, Python и JavaScript. **Любой провал блокирует открытие PR и долгую CI:** сначала исправить ошибку локально в том же scope, повторить быстрый тест до успеха, и лишь затем запускать полную требуемую матрицу. При каждом последующем изменении head те же затронутые быстрые проверки повторяются **до отправки изменений**. Для docs-only и изменений правил выполняются локальные проверки ссылок, идентификаторов правил, реестров перекрёстных ссылок и целостности документации; это не требует запускать продуктовую матрицу, если она не относится к изменению. Если конкретный тест технически невозможно выполнить локально (например, требуется FreeBSD 15), явно зафиксировать причину и выполнить максимально узкую доступную отдельную проверку до длинной матрицы; **не объявлять невыполненную проверку успешной**. Перечень действительно выполненных команд и их результаты отражаются в PR. Длинная CI остаётся обязательной по сфере изменения, но не служит средством обнаружения простых ошибок, которые можно найти до PR.
+
+## Mandatory CI resource budget and GitHub queue protection
+
+GH-066. **Один логический кандидат PR — один подготовленный push, а не push на каждый файл или исправление.** До публикации нового head выполнить все доступные быстрые синтаксические/юнит/контрактные проверки на *итоговых* файлах, собрать относящиеся к одной причине изменения в единый проверенный коммит, проверить реальную identity/revision/документацию. Нельзя использовать долгую GitHub CI для выявления локально проверяемых опечаток. Пока предыдущий exact-head находится в очереди или выполняется, запрещено создавать новый head исключительно для повторного запуска очереди. Подтверждённая существенная ошибка безопасности допускает новую проверенную ревизию с конкретно зафиксированной причиной и судьбой устаревших запусков.
+
+**Исполнение GH-066:** один candidate head не должен запускать одни и те же проверки одновременно по `push` в task branch и по `pull_request` того же PR. Предпочитать локальный S0 и один PR-trigger; branch-push gate допустим только если он не дублирует PR-jobs. Исправления одной подтверждённой причины объединять до следующего checkpoint; устаревшие head прекращаются concurrency вместо создания нескольких параллельных VM.
+
+GH-067. **Изменение только `PLUGIN_REVISION` в `Makefile` НЕ является основанием для запуска дорогостоящих FreeBSD/OPNsense VM-workflows.** Обязательное увеличение ревизии сохраняется. Центральная CI обязана нормализовать *только* поле PLUGIN_REVISION и отличать его от реальных изменений сборщика, зависимостей, ABI, plist, hooks, конфигурации упаковки и production-кода. Настоящее семантическое изменение сборки требует соответствующего native package test; но запрещено включать общий `- Makefile` в path filters нескольких тяжёлых workflow ради простого _N+1. Обязательная нативная приёмка затронутого функционала и полного релиза сохраняется. Изменение только YAML-файла дорогостоящего workflow проверяется быстрой source-policy проверкой; собственный путь `.github/workflows/<имя>.yml` не должен автоматически запускать эту VM. Для проверки самого runner/workflow использовать осмысленный `workflow_dispatch` и зафиксировать результат до релиза.
+
+**Центральная CI: обязательная маршрутизация по GH-067.** Флаг `package=true` означает необходимость квалификации изменённого текущего пакетного payload/build, но **не** является универсальным разрешением для исторических VM. Запрещено связывать published archive baseline, archived four hooks/FD9, old pkg scheduler, old ELF runtime или отдельный IPFW/IPv6 probe с `package=true` либо широким `src/`/revision-only путём. Эти jobs запускаются только по собственным явно названным изменённым тестам/политикам либо ручному `workflow_dispatch`/утверждённому S3. Изменение `.github/workflows/ci.yml` — изменение логики проверки, **не** автоматическое изменение native package payload; его квалифицирует быстрый source-policy/budget gate. Запрещено также косвенно запускать чужую native VM через `pull_request.paths: .github/workflows/ci.yml` или `release.yml` в standalone workflow. Для проверки YAML самой VM применять source-policy и осознанный `workflow_dispatch`, а не автоматическую полную сборку от изменения CI-документа. Реальная штатная сборка пакета при изменении payload, manifest, ABI, зависимостей и hooks при этом сохраняется.
+
+GH-068. **Дублирующие проверки устаревших PR head должны автоматически прекращаться.** Каждый новый/изменённый тяжёлый native PR workflow обязан использовать отдельную concurrency-group на workflow/repository/event/PR и `cancel-in-progress` для PR. Ручные `workflow_dispatch`, защищённый `main`, testing publication и stable release должны быть изолированы от такого автосброса. Повторный запуск допускается только после выяснения реального failed/cancelled/stalled/current-head статуса; нельзя создавать пустые коммиты, запускать полную матрицу по кругу или подменять queued/skipped/cancelled статусом PASS.
+
+GH-069. **Четырёхуровневая экономная CI обязательна; объём определяется необходимыми доказательствами, не количеством тестов.** S0 — реально выполненные локально синтаксис/unit/регрессия до push; S1 — быстрые обязательные PR version/title/docs/rules/source gates; S2 — точные, обоснованные изменённым кодом нативные сценарии на одноразовых FreeBSD/OPNsense, включая FD9/IPFW/Voice/GUI только когда они затронуты; S3 — обоснованная полной финальной приёмкой или релизом комплексная package/clean/RUNNING/reboot/Voice/GUI проверка, без автоматического прогона всех исторических матриц перед каждым промежуточным testing package. Публикация промежуточного тестового `.pkg` требует достоверной квалификации его физических байтов/ABI, сборки и затронутых функций и рисков безопасности, но не заранее завершённой физической приёмки владельца: пакет является её входом. Для связанных native-проверок использовать один побайтово идентичный `.pkg` с SHA-256, когда этого требует критерий. Исторические одноразовые тесты сохранять доступными для осмысленного ручного прогона, не гонять автоматически на каждый docs/revision-only PR. Отсутствие дополнительной проверки не является дефектом само по себе: её необходимость нужно обосновать по `DEV-061`. Экономия ресурсов **никогда** не заменяет обязательный exact-head PASS, критическую безопасность или реально требуемую финальную приёмку.
+
+**Четыре уровня S0–S3 не означают четырёх GitHub check runs.** GitHub показывает отдельные jobs (включая SKIPPED), поэтому это число не равно объёму вычислений и не должно выдаваться за «четыре проверки». Рабочая цель обычного функционального PR: быстрый S1 плюс **один** обоснованный нативный S2-набор для затронутой подсистемы. Каждая дополнительная тяжёлая VM требует конкретного объяснения независимого критерия приёмки (например, общая GUI-страница действительно затронула нижний Apply). Полная Strategy Lab corrective matrix для несвязанного first-install, документации или CI-policy запрещена: только изменения Lab/shared runtime либо явно выбранный S3. Полная обязательная релизная квалификация S3 сохраняется; для промежуточного testing package используем заранее определённые, пропорциональные изменению ограничения, а не повторяем финальную приёмку. В отчётах различать число workflows, число check runs, реально запущенные VM, SKIPPED и причины запуска. Отдельный PR budget test обязан проверять fan-out **внутри** `CI`, а не только standalone YAML.
+
+GH-070. **Watchdog не должен создавать вторую очередь GitHub Actions.** Предпочитать событие завершения доверенной CI, оставив дедуплицированный *ежечасный* cron fallback и ручной dispatch. Без отдельного решения владельца запрещён опрос каждые 10 минут в дополнение к событийному мониторингу. Сохранить проверку текущего head, определение failure/stall/ready-but-open, dedup уведомлений и реальную проверку доставки. Watchdog не должен запускать нативные CI-матрицы или самостоятельно выполнять несогласованный merge. Быстрый PR gate обязан проверять отдельные YAML path filters и внутренние job `if:` центральной CI: запрещать пакетный fan-out к чужим историческим VM, дублирующие branch-push/PR запуски и broad Makefile/Stage0 triggers. Нарушение бюджета должно давать FAIL до дорогих VM.
+
+GH-071. **Native-test placement, infrastructure readiness, and strict time budgets are mandatory.** Run routine syntax, unit, contract, source, rule, and CI-policy validation as fast S0/S1 checks without provisioning a FreeBSD/OPNsense VM. An S2/S3 native test is justified only by the affected subsystem or an explicit release/acceptance criterion; do not couple a GUI localization or read-only browser smoke to historical RUNNING package upgrades, engine compilation, IPFW, or unrelated lifecycle matrices merely to obtain an installed page. Keep genuine installed OPNsense/FreeBSD and authenticated Chromium where the acceptance criterion requires them; an offline mock, source inspection, or skipped test is **not** native acceptance.
+
+**Native execution environment:** Prefer a qualified, isolated, pre-provisioned KVM/FreeBSD/OPNsense test host (including an approved, maintained self-hosted runner) with a known guest image, installed hypervisor/dependencies, bounded access and reliable restore/cleanup. Treat it as test infrastructure, never silently use the owner's production appliance. A GitHub-hosted runner may be used only when a fast prerequisite gate verifies the **runner's own** QEMU/KVM/image/network/package-manager readiness before any long VM operation. A DNS check from the developer's PC is not evidence of runner connectivity. Cache reusable verified base images and dependency preparation where safe, with identity/invalidation checks; never cache secrets or a private owner Config.
+
+**Budget and failure policy:** Set an explicit job timeout and individual bounds for image download, package installation, boot, SSH readiness and other potentially blocking network/VM steps; a narrow GUI smoke should have a short budget (the P3 browser workflow is capped at 15 minutes), while materially longer S3/release tests require a distinct documented rationale and intentional trigger. Detect inaccessible repositories, DNS, missing hypervisor/KVM, guest boot failure and no-progress states early. Fail closed with an explicit **infrastructure failure / NOT TESTED**, not PASS and not a product regression. Do not rerun a known failing external preflight blindly, start multiple equivalent VM jobs, or push empty commits to retry an outage; repair the environment or move the same exact-source required native test to a qualified alternate host. Preserve the evidence gate before merge/publication and distinguish S0/S1 PASS from outstanding S2/S3 and owner-live acceptance.
+
+GH-072. **Outcome-first CI routing and real-user boundary priority are mandatory.** For every PR classify exact changed paths into lightweight GUI/domain/IPSET, critical shared Config/FD9/transport, full lifecycle or documentation-only; a new/unclassified production path fails **toward more** checking, never toward silent exemption. First run a bounded (target at most five minutes) real changed-path regression using production Model, Python bridges, shared Apply encoder/root-contract and actual UI render/semantics where portable; it must exercise the input and downstream consumer, not only regex/mocks. A known owner failure must be reproduced *before its fix* by a test that genuinely fails old code, then passes fixed code; a previously green irrelevant matrix does not qualify it. Keep separate correctness for short synthetic checks, installed native browser/FD9, exact qualified .pkg and owner appliance. Only dispatch full legacy 100-step Project/Voice matrices when critical changed paths, unknown paths or intentional manual/full release criteria warrant them; run targeted S2 native browser/FD9 only for those relevant paths. A documentation or CI-policy-only PR, even one containing a noninstalled read-only Python probe under docs/, does not launch product/VM matrices. Preserve original FD9, Config/IPFW/Voice, immutable package identity, exact-head and fail-closed gates. The native package job for actual packaged-source changes waits for the fast user-journey gate; it need not await unrelated whole-project matrices, but required critical checks **must** pass before an authorized merge/release. Record selected/missing checks and their cost in PR, and stop once the justified decisions are established. The current owner-proven User Domains 65,536-byte envelope defect remains BLOCKED until end-to-end changed large-list Apply/Config/HOSTLIST is demonstrated on the corrected package; an existing bounded-argv security test is *not* proof of functional support. This implements `DEV-062` and supplements `GH-069`–`GH-071` without weakening them.
+
+## Issue execution, PR completion and unattended monitoring
+
+GH-063. **An Issue is a tracked request, not running implementation or an installed watcher.** Opening, linking or updating an Issue does not automatically assign an agent, start coding, open a PR, run CI or deploy monitoring. For an owner-authorized implementation, specify its concrete execution path and acceptance evidence and advance to a scoped branch/PR in the active work whenever possible. If blocked, state the reason explicitly and leave the Issue open. Close as completed only after implementation and verification; use a clearly reasoned non-completion disposition if applicable. Never describe an idle Issue as a stuck PR.
+
+GH-064. **The executing developer remains accountable for the PR's terminal outcome.** A Ready PR or successful CI run is not delivery. Observe and validate all scope-required checks for the **current PR head SHA**, never treating failed, cancelled, skipped, missing, queued, stalled or old-head checks as PASS. Repair same-scope failures in the same PR; when all required checks pass, verify the actual base, next source revision, review/authorization and safety gates, then complete the authorized exact-head merge, post-merge `main` verification and temporary branch cleanup. If the PR cannot be completed or work cannot continue, report that it remains OPEN with its head SHA, precise blocker and next action instead of claiming completion. Do not bypass required checks or authorization.
+
+GH-065. **Unattended completion alerts require a real, separately operating automation.** An Issue, GitHub Actions CI, open/idle chat or intention to follow up is not a watchdog and cannot wake an inactive assistant. A deployed GitHub-native watcher must check owner-managed open PRs against their **current head** and scope-specific required checks on relevant CI completion, with a bounded scheduled fallback; classify ready-but-open, failed, stalled and stale conditions and send deduplicated actionable notifications. Obsolete, cancelled or skipped checks never establish current-head PASS. Privileged watchers must not execute untrusted PR code, leak secrets, weaken protections or silently auto-merge. Notifications alone do not repair or merge PRs; autonomous action requires separately configured authorization and all normal safety gates. **Notification delivery is a separate qualified gate:** an attempted comment that GitHub returns HTTP 403/429, a successful read-only state classification, a passed unit test, or a red run alone is **not** proof that the owner received an alert. A privileged watcher must retain trusted-default-branch execution, deduplicated current-head scanning and a bounded scheduled fallback; it must fail visibly on comment refusal, preserve a minimal redacted API diagnostic and safe GitHub Actions summary without leaking secrets or claiming the summary is a pushed notification. Document and verify actual requested/effective token permissions and at least one live PR-timeline write, while maintaining the developer's GH-064 responsibility to finish Ready PRs.
+
+**Implementation and reproducibility (informational, not a new rule):** [PR completion watchdog — architecture, history, and reusable installation](../../../../GITHUB_PR_COMPLETION_WATCHDOG.md) is the single portable implementation guide for GH-065. [Repository-specific operational runbook](../../../../verification/github-pr-completion-watchdog.md) records our current deployment, examples and monitoring evidence. This distinction preserves GH-063–GH-065 as the only normative policy.
+
+## PR merge and post-merge verification
+
+GH-024. **Merge only the exact verified PR head.** Use expected-head protection when available so a moved head cannot be merged accidentally.
+
+GH-025. **Normal project integration is one squash merge per logical scope.** The resulting `main` subject uses the exact candidate prefix and describes the logical change.
+
+GH-026. **Verify the resulting `main` after merge.** Confirm the new SHA and applicable main-integrity/release-classification behavior rather than assuming PR checks automatically prove post-merge state.
+
+GH-027. **Published release identity and bytes are forward-only.** Never force-update `main`, move a published tag to another commit, replace already-published package/checksum assets under the same release identity, or hide a failed publication by rewriting history. Repair substantive publication errors forward. Human-facing release notes may be transparently corrected when that edit does not change the release identity, tag target, binary/checksum assets, or conceal a publication defect.
+
+GH-028. **Temporary branches are completion machinery, not permanent clutter.** After merge/completion, preserve useful unique work first; otherwise delete the temporary task/publication branch and verify normal branch state.
+
+GH-029. **Routine branch cleanup needs no separate owner confirmation.** Apply `CHAT-010` and `CHAT-022`; escalate only a real permission, tooling, or safety boundary.
+
+GH-030. **Normal steady-state branch hygiene is `main` plus explicitly retained long-lived recovery/work branches.** Do not leave obsolete task/publication branches after safe integration.
+
+## Repository artifact and secret hygiene
+
+GH-031. **Do not commit transport, scratch, or backup artifacts.** `.orig`, `.rej`, `.patch`, `.diff`, `.b64`, `.base64`, `.bak`, split parts, editor backups, and equivalent temporary files are not repository state unless an explicitly approved artifact format requires them.
+
+GH-032. **Never publish secrets or sensitive private configuration.** Credentials, tokens, private configuration, private exploit details, or unredacted sensitive logs do not belong in public issues, PRs, commits, release assets, or repository documentation.
+
+GH-033. **Repository hygiene checks are part of normal CI.** Do not disable or weaken them merely to make an incorrect tree pass.
+
+## Owner testing-package publication
+
+GH-034. **Interpret owner package shorthand through `CHAT-015`, `CHAT-016`, and `CHAT-027`.** A testing package is persistent GitHub delivery, not an ephemeral Actions artifact unless the owner explicitly requests build evidence only.
+
+GH-035. **Every published testing `.pkg` is tied to the exact immutable merged `main` source commit that first introduced its version/revision identity.** Verify ancestor status, distinct parent candidate, exact candidate version/revision, tag target, uploaded package identity and digest. Later `main` commits have *new* revision identities under `DEV-032`, even when they changed only docs, and therefore never silently replace or relabel an earlier published package. A source-only revision is not automatically a published `.pkg`; an explicitly requested package must be built and published from its exact candidate commit through `GH-060`–`GH-061`.
+
+GH-036. **Testing-package publication does not promote the stable project package repository.** No stable Pages/pkg-repository update or full-release claim occurs merely because a `.pkg` is published for testing.
+
+GH-037. **Testing package bytes remain retrievable after workflow completion.** Use a persistent GitHub release/prerelease asset or equivalent approved persistent GitHub surface; Actions artifacts, local files, sandbox files, and chat attachments are build evidence or transport artifacts, not package delivery.
+
+GH-038. **Temporary testing-publication branches are removed after successful immutable publication once unique work is safely preserved.** Do not leave version-specific publisher branches as permanent process state. The publisher must execute the exact ref cleanup even when subsequent Draft publication-record PR creation fails for GitHub token permissions, **but only after independently verifying the native `.pkg` asset and immutable tag/target**. A failed PR-creation step remains a failed run and requires a separately completed GH-061 documentation record; cleanup must never mask that failure or delete the publisher head before release verification. Do not cleanup after cancellation or failed/unverified package publication. Retire obsolete publisher branches by verifying their exact immutable tags, published `.pkg` assets and source SHA; preserve unique unmerged histories in the dedicated archive first.
+
+GH-060. **An owner package/patch command is complete only after direct persistent GitHub delivery of the native OPNsense `.pkg`; external shell installers are forbidden (owner decision 10.11.2026).** An intermediate testing package is qualified and published before outstanding owner-live acceptance rows are exercised on that package; those rows must remain OPEN and must not be misreported as PASS. Require affected safety, package ABI/manifest and native artifact evidence before publication, not unrelated historical full-product test matrices. Follow `DEV-040`, `CHAT-015`–`CHAT-016`, `CHAT-027`, exact-head merge and native package qualification; when a new candidate is explicitly requested, publish its exact candidate-defining merged source commit using the generic testing publisher without requiring a second approval. Publish **only** `os-zapret2-restyle-<actual-version>.pkg` as the new testing installation asset and verify its immutable tag/target, SHA-256, manifest ABI and GitHub URL, plus `GH-061` publication record/cleanup and `DOC-037` documentation reconciliation. No SH companion installer is generated, uploaded, offered or executed; old immutable release assets are historical and not rewritten. The owner-facing result includes the verified direct `.pkg` link and three native shell lines **containing no SH installer**: `fetch -o /root/os-zapret2-restyle-<actual-version>.pkg <direct-pkg-asset-URL>`, `pkg add -f /root/os-zapret2-restyle-<actual-version>.pkg`, `pkg info -x os-zapret2-restyle`. A local `pkg add -f` does not fetch unavailable dependencies: first resolve **only actual manifest-declared missing/outdated dependencies** through interactive official `pkg install -r OPNsense`, reviewing all proposed changes, without automatic hidden modifications, `pkg add -M`, stock FreeBSD repos or omitted pkg hooks. The known native `pkg install -f /path/to/archive.pkg` solver segmentation fault is not the replacement route. Neither source PR, Actions artifact nor sandbox archive completes package delivery. If blocked, report it directly. Stable Pages/pkg repository remains unchanged for testing candidates.
+
+GH-061. **Successful pkg-only testing publication creates a bounded Draft publication-record PR; that PR is part of completion.** The generic publisher creates a branch from the current `main` and one evidence record under `docs/verification/evidence/testing-publications/` with immutable candidate/source SHA/tag, **only the `.pkg` asset and its SHA-256**, manifest ABI, publisher workflow and direct pkg URL/commands. Do **not** generate or require installer-asset/SHA fields for future publications; historical previously recorded SH assets remain unchanged facts of prior immutable releases. The assistant reconciles bounded current docs, increments `PLUGIN_REVISION` exactly once for the docs-only merge under `DEV-032`–`DEV-033` without publishing another package, requires exact-head docs/governance CI, merges, verifies `main` and cleans temporary branches. The publication-record PR must not modify product/runtime, builder, workflow, scripts, repository output or binaries; only `Makefile` revision increment is permitted beyond documentation. Documentation ownership follows `DOC-037`.
+
+GH-039. **Interpret `релиз` through `CHAT-017` and `DEV-039`.** A full release is not complete until the package repository/Web-install boundary is verified.
+
+GH-040. **A full release requires explicit owner release authority.** Do not infer a stable release merely because CI is green or a package exists.
+
+GH-041. **A full release uses the exact current candidate.** It may publish the current `_N`; publication itself does not reset revision under `DEV-038`.
+
+GH-042. **A full release must pass the README gate.** Apply `DOC-038`–`DOC-039` before release preparation.
+
+GH-043. **Release-preparation merge identity is explicit.** The verified merge subject is `v<VERSION>_<PLUGIN_REVISION>: Prepare release v<VERSION>` with only repository-accepted squash suffix variation.
+
+GH-044. **The semantic release tag is immutable and points to the exact release-preparation merge.** If `v<VERSION>` already exists at another commit, do not move it; use a new owner-approved project version for a later release.
+
+GH-045. **A full GitHub Release contains the exact package and checksum assets and is not a testing prerelease.** Verify released asset identity against the source candidate.
+
+GH-046. **A full release publishes and verifies the matching `FreeBSD:15:amd64` project package repository.** Confirm generated repository metadata, package location, and OPNsense Web install/update availability.
+
+GH-047. **A second-component transition is guarded by `DEV-036`–`DEV-037`.** It starts at `_1`, includes explicit full-release preparation, and performs the documentation-line rollover in `DOC-028`–`DOC-030`.
+
+GH-048. **A third-component transition is guarded by `DEV-034`–`DEV-035`.** It starts at `_1` but does not trigger a full release unless the same exact merge is explicitly release preparation.
+
+## Release-trigger behavior
+
+GH-049. **Every new `main` commit is version-validated and release-classified:** same-`VERSION` commits must increment `_N` exactly once, and valid `VERSION` transitions start at `_1`; only the exact explicit release-preparation subject triggers a full release. An ordinary `main` revision increment does **not** publish a tag, package or stable release. Enforce both the base-to-PR-head gate and the actual parent-to-merged-`main` gate; rejected/stale revisions must be corrected before integration.
+
+GH-050. **A third-component-only `VERSION` change requires `_1` and is accepted as a development-stage transition without release by default.** Release occurs only with explicit release-preparation identity.
+
+GH-051. **A first/second-component transition requires `_1` and explicit full-release preparation.** A second-component transition without owner authority under `DEV-036`–`DEV-037` is a failed governance boundary, not an implicit release.
+
+GH-052. **An explicit release-preparation merge at the current candidate creates or verifies the semantic tag and dispatches the full release workflow.** Post-release verification remains mandatory.
+
+## Documentation and process synchronization
+
+GH-053. **Every GitHub delivery applies documentation reconciliation.** Apply `DOC-036`, `DOC-037`, and `DOC-047`. Facts/contracts/handoff/plan/rules known before source merge are reconciled in that logical source PR. Facts that exist only after successful immutable testing-package publication—such as release/tag identity, asset digest, publication workflow result, and automatic publisher-branch cleanup—are reconciled immediately in the bounded docs-only publication-record PR required by `GH-060`–`GH-061`; this is the explicit post-publication exception to the same-source-PR rule and must contain no product/package change. Otherwise use an evidence-based no-op when nothing documented changed.
+
+GH-054. **Touch bounded documents only when their role requires it.** Apply `DOC-011`, `DOC-012`, and `DOC-047`; do not mechanically edit state, handoff, roadmap, or rule books merely to increase PR file count.
+
+GH-055. **GitHub-rule changes are recorded here first.** Add or amend the persistent `GH-*` rule, then reconcile affected references and checks under `DOC-008` and `DOC-042`–`DOC-045` in the same logical scope.
+
+GH-056. **Legacy GitHub decisions are rationale/history, not competing current procedure.** Where an older decision was superseded, preserve it as history and do not merge obsolete behavior back into this file.
+
+GH-057. **The repository tree must be self-consistent at merge.** Active canonical paths, navigation, current state/handoff, rule references, tests, and local documentation links must resolve together; known dangling or contradictory current references block merge under `DOC-019`, `DOC-045`, `DOC-047`, and `DOC-053`.
+
+GH-058. **A canonical rule-book change must pass cross-reference integrity validation.** The bidirectional registries, active rule-body references, and rule lifecycle state must agree under `DOC-042`–`DOC-045` before merge.
+
+GH-059. **Deleting or renaming documentation is a repository-wide reference migration.** Apply `DOC-053`: migrate affected tracked Markdown links and active navigation in the same logical scope, then require the internal-link validator to pass. Do not keep an obsolete duplicate document merely to preserve an in-repository link when those references can be migrated cleanly.
+
+## Cross-reference registry
+
+### Outbound references
+
+<!-- RULE-XREF-OUT-BEGIN -->
+| Source rule | Target rules |
+|---|---|
+| `GH-005` | `DEV-027`–`DEV-040` |
+| `GH-006` | `DOC-016`, `DOC-049` |
+| `GH-011` | `DEV-017` |
+| `GH-014` | `DEV-027`–`DEV-035` |
+| `GH-015` | `DEV-033` |
+| `GH-035` | `DEV-032` |
+| `GH-017` | `DEV-012` |
+| `GH-019` | `DEV-013` |
+| `GH-020` | `DEV-014` |
+| `GH-022` | `DEV-011` |
+| `GH-029` | `CHAT-010`, `CHAT-022` |
+| `GH-034` | `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-039` | `DEV-039`, `CHAT-017` |
+| `GH-041` | `DEV-038` |
+| `GH-042` | `DOC-038`, `DOC-039` |
+| `GH-047` | `DOC-028`–`DOC-030`, `DEV-036`, `DEV-037` |
+| `GH-048` | `DEV-034`, `DEV-035` |
+| `GH-051` | `DEV-036`, `DEV-037` |
+| `GH-053` | `DOC-036`, `DOC-037`, `DOC-047` |
+| `GH-054` | `DOC-011`, `DOC-012`, `DOC-047` |
+| `GH-055` | `DOC-008`, `DOC-042`–`DOC-045` |
+| `GH-057` | `DOC-019`, `DOC-045`, `DOC-047`, `DOC-053` |
+| `GH-058` | `DOC-042`–`DOC-045` |
+| `GH-059` | `DOC-053` |
+| `GH-060` | `DOC-037`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-061` | `DOC-037`, `DEV-032`–`DEV-033` |
+| `GH-069` | `DEV-061` |
+| `GH-072` | `DEV-062` |
+<!-- RULE-XREF-OUT-END -->
+
+### Inbound references
+
+<!-- RULE-XREF-IN-BEGIN -->
+| Target rule | Referenced by |
+|---|---|
+| `GH-004` | `DOC-049`, `CHAT-012` |
+| `GH-006` | `DOC-016` |
+| `GH-010`–`GH-014` | `CHAT-010` |
+| `GH-011` | additionally `DEV-017` |
+| `GH-014` | `DEV-033` |
+| `GH-015` | `DEV-033`, `CHAT-010` |
+| `GH-016` | `DEV-033` |
+| `GH-049` | `DEV-033` |
+| `GH-016`–`GH-023` | `CHAT-010` |
+| `GH-024`–`GH-030` | `CHAT-010`, `CHAT-018` |
+| `GH-026` | additionally `DOC-049` |
+| `GH-034`–`GH-038` | `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-039` | `DOC-038`, `DEV-039`, `CHAT-017` |
+| `GH-040` | `DOC-038`, `CHAT-017` |
+| `GH-041` | `DOC-038`, `DEV-038`, `CHAT-017` |
+| `GH-042`–`GH-044` | `DOC-038`, `CHAT-017` |
+| `GH-045`, `GH-046` | `DOC-038`, `DEV-039`, `CHAT-017` |
+| `GH-047` | `DEV-036`, `DEV-037`, `CHAT-017` |
+| `GH-048`–`GH-050` | `CHAT-017` |
+| `GH-051` | `DEV-036`, `DEV-037`, `CHAT-017` |
+| `GH-052` | `CHAT-017` |
+| `GH-053` | `DOC-037`, `DOC-047` |
+| `GH-054` | `DOC-047` |
+| `GH-060` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-061` | `DOC-037`, `DOC-047`, `DEV-040`, `CHAT-015`, `CHAT-016`, `CHAT-027` |
+| `GH-072` | `DEV-062` |
+<!-- RULE-XREF-IN-END -->
+
+## Rule lifecycle
+
+- `GH-009` — **ОТМЕНЕНО**, 2026-08-14; no replacement.
+
+Cancelled/replaced IDs remain physically in this file and are never recycled.

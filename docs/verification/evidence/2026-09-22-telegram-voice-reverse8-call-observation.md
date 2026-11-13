@@ -18,7 +18,7 @@ After the reverse-run archive was inspected, the owner explicitly reported that 
 
 The supplied archive contains no companion call log. The statement does not yet identify whether this was `tgcalls_cli` or a Windows/Android Telegram call, its actual endpoint/transport, or two-way media evidence. These are attribution questions, not a reason to discard the reported success. Earlier CLI failures belong to their own runs and must not be attached to this observation.
 
-Current handoff: [`START_HERE.md`](../../START_HERE.md). Acceptance definitions: [laboratory architecture](../../architecture/TELEGRAM_VOICE_EMULATION_LAB.md).
+Current handoff: [`START_HERE.md`](../../START_HERE.md). Acceptance definitions: [laboratory architecture](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_VOICE_EMULATION_LAB.md).
 
 ## Runner and archive identity
 

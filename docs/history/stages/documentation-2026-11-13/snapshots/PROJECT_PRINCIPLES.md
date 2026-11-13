@@ -1,0 +1,215 @@
+# Historical source — docs/PROJECT_PRINCIPLES.md
+
+**ARCHIVED / LEVEL 3.** Original text at `277ef0536b217841ab6728ae9561dbc4792fef01` (`v0.6.5_14`), relocated during the 13 November 2026 documentation review. Its dated statuses, commands, proposed work and duplicated rules are historical, not current instructions. Local links are rebased; original prose is preserved. Current authority: [documentation index](/docs/INDEX.md).
+
+# Project development rules
+
+**Status:** CANONICAL · MANDATORY LEVEL 1
+**Updated:** 2026-11-12
+
+This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
+
+Other canonical rule domains:
+
+- [`DOCUMENTATION_RULES.md`](../../../../DOCUMENTATION_RULES.md) — documentation governance (`DOC-*`);
+- [`CHAT_RULES.md`](../../../../CHAT_RULES.md) — owner/assistant communication semantics (`CHAT-*`);
+- [`GITHUB_PUBLICATION.md`](GITHUB_PUBLICATION.md) — GitHub operations (`GH-*`).
+
+Current product facts belong in `PROJECT_STATE.md`; concrete subsystem contracts belong in requirements/architecture.
+
+## Owner canon and engineering authority
+
+DEV-001. **The owner's newest unambiguous project instruction, fact, or approved decision is immediately binding project canon.** It supersedes conflicting older active plans, assumptions, preferences, or normative text. It may not be silently deferred, weakened, or reinterpreted merely to preserve stale material; chat execution semantics are reinforced by `CHAT-007`, `CHAT-009`, and `CHAT-026`.
+
+DEV-002. **Accepted owner canon remains locked until the owner explicitly changes it or fresh direct reproducible evidence disproves the factual premise.** Loss of conversational memory, an old document, or a stale test is not counter-evidence.
+
+DEV-003. **The “Суслик” principle is permanent.** If implementation, active documentation, tests, or plans contradict the newest unambiguous owner canon, the contradiction is a project defect to reconcile; do not reinterpret the owner's words merely to preserve stale project material.
+
+DEV-004. **Settled findings stay settled.** Do not reopen a completed investigation or design choice solely because a later session starts with less context. Reopen only for a new owner decision, changed requirement, or fresh direct evidence material to the conclusion.
+
+DEV-005. **Source and approved intent have different authority.** Committed source is authoritative for what is implemented; owner-approved requirements/architecture/current-state documentation is authoritative for intended direction. A mismatch is explicit transition debt, not permission to silently choose one narrative.
+
+DEV-006. **A project decision must have an evidentiary or owner-authority basis.** Do not turn a guess, convenience, benchmark projection, or tooling limitation into architecture canon.
+
+## Engineering quality and change discipline
+
+DEV-007. **Correctness and an observable result define each logical increment.** Before implementation, name the user scenario, bounded change and evidence required to accept it. Prefer the smallest change that fully solves the confirmed problem and preserves required behavior. A discovered blocking defect remains the current task until corrected and checked; do not advance to an unrelated increment or declare the blocked scenario complete. If the required environment is unavailable, record the concrete boundary and leave acceptance open. Commit count, test count and internal component completion are not substitutes for the user-visible result.
+
+DEV-008. **Preserve working behavior before optimizing it.** Optimization is justified only when the relevant cost or defect is measured or otherwise demonstrated and required semantics are preserved.
+
+DEV-009. **Do not hide behavior behind silent magic.** Important defaults, fallback, state mutation, lossy normalization, recovery, or failure handling must be explicit enough to reason about and verify.
+
+DEV-010. **Failure classes must remain truthful.** Infrastructure, internal, restoration, or validation failures must not be reported as normal network candidate failure, completion, or success merely to simplify control flow.
+
+DEV-011. **Never claim an unexecuted verification as PASS.** A test, live row, package build, restoration check, benchmark, or release gate is PASS only when corresponding evidence exists. Distinguish implementation in source, executed CI/package verification, and observed operation on installed OPNsense. State the exact scenario, candidate and evidence for a readiness claim; successful packaging or static GUI assertions do not prove that a menu opens a rendered page, that settings persist, or that voice traffic works.
+
+DEV-012. **Diagnose from exact evidence before changing code.** Read the concrete failure, log, source, and state first; do not patch a plausible cause and retrofit the explanation.
+
+DEV-013. **A stale test never outranks current owner canon or current architecture.** Update the stale assertion, fixture, or contract rather than bending valid implementation back toward obsolete behavior.
+
+DEV-014. **External infrastructure failures do not justify speculative product changes.** Runner, network, service, action, or dependency outages are retried or diagnosed as infrastructure unless source evidence establishes a product defect.
+
+DEV-015. **Unknown platform behavior is verified, not guessed.** Material OPNsense, FreeBSD, configd, package, shell, firewall, process, PHP, JavaScript, or upstream Zapret2 behavior must be checked against current source/runtime evidence when correctness depends on it.
+
+DEV-016. **Audits and refactors are scope/risk based.** Inspect enough surrounding behavior to prove the change safe; do not repeat broad audits mechanically when existing evidence remains applicable.
+
+DEV-017. **One logical engineering scope remains one logical change.** Same-root-cause repairs, tests, and documentation belong together; unrelated improvements wait for their own scope. GitHub same-scope handling is enforced by `GH-011`.
+
+DEV-018. **Do not change approved architecture merely to make an old test or old implementation path convenient.** First determine whether the contract or implementation is stale. A delivery defect is repaired in the existing architecture unless reproducible evidence establishes that architecture as the blocker and the owner approves a changed direction. Repeated internal checks alone do not justify another architecture rewrite.
+
+DEV-019. **Requirements or architecture changes require explicit rationale.** A change to approved user-visible behavior, safety semantics, ownership, or public contract is not smuggled in as an implementation cleanup.
+
+## Runtime and product-safety invariants
+
+DEV-020. **Runtime/lifecycle changes fail closed.** Preserve bounded actions, transactional mutation, explicit ownership, cleanup on success/failure/cancel, and verifiable restoration.
+
+DEV-021. **Semantic restoration is stronger than command success.** When work temporarily changes runtime state, success requires the required final semantic state/evidence, not merely a zero exit code or new process ID.
+
+DEV-022. **A restoration failure outranks a useful intermediate result.** Never hide `RESTORE_FAILED` or equivalent unsafe residue behind a successful search, setup, Apply, package, or diagnostic result.
+
+DEV-023. **A subsystem has one authoritative owner for each piece of mutable state or policy.** Compatibility layers may adapt inputs/outputs but must not recreate a competing source of truth.
+
+DEV-024. **Preserve native Zapret2 semantics.** Candidate syntax, Lua/BLOB identity, filters/ranges, and upstream behavior are not approximated or normalized into a different strategy unless a specific approved design intentionally changes them.
+
+DEV-025. **Project source shell is POSIX `/bin/sh` unless a documented boundary explicitly requires something else.** FreeBSD-specific commands are allowed; shell-language assumptions remain deliberate and testable.
+
+DEV-026. **Repository/package identity remains independent.** The project is `Tolian82/os-zapret2-restyle`, package `os-zapret2-restyle`, and internal service key `zapret`; inherited upstream/fork identity must not leak back into product ownership. Changing the service key or product identity requires explicit owner approval.
+
+## Version semantics
+
+DEV-027. **`VERSION` is the single project-version source.** Its value has exactly three numeric components `A.B.C`.
+
+DEV-028. **`PLUGIN_REVISION` is the monotonically increasing `main` source-revision suffix `_N` for the current `VERSION`.** It identifies the exact merged source snapshot and, only when built and published, the corresponding installable OPNsense package identity. A revision may legitimately exist in `main` without a built or published `.pkg`; publication state must be stated separately.
+
+DEV-029. **The second numeric component defines the long-lived project-state/release line.** In `v0.4.2_14`, `4` defines line `v0.4.x` and the scope of `PROJECT_STATE.md`.
+
+DEV-030. **The third numeric component defines the current development stage/task.** In `v0.4.2_14`, `2` identifies the genuine current development stage inside `v0.4.x`.
+
+DEV-031. **The `_N` suffix identifies one distinct merged source revision within the current `VERSION`.** In `v0.4.2_14`, `_14` identifies the source snapshot, prospective package candidate and handoff boundary. It is a revision suffix, **not** the semantic-version minor component (`B` in `A.B.C`).
+
+DEV-032. **Every new commit incorporated into `main` increments `PLUGIN_REVISION` exactly once (`_N` -> `_N+1`) while `VERSION` remains unchanged, without exception for documentation, governance, CI, tests or packaging.** One squash-merged PR produces one `main` commit and one increment; fixup commits on an *unmerged task branch* do not consume further revisions. Never skip, reuse, decrement or manually reserve suffixes. `VERSION` does not change merely because `main` advances. A genuine authorized `VERSION` transition resets the revision to `_1` instead, under `DEV-034`–`DEV-037`.
+
+DEV-033. **Even documentation, governance, test and CI-only changes must increment `PLUGIN_REVISION` when merged into `main`.** Such a source-only revision does **not** automatically build or publish a package, move any immutable tag, authorize owner installation or constitute a stable release. Pull-request edits, unsquashed task-branch commits, issue/PR comments, CI re-runs, GitHub metadata and release/tag publication without a new `main` commit do **not** independently increment either `VERSION` or `PLUGIN_REVISION`. GitHub enforcement is defined in `GH-014`–`GH-016` and `GH-049`.
+
+DEV-034. **A genuine new development stage changes the third numeric component and starts at package revision `_1`.** Do not change the third component merely because many patches accumulated; it marks a real stage change.
+
+DEV-035. **A third-component transition is not a full release by itself.** `v0.4.1_N -> v0.4.2_1` may be an internal development-stage transition with no stable/Web/pkg publication.
+
+DEV-036. **A second-component transition is owner-controlled.** The assistant never infers or initiates `v0.4.x -> v0.5.x` from apparent readiness, scope, roadmap progress, or accumulated changes. It requires the owner's explicit transition/version instruction or explicit agreement to a proposal; GitHub enforcement is in `GH-047` and `GH-051`.
+
+DEV-037. **A second-component transition always includes a full release and documentation-line rollover.** Therefore `second-component transition => full release`; the inverse is not true. Documentation rollover follows `DOC-028`; GitHub enforcement follows `GH-047` and `GH-051`.
+
+DEV-038. **A full release may occur without changing the second component and may use the exact current `_N` candidate.** Publication alone does not reset `PLUGIN_REVISION`; GitHub publication follows `GH-041`.
+
+DEV-039. **A full release means a complete installation-ready OPNsense delivery.** It is not merely a tag or uploaded file: the exact package must be published through the project package repository and be installable/upgradable through the OPNsense Web interface, with release identity/assets verified. Chat shorthand is defined by `CHAT-017`; GitHub completion is governed by `GH-039`, `GH-045`, and `GH-046`.
+
+DEV-040. **A testing package is not a full release, but requested testing-package delivery is complete only on GitHub.** It may be persistently published for owner testing without promoting the stable project package repository or claiming stable release status. For owner patch/package shorthand, a local build, Actions artifact, chat attachment, or sandbox `.pkg`/archive is not the delivered package; completion follows `CHAT-015`–`CHAT-016`, `CHAT-027`, `GH-034`–`GH-038`, and `GH-060`–`GH-061`.
+
+## Verification and release readiness
+
+DEV-041. **Live release gates are selected from current risk and evidence, not from a blanket checklist.** A live-only defect fixed by the candidate, materially changed appliance-only behavior, or affected lifecycle/restoration safety requires applicable replacement live evidence.
+
+DEV-042. **CI, FreeBSD package qualification, and live OPNsense evidence are complementary.** None may fabricate or substitute for evidence that only another layer can establish.
+
+DEV-043. **Known critical defects block a full release.** `RESTORE_FAILED`, unverified restoration, unexplained temporary runtime/firewall residue, or another known critical defect remains a blocker until resolved and evidenced.
+
+DEV-044. **Only explicitly selected mandatory live rows block a given release for being pending.** Unrelated regression rows remain valuable coverage but are not silently promoted to mandatory gates; an unrun row is never rewritten as PASS.
+
+DEV-045. **Optimization decisions are measurement-driven.** If measured data does not show a meaningful benefit or reveals semantic cost, retain the simpler accepted production architecture and close the optimization question until new evidence appears.
+
+DEV-046. **A development-rule change is not complete until its references are reconciled.** Apply `DOC-008` and the cross-reference integrity contract `DOC-042`–`DOC-045`. The owner's newly binding meaning still takes effect immediately while that same-scope repository reconciliation is being completed.
+
+DEV-047. **Progress is measured by accepted functionality.** A user-facing feature is complete only after its approved acceptance criteria are evidenced at the required source, CI/package, and installed-appliance levels. Commit counts, revision increments, test volume, and speculative hardening do not substitute for end-to-end acceptance. Once a usable implementation exists, prioritize its qualified delivery and owner-observed verification over unrelated internal expansion.
+
+DEV-048. **Safety is proportional to demonstrated risk.** Preserve all established fail-closed, transactional, ownership, and restoration guarantees. New safety machinery must address an approved requirement or a concrete reproducible defect; prefer the simplest sound solution. An unknown or externally modified state must not be destructively guessed or automatically reset. Defer unproven enhancements rather than blocking already qualified user-facing acceptance indefinitely.
+
+DEV-049. **Model initiative improves the approved plan, but does not silently extend it.** The model shall identify and propose demonstrably useful changes to decisions, requirements, design, or priorities, explaining evidence, expected benefit, cost, and risk. New, unapproved research directions are outside the mandatory current delivery scope; an initiative becomes a required workstream only after owner agreement. The model continues to execute already approved work without unnecessary reapproval.
+
+DEV-050. **Forward-only experimental development uses exactly one current product architecture.** This OPNsense installation is a test stand, not a legacy-upgrade compatibility target. When the owner approves a replacement for a parser, schema, strategy, service, lifecycle, engine or other behavior, implement that replacement directly, and in the same logical scope remove superseded production paths, old-version fallbacks, migration-only exceptions, dormant alternative implementations, compatibility wrappers with no active contract, their obsolete tests and their active documentation assertions. Never keep prior behavior executable just in case, and never add a legacy bridge solely to make upgrading an experimental installation transparent. Current-format IPv4 and IPv6 inputs remain valid according to the current approved grammar; an older sealed runtime or configuration format is not supported merely because it once existed. A required deliberate fresh current-format setup or Apply is preferable to another legacy code path; expose its consequence clearly. A future product-level reversal is a new explicit GitHub change using repository history, not a hidden in-program rollback branch. Preserve testing, accurate errors, one native owner and the current transaction's atomicity, cleanup, fail-closed boundaries and repair of an interrupted operation: restoring the immediately preceding state **within that same operation** to avoid incomplete Config/IPFW/process state is not reverting to an obsolete product implementation. Do not impose production-style backward-migration acceptance gates or speculative rollback scaffolding on this experimental stand.
+
+DEV-051. **Detect automatable defects before exercising the real target execution platform.** Self-checks must exercise the changed production path with its real templates, rendering/generation machinery, produced artifacts, and the consuming interpreter or parser wherever equivalent execution is available outside the target system. Cover relevant empty, populated, edge-sized, and invalid inputs; verify the generated output and observable failure behavior, not merely source syntax, isolated mocks, or package-build success. Before opening the PR or starting long CI/package qualification, reproduce each known defect with a focused check that fails against the faulty implementation and passes with the correction; retain that check in applicable automated CI so a recurrence blocks publication. **The real target execution platform is for genuinely platform-dependent behavior and final integration/acceptance—not the primary discovery environment for errors reproducible in automated tests.** Missing off-target capabilities must be disclosed as an unverified boundary, never disguised as a PASS or delegated to the owner as routine manual debugging.
+
+
+DEV-052. **Version-independent external dependencies and platform-portable design are the default.** New and modified production code must, wherever technically reasonable, survive normal OS, package, interpreter, library and executable updates without source changes. Do not scatter hard-coded dependency versions, minor-version executable names, absolute versioned paths, kernel/ABI assumptions or OS-specific service/config/firewall calls through feature logic. Prefer a stable interface and verified capability detection to guessing from version numbers. When an exact version, supported range, ABI, path or capability restriction is genuinely necessary, define it once in **one authoritative machine-readable external-compatibility manifest** for the project; all runtime resolvers, platform adapters, packaging/build checks and tests must consume or mechanically verify their derived declarations against that source, never independently maintain competing version constants. Resolve and validate executables and required features at the appropriate install/start/use boundary; when already running under a validated interpreter, child processes reuse that interpreter. Never silently choose an unverified binary, use a missing generic symlink, or continue with an unsupported dependency; fail closed with an actionable diagnostic. **Where feasible, prefer keeping the reusable Zapret2 domain/backend logic independent of the target installation platform** (the host operating system/distribution and its configuration, service, firewall, kernel, package and ABI interfaces). This separation is a **recommendation, not a strict architectural requirement or release acceptance gate**: direct platform-dependent code is acceptable where justified by real technical constraints. Prefer narrow, tested adapters for platform-specific integration when they provide a practical benefit, **without adding speculative parallel implementations or compatibility branches** before a target platform is approved and qualified. Qualification must check the supported environments and explicit rejection of unsupported ones, including generated metadata and real platform-only behavior where applicable. Sharing an OS family or kernel base, or successfully building a package, does not by itself prove compatibility with any other target installation platform, OS release or ABI. Version locks demonstrably required for safety, immutable upstream resources or reproducible builds are permitted only as explicit centralized, validated exceptions. This external-dependency policy does **not** replace the separate project `VERSION` source, `PLUGIN_REVISION` governance, or mandatory platform/package-manager metadata.
+
+## Portable dependency and implementation safeguards
+
+These additive rules govern portable software engineering. They do not replace the existing development, release, documentation or platform policies. Existing product-specific identities and qualification constraints remain in their established authoritative metadata.
+
+DEV-053. **Observe installed environment facts rather than maintaining a shadow version inventory.** Obtain actual installed package identities, versions, providers, interpreter identities and library providers from the target platform's native package manager, provider interfaces and validated resolved executables. Query or verify such observations at the relevant boundary rather than copying and synchronizing them across modules. Recorded observations in diagnostics or build receipts are not automatically compatibility restrictions. Explicitly justified supported ranges, ABI restrictions and required capabilities belong only to the project's single authoritative external-compatibility policy, not to a second inventory.
+
+DEV-054. **Classify every external dependency and assign one provisioning owner.** When introducing or changing a dependency, record the consumer, execution environment, actual role (installed runtime, installed setup/build step, package-build-only, test-only, optional or bundled private), provider and acquisition mechanism. Use the target platform's native package manager, qualified repositories and package metadata for system-owned dependencies. Do not let ordinary feature code, package hooks and installers silently compete to install, upgrade or replace a dependency owned by that manager. A tool needed for an installed setup/build operation remains an installed dependency even if it is absent from ordinary request processing. Build/test-only tools must not be promoted to mandatory appliance dependencies without an actual installed use.
+
+DEV-055. **Pin exact external bytes only at a demonstrated release-input or safety boundary.** Routine compatible system package, interpreter and library updates must not require source-version changes or feature-specific version locks. If a private executable or other independent external build input requires byte identity, record its qualified source, necessary selection/version, digest, platform constraints and verification procedure once in the existing authoritative external-input/compatibility policy. Validate that exact input for a release candidate; do not silently substitute upstream latest. Requalify relevant behavior when an intentionally pinned input changes. Do not introduce an independently maintained component-version table or confuse a reproducible release input with a general runtime lock.
+
+DEV-056. **Give every added, moved or renamed production file an explicit integration contract.** Determine its subsystem and owner, caller or entrypoint, execution environment, interface and failure behavior, external dependency needs, packaging disposition and applicable tests. Integrate it through established ownership, invocation, configuration and lifecycle interfaces, not a parallel version resolver, package installer, service supervisor or configuration owner. An unclassified new production file is not automatically safe. This is change-scoped onboarding, not a requirement for a separate manually maintained complete-file catalogue.
+
+DEV-057. **Discover and classify all changed production paths before accepting a change.** Combine the actual version-control change set, including additions, deletions, renames and moves, with existing build/package metadata and coherent path policies to select the relevant checks. A new path must not evade compatibility, dependency, interpreter, packaging or caller-contract checks because it is absent from a former hard-coded path list. Unknown or conflicting classifications require a clear diagnostic and block the affected merge until resolved. Test the actual changed production path where feasible. Documentation-only work need not run the entire unrelated native platform matrix. Do not create an independently curated second package-file inventory.
+
+DEV-058. **Validate shipped files from actual source and native package metadata, not a historical count.** Reconcile tracked production sources and deliberately generated content with the native builder's package manifest and installed files. Verify inclusion, bytes, necessary executable modes, hooks, metadata, declared dependencies and permitted generated entries. New features may legitimately increase file count; a past count or fixed filename list is not a permanent product invariant. Reject missing or unexpected payloads, unqualified executable modes and symlink behavior. Renaming or relocating a file must not remove it from verification.
+
+DEV-059. **Generate and cross-check product-version representations from one authoritative source.** Builders, package metadata, version markers, release tools, update checks and generated presentations must consume the project's established product version and separately governed source revision, not maintain independently edited copies in feature files or packaging scripts. Automated checks must reject inconsistent generated versions and identities. Distinguish project identity from observed dependency versions, independent private-tool versions and explicit historical test fixtures. A newly merged source revision is not necessarily an already published package.
+
+DEV-060. **Bind cross-environment qualification and publication to the exact tested deliverable.** Record the source revision, qualified environment, relevant input identities and cryptographic digest of the actual output. If distinct clean, running-upgrade, reboot or other environments are said to exercise the same candidate, transfer and verify the same physical bytes instead of rebuilding independently from the same commit. A different digest is a separate artifact with separate acceptance scope. Do not publish an unchecked rebuild as a qualified binary or treat source-only success as installed acceptance. Preserve truthful PASS, PARTIAL, SKIPPED and NOT TESTED evidence boundaries.
+
+## Sufficient verification and automatic stop
+
+DEV-061. **Verification is a bounded means to deliver an accepted result, not an open-ended search for certainty.** Before a logical change, define the observable user outcome, changed production paths and dependencies, required safety invariants, and the smallest checks that can establish the applicable acceptance criteria. Reuse prior qualified evidence for unchanged behavior when its source, relevant dependencies, platform assumptions and execution conditions still apply; never relabel old evidence as a PASS on new bytes. Add or repeat a test only for an affected execution path, a concrete reproducible failure, a credible change-specific safety risk, or an expressly applicable acceptance/release gate. For every additional expensive native/VM test identify the distinct risk, why prior checks are insufficient, and what decision its result can change. Speculative failure possibilities alone do not create new blocking gates or authorize unrelated matrices. **When the preselected applicable checks pass and no actual critical defect or mandatory gate remains, stop expanding tests and proceed to the authorized package, merge or owner acceptance without asking the owner to rein in testing.** A testing `.pkg` is an input to owner acceptance, not a reward after every owner-live row has passed: qualify the exact package and any changed high-risk safety behavior before handoff; keep outstanding physical acceptance marked OPEN. This rule never weakens fail-closed/FD9/Config/IPFW/process/Voice/restoration safety, exact-head merge checks, proven package identity or the full release's genuinely mandatory evidence.
+
+DEV-062. **Test real user journeys before internal breadth, with an observable red→green result.** Every user-visible or Config/transport change starts with a written shortest complete journey from the real input and native Model through Python validation, request transport, original FD9/Config owner and the consumed output (HOSTLIST/strategy/GUI), with at least one realistic boundary/invalid case. Reproduce every known relevant owner failure on the pre-fix code with a short test that truly fails; fix the cause, then run the identical test on the candidate until it passes. When a step genuinely needs OPNsense/Chromium, keep its installed evidence separate from portable checks. A successful isolated parser, mock, packaging job, synthetic read-only probe or native engine dry-run cannot be presented as successful UI Apply/save. The first automated gate is the cheapest actual changed-path journey; an unknown or safety-critical path retains fail-closed qualified checks. Track what bug the test would catch, what result it decides, scope, elapsed CI time and reused evidence. If the test cannot demonstrate a credible user-visible failure or safety invariant, do not make it an automatic blocking gate; retain optional historical matrices for explicit risk/acceptance/manual use. Follow the permanent GitHub routing contract `GH-072`. The known 12-Nov-2026 `v0.6.4_44` User Domains oversized shared-Apply failure remains **OPEN** until a real large changed-list Apply/Config/HOSTLIST test passes; `PASS_READONLY_PRECONDITIONS` does not close it.
+
+## Cross-reference registry
+
+### Outbound references
+
+<!-- RULE-XREF-OUT-BEGIN -->
+| Source rule | Target rules |
+|---|---|
+| `DEV-001` | `CHAT-007`, `CHAT-009`, `CHAT-026` |
+| `DEV-017` | `GH-011` |
+| `DEV-033` | `GH-014`–`GH-016`, `GH-049` |
+| `DEV-036` | `GH-047`, `GH-051` |
+| `DEV-037` | `DOC-028`, `GH-047`, `GH-051` |
+| `DEV-038` | `GH-041` |
+| `DEV-039` | `CHAT-017`, `GH-039`, `GH-045`, `GH-046` |
+| `DEV-040` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
+| `DEV-046` | `DOC-008`, `DOC-042`–`DOC-045` |
+| `DEV-062` | `GH-072` |
+<!-- RULE-XREF-OUT-END -->
+
+### Inbound references
+
+<!-- RULE-XREF-IN-BEGIN -->
+| Target rule | Referenced by |
+|---|---|
+| `DEV-001` | `CHAT-007`, `CHAT-026` |
+| `DEV-002` | `CHAT-007` |
+| `DEV-003` | `CHAT-007`, `CHAT-009`, `CHAT-026` |
+| `DEV-004` | `CHAT-007` |
+| `DEV-011` | `CHAT-021`, `GH-022` |
+| `DEV-012` | `GH-017` |
+| `DEV-013` | `GH-019` |
+| `DEV-014` | `GH-020` |
+| `DEV-017` | `GH-011` |
+| `DEV-027` | `GH-005`, `GH-014` |
+| `DEV-028` | `GH-005`, `GH-014` |
+| `DEV-029` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-030` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-031` | `DOC-026`, `GH-005`, `GH-014` |
+| `DEV-032` | `DOC-037`, `GH-005`, `GH-014`, `GH-035`, `GH-061` |
+| `DEV-033` | `DOC-037`, `GH-005`, `GH-014`–`GH-015`, `GH-061` |
+| `DEV-034` | `GH-005`, `GH-014`, `GH-048` |
+| `DEV-035` | `GH-005`, `GH-014`, `GH-048` |
+| `DEV-036` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
+| `DEV-037` | `DOC-028`, `GH-005`, `GH-047`, `GH-051` |
+| `DEV-038` | `GH-005`, `GH-041` |
+| `DEV-039` | `DOC-038`, `CHAT-017`, `GH-005`, `GH-039` |
+| `DEV-040` | `CHAT-016`, `GH-005`, `GH-060` |
+| `DEV-042` | `CHAT-021` |
+| `DEV-061` | `GH-069` |
+| `DEV-062` | `GH-072` |
+<!-- RULE-XREF-IN-END -->
+
+## Rule lifecycle
+
+No cancelled or replaced `DEV-*` IDs currently exist. Existing IDs remain permanent and are never recycled.

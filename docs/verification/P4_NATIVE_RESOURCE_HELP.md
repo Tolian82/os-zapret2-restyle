@@ -1,6 +1,6 @@
 # P4b — Display native Zapret2 Lua/BIN when optional resources are absent
 
-**Candidate:** `v0.6.4_26` — source-only, not a release. **Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Approved plan:** [P4 Help and Strategy Lab](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md). **Baseline:** merged [P4a PR #1059](https://github.com/Tolian82/os-zapret2-restyle/pull/1059) at `374638220d3428940e53b55194c6e9fe51931a2e`.
+**Candidate:** `v0.6.4_26` — source-only, not a release. **Feature:** [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Approved plan:** [P4 Help and Strategy Lab](../history/stages/strategies-2026-11-12/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md). **Baseline:** merged [P4a PR #1059](https://github.com/Tolian82/os-zapret2-restyle/pull/1059) at `374638220d3428940e53b55194c6e9fe51931a2e`.
 
 ## Confirmed root cause and narrowly scoped repair
 

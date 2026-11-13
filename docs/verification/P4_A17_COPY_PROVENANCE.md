@@ -1,6 +1,6 @@
 # P4 / A17 — Strategy Lab RU/EN clipboard provenance and safe manual transfer
 
-**Source candidate:** `v0.6.4_35` (not released). **Authority:** [approved P4 plan](../architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) and [A17 in #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Status:** source change, exact-head CI/installed disposable OPNsense Chromium RU/EN not yet qualified. Real owner A17 acceptance is separately OPEN.
+**Source candidate:** `v0.6.4_35` (not released). **Authority:** [approved P4 plan](../history/stages/strategies-2026-11-12/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_PLAN.md) and [A17 in #936](https://github.com/Tolian82/os-zapret2-restyle/issues/936). **Status:** source change, exact-head CI/installed disposable OPNsense Chromium RU/EN not yet qualified. Real owner A17 acceptance is separately OPEN.
 
 ## Safety gap and product change
 

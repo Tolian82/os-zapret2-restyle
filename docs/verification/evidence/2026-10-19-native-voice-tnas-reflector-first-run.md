@@ -48,6 +48,6 @@ TGCALLS_EXIT=1
 - **Подтверждено на устройстве:** сохранённый native Telegram ON, Config+common Apply, single dvtws2/supervisor, IPFW/table, маршрут TNAS через OPNsense, наличие и запускаемость tgcalls в Docker, счётчик захвата +60/+4080.
 - **Не подтверждено:** что каждый пакет прошёл WAN, что `dvtws2` сгенерировал fake, что reflector вообще обязан отвечать на этот payload, что пришли UDP ответы, корректное STUN-согласование, аудио, настоящий звонок.
 - **Негативный конкретный результат:** `tgcalls_cli` остался Reconnecting и завершился `1`. Не переписывать как `MEDIA_PASS` или `CALL_PASS`.
-- **Следующий опыт:** A2 синхронный LAN/WAN PCAP/UDP RX, затем отдельный STUN-aware A3 в [current runbook](../../architecture/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
+- **Следующий опыт:** A2 синхронный LAN/WAN PCAP/UDP RX, затем отдельный STUN-aware A3 в [current runbook](../../history/stages/telegram-voice-2026-10-20/TELEGRAM_NATIVE_VOICE_TNAS_LAB.md).
 
 Граница публичности: не хранить реальные credentials, приватные ключи, пользовательские идентификаторы вызовов или чувствительный PCAP в репозитории.

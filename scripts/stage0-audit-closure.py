@@ -28,7 +28,7 @@ def verify(root):
     # Historical Stage-0 audit is immutable evidence for the old v0.6.2_66
     # milestone, not an approval oracle for the current VERSION/PLUGIN_REVISION.
     # Current identity is validated separately by test-current-handoff-identity.py.
-    plan=read(root,Path("docs/architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"))
+    plan=read(root,Path("docs/history/stages/native-packaging-2026-11/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_PLAN.md"))
     need("**Stage 0 audit status: CLOSED**" in plan and
          ("Stage 1 READY FOR IMPLEMENTATION" in plan or
           "Stage 1 IN PROGRESS" in plan or

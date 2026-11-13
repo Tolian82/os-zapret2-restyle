@@ -1,11 +1,8 @@
 # Восстановление полного жизненного цикла Zapret2 Restyle после чистой установки — ТЗ v1.3
 
-**Статус: COMPLETED / ACCEPTED, 11.11.2026.** Основное ТЗ v1.3 и реализация G01–G11 приняты владельцем; физическая OPNsense подтвердила установку и обновление стабильного `v0.6.4_1` из GUI, работающую лабораторию, WAN, Voice, обычное удаление/переустановку с сохранённой конфигурацией и полный Purge/чистую установку. Подробности и границы доказательств — в [G11](../verification/G11_PUBLISHED_EXISTING_UPGRADE_PURGE_CLEAN.md). Исторические требования, описания прежних отказов и старые `OPEN` ниже оставлены для трассировки разработки; они не являются актуальными блокерами принятого ТЗ. [#936](https://github.com/Tolian82/os-zapret2-restyle/issues/936) — будущая **feature** по отдельному ТЗ, вне v1.3; [#954](https://github.com/Tolian82/os-zapret2-restyle/issues/954) закрыт как не воспроизводимый на реальной OPNsense, без утверждения о root-cause fix.
-**Базовый дефектный пакет:** опубликованный `os-zapret2-restyle-0.6.3_1.pkg`.
-**Целевая платформа первой приёмки:** OPNsense 26.7 / FreeBSD:15:amd64.
-**Проект:** `Tolian82/os-zapret2-restyle`; служебный ключ `zapret`.
-**Версия ТЗ `v1.3` редакционная, независима от `VERSION` / `PLUGIN_REVISION` и публикаций.**
-**Связанные дефекты:** [#970](https://github.com/Tolian82/os-zapret2-restyle/issues/970), [#971](https://github.com/Tolian82/os-zapret2-restyle/issues/971), [#972](https://github.com/Tolian82/os-zapret2-restyle/issues/972), [#973](https://github.com/Tolian82/os-zapret2-restyle/issues/973).
+**Status:** Current lifecycle contract v1.3. G01–G11 completed and owner accepted on 11 November 2026; current evidence belongs to PROJECT_STATE and G11, not a repeated execution queue.
+
+[Current facts](../PROJECT_STATE.md) · [historical full source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_SPEC.md).
 
 ## 0. Цель, границы и критерий завершения
 
@@ -245,21 +242,10 @@ ssl.gstatic.com
 
 ## 10. Обязательный поэтапный порядок разработки
 
-**Единый исполнимый план, критерии переходов G01–G11 и статус каждого этапа:** [OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md](OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
+**Единый исполнимый план, критерии переходов G01–G11 и статус каждого этапа:** [OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md](../history/stages/lifecycle-2026-11-11/OPNSENSE_CLEAN_INSTALL_LIFECYCLE_RECOVERY_PLAN.md).
 
 **Первоначальный порядок G01–G10 сохраняется как история реализации; новый обязательный завершающий инкремент G10A — запакованный локальный CL-01, полный девятишаговый native gate и только затем G11 owner-live.** Тестируем именно обновление прежней установки прежде clean-install. Не требовать ручного SHA или тестового pkg-репозитория. Этот раздел не дублирует граф этапов: normative user-visible requirements и A01–A22 остаются в данном ТЗ, порядок исполнения и gates принадлежат плану.
 
 ## 11. Что не считать выполнением ТЗ
 
 Не считается приёмкой: ручной `setup.sh install` вместо неработающего GUI; изменение только кнопки без первой rollback-транзакции; «красивый» статус без рабочего процесса; самовольное возвращение прежнего `tls7`-шаблона или добавление дополнительных ресурсов как обязательного условия старта; пустой артефакт портов с активным IPFW перехватом; Lab на ранее запущенной службе вместо никогда не стартовавшей; успешная лаборатория на заведомо доступном домене вместо теста заблокированной цели; `pkg delete` CLI вместо проверки серверного меню GUI; очистка путей без проверки других плагинов; скрытое уничтожение saved Config при обычном uninstall; публикация исправляющего релиза без отдельного разрешения.
-
-### Текущее состояние доказательств на дату утверждения
-
-- В `main` `v0.6.3_1` upper Apply молча отказывается при `installed=0`; `setup_transaction.sh` требует старый release/HEAD; полноценная первая установка по GUI сломана (#970).
-- Ручной `setup.sh install v1.0.7` на owner OPNsense успешно собрал engine; GUI Start/нижний Apply после этого не обеспечили рабочую службу, причина нативного отказа не установлена (#972).
-- Лаборатория на owner-стенде возвращала Stage-60 internal ERROR при отсутствующей TLS-семье и успешно восстановила STOPPED (#973); это не гарантия нативного поиска.
-- Обычный GUI uninstall оставлял ссылки меню после F5/Ctrl+F5; гипотеза cache не доказана отдельно (#971).
-- Upstream `v1.0.7` содержит `no_action` fallback profile (`nfq2/nfqws.c`), но **положительный пустой dvtws2/service запуск ещё не выполнен**.
-- По новому решению владельца первоначальный шаблон **заменён** на точный TCP+QUIC-профиль с десятью доменами. `http_iana_org.bin` есть в upstream, `fake_default_quic` встроен; требование `tls7.bin` **отменено**. Доказательство именно installed-native Apply/Start новой конфигурации **пока не получено**.
-
-**Ссылки:** [upstream v1.0.7](https://github.com/bol-van/zapret2/tree/v1.0.7), [GUI/runtime architecture](ZAPRET2_SERVICE.md), [состояние текущей работы](../PROJECT_STATE.md), [индекс проекта](../INDEX.md).

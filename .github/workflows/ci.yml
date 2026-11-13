@@ -76,9 +76,12 @@ jobs:
             fi
           fi
 
+          # Strip only attested byte-exact doc-path moves, never semantic test edits.
+          classified_changed=$(printf '%s\n' "${classified_changed}" | python3 scripts/ci_owner_journey_scope.py --strip-documentation-guards --base "${base_sha}" --head "${head_sha}")
+
           docs_only=false
           if [[ "${EVENT_NAME}" != "workflow_dispatch" && -n "${changed}" ]]; then
-            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*|\.github/workflows/.*|scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py|scripts/test-github-branch-hygiene[.]sh)$' || true)
+            non_docs=$(printf '%s\n' "${classified_changed}" | grep -Ev '^(AGENTS\.md|README\.md|docs/.*|\.github/workflows/.*|scripts/(ci_owner_journey_scope|test-github-workflow-budget)[.]py|scripts/test-current-handoff-identity[.]py|scripts/test-github-branch-hygiene[.]sh)$' || true)
             if [[ -z "${non_docs}" ]]; then
               docs_only=true
             fi

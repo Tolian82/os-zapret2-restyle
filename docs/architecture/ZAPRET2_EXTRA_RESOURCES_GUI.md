@@ -1,6 +1,8 @@
 # Дополнительные ресурсы Zapret2 — GUI, установка и Strategy Lab (ТЗ)
 
-**Status:** owner-approved requirements (22 October 2026), amended 23 October 2026 for exact resource-set reconciliation. Source implementation now includes the manual Settings button, resource transaction, dynamic BIN/Lua search candidates, and per-click terminal status correlation (`v0.5.7_20`). These remain unverified on installed OPNsense; package publication and stable release are separate decisions.
+**Status:** Current Additional Resources Install/update/cache contract. Accepted bounded evidence is in PROJECT_STATE and the Additional Resources acceptance records. Removal has its own current specification; completed M0–M7 and release chronology are historical.
+
+[Current facts](../PROJECT_STATE.md) · [historical full source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md).
 
 ## 1. Назначение и терминология
 
@@ -79,17 +81,6 @@ untracked bytes, then reconcile without automatically downloading extras.
 Until this switch-specific old/target rollback is proved, uncertain
 switches must be blocked rather than pretending the manual sync covers them.
 
-### Release-switch source increment (v0.5.7_32)
-
-An old/target Git resource inventory and exact-set check now guard the
-upstream checkout. The updater refuses pre-existing orphan files,
-colliding target names and modified tracked blobs before mutation, and
-checks the final exact set before native service restart. No automatic
-orphan deletion is yet enabled for upstream switching: it still requires
-a separately attested all-untracked snapshot and recoverable rollback.
-This is an incomplete intermediate implementation of the accepted final
-contract, not a change to the owner's approved target behavior.
-
 ## 4. Strategy Lab: обязательные функциональные требования
 
 1. **Автоматическая регистрация.** После успешной установки доступные дополнительные `.lua` и `.bin` обнаруживаются текущим `ResourceInventory`. Новый Job формирует свежий снимок каталогов; ранее созданные Job не менять задним числом. Проверять читаемость и непустое содержимое. Важно: **обнаружение не равно участию в поиске**.
@@ -98,7 +89,7 @@ contract, not a change to the owner's approved target behavior.
 4. **Адаптивный конечный поиск.** Сохранить Stage 50 / Stage 60, Model C, реальное evidence-based планирование, ограничения времени, отмену, безопасное восстановление и текущую семантику PASS/PARTIAL/FAIL. **Не создавать декартово произведение всех 73 файлов**, не проверять бессмысленные несочетаемые BLOB/Lua/протоколы. Состав каталога может расти — планировщик остаётся конечным.
 5. **Нулевая мутация пользовательских стратегий.** Никакой автоматической правки/удаления/переноса существующих Traffic Strategy, Voice Transmission, HOSTLIST/IPSET и сохранённых пользовательских полей. Старые стратегии продолжают работать, если используют штатные файлы и функции.
 
-Дополнительное разграничение: установка файлов не обещает, что каждую позицию нужно обязательно прогнать в одном Job; речь об **eligible search coverage** всех совместимых ресурсов в поддерживаемых протокольных семействах. **Количество 73 — снимок репозитория от 22.10.2026, не константа в лаборатории**. При выборе кандидатов фиксировать явные причины `eligible`, `unsupported`, `missing`, `pruned`, `deferred`, а успешные рекомендации содержат точные зависимости и пути для воспроизводимости. **Согласованный рабочий план:** [ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md](ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
+Дополнительное разграничение: установка файлов не обещает, что каждую позицию нужно обязательно прогнать в одном Job; речь об **eligible search coverage** всех совместимых ресурсов в поддерживаемых протокольных семействах. **Количество 73 — снимок репозитория от 22.10.2026, не константа в лаборатории**. При выборе кандидатов фиксировать явные причины `eligible`, `unsupported`, `missing`, `pruned`, `deferred`, а успешные рекомендации содержат точные зависимости и пути для воспроизводимости. **Согласованный рабочий план:** [ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md](../history/stages/extra-resources-2026-10-27/ZAPRET2_EXTRA_RESOURCES_IMPLEMENTATION_PLAN.md).
 
 ## 5. Связь со штатной архитектурой
 
@@ -167,10 +158,10 @@ The owner has confirmed independent hypervisor-console access. Test actual owner
 
 When the existing **Full Help / Справка** switch for the Strategies settings form is ON, the Additional Resources row displays **two columns directly below the manual Install Additional Resources button**: all currently installed `.lua` filenames first and `.bin` filenames second. The inventory is from the actual installed Zapret2 filesystem, not merely catalog descriptors. Filenames belonging to the **installed upstream Git HEAD** are styled OPNsense **green**; all other installed filenames are **blue** (not necessarily managed by the additional catalog). The two colors never imply tested strategy success. Localize RU/EN titles, legend and empty states.
 
-For performance the plugin writes an atomic, bounded JSON **cache file** after manual extra-resource installation/recovery, a successful upstream switch/rollback, and an ordinary plugin package installation/replacement. Opening Full Help calls only a cache-reading configd/API endpoint; it **never scans Git or resource directories per view**. Render filenames using DOM text rather than HTML. On first installation, refresh creates absent extra-resource state directories with owner-only permissions only beneath a trusted non-symlink, non-writable-by-group/others parent, then publishes the upstream-only cache. Existing state, manifests and resource transactions are preserved; unsafe symlinks, foreign files or untrusted parents still fail closed. The read-only Full Help endpoint never creates directories. With no additional resource install yet, help describes the installation button instead of showing lists. Unavailable/invalid cache gives an explicit unavailable message rather than invented names; cache refresh errors must never turn a safely completed native transaction into a false service failure.
+For performance the plugin writes an atomic, bounded JSON **cache file** after manual extra-resource installation/recovery, a successful upstream switch/rollback, and an ordinary plugin package installation/replacement. Opening Full Help calls only a cache-reading configd/API endpoint; it **never scans Git or resource directories per view**. Render filenames using DOM text rather than HTML. On first installation, refresh creates absent extra-resource state directories with owner-only permissions only beneath a trusted non-symlink, non-writable-by-group/others parent, then publishes the upstream-only cache. Existing state, manifests and resource transactions are preserved; unsafe symlinks, foreign files or untrusted parents still fail closed. The read-only Full Help endpoint never creates directories. With no additional resource install yet, help still displays authoritative cached native upstream Lua/BIN when available, alongside the separate optional-install explanation. Unavailable/invalid cache gives an explicit unavailable message rather than invented names; cache refresh errors must never turn a safely completed native transaction into a false service failure.
 
-**Owner acceptance policy:** The previous M0–M6 campaign was closed by owner decision on 24 October 2026. Any unrun special fault/snapshot/cold-boot scenarios stay explicitly **unverified**, not silently PASS. This independently requested help enhancement is implemented as source candidate `0.5.7_48` and requires separate code CI and installed UI acceptance. **Do not publish stable v0.5.8 until explicit owner authorization.**
+**Evidence boundary:** Current bounded acceptance belongs to PROJECT_STATE and the dated resource-help records. Unrun special fault/snapshot/cold-boot scenarios remain unverified. The old source-candidate and stable v0.5.8 publication-authorization assertions are retained in the historical full source, not the current execution queue.
 
-## 10. New owner-approved follow-up: physical removal of non-upstream resources (24 October 2026)
+## Removal contract
 
-The owner approved a **separate future Remove Additional Resources action**. This follow-up does not alter the already accepted Install semantics, M0–M7/H1 results or release evidence. Remove retains **only the exact installed upstream Git HEAD** Lua/BIN and physically deletes all other direct Lua/BIN after a durable snapshot **only if saved ordinary Strategies and all relevant native Voice profiles/drafts are proven compatible with the upstream-only runtime**. Unsafe or uncertain results block before Stop or deletion. The Remove button is RU/EN, text-info blue, directly below Install, same size and visible **only when native Advanced mode is ON**. Full Help returns to the install invitation on success. **This section is approved requirements, not implemented functionality**; see [new normative removal specification](ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) and [new staged plan](ZAPRET2_EXTRA_RESOURCES_REMOVE_PLAN.md).
+Physical removal is implemented under the separate [Remove specification](ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md); its completed execution plan is historical.

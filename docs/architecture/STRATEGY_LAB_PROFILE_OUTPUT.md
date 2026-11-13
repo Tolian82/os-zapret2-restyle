@@ -4,14 +4,7 @@
 
 Define the user-ready Traffic Strategy profile emitted by Strategy Lab and the proof required before it may appear in the final shortlist.
 
-Search-policy authority:
-`docs/decisions/DEC-2026-08-08-strategy-lab-adaptive-search.md` and
-`docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md`. The current `_31` implementation
-preserves an optional candidate-defined range, including `-d8`, `-d10` or absence,
-requires the same fixed search epoch for every replay and publishes at most three
-finalists by default while retaining fixed extended/QUIC compatibility behavior until
-later source patches replace it; the rules below define the approved target output
-contract.
+Search policy follows [adaptive search](STRATEGY_LAB_ADAPTIVE_SEARCH.md); browser/QUIC and address-family behavior follow their current accepted contracts. Per-revision `_31` transition notes remain historical.
 
 ## User-ready profile
 
@@ -26,8 +19,7 @@ Protocol-specific headers are:
 - HTTP: `--filter-tcp=80` and `--filter-l7=http`;
 - generic configured UDP: `--filter-udp=<port>` without an L7 filter.
 
-QUIC candidate profiles are not part of the adaptive-search target. The fixed IPv4
-UDP/443 QUIC precheck remains diagnostic evidence only.
+Explicitly enabled QUIC candidate/replay behavior follows the [QUIC control](STRATEGY_LAB_QUIC_CONTROL.md) and [browser probe](STRATEGY_LAB_BROWSER_HTTP.md) contracts. Do not infer a candidate or call result from a diagnostic precheck.
 
 Every profile also contains one static target selector and the exact tested native
 Zapret2 candidate lines. `--out-range` is emitted only when the tested `CandidateSpec`
@@ -40,8 +32,8 @@ external BLOB declaration merely for output uniformity.
 Static selectors are:
 
 - domain TLS/HTTP: `--hostlist-domains=<domain>`;
-- IPv4 target: `--ipset-ip=<address>`;
-- generic UDP domain target: `--ipset-ip=<comma-separated replay-verified selected IPv4 addresses>`.
+- literal IP target: `--ipset-ip=<address>` under current family eligibility;
+- generic UDP domain target: `--ipset-ip=<comma-separated replay-verified selected IP addresses under current family eligibility>`.
 
 The profile must contain exactly one static selector.
 
@@ -77,13 +69,13 @@ A candidate satisfies the strict stability gate only when all three attempts rep
 replay is fail-fast: after a failed attempt, 3/3 is impossible and remaining stability
 attempts are not spent on that candidate.
 
-The normal best two to three finalists additionally receive cold isolated deep
-validation with a real bounded GET. The deep record stores actual body bytes and whether
-the 16-KiB target was reached. When the selected resource completes successfully but is
-shorter than 16 KiB, the byte-depth criterion is `inconclusive`, not a fabricated PASS;
-separate connectivity/stability evidence remains intact.
+Finalists receive the applicable exact-profile bounded replay. Body-byte/depth observations are diagnostic under BH-08; a valid shorter response does not introduce a separate reachability failure gate. The [browser contract](STRATEGY_LAB_BROWSER_HTTP.md) owns current transport-specific evidence.
 
 The shortlist item records target, target type, protocol, transport, port, optional L7
 selector, pinned search-epoch addresses, normalized candidate/resource identity, complete
 profile, attempt results, pass count, deep-validation evidence for finalists, and
 `profile_replay.verified`.
+
+## Source history
+
+The [full original page](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB_PROFILE_OUTPUT.md) preserves earlier source versions, investigation notes and acceptance claims at their actual dates. [PROJECT_STATE](../PROJECT_STATE.md) owns current evidence; this page owns its bounded technical contract.

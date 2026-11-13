@@ -1,54 +1,6 @@
-# Strategy Lab — current architecture
+# Strategy Lab — product, lifecycle and stage contract
 
-## DOCUMENT ROLE
-
-Question answered:
-How does the approved asynchronous Strategy Lab behave, and which product/lifecycle/stage contracts remain active?
-
-Purpose:
-Record the complete approved product, runtime, lifecycle, reporting, timeout, testing,
-and delivery contract. Historical implementation sections are retained only as history
-and never override current owner canon or current specialist architecture.
-
-Updated when:
-An approved Strategy Lab behavior, implementation boundary, patch boundary, message,
-timeout, verification gate, or delivery order changes.
-
-Read after:
-`docs/ARCHITECTURE.md`.
-
-Do not store here:
-Unrelated plugin architecture or release history.
-
-## STATUS AND AUTHORITY
-
-Status:
-Initial architecture approved on 2026-08-04 and implemented. Search-policy portions were
-amended on 2026-08-08 and subsequently implemented/evolved through the current Python,
-adaptive-search and Model-C architecture.
-
-This document remains the base product/lifecycle/stage authority. Current specialist
-authorities are:
-
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_SEARCH.md` — current Stage-50/60 search semantics;
-- `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md` — current parent-budget ownership;
-- `docs/architecture/STRATEGY_LAB_MODEL_C.md` — current Stage-60 runtime execution;
-- `docs/architecture/STRATEGY_LAB_PYTHON_MIGRATION.md` — implementation ownership/migration history.
-
-**Model C is the only normal production Stage-60 runtime. A/B/C selection is closed.**
-The production fallback to B/A was removed in `v0.4.1_13`. Shared helpers whose filenames
-contain `model_b` remain used by Model C; their names do not imply production fallback.
-
-**Approved future change, not implemented:** [browser HTTP plan](STRATEGY_LAB_BROWSER_HTTP_PLAN.md)
-and [REQUIREMENTS](../REQUIREMENTS.md), `BH-01`–`BH-12`, define Chrome-profile HTTPS with
-natural TLS negotiation, successful HTTP/1.1 or HTTP/2, and application HTTP/3. The
-TLS 1.3 / HTTP/1.1 probe details below describe the current source snapshot, not the
-new target contract. The current implementation was audited at `8b31fa49cfcf00617f3137b8eb7bc80427d1f19f`.
-
-The synchronous Blockcheck path has already been replaced. Historical initial-delivery
-sections below are retained as engineering history and do not override current
-`docs/PROJECT_PRINCIPLES.md`, `docs/START_HERE.md`, `docs/PROJECT_STATE.md`,
-`docs/ROADMAP.md`, or current specialist architecture.
+**Status:** CURRENT SPECIALIST CONTRACT. Python owns automated jobs, with the existing native adapters and Model-C production boundary. Read the [architecture map](README.md) for the selected contracts; this is not an execution diary.
 
 ## OBJECTIVE
 
@@ -67,8 +19,8 @@ Provide an asynchronous Strategy Lab that:
 - reports concise English or Russian results according to the OPNsense language;
 - finishes within bounded operation/stage/job budgets;
 - supports Extended TLS 1.2, HTTP, explicitly enabled QUIC candidates and configured UDP;
-- keeps circular validation separate from discovery. Current QUIC candidate success
-  is handshake evidence; future HTTP3 GET evidence is defined in the browser HTTP plan.
+- keeps circular validation separate from discovery. Measured QUIC handshake and HTTP/3-response evidence
+  remain distinct under the current browser reachability contract.
 
 ## NON-GOALS
 
@@ -111,39 +63,6 @@ restore the exact initial Zapret2 state
         ↓
 publish complete or partial results
 
-## DELIVERY AUTHORITY
-
-Strategy Lab changes follow the current repository-wide authority in
-`docs/GITHUB_PUBLICATION.md` and the canonical principles in
-`docs/PROJECT_PRINCIPLES.md`.
-
-One logical scope uses one Ready PR and required latest-head checks; same-scope repairs
-remain in that PR; `main` receives one squash commit. Independent analysis/documentation
-may continue while unrelated GitHub processing runs, but unrelated source is never added
-to the checked branch.
-
-A stale test/documentation contract never overrides newer owner canon. When a contract
-asserts a superseded decision, correct the stale contract rather than bending current
-architecture back toward it.
-
-## MANUAL VERIFICATION POLICY
-
-Current live verification is governed by
-`docs/verification/STRATEGY_LAB_LIVE_OPNSENSE_MATRIX.md`. Historical A/B/C and adaptive
-search experiment plans are retained as evidence/history; they do not reopen current
-Model-C selection.
-
-Each source patch still requires:
-
-- focused automated contract tests;
-- syntax/static validation;
-- standard pull-request CI;
-- standard FreeBSD package qualification when applicable;
-- synchronized documentation in the same logical change.
-
-Owner-assisted evidence is requested only when behavior cannot be proved faithfully in
-repository CI, such as FreeBSD/IPFW routing, real-provider results or timing on the
-supported appliance.
 
 ## JOB MODEL
 
@@ -446,15 +365,9 @@ The runtime does not:
 PASS/FAIL is handshake capability evidence only. It neither enables nor vetoes the
 explicitly selected Extended QUIC candidate branch and does not prove HTTP3 GET.
 
-## APPROVED FUTURE LABORATORY IPV6 SELECTOR — NOT YET IMPLEMENTED (28 OCTOBER 2026)
+## Laboratory IPv6 scope
 
-The binding UI/behavior authority is [the current dual-stack specification](ZAPRET2_EXCLUDE_IPSET_SPEC.md) (DS-25/DS-26, A25/A26); implementation belongs to [Stage 6](ZAPRET2_EXCLUDE_IPSET_PLAN.md) of its plan. This section is a **future target**, not an assertion that published v0.6.0_1 already exposes the control.
-
-In Strategy Lab's existing Mode column, draw the approved two-row composition: top row `Режим:` / `Mode:` at left with the existing Standard/Extended selector at right; directly below it `IPv6` at left and a **single unchecked-by-default checkbox** at right aligned with the left edge of the selector. The screenshot shows a round visual indicator; behavior must still be checkbox-like, not an exclusive radio mode. Do not move Run/Stop or add a parallel Laboratory. Use RU/EN labels and persist checkbox choice in the immutable job record.
-
-OFF **disables IPv6 strategy tests even for domains with AAAA**. ON schedules eligible A and AAAA independently for dual-family domains, using pinned exact endpoints. Domains with A only always test IPv4; domains with AAAA only require ON and a usable IPv6 path. Literal IPv4 always tests that exact IPv4; literal IPv6 requires ON and tests that exact IPv6 only. Do not invent an alternate family, silently fall back between families, or treat missing/unroutable AAAA as a failed IPv4 candidate. Keep baseline, QUIC where supported, Host/SNI, ECH-off, saved result identity, adaptive Model-C and restoration semantics.
-
-Job-wide time budgets are **150 s** for Standard single-family, **200 s** for Standard dual-family, **270 s** for Extended single-family and **350 s** for Extended dual-family. Both-family eligibility (not the checkbox alone) triggers the added 50/80 seconds. This is one overall job deadline, never full time per family. The [existing adaptive workload budget](STRATEGY_LAB_ADAPTIVE_BUDGET.md) must be reconciled with these final owner-approved totals during Stage 6 so no extra IPv6 allowance is silently added beyond them.
+The opt-in IPv6 selector and per-family eligibility/budgets are current shipped requirements under [DS-25/DS-26](ZAPRET2_EXCLUDE_IPSET_SPEC.md). OFF is IPv4-only; ON permits independently pinned eligible IPv4/IPv6 endpoints. A checked box alone does not extend a single-family job budget. Do not restore the former IPv4-only target restriction. Evidence limits and the owner's live IPv6 waiver remain in [PROJECT_STATE](../PROJECT_STATE.md).
 
 ## IPV6 POLICY
 
@@ -482,7 +395,7 @@ All operations remain bounded and preserve this containment hierarchy:
 
 `operation/candidate work <= stage parent <= finite job parent`.
 
-Current Stage-60/job parent-budget ownership is the implemented `eligible-work-v1` policy
+Current Stage-60/job parent-budget ownership is the implemented `eligible-families-v2` policy
 documented in `docs/architecture/STRATEGY_LAB_ADAPTIVE_BUDGET.md`. Admission uses remaining
 absolute budget and cleanup/restoration remain bounded/mandatory.
 
@@ -494,13 +407,6 @@ A previously observed admission concern involved the retired `C -> B` fallback t
 Current Model-C-only timeout/deadline defects require concrete evidence; the retired
 fallback is not an optimization target.
 
-## LIVE MEASUREMENT HISTORY
-
-Historical owner-supplied OPNsense measurements established initial implementation bounds
-and later measurement cycles refined Lua/BLOB/discovery/lifecycle behavior. Current accepted
-conclusions are summarized in `docs/PROJECT_STATE.md` and specialist architecture.
-
-The old DNS timing observations are historical only because DNS has since been fixed by the owner.
 
 ## STRATEGY SEARCH MODEL
 
@@ -639,8 +545,9 @@ Language selection follows active OPNsense document language:
 
 Messages use stable keys with variable substitution. The examples below retain the
 initial report vocabulary. Current QUIC presentation is owned by
-[QUIC control](STRATEGY_LAB_QUIC_CONTROL.md); future Chrome/TLS/HTTP presentation is
-defined in the browser HTTP plan and is not yet implemented.
+[QUIC control](STRATEGY_LAB_QUIC_CONTROL.md) and the current
+[browser reachability contract](STRATEGY_LAB_BROWSER_HTTP.md). Older report examples
+retain their literal vocabulary and do not force a negotiated TLS 1.3 claim.
 
 Target:
 
@@ -816,20 +723,7 @@ Recommended message keys:
 - `test_completed`;
 - `stage_canceled`.
 
-## HISTORICAL INITIAL IMPLEMENTATION PATCH SERIES
 
-The original 13-patch implementation plan is retained in Git history and the prior
-version of this document, plus patch/devlog records. It is complete and is **not** the
-current roadmap. Its family-first, QUIC-search, serial-delivery and cold-candidate
-assumptions do not override current Python/adaptive/Model-C architecture.
+## Governance and historical context
 
-Model-C-only finalization is complete. Current next work is defined only by
-[START_HERE](../START_HERE.md) and [ROADMAP](../ROADMAP.md).
-
-## HISTORICAL VERIFICATION / ACCEPTANCE
-
-Historical implementation-series verification and acceptance are preserved in
-`docs/verification/`, `docs/patches/`, `docs/devlog/`, decisions and Git history.
-
-Current verification authority is the current live matrix, specialist architecture and
-exact current patch acceptance in `docs/START_HERE.md`.
+Delivery/verification scope follows the canonical DEV/GH rules selected by [AGENTS](../../AGENTS.md), rather than a second policy in this subsystem. [Current facts](../PROJECT_STATE.md) and [handoff](../START_HERE.md) own progress. Old measurements, patch sequencing and former status text are complete in the [historical source](/docs/history/stages/documentation-2026-11-13/snapshots/architecture/STRATEGY_LAB.md).
