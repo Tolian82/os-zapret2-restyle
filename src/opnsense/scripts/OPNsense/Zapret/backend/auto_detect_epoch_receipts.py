@@ -45,7 +45,10 @@ class HistoricalReceipt:
 
 
 def _directory(path: Path, uid: int) -> None:
-    info = path.lstat()
+    try:
+        info = path.lstat()
+    except OSError as exc:
+        raise ReceiptRefused("untrusted_root_private_directory") from exc
     if (not stat.S_ISDIR(info.st_mode) or info.st_uid != uid or
             stat.S_IMODE(info.st_mode) != 0o700):
         raise ReceiptRefused("untrusted_root_private_directory")
