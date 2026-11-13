@@ -163,6 +163,7 @@ def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
                 hostlist is not None and (
                     not isinstance(hostlist, str) or
                     not re.fullmatch("[a-z][a-z0-9_-]{0,63}", hostlist))
+                or status == "known-hostlist" and hostlist is None
                 or status != "known-hostlist" and hostlist is not None
                 or no in seen):
             raise GenerationRefused("ambiguous_or_invalid_native_profile")
@@ -172,7 +173,8 @@ def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
     observer = data["observer_native_number"]
     if (type(observer) is not int or observer <= 0 or observer > 255
             or frozen.count((observer, "observer", None)) != 1
-            or max((n for n in seen if n > 0), default=0) != observer):
+            or max((n for n in seen if n > 0), default=0) != observer
+            or {n for n in seen if n > 0} != set(range(1, observer + 1))):
         raise GenerationRefused("observer_does_not_match_final_native_map")
     if (0, "unknown-native-default", None) not in frozen:
         raise GenerationRefused("missing_native_default")
