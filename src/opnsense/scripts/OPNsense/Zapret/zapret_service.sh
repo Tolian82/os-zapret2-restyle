@@ -1108,8 +1108,8 @@ shared_apply_execute_service()
     # second process, raw append, native auto HOSTLIST or worker.
     if [ "$_shared_apply_mode" = 1 ] &&
        [ -f "$_shared_apply_root/release/auto-detect-observer-preview.json" ]; then
-        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-            verify-preview "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
+        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-preview \
+            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
             printf '%s\n' preflight-rejected=observer-generation
             return 0
         fi
