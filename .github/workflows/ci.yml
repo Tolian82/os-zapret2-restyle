@@ -621,6 +621,9 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-gui-hostlist.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owned_sources.py scripts/test-auto-detect-owned-sources.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-owned-sources.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py scripts/test-auto-detect-effective-known.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-effective-known.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/targets.sh
           php -l src/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php
           php -l scripts/test-auto-detect-config-snapshot.php
           php scripts/test-auto-detect-config-snapshot.php
