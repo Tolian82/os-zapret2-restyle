@@ -13,6 +13,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 
 MODULE = (Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/"
           "Zapret/backend/auto_detect_fd.py")
@@ -56,9 +58,19 @@ class FDPortable(unittest.TestCase):
         self.devid = f"{os.major(self.stat.st_dev)},{os.minor(self.stat.st_dev)}"
 
     def probe(self, runner, **kwargs):
-        return mod.probe_pending_fd(self.segment, self.stat.st_dev, self.stat.st_ino,
-                                    owner=self.owner, runner=runner,
-                                    platform="freebsd15", **kwargs)
+        # Portable Linux CI runs unprivileged. Preserve production root-only
+        # semantics while injecting a synthetic root-owned inode for parsing.
+        original_fstat = os.fstat
+        def as_root(fd):
+            st = original_fstat(fd)
+            return SimpleNamespace(st_uid=0, st_mode=st.st_mode, st_dev=st.st_dev,
+                                   st_ino=st.st_ino, st_nlink=st.st_nlink,
+                                   st_size=st.st_size, st_mtime_ns=st.st_mtime_ns)
+        with mock.patch.object(mod.os, "geteuid", return_value=0), \
+             mock.patch.object(mod.os, "fstat", side_effect=as_root):
+            return mod.probe_pending_fd(self.segment, self.stat.st_dev, self.stat.st_ino,
+                                        owner=self.owner, runner=runner,
+                                        platform="freebsd15", **kwargs)
 
     def test_closed_inode_with_exact_owner_and_header(self):
         r = FakeRunner()
