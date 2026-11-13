@@ -66,7 +66,6 @@ class OriginalSharedGeneration(unittest.TestCase):
             (self.static / sub).mkdir(parents=True, exist_ok=True)
         for lua in ("zapret-lib.lua", "zapret-antidpi.lua", "zapret-auto.lua"):
             (self.static / "lua" / lua).write_text("-- inert original builder fixture\n")
-        (self.static / "ipset" / "zapret-hosts-auto.txt").write_text("legacy.test.example\n")
         (self.static / "ipset" / "auto-domains.txt").write_text("")
         # Intentionally no engine executable: this is the normal offline
         # shared release builder, not a new or installed dvtws2 instance.

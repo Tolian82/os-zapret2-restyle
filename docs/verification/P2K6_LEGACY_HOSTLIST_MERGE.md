@@ -1,6 +1,6 @@
 # #1052 P2k6 — safe, explicitly reviewed two-populated Auto HOSTLIST migration
 
-**SUPERSEDED BY OWNER (13 November 2026):** The old `zapret-hosts-auto.txt` file is an obsolete historical code path. Its contents have no value or migration requirement. **Every migration/import path, button, root API, configd action and migration-only receipt implemented by P2k6 must be removed from active source.** This document is retained **only as historical implementation/verification evidence**; it does not authorize migration. [Current specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) take precedence.
+**SUPERSEDED BY OWNER (13 November 2026):** The old `zapret-hosts-auto.txt` file is an obsolete historical code path. Its contents have no value or migration requirement. **Every migration/import path, button, root API, configd action and migration-only receipt implemented by P2k6 was removed from active source in `_30`.** This document is retained **only as historical implementation/verification evidence**; it does not authorize migration. [Current specification](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [plan](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) take precedence.
 
 **Candidate:** source `v0.6.5_28` (13 November 2026). Source-level follow-up to [P2k5](P2K5_GUI_AUTO_HOSTLIST.md). No `_28.pkg` release or owner-installed change; original native detection still disabled.
 
