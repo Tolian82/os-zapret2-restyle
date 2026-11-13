@@ -552,10 +552,15 @@ orchestrator_build_release()
                 "--lua-init=@${_orchestrator_build_zapret_dir}/lua/zapret-auto.lua"
             cat "${_orchestrator_build_blob_args}"
         } > "${_orchestrator_origin_capture}/preamble" || exit 1
-        printf '%s\n' \
-            "--hostlist-exclude=${_orchestrator_build_exclude_reference}" \
-            "--ipset-exclude=${_orchestrator_build_managed_reference}/ipset-exclude.txt" \
-            > "${_orchestrator_origin_capture}/overlays" || exit 1
+        # This optional global domain tail is added by the ORIGINAL
+        # generator only for a nonempty Exclude Domains file. A fabricated
+        # tail would make every normal empty-exclusion P2d map fail closed.
+        {
+            if [ -s "${_orchestrator_build_exclude_source}" ]; then
+                printf '%s\n' "--hostlist-exclude=${_orchestrator_build_exclude_reference}"
+            fi
+            printf '%s\n' "--ipset-exclude=${_orchestrator_build_managed_reference}/ipset-exclude.txt"
+        } > "${_orchestrator_origin_capture}/overlays" || exit 1
     ); then
         _orchestrator_origin_capture=
     fi

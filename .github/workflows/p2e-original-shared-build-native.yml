@@ -1,0 +1,67 @@
+name: "P2e #1052 original common generator FreeBSD source map"
+
+on:
+  pull_request:
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/backend/orchestrator.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_origin_map.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
+      - scripts/test-p2e-original-shared-build.py
+      - .github/workflows/p2e-original-shared-build-native.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2e-1052-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    name: One OPNsense 26.7 isolated original shared release generator witness
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Fail fast if disposable VM host cannot start
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! sudo test -c /dev/kvm; then
+            echo '::error::KVM unavailable; original FreeBSD build NOT TESTED'
+            exit 1
+          fi
+          if command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             command -v qemu-img >/dev/null 2>&1; then
+            echo P2E_QEMU=already_available
+          elif ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::VM dependency mirror unavailable; native P2e NOT TESTED'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99p2e-network >/dev/null
+      - name: Exact original shared-candidate builder, Voice and source-map on disposable FreeBSD
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: "26.7"
+          sync: rsync
+          copyback: false
+          cpu: 2
+          mem: 4096
+          cache-after-prepare: true
+          run: |
+            set -eu
+            /usr/local/bin/python3 - <<'PY'
+            import os
+            import sys
+            if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+                raise SystemExit("P2E_REFUSED_NOT_ROOT_FREEBSD")
+            PY
+            PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
+      - name: Declare exact native evidence boundary
+        shell: bash
+        run: |
+          echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
+          echo P2E_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_TRAFFIC_RAW_DEBUG_OR_OBSERVER_OR_QUEUE_ACK
