@@ -1104,6 +1104,15 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
+    # P2f: original FD9 and native PHP have now authenticated this candidate.
+    # Cross-check its ORIGINAL source map and generated TCP observer proposal
+    # in memory only. P2c cannot authorize this preview; an absent/refused
+    # capture never changes the existing shared Apply or its runtime argv.
+    if [ "$_shared_apply_mode" = 1 ] &&
+       [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
+        "${PYTHON_RUNTIME}" "${BACKEND_DIR}/auto_detect_origin_map.py" preflight \
+            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null 2>&1 || :
+    fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
     # invalid candidate BEFORE any durable phase is recorded. This must be
     # purely read-only. The mutating activation repeats the exact probe.
