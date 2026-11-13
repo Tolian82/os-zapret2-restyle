@@ -27,8 +27,7 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
-from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH,
-                                 verify_native)
+from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH)
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
 KNOWN = "youtube.com"
@@ -141,10 +140,20 @@ def _remap_managed(case, planned: bytes) -> list[str]:
 
 
 def _native_file_modes(gid: int) -> None:
-    verify_native()
+    root = PRODUCER.lstat()
+    pending = (PRODUCER / "pending").lstat()
+    need(stat.S_ISDIR(root.st_mode) and root.st_uid == 0 and
+         root.st_gid == gid and stat.S_IMODE(root.st_mode) == 0o710,
+         "NATIVE_ROOT_OWNER_OR_MODE_CHANGED")
+    need(stat.S_ISDIR(pending.st_mode) and pending.st_uid == 0 and
+         pending.st_gid == 0 and stat.S_IMODE(pending.st_mode) == 0o700,
+         "NATIVE_PENDING_PRIVATE_MODE_CHANGED")
+    need(set(os.listdir(PRODUCER)) ==
+         {"pending", "inbox.txt", "debug.log"},
+         "UNEXPECTED_NATIVE_PRODUCER_ARTIFACT")
     for file in (RAW_PATH, DEBUG_PATH):
         info = file.lstat()
-        need(stat.S_ISREG(info.st_mode) and
+        need(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and
              stat.S_IMODE(info.st_mode) == 0o660 and
              info.st_uid == 0 and info.st_gid == gid,
              "NATIVE_FILE_OWNER_OR_MODE_CHANGED")
