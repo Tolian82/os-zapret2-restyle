@@ -8,7 +8,8 @@ fail() { echo "FAIL G04 cold Apply: $*" >&2; exit 1; }
 BASE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 RUNTIME="$BASE/src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh"
 SERVICE="$BASE/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
-sed -n '/^apply_runtime_probe()$/,/^}$/p' "$RUNTIME" > "$ROOT/functions.sh"
+sed -n '/^apply_runtime_observer_preflight()$/,/^}$/p' "$RUNTIME" > "$ROOT/functions.sh"
+sed -n '/^apply_runtime_probe()$/,/^}$/p' "$RUNTIME" >> "$ROOT/functions.sh"
 sed -n '/^shared_apply_ipfw_kernel_absent_service()$/,/^}$/p' "$SERVICE" >> "$ROOT/functions.sh"
 sh -n "$ROOT/functions.sh" || fail "actual production function syntax"
 . "$ROOT/functions.sh"

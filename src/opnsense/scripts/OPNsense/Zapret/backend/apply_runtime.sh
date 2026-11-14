@@ -15,6 +15,72 @@ apply_runtime_clear()
     APPLY_IPFW_INSTALLED=0
 }
 
+# #1052 P2k8i: original FD9's *single* launcher boundary. P2h's
+# nonactivating preview cannot ever create/touch a live raw/debug producer.
+# No native --hostlist-auto= argv is authorized until a durable worker/ACK
+# proves the actual sealed generation. No environment override is accepted.
+apply_runtime_observer_preflight()
+{
+    [ "$#" -eq 1 ] || return 64
+    [ -d "$1" ] && [ ! -L "$1" ] &&
+    [ -f "$1/dvtws.args" ] && [ ! -L "$1/dvtws.args" ] || return 69
+    _apply_observer_map="$1/auto-detect-generation.json"
+    if ! /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' "$1/dvtws.args"; then
+        # An active generation map without original native argv is untrusted.
+        # P2h's inert preview has a DIFFERENT file name.
+        [ ! -e "$_apply_observer_map" ] &&
+        [ ! -L "$_apply_observer_map" ] || return 69
+        return 0
+    fi
+    [ -f "$_apply_observer_map" ] &&
+    [ ! -L "$_apply_observer_map" ] || {
+        common_error "shared Apply: native observer lacks sealed generation"
+        return 69
+    }
+    # Intentionally REFUSES today. The authorization command does not yet
+    # exist: no real generation-bound worker/ACK has been qualified.
+    "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1" \
+        >/dev/null 2>&1 || {
+        common_error "shared Apply: native observer worker/ACK not authorized"
+        return 69
+    }
+}
+
+apply_runtime_original_launcher_once()
+{
+    [ "$#" -eq 5 ] || return 64
+    apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
+    _apply_observer_witness=
+    if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
+        "$ACTIVE_DIR/dvtws.args"; then
+        # Reachable only after future original sealed-worker authorization.
+        # Both short Python calls inherit the SAME original root FD9.
+        _apply_observer_witness=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
+        case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac
+    fi
+    launcher_start_once "$@" || return 1
+    if [ -n "$_apply_observer_witness" ]; then
+        _apply_observer_pid=$(common_pidfile_read "$CHILD_PIDFILE") || {
+            launcher_stop "$CHILD_PIDFILE" 5
+            return 70
+        }
+        # Exact original PID/birth/absolute executable and original producer
+        # inodes must survive --user=nobody and finish root reownership BEFORE
+        # existing shared firewall_shared_runtime install.
+        _apply_observer_result=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" restore \
+            "$_apply_observer_witness" "$_apply_observer_pid" "$DVTWS_BIN") || {
+            launcher_stop "$CHILD_PIDFILE" 5
+            return 70
+        }
+        [ "$_apply_observer_result" = original-fd9-postdrop=attested ] || {
+            launcher_stop "$CHILD_PIDFILE" 5
+            return 70
+        }
+    fi
+}
+
 # Independent, read-only census of the ONE shared engine. A stale,
 # absent or replaced PID file cannot make a live dvtws2 process disappear.
 # Use the established process_query.sh wrapper (FreeBSD -xww / ax adapter),
@@ -58,6 +124,7 @@ apply_runtime_probe()
     [ -f "$1/voice-plan.json" ] &&
     [ "$1" != "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
     validator_validate_runtime_modes "$1" || return 1
+    apply_runtime_observer_preflight "$1" || return 69
     if [ "$2" = 1 ]; then
         [ -x "$DVTWS_BIN" ] || return 1
         validator_validate_engine_mapped "$DVTWS_BIN" "$1/dvtws.args" \
@@ -172,7 +239,7 @@ apply_runtime_restore()
         }
     fi
     if [ "$APPLY_OLD_RUNNING" = 1 ]; then
-        launcher_start_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+        apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
             "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
             common_error "RESTORE_FAILED: previous engine"
             return 70
@@ -255,7 +322,7 @@ apply_runtime_activate()
     fi
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         APPLY_NEW="$ACTIVE_DIR"
-        launcher_start_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+        apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
             "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
             apply_runtime_abort "replacement engine failed"
             return $?

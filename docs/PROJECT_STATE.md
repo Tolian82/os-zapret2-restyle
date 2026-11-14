@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_38`** (`VERSION=0.6.5`, `PLUGIN_REVISION=38`, prospective `os-zapret2-restyle-0.6.5_38.pkg` **NOT PUBLISHED**). P2k8h relocates the original P2i pre-IPFW root-inode repair from a test-local pathname-chown function to an import-only production backend, with prelaunch exact P2g raw/debug inode capture, actual FreeBSD root-owned post-drop `fchown` on original `O_NOFOLLOW` descriptors, same-owner process liveness, all-file validation before write and post-repair root/group/mode/inode verification. Existing P2i native guest exercises this helper on real dropped-credential pinned dvtws2 **before scoped disposable loopback IPFW**; its green native receipt is needed for proof. It does **not** connect this helper to installed shared FD9/Apply, activate schema-2 observer, prove old-generation drained/ACK or schedule cron. `commit_authorized=false`.
+Current source increment: **`v0.6.5_39`** (`VERSION=0.6.5`, `PLUGIN_REVISION=39`, prospective `os-zapret2-restyle-0.6.5_39.pkg` **NOT PUBLISHED**). P2k8i places an actual fail-closed native-auto observer gate before the original shared FD9 journal/engine in `apply_runtime_probe`, and unifies original shared activation/rollback through one guarded launcher order: original FD9 producer capture → single launcher → real native PID/birth/executable protected post-drop repair → only then IPFW. The new source-only qualified CLI borrows the original FD9 (no second lock) and passes the exact original raw/debug inode witness through the parent shell without a disk file. The existing disposable native P2i guest exercises the positive same-FD9 handoff and negative missing-FD9/forged-witness cases against real pinned dvtws2; current exact-head native PASS is required before qualification. The `authorize` branch remains **deliberately unimplemented** until sealed schema-2/worker/ACK readiness, so unauthorized native `--hostlist-auto=` is refused before engine start. Normal single-engine Strategies/Voice has unchanged argv/IPFW/Config. `commit_authorized=false`.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=38`; P2k8h reusable original P2g post-drop inode repair and one existing native P2i exercise, no installed FD9 observer | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=39`; P2k8i authentic original-FD9 guard/CLI bridge in the shared launch/rollback path; active observer and worker explicitly disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_38.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_39.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

@@ -8,6 +8,8 @@ guest/IPFW guard, pinned upstream SHA and loopback flow helper are reused.
 from __future__ import annotations
 
 import hashlib
+import fcntl
+from contextlib import contextmanager
 import importlib.util
 import json
 import os
@@ -27,8 +29,7 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
-from auto_detect_fd import OwnerToken
-from auto_detect_post_drop import native_capture_before_launch, native_restore_before_ipfw
+from auto_detect_post_drop import native_capture_before_launch, _witness_line
 from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH)
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
@@ -42,6 +43,59 @@ RULES = (19351, 19352)
 def need(ok: bool, reason: str) -> None:
     if not ok:
         raise RuntimeError(reason)
+
+
+@contextmanager
+def _native_test_original_fd9():
+    """Same held original kernel FD9 in ONE disposable guest, no service."""
+    lock = Path("/var/run/zapret2-lifecycle.lock")
+    created = False
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        created = True
+    except FileExistsError:
+        fd = os.open(lock, os.O_RDWR | os.O_NOFOLLOW)
+    # Do not allow an open() that reuses vacant FD9 to become its own
+    # "previous descriptor": keep an independent fd for proper unlock.
+    if fd == 9:
+        fd = os.dup(fd)
+        os.close(9)
+    old_fd = None
+    fd9_set = False
+    try:
+        st = os.fstat(fd)
+        named = lock.lstat()
+        need(stat.S_ISREG(st.st_mode) and st.st_uid == 0 and
+             st.st_nlink == 1 and st.st_mode & 0o022 == 0 and
+             (st.st_dev, st.st_ino) == (named.st_dev, named.st_ino),
+             "FOREIGN_ORIGINAL_FD9_FILE")
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            old_fd = os.dup(9)
+        except OSError:
+            old_fd = None
+        os.dup2(fd, 9, inheritable=True)
+        fd9_set = True
+        yield
+    finally:
+        if fd9_set:
+            if old_fd is not None:
+                os.dup2(old_fd, 9)
+            else:
+                try:
+                    os.close(9)
+                except OSError:
+                    pass
+        if old_fd is not None:
+            os.close(old_fd)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+        if created:
+            # The loopback VM is disposed afterwards; preserve foreign
+            # existing native lifecycle files and remove only our own.
+            lock.unlink()
 
 
 def load(name: str, file: Path):
@@ -189,6 +243,7 @@ def _native(checkout: Path) -> None:
     process = None
     installed = []
     started = False
+    fd9_context = None
     logfile = None
     observed_native_log = ""
     observed_debug_log = ""
@@ -200,6 +255,23 @@ def _native(checkout: Path) -> None:
         # Reuse the production P2k8h import-only primitive under native VM.
         prelaunch = native_capture_before_launch()
         producer_ids = dict(zip(("inbox.txt", "debug.log"), prelaunch.identities))
+        fd9_context = _native_test_original_fd9()
+        fd9_context.__enter__()
+        bridge = BACKEND / "auto_detect_post_drop.py"
+        missing_fd = subprocess.run(
+            [sys.executable, str(bridge), "capture"],
+            capture_output=True, text=True, timeout=15, check=False)
+        need(missing_fd.returncode != 0,
+             "UNHELD_NATIVE_FD9_ACCEPTED_PRELAUNCH")
+        capture = subprocess.run(
+            [sys.executable, str(bridge), "capture"],
+            pass_fds=(9,), capture_output=True, text=True,
+            timeout=15, check=False)
+        need(capture.returncode == 0 and
+             capture.stdout.strip() == _witness_line(prelaunch),
+             "ORIGINAL_NATIVE_FD9_PRELAUNCH_WITNESS_REJECTED")
+        fd9_witness = capture.stdout.strip()
+        print(MARK + "_TRUE_FD9_PRELAUNCH=PASS", flush=True)
         print(MARK + "_PREPARED_NATIVE_PRODUCER=PASS", flush=True)
         args = _remap_managed(case, planned)
         # First check the uninstrumented preview with real native parser.
@@ -226,9 +298,26 @@ def _native(checkout: Path) -> None:
             birth = guard.cmd("ps", "-p", str(process.pid), "-o", "lstart=")
             need(birth.returncode == 0 and birth.stdout.strip(),
                  "NATIVE_PROCESS_BIRTH_MISSING")
-            original_process = OwnerToken(process.pid, birth.stdout.strip(), str(engine))
-            changed = native_restore_before_ipfw(prelaunch, original_process)
-            need("inbox.txt" in changed, "PINNED_UPSTREAM_AUTO_INBOX_CHOWN_NOT_OBSERVED")
+            # The genuine same-held FD9 is inherited by the two short
+            # product CLI calls. A corrupt prelaunch witness must be denied
+            # before any chown and any loopback IPFW rule.
+            incorrect = subprocess.run(
+                [sys.executable, str(bridge), "restore",
+                 "p2k8i:0:0:1:0:0:1", str(process.pid), str(engine)],
+                pass_fds=(9,), capture_output=True, text=True,
+                timeout=15, check=False)
+            need(incorrect.returncode != 0 and
+                 RAW_PATH.stat().st_uid == nobody.pw_uid,
+                 "FALSE_FD9_WITNESS_ACCEPTED_OR_REPAIRED")
+            result = subprocess.run(
+                [sys.executable, str(bridge), "restore",
+                 fd9_witness, str(process.pid), str(engine)],
+                pass_fds=(9,), capture_output=True, text=True,
+                timeout=15, check=False)
+            need(result.returncode == 0 and
+                 result.stdout.strip() == "original-fd9-postdrop=attested",
+                 "TRUE_FD9_POSTDROP_REPAIR_REJECTED")
+            print(MARK + "_TRUE_FD9_RESTORED_BEFORE_IPFW=PASS", flush=True)
             _native_file_modes(nobody.pw_gid, phase="before-ipfw")
             print(MARK + "_UPSTREAM_STARTUP_CHOWN=OBSERVED_AND_ROOT_RESTORED_BEFORE_IPFW", flush=True)
             print(MARK + "_REUSABLE_P2K8H_INODE_FD_REPAIR=PASS", flush=True)
@@ -294,6 +383,10 @@ def _native(checkout: Path) -> None:
             failures.append("PRODUCER_ROOT_NOT_CLEANED")
         if case is not None:
             case.doCleanups()
+        # Keep the SAME original FD9 through BOTH engine and scoped IPFW
+        # cleanup; never release the kernel lifecycle lock first.
+        if fd9_context is not None:
+            fd9_context.__exit__(None, None, None)
         need(not failures, ";".join(failures))
     need(started and logfile is not None, "ENGINE_NOT_EXERCISED")
     native_number = preview["observer_native_number"]

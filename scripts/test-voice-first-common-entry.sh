@@ -5,7 +5,8 @@ set -eu
 ROOT=$(mktemp -d /tmp/zapret-first-common.XXXXXXXX) || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 SRC=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
-sed -n '/^apply_runtime_probe()$/,/^}$/p' "$SRC" > "$ROOT/functions.sh"
+sed -n '/^apply_runtime_observer_preflight()$/,/^}$/p' "$SRC" > "$ROOT/functions.sh"
+sed -n '/^apply_runtime_probe()$/,/^}$/p' "$SRC" >> "$ROOT/functions.sh"
 sed -n '/^apply_runtime_observe_live_legacy()$/,/^}$/p' "$SRC" >> "$ROOT/functions.sh"
 sh -n "$ROOT/functions.sh"
 . "$ROOT/functions.sh"
@@ -17,6 +18,7 @@ chmod +x "$DVTWS_BIN"
 ACTIVE_DIR="$ROOT/active"
 mkdir -p "$ACTIVE_DIR" "$ROOT/new"
 : > "$ROOT/new/voice-plan.json"
+: > "$ROOT/new/dvtws.args"
 for file in dvtws.args tcp-ports.txt udp-ports.txt; do : > "$ACTIVE_DIR/$file"; done
 CHILD_PIDFILE="$ROOT/engine.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
