@@ -144,10 +144,19 @@ def native():
     parent = PRODUCER.parent
     try:
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
-        (PRODUCER / "worker.lock").touch(mode=0o600)
+        # The original P2a owner, never this test, creates worker.lock.
+        # A FreeBSD touch() here inherits nobody-group and correctly fails.
+        with DurableInbox(PRODUCER, writer_gid=nobody.pw_gid).exclusive() as queue:
+            need(queue.segments() == [], "NATIVE_PENDING_NOT_EMPTY")
+        original = (PRODUCER / "worker.lock").lstat()
+        need(original.st_uid == 0 and original.st_gid == 0 and
+             original.st_nlink == 1 and stat.S_IMODE(original.st_mode) == 0o600,
+             "NATIVE_ORIGINAL_QUEUE_LOCK_OWNER")
         native_nobody_access(PRODUCER, nobody)
         with DurableInbox(PRODUCER, writer_gid=nobody.pw_gid).exclusive() as queue:
             need(queue.segments() == [], "NATIVE_PENDING_NOT_EMPTY")
+        need((PRODUCER / "worker.lock").lstat().st_ino == original.st_ino,
+             "NATIVE_ORIGINAL_QUEUE_LOCK_REPLACED")
         print("P2G_NATIVE=PASS_FREEBSD_NOBODY_READ_APPEND_NO_CREATE_NO_PENDING")
     finally:
         # Only the explicitly created disposable root, never its parent.
