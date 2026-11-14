@@ -211,6 +211,51 @@ def native_restore_before_ipfw(witness: OriginalProducer, owner: OwnerToken,
         raise PostDropRefused("native_original_process_unavailable") from exc
 
 
+# P2k8q3a: route the sole original FD9 through the existing immutable
+# pretraffic -> committed process epoch. These commands are not authorizers:
+# normal original Apply still refuses active native recording until the
+# existing worker/FD/rollover gates are qualified.
+def _original_epoch_queue():
+    from auto_detect_epoch_receipts import EpochReceipts
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise PostDropRefused("native_root_fd9_epoch_only")
+    _parent(ROOT, 0)
+    native_user = pwd.getpwnam(ENGINE_USER)
+    if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
+        raise PostDropRefused("unqualified_original_epoch_engine")
+    _check_layout(ROOT, 0, 0, native_user.pw_gid)
+    return (DurableInbox(ROOT, owner_uid=0, writer_gid=native_user.pw_gid),
+            EpochReceipts(writer_gid=native_user.pw_gid))
+
+
+def native_seal_original_epoch(generation: str, candidate: str) -> None:
+    from auto_detect_epoch_receipts import HEX32, HEX64
+    from shared_apply_seal import WORK
+    if (not isinstance(generation, str) or not HEX32.fullmatch(generation)
+            or not isinstance(candidate, str) or not HEX64.fullmatch(candidate)):
+        raise PostDropRefused("invalid_original_epoch_candidate")
+    queue, receipts = _original_epoch_queue()
+    with queue.exclusive():
+        receipts.seal_pretraffic(
+            queue, workspace=WORK / generation, candidate_sha256=candidate)
+
+
+def native_finish_original_epoch(generation: str) -> None:
+    from auto_detect_epoch_receipts import HEX32
+    from auto_detect_owner import attest_running_generation
+    if not isinstance(generation, str) or not HEX32.fullmatch(generation):
+        raise PostDropRefused("invalid_original_epoch_generation")
+    # P2c requires the ORIGINAL terminal common journal, live supervisor,
+    # matching active+sealed argv/map and exact PID/birth. Do not call this
+    # before native Config save and the terminal shared Apply record.
+    proof = attest_running_generation()
+    if proof.generation != generation or proof.operation_id != generation:
+        raise PostDropRefused("completed_original_owner_differs")
+    queue, receipts = _original_epoch_queue()
+    with queue.exclusive():
+        receipts.finish_running(proof, queue)
+
+
 # P2k8i: the two half-calls are a *single* original-FD9 shell operation.
 # No new lock, Config parser, queue owner or on-disk witness is introduced.
 # The compact witness crosses launcher_start_once as an exact positional
@@ -281,24 +326,29 @@ def original_fd9_command(args: list[str]) -> int:
     A normal release with P2h's inert preview never invokes this command.
     Activation is deliberately a separate original-builder/worker gate.
     """
+    shapes = {"capture": 1, "restore": 4, "seal-epoch": 3,
+              "finish-epoch": 2}
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
-            len(args) not in (1, 4) or args[0] not in {"capture", "restore"}):
-        return 64
-    if (args[0] == "capture" and len(args) != 1) or (
-            args[0] == "restore" and len(args) != 4):
+            not args or len(args) != shapes.get(args[0], -1)):
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()  # REAL original same-OFD held FD9, no new lock.
         if args[0] == "capture":
             print(_witness_line(native_capture_before_launch()))
-        else:
+        elif args[0] == "restore":
             # Caller already started the single original engine. A false
             # witness, missing original FD9 or replaced process refuses.
             witness = _witness_read(args[1])
             owner = _original_owner_from_pid(args[2], args[3])
             native_restore_before_ipfw(witness, owner)
             print("original-fd9-postdrop=attested")
+        elif args[0] == "seal-epoch":
+            native_seal_original_epoch(args[1], args[2])
+            print("original-fd9-pretraffic=sealed")
+        else:
+            native_finish_original_epoch(args[1])
+            print("original-fd9-running-epoch=attested")
         return 0
     except Exception as exc:
         # Catch the original FD9 adapter's refusal as well as process errors.
