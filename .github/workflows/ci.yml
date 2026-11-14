@@ -615,6 +615,11 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py scripts/test-auto-detect-original-ack-cycle.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-ack-cycle.py
+      - name: Test P2k8m original raw rotation to protected current-generation debug intent (dormant)
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_rotation.py scripts/test-auto-detect-original-rotation.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-rotation.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
