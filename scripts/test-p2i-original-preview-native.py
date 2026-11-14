@@ -31,10 +31,13 @@ import auto_detect_origin_map as origin
 import auto_detect_owner as owner
 from auto_detect_post_drop import native_capture_before_launch, _witness_line
 from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH)
+from auto_detect_queue import DurableInbox
+from auto_detect_fd import OwnerToken, probe_pending_fd
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
 KNOWN = "youtube.com"
 UNKNOWN = "unknown.p2i.invalid"
+UNKNOWN_AFTER = "rotated.p2i.invalid"
 PORT = 6545
 DIVERT = 19899
 RULES = (19351, 19352)
@@ -225,10 +228,34 @@ def _native_file_modes(gid: int, *, phase: str) -> None:
              f"expected_gid={gid}:links={info.st_nlink}")
 
 
-def _debug_match(content: str, number: int) -> bool:
+def _debug_match(content: str, number: int, host: str = UNKNOWN) -> bool:
     return any(f" : profile {number} " in line and
                " : adding to " + str(RAW_PATH) in line and
-               UNKNOWN in line for line in content.splitlines())
+               host in line for line in content.splitlines())
+
+
+def _exclusive_native_route(previous: str, current: str, host: str, *,
+                            debug_number: int | None = None) -> str:
+    """Classify one native append by physical pathname after an inode swap.
+
+    Observational only: a valid previous-inode append is not permission to
+    unlink/ACK it, reset debug cursor or schedule a live rollover.
+    """
+    if debug_number is None:
+        old_count = previous.splitlines().count(host)
+        new_count = current.splitlines().count(host)
+    else:
+        def count(text: str) -> int:
+            return sum(
+                1 for line in text.splitlines()
+                if f" : profile {debug_number} " in line
+                and " : adding to " + str(RAW_PATH) in line
+                and host in line
+            )
+        old_count, new_count = count(previous), count(current)
+    need(old_count + new_count == 1,
+         "NATIVE_ROLLOVER_EVENT_MISSING_OR_DUPLICATED")
+    return "previous" if old_count == 1 else "current"
 
 
 def _native(checkout: Path) -> None:
@@ -255,6 +282,8 @@ def _native(checkout: Path) -> None:
     logfile = None
     observed_native_log = ""
     observed_debug_log = ""
+    archived_debug = None
+    native_rollover = None
     try:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
@@ -362,6 +391,87 @@ def _native(checkout: Path) -> None:
                       file.stat().st_nlink) == producer_ids[file.name]
                      for file in (RAW_PATH, DEBUG_PATH)),
                  "INODE_REPLACED_DURING_NATIVE_APPEND")
+
+            # P2k8q3c1: disposable evidence for actual upstream reopen
+            # behavior, not an enabled product debug/raw rollover. The
+            # original P2a rotation happens under its ONE real worker.lock.
+            # Keep the old raw hardlink; never ACK in this experiment.
+            original_queue = DurableInbox(
+                PRODUCER, owner_uid=0, writer_gid=nobody.pw_gid)
+            old_raw_identity = (RAW_PATH.stat().st_dev, RAW_PATH.stat().st_ino)
+            with original_queue.exclusive():
+                previous_raw = original_queue.rotate(generation="a" * 32)
+                need(previous_raw is not None and
+                     previous_raw.read_text(encoding="ascii").splitlines() == [UNKNOWN] and
+                     (previous_raw.stat().st_dev, previous_raw.stat().st_ino) ==
+                     old_raw_identity and previous_raw.stat().st_nlink == 1 and
+                     (RAW_PATH.stat().st_dev, RAW_PATH.stat().st_ino) !=
+                     old_raw_identity and RAW_PATH.read_bytes() == b"",
+                     "ORIGINAL_P2A_NATIVE_ROTATION_CHANGED_OR_LOST_FIRST_EVENT")
+            print(MARK + "_REAL_ORIGINAL_P2A_RAW_ROTATE=PASS", flush=True)
+
+            # The product has NO authorized debug rollover; this rename
+            # and recreation are confined to a disposable VM. Capture the
+            # true native writer's choice of old-vs-new DEBUG inode.
+            archived_debug = PRODUCER / ".p2i-previous-debug"
+            need(not archived_debug.exists() and not archived_debug.is_symlink(),
+                 "FOREIGN_DISPOSABLE_DEBUG_ARCHIVE")
+            old_debug_identity = (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino)
+            os.replace(DEBUG_PATH, archived_debug)
+            replacement_fd = os.open(
+                DEBUG_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                os.O_NOFOLLOW, 0o660)
+            try:
+                os.fchown(replacement_fd, 0, nobody.pw_gid)
+                os.fchmod(replacement_fd, 0o660)
+                os.fsync(replacement_fd)
+            finally:
+                os.close(replacement_fd)
+            need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
+                 old_debug_identity and
+                 (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino) !=
+                 old_debug_identity and DEBUG_PATH.stat().st_nlink == 1,
+                 "DISPOSABLE_DEBUG_INODE_REPLACEMENT_UNQUALIFIED")
+            dir_fd = os.open(PRODUCER, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+
+            # One SECOND unknown hostname cannot inherit native inclusion
+            # of the first. Real traffic proves where the same running
+            # native PID actually appends after both physical swaps.
+            observed = p0.exchange(UNKNOWN_AFTER, force_rst=True)
+            need(observed == p0.request(UNKNOWN_AFTER),
+                 "SECOND_NATIVE_UNKNOWN_HTTP_CHANGED")
+            time.sleep(0.8)
+            first_raw = previous_raw.read_text(encoding="ascii")
+            second_raw = RAW_PATH.read_text(encoding="ascii")
+            first_debug = archived_debug.read_text(errors="replace")
+            second_debug = DEBUG_PATH.read_text(errors="replace")
+            number = preview["observer_native_number"]
+            need(_debug_match(first_debug, number, UNKNOWN),
+                 "FIRST_NATIVE_DEBUG_LOST_DURING_DISPOSABLE_ROTATION")
+            raw_route = _exclusive_native_route(
+                first_raw, second_raw, UNKNOWN_AFTER)
+            debug_route = _exclusive_native_route(
+                first_debug, second_debug, UNKNOWN_AFTER, debug_number=number)
+            need(process.poll() is None and
+                 guard.cmd("ps", "-p", str(process.pid),
+                           "-o", "lstart=").stdout == birth.stdout,
+                 "ORIGINAL_NATIVE_PID_CHANGED_DURING_ROLLOVER_WITNESS")
+            original_owner = OwnerToken(
+                process.pid, birth.stdout.strip(), str(engine))
+            old_pending_stat = previous_raw.stat()
+            # This is the actual all-PID P2b snapshot, never an ACK permit.
+            fd_state = probe_pending_fd(
+                previous_raw, old_pending_stat.st_dev,
+                old_pending_stat.st_ino, owner=original_owner,
+                writer_gid=nobody.pw_gid)
+            native_rollover = (raw_route, debug_route, fd_state.value)
+            print(MARK + "_REAL_NATIVE_POST_ROTATION_ROUTE="
+                  + "raw:" + raw_route + ",debug:" + debug_route
+                  + ",old_inode_fd:" + fd_state.value, flush=True)
     finally:
         failures = []
         for rule in reversed(installed):
@@ -381,8 +491,15 @@ def _native(checkout: Path) -> None:
         # Capture only bounded local evidence before disposable cleanup.
         if logfile is not None and logfile.is_file():
             observed_native_log = logfile.read_text(errors="replace")[-262144:]
+        # The intentional disposable debug swap may leave native writes on
+        # the previous inode; the original first-match assertion must check
+        # BOTH files rather than silently discarding their historical bytes.
+        debug_parts = []
+        if archived_debug is not None and archived_debug.is_file():
+            debug_parts.append(archived_debug.read_text(errors="replace")[-32768:])
         if DEBUG_PATH.is_file():
-            observed_debug_log = DEBUG_PATH.read_text(errors="replace")[-32768:]
+            debug_parts.append(DEBUG_PATH.read_text(errors="replace")[-32768:])
+        observed_debug_log = "\n".join(debug_parts)
         if started and guard.cmd("pgrep", "-x", "dvtws2").returncode != 1:
             failures.append("ISOLATED_ENGINE_NOT_STOPPED")
         if PRODUCER.is_dir() and not PRODUCER.is_symlink():
@@ -397,6 +514,8 @@ def _native(checkout: Path) -> None:
             fd9_context.__exit__(None, None, None)
         need(not failures, ";".join(failures))
     need(started and logfile is not None, "ENGINE_NOT_EXERCISED")
+    need(native_rollover is not None,
+         "POST_ROTATION_NATIVE_WRITER_EVIDENCE_MISSING")
     native_number = preview["observer_native_number"]
     need(_debug_match(observed_debug_log, native_number),
          "RAW_APPEND_DEBUG_PROFILE_NOT_CORRELATED")
@@ -420,6 +539,26 @@ if __name__ == "__main__":
                  "DEBUG_CORRELATION_PARSER_REJECTED_VALID")
             need(not _debug_match("hello : profile 1 : adding to /tmp/wrong", 2),
                  "DEBUG_CORRELATION_FALSE_POSITIVE")
+            need(_exclusive_native_route(
+                UNKNOWN_AFTER + "\n", "", UNKNOWN_AFTER) == "previous",
+                 "OLD_RAW_ROUTE_MISCLASSIFIED")
+            need(_exclusive_native_route(
+                "", UNKNOWN_AFTER + "\n", UNKNOWN_AFTER) == "current",
+                 "NEW_RAW_ROUTE_MISCLASSIFIED")
+            fake = (f"hello : profile 2 (tail) : client 127.0.0.1:111 : "
+                    f"proto http : adding to {RAW_PATH} {UNKNOWN_AFTER}\n")
+            need(_exclusive_native_route(fake, "", UNKNOWN_AFTER,
+                                         debug_number=2) == "previous" and
+                 _exclusive_native_route("", fake, UNKNOWN_AFTER,
+                                         debug_number=2) == "current",
+                 "NATIVE_DEBUG_ROUTE_MISCLASSIFIED")
+            try:
+                _exclusive_native_route(UNKNOWN_AFTER + "\n",
+                                        UNKNOWN_AFTER + "\n", UNKNOWN_AFTER)
+            except RuntimeError:
+                pass
+            else:
+                raise RuntimeError("DUPLICATE_NATIVE_ROLLOVER_ACCEPTED")
             print(MARK + "_SELF_TEST=PASS_SOURCE_ONLY")
         elif len(sys.argv) == 3 and sys.argv[1] == "--native":
             _native(Path(sys.argv[2]))
