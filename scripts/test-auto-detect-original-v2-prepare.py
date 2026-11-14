@@ -19,6 +19,7 @@ BACKEND = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Z
 sys.path.insert(0, str(BACKEND))
 
 from auto_detect_cursor_chain import CursorChain
+from auto_detect_debug_window import MAX_DEBUG, MAX_WINDOW
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_fixture import sealed_original_epoch
 from auto_detect_epoch_receipts import EpochReceipts
@@ -199,6 +200,108 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.queue.segments(), [])
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
             self.assertEqual(self.drains, 0)
+
+    def test_debug_window_over_limit_refuses_before_raw_detachment(self):
+        self.emit("one.example.com")
+        original = self.debug.read_bytes()
+        with self.debug.open("ab") as output:
+            output.write(b"x" * (MAX_WINDOW + 1))
+        live = self.queue.inbox.stat()
+        bad_debug = self.debug.read_bytes()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "debug_window_invalid_before_raw_cut"):
+                self.stage()
+            now = self.queue.inbox.stat()
+            self.assertEqual((now.st_dev, now.st_ino, now.st_size),
+                             (live.st_dev, live.st_ino, live.st_size))
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+        self.assertEqual(self.drains, 0)
+        self.assertEqual(self.debug.read_bytes(), bad_debug)
+        self.debug.write_bytes(original)
+        with self.queue.exclusive():
+            self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
+
+    def test_debug_over_four_mib_refuses_before_raw_detachment(self):
+        self.emit("one.example.com")
+        original = self.debug.read_bytes()
+        with self.debug.open("r+b") as output:
+            output.truncate(MAX_DEBUG + 1)
+        live = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            now = self.queue.inbox.stat()
+            self.assertEqual((now.st_dev, now.st_ino),
+                             (live.st_dev, live.st_ino))
+            self.assertEqual(self.queue.segments(), [])
+        self.assertEqual(self.debug.stat().st_size, MAX_DEBUG + 1)
+        self.assertEqual(self.drains, 0)
+        self.debug.write_bytes(original)
+        with self.queue.exclusive():
+            self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
+
+    def test_debug_inode_replacement_refuses_before_raw_cut(self):
+        self.emit("one.example.com")
+        original = self.debug.read_bytes()
+        archived = self.root / "original-debug"
+        os.replace(self.debug, archived)
+        self.debug.write_bytes(original)
+        self.debug.chmod(0o600)
+        live = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "debug_cursor_invalid_before_raw_cut"):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live.st_ino)
+            self.assertEqual(self.queue.segments(), [])
+        self.assertEqual(self.drains, 0)
+        os.replace(archived, self.debug)
+        with self.queue.exclusive():
+            self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
+
+    def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            first = self.stage()
+            self.commit_and_ack(first, "one.example.com")
+        original_prefix = self.debug.read_bytes()
+        self.emit("two.example.com")
+        complete = self.debug.read_bytes()
+        self.debug.write_bytes(b"X" + complete[1:])
+        live = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "debug_cursor_invalid_before_raw_cut"):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live.st_ino)
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+        self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+        self.debug.write_bytes(original_prefix + complete[len(original_prefix):])
+        with self.queue.exclusive():
+            second = self.stage()
+            self.assertEqual(second.read_bytes(), b"two.example.com\n")
+            self.commit_and_ack(second, "two.example.com")
+
+    def test_incomplete_native_debug_line_refuses_before_raw_cut(self):
+        self.emit("one.example.com")
+        original = self.debug.read_bytes()
+        with self.debug.open("ab") as output:
+            output.write(b"incomplete")
+        live = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "debug_window_invalid_before_raw_cut"):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live.st_ino)
+            self.assertEqual(self.queue.segments(), [])
+        self.assertEqual(self.drains, 0)
+        self.debug.write_bytes(original)
+        with self.queue.exclusive():
+            self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
 
     def test_original_v2_late_hardlink_append_refuses_and_recovers_same_raw(self):
         # Same real P2k8o/v2 preparation, not a synthetic alternate queue:

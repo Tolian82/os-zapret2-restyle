@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_55`** (`VERSION=0.6.5`, `PLUGIN_REVISION=55`, prospective `os-zapret2-restyle-0.6.5_55.pkg` **NOT PUBLISHED**). P2k8q3c2 tightens the existing disposable genuine native `dvtws2` witness: after the **one original P2a** protected live-raw rotation (still-running owner, preserved old pending), but **before** VM-only debug rename/recreation, a third real HTTP/RST unknown host is sent. Its raw/debug cohort is checked on actual old/new inodes, then a fourth distinct host is sent after both replacements. This distinguishes the potentially split interstitial event from the `_54` fully-swapped `raw:current,debug:current,old_inode_fd:drained` observation. The disposable test reports the real interstitial route and requires exact-once first/interstitial/final events, genuine same PID/birth, full cleanup and no product debug-rotator/Config/cron change. Native positive evidence remains separate from CI source-only and owner-installed acceptance. This is **not** an atomic raw/debug swap or any form of completed rollover; previous-generation sealed raw/debug + FD, 4 MiB bounded debug/raw, 512 v2 slots, crash/ENOSPC and active schema-2 still OPEN. [Focused scope](verification/P2K8Q3C2_NATIVE_MIDCUT_RAW_DEBUG.md). Stable owner-installed `_1.pkg` unchanged.
+Current source increment: **`v0.6.5_56`** (`VERSION=0.6.5`, `PLUGIN_REVISION=56`, prospective `os-zapret2-restyle-0.6.5_56.pkg` **NOT PUBLISHED**). P2k8q3d1 strengthens original P2k8o: its root-protected P2k1 `_read_exact()` and immutable P2k8n ACK cursor now preflight stable debug <=4 MiB, exact inode and committed prefix hash, and at most 256 KiB complete unread debug **before** any fresh or crash-linked raw cut. Five physical original queue/v2 tests verify no raw detach/extra pending or intent on known-invalid debug and same-gen retry after recovery. The `_55` real native interstitial raw:current/debug:previous remains, and this finite preflight is NOT an atomic producer fence, authenticated historical replay, or lossless 4 MiB/512-step rollover. ACTIVE schema-2, cron and new ACK remain OFF. [Scope](verification/P2K8Q3D1_ORIGINAL_DEBUG_PRE_CUT.md). Stable installed `_1.pkg` unchanged.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=55`; original P2a/P2b/FD9 unchanged; native split-cohort interstitial raw/debug witness; schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=56`; original P2k8o guarded by P2k1 native debug/ACK pre-cut; schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_55.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_56.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

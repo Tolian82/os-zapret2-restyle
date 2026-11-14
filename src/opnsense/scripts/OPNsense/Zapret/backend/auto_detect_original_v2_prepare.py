@@ -8,9 +8,11 @@ No Config/FD9 child, destination writes, ACK, cron or old-owner migration.
 """
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Callable
 
+from auto_detect_debug_window import _read_exact, DebugWindowRefused, MAX_WINDOW
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       MAX_STEPS, PENDING)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
@@ -23,6 +25,28 @@ from auto_detect_queue import DurableInbox, QueueSafetyError
 
 class OriginalV2PrepareRefused(RuntimeError):
     """Do not rotate or discard another generation's original raw segment."""
+
+
+def _require_debug_window_before_raw_cut(proof: GenerationProof, cursor,
+                                         receipts: EpochReceipts) -> None:
+    """Refuse a known-bad native debug before changing original raw inode.
+
+    This remains a finite snapshot, not an atomic native-writer barrier.
+    Reuse only the existing original P2k1 protected debug reader.
+    """
+    info, data = _read_exact(Path(proof.debug_path),
+                             owner_uid=receipts.uid,
+                             writer_gid=receipts.writer_gid)
+    if ((info.st_dev, info.st_ino) != (cursor.device, cursor.inode) or
+            cursor.offset > len(data) or
+            hashlib.sha256(data[:cursor.offset]).hexdigest() !=
+            cursor.prefix_sha256):
+        raise OriginalV2PrepareRefused("debug_cursor_invalid_before_raw_cut")
+    tail = data[cursor.offset:]
+    if (len(tail) > MAX_WINDOW or
+            (tail and not tail.endswith(b"\n")) or
+            b"\x00" in tail):
+        raise OriginalV2PrepareRefused("debug_window_invalid_before_raw_cut")
 
 
 def prepare_original_v2_locked(
@@ -85,8 +109,12 @@ def prepare_original_v2_locked(
             inode = segment.lstat()
             live = queue.inbox.lstat()
             if (inode.st_dev, inode.st_ino) == (live.st_dev, live.st_ino):
+                # Crash-link repair still cuts the live raw pathname.
+                _require_debug_window_before_raw_cut(proof, tip.cursor, receipts)
                 segment = queue.rotate(generation=proof.generation)
         else:
+            # Refuse known-bad debug before converting live raw to pending.
+            _require_debug_window_before_raw_cut(proof, tip.cursor, receipts)
             segment = queue.rotate(generation=proof.generation)
         if segment is None:
             return None
@@ -100,6 +128,7 @@ def prepare_original_v2_locked(
             raise OriginalV2PrepareRefused("original_owner_changed_after_intent")
         return segment
     except (OriginalSourceRefused, CursorChainRefused, QueueSafetyError,
-            ReceiptRefused, GenerationRefused, OSError, ValueError, TypeError,
+            ReceiptRefused, DebugWindowRefused, GenerationRefused,
+            OSError, ValueError, TypeError,
             AttributeError, KeyError) as exc:
         raise OriginalV2PrepareRefused("original_v2_prepared_intent_unavailable") from exc
