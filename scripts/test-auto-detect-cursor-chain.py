@@ -239,6 +239,29 @@ class CursorChainTests(unittest.TestCase):
                 self.ack(p, cp)
             self.assertTrue(p.exists())
 
+    def test_open_native_debug_intent_cannot_change_to_raw_first(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            self.stage(pending)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "native-debug")
+            old = self.debug.with_name("old-native-debug")
+            new = self.debug.with_name(".new-native-debug")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(new, self.debug)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "different_unacknowledged_cursor_pending"):
+                self.stage(pending)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "debug_changed_before_destination"):
+                self.commit(pending, "one.example.com")
+            self.assertTrue(pending.exists())
+            self.assertFalse(self.chain.tip(self.proof).raw_first)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+
     def test_superseded_v1_epoch_entry_is_rejected_not_imported(self):
         self.emit("one.example.com")
         with self.queue.exclusive():

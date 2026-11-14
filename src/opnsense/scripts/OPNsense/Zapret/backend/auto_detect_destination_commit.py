@@ -211,6 +211,7 @@ class DestinationCommit:
                     "generation": intent["generation"],
                     "pending_name": intent["pending_name"],
                     "pending_sha256": intent["pending_sha256"],
+                    "evidence": intent["evidence"],
                     "debug_end_offset": intent["debug_end_offset"],
                     "debug_end_sha256": intent["debug_end_sha256"],
                     "writes": writes}
@@ -223,12 +224,13 @@ class DestinationCommit:
         if (not isinstance(plan, dict) or plan.get("kind") != "durable-destination-plan" or
                 any(plan.get(k) != intent[k] for k in (
                     "generation", "pending_name", "pending_sha256",
-                    "debug_end_offset", "debug_end_sha256")) or
+                    "evidence", "debug_end_offset", "debug_end_sha256")) or
                 not isinstance(plan.get("writes"), dict)):
             raise DestinationRefused("destination_plan_identity_changed")
         if checkpoint_path.exists() or checkpoint_path.is_symlink():
             checkpoint = json.loads(_read(checkpoint_path, self.receipts.uid))
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
+                    checkpoint.get("evidence") != intent["evidence"] or
                     checkpoint.get("committed_cursor_offset") != intent["debug_end_offset"] or
                     checkpoint.get("committed_cursor_sha256") != intent["debug_end_sha256"]):
                 raise DestinationRefused("checkpoint_differs_from_plan")
@@ -250,6 +252,7 @@ class DestinationCommit:
         checkpoint = {"schema": 1, "kind": "destination-and-cursor-committed",
                       "generation": intent["generation"], "pending_name": intent["pending_name"],
                       "plan_sha256": _sha(plan_raw),
+                      "evidence": intent["evidence"],
                       "committed_cursor_offset": intent["debug_end_offset"],
                       "committed_cursor_sha256": intent["debug_end_sha256"],
                       "ack_authorized": False}

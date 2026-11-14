@@ -138,6 +138,47 @@ class OriginalConfigV2Tests(unittest.TestCase):
         with self.queue.exclusive():
             return self.chain.tip(self.proof).next_sequence
 
+    def test_real_original_config_raw_first_cross_inode_commit_and_ack(self):
+        # Native debug positive for the second raw lands in the previous
+        # debug inode; P2c + all-PID P2b raw are independently sufficient
+        # for UNKNOWN Auto Hostlist, not YouTube/User attribution.
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            first = self.queue.rotate(generation=self.proof.generation)
+            self.emit("cdn.second.com")
+            old = self.debug.with_name("old-debug-for-test")
+            new = self.debug.with_name(".new-debug-for-test")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(new, self.debug)
+            self.assertEqual(old.stat().st_nlink, 1)
+            self.assertEqual(self.prepare(), first)
+            intent = self.chain.tip(self.proof).open_intent
+            self.assertEqual(intent["evidence"], "raw-first")
+            self.assertEqual(intent["debug_end_offset"], 0)
+            cp = self.commit(first)
+            self.assertEqual(cp["evidence"], "raw-first")
+            # Same original Config checkpoint cannot apply one raw twice.
+            self.assertEqual(self.commit(first), cp)
+            self.assertTrue(self.ack(first, cp))
+            self.assertTrue(self.ack(first, cp))
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+            second = self.prepare()
+            cp2 = self.commit(second)
+            self.assertTrue(self.ack(second, cp2))
+            # Duplicate root after debug cut remains P1-idempotent.
+            self.emit("video.example.co.uk")
+            third = self.prepare()
+            self.assertTrue(self.ack(third, self.commit(third)))
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 3)
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+        self.assertEqual(self.auto.read_text(),
+                         "!untouched.example\nexample.co.uk\nsecond.com\n")
+        self.assertEqual(self.youtube.read_text(), "")
+        self.assertEqual(old.read_bytes().count(b"adding to "), 2)
+
     def test_replay_does_not_restore_manual_gui_deletion(self):
         self.emit("video.example.co.uk")
         with self.queue.exclusive():
