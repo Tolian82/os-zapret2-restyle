@@ -189,7 +189,7 @@ class EpochReceipts:
         entries = os.listdir(folder)
         expected_prefix = "intent-" + generation + "-"
         if (len(entries) > 3 or any(
-                name not in ("epoch.json", "destination") and not (
+                name not in ("epoch.json", "destination", "cursor-chain-v2") and not (
                     name.startswith(expected_prefix) and
                     re.fullmatch(r"intent-[a-f0-9]{32}-[a-f0-9]{32}\.txt\.json", name))
                 for name in entries) or
@@ -197,6 +197,8 @@ class EpochReceipts:
             raise ReceiptRefused("foreign_or_ambiguous_generation_receipt")
         if "destination" in entries:
             _directory(folder / "destination", self.uid)
+        if "cursor-chain-v2" in entries:
+            _directory(folder / "cursor-chain-v2", self.uid)
         return folder
 
     def begin(self, proof: GenerationProof, cursor: Cursor) -> None:
@@ -256,6 +258,8 @@ class EpochReceipts:
         idempotent destination sink before a distinct commit implementation.
         """
         folder, epoch = self._epoch(proof)
+        if (folder / "cursor-chain-v2").exists() or (folder / "cursor-chain-v2").is_symlink():
+            raise ReceiptRefused("legacy_intent_cannot_mix_with_cursor_chain")
         pending = Path(pending)
         allowed = re.fullmatch(
             re.escape(proof.generation) + r"-[0-9a-f]{32}\.txt\Z",
@@ -340,6 +344,8 @@ class EpochReceipts:
     def historical(self, generation: str) -> HistoricalReceipt:
         """Read-only recovery. A receipt is NOT authorization for an old owner."""
         folder = self._generation(generation, create=False)
+        if (folder / "cursor-chain-v2").exists() or (folder / "cursor-chain-v2").is_symlink():
+            raise ReceiptRefused("legacy_historical_reader_cannot_consume_cursor_chain")
         try:
             epoch = json.loads(_read(folder / "epoch.json", self.uid))
             names = [n for n in os.listdir(folder) if n.startswith("intent-")]
