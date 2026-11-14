@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_41`** (`VERSION=0.6.5`, `PLUGIN_REVISION=41`, prospective `os-zapret2-restyle-0.6.5_41.pkg` **NOT PUBLISHED**). P2k8k adds an **import-only** post-commit ACK helper: it validates the current live P2c generation, protected P2k2b plan/checkpoint, exact original Config-child completion, original pending inode/hash and P2b native FD drain under the held P2a queue before calling its inode-safe unlink. Old-generation replay, genuine sealed observer, active worker and cron remain OPEN. P2k8j's configd ingress stays unscheduled/inactive; FD9 unchanged; `ack_authorized=false` in detached receipts.
+Current source increment: **`v0.6.5_42`** (`VERSION=0.6.5`, `PLUGIN_REVISION=42`, prospective `os-zapret2-restyle-0.6.5_42.pkg` **NOT PUBLISHED**). P2k8l connects the previously dormant original queue FD→PHP Config-held P1/P2k2b child completion→P2k8k guarded ACK **under one unchanged P2a queue flock**, without a second owner/lock. It retains the existing unacknowledged entry and adds a restricted import-only native one-segment composer that is NOT registered with configd. No real active schema-2 observer, native raw/debug epoch pipeline, historical-owner replay, scheduled worker or cron is enabled; ordinary shared FD9/Strategies/Voice/Lab are unchanged. Detached receipts remain `ack_authorized=false`.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=41`; current-generation post-commit ACK primitive import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=42`; original held-queue Config→P2k8k ACK composer import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_41.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_42.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -28,6 +28,8 @@ Current source increment: **`v0.6.5_41`** (`VERSION=0.6.5`, `PLUGIN_REVISION=41`
 | Voice | Five-service native page and common Strategies/Voice Config/Apply/engine/firewall lifecycle; service acceptance does not establish media/call bypass | [Voice contract](architecture/VOICE_TRANSMISSION_GUI.md) |
 
 ## Active #1052 implementation boundary
+
+**Current `_42` addition:** [P2k8l](verification/P2K8L_ORIGINAL_QUEUE_CONFIG_ACK.md) joins the actual original PHP-child response and P2k8k guarded ACK before releasing the same original P2a queue lock. The new fixed-path native single-segment entry is import-only and unscheduled. Current/old native owner, sealed observer and real end-to-end installed acceptance remain unqualified.
 
 **Current `_41` addition:** [P2k8k](verification/P2K8K_POST_COMMIT_ACK.md) validates the genuine *current* original generation and protected physical ACK preconditions; it is only called in offline test fixtures. There is still no installed writer/ACK caller or historical-owner authorization.
 
