@@ -22,6 +22,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = Path(__file__).resolve().parent
@@ -267,6 +268,15 @@ def _native_stopped(guard, pid: int) -> bool:
     return state.returncode == 0 and state.stdout.strip().startswith("T")
 
 
+def _scoped_divert_hits(guard, rule: int) -> int:
+    """Read the original P0 scoped rule counter; fail without real evidence."""
+    result = guard.cmd("/sbin/ipfw", "-a", "list", str(rule))
+    match = re.search(rf"(?m)^0*{rule}\s+([0-9]+)\s+", result.stdout)
+    need(result.returncode == 0 and match is not None,
+         "NATIVE_SCOPED_DIVERT_COUNTER_UNAVAILABLE")
+    return int(match.group(1))
+
+
 def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
     need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
          "FREEBSD_ROOT_ONLY")
@@ -294,6 +304,8 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
     archived_debug = None
     native_rollover = None
     stopped_by_test = False
+    inflight_thread = None
+    inflight_reply = {}
     try:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
@@ -427,6 +439,46 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 need(_native_stopped(guard, process.pid) and
                      process.poll() is None,
                      "NATIVE_QUIESCENCE_SIGSTOP_NOT_KERNEL_CONFIRMED")
+
+                # _57 sent NO packets while dvtws2 was STOPPED. Qualify
+                # the missing traffic-continuity property using the SAME
+                # original P0 loopback and scoped IPFW divert rule.
+                # Known HOSTLIST must stay out of native auto hostlist.
+                prior_hits = _scoped_divert_hits(guard, RULES[0])
+                attempted = threading.Event()
+                completed = threading.Event()
+
+                def inflight_known() -> None:
+                    attempted.set()
+                    try:
+                        inflight_reply["payload"] = p0.exchange(
+                            KNOWN, force_rst=False)
+                    except Exception as exc:
+                        inflight_reply["error"] = type(exc).__name__ + ":" + str(exc)
+                    finally:
+                        completed.set()
+
+                inflight_thread = threading.Thread(
+                    target=inflight_known, name="disposable-p2i-stopped-divert",
+                    daemon=True)
+                inflight_thread.start()
+                need(attempted.wait(timeout=2),
+                     "NATIVE_STOPPED_DIVERT_REQUEST_NOT_STARTED")
+                counted = False
+                for _ in range(50):
+                    if _scoped_divert_hits(guard, RULES[0]) > prior_hits:
+                        counted = True
+                        break
+                    if completed.is_set():
+                        break
+                    time.sleep(0.04)
+                need(counted,
+                     "NATIVE_STOPPED_DIVERT_PACKET_NOT_COUNTED")
+                need(_native_stopped(guard, process.pid) and
+                     not completed.is_set(),
+                     "NATIVE_STOPPED_DIVERT_NOT_STALLED")
+                print(MARK + "_REAL_NATIVE_STOPPED_DIVERT="
+                      "ipfw_packet_counted_request_stalled", flush=True)
             with original_queue.exclusive():
                 previous_raw = original_queue.rotate(generation="a" * 32)
                 need(previous_raw is not None and
@@ -498,7 +550,7 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 # Validate the process is STILL STOPPED after BOTH cuts,
                 # with first-event raw/debug preserved on previous inodes
                 # and both freshly replaced live paths empty. There is
-                # no user traffic while stopped in this isolated witness.
+                # one bounded known request is outstanding in IPFW until CONT.
                 need(_native_stopped(guard, process.pid) and
                      process.poll() is None and
                      guard.cmd("ps", "-p", str(process.pid), "-o",
@@ -521,6 +573,28 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                                "lstart=").stdout == birth.stdout,
                      "NATIVE_QUIESCENCE_ORIGINAL_PID_NOT_RESUMED")
                 stopped_by_test = False
+                # The request entered IPFW BEFORE the first raw cut and
+                # could not finish while the same native PID was STOPPED.
+                # It must now be delivered after SIGCONT without creating
+                # any native auto positive for the known HOSTLIST.
+                need(inflight_thread is not None,
+                     "NATIVE_STOPPED_DIVERT_THREAD_MISSING")
+                inflight_thread.join(timeout=7)
+                need(not inflight_thread.is_alive() and
+                     inflight_reply.get("payload") == p0.request(KNOWN),
+                     "NATIVE_STOPPED_DIVERT_NOT_DELIVERED_AFTER_RESUME:"
+                     + str(inflight_reply.get("error", "missing_payload")))
+                need(previous_raw.read_text(encoding="ascii").splitlines() ==
+                     [UNKNOWN] and RAW_PATH.read_bytes() == b"" and
+                     not _debug_match(
+                         archived_debug.read_text(errors="replace"),
+                         preview["observer_native_number"], KNOWN) and
+                     not _debug_match(
+                         DEBUG_PATH.read_text(errors="replace"),
+                         preview["observer_native_number"], KNOWN),
+                     "NATIVE_STOPPED_DIVERT_KNOWN_ENTERED_AUTO_OBSERVER")
+                print(MARK + "_REAL_NATIVE_STOPPED_DIVERT_RECOVERY="
+                      "known_first_match_delivered_after_sigcont", flush=True)
                 print(MARK + "_REAL_NATIVE_QUIESCED_CUT="
                       "same_pid_stopped_for_raw_and_debug_then_resumed",
                       flush=True)
@@ -588,6 +662,12 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
         # before terminating the original engine and restoring original FD9.
         if stopped_by_test and process is not None and process.poll() is None:
             process.send_signal(signal.SIGCONT)
+        # The bounded synthetic traffic client must not survive into IPFW
+        # rule cleanup even when the stopped-PID experiment refuses.
+        if inflight_thread is not None:
+            inflight_thread.join(timeout=8)
+            if inflight_thread.is_alive():
+                failures.append("NATIVE_STOPPED_DIVERT_CLIENT_LEAKED")
         for rule in reversed(installed):
             if guard.cmd("/sbin/ipfw", "-q", "delete", str(rule)).returncode:
                 failures.append("SCOPED_DIVERT_RULE_LEAKED")
