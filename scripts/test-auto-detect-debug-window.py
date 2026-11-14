@@ -82,12 +82,42 @@ class DebugWindowTests(unittest.TestCase):
         self.rejects(b'', 'invalid_or_incomplete_raw_segment')
         self.rejects(b'another.p2k.invalid\n', 'raw_and_positive_debug_not_one_to_one')
 
-    def test_missing_extra_and_misordered_events_refused(self):
+    def test_misordered_or_missing_native_positives_refused(self):
         one = self.add('first.p2k.invalid')
+        self.rejects(one + b'second.p2k.invalid\n',
+                     'raw_and_positive_debug_not_one_to_one')
         two = self.add('second.p2k.invalid')
-        self.rejects(one, 'raw_and_positive_debug_not_one_to_one')
         self.rejects(two + one, 'raw_and_positive_debug_not_one_to_one')
         self.assertEqual(len(self.window(one + two).candidates), 2)
+
+    def test_later_native_positive_remains_for_next_raw_inode(self):
+        first = self.add('first.p2k.invalid')
+        boundary = len(self.debug.read_bytes())
+        second = self.add('second.p2k.invalid')
+        # Pre-fix matcher rejected first: debug has two positives already,
+        # but the first pending raw contains only the first.
+        current = self.window(first)
+        self.assertEqual([x.host for x in current.candidates],
+                         ['first.p2k.invalid'])
+        self.assertEqual(current.proposed_cursor.offset, boundary)
+        self.assertEqual(current.proposed_cursor.prefix_sha256,
+                         hashlib.sha256(self.debug.read_bytes()[:boundary]).hexdigest())
+        following = propose_window(self.proof, current.proposed_cursor, second,
+                                   owner_uid=os.geteuid())
+        self.assertEqual([x.host for x in following.candidates],
+                         ['second.p2k.invalid'])
+        self.assertEqual(following.proposed_cursor.offset,
+                         self.debug.stat().st_size)
+
+    def test_untrusted_later_positive_is_not_hidden_by_first_ack(self):
+        first = self.add('first.p2k.invalid')
+        second = self.add('foreign.p2k.invalid', profile=1)
+        current = self.window(first)
+        self.assertEqual(len(current.candidates), 1)
+        with self.assertRaisesRegex(DebugWindowRefused,
+                                    'unauthorized_native_profile_or_host'):
+            propose_window(self.proof, current.proposed_cursor, second,
+                           owner_uid=os.geteuid())
 
     def test_cross_profile_and_wrong_output_path_refused(self):
         raw = self.add(profile=1)

@@ -136,6 +136,37 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.assertEqual(self.auto.read_text(),
                          "!manual.invalid\none.example.com\ntwo.example.com\n")
 
+    def test_midcut_later_debug_positive_before_first_original_prepare(self):
+        # Original P2a hardlink/replace, P2k8o v2 preparation and v2 ACK.
+        # Two separate raw inodes share ONE native debug inode; no stop.
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            first = self.queue.rotate(generation=self.generation)
+            first_debug_end = self.debug.stat().st_size
+            first_inode = first.stat().st_ino
+            second_live_inode = self.queue.inbox.stat().st_ino
+            self.assertNotEqual(first_inode, second_live_inode)
+            self.emit("two.example.com")
+            self.assertEqual(first.read_bytes(), b"one.example.com\n")
+            self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+            # Before the fix the second positive blocked the FIRST raw.
+            self.assertEqual(self.stage(), first)
+            first_intent = self.chain.tip(self.proof).open_intent
+            self.assertEqual(first_intent["debug_end_offset"], first_debug_end)
+            self.assertEqual(first_intent["candidate_count"], 1)
+            self.commit_and_ack(first, "one.example.com")
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset,
+                             first_debug_end)
+            self.assertEqual(self.queue.inbox.stat().st_ino, second_live_inode)
+            second = self.stage()
+            self.assertEqual(second.stat().st_ino, second_live_inode)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["candidate_count"], 1)
+            self.commit_and_ack(second, "two.example.com")
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset,
+                             self.debug.stat().st_size)
+        self.assertEqual(self.auto.read_text(),
+                         "!manual.invalid\none.example.com\ntwo.example.com\n")
+
     def test_pending_priority_when_new_raw_waits(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
