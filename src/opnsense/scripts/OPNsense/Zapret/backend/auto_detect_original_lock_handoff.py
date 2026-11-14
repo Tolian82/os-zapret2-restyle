@@ -35,21 +35,38 @@ class OriginalLockRefused(RuntimeError):
     """Refuse the batch without deleting pending or exposing domain content."""
 
 
-def assert_inherited_config_fd(fd: int, path: Path, *, owner_uid: int = 0) -> None:
+def assert_inherited_config_fd(fd: int, path: Path, *, owner_uid: int | None = 0) -> None:
     """Prove same original locked Config inode/open description, not a token."""
-    if type(fd) is not int or fd < 3 or not Path(path).is_absolute():
+    if (type(fd) is not int or fd < 3 or not Path(path).is_absolute() or
+            (owner_uid is None and Path(path) != CONFIG_PATH)):
+        # The original OPNsense Config is allowed a *non-root* native
+        # uid only at its one hard-coded Config path, never any test path
+        # or worker directory. OPNsense itself supplied the descriptor.
         raise OriginalLockRefused('invalid_original_config_fd')
     try:
         path = Path(path)
         named = path.lstat()
         held = os.fstat(fd)
         parent = path.parent.lstat()
-        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != owner_uid or
+        # OPNsense 26.7 native Config and /conf are *not* necessarily owned
+        # by UID 0 (actual guest ownership can be UID 789, root group).
+        # Distinguish its original Config-file owner from the separately
+        # root-only queue. Never hard-code an appliance-specific UID.
+        if owner_uid is None:
+            valid_owner = (named.st_uid == held.st_uid == parent.st_uid and
+                           named.st_gid == held.st_gid == parent.st_gid == 0)
+        else:
+            valid_owner = (named.st_uid == held.st_uid == parent.st_uid
+                           == owner_uid)
+        if (not stat.S_ISDIR(parent.st_mode) or
                 parent.st_mode & 0o022 or
-                not stat.S_ISREG(named.st_mode) or named.st_uid != owner_uid or
-                named.st_nlink != 1 or named.st_mode & 0o022 or
+                not stat.S_ISREG(named.st_mode) or
+                not stat.S_ISREG(held.st_mode) or
+                not valid_owner or
+                named.st_nlink != 1 or held.st_nlink != 1 or
+                named.st_mode & 0o022 or
                 (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino) or
-                held.st_uid != owner_uid or held.st_nlink != 1):
+                stat.S_IMODE(held.st_mode) != stat.S_IMODE(named.st_mode)):
             raise OriginalLockRefused('unsafe_original_config_inode')
         separate = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
         try:
@@ -75,9 +92,13 @@ def inherited_original_locks(queue: DurableInbox, queue_fd: int, config_fd: int,
                              config_path: Path, *, owner_uid: int = 0):
     """Adopt existing original locks in queue -> Config -> GUI order."""
     with queue.inherited_exclusive(queue_fd):
-        assert_inherited_config_fd(config_fd, config_path, owner_uid=owner_uid)
+        # Queue/inbox/pending remain strictly ROOT-owned. Only the fixed
+        # original OPNsense Config path may use its native Config account:
+        # its file, descriptor and parent must share a UID and root GID.
+        config_owner = None if Path(config_path) == CONFIG_PATH else owner_uid
+        assert_inherited_config_fd(config_fd, config_path, owner_uid=config_owner)
         yield
-        assert_inherited_config_fd(config_fd, config_path, owner_uid=owner_uid)
+        assert_inherited_config_fd(config_fd, config_path, owner_uid=config_owner)
 
 
 def run_original_pending_cycle(queue: DurableInbox, pending: Path, *,

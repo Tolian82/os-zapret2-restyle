@@ -363,10 +363,63 @@ final class AutoDetectConfigSnapshot
         }
     }
 
+    /**
+     * Original OPNsense PHP CLI can omit the optional POSIX extension.
+     * A non-root CLI must never read Config or inherit FD authorization.
+     * Query the kernel's effective UID through native /usr/bin/id -u only
+     * when posix_geteuid() is not available. No shell, PATH or environment
+     * identity tokens; reject errors, extra output and unsafe executable.
+     */
+    public static function nativeRootAllowed(): bool
+    {
+        if (PHP_OS_FAMILY !== 'BSD' || PHP_SAPI !== 'cli') {
+            return false;
+        }
+        if (function_exists('posix_geteuid')) {
+            return posix_geteuid() === 0;
+        }
+        $idPath = '/usr/bin/id';
+        $info = @lstat($idPath);
+        if (!is_array($info) || $info['uid'] !== 0 ||
+            ($info['mode'] & 0o022) !== 0 || !is_executable($idPath)) {
+            return false;
+        }
+        $pipes = [];
+        $process = @proc_open(
+            [$idPath, '-u'],
+            [0 => ['file', '/dev/null', 'r'],
+             1 => ['pipe', 'w'],
+             2 => ['file', '/dev/null', 'w']],
+            $pipes, null, ['LC_ALL' => 'C']
+        );
+        if (!is_resource($process)) {
+            return false;
+        }
+        try {
+            $response = stream_get_contents($pipes[1], 8);
+            fclose($pipes[1]);
+            unset($pipes[1]);
+            $exit = proc_close($process);
+            $process = null;
+            return $exit === 0 && $response === "0\n";
+        } catch (\Throwable $error) {
+            return false;
+        } finally {
+            foreach ($pipes as $pipe) {
+                if (is_resource($pipe)) {
+                    fclose($pipe);
+                }
+            }
+            if (is_resource($process)) {
+                proc_terminate($process);
+                proc_close($process);
+            }
+        }
+    }
+
     public static function main(array $argv): int
     {
-        if (PHP_OS_FAMILY !== 'BSD' || !function_exists('posix_geteuid') ||
-            posix_geteuid() !== 0 ||
+        if (!self::nativeRootAllowed() ||
             (count($argv) !== 2 && count($argv) !== 4)) {
             fwrite(STDERR, "ERROR: root native original Config required\n");
             return 64;

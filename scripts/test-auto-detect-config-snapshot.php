@@ -99,6 +99,8 @@ foreach ([['status'=>'populated','content'=>'','revision'=>correctFile('')['revi
 $c=new TestConfig;
 expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel(nativeModel()),function(){throw new RuntimeException('reader failed');}),'failure propagation');
 check(!$c->held&&$c->unlocks===1,'exception releases lock');++$count;
+check(Snapshot::nativeRootAllowed()===false,
+      'off-FreeBSD even root PHP CLI must refuse native authority');++$count;
 check(Snapshot::main(['script','read'])===64,'Linux CLI must refuse native authority');++$count;
 
 // P2k8e: queue owner is established by the upstream worker BEFORE this

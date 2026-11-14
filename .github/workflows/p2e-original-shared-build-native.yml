@@ -9,6 +9,9 @@ on:
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-auto-detect-storage.py
       - scripts/test-p2i-original-preview-native.py
+      - scripts/test-p2k8g-original-config-native.py
+      - scripts/test-auto-detect-original-lock-handoff.php
+      - scripts/test-auto-detect-original-lock-handoff.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py
@@ -35,6 +38,8 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
+          python3 -m py_compile scripts/test-p2k8g-original-config-native.py
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2k8g-original-config-native.py --self-test
           if GITHUB_ACTIONS=true PYTHONDONTWRITEBYTECODE=1 python3 \
                scripts/test-p2i-original-preview-native.py --native \
                /tmp/p4c3-native-invalid >"${RUNNER_TEMP}/p2i-refusal.log" 2>&1; then
@@ -90,6 +95,11 @@ jobs:
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
             GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
+            # P2k8g: qualify the real ORIGINAL OPNsense Config handle and
+            # Python -> PHP -> Python inherited kernel flock in this same
+            # disposable guest. NEVER save /conf/config.xml or touch IPFW.
+            GITHUB_ACTIONS=true ZAPRET2_P2K8G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
+              /usr/local/bin/python3 scripts/test-p2k8g-original-config-native.py --native
             # Reuse THIS SAME disposable OPNsense guest; no extra VM job.
             /usr/local/bin/python3 - <<'PY'
             import os
@@ -131,5 +141,7 @@ jobs:
           echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
           echo P2G_SCOPE=DISPOSABLE_FREEBSD_NOBODY_FILE_ACCESS_AND_DURABLE_QUEUE_PERMISSIONS
           echo P2I_SCOPE=ORIGINAL_GENERATOR_P2H_SEALED_PREVIEW_PINNED_DVTWS2_LOOPBACK_RAW_DEBUG_ONLY
+          echo P2K8G_SCOPE=DISPOSABLE_NATIVE_ORIGINAL_CONFIG_FD_PHP_PARENT_DEATH_AND_EARLY_UNLOCK_REFUSAL
+          echo P2K8G_NOT_CLAIMED=INSTALLED_OBSERVER_OR_P2K8D_REAL_DESTINATION_OR_NATIVE_FD9_OR_PENDING_ACK
           echo P2I_NOT_CLAIMED=INSTALLED_FD9_OWNER_OR_CONTINUOUS_DRAIN_OR_WORKER_OR_PRODUCTION_TRAFFIC
           echo P2E_P2G_NOT_CLAIMED=FD9_OR_INSTALLED_SERVICE_OR_OWNER_APPLIANCE_OR_QUEUE_ACK

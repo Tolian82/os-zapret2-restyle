@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
@@ -29,6 +31,7 @@ def probe_main(argv: list[str]) -> int:
     if len(argv) != 2:
         return 64
     root, config = map(Path, argv)
+    stage = 'payload'
     try:
         payload = json.loads(sys.stdin.read(3 * 1048576 + 1))
         if (not isinstance(payload, dict) or
@@ -37,17 +40,49 @@ def probe_main(argv: list[str]) -> int:
                 set(payload['manual_hostlists']) != {'youtube', 'user'} or
                 len(payload['config_snapshot_sha256']) != 64):
             return 65
+        stage = 'original-inherited-locks'
         queue = DurableInbox(root, owner_uid=os.geteuid())
         with inherited_original_locks(queue, 3, 4, config, owner_uid=os.geteuid()):
+            stage = 'native-model-assertion'
             assert queue._held and queue.locked_fd == 3
             assert payload['manual_hostlists']['youtube'] == 'youtube.com\n'
             assert payload['global_exclude'] == '!blocked.example\n'
+            # P2k8g: optional disposable-native parent-death witness.
+            # The grandchild reports its PID after both real inherited kernel
+            # locks have been validated and holds them until the test releases.
+            stage = 'child-hold'
+            ready = os.environ.get('P2K8G_HOLD_READY')
+            release = os.environ.get('P2K8G_HOLD_RELEASE')
+            if ready or release:
+                if (not ready or not release or
+                        Path(ready).parent != Path(release).parent or
+                        not Path(ready).parent.is_dir()):
+                    return 69
+                Path(ready).write_text(str(os.getpid()))
+                for _ in range(200):
+                    if Path(release).is_file():
+                        break
+                    time.sleep(0.05)
+                else:
+                    return 69
             # This fixture does not write destinations or ACK.
             print(json.dumps({'kind': 'destination-and-cursor-committed',
                               'ack_authorized': False}))
         return 0
     except (OriginalLockRefused, QueueSafetyError, KeyError, ValueError,
-            AssertionError, OSError, TypeError):
+            AssertionError, OSError, TypeError) as exc:
+        # Only private disposable-test diagnostics, never raw Config,
+        # pending domains, Python argv or stderr of a real service.
+        diagnostic = os.environ.get('P2K8G_CHILD_DIAG')
+        if diagnostic:
+            reason = str(exc)
+            if not re.fullmatch(r'[a-z_]{1,100}', reason):
+                reason = 'refused'
+            try:
+                Path(diagnostic).write_text(
+                    f'{stage}:{type(exc).__name__}:{reason}\n')
+            except OSError:
+                pass
         return 69
 
 
@@ -146,6 +181,13 @@ class OriginalLockHandoffTests(unittest.TestCase):
             with self.assertRaisesRegex(OriginalLockRefused, 'unlocked'):
                 assert_inherited_config_fd(unlocked.fileno(), self.config,
                                             owner_uid=os.geteuid())
+
+    def test_dynamic_native_config_uid_restricted_to_original_path(self):
+        with open(self.config, 'rb') as fake:
+            with self.assertRaisesRegex(OriginalLockRefused, 'invalid_original_config_fd'):
+                assert_inherited_config_fd(fake.fileno(), self.config,
+                                            owner_uid=None)
+        self.assertTrue(self.segment.exists())
 
     def test_native_writer_cli_is_restricted_and_never_accepts_fake_origin(self):
         from auto_detect_original_lock_handoff import main
