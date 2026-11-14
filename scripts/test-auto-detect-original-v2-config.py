@@ -160,7 +160,7 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.assertEqual(self.manual["youtube"], "youtube.com\n")
 
     def test_global_exclusion_prevents_any_positive(self):
-        self.excluded = "!example.co.uk\n"
+        self.excluded = "example.co.uk\n"
         self.emit("video.example.co.uk")
         with self.queue.exclusive():
             pending = self.prepare()
