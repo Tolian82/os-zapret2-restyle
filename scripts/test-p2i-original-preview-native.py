@@ -38,6 +38,7 @@ MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
 KNOWN = "youtube.com"
 UNKNOWN = "unknown.p2i.invalid"
 UNKNOWN_AFTER = "rotated.p2i.invalid"
+UNKNOWN_MIDCUT = "midcut.p2i.invalid"
 PORT = 6545
 DIVERT = 19899
 RULES = (19351, 19352)
@@ -410,6 +411,33 @@ def _native(checkout: Path) -> None:
                      "ORIGINAL_P2A_NATIVE_ROTATION_CHANGED_OR_LOST_FIRST_EVENT")
             print(MARK + "_REAL_ORIGINAL_P2A_RAW_ROTATE=PASS", flush=True)
 
+            # P2k8q3c2: a real HTTP/RST event strictly BETWEEN the two
+            # physical name replacements. The original raw has been cut,
+            # but the original debug name is still current. The producer
+            # is NOT synchronized by P2a's root-only queue flock.
+            gap_observed = p0.exchange(UNKNOWN_MIDCUT, force_rst=True)
+            need(gap_observed == p0.request(UNKNOWN_MIDCUT),
+                 "MIDCUT_NATIVE_HTTP_NOT_DELIVERED")
+            time.sleep(0.7)
+            mid_old_raw = previous_raw.read_text(encoding="ascii")
+            mid_new_raw = RAW_PATH.read_text(encoding="ascii")
+            mid_old_debug = DEBUG_PATH.read_text(errors="replace")
+            observer_num = preview["observer_native_number"]
+            mid_raw_route = _exclusive_native_route(
+                mid_old_raw, mid_new_raw, UNKNOWN_MIDCUT)
+            need(_debug_match(mid_old_debug, observer_num, UNKNOWN_MIDCUT),
+                 "MIDCUT_NATIVE_DEBUG_EVENT_MISSING_ON_ORIGINAL_PATH")
+            need(mid_old_raw.splitlines() == [UNKNOWN] and
+                 mid_new_raw.splitlines() == [UNKNOWN_MIDCUT],
+                 "MIDCUT_ORIGINAL_RAW_SEGMENT_LINEAGE_CHANGED")
+            need(process.poll() is None and
+                 guard.cmd("ps", "-p", str(process.pid),
+                           "-o", "lstart=").stdout == birth.stdout,
+                 "MIDCUT_ORIGINAL_NATIVE_PID_CHANGED")
+            print(MARK + "_REAL_NATIVE_MIDCUT_ROUTE="
+                  + "raw:" + mid_raw_route + ",debug:previous",
+                  flush=True)
+
             # The product has NO authorized debug rollover; this rename
             # and recreation are confined to a disposable VM. Capture the
             # true native writer's choice of old-vs-new DEBUG inode.
@@ -452,6 +480,16 @@ def _native(checkout: Path) -> None:
             number = preview["observer_native_number"]
             need(_debug_match(first_debug, number, UNKNOWN),
                  "FIRST_NATIVE_DEBUG_LOST_DURING_DISPOSABLE_ROTATION")
+            # Both original native debug lines must remain on the archived
+            # pre-debug-replacement inode, while the interstitial raw line
+            # must still be on the fresh live raw inode. These two durable
+            # locations cannot be claimed as one generation by name alone.
+            need(_exclusive_native_route(
+                 first_raw, second_raw, UNKNOWN_MIDCUT) == mid_raw_route and
+                 _exclusive_native_route(
+                     first_debug, second_debug, UNKNOWN_MIDCUT,
+                     debug_number=number) == "previous",
+                 "MIDCUT_RAW_DEBUG_PREVIOUS_CURRENT_COHORT_CHANGED")
             raw_route = _exclusive_native_route(
                 first_raw, second_raw, UNKNOWN_AFTER)
             debug_route = _exclusive_native_route(
@@ -468,7 +506,8 @@ def _native(checkout: Path) -> None:
                 previous_raw, old_pending_stat.st_dev,
                 old_pending_stat.st_ino, owner=original_owner,
                 writer_gid=nobody.pw_gid)
-            native_rollover = (raw_route, debug_route, fd_state.value)
+            native_rollover = (mid_raw_route, raw_route,
+                               debug_route, fd_state.value)
             print(MARK + "_REAL_NATIVE_POST_ROTATION_ROUTE="
                   + "raw:" + raw_route + ",debug:" + debug_route
                   + ",old_inode_fd:" + fd_state.value, flush=True)
@@ -540,6 +579,11 @@ if __name__ == "__main__":
             need(not _debug_match("hello : profile 1 : adding to /tmp/wrong", 2),
                  "DEBUG_CORRELATION_FALSE_POSITIVE")
             need(_exclusive_native_route(
+                UNKNOWN_MIDCUT + "\n", "", UNKNOWN_MIDCUT) == "previous" and
+                 _exclusive_native_route(
+                     "", UNKNOWN_MIDCUT + "\n", UNKNOWN_MIDCUT) == "current",
+                 "NATIVE_MIDCUT_RAW_ROUTE_MISCLASSIFIED")
+            need(_exclusive_native_route(
                 UNKNOWN_AFTER + "\n", "", UNKNOWN_AFTER) == "previous",
                  "OLD_RAW_ROUTE_MISCLASSIFIED")
             need(_exclusive_native_route(
@@ -552,6 +596,13 @@ if __name__ == "__main__":
                  _exclusive_native_route("", fake, UNKNOWN_AFTER,
                                          debug_number=2) == "current",
                  "NATIVE_DEBUG_ROUTE_MISCLASSIFIED")
+            mid_debug = fake.replace(UNKNOWN_AFTER, UNKNOWN_MIDCUT)
+            need(_exclusive_native_route(
+                    "", UNKNOWN_MIDCUT + "\n", UNKNOWN_MIDCUT) == "current" and
+                 _exclusive_native_route(
+                    mid_debug, "", UNKNOWN_MIDCUT,
+                    debug_number=2) == "previous",
+                 "NATIVE_SPLIT_GENERATION_ROUTE_MISCLASSIFIED")
             try:
                 _exclusive_native_route(UNKNOWN_AFTER + "\n",
                                         UNKNOWN_AFTER + "\n", UNKNOWN_AFTER)
