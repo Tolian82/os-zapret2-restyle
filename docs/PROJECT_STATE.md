@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_51`** (`VERSION=0.6.5`, `PLUGIN_REVISION=51`, prospective `os-zapret2-restyle-0.6.5_51.pkg` **NOT PUBLISHED**). P2k8q3b2a adds pre-mutation `MAX_SEGMENT` checking to the ONE original P2a `DurableInbox.rotate()`: an already oversized (>4 MiB) raw inode is not detached into an unprocessable pending, including after a crash-created hardlink. No new pending, cursor intent or loss of inode identity occurs on refusal. Existing v2 physical source tests use injected native PID/FD evidence, not owner-live acceptance. This is not 4-MiB lossless rollover or 512-slot rollover; previous-generation writer-FD and late postlink append remain open. P2k8q3b1 retains the genuine source-only original FD9 `epoch-finalizing` journal barrier after Config::save and before IPFW, then original P2c/epoch finish before `committed`. Ordinary Voice/Strategy Apply retains its existing path. The active schema-2 release producer, bounded complete worker/ACK, original `authorize` and cron remain OFF; stable owner-installed `_1.pkg` unchanged. [Scoped pre-rotation proof](verification/P2K8Q3B2A_PRE_ROTATION_CAPACITY.md).
+Current source increment: **`v0.6.5_52`** (`VERSION=0.6.5`, `PLUGIN_REVISION=52`, prospective `os-zapret2-restyle-0.6.5_52.pkg` **NOT PUBLISHED**). P2k8q3b2b fixes the existing P2b FreeBSD ACK-inspection hole: checking only `fstat -p <current P2c PID>` could return `DRAINED` while a previous process/child still held the same detached raw inode open. The ONE original `probe_pending_fd()` now uses bounded all-process `fstat -n -v -m` on the protected original hardlink, including mmap, rejects every other FD/unknown row, skips only its own pinned read FD and reattests exact original P2c birth and physical inode. Native disposable witness is required separately from injected portable tests. This is **not an atomic writer epoch or historical-generation receipt**: old raw/debug/source binding and 4 MiB/512-slot lossless rollover remain OPEN. Prior `_51` pre-rotation bound and `_50` original shared FD9 `epoch-finalizing` terminal journal safety stay. Real original ACTIVE schema-2 producer, bounded minute worker/ACK proof, `authorize` and cron remain OFF. Stable owner-installed `_1.pkg` unchanged. [P2b bounded scanner scope](verification/P2K8Q3B2B_ALL_PROCESS_FD.md).
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=51`; original P2a bounded pre-rotation and FD9 nonterminal epoch; live schema-2 producer/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=52`; original P2b all-process old-FD inspection, P2a bound and FD9 nonterminal epoch; live schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_51.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_52.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

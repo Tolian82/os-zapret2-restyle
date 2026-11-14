@@ -76,7 +76,8 @@ class FDPortable(unittest.TestCase):
         r = FakeRunner()
         self.assertEqual(self.probe(r), mod.FDState.DRAINED)
         self.assertEqual(len(r.commands), 3)
-        self.assertIn("-p", r.commands[1])
+        self.assertNotIn("-p", r.commands[1])
+        self.assertIn("-m", r.commands[1])
         self.assertEqual(r.commands[1][-1], str(self.segment))
 
     def test_qualified_group_writer_requires_explicit_engine_group(self):
@@ -95,6 +96,51 @@ class FDPortable(unittest.TestCase):
     def test_open_writer_blocks_acknowledgement(self):
         body = f"root dvtws2 123 4 {self.devid} {self.stat.st_ino} 100600 8 w {self.segment}\n"
         self.assertEqual(self.probe(FakeRunner(fstat=HEADER + body)), mod.FDState.BUSY)
+
+    def test_historical_pid_writer_blocks_when_current_pid_has_no_fd(self):
+        # PRE-FIX reproducer: -p 123 sees no current engine writer, but
+        # the previous process PID 991 still holds this original inode.
+        row = (f"root previous 991 7 {self.devid} {self.stat.st_ino} "
+               f"100600 8 w {self.segment}\n")
+        self.assertEqual(self.probe(FakeRunner(fstat=HEADER + row)),
+                         mod.FDState.BUSY)
+
+    def test_unrelated_pid_reader_also_conservatively_blocks(self):
+        row = (f"root reader 992 6 {self.devid} {self.stat.st_ino} "
+               f"100600 8 r {self.segment}\n")
+        self.assertEqual(self.probe(FakeRunner(fstat=HEADER + row)),
+                         mod.FDState.BUSY)
+
+    def test_only_own_pinned_read_fd_may_be_skipped(self):
+        own_pid, pinned_fd = 1333, 17
+        own = (f"root inspector {own_pid} {pinned_fd} {self.devid} "
+               f"{self.stat.st_ino} 100600 8 r {self.segment}\n")
+        old = (f"root oldengine 991 7 {self.devid} {self.stat.st_ino} "
+               f"100600 8 rw {self.segment}\n")
+        scan = lambda rows: mod._all_rows(HEADER + rows, self.stat.st_dev,
+                                         self.stat.st_ino,
+                                         inspector_pid=own_pid,
+                                         inspector_fd=pinned_fd)
+        self.assertEqual(scan(own), mod.FDState.DRAINED)
+        self.assertEqual(scan(own + old), mod.FDState.BUSY)
+        self.assertEqual(scan(own.replace(" 8 r ", " 8 w ")), mod.FDState.BUSY)
+        self.assertEqual(scan(own.replace(f" {pinned_fd} ", " 18 ")),
+                         mod.FDState.BUSY)
+        self.assertEqual(scan(own.replace(" 1333 ", " 1334 ")),
+                         mod.FDState.BUSY)
+
+    def test_kernel_scan_corruption_never_grants_drain(self):
+        old = (f"root oldengine 991 7 {self.devid} {self.stat.st_ino} "
+               f"100600 8 w {self.segment}\n")
+        for invalid in ("root bad 0 7 " + old.split(" 7 ", 1)[1],
+                        old.replace(" 991 ", " x "),
+                        old.replace(" 7 ", " mmap "),
+                        old.replace(" 100600 ", " badmode "),
+                        old.replace(f" {self.devid} ", " 0xdead "),
+                        old + "unparsed remainder\n"):
+            with self.subTest(row=invalid[:70]):
+                self.assertEqual(self.probe(FakeRunner(fstat=HEADER + invalid)),
+                                 mod.FDState.UNKNOWN)
 
     def test_open_reader_is_conservatively_busy(self):
         body = f"root dvtws2 123 5 {self.devid} {self.stat.st_ino} 100600 8 r {self.segment}\n"
@@ -176,8 +222,8 @@ sys.stdin.readline()
             if held != mod.FDState.BUSY:
                 # This test has only synthetic input and a disposable child.
                 # Report the native kernel formatting, not any user traffic.
-                inspected = subprocess.run(["/usr/bin/fstat", "-n", "-v", "-p",
-                                            str(process.pid), str(segment)],
+                inspected = subprocess.run(["/usr/bin/fstat", "-n", "-v", "-m",
+                                            str(segment)],
                                            capture_output=True, text=True, timeout=5)
                 print(f"P2B_TEST_FSTAT_DIAGNOSTIC={inspected.returncode}:"
                       f"{inspected.stdout[:1024]!r}:{inspected.stderr[:256]!r}",
@@ -189,6 +235,33 @@ sys.stdin.readline()
                 raise RuntimeError("NATIVE_CHILD_DID_NOT_CLOSE")
             if probe() != mod.FDState.DRAINED:
                 raise RuntimeError("NATIVE_CLOSED_WRITER_NOT_DETECTED")
+            # With the current P2c owner alive but its FD CLOSED, emulate
+            # the old generation still writing the very same raw inode.
+            # The old -p owner-only probe returned DRAINED: data-loss gate.
+            historical = subprocess.Popen(
+                [sys.executable, "-c", code, str(segment)],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True)
+            try:
+                if historical.stdout.readline().strip() != "OPEN":
+                    raise RuntimeError("NATIVE_HISTORICAL_WRITER_NOT_OPEN")
+                if probe() != mod.FDState.BUSY:
+                    raise RuntimeError("NATIVE_OLD_PID_STILL_OPEN_WAS_NOT_DETECTED")
+                historical.stdin.write("close\n")
+                historical.stdin.flush()
+                if historical.stdout.readline().strip() != "CLOSED":
+                    raise RuntimeError("NATIVE_OLD_PID_DID_NOT_CLOSE")
+                if probe() != mod.FDState.DRAINED:
+                    raise RuntimeError("NATIVE_OLD_PID_CLOSE_NOT_DETECTED")
+            finally:
+                if historical.poll() is None:
+                    historical.stdin.write("exit\n")
+                    historical.stdin.flush()
+                try:
+                    historical.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    historical.kill()
+                    historical.communicate(timeout=5)
             bad = mod.OwnerToken(process.pid, "Fri Nov 13 00:00:00 2000", sys.executable)
             if mod.probe_pending_fd(segment, stat_before.st_dev, stat_before.st_ino,
                                     owner=bad) != mod.FDState.UNKNOWN:
@@ -204,7 +277,7 @@ sys.stdin.readline()
                 process.communicate(timeout=5)
         if probe() != mod.FDState.UNKNOWN:
             raise RuntimeError("NATIVE_REAPED_OWNER_WAS_ACCEPTED")
-    print("P2B_NATIVE_FSTAT=PASS_FREEBSD_HELD_AND_CLOSED_FD_ONLY", flush=True)
+    print("P2B_NATIVE_FSTAT=PASS_FREEBSD_ALL_PID_HISTORICAL_WRITER_FD_CLOSED", flush=True)
 
 
 if __name__ == "__main__":

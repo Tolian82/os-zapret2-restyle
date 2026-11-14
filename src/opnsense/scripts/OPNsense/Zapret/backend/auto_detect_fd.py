@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """P2b read-only FreeBSD inode/FD evidence; NOT an acknowledgement adapter.
 
-This is a detached inspector. It cannot manufacture a common dvtws2 owner:
-OwnerToken must originate from the still-unimplemented generation/owner binder.
-No production worker imports this module until that owner proof is available.
+Require a real P2c-bound current owner, then check ALL open references to
+the exact detached inode. Inspecting only that current PID misses a still
+open writer FD inherited from an older generation or an unrelated process.
+The existing original v2 caller uses this inspector; no separate worker,
+queue, Config writer, ACK grant or process owner is created here.
 """
 from __future__ import annotations
 
@@ -57,37 +59,50 @@ def _owner_snapshot(token: OwnerToken, runner) -> bool:
     return born == token.started and executable == token.executable
 
 
-def _rows(output: str, pid: int, device: int, inode: int) -> FDState:
+def _all_rows(output: str, device: int, inode: int, *,
+              inspector_pid: int, inspector_fd: int) -> FDState:
+    """FreeBSD -n -v -m <file>: inspect every process, not just P2c PID.
+
+    The inspector deliberately holds one read-only FD to pin the inode.
+    Skip ONLY that exact own read FD; any other open reference (including
+    former dvtws2 writer PID, children, readers, mmap) blocks or refuses.
+    Unknown/partial rows, mismatched inodes or kernel warnings never drain.
+    """
     lines = output.splitlines()
-    if not lines or tuple(lines[0].split()) != _HEADER:
+    if (not lines or tuple(lines[0].split()) != _HEADER or
+            len(lines) > 4097 or type(inspector_pid) is not int or
+            inspector_pid <= 1 or type(inspector_fd) is not int or
+            inspector_fd < 0):
         return FDState.UNKNOWN
-    if len(lines) > 4097:
-        return FDState.UNKNOWN
-    seen = 0
+    busy = False
     for line in lines[1:]:
         columns = line.split()
-        if len(columns) < 10 or columns[2] != str(pid) or not _FD.fullmatch(columns[3]):
+        if (len(columns) < 10 or not columns[2].isdigit() or
+                int(columns[2]) <= 1 or not _FD.fullmatch(columns[3])):
             return FDState.UNKNOWN
         found_dev = _DEVICE.fullmatch(columns[4])
-        if not found_dev or not columns[5].isdigit() or not columns[6].isdigit():
+        if (not found_dev or not columns[5].isdigit() or
+                not columns[6].isdigit() or
+                int(found_dev.group(0), 16) != device or
+                int(columns[5]) != inode or
+                columns[8] not in {"r", "w", "rw"}):
             return FDState.UNKNOWN
-        if int(found_dev.group(0), 16) != device or int(columns[5]) != inode:
-            return FDState.UNKNOWN  # -p + file filter must not return another inode.
-        if columns[8] not in {"r", "w", "rw"}:
-            return FDState.UNKNOWN
-        seen += 1
-    return FDState.BUSY if seen else FDState.DRAINED
-
+        if (int(columns[2]) == inspector_pid and
+                int(columns[3]) == inspector_fd and columns[8] == "r"):
+            continue
+        busy = True
+    return FDState.BUSY if busy else FDState.DRAINED
 
 def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
                      owner: OwnerToken, runner=subprocess.run,
                      platform: str | None = None,
                      writer_gid: int | None = None) -> FDState:
-    """Inspect one saved hardlink after rotation. No deletion or service touch.
+    """Attest current P2c process AND every open original raw inode FD.
 
-    The caller MUST bind OwnerToken to the original common engine lifecycle;
-    merely reading a PID file during this call is NOT that missing proof.
-    Never wire directly as DurableInbox.acknowledge(drained=...) in P2b.
+    A currently running owner with no FD is insufficient: a historical
+    engine/child may still append to the same hardlink. Kernel-wide -m
+    fstat and exact protected inode/owner snapshots must all be stable.
+    Never call the P2a ACK directly: original Config/v2 checkpoints rule.
     """
     if platform is None:
         platform = sys.platform
@@ -119,11 +134,13 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
             return FDState.UNKNOWN
         if not _owner_snapshot(owner, runner):
             return FDState.UNKNOWN
-        evidence = _command(["/usr/bin/fstat", "-n", "-v", "-p", str(owner.pid),
-                             str(path)], runner)
-        # FreeBSD 15 fstat prints vn_fsid as a single hex dev_t (0x...),
-        # NOT a major,minor pair. getfname() filters on st_dev/st_ino.
-        state = _rows(evidence, owner.pid, before.st_dev, inode)
+        # -m includes memory maps; -n produces a native hex dev_t (0x...).
+        # Crucially NO -p filter: an older engine/child with a retained FD
+        # is not the current P2c process, yet it can still append after ACK.
+        evidence = _command(["/usr/bin/fstat", "-n", "-v", "-m", str(path)],
+                            runner)
+        state = _all_rows(evidence, before.st_dev, inode,
+                          inspector_pid=os.getpid(), inspector_fd=fd)
         if state == FDState.UNKNOWN or not _owner_snapshot(owner, runner):
             return FDState.UNKNOWN
         after = os.fstat(fd)
