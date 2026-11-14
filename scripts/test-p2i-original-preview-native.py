@@ -491,6 +491,20 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
             print(MARK + "_REAL_ORIGINAL_P2A_RAW_ROTATE=PASS", flush=True)
 
             if not quiesced_cut:
+                # P2k8q3e2: exact real-IPFW known traffic MUST complete in
+                # the gap between two independent inode cuts, with the
+                # original dvtws2 PID still running. A matching counter alone
+                # is NOT sufficient (the _58 stopped test proved that).
+                need(not _native_stopped(guard, process.pid),
+                     "NATIVE_RUNNING_COHORT_ENGINE_STOPPED_BEFORE_GAP")
+                gap_hits = _scoped_divert_hits(guard, RULES[0])
+                known_gap = p0.exchange(KNOWN, force_rst=False)
+                need(known_gap == p0.request(KNOWN) and
+                     _scoped_divert_hits(guard, RULES[0]) > gap_hits and
+                     not _native_stopped(guard, process.pid) and
+                     previous_raw.read_text(encoding="ascii").splitlines() == [UNKNOWN] and
+                     RAW_PATH.read_bytes() == b"",
+                     "NATIVE_RUNNING_GAP_KNOWN_HTTP_NOT_DELIVERED_OR_MISATTRIBUTED")
                 # P2k8q3c2: a real HTTP/RST event strictly BETWEEN the two
                 # physical name replacements. The original raw has been cut,
                 # but the original debug name is still current. The producer
@@ -518,16 +532,22 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                       + "raw:" + mid_raw_route + ",debug:previous",
                       flush=True)
 
-            # The product has NO authorized debug rollover; this rename
-            # and recreation are confined to a disposable VM. Capture the
-            # true native writer's choice of old-vs-new DEBUG inode.
+            # P2k8q3e2: experimental SAME-FILESYSTEM nonblocking debug
+            # cohort cut in the disposable guest ONLY. The old diagnostic
+            # test used rename-then-create: debug.log was temporarily absent,
+            # and any native fopen() in that gap could lose the attribution.
+            # Prepare + fsync the empty new inode FIRST, hardlink the old
+            # pathname and fsync its alias, then atomically replace the name.
+            # This never stops dvtws2 or unlinks an old debug source.
+            # It does NOT authorize product rollover or historical v2 ACK.
             archived_debug = PRODUCER / ".p2i-previous-debug"
-            need(not archived_debug.exists() and not archived_debug.is_symlink(),
+            fresh_debug = PRODUCER / ".p2i-new-debug"
+            need(not archived_debug.exists() and not archived_debug.is_symlink() and
+                 not fresh_debug.exists() and not fresh_debug.is_symlink(),
                  "FOREIGN_DISPOSABLE_DEBUG_ARCHIVE")
             old_debug_identity = (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino)
-            os.replace(DEBUG_PATH, archived_debug)
             replacement_fd = os.open(
-                DEBUG_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                fresh_debug, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                 os.O_NOFOLLOW, 0o660)
             try:
                 os.fchown(replacement_fd, 0, nobody.pw_gid)
@@ -535,16 +555,47 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 os.fsync(replacement_fd)
             finally:
                 os.close(replacement_fd)
+            need(DEBUG_PATH.is_file() and DEBUG_PATH.stat().st_nlink == 1 and
+                 fresh_debug.read_bytes() == b"",
+                 "PREPARED_NATIVE_DEBUG_INODE_UNQUALIFIED")
+            os.link(DEBUG_PATH, archived_debug, follow_symlinks=False)
             need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
-                 old_debug_identity and
-                 (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino) !=
-                 old_debug_identity and DEBUG_PATH.stat().st_nlink == 1,
-                 "DISPOSABLE_DEBUG_INODE_REPLACEMENT_UNQUALIFIED")
+                 old_debug_identity and DEBUG_PATH.stat().st_nlink == 2 and
+                 archived_debug.stat().st_nlink == 2,
+                 "DISPOSABLE_OLD_DEBUG_LINK_NOT_ATTESTED")
             dir_fd = os.open(PRODUCER, os.O_RDONLY | os.O_DIRECTORY)
             try:
                 os.fsync(dir_fd)
+                os.replace(fresh_debug, DEBUG_PATH)
+                os.fsync(dir_fd)
             finally:
                 os.close(dir_fd)
+            need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
+                 old_debug_identity and archived_debug.stat().st_nlink == 1 and
+                 (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino) !=
+                 old_debug_identity and DEBUG_PATH.stat().st_nlink == 1 and
+                 DEBUG_PATH.stat().st_size == 0,
+                 "DISPOSABLE_NONBLOCKING_DEBUG_COHORT_CUT_UNQUALIFIED")
+            print(MARK + "_REAL_NATIVE_ATOMIC_DEBUG_CUT="
+                  "old_hardlink_retained_new_path_always_present", flush=True)
+            if not quiesced_cut:
+                # P2 known HOSTLIST can still traverse actual scoped IPFW
+                # immediately after BOTH cuts, with the same running engine.
+                post_hits = _scoped_divert_hits(guard, RULES[0])
+                known_post = p0.exchange(KNOWN, force_rst=False)
+                need(known_post == p0.request(KNOWN) and
+                     _scoped_divert_hits(guard, RULES[0]) > post_hits and
+                     process.poll() is None and
+                     guard.cmd("ps", "-p", str(process.pid),
+                               "-o", "lstart=").stdout == birth.stdout and
+                     not _native_stopped(guard, process.pid),
+                     "NATIVE_RUNNING_POST_CUT_KNOWN_HTTP_NOT_DELIVERED")
+                need(previous_raw.read_text(encoding="ascii").splitlines() == [UNKNOWN] and
+                     RAW_PATH.read_text(encoding="ascii").splitlines() == [UNKNOWN_MIDCUT],
+                     "KNOWN_HTTP_COVERTLY_ADDED_DURING_DEBUG_COHORT_CUT")
+                print(MARK + "_REAL_NATIVE_RUNNING_DIVERT_CONTINUITY="
+                      "known_http_delivered_before_and_after_debug_cut_no_stop",
+                      flush=True)
 
             if quiesced_cut:
                 # Validate the process is STILL STOPPED after BOTH cuts,
@@ -647,7 +698,16 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 previous_raw, old_pending_stat.st_dev,
                 old_pending_stat.st_ino, owner=original_owner,
                 writer_gid=nobody.pw_gid)
-            native_rollover = (raw_route, debug_route, fd_state.value)
+            # Independent OLD debug inode must remain physically addressable;
+            # all-PID fstat is diagnostic, never guessed permission to ACK.
+            old_debug_stat = archived_debug.stat()
+            old_debug_fd = probe_pending_fd(
+                archived_debug, old_debug_stat.st_dev, old_debug_stat.st_ino,
+                owner=original_owner, writer_gid=nobody.pw_gid)
+            native_rollover = (raw_route, debug_route, fd_state.value,
+                               old_debug_fd.value)
+            print(MARK + "_REAL_NATIVE_OLD_DEBUG_FD=" + old_debug_fd.value,
+                  flush=True)
             if quiesced_cut:
                 print(MARK + "_REAL_NATIVE_QUIESCED_POST_RESUME_ROUTE="
                       + "raw:" + raw_route + ",debug:" + debug_route

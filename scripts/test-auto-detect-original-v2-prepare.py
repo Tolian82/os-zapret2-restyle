@@ -293,6 +293,50 @@ class OriginalV2PrepareTests(unittest.TestCase):
         with self.queue.exclusive():
             self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
 
+    def test_live_cross_inode_debug_cut_retains_unacked_original_raw(self):
+        # Exact original P2a rotates raw FIRST, native-format second positive
+        # arrives in the new raw and original debug inode, then debug is
+        # atomically hardlinked/replaced without ever removing its live name.
+        # The CURRENT P2k8n cursor has no authenticated old-debug handoff.
+        # It must refuse rather than ACK or relabel the two raw generations.
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            first = self.queue.rotate(generation=self.generation)
+            first_ino = first.stat().st_ino
+            second_ino = self.queue.inbox.stat().st_ino
+            self.assertNotEqual(first_ino, second_ino)
+            self.emit("midcut.example.com")
+            old_debug_bytes = self.debug.read_bytes()
+            previous = self.root / "previous-native-debug"
+            replacement = self.root / ".prepared-native-debug"
+            replacement.write_bytes(b"")
+            replacement.chmod(0o600)
+            os.link(self.debug, previous)
+            self.assertEqual(previous.stat().st_nlink, 2)
+            os.replace(replacement, self.debug)
+            self.assertEqual(previous.stat().st_nlink, 1)
+            self.assertEqual(self.debug.stat().st_nlink, 1)
+            self.assertNotEqual(previous.stat().st_ino, self.debug.stat().st_ino)
+            self.assertEqual(previous.read_bytes(), old_debug_bytes)
+            self.assertEqual(self.debug.read_bytes(), b"")
+            self.assertEqual(first.read_bytes(), b"one.example.com\n")
+            self.assertEqual(self.queue.inbox.read_bytes(), b"midcut.example.com\n")
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            # A crash/retry cannot create a false ACK, invent a HOSTLIST,
+            # switch the epoch inode or rotate the second raw again.
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            self.assertEqual(self.queue.segments(), [first])
+            self.assertEqual(first.stat().st_ino, first_ino)
+            self.assertEqual(self.queue.inbox.stat().st_ino, second_ino)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
+            self.assertEqual(self.debug.read_bytes(), b"")
+            self.assertEqual(previous.read_bytes(), old_debug_bytes)
+
     def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
         self.emit("one.example.com")
         with self.queue.exclusive():

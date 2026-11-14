@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_60`** (`VERSION=0.6.5`, `PLUGIN_REVISION=60`, prospective `os-zapret2-restyle-0.6.5_60.pkg` **NOT PUBLISHED**). #1052 P2k8q3e1 improves the original P2k1 **positive-debug prefix cursor** when one native debug inode already includes a later event for the next raw inode. Two original P2a raw generations can now independently receive source-tested P2k8n v2 prepared intents and acknowledgments while invalid ordering/source/profile data still refuse. The _55 actual old/new debug-inode split remains unresolved; _58's native stalled IPFW packet rules out pausing the engine as a shortcut. Original FD9 ACTIVE schema-2, debug-inode rollover, full 4 MiB/512-step recovery, cron and installed acceptance remain OPEN. Stable owner-installed `0.6.5_1.pkg` unchanged. [Scoped source proof](verification/P2K8Q3E1_DEBUG_PREFIX_CURSOR.md).
+Current source increment: **`v0.6.5_61`** (`VERSION=0.6.5`, `PLUGIN_REVISION=61`, prospective `os-zapret2-restyle-0.6.5_61.pkg` **NOT PUBLISHED**). #1052 P2k8q3e2 extends the original disposable P2i OPNsense native verification: raw first, live interstitial event on new raw/old debug, then root-created empty debug inode plus hardlinked old debug and atomic pathname replacement (NO missing debug name, NO native engine stop); real known-HOSTLIST IPFW-diverted HTTP must complete both during the open raw/debug gap and after the debug cut. The same original physical P2a/P2k8o/v2 source regression requires refusal and byte-preserved pending on a genuine debug-inode replacement, including retries; no unsupported ACK or synthetic cursor reset. Previous `_60` same-debug-inode positive-prefix advance remains. This is an **experimental non-interrupting physical gate** only; cross-inode v2 provenance/commit, historically held debug writer-FD, full lossless 4 MiB/512-step rollover, reboot/ENOSPC and installed acceptance remain OPEN. ACTIVE schema-2 and cron stay disabled. Owner-installed `0.6.5_1.pkg` unchanged. [Evidence scope](verification/P2K8Q3E2_RUNNING_NONBLOCKING_DEBUG_COHORT.md).
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=60`; original P2k1/v2 same-debug-inode prefix cursor; old/new debug-inode rollover and active observer still blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=61`; native nonblocking two-debug-inode physical test and fail-closed pending retention; product cross-inode ACK remains blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_60.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_61.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
