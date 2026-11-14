@@ -195,6 +195,12 @@ class OriginalLockHandoffTests(unittest.TestCase):
         self.assertEqual(main(['commit-fds','anything']), 64)
         self.assertTrue(self.segment.exists())
 
+    def test_p2k8l_native_ack_composer_refuses_invalid_pending_identity(self):
+        from auto_detect_original_lock_handoff import run_native_original_pending_ack_once
+        with self.assertRaisesRegex(OriginalLockRefused, 'original_native_generation'):
+            run_native_original_pending_ack_once('foreign-pending.txt')
+        self.assertTrue(self.segment.exists())
+
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2 and sys.argv[1] == '--child-probe':
