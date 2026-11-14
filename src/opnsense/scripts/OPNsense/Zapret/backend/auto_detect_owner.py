@@ -183,11 +183,22 @@ def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
 
 def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  child_pidfile: Path, monitor_pidfile: Path,
-                 runner, owner_uid: int) -> GenerationProof:
+                 runner, owner_uid: int,
+                 epoch_finalizing_operation: str | None = None) -> GenerationProof:
     record = SharedApplyOperation(journal, owner=owner_uid).read()
-    if record is None or record["phase"] not in TERMINAL:
-        raise GenerationRefused("missing_terminal_common_owner")
-    owner = committed_owner(record)
+    if epoch_finalizing_operation is None:
+        # Public worker and ACK never trust an unfinished original epoch.
+        if record is None or record["phase"] not in TERMINAL:
+            raise GenerationRefused("missing_terminal_common_owner")
+        owner = committed_owner(record)
+    else:
+        # Only the FD9-only entry below passes this exact operation identity.
+        if (not isinstance(epoch_finalizing_operation, str) or
+                not HEX32.fullmatch(epoch_finalizing_operation) or
+                record is None or record["phase"] != "epoch-finalizing" or
+                record["detail"]["id"] != epoch_finalizing_operation):
+            raise GenerationRefused("unqualified_original_epoch_finalization")
+        owner = record["detail"]
     if owner is None or not HEX32.fullmatch(owner["id"]) or not HEX64.fullmatch(owner["candidate"]):
         raise GenerationRefused("missing_committed_common_owner")
     work = work_root / owner["id"]
@@ -262,6 +273,31 @@ def attest_running_generation(*, journal: Path = Path("/var/db/zapret2/shared-ap
     except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("generation_owner_not_attested") from exc
+
+
+def attest_epoch_finalizing_generation(operation_id: str, *,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       runner=subprocess.run) -> GenerationProof:
+    """Same-original-FD9 precommit proof, not a worker/ACK owner."""
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or
+            not HEX32.fullmatch(operation_id)):
+        raise GenerationRefused("native_root_epoch_finalizing_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        return _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0,
+            epoch_finalizing_operation=operation_id)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
+            SharedOperationError, SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("original_epoch_finalizing_not_attested") from exc
 
 
 def main() -> int:
