@@ -5,6 +5,7 @@ No native service, Model, dvtws2, IPFW or scheduler changes. The existing
 single disposable P2i VM covers actual dropped-credential fchown.
 """
 from __future__ import annotations
+import fcntl
 import os
 from pathlib import Path
 import stat
@@ -25,6 +26,8 @@ class PostDropContract(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix='p2k8h-')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'producer'
+        # Match the real /var/db root traversal policy required by P2a.
+        self.root.parent.chmod(0o711)
         self.root.mkdir(mode=0o700)
         self.root.chmod(0o710)
         (self.root / 'pending').mkdir(mode=0o700)
@@ -107,6 +110,69 @@ class PostDropContract(unittest.TestCase):
         lock.unlink()
         (self.root / 'foreign').write_bytes(b'')
         with self.assertRaisesRegex(PostDropRefused, "unsafe_original_producer_layout"):
+            self.capture()
+
+    def test_pretraffic_rejects_existing_raw_without_truncation(self):
+        raw = self.root / 'inbox.txt'
+        raw.write_bytes(b'video.example.com\n')
+        with self.assertRaisesRegex(PostDropRefused, 'nonempty_or_changed_original_pretraffic_inode'):
+            self.capture()
+        self.assertEqual(raw.read_bytes(), b'video.example.com\n')
+
+    def test_pretraffic_rejects_existing_debug_without_truncation(self):
+        debug = self.root / 'debug.log'
+        debug.write_bytes(b'old-generation event\n')
+        with self.assertRaisesRegex(PostDropRefused, 'nonempty_or_changed_original_pretraffic_inode'):
+            self.capture()
+        self.assertEqual(debug.read_bytes(), b'old-generation event\n')
+
+    def test_pretraffic_rejects_unacknowledged_original_pending(self):
+        old = self.root / 'pending' / ('f' * 32 + '-' + 'e' * 32 + '.txt')
+        old.write_bytes(b'blocked.example.com\n')
+        old.chmod(0o660)
+        with self.assertRaisesRegex(PostDropRefused, 'unprocessed_original_pending_prelaunch'):
+            self.capture()
+        self.assertEqual(old.read_bytes(), b'blocked.example.com\n')
+
+    def test_pretraffic_rejects_foreign_pending_without_deletion(self):
+        bad = self.root / 'pending' / 'untrusted.tmp'
+        bad.write_bytes(b'unknown\n')
+        with self.assertRaisesRegex(PostDropRefused, 'original_pretraffic_queue_or_inode_unavailable'):
+            self.capture()
+        self.assertEqual(bad.read_bytes(), b'unknown\n')
+
+    def test_original_queue_new_lock_is_private_and_group_exact(self):
+        stamp = self.capture()
+        path = self.root / 'worker.lock'
+        lock = path.lstat()
+        self.assertEqual(lock.st_uid, self.owner)
+        self.assertEqual(lock.st_gid, (self.root / 'pending').lstat().st_gid)
+        self.assertEqual(stat.S_IMODE(lock.st_mode), 0o600)
+        self.assertEqual(self.capture().identities, stamp.identities)
+        self.assertEqual(path.lstat().st_ino, lock.st_ino)
+
+    def test_pretraffic_respects_original_queue_busy_without_second_owner(self):
+        witness = self.capture()
+        original_lock = self.root / 'worker.lock'
+        self.assertTrue(original_lock.is_file())
+        fd = os.open(original_lock, os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaisesRegex(PostDropRefused, 'original_pretraffic_queue_or_inode_unavailable'):
+                self.capture()
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        self.assertEqual(self.capture().identities, witness.identities)
+
+    def test_pretraffic_does_not_reject_native_append_after_start(self):
+        # The original prelaunch witness stays valid after raw/debug append.
+        # It is NOT permission to seed an epoch after traffic started.
+        witness = self.capture()
+        (self.root / 'inbox.txt').write_bytes(b'discovery.example.com\n')
+        (self.root / 'debug.log').write_bytes(b'native adding event\n')
+        self.assertEqual(_reattest(witness, lambda: True), ())
+        with self.assertRaises(PostDropRefused):
             self.capture()
 
     def test_original_fd9_witness_token_and_malformed_refusal(self):

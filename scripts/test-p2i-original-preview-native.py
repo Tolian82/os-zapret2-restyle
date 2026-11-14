@@ -204,9 +204,17 @@ def _native_file_modes(gid: int, *, phase: str) -> None:
     need(stat.S_ISDIR(pending.st_mode) and pending.st_uid == 0 and
          pending.st_gid == 0 and stat.S_IMODE(pending.st_mode) == 0o700,
          "NATIVE_PENDING_PRIVATE_MODE_CHANGED")
-    need(set(os.listdir(PRODUCER)) ==
+    observed = set(os.listdir(PRODUCER))
+    need(observed in (
          {"pending", "inbox.txt", "debug.log"},
+         {"pending", "inbox.txt", "debug.log", "worker.lock"}),
          "UNEXPECTED_NATIVE_PRODUCER_ARTIFACT")
+    if "worker.lock" in observed:
+        held = (PRODUCER / "worker.lock").lstat()
+        need(stat.S_ISREG(held.st_mode) and held.st_uid == 0 and
+             held.st_gid == 0 and held.st_nlink == 1 and
+             stat.S_IMODE(held.st_mode) == 0o600,
+             "NATIVE_ORIGINAL_QUEUE_LOCK_NOT_PROTECTED")
     for file in (RAW_PATH, DEBUG_PATH):
         info = file.lstat()
         actual_mode = stat.S_IMODE(info.st_mode)

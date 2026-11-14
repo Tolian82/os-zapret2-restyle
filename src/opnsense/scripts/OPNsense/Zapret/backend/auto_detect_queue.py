@@ -112,10 +112,31 @@ class DurableInbox:
     @contextmanager
     def exclusive(self):
         self._verify()
-        fd = os.open(self.lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        # A new FreeBSD file inherits the parent directory group (nobody).
+        # The ONE original P2a queue lock is instead root:root 0600.
+        # Never reown or repair an EXISTING lock: reject all foreign state.
+        fresh = False
         try:
-            _stat_regular(self.lock, self.uid)
-            if os.fstat(fd).st_ino != self.lock.lstat().st_ino or os.fstat(fd).st_nlink != 1:
+            fd = os.open(self.lock, os.O_CREAT | os.O_EXCL |
+                         os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            fresh = True
+        except FileExistsError:
+            fd = os.open(self.lock, os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            if fresh:
+                expected_gid = self.pending.lstat().st_gid
+                if os.fstat(fd).st_gid != expected_gid:
+                    os.fchown(fd, -1, expected_gid)
+                os.fchmod(fd, 0o600)
+                os.fsync(fd)
+                _sync_directory(self.root)
+            named = _stat_regular(self.lock, self.uid)
+            if self.writer_gid is not None and (
+                    named.st_gid != self.pending.lstat().st_gid or
+                    stat.S_IMODE(named.st_mode) != 0o600):
+                raise QueueSafetyError("unsafe_original_queue_lock")
+            if (os.fstat(fd).st_dev, os.fstat(fd).st_ino) != (
+                    named.st_dev, named.st_ino) or os.fstat(fd).st_nlink != 1:
                 raise QueueSafetyError("lock_replaced")
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -149,6 +170,10 @@ class DurableInbox:
         try:
             held = os.fstat(fd)
             named = _stat_regular(self.lock, self.uid)
+            if (self.writer_gid is not None and
+                    (named.st_gid != self.pending.lstat().st_gid or
+                     stat.S_IMODE(named.st_mode) != 0o600)):
+                raise QueueSafetyError("unsafe_original_queue_lock")
             if (not stat.S_ISREG(held.st_mode) or
                     (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino) or
                     held.st_uid != self.uid or held.st_nlink != 1):
