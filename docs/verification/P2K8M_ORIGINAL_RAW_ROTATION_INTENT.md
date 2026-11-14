@@ -1,6 +1,6 @@
-# #1052 P2k8m — original-current raw rotation to protected debug intent (dormant)
+# #1052 P2k8m — SUPERSEDED historical source-only evidence (removed in `_45`)
 
-**Candidate:** `v0.6.5_43`, 14 November 2026. This is source-only. No cron, installed worker, schema-2 live observer, product package or physical owner acceptance.
+**Historical candidate:** `v0.6.5_43`, 14 November 2026. **No longer active:** DEV-050 removed the obsolete `auto_detect_original_rotation.py`, its standalone test and CI step in `_45` after replacement by the forward-only [P2k8o v2 raw→intent bridge](P2K8O_ORIGINAL_QUEUE_V2_PREPARE.md). This document preserves historical reasoning only; its implementation instructions and one-intent format are not current authority. Source-only. No cron, installed worker, schema-2 live observer, product package or physical owner acceptance.
 
 ## Precise transaction and refusal
 
