@@ -584,37 +584,16 @@ jobs:
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n scripts/test-auto-detect-fd9-launch.sh
           sh scripts/test-auto-detect-fd9-launch.sh
-      - name: Test P2j one-tick generation/FD/debug/commit bridge (inert)
+      - name: Test single original P2a queue and inode-safe pending ACK
         run: |
           set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_cycle.py scripts/test-auto-detect-cycle.py scripts/test-auto-detect-queue.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py scripts/test-auto-detect-queue.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-queue.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-cycle.py
       - name: Test P2k bounded native debug/raw cursor candidates (read-only, not worker)
         run: |
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_debug_window.py scripts/test-auto-detect-debug-window.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-debug-window.py
-      - name: Test P2k2a immutable original-epoch and pending intent receipts (not commit)
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py scripts/test-auto-detect-epoch-receipts.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-epoch-receipts.py
-      - name: Test P2k2b destination transaction and debug checkpoint (inert)
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py scripts/test-auto-detect-destination-commit.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-destination-commit.py
-      - name: Test P2k8k current-generation durable checkpoint to pending ACK (dormant)
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_commit_ack.py scripts/test-auto-detect-post-commit-ack.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-commit-ack.py
-      - name: Test P2k8l original queue to PHP completion and protected ACK lifetime (dormant)
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py scripts/test-auto-detect-original-ack-cycle.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-ack-cycle.py
       - name: Test P2k8n append-only two-minute native cursor/Config-target/ACK chain (dormant)
         run: |
           set -euo pipefail
@@ -628,19 +607,13 @@ jobs:
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
-      - name: Test P2k3 original pending / FD / canonical P1 policy preview (inert)
+      - name: Test P2k8p original Config-held v2 P1 model → durable destination and pending ACK
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: |
           set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_verified_batch.py scripts/test-auto-detect-verified-batch.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-verified-batch.py
-      - name: Test P2k4 locked P1-to-durable fallback commit (not native worker)
-        if: ${{ needs.changes.outputs.owner_flow == 'true' }}
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_verified_commit.py scripts/test-auto-detect-verified-commit.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-verified-commit.py
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py scripts/test-auto-detect-original-lock-handoff.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_v2_model.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py scripts/test-auto-detect-original-v2-config.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-v2-config.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py scripts/test-auto-detect-original-lock-handoff.py
           php -l scripts/test-auto-detect-original-lock-handoff.php
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-lock-handoff.py
       - name: Test P2k5/P2k8 native root Auto Hostlist read and known-owned sources

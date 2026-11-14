@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""#1052 P2k8l: original queue -> PHP Config -> durable checkpoint -> ACK.
+"""#1052 P2k8p: single original P2a -> PHP Config-held P1 -> v2 ACK.
 
-This module remains an import-only, unscheduled native worker seam. The
-same ORIGINAL queue open-file description stays held across the PHP Config
-child and P2k8k post-commit evidence before the P2a unlink. No active FD9
-observer, cron/configd invocation or old-generation replay is enabled.
+The same ORIGINAL queue open-file description survives PHP/Python inheritance.
+The original native Config::lock owns the only Model snapshot and root P1.
+Legacy one-intent Config/ACK functions are REMOVED, not left dormant.
+No active FD9 observer, configd worker, cron or old-generation replay.
 """
 from __future__ import annotations
 
@@ -19,17 +19,22 @@ import subprocess
 import sys
 
 from auto_detect_queue import DurableInbox, QueueSafetyError
+from auto_detect_storage import ROOT as QUEUE_ROOT
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_fd import probe_pending_fd
 from auto_detect_owner import GenerationProof, attest_running_generation
-from auto_detect_post_commit_ack import acknowledge_current_checkpoint
 from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
 from auto_detect_owned_sources import OWNED_ROOT
-from auto_detect_verified_owned_commit import commit_with_locked_original_model
+from auto_detect_cursor_chain import CursorChain, CursorChainRefused
+from auto_detect_original_v2_prepare import (prepare_original_v2_locked,
+                                             OriginalV2PrepareRefused)
+from auto_detect_original_v2_model import (commit_with_original_v2_model,
+                                           V2OriginalConfigRefused)
+from auto_detect_original_v2_source import qualified_current_source
 
 PENDING_NAME = re.compile(r'[0-9a-f]{32}-[0-9a-f]{32}\.txt\Z')
-QUEUE_ROOT = Path('/var/db/zapret2-auto-detect')
+
 PHP_CONFIG = Path('/usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php')
 CONFIG_PATH = Path('/conf/config.xml')
 
@@ -145,124 +150,108 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
     return response  # returned child receipt, NOT ACK permission
 
 
-def run_original_pending_cycle(queue: DurableInbox, pending: Path, *,
-                               php_bin: str = '/usr/local/bin/php',
-                               php_script: Path = PHP_CONFIG,
-                               timeout: int = 120) -> dict:
-    """Keep the previously qualified original queue/Config-only path inert."""
-    if (not isinstance(queue, DurableInbox) or queue._held or
-            not isinstance(pending, Path) or pending.parent != queue.pending):
-        raise OriginalLockRefused('invalid_original_pending_cycle')
-    with queue.exclusive():
-        return _original_completion_locked(
-            queue, pending, php_bin=php_bin, php_script=php_script,
-            timeout=timeout)
+def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
+                              php_bin: str, php_script: Path, timeout: int,
+                              attest=attest_running_generation,
+                              inspect=probe_pending_fd) -> bool:
+    """One P2a open-file description: prepare -> original PHP child -> v2 ACK.
 
-
-def _original_commit_then_ack_locked(queue: DurableInbox, pending: Path,
-                                     writer: DestinationCommit, *,
-                                     php_bin: str, php_script: Path,
-                                     timeout: int,
-                                     attest=attest_running_generation,
-                                     inspect=probe_pending_fd) -> bool:
-    """Join real original PHP child + P2k8k ACK without releasing queue FD.
-
-    Test injections of current P2c/FD evidence and a disposable PHP fixture
-    are only possible through this private, import-only helper. Production
-    entry below fixes original runtime paths and native attesters.
+    P2c/P2b attesters may be injected only by source test callers.
+    Production uses the original fixed P2c/P2b and source paths.
     """
-    if (not isinstance(writer, DestinationCommit) or writer.queue is not queue or
+    if (not isinstance(writer, DestinationCommit) or
+            writer.queue is not queue or writer.receipts.uid != queue.uid or
+            writer.receipts.writer_gid != queue.writer_gid or
             not isinstance(queue, DurableInbox) or not queue._held or
-            not isinstance(pending, Path) or pending.parent != queue.pending or
-            not PENDING_NAME.fullmatch(pending.name) or
             not callable(attest) or not callable(inspect)):
-        raise OriginalLockRefused('original_locked_queue_and_writer_required')
-    proof = attest()
-    if (not isinstance(proof, GenerationProof) or
-            proof.generation != proof.operation_id or
-            proof.generation != pending.name[:32] or
-            proof.raw_path != str(queue.inbox) or
-            proof.debug_path != str(queue.root / 'debug.log') or
-            (proof.observer_native_number, 'observer', None) not in proof.profiles):
-        raise OriginalLockRefused('current_original_generation_required')
-    # No unlocking/re-locking the queue between original PHP completion and
-    # the protected P2k8k inode/hash, checkpoint and current FD verification.
-    completion = _original_completion_locked(
-        queue, pending, php_bin=php_bin, php_script=php_script,
-        timeout=timeout)
-    if attest() != proof:
-        raise OriginalLockRefused('original_owner_changed_after_config_child')
-    return acknowledge_current_checkpoint(
-        writer, pending, completion, attest=attest, inspect=inspect)
+        raise OriginalLockRefused("original_v2_queue_config_owner_required")
+    try:
+        proof = qualified_current_source(attest(), queue)
+        pending = prepare_original_v2_locked(
+            queue, writer.receipts, attest=attest, inspect=inspect)
+        if pending is None:
+            return False
+        tip = CursorChain(writer.receipts, queue).tip(proof)
+        if (tip.open_intent is None or
+                tip.open_intent["pending_name"] != pending.name or
+                attest() != proof):
+            raise OriginalLockRefused("original_v2_intent_or_owner_changed")
+        result = _original_completion_locked(
+            queue, pending, php_bin=php_bin,
+            php_script=php_script, timeout=timeout)
+        if attest() != proof:
+            raise OriginalLockRefused("original_owner_changed_after_config_child")
+        return CursorChain(writer.receipts, queue).acknowledge(
+            proof, pending, result, writer, attest=attest, inspect=inspect)
+    except (CursorChainRefused, OriginalV2PrepareRefused, OSError, ValueError,
+            TypeError, KeyError) as exc:
+        raise OriginalLockRefused("original_v2_transaction_or_ack_unavailable") from exc
 
 
-def run_native_original_pending_ack_once(pending_name: str) -> bool:
-    """DORMANT native one-segment path; NOT a registered CLI/configd action.
-
-    Native ownership, original trusted paths, fixed short subprocess timeout
-    and live P2c/P2b proofs cannot be overridden by CLI/env/input parameters.
-    No directory or native observer is created here.
-    """
-    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
-            type(pending_name) is not str or
-            not PENDING_NAME.fullmatch(pending_name)):
-        raise OriginalLockRefused('original_native_generation_required')
+def run_native_original_v2_cycle_once() -> bool:
+    """Fixed native one-shot composer; NOT registered with configd/cron."""
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise OriginalLockRefused("original_native_fd9_required")
     import pwd
     from auto_detect_storage import ENGINE_USER
-    writer_gid = pwd.getpwnam(ENGINE_USER).pw_gid
-    if writer_gid <= 0:
-        raise OriginalLockRefused('unqualified_original_engine_gid')
-    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=writer_gid)
-    pending = queue.pending / pending_name
-    writer = DestinationCommit(
-        EpochReceipts(owner_uid=0), queue,
-        {'auto': AUTO_HOSTLIST,
-         'youtube': OWNED_ROOT / 'youtube.txt',
-         'user': OWNED_ROOT / 'user.txt'}, AUTO_LOCK)
-    with queue.exclusive():
-        return _original_commit_then_ack_locked(
-            queue, pending, writer, php_bin='/usr/local/bin/php',
-            php_script=PHP_CONFIG, timeout=25)
+    try:
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise OriginalLockRefused("original_writer_gid_not_qualified")
+        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        writer = DestinationCommit(
+            receipts, queue,
+            {"auto": AUTO_HOSTLIST,
+             "youtube": OWNED_ROOT / "youtube.txt",
+             "user": OWNED_ROOT / "user.txt"}, AUTO_LOCK)
+        with queue.exclusive():
+            return _original_v2_cycle_locked(
+                queue, writer, php_bin="/usr/local/bin/php",
+                php_script=PHP_CONFIG, timeout=25)
+    except (KeyError, OSError, QueueSafetyError) as exc:
+        raise OriginalLockRefused("original_native_v2_source_unavailable") from exc
 
 
 def _native_fd_child(pending_name: str, payload: dict) -> dict:
-    """CLI child of original PHP Config owner; no synthetic owner injection."""
-    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
+    """Original PHP Config child with BOTH verified inherited lock descriptors."""
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not PENDING_NAME.fullmatch(pending_name) or
             not isinstance(payload, dict) or
-            set(payload) != {'manual_hostlists','global_exclude','config_snapshot_sha256'} or
-            not re.fullmatch('[0-9a-f]{64}', str(payload['config_snapshot_sha256']))):
-        raise OriginalLockRefused('original_native_fd9_and_model_required')
-    # Use the original P2g producer's ENGINE_USER/GID contract, not an
-    # independently guessed same-named group entry.
+            set(payload) != {"manual_hostlists", "global_exclude",
+                             "config_snapshot_sha256"} or
+            not re.fullmatch("[0-9a-f]{64}",
+                             str(payload["config_snapshot_sha256"]))):
+        raise OriginalLockRefused("original_native_fd9_and_model_required")
     import pwd
     from auto_detect_storage import ENGINE_USER
-    writer_gid = pwd.getpwnam(ENGINE_USER).pw_gid
-    if writer_gid <= 0:
-        raise OriginalLockRefused('unqualified_original_engine_gid')
-    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=writer_gid)
+    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+    if gid <= 0:
+        raise OriginalLockRefused("unqualified_original_writer_gid")
+    queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
     pending = queue.pending / pending_name
     with inherited_original_locks(queue, 3, 4, CONFIG_PATH, owner_uid=0):
         if pending not in queue.segments():
-            raise OriginalLockRefused('original_pending_not_in_queue')
+            raise OriginalLockRefused("original_pending_not_in_queue")
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
         writer = DestinationCommit(
-            EpochReceipts(owner_uid=0), queue,
-            {'auto': AUTO_HOSTLIST,
-             'youtube': OWNED_ROOT / 'youtube.txt',
-             'user': OWNED_ROOT / 'user.txt'}, AUTO_LOCK)
-        result = commit_with_locked_original_model(
+            receipts, queue,
+            {"auto": AUTO_HOSTLIST,
+             "youtube": OWNED_ROOT / "youtube.txt",
+             "user": OWNED_ROOT / "user.txt"}, AUTO_LOCK)
+        completion = commit_with_original_v2_model(
             writer, pending, owned_root=OWNED_ROOT,
-            manual_hostlists=payload['manual_hostlists'],
-            global_exclude=payload['global_exclude'])
-        if result.get('ack_authorized') is not False:
-            raise OriginalLockRefused('ack_remains_unauthorized')
-        return result
+            manual_hostlists=payload["manual_hostlists"],
+            global_exclude=payload["global_exclude"])
+        if completion.get("ack_authorized") is not False:
+            raise OriginalLockRefused("original_v2_checkpoint_not_authorization")
+        return completion
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if (len(argv) != 2 or argv[0] != 'commit-fds' or
-            not sys.platform.startswith('freebsd') or os.geteuid() != 0):
+    if (len(argv) != 2 or argv[0] != "commit-fds" or
+            not sys.platform.startswith("freebsd") or os.geteuid() != 0):
         return 64
     try:
         chunks = []
@@ -273,15 +262,17 @@ def main(argv: list[str] | None = None) -> int:
                 break
             total += len(piece)
             if total > (3 << 20):
-                raise OriginalLockRefused('oversized_original_model')
+                raise OriginalLockRefused("oversized_original_model")
             chunks.append(piece)
-        result = _native_fd_child(argv[1], json.loads(b''.join(chunks)))
-        print(json.dumps(result, sort_keys=True, separators=(',', ':')))
+        response = _native_fd_child(argv[1], json.loads(b"".join(chunks)))
+        print(json.dumps(response, sort_keys=True, separators=(",", ":")))
         return 0
-    except (OriginalLockRefused, QueueSafetyError, ValueError,
-            OSError, TypeError, KeyError, RuntimeError):
+    except (OriginalLockRefused, V2OriginalConfigRefused,
+            CursorChainRefused, OriginalV2PrepareRefused,
+            QueueSafetyError, ValueError, OSError, TypeError, KeyError,
+            RuntimeError):
         return 69
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

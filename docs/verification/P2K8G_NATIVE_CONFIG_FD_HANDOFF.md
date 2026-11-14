@@ -1,5 +1,8 @@
 # #1052 P2k8g — native original OPNsense Config + queue FD handoff gate
 
+**Historical/supersession status (source `v0.6.5_46`):** Native OPNsense Config::lock, original queue FD and Python child inheritance remain the same v2 security mechanism. The obsolete P2k8l v1 public wrapper was deleted in `_46`; the native test now invokes the same authenticated internal PHP completion under an explicitly held original queue FD. Historical native evidence remains scoped to the FD handoff, not live observer activation. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_37`, 14 November 2026. **Real disposable native FreeBSD guest; NOT installed/owner appliance acceptance or activation of Auto-detect.**
 
 ## Genuine gap and required observation

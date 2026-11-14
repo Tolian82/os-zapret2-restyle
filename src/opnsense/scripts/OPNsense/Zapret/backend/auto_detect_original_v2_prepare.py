@@ -8,10 +8,7 @@ No Config/FD9 child, destination writes, ACK, cron or old-owner migration.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
-import pwd
-import sys
 from typing import Callable
 
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
@@ -22,8 +19,6 @@ from auto_detect_original_v2_source import (qualified_current_source, OriginalSo
 from auto_detect_owner import (GenerationProof, GenerationRefused,
                                attest_running_generation)
 from auto_detect_queue import DurableInbox, QueueSafetyError
-from auto_detect_storage import ENGINE_USER
-from auto_detect_original_lock_handoff import QUEUE_ROOT
 
 
 class OriginalV2PrepareRefused(RuntimeError):
@@ -108,27 +103,3 @@ def prepare_original_v2_locked(
             ReceiptRefused, GenerationRefused, OSError, ValueError, TypeError,
             AttributeError, KeyError) as exc:
         raise OriginalV2PrepareRefused("original_v2_prepared_intent_unavailable") from exc
-
-
-def run_native_original_v2_prepare_once() -> Path | None:
-    """Hard-coded future FreeBSD original worker seam; NOT registered."""
-    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
-        raise OriginalV2PrepareRefused("native_original_root_only")
-    try:
-        gid = pwd.getpwnam(ENGINE_USER).pw_gid
-        if gid <= 0:
-            raise OriginalV2PrepareRefused("native_original_writer_group_missing")
-        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
-        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
-        with queue.exclusive():
-            return prepare_original_v2_locked(queue, receipts)
-    except (QueueSafetyError, ReceiptRefused, KeyError, OSError) as exc:
-        raise OriginalV2PrepareRefused("native_original_v2_unavailable") from exc
-
-
-def main() -> None:
-    raise OriginalV2PrepareRefused("original_fd9_worker_and_config_child_not_enabled")
-
-
-if __name__ == "__main__":
-    main()

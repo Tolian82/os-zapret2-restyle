@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""#1052 P2k2a: root-private immutable debug epoch and pending-intent receipts.
+"""#1052 P2k8p: root-private immutable original empty-debug epoch for v2.
 
-NOT a worker, not an authenticated FD9 caller and NOT commit/ack authority.
-Only an original-FD9-attested GenerationProof may be supplied by a future
-caller. The stored record is HISTORICAL PROVENANCE, not a fresh PID/FD proof.
+The original FD9 attested current generation establishes the epoch BEFORE
+traffic; only append-only v2 cursor-chain slots are allowed thereafter.
+No legacy one-intent format, migration path, Config writer or worker.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import json
 import os
@@ -23,25 +22,13 @@ from auto_detect_owner import GenerationProof
 ROOT = Path("/var/db/zapret2/auto-detect-epochs")
 HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
-PENDING = re.compile(r"[0-9a-f]{32}-[0-9a-f]{32}\.txt\Z")
 EMPTY_HASH = hashlib.sha256(b"").hexdigest()
 MAX_EPOCHS = 128
 MAX_RECORD = 16 * 1024
-MAX_SEGMENT = 4 * 1024 * 1024
 
 
 class ReceiptRefused(RuntimeError):
     """Never use a receipt to acknowledge a pending inode on uncertainty."""
-
-
-@dataclass(frozen=True)
-class HistoricalReceipt:
-    """An archive of what the original trusted owner once attested.
-
-    It is deliberately NOT GenerationProof and cannot attest a live process.
-    """
-    epoch: dict
-    intent: dict | None
 
 
 def _directory(path: Path, uid: int) -> None:
@@ -187,16 +174,9 @@ class EpochReceipts:
             _sync(self.root)
         _directory(folder, self.uid)
         entries = os.listdir(folder)
-        expected_prefix = "intent-" + generation + "-"
-        if (len(entries) > 3 or any(
-                name not in ("epoch.json", "destination", "cursor-chain-v2") and not (
-                    name.startswith(expected_prefix) and
-                    re.fullmatch(r"intent-[a-f0-9]{32}-[a-f0-9]{32}\.txt\.json", name))
-                for name in entries) or
-                sum(name.startswith("intent-") for name in entries) > 1):
-            raise ReceiptRefused("foreign_or_ambiguous_generation_receipt")
-        if "destination" in entries:
-            _directory(folder / "destination", self.uid)
+        if (len(entries) > 2 or
+                any(name not in ("epoch.json", "cursor-chain-v2") for name in entries)):
+            raise ReceiptRefused("superseded_one_intent_epoch_refused")
         if "cursor-chain-v2" in entries:
             _directory(folder / "cursor-chain-v2", self.uid)
         return folder
@@ -248,125 +228,3 @@ class EpochReceipts:
                 doc.get("committed_cursor_sha256") != EMPTY_HASH):
             raise ReceiptRefused("epoch_differs_from_original_owner")
         return folder, doc
-
-    def stage(self, proof: GenerationProof, cursor: Cursor, window: Window,
-              pending: Path) -> None:
-        """Persist only one immutable per-generation *uncommitted* intent.
-
-        This never advances cursor and never acknowledges or deletes pending.
-        The real future writer must prove FD.DRAINED plus native debug and
-        idempotent destination sink before a distinct commit implementation.
-        """
-        folder, epoch = self._epoch(proof)
-        if (folder / "cursor-chain-v2").exists() or (folder / "cursor-chain-v2").is_symlink():
-            raise ReceiptRefused("legacy_intent_cannot_mix_with_cursor_chain")
-        pending = Path(pending)
-        allowed = re.fullmatch(
-            re.escape(proof.generation) + r"-[0-9a-f]{32}\.txt\Z",
-            pending.name)
-        if (not allowed or pending.parent != Path(proof.raw_path).parent / "pending" or
-                not isinstance(window, Window) or not isinstance(cursor, Cursor) or
-                cursor.generation != proof.generation or
-                (cursor.device, cursor.inode, cursor.offset, cursor.prefix_sha256) !=
-                (epoch["debug_device"], epoch["debug_inode"], 0, EMPTY_HASH) or
-                window.proposed_cursor.generation != proof.generation or
-                (window.proposed_cursor.device, window.proposed_cursor.inode) !=
-                (cursor.device, cursor.inode) or
-                window.proposed_cursor.offset <= 0 or
-                not HEX64.fullmatch(window.proposed_cursor.prefix_sha256)):
-            raise ReceiptRefused("segment_or_proposed_debug_cursor_untrusted")
-        _directory(pending.parent, self.uid)
-        try:
-            before = pending.lstat()
-            correct_mode = (0o600 if self.writer_gid is None else 0o660)
-            if (not stat.S_ISREG(before.st_mode) or before.st_uid != self.uid or
-                    before.st_nlink != 1 or
-                    stat.S_IMODE(before.st_mode) != correct_mode or
-                    (self.writer_gid is not None and
-                     before.st_gid != self.writer_gid) or
-                    not 0 < before.st_size <= MAX_SEGMENT):
-                raise ReceiptRefused("pending_inode_not_fully_rotated")
-            fd = os.open(pending, os.O_RDONLY | os.O_NOFOLLOW)
-            try:
-                pinned = os.fstat(fd)
-                data = os.read(fd, MAX_SEGMENT + 1)
-                after = os.fstat(fd)
-            finally:
-                os.close(fd)
-            if ((pinned.st_dev, pinned.st_ino, pinned.st_size, pinned.st_mtime_ns) != (
-                    before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) or
-                    (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) != (
-                    before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) or
-                    len(data) != before.st_size):
-                raise ReceiptRefused("pending_changed_during_receipt")
-        except OSError as exc:
-            raise ReceiptRefused("pending_snapshot_unavailable") from exc
-        if not data.endswith(b"\n") or b"\r" in data or b"\x00" in data:
-            raise ReceiptRefused("incomplete_pending_segment")
-        try:
-            hosts = [line.decode("ascii") for line in data.split(b"\n")[:-1]]
-        except UnicodeError as exc:
-            raise ReceiptRefused("invalid_pending_encoding") from exc
-        if (not hosts or any(not _hostname(v) for v in hosts) or
-                [c.host for c in window.candidates] != hosts or
-                any(c.native_number != proof.observer_native_number
-                    for c in window.candidates)):
-            raise ReceiptRefused("raw_and_debug_intent_disagree")
-        # Re-run the REAL P2k1 inode/offset/raw comparison on the bounded
-        # same-generation data. A caller's forged Window cannot stage intent.
-        try:
-            actual_window = propose_window(proof, cursor, data,
-                                           owner_uid=self.uid,
-                                           writer_gid=self.writer_gid)
-        except DebugWindowRefused as exc:
-            raise ReceiptRefused("native_debug_does_not_support_pending") from exc
-        if actual_window != window:
-            raise ReceiptRefused("caller_window_differs_from_native_debug")
-        receipt_name = "intent-" + pending.name + ".json"
-        existing = [name for name in os.listdir(folder) if name.startswith("intent-")]
-        if existing and existing != [receipt_name]:
-            raise ReceiptRefused("older_pending_intent_not_committed")
-        intent = {
-            "schema": 1, "kind": "pending-debug-intent-not-commit",
-            "generation": proof.generation, "pending_name": pending.name,
-            "pending_device": before.st_dev, "pending_inode": before.st_ino,
-            "pending_size": before.st_size,
-            "pending_sha256": hashlib.sha256(data).hexdigest(),
-            "debug_device": cursor.device, "debug_inode": cursor.inode,
-            "debug_start_offset": 0, "debug_start_sha256": EMPTY_HASH,
-            "debug_end_offset": window.proposed_cursor.offset,
-            "debug_end_sha256": window.proposed_cursor.prefix_sha256,
-            "candidate_count": len(hosts), "ack_authorized": False
-        }
-        _write_once(folder, receipt_name,
-                    _canonical(intent), self.uid)
-
-    def historical(self, generation: str) -> HistoricalReceipt:
-        """Read-only recovery. A receipt is NOT authorization for an old owner."""
-        folder = self._generation(generation, create=False)
-        if (folder / "cursor-chain-v2").exists() or (folder / "cursor-chain-v2").is_symlink():
-            raise ReceiptRefused("legacy_historical_reader_cannot_consume_cursor_chain")
-        try:
-            epoch = json.loads(_read(folder / "epoch.json", self.uid))
-            names = [n for n in os.listdir(folder) if n.startswith("intent-")]
-            intent = (json.loads(_read(folder / names[0], self.uid)) if names else None)
-        except (ValueError, UnicodeError) as exc:
-            raise ReceiptRefused("corrupt_historical_receipt") from exc
-        if (not isinstance(epoch, dict) or epoch.get("generation") != generation or
-                epoch.get("kind") != "historical-native-debug-epoch" or
-                epoch.get("ack_authorized") is not False or
-                (intent is not None and
-                 (not isinstance(intent, dict) or
-                  intent.get("generation") != generation or
-                  intent.get("kind") != "pending-debug-intent-not-commit" or
-                  intent.get("ack_authorized") is not False))):
-            raise ReceiptRefused("untrusted_historical_receipt")
-        return HistoricalReceipt(epoch, intent)
-
-
-def run_native_epoch_worker() -> None:
-    raise ReceiptRefused("no_live_fd9_or_durable_destination_commit")
-
-
-if __name__ == "__main__":
-    run_native_epoch_worker()

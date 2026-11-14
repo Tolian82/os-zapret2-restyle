@@ -1,5 +1,8 @@
 # #1052 P2k8f — original P2a queue and native Config locked-FD handoff
 
+**Historical/supersession status (source `v0.6.5_46`):** The original P2a queue-FD/PHP Config-FD handoff remains authoritative in the v2 implementation. The old `run_original_pending_cycle()` unacknowledged v1 wrapper was deleted in `_46`; test fixtures now call the same original internal PHP completion while holding the real queue lock. Historical evidence remains. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_36`, 14 November 2026. **Not registered in cron/configd and not an installed or owner-accepted native Auto-detect.** Existing published owner-installed stable package remains `0.6.5_1.pkg`; no `_36.pkg` published.
 
 ## Actual previous failure and changed source path

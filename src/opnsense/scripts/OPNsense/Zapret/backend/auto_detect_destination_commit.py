@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""#1052 P2k2b: dormant crash-replay-safe HOSTLIST destination transaction.
+"""#1052 P2k8p: one v2 per-slot P2k2b destination CAS/checkpoint owner.
 
-This is not a native worker or an FD/owner attester. The trusted caller must
-hold the queue lock, prove original generation and drained writer FD, and
-coordinate every GUI writer on the supplied destination lock. No ack here.
+Original P2a queue, original Config/P1 and GUI destination flocks must be
+held by the caller. No superseded single-intent destination entrypoint.
 """
 from __future__ import annotations
 
@@ -19,7 +18,6 @@ import secrets
 import stat
 
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused, _canonical, _read, _sync, _write_once, _directory
-from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox
 
 MAX_TARGET = 4 * 1024 * 1024
@@ -175,57 +173,6 @@ class DestinationCommit:
                 self.gui_lock in self.targets.values()):
             raise DestinationRefused("unqualified_destination_mapping")
 
-    def _source(self, proof: GenerationProof, pending: Path) -> tuple[Path, dict, bytes]:
-        folder, _ = self.receipts._epoch(proof)
-        h = self.receipts.historical(proof.generation)
-        intent = h.intent
-        if (intent is None or not isinstance(pending, Path) or
-                pending.parent != self.queue.pending or
-                intent.get("pending_name") != pending.name or
-                pending.name[:32] != proof.generation or
-                not self.queue._held):
-            raise DestinationRefused("no_locked_original_pending_intent")
-        try:
-            stat_before = pending.lstat()
-            fd = os.open(pending, os.O_RDONLY | os.O_NOFOLLOW)
-            try:
-                st = os.fstat(fd)
-                raw = os.read(fd, MAX_TARGET + 1)
-                after = os.fstat(fd)
-            finally:
-                os.close(fd)
-        except OSError as exc:
-            raise DestinationRefused("pending_read_failed") from exc
-        identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns)
-        if (identity(stat_before) != identity(st) or identity(st) != identity(after) or
-                not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or
-                st.st_uid != self.receipts.uid or
-                stat.S_IMODE(st.st_mode) != (0o600 if self.queue.writer_gid is None else 0o660) or
-                (self.queue.writer_gid is not None and st.st_gid != self.queue.writer_gid) or
-                st.st_size != len(raw) or
-                (st.st_dev, st.st_ino, st.st_size, _sha(raw)) !=
-                (intent["pending_device"], intent["pending_inode"],
-                 intent["pending_size"], intent["pending_sha256"])):
-            raise DestinationRefused("pending_differs_from_original_intent")
-        return folder, intent, raw
-
-    def commit(self, proof: GenerationProof, pending: Path,
-               effects: dict[str, dict[str, list[str]]]) -> dict:
-        """Record effects only after an independently attested P1 decision.
-
-        Explicit changes must already exclude manual-owned rows. This detached
-        primitive cannot derive original native attribution or authorize ack.
-        """
-        folder, intent, raw = self._source(proof, Path(pending))
-        if (not isinstance(effects, dict) or
-                any(k not in self.targets or not isinstance(e, dict) or
-                    set(e) != {"add", "remove"} or
-                    (k == "auto" and bool(e["remove"]))
-                    for k, e in effects.items())):
-            raise DestinationRefused("unqualified_effects")
-        with self.exclusive_targets():
-            return self._locked_commit(folder, intent, raw, effects)
-
     @contextmanager
     def exclusive_targets(self):
         """Lock the P1 snapshot and P2k2b CAS under the same root flock."""
@@ -308,7 +255,3 @@ class DestinationCommit:
                       "ack_authorized": False}
         _write_once(journal, "checkpoint.json", _canonical(checkpoint), self.receipts.uid)
         return checkpoint
-
-
-def run_native_destination_writer() -> None:
-    raise DestinationRefused("original_owner_fd_and_gui_writer_not_integrated")

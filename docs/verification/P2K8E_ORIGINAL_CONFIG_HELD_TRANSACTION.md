@@ -1,5 +1,8 @@
 # #1052 P2k8e — original Config-held synchronous Model to durable transaction
 
+**Historical/supersession status (source `v0.6.5_46`):** The original native PHP `Config::lock`/Model/FD inheritance survives unchanged and is the active v2 Model owner; the former one-intent Python adapter was retired in `_46`. No alternative adapter or second Config writer exists. This is historical `_35` source evidence. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_35`, 14 November 2026. **Source-only integration; not an enabled worker, production FD9 run or installed-appliance acceptance.**
 
 ## Concrete user path

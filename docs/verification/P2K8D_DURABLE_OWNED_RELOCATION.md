@@ -1,5 +1,8 @@
 # #1052 P2k8d — durable known auto-owned → shared fallback relocation
 
+**Historical/supersession status (source `v0.6.5_46`):** The original standalone one-intent `auto_detect_verified_owned_commit.py` and tests were removed in `_46`. Proven automatic-owned relocation now uses the canonical P1 policy from the original Config-held v2 model path only, including interrupted multi-target plan checks. This is historical implementation evidence, not a second active worker. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Candidate source:** `v0.6.5_34`, 14 November 2026. **Import-only, not an enabled native worker, not a live origin qualification.**
 
 ## Observable behavior and original path

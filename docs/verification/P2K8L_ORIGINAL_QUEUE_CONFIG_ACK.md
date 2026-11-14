@@ -1,5 +1,8 @@
 # #1052 P2k8l — held original queue → original Config child → guarded ACK
 
+**Historical/supersession status (source `v0.6.5_46`):** The superseded one-intent `_original_commit_then_ack_locked()`, one-segment native ACK wrapper and tests were removed in `_46`. The same original PHP Config/queue FD lifetime is retained by the single v2 composer. This is a historical `_42` report, not an active code contract. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Candidate:** `v0.6.5_42` (14 November 2026). Source-only continuation of P2k8k; no cron, native observer, installed package or user-appliance acceptance.
 
 The original `run_original_pending_cycle()` used P2a `DurableInbox.exclusive()` and held its original queue file descriptor during PHP `Config::lock()` and a child that performs P2k8d/P2k2b commit. It then returned the child JSON **after releasing the original queue lock**, so passing that result later to P2k8k could not guarantee a single original owner across transaction and ACK.

@@ -1,5 +1,8 @@
 # #1052 P2k3 — genuine current-owner/FD/pending gate before canonical P1 planning
 
+**Historical/supersession status (source `v0.6.5_46`):** The old `auto_detect_verified_batch.py` one-intent reader and standalone test were removed in `_46` per DEV-050. Native raw/debug/provenance and P1 policy are now composed only through the original v2 Model transaction. This document describes the historical `_25` experiment, not active code. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_25`, import-only, no published `_25.pkg` and no installed native worker. Owner stable `0.6.5_1.pkg` remains unchanged.
 
 ## Observable scenario and bound

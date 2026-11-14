@@ -22,7 +22,7 @@ import time
 HERE = Path(__file__).resolve().parent
 BACKEND = HERE.parent / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
-from auto_detect_original_lock_handoff import run_original_pending_cycle
+from auto_detect_original_lock_handoff import _original_completion_locked
 from auto_detect_queue import DurableInbox
 
 MARK = "P2K8G_ORIGINAL_NATIVE_CONFIG_FD"
@@ -167,8 +167,9 @@ def native() -> None:
         # Exact original public queue owner callable, with the native PHP
         # Config instance and the real proc_open FDs; no independent lock.
         with _environment(env):
-            result = run_original_pending_cycle(
-                queue, pending, php_bin=str(PHP), php_script=FIXTURE, timeout=20)
+            with queue.exclusive():
+                result = _original_completion_locked(
+                    queue, pending, php_bin=str(PHP), php_script=FIXTURE, timeout=20)
         need(result.get("ack_authorized") is False and pending.is_file(),
              "NATIVE_CONFIG_TO_PYTHON_DID_NOT_RETAIN_PENDING")
         print(MARK + "_ORIGINAL_CONFIG_HANDLE_AND_QUEUE=PASS", flush=True)
