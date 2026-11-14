@@ -1,5 +1,8 @@
 # #1052 P2k8k — guarded original-current post-commit ACK (import-only)
 
+**Historical/supersession status (source `v0.6.5_46`):** The standalone single-intent P2k8k post-commit ACK helper and tests were deleted in `_46`, replaced by per-slot `CursorChain.acknowledge()` inside the sole original Config-held v2 chain. Historical `_41` evidence is preserved; it is not an installed worker or an active alternative. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Candidate:** `v0.6.5_41`, 14 November 2026. Neither installed native observer, cron, user OPNsense acceptance nor testing package is authorized.
 
 ## Concrete end-to-end boundary

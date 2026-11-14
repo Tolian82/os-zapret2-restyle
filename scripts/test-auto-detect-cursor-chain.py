@@ -18,7 +18,7 @@ from unittest.mock import patch
 BACKEND = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 
-from auto_detect_cursor_chain import CursorChain, CursorChainRefused, main
+from auto_detect_cursor_chain import CursorChain, CursorChainRefused
 from auto_detect_debug_window import empty_epoch, propose_window, Cursor
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
@@ -238,19 +238,17 @@ class CursorChainTests(unittest.TestCase):
                 self.ack(p, cp)
             self.assertTrue(p.exists())
 
-    def test_legacy_intent_and_chain_cannot_coexist(self):
+    def test_superseded_v1_epoch_entry_is_rejected_not_imported(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
             p = self.rotate()
             self.stage(p)
-            with self.assertRaisesRegex(ReceiptRefused, "legacy_historical_reader_cannot_consume"):
-                self.receipts.historical(self.generation)
-            cursor = Cursor(self.generation, self.debug.stat().st_dev,
-                            self.debug.stat().st_ino, 0, hashlib.sha256(b"").hexdigest())
-            window = propose_window(self.proof, cursor, p.read_bytes(),
-                                    owner_uid=os.geteuid())
-            with self.assertRaisesRegex(ReceiptRefused, "legacy_intent_cannot_mix"):
-                self.receipts.stage(self.proof, cursor, window, p)
+            folder = self.base / "epochs" / self.generation
+            illegal = folder / ("intent-" + self.generation + "-" + "c" * 32 + ".txt.json")
+            illegal.write_text("{}\n")
+            illegal.chmod(0o600)
+            with self.assertRaisesRegex(ReceiptRefused, "superseded_one_intent_epoch_refused"):
+                self.chain.tip(self.proof)
 
     def test_corrupt_checkpoint_prevents_ack(self):
         self.emit("one.example.com")
@@ -278,8 +276,6 @@ class CursorChainTests(unittest.TestCase):
     def test_no_unlocked_writer_and_public_entry(self):
         with self.assertRaisesRegex(CursorChainRefused, "original_queue_lock_required"):
             self.chain.tip(self.proof)
-        with self.assertRaisesRegex(CursorChainRefused, "original_fd9_multiminute_worker_not_enabled"):
-            main()
 
     def test_partial_debug_prefix_retains_current_segment(self):
         self.emit("one.example.com")

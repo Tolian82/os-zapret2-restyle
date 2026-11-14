@@ -1,5 +1,8 @@
 # #1052 P2k4 — one locked P1→durable fallback transaction (inactive)
 
+**Historical/supersession status (source `v0.6.5_46`):** The old v1 single-intent fallback adapter and its standalone test were removed in `_46`. The same physical destination CAS and single GUI flock remain directly beneath the **single v2 original Config-held P1** path. This text is retained only as history. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_26`, no published `_26.pkg`; installed stable `0.6.5_1.pkg` unchanged. This is a source-only qualification of the **actual P2k3-to-P2k2b result path**, not production activation.
 
 ## Red path / observable behavior

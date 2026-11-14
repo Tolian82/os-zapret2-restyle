@@ -24,9 +24,7 @@ from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
-                                             prepare_original_v2_locked,
-                                             run_native_original_v2_prepare_once,
-                                             main)
+                                             prepare_original_v2_locked)
 from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox
 
@@ -276,14 +274,10 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.assertTrue(callable(qualified_current_source))
         self.assertTrue(callable(CursorChain.prepare))
 
-    def test_queue_lock_and_public_worker_remain_disabled(self):
+    def test_original_queue_lock_is_mandatory(self):
         self.emit("one.example.com")
         with self.assertRaisesRegex(OriginalV2PrepareRefused, "original_queue_epoch_lock_required"):
             self.stage()
-        with self.assertRaisesRegex(OriginalV2PrepareRefused, "original_fd9_worker_and_config_child_not_enabled"):
-            main()
-        with self.assertRaisesRegex(OriginalV2PrepareRefused, "native_original_root_only"):
-            run_native_original_v2_prepare_once()
 
 
 if __name__ == "__main__":

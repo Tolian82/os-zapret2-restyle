@@ -467,11 +467,3 @@ class CursorChain:
                 DestinationRefused, GenerationRefused, OSError, ValueError,
                 TypeError, KeyError, AttributeError) as exc:
             raise CursorChainRefused("original_cursor_ack_evidence_unavailable") from exc
-
-
-def main() -> None:
-    raise CursorChainRefused("original_fd9_multiminute_worker_not_enabled")
-
-
-if __name__ == "__main__":
-    main()

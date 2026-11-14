@@ -1,5 +1,8 @@
 # #1052 P2k2b — dormant destination transaction and cursor checkpoint
 
+**Historical/supersession status (source `v0.6.5_46`):** The physical CAS/checkpoint implementation remains in use as a **per-v2-slot** journal. The old single-intent `DestinationCommit.commit()/_source()` and corresponding test/CLI were removed in `_46`; all new callers use the original Config-held v2 path. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Candidate:** source `v0.6.5_24`; no published `_24.pkg`. Owner-installed stable `0.6.5_1.pkg` remains unchanged.
 
 ## Failure addressed

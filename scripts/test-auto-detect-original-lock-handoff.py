@@ -21,7 +21,7 @@ sys.path.insert(0, str(BACKEND))
 from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_original_lock_handoff import (
     OriginalLockRefused, assert_inherited_config_fd,
-    inherited_original_locks, run_original_pending_cycle,
+    inherited_original_locks, _original_completion_locked,
 )
 
 PHP_FIXTURE = Path(__file__).with_suffix('.php')
@@ -140,9 +140,10 @@ class OriginalLockHandoffTests(unittest.TestCase):
         # observer and no cron/configd enrollment is implied by the fixture.
         from unittest.mock import patch
         with patch.dict(os.environ, self.environment()):
-            result = run_original_pending_cycle(
-                self.queue, self.segment, php_bin='php',
-                php_script=PHP_FIXTURE, timeout=15)
+            with self.queue.exclusive():
+                result = _original_completion_locked(
+                    self.queue, self.segment, php_bin='php',
+                    php_script=PHP_FIXTURE, timeout=15)
         self.assertFalse(result['ack_authorized'])
         self.assertTrue(self.segment.exists())
 
@@ -195,10 +196,10 @@ class OriginalLockHandoffTests(unittest.TestCase):
         self.assertEqual(main(['commit-fds','anything']), 64)
         self.assertTrue(self.segment.exists())
 
-    def test_p2k8l_native_ack_composer_refuses_invalid_pending_identity(self):
-        from auto_detect_original_lock_handoff import run_native_original_pending_ack_once
-        with self.assertRaisesRegex(OriginalLockRefused, 'original_native_generation'):
-            run_native_original_pending_ack_once('foreign-pending.txt')
+    def test_only_current_v2_native_composer_is_disabled_off_platform(self):
+        from auto_detect_original_lock_handoff import run_native_original_v2_cycle_once
+        with self.assertRaisesRegex(OriginalLockRefused, 'original_native_fd9_required'):
+            run_native_original_v2_cycle_once()
         self.assertTrue(self.segment.exists())
 
 

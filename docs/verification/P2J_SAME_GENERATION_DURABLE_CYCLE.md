@@ -1,5 +1,8 @@
 # #1052 P2j — same-generation pending cycle, **dormant**
 
+**Historical/supersession status (source `v0.6.5_46`):** The earlier callback-injected P2j `auto_detect_cycle.py` alternate coordinator and standalone tests were deleted in `_46` per DEV-050. The sole forward-only original v2 queue→Config→P1→ACK composer replaces it; this document remains historical evidence. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_21`. P2j is an integration precursor, **NOT** a running or installed minute worker. The original P2i pinned OPNsense/FreeBSD proof is [#43429359714](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43429359714); it established real P2h preview first-match/raw+debug and the upstream pre-drop chown, **not** durable destination writes or installed FD9 startup.
 
 ## Observable failure and red → green

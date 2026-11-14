@@ -1,5 +1,8 @@
 # #1052 P2k2a — root-private immutable generation epoch and pending intent
 
+**Historical/supersession status (source `v0.6.5_46`):** The original immutable zero-debug epoch and root-private receipt helpers remain; old `stage()/historical()` single-intent APIs and their standalone test were removed in `_46`. The current source uses only append-only P2k8n v2 slots, no legacy migration. The replacement contract is [P2k8p](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).
+
+
 **Source candidate:** `v0.6.5_23`. This is a **real protected filesystem primitive** with actual fsync/open/no-follow/immutable-link operations, not an activated service. P2k2a intentionally does **not** implement the distinct authoritative destination commit/ack path (P2k2b), real installed FD9 hooks, raw collection or cron.
 
 ## User failure this prevents
