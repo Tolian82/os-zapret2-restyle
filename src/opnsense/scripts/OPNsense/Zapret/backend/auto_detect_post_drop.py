@@ -18,6 +18,8 @@ import sys
 from typing import Callable
 
 from auto_detect_fd import OwnerToken, _owner_snapshot
+from auto_detect_debug_window import _read_exact, DebugWindowRefused
+from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import (
     ROOT, RAW_PATH, DEBUG_PATH, ENGINE_USER,
     ROOT_MODE, FILE_MODE, PENDING_MODE, _parent,
@@ -86,10 +88,35 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
             type(engine_gid) is not int or engine_gid <= 0 or
             root_uid == engine_uid):
         raise PostDropRefused("unqualified_original_producer_identity")
-    _check_layout(root, root_uid, root_gid, engine_gid)
-    identities = tuple(_identity(root / name, uid=(root_uid,), gid=engine_gid)
-                       for name in ("inbox.txt", "debug.log"))
-    return OriginalProducer(root, root_uid, root_gid, engine_uid, engine_gid, identities)
+    # The original P2a queue flock is the ONLY serialization owner for
+    # prelaunch raw/old-inode state. The FD9 caller retains its independent
+    # common Apply lock; this short nested P2a lock is not a new worker.
+    # Neither a nonempty prior native debug history nor foreign-generation
+    # pending may be inherited by a new original shared-FD9 observer.
+    try:
+        _check_layout(root, root_uid, root_gid, engine_gid)
+        queue = DurableInbox(root, owner_uid=root_uid, writer_gid=engine_gid)
+        with queue.exclusive():
+            _check_layout(root, root_uid, root_gid, engine_gid)
+            if queue.segments():
+                raise PostDropRefused("unprocessed_original_pending_prelaunch")
+            identities = []
+            for name in ("inbox.txt", "debug.log"):
+                path = root / name
+                stat_before, bytes_before = _read_exact(
+                    path, owner_uid=root_uid, writer_gid=engine_gid)
+                identity = _identity(path, uid=(root_uid,), gid=engine_gid)
+                if bytes_before or stat_before.st_size or identity != (
+                        stat_before.st_dev, stat_before.st_ino, stat_before.st_nlink):
+                    raise PostDropRefused("nonempty_or_changed_original_pretraffic_inode")
+                identities.append(identity)
+            if identities[0][:2] == identities[1][:2]:
+                raise PostDropRefused("aliased_original_raw_and_debug")
+            _check_layout(root, root_uid, root_gid, engine_gid)
+            return OriginalProducer(root, root_uid, root_gid,
+                                    engine_uid, engine_gid, tuple(identities))
+    except (QueueSafetyError, DebugWindowRefused, OSError) as exc:
+        raise PostDropRefused("original_pretraffic_queue_or_inode_unavailable") from exc
 
 
 def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tuple[str, ...]:
@@ -152,7 +179,7 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
 
 
 def native_capture_before_launch() -> OriginalProducer:
-    """Original FD9-only prospective call; no installed caller or CLI yet."""
+    """Original FD9-only pretraffic proof; live producer still disabled."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise PostDropRefused("native_root_fd9_only")
     try:

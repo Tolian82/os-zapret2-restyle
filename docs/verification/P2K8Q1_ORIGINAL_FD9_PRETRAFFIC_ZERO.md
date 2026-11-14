@@ -1,0 +1,17 @@
+# #1052 P2k8q1 — original FD9 pretraffic zero and P2a queue lock
+
+**Candidate source:** `v0.6.5_47`, 14 November 2026. No approved observer activation, scheduled worker/cron, published test package or user OPNsense change.
+
+## Same authority, strict first-launch gate
+
+Use **only** original shared FD9 `apply_runtime_original_launcher_once()`, which already invokes `auto_detect_post_drop.py capture` before `launcher_start_once` and `restore` before IPFW. The source-only native `authorize` remains absent and therefore refuses all live `--hostlist-auto` by default. P2k8q1 extends the **existing** `OriginalProducer._capture` before native launch, not a new CLI, daemon, process owner or second queue.
+
+`DurableInbox.exclusive()` takes the same existing root-only original P2a `worker.lock` to serialize new prelaunch file reads against pending rotation/ACK. Reject a busy/foreign original queue, any retained original pending or unknown pending entry. Validate exact root-owned producer layout and independently open `inbox.txt` + `debug.log` with `O_NOFOLLOW`, matching path/open dev/ino/mtime/size, verified root and named engine group, owner/permissions, **zero actual bytes**, two distinct inodes and unchanged ownership/entry layout. All checks precede one original dvtws2 launch. Do **not** silently clear stale debug/raw or delete an older generation's unacknowledged pending to make startup pass. The checked same original producer inode baton survives native `--user=nobody` and its unchanged P2k8i post-drop root reownership before IPFW; after launch append is allowed, but *a second prelaunch* with nonempty debug/raw is refused.
+
+## Evidence and security boundary
+
+`scripts/test-auto-detect-post-drop.py` now covers real P2a lock contention, nonempty original raw/debug refusal **without truncation**, unacknowledged and foreign pending retention, and legal native append after launch; existing original P2k8i inode and FD9 witness tests remain. The existing single OPNsense 26.7 native P2e/P2g/P2i runner exercises actual root FreeBSD original FD9 and startup/post-drop with a newly created legitimate original queue lock, no additional native VM. Exact-HEAD CI and separate native proof must pass before merge.
+
+**Unimplemented:** This gate's volatile prelaunch identity does not yet provide an immutable root-private zero-debug **epoch.json** bound to actual original active sealed schema-2 and committed PID/birth. **Do not** run `EpochReceipts.begin()` only after engine start: the debug file may already contain legitimate events, which would make the epoch impossible to establish or tempt data loss. Next replace that old source-only API by the durable original-FD9 pretraffic seal + authenticated postlaunch completion (DEV-050); refuse all active observers until full current owner, historical writer-FD, native P0-first-match and v2 checkpoint/ACK readiness are physically qualified. No v1 migration, extra Config writer, new daemon or cron.
+
+[Plan](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) · [P2k8i original FD9](P2K8I_ORIGINAL_FD9_PRE_IPFW_BRIDGE.md) · [P2k8p v2 Config owner](P2K8P_ORIGINAL_CONFIG_HELD_V2.md).

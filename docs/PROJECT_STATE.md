@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_46`** (`VERSION=0.6.5`, `PLUGIN_REVISION=46`, prospective `os-zapret2-restyle-0.6.5_46.pkg` **NOT PUBLISHED**). P2k8p replaces the obsolete one-intent chain with one source-only original P2a queue→PHP native Config-locked registered Model→Python original inherited two-FD P1→P2k8n v2 immutable per-minute destination/checkpoint→P2a inode/FD-safe ACK path. Native event subwindow, protected pending content, original owner, manual Hostlist/PSL/exclude and sealed known auto-owned components are rechecked under a single GUI destination lock. Old one-intent EpochReceipts stage/historical, P2k3/P2k4/P2k8d adapters, P2k8k ACK, P2k8l alternate composer and P2j injected coordinator (plus obsolete tests/CI) were **removed under DEV-050**, never left inactive. PHP still uses original Config::lock and releases it without writing config.xml. Current source-only, not actual live active original FD9 schema-2/empty debug generation, historical writer-FD or repeating scheduled worker. Native/owner appliance integration and 512-slot/4MiB safe compaction remain open. Owner stable `_1.pkg` unchanged.
+Current source increment: **`v0.6.5_47`** (`VERSION=0.6.5`, `PLUGIN_REVISION=47`, prospective `os-zapret2-restyle-0.6.5_47.pkg` **NOT PUBLISHED**). P2k8q1 adds strict pretraffic zero-file and empty original pending checks to the existing real FD9 prospective producer capture, under the **same P2a queue flock** (no new owner). Original protected raw/debug file inode, root/group/mode, `O_NOFOLLOW`/fstat/mtime and independent exact zero bytes are verified under the queue lock; unsafe historical or foreign pending refuses non-destructively, busy original queue refuses, and same native post-drop reownership still permits append after the single original launch. This is **not** an authorized active schema-2 generation, durable zero-debug epoch, running native collector, scheduled worker or owner-installed acceptance. `EpochReceipts.begin()` still needs forward-only prelaunch redesign because calling it after traffic can miss data. Original Config/P1/v2 worker from `_46` remains source-only; bounded debug/512 v2 chain, old FD evidence and cron remain open. Stable owner `_1.pkg` unchanged.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=46`; one original queue→PHP Config-held Model/P1→v2 checkpoint/ACK source-only path; live FD9/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=47`; original FD9 pretraffic empty-inode/P2a queue safety + current v2 P1 path; active schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_46.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_47.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -28,6 +28,8 @@ Current source increment: **`v0.6.5_46`** (`VERSION=0.6.5`, `PLUGIN_REVISION=46`
 | Voice | Five-service native page and common Strategies/Voice Config/Apply/engine/firewall lifecycle; service acceptance does not establish media/call bypass | [Voice contract](architecture/VOICE_TRANSMISSION_GUI.md) |
 
 ## Active #1052 implementation boundary
+
+**Current `_47` boundary:** [P2k8q1](verification/P2K8Q1_ORIGINAL_FD9_PRETRAFFIC_ZERO.md) verifies original FD9's **prelaunch** producer emptiness and retained pending under the same P2a queue flock. The genuine active schema-2 + durable root-only zero-debug epoch is **NOT** yet emitted; prelaunch no-content proof must be persisted and bound to the postlaunch original owner before the existing P2c/v2 composer can run. The installed `authorize` gate remains nonexistent and all new live `--hostlist-auto` launches refuse; no release package, real owner traffic or cron acceptance. Prior `_46` v2 Config/ACK evidence remains valid source-only.
 
 **Current `_46` boundary:** [P2k8p](verification/P2K8P_ORIGINAL_CONFIG_HELD_V2.md) replaces the older single-intent PHP/Python/ACK and policy chain with the current original Config-locked v2 per-minute transaction. The only future native parent is `run_native_original_v2_cycle_once()` in the original lock handoff. P2a/FD9 native generation is still unauthorized on real appliance; native VM/P5 and owner-live tests are not satisfied by portable source fixtures. P2k8n v2 bounded history (512 slots + limited debug) needs safe rollover; old-generation physical pending cannot be attributed to the new owner. All existing Strategy/Voice/WAN/FD9 non-observer operations remain unchanged.
 
