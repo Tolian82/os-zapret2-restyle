@@ -141,6 +141,16 @@ class PostDropContract(unittest.TestCase):
             self.capture()
         self.assertEqual(bad.read_bytes(), b'unknown\n')
 
+    def test_original_queue_new_lock_is_private_and_group_exact(self):
+        stamp = self.capture()
+        path = self.root / 'worker.lock'
+        lock = path.lstat()
+        self.assertEqual(lock.st_uid, self.owner)
+        self.assertEqual(lock.st_gid, (self.root / 'pending').lstat().st_gid)
+        self.assertEqual(stat.S_IMODE(lock.st_mode), 0o600)
+        self.assertEqual(self.capture().identities, stamp.identities)
+        self.assertEqual(path.lstat().st_ino, lock.st_ino)
+
     def test_pretraffic_respects_original_queue_busy_without_second_owner(self):
         witness = self.capture()
         original_lock = self.root / 'worker.lock'
