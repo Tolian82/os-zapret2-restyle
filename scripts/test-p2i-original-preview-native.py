@@ -27,6 +27,8 @@ BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
+from auto_detect_fd import OwnerToken
+from auto_detect_post_drop import native_capture_before_launch, native_restore_before_ipfw
 from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH)
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
@@ -161,38 +163,6 @@ def _native_file_modes(gid: int, *, phase: str) -> None:
              f"expected_gid={gid}:links={info.st_nlink}")
 
 
-def _reattest_root_after_native_drop(before: dict, nobody) -> None:
-    """Test ONLY: restore exact root inode ownership before installing IPFW.
-
-    Upstream v1.0.7 takes ownership of the auto hostlist after root startup
-    while preparing to drop privileges. The pending queue must NEVER trust
-    a nobody-owned inode. The stopped traffic path in this disposable guest
-    permits an exact FD9-like root reownership before adding scoped divert.
-    """
-    changed = []
-    for file in (RAW_PATH, DEBUG_PATH):
-        pre = before[file.name]
-        now = file.lstat()
-        need(stat.S_ISREG(now.st_mode) and
-             (now.st_dev, now.st_ino, now.st_nlink) == pre and
-             now.st_gid == nobody.pw_gid and
-             stat.S_IMODE(now.st_mode) == 0o660 and
-             now.st_uid in (0, nobody.pw_uid),
-             "NATIVE_STARTUP_OWNERSHIP_OR_INODE_UNSAFE:" + file.name)
-        if now.st_uid == nobody.pw_uid:
-            os.chown(file, 0, nobody.pw_gid, follow_symlinks=False)
-            changed.append(file.name)
-        again = file.lstat()
-        need((again.st_dev, again.st_ino, again.st_nlink) == pre and
-             again.st_uid == 0 and again.st_gid == nobody.pw_gid and
-             stat.S_IMODE(again.st_mode) == 0o660,
-             "ROOT_POST_DROP_REOWNERSHIP_NOT_ATTESTED:" + file.name)
-    need("inbox.txt" in changed, "PINNED_UPSTREAM_AUTO_INBOX_CHOWN_NOT_OBSERVED")
-    _native_file_modes(nobody.pw_gid, phase="before-ipfw")
-    print(MARK + "_UPSTREAM_STARTUP_CHOWN=OBSERVED_AND_ROOT_RESTORED_BEFORE_IPFW",
-          flush=True)
-
-
 def _debug_match(content: str, number: int) -> bool:
     return any(f" : profile {number} " in line and
                " : adding to " + str(RAW_PATH) in line and
@@ -226,9 +196,10 @@ def _native(checkout: Path) -> None:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
         _native_file_modes(nobody.pw_gid, phase="prepared")
-        producer_ids = {file.name: (file.stat().st_dev, file.stat().st_ino,
-                                    file.stat().st_nlink)
-                        for file in (RAW_PATH, DEBUG_PATH)}
+        # Original protected inode identities before launching real dvtws2.
+        # Reuse the production P2k8h import-only primitive under native VM.
+        prelaunch = native_capture_before_launch()
+        producer_ids = dict(zip(("inbox.txt", "debug.log"), prelaunch.identities))
         print(MARK + "_PREPARED_NATIVE_PRODUCER=PASS", flush=True)
         args = _remap_managed(case, planned)
         # First check the uninstrumented preview with real native parser.
@@ -255,7 +226,12 @@ def _native(checkout: Path) -> None:
             birth = guard.cmd("ps", "-p", str(process.pid), "-o", "lstart=")
             need(birth.returncode == 0 and birth.stdout.strip(),
                  "NATIVE_PROCESS_BIRTH_MISSING")
-            _reattest_root_after_native_drop(producer_ids, nobody)
+            original_process = OwnerToken(process.pid, birth.stdout.strip(), str(engine))
+            changed = native_restore_before_ipfw(prelaunch, original_process)
+            need("inbox.txt" in changed, "PINNED_UPSTREAM_AUTO_INBOX_CHOWN_NOT_OBSERVED")
+            _native_file_modes(nobody.pw_gid, phase="before-ipfw")
+            print(MARK + "_UPSTREAM_STARTUP_CHOWN=OBSERVED_AND_ROOT_RESTORED_BEFORE_IPFW", flush=True)
+            print(MARK + "_REUSABLE_P2K8H_INODE_FD_REPAIR=PASS", flush=True)
             for rule, item in zip(RULES, p0.rules()):
                 need(guard.cmd("/sbin/ipfw", "-q", "add",
                                str(rule), *item).returncode == 0,
