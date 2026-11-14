@@ -93,6 +93,41 @@ class DurableInboxTests(unittest.TestCase):
                     pass
             self.assertEqual(self.queue.inbox.read_bytes(), b"one.example.com\n")
 
+    def test_oversized_live_raw_refuses_before_hardlink_or_replace(self):
+        # PRE-FIX reproducer: the original P2a rotate() detached >4 MiB,
+        # but its exact v2 reader/ACK can never consume that inode.
+        with self.queue.inbox.open("r+b") as output:
+            output.truncate(queue.MAX_SEGMENT + 1)
+        before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(queue.QueueSafetyError, "oversized_segment"):
+                self.queue.rotate(generation="a" * 32)
+            after = self.queue.inbox.stat()
+            self.assertEqual((after.st_dev, after.st_ino, after.st_size),
+                             (before.st_dev, before.st_ino, before.st_size))
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(list(self.root.glob(".new-inbox-*")), [])
+
+    def test_oversized_crash_link_remains_recoverable_without_replacing_live(self):
+        # Crash after hardlink but before replace: no second pending name,
+        # no relabel, no destructive attempt to recover an unreadable batch.
+        with self.queue.inbox.open("r+b") as output:
+            output.truncate(queue.MAX_SEGMENT + 1)
+        before = self.queue.inbox.stat()
+        generation = "b" * 32
+        p = self.queue.pending / (generation + "-" + "c" * 32 + ".txt")
+        os.link(self.queue.inbox, p)
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(queue.QueueSafetyError, "oversized_segment"):
+                self.queue.rotate(generation=generation)
+            after = self.queue.inbox.stat()
+            self.assertEqual((after.st_dev, after.st_ino, after.st_size),
+                             (before.st_dev, before.st_ino, before.st_size))
+            self.assertEqual(queue._identity(p), queue._identity(self.queue.inbox))
+            self.assertEqual(self.queue.segments(), [p])
+            self.assertEqual(p.stat().st_nlink, 2)
+            self.assertEqual(list(self.root.glob(".new-inbox-*")), [])
+
     def test_oversized_pending_is_not_removed(self):
         with self.queue.exclusive():
             p = self.queue.rotate()

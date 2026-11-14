@@ -233,7 +233,14 @@ class DurableInbox:
             raise QueueSafetyError("invalid_producer_generation")
         self._require_lock()
         self._verify()
-        old = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
+        # The original v2 reader and physical ACK both refuse >4 MiB.
+        # Qualify the live raw inode BEFORE creating a hardlink/replacing
+        # the writer's path. Otherwise a too-large unprocessable event batch
+        # is detached and indefinitely blocks later current-generation ACK.
+        # This is bounded backpressure, NOT permission to discard/truncate
+        # or claim that large native appends after rotation are impossible.
+        old = _stat_regular(self.inbox, self.uid, max_size=MAX_SEGMENT,
+                            writer_gid=self.writer_gid)
         existing = self.segments()
         same = [path for path in existing if _identity(path) == (old.st_dev, old.st_ino)]
         if len(same) > 1:

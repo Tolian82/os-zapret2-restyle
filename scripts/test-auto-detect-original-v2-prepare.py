@@ -26,7 +26,7 @@ from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
                                              prepare_original_v2_locked)
 from auto_detect_owner import GenerationProof
-from auto_detect_queue import DurableInbox
+from auto_detect_queue import DurableInbox, MAX_SEGMENT
 
 
 class OriginalV2PrepareTests(unittest.TestCase):
@@ -181,6 +181,24 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.stage(inspect=lambda *a, **kw: FDState.UNKNOWN)
             self.assertEqual(len(self.queue.segments()), 1)
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+
+    def test_oversized_original_raw_refuses_before_detaching_or_claiming_v2(self):
+        # Actual original v2 caller: no created pending or durable intent
+        # when the live producer has already exceeded its downstream bound.
+        self.emit("one.example.com")
+        with self.queue.inbox.open("r+b") as output:
+            output.truncate(MAX_SEGMENT + 1)
+        before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            after = self.queue.inbox.stat()
+            self.assertEqual((after.st_dev, after.st_ino, after.st_size),
+                             (before.st_dev, before.st_ino, before.st_size))
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+            self.assertEqual(self.drains, 0)
 
     def test_old_generation_pending_blocks_original_raw_rotation(self):
         self.emit("one.example.com")
