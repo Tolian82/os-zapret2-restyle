@@ -37,9 +37,10 @@ NEXT = {
     # An activation failure may have fully restored every resource without
     # ever publishing 'activated'; mark restored only after attested rollback.
     "activating": frozenset(("activated", "restored", "requires-review", "restore-failed")),
-    "activated": frozenset(("config-saved", "restored", "restore-failed",
-                            "requires-review")),
-    "config-saved": frozenset(("committed", "epoch-finalizing", "requires-review")),
+    "activated": frozenset(("config-saved", "epoch-finalizing", "restored",
+                            "restore-failed", "requires-review")),
+    # The native observer never enters ordinary saved-only recovery.
+    "config-saved": frozenset(("committed", "requires-review")),
     # A real native observer must finish its pretraffic epoch BEFORE
     # becoming a terminal common owner. This is the same original journal.
     "epoch-finalizing": frozenset(("committed", "requires-review")),

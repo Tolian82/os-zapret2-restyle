@@ -1189,8 +1189,22 @@ shared_apply_execute_service()
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
-    shared_apply_record_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
-        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    # An active observer MUST enter a nonterminal journal phase immediately
+    # after Config::save, before IPFW commit or any saved-only recovery path.
+    _shared_apply_epoch_required=0
+    if [ "$_shared_apply_mode" = 1 ] &&
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        _shared_apply_epoch_required=1
+        if ! shared_apply_record_service epoch-finalizing "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
+            shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            return 70
+        fi
+    else
+        shared_apply_record_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    fi
     # Native Config::save releases its own lock. Reacquire/read the saved
     # model before DISCARDING IPFW rollback stages. No Config XML writer is
     # introduced here: the same OPNsense worker handles the readback.
@@ -1246,16 +1260,9 @@ shared_apply_execute_service()
     fi
     # Do NOT write terminal committed before the original pretraffic epoch
     # is complete. Otherwise failure of PID/birth/FD/debug proof leaves a
-    # falsely successful durable owner. The single shared journal records a
-    # nonterminal epoch-finalizing phase AFTER Config/IPFW/runtime proof.
-    if [ "$_shared_apply_mode" = 1 ] &&
-       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
-        if ! shared_apply_record_service epoch-finalizing "$_shared_apply_id" "$_shared_apply_page" \
-            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
-            shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
-                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
-            return 70
-        fi
+    # falsely successful durable owner. The same journal has remained
+    # nonterminal since Config::save through IPFW commit/runtime proof.
+    if [ "$_shared_apply_epoch_required" = 1 ]; then
         # First native packets may already have been appended. Do not reset
         # original raw/debug or move the starting cursor away from zero.
         _shared_epoch_complete=$("$PYTHON_RUNTIME" \

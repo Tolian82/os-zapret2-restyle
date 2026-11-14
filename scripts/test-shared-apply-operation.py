@@ -26,7 +26,7 @@ class TestJournal(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SharedApplyOperation(Path(tmp) / "shared-apply")
             current = detail("e" * 32)
-            for phase in ("prepared", "activating", "activated", "config-saved"):
+            for phase in ("prepared", "activating", "activated"):
                 store.advance(phase, current)
             with self.assertRaises(SharedOperationError):
                 store.advance("epoch-finalizing", detail("f" * 32))
@@ -43,10 +43,17 @@ class TestJournal(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = SharedApplyOperation(Path(tmp) / "shared-apply")
             current = detail("c" * 32)
-            for phase in ("prepared", "activating", "activated", "config-saved",
+            for phase in ("prepared", "activating", "activated",
                           "epoch-finalizing", "committed"):
                 store.advance(phase, current)
             self.assertEqual(committed_owner(store.read()), current)
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            current = detail("a" * 32)
+            for phase in ("prepared", "activating", "activated", "config-saved"):
+                store.advance(phase, current)
+            with self.assertRaises(SharedOperationError):
+                store.advance("epoch-finalizing", current)
 
     def test_retired_telegram_predecessor_api_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
