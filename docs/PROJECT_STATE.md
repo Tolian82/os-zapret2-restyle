@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_42`** (`VERSION=0.6.5`, `PLUGIN_REVISION=42`, prospective `os-zapret2-restyle-0.6.5_42.pkg` **NOT PUBLISHED**). P2k8l connects the previously dormant original queue FD→PHP Config-held P1/P2k2b child completion→P2k8k guarded ACK **under one unchanged P2a queue flock**, without a second owner/lock. It retains the existing unacknowledged entry and adds a restricted import-only native one-segment composer that is NOT registered with configd. No real active schema-2 observer, native raw/debug epoch pipeline, historical-owner replay, scheduled worker or cron is enabled; ordinary shared FD9/Strategies/Voice/Lab are unchanged. Detached receipts remain `ack_authorized=false`.
+Current source increment: **`v0.6.5_43`** (`VERSION=0.6.5`, `PLUGIN_REVISION=43`, prospective `os-zapret2-restyle-0.6.5_43.pkg` **NOT PUBLISHED**). P2k8m adds a source-only original locked queue→current-generation hardlink/replace→P2b old writer FD drain→actual P2k1 raw/debug pairing→immutable P2k2a intent composer. The original preexisting empty-debug epoch is required before any rotation; old pending generations, busy/unknown FD, changed engine and a second intent are retained. The worker, active observer/FD9 schema-2 publisher, historical recovery, multi-minute cursor and cron remain OPEN. Stable owner's `_1.pkg` and original Strategies/Voice/FD9/Config/Lab unchanged.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=42`; original held-queue Config→P2k8k ACK composer import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=43`; original held-queue raw→pending→debug intent import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_42.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_43.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -28,6 +28,8 @@ Current source increment: **`v0.6.5_42`** (`VERSION=0.6.5`, `PLUGIN_REVISION=42`
 | Voice | Five-service native page and common Strategies/Voice Config/Apply/engine/firewall lifecycle; service acceptance does not establish media/call bypass | [Voice contract](architecture/VOICE_TRANSMISSION_GUI.md) |
 
 ## Active #1052 implementation boundary
+
+**Current `_43` addition:** [P2k8m](verification/P2K8M_ORIGINAL_RAW_ROTATION_INTENT.md) composes one authentic *current generation only* original queue hardlink/replace and protected P2b/P2k1/P2k2a physical intent. Its native wrapper has no active CLI/configd path; it cannot bootstrap its own epoch, process an old generation, advance another minute's cursor or ACK a domain. Source-only physical tests do not constitute installed FD9 traffic evidence.
 
 **Current `_42` addition:** [P2k8l](verification/P2K8L_ORIGINAL_QUEUE_CONFIG_ACK.md) joins the actual original PHP-child response and P2k8k guarded ACK before releasing the same original P2a queue lock. The new fixed-path native single-segment entry is import-only and unscheduled. Current/old native owner, sealed observer and real end-to-end installed acceptance remain unqualified.
 
