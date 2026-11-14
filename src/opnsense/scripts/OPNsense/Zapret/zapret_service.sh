@@ -1133,7 +1133,7 @@ shared_apply_execute_service()
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
     shared_apply_record_service activating "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
-    if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode" "$_shared_apply_id"; then
+    if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode" "$_shared_apply_id" "$_shared_apply_candidate"; then
         # activate() may have restored internally, or may have failed between
         # irreversible observations. Never claim a verified rollback merely
         # because a shell status is zero or APPLY_PHASE was reset.
@@ -1246,6 +1246,23 @@ shared_apply_execute_service()
     fi
     shared_apply_record_service committed "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+    # The genuine P2c attester requires this terminal journal record and the
+    # already-started supervisor. A postlaunch empty-file check would discard
+    # early native events; completion must bind the pretraffic cursor ZERO.
+    # Failure after Config/IPFW commit is an explicit critical error, not
+    # an "applied" success or an invitation to wipe/reattribute raw bytes.
+    if [ "$_shared_apply_mode" = 1 ] &&
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        _shared_epoch_complete=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" finish-epoch "$_shared_apply_id") || {
+            common_error "shared Apply: committed native epoch not attested"
+            return 70
+        }
+        [ "$_shared_epoch_complete" = original-fd9-running-epoch=attested ] || {
+            common_error "shared Apply: committed native epoch not attested"
+            return 70
+        }
+    fi
     printf "applied-id=%s\n" "$_shared_apply_id"
 }
 # LC-06 WAN-only Config mode of the ORIGINAL FD9, not a second owner.

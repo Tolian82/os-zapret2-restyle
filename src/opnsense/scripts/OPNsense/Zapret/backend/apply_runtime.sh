@@ -48,18 +48,31 @@ apply_runtime_observer_preflight()
 
 apply_runtime_original_launcher_once()
 {
-    [ "$#" -eq 5 ] || return 64
+    [ "$#" -eq 5 ] || [ "$#" -eq 7 ] || return 64
     apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
     _apply_observer_witness=
     if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
         "$ACTIVE_DIR/dvtws.args"; then
-        # Reachable only after future original sealed-worker authorization.
-        # Both short Python calls inherit the SAME original root FD9.
+        # A real active observer MUST carry the independently attested native
+        # Config candidate and original shared-work generation. An old-boot/
+        # rollback caller with no such provenance refuses before launching.
+        [ "$#" -eq 7 ] || return 69
+        case "$6" in ""|*[!a-f0-9]*) return 69 ;; esac
+        case "$7" in ""|*[!a-f0-9]*) return 69 ;; esac
+        [ "${#6}" -eq 32 ] && [ "${#7}" -eq 64 ] || return 69
+        # P2k8q3a: two existing original-FD9 calls, no second queue owner.
+        # The immutable empty pretraffic epoch is fsynced BEFORE dvtws2.
         _apply_observer_witness=$("$PYTHON_RUNTIME" \
             "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
         case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac
+        _apply_observer_seed=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" seal-epoch "$6" "$7") || return 69
+        [ "$_apply_observer_seed" = original-fd9-pretraffic=sealed ] || return 69
+    else
+        # An ordinary/preview release may never create an active epoch.
+        [ "$#" -eq 5 ] || return 69
     fi
-    launcher_start_once "$@" || return 1
+    launcher_start_once "$1" "$2" "$3" "$4" "$5" || return 1
     if [ -n "$_apply_observer_witness" ]; then
         _apply_observer_pid=$(common_pidfile_read "$CHILD_PIDFILE") || {
             launcher_stop "$CHILD_PIDFILE" 5
@@ -267,16 +280,20 @@ apply_runtime_abort()
 
 apply_runtime_activate()
 {
-    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || return 64
+    [ "$#" -eq 2 ] || [ "$#" -eq 3 ] || [ "$#" -eq 4 ] || return 64
     # The optional third argument is already recorded in the durable shared
     # Apply journal before this invocation. Keep normal boot/legacy callers
     # on their original 2-argument API and original PID layout.
-    if [ "$#" -eq 3 ]; then
+    if [ "$#" -ge 3 ]; then
         case "$3" in ""|*[!a-f0-9]*) return 64 ;; esac
         [ "${#3}" -eq 32 ] || return 64
     fi
+    if [ "$#" -eq 4 ]; then
+        case "$4" in ""|*[!a-f0-9]*) return 64 ;; esac
+        [ "${#4}" -eq 64 ] || return 64
+    fi
     apply_runtime_preflight "$1" "$2" || return $?
-    if [ "$#" -eq 3 ]; then
+    if [ "$#" -ge 3 ]; then
         APPLY_BACKUP=$(atomic_install_tree "$APPLY_CANDIDATE" "$ACTIVE_DIR" "$BACKUP_ROOT" "$3") || {
             apply_runtime_clear
             return 1
@@ -322,11 +339,25 @@ apply_runtime_activate()
     fi
     if [ "$APPLY_NEW_RUNNING" = 1 ]; then
         APPLY_NEW="$ACTIVE_DIR"
-        apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
-            "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
-            apply_runtime_abort "replacement engine failed"
-            return $?
-        }
+        if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto=' \
+            "$ACTIVE_DIR/dvtws.args"; then
+            # Never synthesize a candidate digest from argv or an old owner.
+            [ "$#" -eq 4 ] || {
+                apply_runtime_abort "original observer candidate unavailable"
+                return $?
+            }
+            apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                "$CHILD_PIDFILE" "$DVTWS_LOG" 5 "$3" "$4" || {
+                apply_runtime_abort "replacement observer failed"
+                return $?
+            }
+        else
+            apply_runtime_original_launcher_once "$DVTWS_BIN" "$ACTIVE_DIR/dvtws.args" \
+                "$CHILD_PIDFILE" "$DVTWS_LOG" 5 || {
+                apply_runtime_abort "replacement engine failed"
+                return $?
+            }
+        fi
     fi
     if [ "$APPLY_OLD_RUNNING" = 1 ] || [ "$APPLY_NEW_RUNNING" = 1 ]; then
         firewall_shared_runtime install "$APPLY_OLD" "$APPLY_NEW" || {

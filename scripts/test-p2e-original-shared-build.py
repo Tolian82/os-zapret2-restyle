@@ -356,8 +356,16 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertLess(applied.index('auto_detect_origin_map.py" verify-preview'),
                         applied.index('apply_runtime_probe "$_shared_apply_root/release"'))
         self.assertIn("preflight-rejected=observer-generation", applied)
+        # P2h remains physically NONACTIVATING: only the source-only preview
+        # is emitted at build time. The new original-FD9 epoch completion is
+        # deliberately reached only after the terminal committed owner, not
+        # while compiling a candidate or before runtime preflight.
         self.assertNotIn("auto-detect-generation.json", body)
-        self.assertNotIn("auto-detect-generation.json", applied)
+        self.assertIn('auto-detect-generation.json" ]; then', applied)
+        self.assertLess(applied.index('shared_apply_record_service committed'),
+                        applied.index('finish-epoch "$_shared_apply_id"'))
+        self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
+                        applied.index('finish-epoch "$_shared_apply_id"'))
 
     def test_p2f_fd9_hook_runs_after_php_preflight_and_before_activation(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
