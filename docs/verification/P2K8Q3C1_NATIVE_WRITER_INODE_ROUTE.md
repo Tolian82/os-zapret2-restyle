@@ -1,0 +1,21 @@
+# #1052 P2k8q3c1 — genuine native writer raw/debug inode route after original P2a rotation
+
+**Candidate:** `v0.6.5_54`, 14 November 2026. This is an explicitly **disposable OPNsense/FreeBSD experiment** extending the already-running original P2e/P2g/P2i native loopback witness. **No product runtime, observer/worker/scheduler, Config writer or installed package is changed.** The active original `dvtws2.args` still lacks an authorized schema-2 native observer.
+
+## Engineering question that must be measured before a lossless rollover design
+
+The previous `_51`–`_53` P2a raw hardlink checks and `_52` all-PID P2b scanner are necessary but do not guarantee perpetual collection. When `os.replace()` changes the raw producer pathname, an upstream process may reopen the pathname for each native event **or** keep a descriptor to the previous inode. The native `--hostlist-auto-debug` file may behave independently. A guessed behavior can silently lose events or misassign raw/debug records to a new generation. Neither a portable mock nor `fstat` alone answers that question. Test the **real** `dvtws2` binary with valid original P0 first-match and real loopback packets before designing a production rollover.
+
+## Single existing VM, real native events, zero activation
+
+1. Keep the existing isolated OPNsense 26.7 P2e/P2g/P2i original shared-release builder, one native `dvtws2` with FD9 and `nobody` postdrop reownership, the precise P0 loopback rules and a real first unknown host. The original known-host profile remains first match; the first unknown native event must appear once in raw and correlate to the native observer in debug.
+2. After the first real event, run the **existing original** `DurableInbox(PRODUCER, writer_gid=nobody_gid).exclusive()/rotate(generation=<32hex>)` against that exact native raw inode. Require the original hardlinked pending to contain the first event, the fresh live inbox to be physically distinct and empty, pending only one link, no ACK or truncation.
+3. As a **temporary guest-only diagnostic**, move the original debug filename to a private archive path and recreate `debug.log` with the same root:group and mode 0660. This is deliberately **not** implementation of product debug rollover, whose safety still requires a real FD9/generation+cursor protocol.
+4. Send a SECOND, distinct unknown hostname via real HTTP/RST while the same physical engine PID/birth remains running. Check both old/new raw and debug paths, require the second domain event to appear **exactly once across each pair**, preserve the initial event/debug and output observed route `raw:previous/current`, `debug:previous/current` along with actual P2b all-PID `FDState` for the old pending. Only the inspector's existing root-only read-only probe is used; no ACK granted.
+5. Shutdown engine and restore scoped original IPFW state, remove all guest-only paths. The prior FD9/p0 first-match evidence and original postdrop/Config path remain unchanged; no owner-live claim.
+
+This experiment intentionally accepts either well-formed native route, because **the choice is the measured fact**, not a predicted result. A missing or duplicated native event, changed process birth, mismatched first event, broken native file mode, or leaked rule **fails** the witness. The exact-head PR fast test plus existing P2e/P2g/P2i disposable native VM are required and results recorded separately.
+
+**Unresolved:** whether either observed route can be safely supported under a single generation/FD9 and root-private v2 receipts; a global `fstat` snapshot is not atomic quiescence. Historic sealed raw/debug/provenance after Apply/reboot, native debug-to-raw ordering across generations, strict 4 MiB/512-slot lossless capacity and disk-full handling, active schema-2, original 60-second worker/ACK and user-installed P3–P5 are all OPEN. `authorize`, cron and `commit_authorized` remain OFF. No `_54.pkg` published; stable owner-installed `0.6.5_1.pkg` unchanged.
+
+[Existing P2i witness](P2I_NATIVE_ORIGINAL_PREVIEW_LOOPBACK.md) · [P2a original queue](../../src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py) · [P2b all PID FD](P2K8Q3B2B_ALL_PROCESS_FD.md) · [P0–P5 plan](../architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
