@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_36`** (`VERSION=0.6.5`, `PLUGIN_REVISION=36`, prospective `os-zapret2-restyle-0.6.5_36.pkg` **NOT PUBLISHED**). P2k8f connects one original P2a queue-owner process, native PHP `Config::lock()` and P2k8d/P2k2b Python commit using inherited original locked open-file descriptions, with independent inode/flock verification, bounded child and no second Config writer. The process/FD handoff has portable physical-process tests but **not yet FreeBSD/owner-appliance qualification**. Original native FD9/schema-2 observer, known-list new-origin evidence, post-drop repair, pending ACK and cron remain OFF; `commit_authorized=false`.
+Current source increment: **`v0.6.5_37`** (`VERSION=0.6.5`, `PLUGIN_REVISION=37`, prospective `os-zapret2-restyle-0.6.5_37.pkg` **NOT PUBLISHED**). P2k8g adds an actual original OPNsense Config object/`/conf/config.xml` **read-only** FreeBSD FD-handoff qualification to the already qualified P2e/P2g/P2i disposable VM; the first native refusal exposed stock guest UID 789/GID 0 on `/conf` and `config.xml`, so the code now validates an exact same-UID, GID 0, non-group-writable Config ancestry instead of assuming root ownership (queue remains root-only): true queue→PHP→Python inherited kernel locks, early Config-unlock denial, PHP-parent death lock survival and no Config/queue writes. Test consumes an inert child receipt and synthetic Hostlist Model; it does **not** validate a real FD9/schema-2 observer, actual P2k8d native destination write, pending ACK, cron or owner-installed appliance operation. The same native evidence showed that OPNsense PHP omits `posix_geteuid()`: the shared CLI now checks effective root through POSIX or exact-output absolute no-shell `/usr/bin/id -u`. The disposable test transports its Python compatibility paths/hold markers via a bounded **test-only** `/usr/bin/env` child command because production PHP scrubs subprocess environment. Qualification is established only by exact-head native run evidence, not portable CI. `commit_authorized=false`.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=36`; P2k8f one original queue→Config→P2k8d/P2k2b inherited-FD cycle (not installed/activated) | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=37`; P2k8g exact-original OPNsense Config/FD handoff native test in existing disposable VM; P2k8f source chain retained; no installed/activated worker | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_36.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_37.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
