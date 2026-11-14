@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_57`** (`VERSION=0.6.5`, `PLUGIN_REVISION=57`, prospective `os-zapret2-restyle-0.6.5_57.pkg` **NOT PUBLISHED**). P2k8q3d2 extends the original disposable OPNsense 26.7 P2i generator/FD9/native loopback scenario with TWO sequential (not concurrent) original engine lifetimes in the SAME VM. The first preserves `_55`'s measured native live-writer midcut `raw:current,debug:previous`. The second pins the dropped-owner PID/birth/UID, SIGSTOPs only that native test child and requires real FreeBSD STOP state while the ONE original P2a queue rotates raw and guest-only debug is replaced. Before SIGCONT it checks both old native data files unchanged and both live new paths empty; after SIGCONT it requires same PID resumed and distinct native HTTP/RST once in each new inode plus P0 first-match, scoped IPFW cleanup, real P2b old raw fstat snapshot. **Only a finite isolated STOP/CONT witness**; installed service pause is not authorized, and historic writer FD/FD9, crash/reboot/ENOSPC, 4 MiB/512-slot lossless rollover, active schema-2 and cron remain OPEN. [Scope](verification/P2K8Q3D2_NATIVE_STOPPED_CUT_WITNESS.md). Stable installed `_1.pkg` unchanged.
+Current source increment: **`v0.6.5_58`** (`VERSION=0.6.5`, `PLUGIN_REVISION=58`, prospective `os-zapret2-restyle-0.6.5_58.pkg` **NOT PUBLISHED**). P2k8q3d3 qualifies the **untested real traffic continuity** gap in `_57` with the ORIGINAL P2i native OPNsense 26.7 same VM. The original engine is already PID/birth/UID checked and FreeBSD-kernel STOPPED across original P2a raw and guest-only debug cuts; while STOPPED a concurrent known-HOSTLIST HTTP exchange MUST increase the original P0 scoped IPFW divert packet count yet remain incomplete. After both cuts and original PID SIGCONT, require exact delivery of that in-flight known HTTP, no false native auto positive, and previous distinct post-resume unknown once on both NEW raw/debug. Bounded synthetic thread cleanup runs after unconditional SIGCONT on error. The `_55` native split-cohort negative control remains. This is only an isolated stalled-packet/recovery measurement, NOT a production signal/uptime guarantee: crash during STOP, FD9 historical source, finite 4 MiB/512-slot lossless rollover, reboot/ENOSPC and active schema-2/cron are OPEN. [Proof](verification/P2K8Q3D3_NATIVE_INFLIGHT_DIVERT_STOP.md). Stable installed `_1.pkg` unchanged.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=57`; original disposable P2i native dual-scenario STOP/CONT test; schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=58`; original P2i STOP/CONT in-flight IPFW divert measurement; schema-2/cron disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_57.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_58.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
