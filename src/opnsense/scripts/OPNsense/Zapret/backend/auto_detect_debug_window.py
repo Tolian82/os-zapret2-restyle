@@ -176,8 +176,13 @@ def propose_window(proof: GenerationProof, cursor: Cursor, raw: bytes, *,
     if (len(tail) > MAX_WINDOW or (tail and not tail.endswith(b'\n')) or
             b'\x00' in tail):
         raise DebugWindowRefused('debug_window_oversized_or_incomplete')
+    # Upstream debug emits 'adding to' BEFORE its raw append. While the
+    # previous raw inode is detached, later native events may already be
+    # present in the same debug inode for the NEXT raw segment. Only advance
+    # over the exact ordered positive prefix belonging to this pending raw.
     candidates = []
     pos = cursor.offset
+    end_offset = None
     for line in tail.splitlines(keepends=True):
         try:
             decoded = line[:-1].decode('ascii')
@@ -192,13 +197,19 @@ def propose_window(proof: GenerationProof, cursor: Cursor, raw: bytes, *,
             if (not _hostname(host) or
                     (number, 'observer', None) not in proof.profiles):
                 raise DebugWindowRefused('unauthorized_native_profile_or_host')
+            if host != hosts[len(candidates)]:
+                raise DebugWindowRefused('raw_and_positive_debug_not_one_to_one')
             candidates.append(Candidate(host, number, pos))
+            if len(candidates) == len(hosts):
+                end_offset = pos + len(line)
+                break
         # RST, reset, fail counter and NOT adding are NOT positives.
         pos += len(line)
-    if [x.host for x in candidates] != hosts:
+    if end_offset is None:
         raise DebugWindowRefused('raw_and_positive_debug_not_one_to_one')
     return Window(tuple(candidates), Cursor(proof.generation, info.st_dev,
-                  info.st_ino, len(content), hashlib.sha256(content).hexdigest()))
+                  info.st_ino, end_offset,
+                  hashlib.sha256(content[:end_offset]).hexdigest()))
 
 
 def run_native_debug_collector() -> None:
