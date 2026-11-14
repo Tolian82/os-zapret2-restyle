@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_44`** (`VERSION=0.6.5`, `PLUGIN_REVISION=44`, prospective `os-zapret2-restyle-0.6.5_44.pkg` **NOT PUBLISHED**). P2k8n adds a dormant protected per-generation, **per-minute append-only cursor chain** built from the genuine immutable P2k2a initial epoch. Each slot has its own immutable pending/debug intent, physical P2k2b CAS plan/checkpoint and original P2a inode-safe ACK receipt; following cursor derives only from the prior ACK, not a stale raw producer. Portable physical two-minute tests prove replay after GUI edits and a crash between pending unlink and ACK; all real native P2c/P2b witnesses remain unqualified on the owner appliance. The old P2k2a one-intent format refuses mixed v2 state, while source `_43` remains inert. No active FD9/schema-2, old-generation recovery, CLI/configd worker, cron or product `.pkg` release. Existing stable installed `_1` unchanged.
+Current source increment: **`v0.6.5_45`** (`VERSION=0.6.5`, `PLUGIN_REVISION=45`, prospective `os-zapret2-restyle-0.6.5_45.pkg` **NOT PUBLISHED**). P2k8o now provides a **single** import-only P2a original current-generation raw→pending→P2k8n v2 prepared intent bridge with genuine immutable epoch and v2 chain preflight, one original queue flock, retained old pending priority, same-inode hardlink crash repair, P2c engine reattestation, P2b independent native writer FD drain and P2k1 real debug/raw pairing. **The superseded P2k8m one-intent rotation implementation, its tests and CI entry are removed under DEV-050**, not preserved as dormant alternatives. The old one-intent on-disk format is not a supported active fallback; unknown historic bytes fail closed. Old P2k8k/l Config-held one-intent route is still in source pending future v2 Config/ACK replacement; do not treat this as finished architectural cleanup. Active native FD9 schema-2, real Config-held v2 commit, old-generation process/FD evidence, continuous compaction and cron are unimplemented. Owner-installed `_1.pkg` unchanged.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=44`; append-only per-minute cursor/P2k2b physical commit/ACK chain import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=45`; one original P2a raw→v2 prepared-intent path, old P2k8m node removed; live observer/cron/collector disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_44.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_45.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -29,7 +29,7 @@ Current source increment: **`v0.6.5_44`** (`VERSION=0.6.5`, `PLUGIN_REVISION=44`
 
 ## Active #1052 implementation boundary
 
-**Current `_44` addition:** [P2k8n](verification/P2K8N_APPEND_ONLY_CURSOR_CHAIN.md) adds a second, **mutually exclusive**, append-only cursor-chain storage protocol under the same immutable P2k2a original epoch. Per-slot P2k2b physical destination plan/checkpoint and P2a ACK gate permit multiple consecutive minutes of *offline-test* events; a durable ACK alone never authorizes an original process, Config writer or running observer. No original FD9 lifecycle owner nor minute worker invokes it; finite 512-slot capacity and debug limit still require compaction before production.
+**Current `_45` boundary:** [P2k8o](verification/P2K8O_ORIGINAL_QUEUE_V2_PREPARE.md) is now the one original current raw→v2 prepared-intent path. P2k8n physical per-minute destination/ACK chain remains a separate unactivated transaction primitive until genuine original PHP Config-child integration. Superseded P2k8m code/tests/CI no longer exist; original experimental v1 on-disk receipts are detected and refused, not migrated. Real FD9 schema-2 and owner-lifecycle proof remain necessary; finite 512-slot and debug growth limits block continuous production activation.
 
 **Current `_43` addition:** [P2k8m](verification/P2K8M_ORIGINAL_RAW_ROTATION_INTENT.md) composes one authentic *current generation only* original queue hardlink/replace and protected P2b/P2k1/P2k2a physical intent. Its native wrapper has no active CLI/configd path; it cannot bootstrap its own epoch, process an old generation, advance another minute's cursor or ACK a domain. Source-only physical tests do not constitute installed FD9 traffic evidence.
 

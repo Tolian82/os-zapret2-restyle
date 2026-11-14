@@ -24,7 +24,7 @@ from auto_detect_destination_commit import DestinationCommit, DestinationRefused
 from auto_detect_epoch_receipts import (EMPTY_HASH, EpochReceipts, ReceiptRefused,
                                         _canonical, _directory, _read, _sync, _write_once)
 from auto_detect_fd import FDState, probe_pending_fd
-from auto_detect_original_rotation import _original, _pending_snapshot
+from auto_detect_original_v2_source import (qualified_current_source, detached_original_raw)
 from auto_detect_owner import GenerationProof, GenerationRefused, attest_running_generation
 from auto_detect_queue import DurableInbox, QueueSafetyError
 
@@ -150,7 +150,7 @@ class CursorChain:
     def _root(self, proof: GenerationProof, *, create: bool) -> tuple[Path, dict, bytes]:
         if not self.queue._held:
             raise CursorChainRefused("original_queue_lock_required")
-        proof = _original(proof, self.queue)
+        proof = qualified_current_source(proof, self.queue)
         epoch_folder, epoch = self.receipts._epoch(proof)
         names = set(os.listdir(epoch_folder))
         if (any(n.startswith("intent-") for n in names) or "destination" in names or
@@ -248,7 +248,7 @@ class CursorChain:
                 not self.queue._held or attest() != proof):
             raise CursorChainRefused("current_original_owner_required")
         try:
-            _original(proof, self.queue)
+            qualified_current_source(proof, self.queue)
             pending = Path(pending)
             items = self.queue.segments()
             if (len(items) != 1 or items[0] != pending or
@@ -263,7 +263,7 @@ class CursorChain:
                         writer_gid=self.queue.writer_gid) is not FDState.DRAINED or
                     attest() != proof):
                 raise CursorChainRefused("original_pending_fd_not_drained")
-            raw = _pending_snapshot(self.queue, pending)
+            raw = detached_original_raw(self.queue, pending)
             if tip.open_intent is not None:
                 expected = tip.open_intent
                 # After first staging, the original engine may append later
@@ -309,7 +309,7 @@ class CursorChain:
                     inspect(pending, before.st_dev, before.st_ino,
                             owner=proof.owner,
                             writer_gid=self.queue.writer_gid) is not FDState.DRAINED or
-                    _pending_snapshot(self.queue, pending) != raw):
+                    detached_original_raw(self.queue, pending) != raw):
                 raise CursorChainRefused("original_pending_changed_before_persist")
             root, _, _ = self._root(proof, create=True)
             slot = root / f"{tip.next_sequence:08d}"
@@ -352,7 +352,7 @@ class CursorChain:
                         owner=proof.owner, writer_gid=self.queue.writer_gid)
                     is not FDState.DRAINED or attest() != proof):
                 raise CursorChainRefused("original_writer_fd_not_drained")
-            raw = _pending_snapshot(self.queue, pending)
+            raw = detached_original_raw(self.queue, pending)
             if ((before.st_dev, before.st_ino, len(raw), _digest(raw)) !=
                     (intent["pending_device"], intent["pending_inode"],
                      intent["pending_size"], intent["pending_sha256"])):

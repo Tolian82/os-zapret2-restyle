@@ -615,16 +615,16 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_lock_handoff.py scripts/test-auto-detect-original-ack-cycle.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-ack-cycle.py
-      - name: Test P2k8m original raw rotation to protected current-generation debug intent (dormant)
-        run: |
-          set -euo pipefail
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_rotation.py scripts/test-auto-detect-original-rotation.py
-          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-rotation.py
       - name: Test P2k8n append-only two-minute native cursor/Config-target/ACK chain (dormant)
         run: |
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_cursor_chain.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py scripts/test-auto-detect-cursor-chain.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-cursor-chain.py
+      - name: Test P2k8o original P2a raw rotation to forward-only v2 prepared intent
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_v2_source.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_v2_prepare.py scripts/test-auto-detect-original-v2-prepare.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-original-v2-prepare.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
