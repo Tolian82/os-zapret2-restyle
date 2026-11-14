@@ -133,11 +133,12 @@ class OwnerGenerationTests(unittest.TestCase):
         create_seal(self.work, owner=UID)
         self.ps.args = " ".join(self.argv.split())
 
-    def witness(self):
+    def witness(self, *, epoch_finalizing_operation=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
+            epoch_finalizing_operation=epoch_finalizing_operation,
         )
 
     def refuses(self):
@@ -221,6 +222,25 @@ class OwnerGenerationTests(unittest.TestCase):
         self.map["observer_native_number"] = 1
         self.refresh()
         self.refuses()
+
+    def test_epoch_finalizing_is_not_a_public_current_owner(self):
+        self.record["phase"] = "epoch-finalizing"
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        self.refuses()  # ordinary P2c / minute worker cannot accept it
+        proof = self.witness(epoch_finalizing_operation=OP_ID)
+        self.assertEqual(proof.generation, OP_ID)
+        self.assertEqual(proof.owner.pid, PID)
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.witness(epoch_finalizing_operation="f" * 32)
+        self.record["phase"] = "activated"
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.witness(epoch_finalizing_operation=OP_ID)
+        self.record["phase"] = "committed"
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.witness(epoch_finalizing_operation=OP_ID)
+        self.assertEqual(self.witness().generation, OP_ID)
 
     def test_nonroot_or_offtarget_public_api_refuses(self):
         # The public path is strict; these positive synthetic fixture checks

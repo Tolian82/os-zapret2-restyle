@@ -242,18 +242,19 @@ def native_seal_original_epoch(generation: str, candidate: str) -> None:
 
 def native_finish_original_epoch(generation: str) -> None:
     from auto_detect_epoch_receipts import HEX32
-    from auto_detect_owner import attest_running_generation
+    from auto_detect_owner import attest_epoch_finalizing_generation
     if not isinstance(generation, str) or not HEX32.fullmatch(generation):
         raise PostDropRefused("invalid_original_epoch_generation")
-    # P2c requires the ORIGINAL terminal common journal, live supervisor,
-    # matching active+sealed argv/map and exact PID/birth. Do not call this
-    # before native Config save and the terminal shared Apply record.
-    proof = attest_running_generation()
+    # Same FD9 after Config save, IPFW commit, supervisor and final runtime
+    # proof, but BEFORE terminal committed. A minute worker cannot enter.
+    proof = attest_epoch_finalizing_generation(generation)
     if proof.generation != generation or proof.operation_id != generation:
-        raise PostDropRefused("completed_original_owner_differs")
+        raise PostDropRefused("precommit_original_owner_differs")
     queue, receipts = _original_epoch_queue()
     with queue.exclusive():
-        receipts.finish_running(proof, queue)
+        receipts.finish_running(
+            proof, queue,
+            attest=lambda: attest_epoch_finalizing_generation(generation))
 
 
 # P2k8i: the two half-calls are a *single* original-FD9 shell operation.

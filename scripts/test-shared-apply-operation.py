@@ -22,6 +22,32 @@ class TestJournal(unittest.TestCase):
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
 
+    def test_original_epoch_must_complete_before_terminal_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            current = detail("e" * 32)
+            for phase in ("prepared", "activating", "activated", "config-saved"):
+                store.advance(phase, current)
+            with self.assertRaises(SharedOperationError):
+                store.advance("epoch-finalizing", detail("f" * 32))
+            store.advance("epoch-finalizing", current)
+            self.assertIsNone(committed_owner(store.read()))
+            with self.assertRaises(SharedOperationError):
+                store.advance("prepared", detail("f" * 32))
+            with self.assertRaises(SharedOperationError):
+                store.advance("activated", current)
+            store.advance("requires-review", current)
+            self.assertIsNone(committed_owner(store.read()))
+            with self.assertRaises(SharedOperationError):
+                store.advance("committed", current)
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            current = detail("c" * 32)
+            for phase in ("prepared", "activating", "activated", "config-saved",
+                          "epoch-finalizing", "committed"):
+                store.advance(phase, current)
+            self.assertEqual(committed_owner(store.read()), current)
+
     def test_retired_telegram_predecessor_api_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             j=SharedApplyOperation(Path(tmp)/"shared-apply")

@@ -102,7 +102,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; }
+reset() { : > "$LOG"; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -167,3 +167,30 @@ expect_status 70 'bundle:verify runtime-probe record:prepared record:activating 
 reset; RESTORE_RC=1; SAVE_RC=69
 expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save runtime-restore record:requires-review '
 echo 'PASS: shared FD9 native runtime/Config fault-injection matrix'
+
+# #1052 P2k8q3b1: real existing shell executor, stubbed native FD9 epoch
+# proof only. This is not active recording or P2c FreeBSD acceptance.
+cat > "$ROOT/epoch-cli-shim" <<'EOS'
+#!/bin/sh
+[ "$2" = finish-epoch ] || exit 69
+printf 'epoch-finish\n' >> "$LOG"
+[ "$FINISH_FAIL" = 0 ] || exit 69
+printf 'original-fd9-running-epoch=attested\n'
+EOS
+chmod 700 "$ROOT/epoch-cli-shim"
+export LOG FINISH_FAIL
+PYTHON_RUNTIME="$ROOT/epoch-cli-shim"
+BACKEND_DIR="$ROOT"
+: > "$ROOT/work/release/auto-detect-generation.json"
+reset
+expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:epoch-finalizing epoch-finish record:committed '
+grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "completed native epoch not applied"
+reset; FINISH_FAIL=1; export FINISH_FAIL
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:epoch-finalizing epoch-finish record:requires-review '
+! grep -q '^applied-id=' "$ROOT/response.txt" || fail "failed epoch claimed success"
+reset; BAD_RECORD=epoch-finalizing
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:epoch-finalizing record:requires-review '
+reset; BAD_RECORD=committed
+expect_status 70 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:epoch-finalizing epoch-finish record:committed '
+! grep -q '^applied-id=' "$ROOT/response.txt" || fail "failed commit claimed success"
+echo 'P2K8Q3B1_EPOCH_TERMINAL_BARRIER=PASS_SOURCE_ONLY'

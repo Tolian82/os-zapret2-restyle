@@ -29,7 +29,7 @@ FIELD = re.compile(r"^[a-z]+(?:\.[a-z]+){1,2}$")
 PAGES = frozenset(("strategies", "voice"))
 PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
-    "committed", "restored", "restore-failed", "requires-review",
+    "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -39,7 +39,10 @@ NEXT = {
     "activating": frozenset(("activated", "restored", "requires-review", "restore-failed")),
     "activated": frozenset(("config-saved", "restored", "restore-failed",
                             "requires-review")),
-    "config-saved": frozenset(("committed", "requires-review")),
+    "config-saved": frozenset(("committed", "epoch-finalizing", "requires-review")),
+    # A real native observer must finish its pretraffic epoch BEFORE
+    # becoming a terminal common owner. This is the same original journal.
+    "epoch-finalizing": frozenset(("committed", "requires-review")),
     "committed": frozenset(),
     "restored": frozenset(),
     "restore-failed": frozenset(),
