@@ -19,8 +19,8 @@ BACKEND = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Z
 sys.path.insert(0, str(BACKEND))
 
 from auto_detect_cursor_chain import CursorChain
-from auto_detect_debug_window import empty_epoch
 from auto_detect_destination_commit import DestinationCommit
+from auto_detect_epoch_fixture import sealed_original_epoch
 from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
@@ -52,7 +52,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
             ((0, "unknown-native-default", None),
              (1, "known-hostlist", "youtube"), (2, "observer", None)))
         self.receipts = EpochReceipts(self.base / "epochs", owner_uid=os.geteuid())
-        self.receipts.begin(self.proof, empty_epoch(self.proof, owner_uid=os.geteuid()))
+        self.proof = sealed_original_epoch(self.base, self.proof, self.queue, self.receipts)
         self.chain = CursorChain(self.receipts, self.queue)
         self.targets = self.base / "lists"
         self.targets.mkdir(mode=0o700)
