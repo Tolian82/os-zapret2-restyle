@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_40`** (`VERSION=0.6.5`, `PLUGIN_REVISION=40`, prospective `os-zapret2-restyle-0.6.5_40.pkg` **NOT PUBLISHED**). P2k8j adds the **registered, unscheduled** original OPNsense configd action `auto_detect_minute` and one restricted short Python runtime entrypoint. Only original protected inactive shared runtime is accepted; forged/dangling generation, any native-auto raw/debug knob, unsafe symlink/mode/argv or non-FreeBSD/non-root invocation refuses. No cron entry is packaged, no actual durable worker, native observer, pending rotation/ACK, hostlist or Config write is enabled. Existing original-FD9 P2k8i launcher remains unchanged. `commit_authorized=false`.
+Current source increment: **`v0.6.5_41`** (`VERSION=0.6.5`, `PLUGIN_REVISION=41`, prospective `os-zapret2-restyle-0.6.5_41.pkg` **NOT PUBLISHED**). P2k8k adds an **import-only** post-commit ACK helper: it validates the current live P2c generation, protected P2k2b plan/checkpoint, exact original Config-child completion, original pending inode/hash and P2b native FD drain under the held P2a queue before calling its inode-safe unlink. Old-generation replay, genuine sealed observer, active worker and cron remain OPEN. P2k8j's configd ingress stays unscheduled/inactive; FD9 unchanged; `ack_authorized=false` in detached receipts.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=40`; P2k8j registered **unscheduled** fail-closed minute ingress and exact original-release idle classification; native worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=41`; current-generation post-commit ACK primitive import-only; live worker/cron/collector/ACK disabled | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_40.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_41.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts
@@ -28,6 +28,8 @@ Current source increment: **`v0.6.5_40`** (`VERSION=0.6.5`, `PLUGIN_REVISION=40`
 | Voice | Five-service native page and common Strategies/Voice Config/Apply/engine/firewall lifecycle; service acceptance does not establish media/call bypass | [Voice contract](architecture/VOICE_TRANSMISSION_GUI.md) |
 
 ## Active #1052 implementation boundary
+
+**Current `_41` addition:** [P2k8k](verification/P2K8K_POST_COMMIT_ACK.md) validates the genuine *current* original generation and protected physical ACK preconditions; it is only called in offline test fixtures. There is still no installed writer/ACK caller or historical-owner authorization.
 
 P0 generated-native observer feasibility and P1 canonical domain/PSL policy are complete. P2a protected queue, P2b genuine FreeBSD FD inspection, P2c detached common-owner attestation and P2d nonactivating original-generator source map are merged. [P2e](verification/P2E_ORIGINAL_SHARED_BUILDER.md) adds the actual original shared-builder witness at `_14`; the original `orchestrator_build_release()` runs against a disposable offline candidate, with only the kernel-interface resolver locally stubbed.
 
