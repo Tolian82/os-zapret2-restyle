@@ -222,11 +222,11 @@ class DurableInbox:
         return files
 
     def rotate(self, *, generation: str | None = None) -> Path | None:
-        """Under exclusive(); recover link-before-replace with exact generation.
+        """Under original exclusive(); recover only a genuine generation link.
 
-        Legacy callers retain the P2a behavior; the not-yet-enabled P2j
-        coordinator requires a 32-hex original shared-Apply generation tag so
-        a pending inode can never be guessed to belong to a NEW engine.
+        The original v2 preparation passes its 32-hex shared-Apply ID.
+        Existing no-tag queue callers remain supported. No historical
+        inode may silently acquire a different generation during recovery.
         """
         if generation is not None and (type(generation) is not str or
                                        re.fullmatch(r"[a-f0-9]{32}", generation) is None):
@@ -277,8 +277,29 @@ class DurableInbox:
                 if _identity(segment) != (old.st_dev, old.st_ino) or segment.lstat().st_nlink != 2:
                     raise QueueSafetyError("link_identity_changed")
                 _sync_directory(self.pending)
-            if _identity(self.inbox) != (old.st_dev, old.st_ino):
-                raise QueueSafetyError("inbox_changed_before_replace")
+            # The producer is not serialized by the root-only queue lock.
+            # It can append AFTER the first <=4 MiB stat and while link()
+            # is being fsynced. Re-read BOTH linked names at the last
+            # pre-replace boundary. A changed/oversized raw inode stays
+            # on its original live path, with the same pending hardlink
+            # available for exactly attributed crash recovery; NEVER drop
+            # or truncate its bytes to make the next tick pass.
+            live_now = _stat_regular(self.inbox, self.uid,
+                                     max_size=MAX_SEGMENT,
+                                     writer_gid=self.writer_gid)
+            pending_now = _stat_regular(segment, self.uid,
+                                        max_size=MAX_SEGMENT,
+                                        writer_gid=self.writer_gid)
+            if (live_now.st_dev != old.st_dev or
+                    live_now.st_ino != old.st_ino or
+                    pending_now.st_dev != old.st_dev or
+                    pending_now.st_ino != old.st_ino or
+                    live_now.st_nlink != 2 or pending_now.st_nlink != 2 or
+                    live_now.st_size != old.st_size or
+                    pending_now.st_size != old.st_size or
+                    live_now.st_mtime_ns != old.st_mtime_ns or
+                    pending_now.st_mtime_ns != old.st_mtime_ns):
+                raise QueueSafetyError("raw_changed_between_link_and_replace")
             os.replace(temp, self.inbox)
             _sync_directory(self.root)
             return segment

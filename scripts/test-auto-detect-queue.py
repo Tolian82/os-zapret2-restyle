@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py"
 spec = importlib.util.spec_from_file_location("auto_detect_queue", MODULE)
@@ -127,6 +128,82 @@ class DurableInboxTests(unittest.TestCase):
             self.assertEqual(self.queue.segments(), [p])
             self.assertEqual(p.stat().st_nlink, 2)
             self.assertEqual(list(self.root.glob(".new-inbox-*")), [])
+
+    def test_producer_append_during_hardlink_refuses_without_replace(self):
+        # RED on _52: initial size fits, link succeeds, producer appends
+        # while pending directory is synced, then rotate() replaced live.
+        generation = "d" * 32
+        original_link = os.link
+        before = self.queue.inbox.stat()
+        extra = b"late.example.com\n"
+
+        def link_then_append(source, target, **kwargs):
+            original_link(source, target, **kwargs)
+            with self.queue.inbox.open("ab", buffering=0) as writer:
+                writer.write(extra)
+                os.fsync(writer.fileno())
+
+        with self.queue.exclusive():
+            with patch.object(queue.os, "link", side_effect=link_then_append):
+                with self.assertRaisesRegex(
+                    queue.QueueSafetyError, "raw_changed_between_link_and_replace"
+                ):
+                    self.queue.rotate(generation=generation)
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            live = self.queue.inbox.stat()
+            self.assertEqual((live.st_dev, live.st_ino),
+                             (before.st_dev, before.st_ino))
+            self.assertEqual(live.st_nlink, 2)
+            self.assertEqual(queue._identity(pending[0]),
+                             queue._identity(self.queue.inbox))
+            self.assertEqual(self.queue.inbox.read_bytes(),
+                             b"one.example.com\n" + extra)
+            self.assertEqual(list(self.root.glob(".new-inbox-*")), [])
+            # Next attempt recovers the ORIGINAL same-generation crash link;
+            # it does not invent a fresh pending or lose the late record.
+            self.assertEqual(self.queue.rotate(generation=generation), pending[0])
+            self.assertEqual(pending[0].read_bytes(),
+                             b"one.example.com\n" + extra)
+            self.assertEqual(pending[0].stat().st_nlink, 1)
+            self.assertEqual(self.queue.inbox.read_bytes(), b"")
+
+    def test_producer_crosses_4mib_after_link_still_keeps_live_inode(self):
+        # The _51 pre-link size check alone cannot protect this real window.
+        generation = "e" * 32
+        original_link = os.link
+        before = self.queue.inbox.stat()
+
+        def link_then_overflow(source, target, **kwargs):
+            original_link(source, target, **kwargs)
+            with self.queue.inbox.open("r+b") as writer:
+                writer.truncate(queue.MAX_SEGMENT + 1)
+                writer.flush()
+                os.fsync(writer.fileno())
+
+        with self.queue.exclusive():
+            with patch.object(queue.os, "link", side_effect=link_then_overflow):
+                with self.assertRaisesRegex(
+                    queue.QueueSafetyError, "oversized_segment"
+                ):
+                    self.queue.rotate(generation=generation)
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            live = self.queue.inbox.stat()
+            self.assertEqual((live.st_dev, live.st_ino),
+                             (before.st_dev, before.st_ino))
+            self.assertEqual(live.st_nlink, 2)
+            self.assertEqual(live.st_size, queue.MAX_SEGMENT + 1)
+            self.assertEqual(queue._identity(pending[0]),
+                             queue._identity(self.queue.inbox))
+            self.assertEqual(list(self.root.glob(".new-inbox-*")), [])
+            # This live file is now genuinely oversized; do not detach it
+            # on subsequent retries or pretend to have a lossless recovery.
+            with self.assertRaisesRegex(queue.QueueSafetyError,
+                                        "oversized_segment"):
+                self.queue.rotate(generation=generation)
+            self.assertEqual(queue._identity(pending[0]),
+                             queue._identity(self.queue.inbox))
 
     def test_oversized_pending_is_not_removed(self):
         with self.queue.exclusive():
