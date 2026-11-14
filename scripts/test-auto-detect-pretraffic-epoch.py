@@ -98,7 +98,7 @@ class PretrafficEpochTests(unittest.TestCase):
 
     def test_nonempty_original_raw_never_seeds_or_truncates(self):
         self.queue.inbox.write_bytes(b"old.example.com\n")
-        with self.assertRaisesRegex(ReceiptRefused, "original_sealed_pretraffic_not_attested"):
+        with self.assertRaisesRegex(ReceiptRefused, "pretraffic_original_inodes_not_empty_and_distinct"):
             self.seal()
         self.assertEqual(self.queue.inbox.read_bytes(), b"old.example.com\n")
         self.assertFalse(self.folder.exists())
@@ -191,7 +191,7 @@ class PretrafficEpochTests(unittest.TestCase):
         self.seal()
         path = self.folder / "pretraffic.json"
         row = json.loads(path.read_text())
-        row["raw_inode"] += 1
+        row["raw_inode"] += 1000000
         path.write_text(json.dumps(row))
         with self.assertRaisesRegex(ReceiptRefused, "pretraffic_inode_replaced_after_launch"):
             self.finish()
