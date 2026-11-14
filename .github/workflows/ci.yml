@@ -594,6 +594,11 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_debug_window.py scripts/test-auto-detect-debug-window.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-debug-window.py
+      - name: Test P2k8q2 original FD9 sealed pretraffic epoch and same-owner postlaunch completion
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py scripts/auto_detect_epoch_fixture.py scripts/test-auto-detect-pretraffic-epoch.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-pretraffic-epoch.py
       - name: Test P2k8n append-only two-minute native cursor/Config-target/ACK chain (dormant)
         run: |
           set -euo pipefail

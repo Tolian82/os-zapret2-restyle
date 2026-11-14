@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""#1052 P2k8p: root-private immutable original empty-debug epoch for v2.
+"""#1052 P2k8q2: one forward-only original pretraffic seed and live completion.
 
-The original FD9 attested current generation establishes the epoch BEFORE
-traffic; only append-only v2 cursor-chain slots are allowed thereafter.
-No legacy one-intent format, migration path, Config writer or worker.
+The original held FD9 must seal an authenticated schema-2 shared candidate
+and the *real empty* debug/raw inodes BEFORE dvtws2 starts. The later genuine
+P2c process proof can complete that same immutable seed even if debug now
+contains first-packet events. A receipt never itself authorizes observation,
+Config, final targets, pending ACK or cron. No postlaunch zero-init fallback.
 """
 from __future__ import annotations
 
@@ -14,10 +16,15 @@ from pathlib import Path
 import re
 import secrets
 import stat
+import sys
 
-from auto_detect_debug_window import (Cursor, Window, _hostname,
-                                      empty_epoch, propose_window, DebugWindowRefused)
-from auto_detect_owner import GenerationProof
+from auto_detect_debug_window import _read_exact, DebugWindowRefused
+from auto_detect_owner import (GenerationProof, GenerationRefused,
+                               MAX_ARGS, MAX_MAP, _secure_bytes, _valid_map,
+                               attest_running_generation)
+from auto_detect_original_v2_source import qualified_current_source, OriginalSourceRefused
+from auto_detect_queue import DurableInbox, QueueSafetyError
+from shared_apply_seal import (SEAL, SharedBundleError, verify_seal)
 
 ROOT = Path("/var/db/zapret2/auto-detect-epochs")
 HEX32 = re.compile(r"[0-9a-f]{32}\Z")
@@ -128,7 +135,7 @@ def _proof_fields(proof: GenerationProof) -> dict:
             (proof.observer_native_number, "observer", None) not in proof.profiles):
         raise ReceiptRefused("unqualified_original_owner_proof")
     return {
-        "schema": 1, "kind": "historical-native-debug-epoch",
+        "schema": 2, "kind": "original-native-debug-epoch",
         "generation": proof.generation, "operation_id": proof.operation_id,
         "final_args_sha256": proof.final_args_sha256,
         "owner_pid": proof.owner.pid, "owner_start": proof.owner.started,
@@ -174,57 +181,204 @@ class EpochReceipts:
             _sync(self.root)
         _directory(folder, self.uid)
         entries = os.listdir(folder)
-        if (len(entries) > 2 or
-                any(name not in ("epoch.json", "cursor-chain-v2") for name in entries)):
+        if (len(entries) > 3 or
+                any(name not in ("pretraffic.json", "epoch.json",
+                                 "cursor-chain-v2") for name in entries)):
             raise ReceiptRefused("superseded_one_intent_epoch_refused")
         if "cursor-chain-v2" in entries:
             _directory(folder / "cursor-chain-v2", self.uid)
         return folder
 
-    def begin(self, proof: GenerationProof, cursor: Cursor) -> None:
-        """Initialize exactly once from a future independently attested FD9.
-
-        No old debug file is silently cleared or inherited; P2k1 empty_epoch
-        must already have proved a new zero-length native debug inode.
-        """
-        if (not isinstance(cursor, Cursor) or
-                not isinstance(proof, GenerationProof) or
-                cursor.generation != proof.generation or
-                cursor.offset != 0 or cursor.prefix_sha256 != EMPTY_HASH or
-                type(cursor.device) is not int or cursor.device < 0 or
-                type(cursor.inode) is not int or cursor.inode <= 0):
-            raise ReceiptRefused("unqualified_initial_debug_cursor")
-        # Independently read the actual protected zero-length native inode.
-        # Never pin a fabricated dev/ino or inherit a prior generation's log.
+    def _pretraffic(self, proof: GenerationProof) -> tuple[Path, dict, bytes]:
+        folder = self._generation(proof.generation, create=False)
+        raw = _read(folder / "pretraffic.json", self.uid)
         try:
-            actual = empty_epoch(proof, owner_uid=self.uid,
-                                 writer_gid=self.writer_gid)
-        except DebugWindowRefused as exc:
-            raise ReceiptRefused("no_trusted_empty_debug_epoch") from exc
-        if actual != cursor:
-            raise ReceiptRefused("initial_debug_inode_does_not_match")
-        data = _proof_fields(proof)
-        data.update(debug_device=cursor.device, debug_inode=cursor.inode,
-                    committed_cursor_offset=0, committed_cursor_sha256=EMPTY_HASH)
-        folder = self._generation(proof.generation, create=True)
-        _write_once(folder, "epoch.json", _canonical(data), self.uid)
+            seed = json.loads(raw)
+        except (UnicodeError, TypeError, ValueError) as exc:
+            raise ReceiptRefused("corrupt_original_pretraffic_seed") from exc
+        required = {
+            "schema", "kind", "generation", "owner_candidate_sha256",
+            "release_seal_sha256", "final_args_sha256", "raw_path",
+            "debug_path", "raw_device", "raw_inode", "debug_device",
+            "debug_inode", "observer_native_number", "profiles",
+            "ack_authorized",
+        }
+        if (not isinstance(seed, dict) or set(seed) != required or
+                seed["schema"] != 2 or seed["kind"] != "original-fd9-pretraffic-zero" or
+                seed["generation"] != proof.operation_id or
+                seed["generation"] != proof.generation or
+                not HEX64.fullmatch(str(seed["owner_candidate_sha256"])) or
+                not HEX64.fullmatch(str(seed["release_seal_sha256"])) or
+                seed["final_args_sha256"] != proof.final_args_sha256 or
+                seed["raw_path"] != proof.raw_path or
+                seed["debug_path"] != proof.debug_path or
+                seed["observer_native_number"] != proof.observer_native_number or
+                seed["profiles"] != [list(row) for row in proof.profiles] or
+                any(type(seed[k]) is not int or seed[k] <= 0
+                    for k in ("raw_inode", "debug_inode")) or
+                any(type(seed[k]) is not int or seed[k] < 0
+                    for k in ("raw_device", "debug_device")) or
+                (seed["raw_device"], seed["raw_inode"]) ==
+                    (seed["debug_device"], seed["debug_inode"]) or
+                seed["ack_authorized"] is not False):
+            raise ReceiptRefused("pretraffic_seed_differs_from_running_generation")
+        return folder, seed, raw
+
+    def seal_pretraffic(self, queue: DurableInbox, *, workspace: Path,
+                        candidate_sha256: str) -> None:
+        """Original-FD9 prelaunch only: durable immutable zero BEFORE a packet.
+
+        Caller MUST own original FD9 and the original P2a flock and provide
+        the independently obtained native PHP candidate digest. A detached P2h
+        preview is insufficient: the actual sealed release must contain the
+        genuine authorized schema-2 map and exact live observer argv. No API
+        accepts a synthetic running GenerationProof at this stage.
+        """
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not isinstance(workspace, Path) or not workspace.is_absolute() or
+                not HEX32.fullmatch(workspace.name) or
+                not isinstance(candidate_sha256, str) or
+                not HEX64.fullmatch(candidate_sha256)):
+            raise ReceiptRefused("original_fd9_pretraffic_queue_and_candidate_required")
+        try:
+            # Production seed is valid ONLY from the original inherited held
+            # FD9, not from a private root script or a second lock owner.
+            # Portable source fixtures exercise the same file-level proof.
+            if sys.platform.startswith("freebsd"):
+                if self.uid != 0 or self.writer_gid is None or os.geteuid() != 0:
+                    raise ReceiptRefused("original_root_fd9_required")
+                from voice_ipfw_adapter import require_lifecycle_lock
+                require_lifecycle_lock()
+            queue._verify()
+            if queue.segments():
+                raise ReceiptRefused("unacknowledged_original_pending_before_launch")
+            seal = verify_seal(workspace, owner=self.uid)
+            argv = _secure_bytes(workspace / "release" / "dvtws.args",
+                                 MAX_ARGS, self.uid)
+            original_map = _secure_bytes(
+                workspace / "release" / "auto-detect-generation.json",
+                MAX_MAP, self.uid)
+            mapping, profiles = _valid_map(
+                original_map,
+                {"id": workspace.name, "candidate": candidate_sha256}, argv)
+            if (mapping["generation"] != workspace.name or
+                    mapping["raw_path"] != str(queue.inbox) or
+                    mapping["debug_path"] != str(queue.root / "debug.log")):
+                raise ReceiptRefused("sealed_original_paths_or_generation_changed")
+            locations = (queue.inbox, queue.root / "debug.log")
+            a, b = (
+                _read_exact(path, owner_uid=self.uid,
+                            writer_gid=self.writer_gid)
+                for path in locations
+            )
+            if (a[1] or b[1] or
+                    (a[0].st_dev, a[0].st_ino) ==
+                    (b[0].st_dev, b[0].st_ino)):
+                raise ReceiptRefused("pretraffic_original_inodes_not_empty_and_distinct")
+            # Reattest no initial bytes and exact same identities just before
+            # durable write; the original shared FD9 ensures no engine has
+            # launched between the two original queue snapshots.
+            again = tuple(_read_exact(path, owner_uid=self.uid,
+                                      writer_gid=self.writer_gid)
+                          for path in locations)
+            for original, current in zip((a, b), again):
+                if (original[1] or current[1] or
+                        (original[0].st_dev, original[0].st_ino,
+                         original[0].st_size, original[0].st_mtime_ns) !=
+                        (current[0].st_dev, current[0].st_ino,
+                         current[0].st_size, current[0].st_mtime_ns)):
+                    raise ReceiptRefused("pretraffic_native_inode_changed")
+            if verify_seal(workspace, owner=self.uid) != seal or queue.segments():
+                raise ReceiptRefused("pretraffic_shared_seal_or_queue_changed")
+            data = {
+                "schema": 2, "kind": "original-fd9-pretraffic-zero",
+                "generation": workspace.name,
+                "owner_candidate_sha256": candidate_sha256,
+                "release_seal_sha256": hashlib.sha256(
+                    _canonical(seal)).hexdigest(),
+                "final_args_sha256": hashlib.sha256(argv).hexdigest(),
+                "raw_path": str(locations[0]), "debug_path": str(locations[1]),
+                "raw_device": a[0].st_dev, "raw_inode": a[0].st_ino,
+                "debug_device": b[0].st_dev, "debug_inode": b[0].st_ino,
+                "observer_native_number": mapping["observer_native_number"],
+                "profiles": [list(row) for row in profiles],
+                "ack_authorized": False,
+            }
+            folder = self._generation(workspace.name, create=True)
+            if (folder / "epoch.json").exists() or (folder / "cursor-chain-v2").exists():
+                raise ReceiptRefused("pretraffic_already_consumed")
+            _write_once(folder, "pretraffic.json", _canonical(data), self.uid)
+        except (OSError, ValueError, KeyError, TypeError, QueueSafetyError,
+                GenerationRefused, DebugWindowRefused, SharedBundleError) as exc:
+            raise ReceiptRefused("original_sealed_pretraffic_not_attested") from exc
+
+    def finish_running(self, proof: GenerationProof, queue: DurableInbox, *,
+                       attest=attest_running_generation) -> None:
+        """Complete the exact original pretraffic seed AFTER live P2c attest.
+
+        Debug and raw may ALREADY contain events. Never re-test zero or seed
+        a new cursor from the postlaunch file: reuse its original inode at
+        zero offset and retain every appended byte for P2k1/v2 inspection.
+        """
+        if (not isinstance(proof, GenerationProof) or
+                not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not callable(attest) or attest() != proof):
+            raise ReceiptRefused("original_running_queue_and_owner_required")
+        try:
+            qualified_current_source(proof, queue)
+            queue._verify()
+            folder, seed, seed_raw = self._pretraffic(proof)
+            if queue.segments():
+                raise ReceiptRefused("original_pending_before_epoch_completion")
+            a = _read_exact(queue.inbox, owner_uid=self.uid,
+                            writer_gid=self.writer_gid)
+            b = _read_exact(Path(proof.debug_path), owner_uid=self.uid,
+                            writer_gid=self.writer_gid)
+            if ((a[0].st_dev, a[0].st_ino) !=
+                    (seed["raw_device"], seed["raw_inode"]) or
+                    (b[0].st_dev, b[0].st_ino) !=
+                    (seed["debug_device"], seed["debug_inode"])):
+                raise ReceiptRefused("pretraffic_inode_replaced_after_launch")
+            if attest() != proof:
+                raise ReceiptRefused("original_engine_changed_before_epoch_completion")
+            data = _proof_fields(proof)
+            data.update(
+                owner_candidate_sha256=seed["owner_candidate_sha256"],
+                pretraffic_sha256=hashlib.sha256(seed_raw).hexdigest(),
+                raw_device=seed["raw_device"], raw_inode=seed["raw_inode"],
+                debug_device=seed["debug_device"],
+                debug_inode=seed["debug_inode"],
+                committed_cursor_offset=0,
+                committed_cursor_sha256=EMPTY_HASH)
+            if (folder / "cursor-chain-v2").exists():
+                raise ReceiptRefused("cursor_chain_precedes_original_epoch")
+            _write_once(folder, "epoch.json", _canonical(data), self.uid)
+        except (OSError, ValueError, TypeError, QueueSafetyError,
+                DebugWindowRefused, OriginalSourceRefused) as exc:
+            raise ReceiptRefused("original_postlaunch_epoch_not_attested") from exc
 
     def _epoch(self, proof: GenerationProof) -> tuple[Path, dict]:
         expected = _proof_fields(proof)
-        folder = self._generation(proof.generation, create=False)
+        folder, seed, seed_raw = self._pretraffic(proof)
         try:
             doc = json.loads(_read(folder / "epoch.json", self.uid))
         except (ValueError, UnicodeError) as exc:
             raise ReceiptRefused("corrupt_generation_epoch") from exc
+        additional = {
+            "owner_candidate_sha256": seed["owner_candidate_sha256"],
+            "pretraffic_sha256": hashlib.sha256(seed_raw).hexdigest(),
+            "raw_device": seed["raw_device"],
+            "raw_inode": seed["raw_inode"],
+            "debug_device": seed["debug_device"],
+            "debug_inode": seed["debug_inode"],
+            "committed_cursor_offset": 0,
+            "committed_cursor_sha256": EMPTY_HASH,
+        }
         if (not isinstance(doc, dict) or
-                set(doc) != set(expected) | {
-                    "debug_device", "debug_inode", "committed_cursor_offset",
-                    "committed_cursor_sha256"} or
-                any(doc.get(key) != value for key, value in expected.items()) or
-                type(doc.get("debug_device")) is not int or
-                type(doc.get("debug_inode")) is not int or
-                doc["debug_device"] < 0 or doc["debug_inode"] <= 0 or
-                doc.get("committed_cursor_offset") != 0 or
-                doc.get("committed_cursor_sha256") != EMPTY_HASH):
-            raise ReceiptRefused("epoch_differs_from_original_owner")
+                set(doc) != set(expected) | set(additional) or
+                any(doc.get(k) != v for k, v in expected.items()) or
+                any(doc.get(k) != v for k, v in additional.items())):
+            raise ReceiptRefused("epoch_differs_from_original_pretraffic_or_owner")
         return folder, doc

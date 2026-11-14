@@ -2,6 +2,8 @@
 
 **Candidate source:** `v0.6.5_47`, 14 November 2026. No approved observer activation, scheduled worker/cron, published test package or user OPNsense change.
 
+**Historical P2k8q1 native acceptance boundary:** `_48` now extends this exact original-P2a/FD9 prelaunch check with [two-phase durable sealed pretraffic/owner epoch](P2K8Q2_TWO_PHASE_PRETRAFFIC_EPOCH.md) source APIs. This `_47` record remains the actual qualified native original FD9 zero-producer gate.
+
 ## Same authority, strict first-launch gate
 
 Use **only** original shared FD9 `apply_runtime_original_launcher_once()`, which already invokes `auto_detect_post_drop.py capture` before `launcher_start_once` and `restore` before IPFW. The source-only native `authorize` remains absent and therefore refuses all live `--hostlist-auto` by default. P2k8q1 extends the **existing** `OriginalProducer._capture` before native launch, not a new CLI, daemon, process owner or second queue.
