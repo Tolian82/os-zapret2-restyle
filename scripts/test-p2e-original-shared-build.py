@@ -362,8 +362,15 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         # while compiling a candidate or before runtime preflight.
         self.assertNotIn("auto-detect-generation.json", body)
         self.assertIn('auto-detect-generation.json" ]; then', applied)
-        self.assertLess(applied.index('shared_apply_record_service committed'),
+        # The old order was unsafe: a refused epoch left terminal committed.
+        # An active schema-2 candidate must remain nonterminal through
+        # Config saved/readback, IPFW and final FD9 epoch attestation.
+        self.assertLess(applied.index('shared_apply_native_config save'),
+                        applied.index('shared_apply_record_service epoch-finalizing'))
+        self.assertLess(applied.index('shared_apply_record_service epoch-finalizing'),
                         applied.index('finish-epoch "$_shared_apply_id"'))
+        self.assertLess(applied.index('finish-epoch "$_shared_apply_id"'),
+                        applied.index('shared_apply_record_service committed'))
         self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
                         applied.index('finish-epoch "$_shared_apply_id"'))
 
