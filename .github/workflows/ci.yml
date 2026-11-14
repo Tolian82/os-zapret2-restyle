@@ -605,6 +605,11 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py scripts/test-auto-detect-destination-commit.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-destination-commit.py
+      - name: Test P2k8k current-generation durable checkpoint to pending ACK (dormant)
+        run: |
+          set -euo pipefail
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_commit_ack.py scripts/test-auto-detect-post-commit-ack.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-commit-ack.py
       - name: Install canonical domain policy IDNA dependency
         if: ${{ needs.changes.outputs.owner_flow == 'true' }}
         run: python3.13 -m pip install idna
