@@ -74,7 +74,11 @@ def prepare_original_v2_locked(
                 raise OriginalV2PrepareRefused("unacknowledged_pending_identity_mismatch")
         elif tip.next_sequence >= MAX_STEPS:
             raise OriginalV2PrepareRefused("bounded_cursor_chain_capacity")
-        if pending and pending[0].name in tip.used_pending_names:
+        # The v2 tip includes its currently OPEN intent in used_pending_names.
+        # Retrying that exact unacknowledged inode is necessary for durable
+        # crash recovery. Only a name from a previously ACKed slot is reuse.
+        if (pending and tip.open_intent is None and
+                pending[0].name in tip.used_pending_names):
             raise OriginalV2PrepareRefused("acknowledged_pending_name_reused")
         if attest() != proof:
             raise OriginalV2PrepareRefused("original_owner_changed_before_rotation")
