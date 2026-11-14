@@ -80,6 +80,8 @@ The generator must produce a map **bound to the exact generated-profile generati
 
 ## 5. Once-per-minute native cron/configd worker
 
+**Current source boundary, P2k8j (`_40`):** only the original OPNsense `actions_zapret.conf` configd command `auto_detect_minute` is registered. The short `auto_detect_minute.py` checks an inactive original release (no raw/debug native-auto options and no active generation map) or refuses unqualified forged/unsafe release state, with no queue/Config/HOSTLIST mutations. **No native cron schedule is installed; no active native observer is authorized.** Activating a real 60-second cron entry must be coupled to the already-approved bounded, locked, generation/FD/debug-proven durable worker and ACK. [Exact incremental evidence](../verification/P2K8J_CONFIGD_MINUTE_INGRESS.md).
+
 The owner's selected schedule is final: **every 60 seconds**, using normal OPNsense **cron → registered configd action → one short Python worker**, not a long-running kqueue watcher/second daemon. Do not restart `dvtws2` or call common Apply for every new event. Missed ticks keep the queue for the next run. One pass may take longer than a minute; other invocations must not overlap its exclusive lock.
 
 Multiple discoveries in a minute, repeated hosts, arbitrarily deep subdomains, competing sources and crash retries must normalize/deduplicate **idempotently**, not blindly copy raw lines.

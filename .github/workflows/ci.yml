@@ -579,6 +579,8 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-storage.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-drop.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_minute.py scripts/test-auto-detect-minute.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-minute.py
           sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
           sh -n scripts/test-auto-detect-fd9-launch.sh
           sh scripts/test-auto-detect-fd9-launch.sh
