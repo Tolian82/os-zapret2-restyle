@@ -86,6 +86,8 @@ The generator must produce a map **bound to the exact generated-profile generati
 
 The owner's selected schedule is final: **every 60 seconds**, using normal OPNsense **cron → registered configd action → one short Python worker**, not a long-running kqueue watcher/second daemon. Do not restart `dvtws2` or call common Apply for every new event. Missed ticks keep the queue for the next run. One pass may take longer than a minute; other invocations must not overlap its exclusive lock.
 
+**Non-interruption requirement (owner decision, 15 November 2026):** The 60-second Auto-detect worker, raw/debug rotation, cursor maintenance and recovery MUST NOT signal `SIGSTOP`/`SIGCONT`, suspend, kill or restart the shared `dvtws2`, disrupt IPFW divert, or deliberately hold forwarding to synchronize files. The isolated _58 native experiment proved that a diverted HTTP request stalled while the original engine was STOPPED; delivery after `SIGCONT` is NOT production availability. The independent, explicitly user-selected Auto Restart setting in section 8 remains opt-in and defaults to Off; it is never a file-rotation barrier. If continuous bounded lossless operation cannot be proven, keep the production observer/cron disabled and retain pending discoveries rather than compromise packet processing.
+
 Multiple discoveries in a minute, repeated hosts, arbitrarily deep subdomains, competing sources and crash retries must normalize/deduplicate **idempotently**, not blindly copy raw lines.
 
 ### 5.1 Storage and ownership
@@ -109,6 +111,8 @@ Qualify actual paths, identities, file modes and permissions against the install
 7. Parse only complete pending data, correlate confirmed debug/profile attribution, normalize/exclude/deduplicate and write appropriate permanent destination lists.
 8. Require durable success for **all processed valid results** (file and directory fsync where needed). If any destination write remains incomplete, **retain source pending**. Retry is **at-least-once + idempotent**, not exactly-once.
 9. Delete **only fully acknowledged pending** and persist deletion. **Never zero the live inbox. `truncate` and `copytruncate` are forbidden.**
+
+**Independent raw/debug cohorts:** `inbox.txt` and the native debug log cannot be swapped as one atomic operation while the engine runs. A proven raw append is the discovery source; a prior debug `adding to` message alone is not proof that the append succeeded. On an unmatched, ambiguous or cross-inode debug event, never invent known-HOSTLIST attribution or acknowledge/discard uncommitted raw: either durably commit the independently verified raw domain to the approved unknown fallback with sound provenance and idempotence, or retain its original pending inode for safe replay. The existing P2k1/v2 single-debug-inode, one-to-one cursor contract has not yet been qualified for such split cohorts; active collection remains blocked until the original transaction is safely adapted.
 
 Explicitly qualify `fopen` before replace, writer FD persisting after replace, concurrent appends, incomplete final line, disk/write errors, interrupted operations, reboot, wrong ownership and corrupt or oversized pending. **Never start/restart `dvtws2` to clear input.**
 
@@ -155,7 +159,7 @@ For an enabled interval, perform the **normal shared service restart on schedule
 ## 9. Safety invariants
 
 - Native `config.xml` has **one** legitimate writer. The Python worker does not write it; `SharedConfigCommit` is used only by authorized UI configuration saves.
-- One Strategies+Voice `dvtws2`, original FD9, WAN-first, atomic Apply/rollback, IPFW ownership, **no `pfctl -d/-e`**. Native `.pkg` only; no SH companion installers.
+- One Strategies+Voice `dvtws2`, original FD9, WAN-first, atomic Apply/rollback, IPFW ownership, **no `pfctl -d/-e`**. Native `.pkg` only; no SH companion installers. Periodic Auto-detect file maintenance never pauses the native engine or diverted traffic.
 - Strict file/entry/log size bounds and no publication of user traffic. Unsafe ownership, inode, symlink or damaged pending **fail closed without deleting unprocessed events**.
 - Never write domains to IPSET or DNS-convert them. **Do not call, test or modify Strategy Lab** at any stage.
 - The active-profile side effect of native `--hostlist-auto` is an **unwaivable P0 integration blocker** until a safe real-engine solution is proven.
@@ -167,7 +171,7 @@ For an enabled interval, perform the **normal shared service restart on schedule
 3. **Routing:** known HOSTLIST → its auto source; unknown/ambiguous → shared; IPSET-only/mixed excluded; no IP→HOSTLIST inference.
 4. **Normalization:** subdomains of depth 3–N, multiple findings/minute, `example.co.uk` and PRIVATE `github.io`, malformed data, unsafe/unknown PSL, ordinary root without auto-`^`.
 5. **Exclusions:** global Exclude Domains, `!domain.com` in any HOSTLIST, exact `!^domain.com` / `^!domain.com`, manual list preservation and normal deletion followed by rediscovery.
-6. **File races:** old open FD, concurrent append/link/replace, crash before/after replace/fsync, concurrent cron, partial line, damaged/oversized pending, write failure and reboot; no input loss or duplicate output.
+6. **File races and traffic continuity:** old open FD, concurrent append/link/replace, independent raw/debug inode swaps with an interstitial positive, crash before/after replace/fsync, concurrent cron, partial line, damaged/oversized pending, write failure and reboot; no input loss or duplicate output. The native engine must keep processing diverted packets during the minute worker and file maintenance; recovery after a SIGCONT pause is not acceptance.
 7. **GUI:** placement and RU/EN, editing final Auto Hostlist, displaying accumulated data without selector, no stale form silent overwrite, concurrent worker/user changes.
 8. **Auto Restart:** label and dropdown visible **only with standard Advanced ON**; hidden under OFF while saved choice and schedule remain; restored selection when Advanced ON; all five values, default Off, restart without list changes, STOPPED stays stopped, hidden-field unrelated GUI Save does not reset, no shared Voice/FD9/IPFW/Apply regression.
 9. **Preservation:** normal Apply, RUNNING, in-place native `.pkg` update, GUI uninstall/reinstall preservation, clean install and approved full purge on real FreeBSD/OPNsense.
