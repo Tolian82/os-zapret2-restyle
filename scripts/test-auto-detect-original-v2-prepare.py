@@ -200,6 +200,49 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
             self.assertEqual(self.drains, 0)
 
+    def test_original_v2_late_hardlink_append_refuses_and_recovers_same_raw(self):
+        # Same real P2k8o/v2 preparation, not a synthetic alternate queue:
+        # native writer appends a second event *after* the first link, before
+        # replace. The original source must not stage an incomplete intent.
+        self.emit("one.example.com")
+        old_inode = self.queue.inbox.stat().st_ino
+        original_link = os.link
+
+        def link_then_producer_append(source, target, **kwargs):
+            original_link(source, target, **kwargs)
+            with self.queue.inbox.open("ab", buffering=0) as output:
+                output.write(b"two.example.com\n")
+                os.fsync(output.fileno())
+            with self.debug.open("a", encoding="ascii") as out:
+                out.write(
+                    f"2026-11-14 11:10:01 : two.example.com : profile 2 (tail) : "
+                    f"client 127.0.0.1:1234 : proto http : adding to "
+                    f"{self.queue.inbox}\n"
+                )
+
+        with self.queue.exclusive():
+            with patch("auto_detect_queue.os.link",
+                       side_effect=link_then_producer_append):
+                with self.assertRaisesRegex(
+                    OriginalV2PrepareRefused, "original_v2_prepared_intent_unavailable"
+                ):
+                    self.stage()
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(self.queue.inbox.stat().st_ino, old_inode)
+            self.assertEqual(pending[0].stat().st_ino, old_inode)
+            self.assertEqual(pending[0].stat().st_nlink, 2)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+            self.assertEqual(self.drains, 0)
+            self.assertEqual(self.queue.inbox.read_bytes(),
+                             b"one.example.com\ntwo.example.com\n")
+            # Recovery uses one original generation, same inode, both actual
+            # correlated native-format events; no new queue or parser.
+            self.assertEqual(self.stage(), pending[0])
+            intent = self.chain.tip(self.proof).open_intent
+            self.assertEqual(intent["candidate_count"], 2)
+            self.assertEqual(pending[0].stat().st_nlink, 1)
+
     def test_old_generation_pending_blocks_original_raw_rotation(self):
         self.emit("one.example.com")
         old = self.queue.pending / ("f" * 32 + "-" + "c" * 32 + ".txt")
