@@ -577,6 +577,8 @@ jobs:
           set -euo pipefail
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_storage.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_fd.py scripts/test-auto-detect-storage.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-storage.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-post-drop.py
       - name: Test P2j one-tick generation/FD/debug/commit bridge (inert)
         run: |
           set -euo pipefail

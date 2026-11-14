@@ -9,6 +9,8 @@ on:
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-auto-detect-storage.py
       - scripts/test-p2i-original-preview-native.py
+      - scripts/test-auto-detect-post-drop.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
       - scripts/test-p2k8g-original-config-native.py
       - scripts/test-auto-detect-original-lock-handoff.php
       - scripts/test-auto-detect-original-lock-handoff.py
@@ -38,6 +40,8 @@ jobs:
         run: |
           set -euo pipefail
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
+          python3 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-auto-detect-post-drop.py
           python3 -m py_compile scripts/test-p2k8g-original-config-native.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2k8g-original-config-native.py --self-test
           if GITHUB_ACTIONS=true PYTHONDONTWRITEBYTECODE=1 python3 \
