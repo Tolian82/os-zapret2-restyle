@@ -17,8 +17,8 @@ import re
 from typing import Callable
 
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
-                                      _checkpoint, _debug_prefix)
-from auto_detect_debug_window import ADD, _read_exact, _hostname
+                                      _checkpoint, _evidence_unchanged)
+from auto_detect_debug_window import ADD, _raw_hosts, _read_exact, _hostname
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
                                             _target)
 from auto_detect_epoch_receipts import ReceiptRefused, _read
@@ -44,6 +44,18 @@ def _domains(proof: GenerationProof, intent: dict, raw: bytes, *,
     Later native debug events may have been appended to the same inode;
     never accidentally consume them for a preceding immutable intent.
     """
+    if intent["evidence"] == "raw-first":
+        # The original P2a pending inode and SHA, live P2c/FD9 identity,
+        # all-PID P2b drain and Config-held CAS are the provenance.
+        # Diagnostic debug cannot invent known HOSTLIST attribution.
+        if not _evidence_unchanged(proof, intent, owner_uid, writer_gid):
+            raise V2OriginalConfigRefused("raw_first_source_not_attested")
+        hosts = _raw_hosts(raw)
+        if len(hosts) != intent["candidate_count"]:
+            raise V2OriginalConfigRefused("raw_first_candidate_count_changed")
+        return [{"hostname": host, "hostlist": None} for host in hosts]
+    if intent["evidence"] != "native-debug":
+        raise V2OriginalConfigRefused("unqualified_original_observation_mode")
     info, data = _read_exact(Path(proof.debug_path), owner_uid=owner_uid,
                              writer_gid=writer_gid)
     start, end = intent["debug_start_offset"], intent["debug_end_offset"]
@@ -218,10 +230,9 @@ def commit_with_original_v2_model(
                             owner=proof.owner,
                             writer_gid=writer.queue.writer_gid) is not FDState.DRAINED or
                     detached_original_raw(writer.queue, pending) != raw or
-                    not _debug_prefix(proof, intent["debug_end_offset"],
-                                      intent["debug_end_sha256"],
-                                      writer.receipts.uid, writer.receipts.writer_gid,
-                                      intent["debug_device"], intent["debug_inode"])):
+                    not _evidence_unchanged(proof, intent,
+                                            writer.receipts.uid,
+                                            writer.receipts.writer_gid)):
                 raise V2OriginalConfigRefused("original_generation_or_fd_changed_before_write")
             result = writer._locked_commit(folder, intent, raw, effects)
             if (read_owned(root, owner_uid=writer.receipts.uid) is None or

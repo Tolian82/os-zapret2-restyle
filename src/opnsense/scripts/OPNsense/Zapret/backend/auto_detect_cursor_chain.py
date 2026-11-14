@@ -18,8 +18,8 @@ import re
 import stat
 from typing import Callable
 
-from auto_detect_debug_window import (Cursor, DebugWindowRefused, Window,
-                                      _read_exact, propose_window)
+from auto_detect_debug_window import (Cursor, DebugWindowRefused,
+                                      _raw_hosts, _read_exact, propose_window)
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
 from auto_detect_epoch_receipts import (EMPTY_HASH, EpochReceipts, ReceiptRefused,
                                         _canonical, _directory, _read, _sync, _write_once)
@@ -47,6 +47,7 @@ class ChainTip:
     open_folder: Path | None
     open_intent: dict | None
     used_pending_names: frozenset[str]
+    raw_first: bool
 
 
 def _digest(data: bytes) -> str:
@@ -83,6 +84,7 @@ def _checkpoint(slot: Path, intent: dict, uid: int, *,
         "generation": intent["generation"],
         "pending_name": intent["pending_name"],
         "pending_sha256": intent["pending_sha256"],
+        "evidence": intent["evidence"],
         "debug_end_offset": intent["debug_end_offset"],
         "debug_end_sha256": intent["debug_end_sha256"],
     }
@@ -101,6 +103,7 @@ def _checkpoint(slot: Path, intent: dict, uid: int, *,
         "generation": intent["generation"],
         "pending_name": intent["pending_name"],
         "plan_sha256": _digest(plan_raw),
+        "evidence": intent["evidence"],
         "committed_cursor_offset": intent["debug_end_offset"],
         "committed_cursor_sha256": intent["debug_end_sha256"],
         "ack_authorized": False,
@@ -121,12 +124,32 @@ def _debug_prefix(proof: GenerationProof, end_offset: int, end_sha256: str,
             _digest(content[:end_offset]) == end_sha256)
 
 
+def _evidence_unchanged(proof: GenerationProof, intent: dict,
+                        uid: int, writer_gid: int | None) -> bool:
+    """Apply the SAME source proof at intent replay, Config and ACK.
+
+    Native-debug remains tied to its strict prefix. Raw-first instead
+    uses the original P2c/FD9 + P2b-drained native raw/Config transaction;
+    protected current debug is only an unrelated diagnostic.
+    """
+    if intent.get("evidence") == "native-debug":
+        return _debug_prefix(proof, intent["debug_end_offset"],
+                             intent["debug_end_sha256"], uid, writer_gid,
+                             intent["debug_device"], intent["debug_inode"])
+    if intent.get("evidence") == "raw-first":
+        _read_exact(Path(proof.debug_path), owner_uid=uid,
+                    writer_gid=writer_gid)
+        return True
+    return False
+
+
 def _ack(intent: dict, checkpoint: dict, cp_bytes: bytes) -> dict:
     return {
         "schema": 2, "kind": "cursor-chain-ack-after-pending-fsync",
         "generation": intent["generation"],
         "sequence": intent["sequence"],
         "pending_name": intent["pending_name"],
+        "evidence": intent["evidence"],
         "previous_ack_sha256": intent["previous_ack_sha256"],
         "plan_sha256": checkpoint["plan_sha256"],
         "checkpoint_sha256": _digest(cp_bytes),
@@ -170,8 +193,9 @@ class CursorChain:
         cursor = Cursor(proof.generation, epoch["debug_device"],
                         epoch["debug_inode"], 0, EMPTY_HASH)
         anchor = _digest(epoch_raw)
+        raw_first = False
         if not root.exists():
-            return ChainTip(0, cursor, anchor, None, None, frozenset())
+            return ChainTip(0, cursor, anchor, None, None, frozenset(), False)
         slots = sorted(os.listdir(root))
         if len(slots) > MAX_STEPS or any(
                 not STEP.fullmatch(name) or int(name) != i
@@ -192,7 +216,7 @@ class CursorChain:
                 "pending_device", "pending_inode", "pending_size", "pending_sha256",
                 "debug_device", "debug_inode", "debug_start_offset",
                 "debug_start_sha256", "debug_end_offset", "debug_end_sha256",
-                "candidate_count", "previous_ack_sha256", "ack_authorized",
+                "candidate_count", "evidence", "previous_ack_sha256", "ack_authorized",
             }
             if (set(intent) != expected_keys or intent.get("schema") != 2 or
                     intent.get("kind") != "cursor-chain-prepared" or
@@ -213,7 +237,13 @@ class CursorChain:
                     intent.get("debug_start_offset") != cursor.offset or
                     intent.get("debug_start_sha256") != cursor.prefix_sha256 or
                     type(intent.get("debug_end_offset")) is not int or
-                    intent["debug_end_offset"] <= cursor.offset or
+                    intent.get("evidence") not in ("native-debug", "raw-first") or
+                    (raw_first and intent["evidence"] != "raw-first") or
+                    (intent["evidence"] == "native-debug" and
+                     intent["debug_end_offset"] <= cursor.offset) or
+                    (intent["evidence"] == "raw-first" and
+                     (intent["debug_end_offset"] != cursor.offset or
+                      intent["debug_end_sha256"] != cursor.prefix_sha256)) or
                     intent.get("previous_ack_sha256") != anchor or
                     intent.get("ack_authorized") is not False):
                 raise CursorChainRefused("cursor_chain_disagrees_with_previous_ack")
@@ -232,9 +262,10 @@ class CursorChain:
                 raise CursorChainRefused("cursor_ack_not_bound_to_checkpoint")
             cursor = Cursor(proof.generation, cursor.device, cursor.inode,
                             intent["debug_end_offset"], intent["debug_end_sha256"])
+            raw_first = raw_first or intent["evidence"] == "raw-first"
             anchor = _digest(ack_raw)
         return ChainTip(len(slots), cursor, anchor, open_folder, open_intent,
-                        frozenset(used_pending_names))
+                        frozenset(used_pending_names), raw_first)
 
     def prepare(self, proof: GenerationProof, pending: Path, *,
                 attest: Callable = attest_running_generation,
@@ -274,19 +305,35 @@ class CursorChain:
                         expected["pending_inode"] != before.st_ino or
                         expected["pending_size"] != len(raw) or
                         expected["pending_sha256"] != _digest(raw) or
-                        not _debug_prefix(proof, expected["debug_end_offset"],
-                                          expected["debug_end_sha256"],
-                                          self.receipts.uid, self.receipts.writer_gid,
-                                          expected["debug_device"], expected["debug_inode"])):
+                        not _evidence_unchanged(proof, expected, self.receipts.uid,
+                                                self.receipts.writer_gid)):
                     raise CursorChainRefused("different_unacknowledged_cursor_pending")
                 if attest() != proof:
                     raise CursorChainRefused("owner_changed_during_intent_replay")
                 return tip.open_folder
             if pending.name in tip.used_pending_names:
                 raise CursorChainRefused("completed_pending_name_reused")
-            window = propose_window(proof, tip.cursor, raw,
-                                    owner_uid=self.receipts.uid,
-                                    writer_gid=self.queue.writer_gid)
+            current_debug, _ = _read_exact(
+                Path(proof.debug_path), owner_uid=self.receipts.uid,
+                writer_gid=self.queue.writer_gid)
+            # A native debug positive precedes its raw append. The original
+            # P2a pending raw inode is discovery truth independently of it.
+            # One debug replacement selects raw-first for the remainder
+            # of this authenticated generation (no false cursor reset).
+            raw_first = (tip.raw_first or
+                         (current_debug.st_dev, current_debug.st_ino) !=
+                         (tip.cursor.device, tip.cursor.inode))
+            if raw_first:
+                candidates = _raw_hosts(raw)
+                next_cursor = tip.cursor
+                evidence = "raw-first"
+            else:
+                window = propose_window(proof, tip.cursor, raw,
+                                        owner_uid=self.receipts.uid,
+                                        writer_gid=self.queue.writer_gid)
+                candidates = window.candidates
+                next_cursor = window.proposed_cursor
+                evidence = "native-debug"
             if attest() != proof:
                 raise CursorChainRefused("owner_changed_during_debug_correlation")
             intent = {
@@ -298,9 +345,10 @@ class CursorChain:
                 "debug_device": tip.cursor.device, "debug_inode": tip.cursor.inode,
                 "debug_start_offset": tip.cursor.offset,
                 "debug_start_sha256": tip.cursor.prefix_sha256,
-                "debug_end_offset": window.proposed_cursor.offset,
-                "debug_end_sha256": window.proposed_cursor.prefix_sha256,
-                "candidate_count": len(window.candidates),
+                "debug_end_offset": next_cursor.offset,
+                "debug_end_sha256": next_cursor.prefix_sha256,
+                "candidate_count": len(candidates),
+                "evidence": evidence,
                 "previous_ack_sha256": tip.previous_ack_sha256,
                 "ack_authorized": False,
             }
@@ -309,7 +357,9 @@ class CursorChain:
                     inspect(pending, before.st_dev, before.st_ino,
                             owner=proof.owner,
                             writer_gid=self.queue.writer_gid) is not FDState.DRAINED or
-                    detached_original_raw(self.queue, pending) != raw):
+                    detached_original_raw(self.queue, pending) != raw or
+                    not _evidence_unchanged(proof, intent, self.receipts.uid,
+                                            self.receipts.writer_gid)):
                 raise CursorChainRefused("original_pending_changed_before_persist")
             root, _, _ = self._root(proof, create=True)
             slot = root / f"{tip.next_sequence:08d}"
@@ -357,10 +407,8 @@ class CursorChain:
                     (intent["pending_device"], intent["pending_inode"],
                      intent["pending_size"], intent["pending_sha256"])):
                 raise CursorChainRefused("original_pending_differs_from_cursor_intent")
-            if not _debug_prefix(proof, intent["debug_end_offset"],
-                                 intent["debug_end_sha256"], self.receipts.uid,
-                                 self.receipts.writer_gid, intent["debug_device"],
-                                 intent["debug_inode"]):
+            if not _evidence_unchanged(proof, intent, self.receipts.uid,
+                                       self.receipts.writer_gid):
                 raise CursorChainRefused("debug_changed_before_destination")
             with writer.exclusive_targets():
                 checkpoint = writer._locked_commit(folder, intent, raw, effects)
@@ -415,10 +463,8 @@ class CursorChain:
             if verified is None or completion != verified[0]:
                 raise CursorChainRefused("original_child_checkpoint_mismatch")
             cp, cp_raw = verified
-            if not _debug_prefix(proof, intent["debug_end_offset"],
-                                 intent["debug_end_sha256"], self.receipts.uid,
-                                 self.receipts.writer_gid, intent["debug_device"],
-                                 intent["debug_inode"]):
+            if not _evidence_unchanged(proof, intent, self.receipts.uid,
+                                       self.receipts.writer_gid):
                 raise CursorChainRefused("debug_changed_before_original_ack")
 
             def still_original() -> bool:
@@ -436,10 +482,8 @@ class CursorChain:
                 return (len(raw) == intent["pending_size"] and
                         _digest(raw) == intent["pending_sha256"] and
                         still_original() and
-                        _debug_prefix(proof, intent["debug_end_offset"],
-                                      intent["debug_end_sha256"],
-                                      self.receipts.uid, self.receipts.writer_gid,
-                                      intent["debug_device"], intent["debug_inode"]) and
+                        _evidence_unchanged(proof, intent, self.receipts.uid,
+                                            self.receipts.writer_gid) and
                         _checkpoint(folder, intent, self.receipts.uid,
                                     targets=writer.targets) == verified and
                         still_original())

@@ -142,6 +142,21 @@ def empty_epoch(proof: GenerationProof, *, owner_uid: int = 0,
                   hashlib.sha256(b'').hexdigest())
 
 
+def _raw_hosts(raw: bytes) -> list[str]:
+    """One bounded raw parser for both native-debug and raw-first evidence."""
+    if (type(raw) is not bytes or not raw or len(raw) > MAX_RAW or
+            not raw.endswith(b'\n') or b'\r' in raw or b'\x00' in raw):
+        raise DebugWindowRefused('invalid_or_incomplete_raw_segment')
+    try:
+        hosts = [part.decode('ascii') for part in raw.split(b'\n')[:-1]]
+    except UnicodeError as exc:
+        raise DebugWindowRefused('invalid_raw_encoding') from exc
+    if (not 1 <= len(hosts) <= MAX_EVENTS or
+            any(not _hostname(host) for host in hosts)):
+        raise DebugWindowRefused('unqualified_raw_host')
+    return hosts
+
+
 def propose_window(proof: GenerationProof, cursor: Cursor, raw: bytes, *,
                    owner_uid: int = 0, writer_gid: int | None = None) -> Window:
     """Return a *non-authorizing* candidate and possible next cursor.
@@ -157,16 +172,7 @@ def propose_window(proof: GenerationProof, cursor: Cursor, raw: bytes, *,
             type(cursor.offset) is not int or cursor.device < 0 or cursor.inode <= 0 or
             cursor.offset < 0 or not re.fullmatch('[a-f0-9]{64}', cursor.prefix_sha256)):
         raise DebugWindowRefused('untrusted_or_other_generation_cursor')
-    if (type(raw) is not bytes or not raw or len(raw) > MAX_RAW or
-            not raw.endswith(b'\n') or b'\r' in raw or b'\x00' in raw):
-        raise DebugWindowRefused('invalid_or_incomplete_raw_segment')
-    try:
-        hosts = [part.decode('ascii') for part in raw.split(b'\n')[:-1]]
-    except UnicodeError as exc:
-        raise DebugWindowRefused('invalid_raw_encoding') from exc
-    if (not 1 <= len(hosts) <= MAX_EVENTS or
-            any(not _hostname(host) for host in hosts)):
-        raise DebugWindowRefused('unqualified_raw_host')
+    hosts = _raw_hosts(raw)
     info, content = _read_exact(path, owner_uid=owner_uid, writer_gid=writer_gid)
     if ((info.st_dev, info.st_ino) != (cursor.device, cursor.inode) or
             cursor.offset > len(content) or

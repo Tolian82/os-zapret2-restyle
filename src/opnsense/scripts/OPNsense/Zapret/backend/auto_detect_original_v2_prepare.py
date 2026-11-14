@@ -28,7 +28,8 @@ class OriginalV2PrepareRefused(RuntimeError):
 
 
 def _require_debug_window_before_raw_cut(proof: GenerationProof, cursor,
-                                         receipts: EpochReceipts) -> None:
+                                         receipts: EpochReceipts, *,
+                                         raw_first: bool = False) -> None:
     """Refuse a known-bad native debug before changing original raw inode.
 
     This remains a finite snapshot, not an atomic native-writer barrier.
@@ -37,8 +38,13 @@ def _require_debug_window_before_raw_cut(proof: GenerationProof, cursor,
     info, data = _read_exact(Path(proof.debug_path),
                              owner_uid=receipts.uid,
                              writer_gid=receipts.writer_gid)
-    if ((info.st_dev, info.st_ino) != (cursor.device, cursor.inode) or
-            cursor.offset > len(data) or
+    # Debug is diagnostic, not raw source truth. An original FD9/epoch-
+    # authenticated new debug inode selects the one-way raw-first path.
+    # Same-inode modification still refuses instead of hiding corruption.
+    if (raw_first or
+            (info.st_dev, info.st_ino) != (cursor.device, cursor.inode)):
+        return
+    if (cursor.offset > len(data) or
             hashlib.sha256(data[:cursor.offset]).hexdigest() !=
             cursor.prefix_sha256):
         raise OriginalV2PrepareRefused("debug_cursor_invalid_before_raw_cut")
@@ -110,11 +116,13 @@ def prepare_original_v2_locked(
             live = queue.inbox.lstat()
             if (inode.st_dev, inode.st_ino) == (live.st_dev, live.st_ino):
                 # Crash-link repair still cuts the live raw pathname.
-                _require_debug_window_before_raw_cut(proof, tip.cursor, receipts)
+                _require_debug_window_before_raw_cut(proof, tip.cursor, receipts,
+                                                     raw_first=tip.raw_first)
                 segment = queue.rotate(generation=proof.generation)
         else:
             # Refuse known-bad debug before converting live raw to pending.
-            _require_debug_window_before_raw_cut(proof, tip.cursor, receipts)
+            _require_debug_window_before_raw_cut(proof, tip.cursor, receipts,
+                                                     raw_first=tip.raw_first)
             segment = queue.rotate(generation=proof.generation)
         if segment is None:
             return None

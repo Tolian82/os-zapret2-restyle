@@ -274,31 +274,38 @@ class OriginalV2PrepareTests(unittest.TestCase):
         with self.queue.exclusive():
             self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
 
-    def test_debug_inode_replacement_refuses_before_raw_cut(self):
+    def test_debug_replacement_selects_generation_sticky_raw_first(self):
         self.emit("one.example.com")
         original = self.debug.read_bytes()
         archived = self.root / "original-debug"
         os.replace(self.debug, archived)
         self.debug.write_bytes(original)
         self.debug.chmod(0o600)
-        live = self.queue.inbox.stat()
         with self.queue.exclusive():
-            with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                        "debug_cursor_invalid_before_raw_cut"):
-                self.stage()
-            self.assertEqual(self.queue.inbox.stat().st_ino, live.st_ino)
-            self.assertEqual(self.queue.segments(), [])
-        self.assertEqual(self.drains, 0)
+            first = self.stage()
+            intent = self.chain.tip(self.proof).open_intent
+            self.assertEqual(intent["evidence"], "raw-first")
+            self.assertEqual(intent["candidate_count"], 1)
+            self.assertEqual(intent["debug_start_offset"], intent["debug_end_offset"])
+            self.commit_and_ack(first, "one.example.com")
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+        # A restored matching historical debug inode may NOT revert an
+        # authenticated generation to earlier debug/native classification.
         os.replace(archived, self.debug)
+        self.emit("two.example.com")
         with self.queue.exclusive():
-            self.assertEqual(self.stage().read_bytes(), b"one.example.com\n")
+            second = self.stage()
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.commit_and_ack(second, "two.example.com")
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+        self.assertEqual(self.auto.read_text(),
+                         "!manual.invalid\none.example.com\ntwo.example.com\n")
 
-    def test_live_cross_inode_debug_cut_retains_unacked_original_raw(self):
-        # Exact original P2a rotates raw FIRST, native-format second positive
-        # arrives in the new raw and original debug inode, then debug is
-        # atomically hardlinked/replaced without ever removing its live name.
-        # The CURRENT P2k8n cursor has no authenticated old-debug handoff.
-        # It must refuse rather than ACK or relabel the two raw generations.
+    def test_live_cross_inode_raw_first_commits_original_pending_once(self):
+        # True P2a: raw is cut FIRST. The second raw positive is written
+        # to the NEW raw but OLD debug. Then the debug name is atomically
+        # replaced while the old debug inode stays hardlink-reachable.
         self.emit("one.example.com")
         with self.queue.exclusive():
             first = self.queue.rotate(generation=self.generation)
@@ -307,35 +314,77 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertNotEqual(first_ino, second_ino)
             self.emit("midcut.example.com")
             old_debug_bytes = self.debug.read_bytes()
-            previous = self.root / "previous-native-debug"
+            archived = self.root / "previous-native-debug"
             replacement = self.root / ".prepared-native-debug"
             replacement.write_bytes(b"")
             replacement.chmod(0o600)
-            os.link(self.debug, previous)
-            self.assertEqual(previous.stat().st_nlink, 2)
+            os.link(self.debug, archived)
+            self.assertEqual(archived.stat().st_nlink, 2)
             os.replace(replacement, self.debug)
-            self.assertEqual(previous.stat().st_nlink, 1)
+            self.assertEqual(archived.stat().st_nlink, 1)
             self.assertEqual(self.debug.stat().st_nlink, 1)
-            self.assertNotEqual(previous.stat().st_ino, self.debug.stat().st_ino)
-            self.assertEqual(previous.read_bytes(), old_debug_bytes)
+            self.assertNotEqual(archived.stat().st_ino, self.debug.stat().st_ino)
+            self.assertEqual(archived.read_bytes(), old_debug_bytes)
             self.assertEqual(self.debug.read_bytes(), b"")
             self.assertEqual(first.read_bytes(), b"one.example.com\n")
-            self.assertEqual(self.queue.inbox.read_bytes(), b"midcut.example.com\n")
-            with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                        "original_v2_prepared_intent_unavailable"):
-                self.stage()
-            # A crash/retry cannot create a false ACK, invent a HOSTLIST,
-            # switch the epoch inode or rotate the second raw again.
-            with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                        "original_v2_prepared_intent_unavailable"):
-                self.stage()
-            self.assertEqual(self.queue.segments(), [first])
-            self.assertEqual(first.stat().st_ino, first_ino)
+            self.assertEqual(self.queue.inbox.read_bytes(),
+                             b"midcut.example.com\n")
+
+            self.assertEqual(self.stage(), first)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.commit_and_ack(first, "one.example.com")
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
             self.assertEqual(self.queue.inbox.stat().st_ino, second_ino)
+            second = self.stage()
+            self.assertEqual(second.stat().st_ino, second_ino)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.commit_and_ack(second, "midcut.example.com")
+            self.emit("aftercut.example.com")
+            third = self.stage()
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.commit_and_ack(third, "aftercut.example.com")
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 3)
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+            self.assertEqual(self.queue.segments(), [])
+        self.assertEqual(archived.read_bytes(), old_debug_bytes)
+        self.assertEqual(self.auto.read_text(),
+                         "!manual.invalid\none.example.com\nmidcut.example.com\n"
+                         "aftercut.example.com\n")
+
+    def test_raw_first_rejects_malformed_detached_raw_without_ack(self):
+        self.emit("one.example.com")
+        archive = self.root / "old-debug"
+        os.replace(self.debug, archive)
+        self.debug.write_bytes(b"")
+        self.debug.chmod(0o600)
+        self.queue.inbox.write_bytes(b"invalid..example.com\n")
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(pending[0].read_bytes(),
+                             b"invalid..example.com\n")
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
-            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
-            self.assertEqual(self.debug.read_bytes(), b"")
-            self.assertEqual(previous.read_bytes(), old_debug_bytes)
+        self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
+
+    def test_raw_first_refuses_unprotected_new_debug_path_before_cut(self):
+        self.emit("one.example.com")
+        archived = self.root / "old-debug"
+        os.replace(self.debug, archived)
+        self.debug.symlink_to(archived)
+        live_ino = self.queue.inbox.stat().st_ino
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live_ino)
+            self.assertEqual(self.queue.segments(), [])
+        self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
 
     def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
         self.emit("one.example.com")
