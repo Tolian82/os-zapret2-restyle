@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
-from auto_detect_post_drop import _capture, _reattest, PostDropRefused, native_capture_before_launch, native_restore_before_ipfw
+from auto_detect_post_drop import _capture, _reattest, _witness_line, _witness_read, original_fd9_command, PostDropRefused, native_capture_before_launch, native_restore_before_ipfw
 
 
 class PostDropContract(unittest.TestCase):
@@ -108,6 +108,26 @@ class PostDropContract(unittest.TestCase):
         (self.root / 'foreign').write_bytes(b'')
         with self.assertRaisesRegex(PostDropRefused, "unsafe_original_producer_layout"):
             self.capture()
+
+    def test_original_fd9_witness_token_and_malformed_refusal(self):
+        # Pure envelope serialization; actual original root/FD9 identity is
+        # covered by the exact real FreeBSD-native P2i packet scenario.
+        line = _witness_line(self.capture())
+        self.assertRegex(line, r"^p2k8i:(?:[0-9]+:){5}[0-9]+$")
+        for bad in ("", "p2k8i:", "p2k8i:0:0:0:0:0:0",
+                    "p2k8i:0:0:1:0:0:2", "p2k8i:0:0:1:0:0:1;touch /tmp/x",
+                    "p2k8i:" + "9" * 90):
+            with self.subTest(bad=bad[:30]):
+                with self.assertRaisesRegex(PostDropRefused,
+                                            "invalid_original_fd9_prelaunch_witness"):
+                    _witness_read(bad)
+
+    def test_original_fd9_cli_rejects_off_target(self):
+        if sys.platform.startswith("freebsd"):
+            self.skipTest("real original held FD9 is in disposable native P2i")
+        self.assertEqual(original_fd9_command(["capture"]), 64)
+        self.assertEqual(original_fd9_command(["restore", "x", "2", "/tmp/dvtws2"]), 64)
+        self.assertEqual(original_fd9_command(["authorize", "/tmp/test"]), 64)
 
     def test_native_real_fd9_entry_refuses_on_non_freebsd(self):
         if sys.platform.startswith('freebsd'):

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import re
 from pathlib import Path
 import pwd
 import stat
@@ -183,5 +184,103 @@ def native_restore_before_ipfw(witness: OriginalProducer, owner: OwnerToken,
         raise PostDropRefused("native_original_process_unavailable") from exc
 
 
+# P2k8i: the two half-calls are a *single* original-FD9 shell operation.
+# No new lock, Config parser, queue owner or on-disk witness is introduced.
+# The compact witness crosses launcher_start_once as an exact positional
+# argument, never through a detached daemon or a public worker.
+_WITNESS = re.compile(r"^p2k8i:([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-9]+)$")
+
+
+def _witness_line(witness: OriginalProducer) -> str:
+    a, b = witness.identities
+    return "p2k8i:" + ":".join(str(v) for v in (*a, *b))
+
+
+def _witness_read(line: str) -> OriginalProducer:
+    if not isinstance(line, str) or len(line) > 192:
+        raise PostDropRefused("invalid_original_fd9_prelaunch_witness")
+    found = _WITNESS.fullmatch(line)
+    if found is None:
+        raise PostDropRefused("invalid_original_fd9_prelaunch_witness")
+    values = tuple(int(x) for x in found.groups())
+    if any(n > (1 << 64) - 1 for n in values) or values[2] != 1 or values[5] != 1:
+        raise PostDropRefused("invalid_original_fd9_prelaunch_witness")
+    # Do not call native_capture_before_launch() again here: the verified
+    # upstream credential drop legitimately chowns inbox.txt to nobody.
+    # _reattest() immediately checks both protected named/open inodes against
+    # this original prelaunch witness and rejects every other UID.
+    _parent(ROOT, 0)
+    native_user = pwd.getpwnam(ENGINE_USER)
+    if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
+        raise PostDropRefused("unqualified_original_engine_user")
+    return OriginalProducer(
+        ROOT, 0, 0, native_user.pw_uid, native_user.pw_gid,
+        (values[:3], values[3:]),
+    )
+
+
+def _original_owner_from_pid(pid_text: str, executable: str) -> OwnerToken:
+    if (not isinstance(pid_text, str) or not re.fullmatch(r"[1-9][0-9]{0,9}", pid_text)
+            or not isinstance(executable, str) or not executable.startswith("/")
+            or not executable.endswith("/dvtws2") or "\x00" in executable or
+            any(c.isspace() for c in executable)):
+        raise PostDropRefused("invalid_original_launcher_identity")
+    pid = int(pid_text)
+    try:
+        reply = subprocess.run(
+            ["/bin/ps", "-ww", "-p", str(pid), "-o", "lstart=", "-o", "command="],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise PostDropRefused("original_launcher_process_unavailable") from exc
+    if reply.returncode or reply.stderr or len(reply.stdout) > 131072:
+        raise PostDropRefused("original_launcher_process_unavailable")
+    lines = reply.stdout.strip().splitlines()
+    if len(lines) != 1:
+        raise PostDropRefused("original_launcher_process_unavailable")
+    fields = lines[0].split(maxsplit=5)
+    if len(fields) != 6:
+        raise PostDropRefused("original_launcher_process_unavailable")
+    started = " ".join(fields[:5])
+    token = OwnerToken(pid, started, executable)
+    if not _owner_snapshot(token, subprocess.run):
+        raise PostDropRefused("original_launcher_owner_changed")
+    return token
+
+
+def original_fd9_command(args: list[str]) -> int:
+    """Restricted internal CLI, only from inherited original held FD9.
+
+    A normal release with P2h's inert preview never invokes this command.
+    Activation is deliberately a separate original-builder/worker gate.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            len(args) not in (1, 4) or args[0] not in {"capture", "restore"}):
+        return 64
+    if (args[0] == "capture" and len(args) != 1) or (
+            args[0] == "restore" and len(args) != 4):
+        return 64
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()  # REAL original same-OFD held FD9, no new lock.
+        if args[0] == "capture":
+            print(_witness_line(native_capture_before_launch()))
+        else:
+            # Caller already started the single original engine. A false
+            # witness, missing original FD9 or replaced process refuses.
+            witness = _witness_read(args[1])
+            owner = _original_owner_from_pid(args[2], args[3])
+            native_restore_before_ipfw(witness, owner)
+            print("original-fd9-postdrop=attested")
+        return 0
+    except Exception as exc:
+        # Catch the original FD9 adapter's refusal as well as process errors.
+        # Do not print a traceback, raw argv or any private Config/hostlist.
+        # No raw domain, process argv or private witness leaks in diagnostics.
+        print("original-fd9-postdrop-refused=" + type(exc).__name__,
+              file=sys.stderr)
+        return 69
+
+
 if __name__ == "__main__":
-    raise SystemExit("P2k8h is import-only; no independent startup or repair CLI")
+    raise SystemExit(original_fd9_command(sys.argv[1:]))

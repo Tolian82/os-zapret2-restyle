@@ -10,6 +10,8 @@ on:
       - scripts/test-auto-detect-storage.py
       - scripts/test-p2i-original-preview-native.py
       - scripts/test-auto-detect-post-drop.py
+      - scripts/test-auto-detect-fd9-launch.sh
+      - src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
       - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py
       - scripts/test-p2k8g-original-config-native.py
       - scripts/test-auto-detect-original-lock-handoff.php
@@ -42,6 +44,9 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2i-original-preview-native.py --self-test
           python3 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_post_drop.py scripts/test-auto-detect-post-drop.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-auto-detect-post-drop.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh
+          sh -n scripts/test-auto-detect-fd9-launch.sh
+          sh scripts/test-auto-detect-fd9-launch.sh
           python3 -m py_compile scripts/test-p2k8g-original-config-native.py
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-p2k8g-original-config-native.py --self-test
           if GITHUB_ACTIONS=true PYTHONDONTWRITEBYTECODE=1 python3 \
