@@ -141,6 +141,13 @@ jobs:
                                 "scripts/test-p2i-original-preview-native.py",
                                 "--native", str(checkout)],
                                check=True, timeout=90, env=env)
+                # Same disposable OPNsense VM/pinned upstream binary.
+                # ONE original engine at a time: preserve the _55 midcut
+                # negative control, then a sequential stopped-writer cut.
+                subprocess.run([sys.executable,
+                                "scripts/test-p2i-original-preview-native.py",
+                                "--native-quiesced", str(checkout)],
+                               check=True, timeout=90, env=env)
             finally:
                 shutil.rmtree(checkout)
             PY
@@ -149,7 +156,7 @@ jobs:
         run: |
           echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
           echo P2G_SCOPE=DISPOSABLE_FREEBSD_NOBODY_FILE_ACCESS_AND_DURABLE_QUEUE_PERMISSIONS
-          echo P2I_SCOPE=ORIGINAL_GENERATOR_P2H_SEALED_PREVIEW_PINNED_DVTWS2_LOOPBACK_RAW_DEBUG_ONLY
+          echo P2I_SCOPE=ORIGINAL_GENERATOR_PINNED_DVTWS2_LIVE_MIDCUT_AND_SEQUENTIAL_DISPOSABLE_STOPPED_CUT
           echo P2K8G_SCOPE=DISPOSABLE_NATIVE_ORIGINAL_CONFIG_FD_PHP_PARENT_DEATH_AND_EARLY_UNLOCK_REFUSAL
           echo P2K8G_NOT_CLAIMED=INSTALLED_OBSERVER_OR_P2K8D_REAL_DESTINATION_OR_NATIVE_FD9_OR_PENDING_ACK
           echo P2I_NOT_CLAIMED=INSTALLED_FD9_OWNER_OR_CONTINUOUS_DRAIN_OR_WORKER_OR_PRODUCTION_TRAFFIC

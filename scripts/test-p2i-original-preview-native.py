@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import signal
 import shutil
 import stat
 import subprocess
@@ -39,6 +40,7 @@ KNOWN = "youtube.com"
 UNKNOWN = "unknown.p2i.invalid"
 UNKNOWN_AFTER = "rotated.p2i.invalid"
 UNKNOWN_MIDCUT = "midcut.p2i.invalid"
+UNKNOWN_QUIESCED = "quiesced.p2i.invalid"
 PORT = 6545
 DIVERT = 19899
 RULES = (19351, 19352)
@@ -259,7 +261,13 @@ def _exclusive_native_route(previous: str, current: str, host: str, *,
     return "previous" if old_count == 1 else "current"
 
 
-def _native(checkout: Path) -> None:
+def _native_stopped(guard, pid: int) -> bool:
+    """Check actual FreeBSD kernel process stop state; never infer via sleep."""
+    state = guard.cmd("ps", "-p", str(pid), "-o", "stat=")
+    return state.returncode == 0 and state.stdout.strip().startswith("T")
+
+
+def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
     need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
          "FREEBSD_ROOT_ONLY")
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
@@ -285,6 +293,7 @@ def _native(checkout: Path) -> None:
     observed_debug_log = ""
     archived_debug = None
     native_rollover = None
+    stopped_by_test = False
     try:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
@@ -400,6 +409,24 @@ def _native(checkout: Path) -> None:
             original_queue = DurableInbox(
                 PRODUCER, owner_uid=0, writer_gid=nobody.pw_gid)
             old_raw_identity = (RAW_PATH.stat().st_dev, RAW_PATH.stat().st_ino)
+            if quiesced_cut:
+                # Only a disposable original PID can be stopped. Recheck
+                # engine birth and dropped credentials immediately first.
+                need(process.poll() is None and
+                     guard.cmd("ps", "-p", str(process.pid), "-o",
+                               "lstart=").stdout == birth.stdout and
+                     guard.cmd("ps", "-p", str(process.pid), "-o",
+                               "uid=").stdout.strip() == str(nobody.pw_uid),
+                     "NATIVE_QUIESCENCE_OWNER_CHANGED_BEFORE_STOP")
+                process.send_signal(signal.SIGSTOP)
+                stopped_by_test = True
+                for _ in range(60):
+                    if _native_stopped(guard, process.pid):
+                        break
+                    time.sleep(0.05)
+                need(_native_stopped(guard, process.pid) and
+                     process.poll() is None,
+                     "NATIVE_QUIESCENCE_SIGSTOP_NOT_KERNEL_CONFIRMED")
             with original_queue.exclusive():
                 previous_raw = original_queue.rotate(generation="a" * 32)
                 need(previous_raw is not None and
@@ -411,32 +438,33 @@ def _native(checkout: Path) -> None:
                      "ORIGINAL_P2A_NATIVE_ROTATION_CHANGED_OR_LOST_FIRST_EVENT")
             print(MARK + "_REAL_ORIGINAL_P2A_RAW_ROTATE=PASS", flush=True)
 
-            # P2k8q3c2: a real HTTP/RST event strictly BETWEEN the two
-            # physical name replacements. The original raw has been cut,
-            # but the original debug name is still current. The producer
-            # is NOT synchronized by P2a's root-only queue flock.
-            gap_observed = p0.exchange(UNKNOWN_MIDCUT, force_rst=True)
-            need(gap_observed == p0.request(UNKNOWN_MIDCUT),
-                 "MIDCUT_NATIVE_HTTP_NOT_DELIVERED")
-            time.sleep(0.7)
-            mid_old_raw = previous_raw.read_text(encoding="ascii")
-            mid_new_raw = RAW_PATH.read_text(encoding="ascii")
-            mid_old_debug = DEBUG_PATH.read_text(errors="replace")
-            observer_num = preview["observer_native_number"]
-            mid_raw_route = _exclusive_native_route(
-                mid_old_raw, mid_new_raw, UNKNOWN_MIDCUT)
-            need(_debug_match(mid_old_debug, observer_num, UNKNOWN_MIDCUT),
-                 "MIDCUT_NATIVE_DEBUG_EVENT_MISSING_ON_ORIGINAL_PATH")
-            need(mid_old_raw.splitlines() == [UNKNOWN] and
-                 mid_new_raw.splitlines() == [UNKNOWN_MIDCUT],
-                 "MIDCUT_ORIGINAL_RAW_SEGMENT_LINEAGE_CHANGED")
-            need(process.poll() is None and
-                 guard.cmd("ps", "-p", str(process.pid),
-                           "-o", "lstart=").stdout == birth.stdout,
-                 "MIDCUT_ORIGINAL_NATIVE_PID_CHANGED")
-            print(MARK + "_REAL_NATIVE_MIDCUT_ROUTE="
-                  + "raw:" + mid_raw_route + ",debug:previous",
-                  flush=True)
+            if not quiesced_cut:
+                # P2k8q3c2: a real HTTP/RST event strictly BETWEEN the two
+                # physical name replacements. The original raw has been cut,
+                # but the original debug name is still current. The producer
+                # is NOT synchronized by P2a's root-only queue flock.
+                gap_observed = p0.exchange(UNKNOWN_MIDCUT, force_rst=True)
+                need(gap_observed == p0.request(UNKNOWN_MIDCUT),
+                     "MIDCUT_NATIVE_HTTP_NOT_DELIVERED")
+                time.sleep(0.7)
+                mid_old_raw = previous_raw.read_text(encoding="ascii")
+                mid_new_raw = RAW_PATH.read_text(encoding="ascii")
+                mid_old_debug = DEBUG_PATH.read_text(errors="replace")
+                observer_num = preview["observer_native_number"]
+                mid_raw_route = _exclusive_native_route(
+                    mid_old_raw, mid_new_raw, UNKNOWN_MIDCUT)
+                need(_debug_match(mid_old_debug, observer_num, UNKNOWN_MIDCUT),
+                     "MIDCUT_NATIVE_DEBUG_EVENT_MISSING_ON_ORIGINAL_PATH")
+                need(mid_old_raw.splitlines() == [UNKNOWN] and
+                     mid_new_raw.splitlines() == [UNKNOWN_MIDCUT],
+                     "MIDCUT_ORIGINAL_RAW_SEGMENT_LINEAGE_CHANGED")
+                need(process.poll() is None and
+                     guard.cmd("ps", "-p", str(process.pid),
+                               "-o", "lstart=").stdout == birth.stdout,
+                     "MIDCUT_ORIGINAL_NATIVE_PID_CHANGED")
+                print(MARK + "_REAL_NATIVE_MIDCUT_ROUTE="
+                      + "raw:" + mid_raw_route + ",debug:previous",
+                      flush=True)
 
             # The product has NO authorized debug rollover; this rename
             # and recreation are confined to a disposable VM. Capture the
@@ -466,11 +494,43 @@ def _native(checkout: Path) -> None:
             finally:
                 os.close(dir_fd)
 
+            if quiesced_cut:
+                # Validate the process is STILL STOPPED after BOTH cuts,
+                # with first-event raw/debug preserved on previous inodes
+                # and both freshly replaced live paths empty. There is
+                # no user traffic while stopped in this isolated witness.
+                need(_native_stopped(guard, process.pid) and
+                     process.poll() is None and
+                     guard.cmd("ps", "-p", str(process.pid), "-o",
+                               "lstart=").stdout == birth.stdout,
+                     "NATIVE_QUIESCENCE_OWNER_RESUMED_BEFORE_BOTH_CUTS")
+                need(previous_raw.read_text(encoding="ascii").splitlines() ==
+                     [UNKNOWN] and
+                     _debug_match(archived_debug.read_text(errors="replace"),
+                                  preview["observer_native_number"], UNKNOWN) and
+                     RAW_PATH.read_bytes() == b"" and DEBUG_PATH.read_bytes() == b"",
+                     "NATIVE_QUIESCENCE_CUT_FILES_CHANGED_WHILE_STOPPED")
+                process.send_signal(signal.SIGCONT)
+                for _ in range(60):
+                    if not _native_stopped(guard, process.pid):
+                        break
+                    time.sleep(0.05)
+                need(process.poll() is None and
+                     not _native_stopped(guard, process.pid) and
+                     guard.cmd("ps", "-p", str(process.pid), "-o",
+                               "lstart=").stdout == birth.stdout,
+                     "NATIVE_QUIESCENCE_ORIGINAL_PID_NOT_RESUMED")
+                stopped_by_test = False
+                print(MARK + "_REAL_NATIVE_QUIESCED_CUT="
+                      "same_pid_stopped_for_raw_and_debug_then_resumed",
+                      flush=True)
+
             # One SECOND unknown hostname cannot inherit native inclusion
             # of the first. Real traffic proves where the same running
             # native PID actually appends after both physical swaps.
-            observed = p0.exchange(UNKNOWN_AFTER, force_rst=True)
-            need(observed == p0.request(UNKNOWN_AFTER),
+            after_host = UNKNOWN_QUIESCED if quiesced_cut else UNKNOWN_AFTER
+            observed = p0.exchange(after_host, force_rst=True)
+            need(observed == p0.request(after_host),
                  "SECOND_NATIVE_UNKNOWN_HTTP_CHANGED")
             time.sleep(0.8)
             first_raw = previous_raw.read_text(encoding="ascii")
@@ -480,20 +540,27 @@ def _native(checkout: Path) -> None:
             number = preview["observer_native_number"]
             need(_debug_match(first_debug, number, UNKNOWN),
                  "FIRST_NATIVE_DEBUG_LOST_DURING_DISPOSABLE_ROTATION")
-            # Both original native debug lines must remain on the archived
-            # pre-debug-replacement inode, while the interstitial raw line
-            # must still be on the fresh live raw inode. These two durable
-            # locations cannot be claimed as one generation by name alone.
-            need(_exclusive_native_route(
-                 first_raw, second_raw, UNKNOWN_MIDCUT) == mid_raw_route and
-                 _exclusive_native_route(
-                     first_debug, second_debug, UNKNOWN_MIDCUT,
-                     debug_number=number) == "previous",
-                 "MIDCUT_RAW_DEBUG_PREVIOUS_CURRENT_COHORT_CHANGED")
+            if quiesced_cut:
+                # Require first raw and debug to be preserved ONLY on old
+                # inodes, while post-CONT host is absent from both old ones.
+                need(first_raw.splitlines() == [UNKNOWN] and
+                     not _debug_match(first_debug, number, after_host),
+                     "NATIVE_QUIESCENCE_OLD_INODE_WRITTEN_AFTER_RESUME")
+            else:
+                # Retain actual _55 midcut native negative-control forever.
+                need(_exclusive_native_route(
+                     first_raw, second_raw, UNKNOWN_MIDCUT) == mid_raw_route and
+                     _exclusive_native_route(
+                         first_debug, second_debug, UNKNOWN_MIDCUT,
+                         debug_number=number) == "previous",
+                     "MIDCUT_RAW_DEBUG_PREVIOUS_CURRENT_COHORT_CHANGED")
             raw_route = _exclusive_native_route(
-                first_raw, second_raw, UNKNOWN_AFTER)
+                first_raw, second_raw, after_host)
             debug_route = _exclusive_native_route(
-                first_debug, second_debug, UNKNOWN_AFTER, debug_number=number)
+                first_debug, second_debug, after_host, debug_number=number)
+            if quiesced_cut:
+                need(raw_route == "current" and debug_route == "current",
+                     "NATIVE_QUIESCED_RESUME_NOT_A_NEW_INODE_PAIR")
             need(process.poll() is None and
                  guard.cmd("ps", "-p", str(process.pid),
                            "-o", "lstart=").stdout == birth.stdout,
@@ -506,13 +573,21 @@ def _native(checkout: Path) -> None:
                 previous_raw, old_pending_stat.st_dev,
                 old_pending_stat.st_ino, owner=original_owner,
                 writer_gid=nobody.pw_gid)
-            native_rollover = (mid_raw_route, raw_route,
-                               debug_route, fd_state.value)
-            print(MARK + "_REAL_NATIVE_POST_ROTATION_ROUTE="
-                  + "raw:" + raw_route + ",debug:" + debug_route
-                  + ",old_inode_fd:" + fd_state.value, flush=True)
+            native_rollover = (raw_route, debug_route, fd_state.value)
+            if quiesced_cut:
+                print(MARK + "_REAL_NATIVE_QUIESCED_POST_RESUME_ROUTE="
+                      + "raw:" + raw_route + ",debug:" + debug_route
+                      + ",old_inode_fd:" + fd_state.value, flush=True)
+            else:
+                print(MARK + "_REAL_NATIVE_POST_ROTATION_ROUTE="
+                      + "raw:" + raw_route + ",debug:" + debug_route
+                      + ",old_inode_fd:" + fd_state.value, flush=True)
     finally:
         failures = []
+        # Unconditional safe unwind for SIGSTOP even after a failed check,
+        # before terminating the original engine and restoring original FD9.
+        if stopped_by_test and process is not None and process.poll() is None:
+            process.send_signal(signal.SIGCONT)
         for rule in reversed(installed):
             if guard.cmd("/sbin/ipfw", "-q", "delete", str(rule)).returncode:
                 failures.append("SCOPED_DIVERT_RULE_LEAKED")
@@ -565,6 +640,8 @@ def _native(checkout: Path) -> None:
     need("* lua 'multisplit" in observed_native_log,
          "ORIGINAL_AUTHORIZED_LUA_NOT_EXERCISED")
     # No raw, debug or process output retained; no owner-machine changes.
+    if quiesced_cut:
+        print(MARK + "_REAL_NATIVE_QUIESCED_SAME_PID=PASS", flush=True)
     print(MARK + "=PASS_NATIVE_PINNED_PREVIEW_FIRST_MATCH_RAW_DEBUG_ONLY",
           flush=True)
 
@@ -578,6 +655,11 @@ if __name__ == "__main__":
                  "DEBUG_CORRELATION_PARSER_REJECTED_VALID")
             need(not _debug_match("hello : profile 1 : adding to /tmp/wrong", 2),
                  "DEBUG_CORRELATION_FALSE_POSITIVE")
+            need(_exclusive_native_route(
+                UNKNOWN_QUIESCED + "\n", "", UNKNOWN_QUIESCED) == "previous" and
+                 _exclusive_native_route(
+                     "", UNKNOWN_QUIESCED + "\n", UNKNOWN_QUIESCED) == "current",
+                 "QUIESCED_NEW_RAW_ROUTE_MISCLASSIFIED")
             need(_exclusive_native_route(
                 UNKNOWN_MIDCUT + "\n", "", UNKNOWN_MIDCUT) == "previous" and
                  _exclusive_native_route(
@@ -611,8 +693,10 @@ if __name__ == "__main__":
             else:
                 raise RuntimeError("DUPLICATE_NATIVE_ROLLOVER_ACCEPTED")
             print(MARK + "_SELF_TEST=PASS_SOURCE_ONLY")
-        elif len(sys.argv) == 3 and sys.argv[1] == "--native":
-            _native(Path(sys.argv[2]))
+        elif len(sys.argv) == 3 and sys.argv[1] in (
+                "--native", "--native-quiesced"):
+            _native(Path(sys.argv[2]),
+                    quiesced_cut=sys.argv[1] == "--native-quiesced")
         else:
             raise RuntimeError("usage: --self-test | --native /tmp/p4c3-native-*")
     except Exception as exc:
