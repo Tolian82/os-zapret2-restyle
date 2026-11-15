@@ -229,6 +229,50 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertIn("completed-history.example.com",
                           self.auto.read_text())
 
+    def test_four_generation_gc_reclaims_real_native_acked_chain(self):
+        # Six genuinely ACKed original P2a/Config generations, each with
+        # its own pretraffic seed and distinct native owner. Starting the
+        # seventh must retain ONLY the most recent four completed epochs,
+        # while all six domains remain in their final editable HOSTLIST.
+        completed = []
+        for number in range(6):
+            if number:
+                new_id = f"{number:032x}"
+                previous = self.proof
+                next_proof = replace(
+                    previous, generation=new_id, operation_id=new_id,
+                    owner=OwnerToken(4321 + number, previous.owner.started,
+                                     previous.owner.executable))
+                self.proof = sealed_original_epoch(
+                    self.base, next_proof, self.queue, self.receipts)
+            host = f"historical-{number}.example.com"
+            self.emit(host)
+            with self.queue.exclusive():
+                pending = self.stage()
+                self.commit_and_ack(pending, host)
+                with patch("auto_detect_fd.probe_stopped_pending_fd",
+                           return_value=FDState.DRAINED):
+                    self.assertTrue(self.receipts.retire_stopped(
+                        self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+            completed.append(self.proof.generation)
+        next_id = f"{6:032x}"
+        new_proof = replace(
+            self.proof, generation=next_id, operation_id=next_id,
+            owner=OwnerToken(4327, self.proof.owner.started,
+                             self.proof.owner.executable))
+        self.proof = sealed_original_epoch(
+            self.base, new_proof, self.queue, self.receipts)
+        self.assertEqual(
+            set(p.name for p in self.receipts.root.iterdir()),
+            set(completed[-4:]) | {next_id})
+        self.assertEqual(self.queue.inbox.read_bytes(), b"")
+        for number in range(6):
+            self.assertIn(f"historical-{number}.example.com",
+                          self.auto.read_text())
+        self.assertEqual(len(list(self.queue.pending.iterdir())), 0)
+
     def test_history_reclaim_refuses_tampered_actual_native_ack(self):
         self.emit("tampered-history.example.com")
         with self.queue.exclusive():
