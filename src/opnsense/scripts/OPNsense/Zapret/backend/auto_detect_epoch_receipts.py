@@ -409,12 +409,17 @@ class EpochReceipts:
 
     def _retired_sources(self, proof: GenerationProof, queue: DurableInbox,
                          plan: dict, *, repair: bool) -> bool:
-        """Preserve old inodes in the SAME epoch, re-create empty producer.
+        """Atomically retire exact STOPPED old inodes without losing live names.
 
-        Old appends are all ACKed before the durable plan is written. No
-        copytruncate, no new engine, no second original writer and no
-        extra service. Each rename is recoverable after a process crash.
+        The original queue lock MUST remain obtainable through every crash:
+        both native producer paths stay present across every hardlink/replace.
+        An immutable epoch retirement plan pins the old dev/inode/SHA before
+        any source change. No copytruncate, signal, parallel Config or owner.
         """
+        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
+        from auto_detect_queue import _stat_regular, MAX_SEGMENT
+        from auto_detect_debug_window import MAX_DEBUG
+
         if (not isinstance(plan, dict) or
                 set(plan) != {"schema", "kind", "generation", "owner_sha256",
                              "last_ack_sha256", "cycle", "next_sequence", "sources"} or
@@ -427,78 +432,140 @@ class EpochReceipts:
                 set(plan["sources"]) != {"inbox", "debug", "previous"}):
             raise ReceiptRefused("unqualified_old_retirement_plan")
         folder = self._generation(proof.generation, create=False)
-        mode = 0o660 if self.writer_gid is not None else 0o600
-        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
         if (queue.segments() or
                 (queue.root / DEBUG_NEXT).exists() or
                 (queue.root / DEBUG_NEXT).is_symlink()):
             raise ReceiptRefused("foreign_pending_during_old_retirement")
-        source_paths = {
+        mode = 0o660 if self.writer_gid is not None else 0o600
+        gid = self.writer_gid if self.writer_gid is not None else self.uid
+
+        def exact_old(path: Path, expected: list, limit: int) -> os.stat_result:
+            """Pinned nofollow snapshot allows nlink=2 ONLY during torn cut."""
+            named = _stat_regular(path, self.uid, max_size=limit,
+                                  writer_gid=self.writer_gid)
+            if named.st_nlink not in (1, 2):
+                raise ReceiptRefused("foreign_retired_source_links")
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                opened = os.fstat(fd)
+                data = os.read(fd, limit + 1)
+                after = os.fstat(fd)
+            finally:
+                os.close(fd)
+            final = path.lstat()
+            identity = lambda st: (st.st_dev, st.st_ino, st.st_size,
+                                   st.st_mtime_ns, st.st_nlink,
+                                   stat.S_IMODE(st.st_mode))
+            if (identity(named) != identity(opened) or
+                    identity(opened) != identity(after) or
+                    identity(after) != identity(final) or
+                    len(data) != named.st_size or
+                    [named.st_dev, named.st_ino, len(data),
+                     hashlib.sha256(data).hexdigest()] != expected):
+                raise ReceiptRefused("retired_original_source_changed")
+            return named
+
+        def fresh_empty(path: Path) -> os.stat_result:
+            info, data = _read_exact(path, owner_uid=self.uid,
+                                     writer_gid=self.writer_gid)
+            if (data or info.st_nlink != 1 or
+                    stat.S_IMODE(info.st_mode) != mode):
+                raise ReceiptRefused("untrusted_fresh_original_producer")
+            return info
+
+        for key, (live, archived) in {
             "inbox": (queue.inbox, folder / "retired-inbox.txt"),
             "debug": (Path(proof.debug_path), folder / "retired-debug.log"),
             "previous": (queue.root / DEBUG_OLD,
                          folder / "retired-debug-previous.log"),
-        }
-        for key, (live, archived) in source_paths.items():
+        }.items():
             expected = plan["sources"][key]
+            archive_exists = archived.exists() or archived.is_symlink()
+            live_exists = live.exists() or live.is_symlink()
             if expected is None:
-                if (key != "previous" or live.exists() or live.is_symlink() or
-                        archived.exists() or archived.is_symlink()):
+                if key != "previous" or live_exists or archive_exists:
                     raise ReceiptRefused("unexpected_old_debug_archive")
                 continue
             if (not isinstance(expected, list) or len(expected) != 4 or
-                    any(type(v) is not int or v < 0 for v in expected[:3]) or
-                    not isinstance(expected[3], str) or
-                    not HEX64.fullmatch(expected[3]) or expected[1] <= 0):
+                    any(type(x) is not int or x < 0 for x in expected[:3]) or
+                    expected[1] <= 0 or not isinstance(expected[3], str) or
+                    not HEX64.fullmatch(expected[3])):
                 raise ReceiptRefused("invalid_old_source_identity")
-            if not archived.exists() and not archived.is_symlink():
-                if not repair:
-                    return False
-                before, data = _read_exact(
-                    live, owner_uid=self.uid, writer_gid=self.writer_gid)
-                if ([before.st_dev, before.st_ino, len(data),
-                     hashlib.sha256(data).hexdigest()] != expected or
-                        before.st_nlink != 1 or
-                        before.st_dev != folder.stat().st_dev):
-                    raise ReceiptRefused("old_native_source_changed_before_archive")
-                if repair:
-                    # Existing FD9 and stopped epoch are re-attested around
-                    # each source rename by the public caller.
+            limit = MAX_SEGMENT if key == "inbox" else MAX_DEBUG
+            if key == "previous":
+                # An old diagnostic archive is not a live producer path.
+                # Its rename is safe to resume after a crash.
+                if live_exists and archive_exists:
+                    raise ReceiptRefused("duplicate_previous_debug_archive")
+                if not archive_exists:
+                    if not repair:
+                        return False
+                    old = exact_old(live, expected, limit)
+                    if old.st_nlink != 1 or old.st_dev != folder.stat().st_dev:
+                        raise ReceiptRefused("old_previous_archive_not_owned")
                     os.rename(live, archived)
                     _sync(folder)
                     _sync(queue.root)
-            old, old_bytes = _read_exact(
-                archived, owner_uid=self.uid, writer_gid=self.writer_gid)
-            if [old.st_dev, old.st_ino, len(old_bytes),
-                hashlib.sha256(old_bytes).hexdigest()] != expected:
-                raise ReceiptRefused("retired_old_inode_not_original")
-            if key == "previous":
-                if live.exists() or live.is_symlink():
-                    raise ReceiptRefused("retained_old_debug_archive_reappeared")
+                if exact_old(archived, expected, limit).st_nlink != 1:
+                    raise ReceiptRefused("previous_debug_retired_with_open_alias")
                 continue
-            if live.exists() or live.is_symlink():
-                new = _read_exact(live, owner_uid=self.uid,
-                                  writer_gid=self.writer_gid)
-                if (new[1] or (new[0].st_dev, new[0].st_ino) ==
-                        (old.st_dev, old.st_ino) or
-                        stat.S_IMODE(new[0].st_mode) != mode):
-                    raise ReceiptRefused("untrusted_fresh_original_producer")
-            elif repair:
-                # The producer was positively stopped BEFORE the old file
-                # was renamed into the protected epoch. No engine can open
-                # this pathname until a NEW shared operation is committed.
-                fd = os.open(live, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                             os.O_NOFOLLOW, 0o600)
-                try:
-                    os.fchown(fd, self.uid, self.writer_gid
-                              if self.writer_gid is not None else self.uid)
-                    os.fchmod(fd, mode)
-                    os.fsync(fd)
-                finally:
-                    os.close(fd)
+
+            # Raw and native debug must NEVER disappear from queue.root,
+            # including after a power loss. A prepared empty replacement
+            # lives in the SAME producer directory, never in the epoch.
+            if not live_exists:
+                raise ReceiptRefused("old_live_source_missing")
+            temp = queue.root / (".original-retire-" + key + "-ready")
+            temp_exists = temp.exists() or temp.is_symlink()
+            if not archive_exists:
+                if not repair:
+                    return False
+                old = exact_old(live, expected, limit)
+                if (old.st_nlink != 1 or old.st_dev != folder.stat().st_dev):
+                    raise ReceiptRefused("old_live_inode_not_archive_safe")
+                if not temp_exists:
+                    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                 os.O_NOFOLLOW, 0o600)
+                    try:
+                        os.fchown(fd, self.uid, gid)
+                        os.fchmod(fd, mode)
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
+                    _sync(queue.root)
+                prepared = fresh_empty(temp)
+                if prepared.st_dev != old.st_dev:
+                    raise ReceiptRefused("replacement_not_same_filesystem")
+                os.link(live, archived, follow_symlinks=False)
+                _sync(folder)
+                archive_exists = True
+
+            old = exact_old(archived, expected, limit)
+            current = _stat_regular(live, self.uid, max_size=limit,
+                                    writer_gid=self.writer_gid)
+            if (current.st_dev, current.st_ino) == (old.st_dev, old.st_ino):
+                # Crash after hardlink/fsync, before atomic replace. Both
+                # names point at the EXACT original bytes (nlink=2). Do
+                # not unlink either one until the fresh inode is installed.
+                if (not repair):
+                    return False
+                if current.st_nlink != 2 or old.st_nlink != 2:
+                    raise ReceiptRefused("torn_original_archive_links_unsafe")
+                exact_old(live, expected, limit)
+                if not (temp.exists() and not temp.is_symlink()):
+                    raise ReceiptRefused("missing_prepared_original_replacement")
+                prepared = fresh_empty(temp)
+                if prepared.st_dev != old.st_dev:
+                    raise ReceiptRefused("different_original_replacement_device")
+                os.replace(temp, live)
                 _sync(queue.root)
-            else:
-                return False
+                old = exact_old(archived, expected, limit)
+            if old.st_nlink != 1:
+                raise ReceiptRefused("retired_original_still_has_alias")
+            new = fresh_empty(live)
+            if (new.st_dev != old.st_dev or new.st_ino == old.st_ino or
+                    temp.exists() or temp.is_symlink()):
+                raise ReceiptRefused("retired_original_replacement_not_complete")
         return True
 
     def retire_stopped(self, proof: GenerationProof, queue: DurableInbox, *,
