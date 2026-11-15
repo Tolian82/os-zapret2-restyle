@@ -16,6 +16,7 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
@@ -199,7 +200,8 @@ final class AutoDetectConfigSnapshot
      */
     public static function commitWithInheritedOriginalLocks(
         object $config, callable $modelFactory, int $queueFd,
-        string $queuePath, string $configPath, array $pythonCommand
+        string $queuePath, string $configPath, array $pythonCommand,
+        bool $retired = false
     ): array {
         if ($queueFd < 3 || $queueFd > 1024 || $queuePath === '' ||
             $configPath === '' || !str_starts_with($queuePath, '/') ||
@@ -210,7 +212,7 @@ final class AutoDetectConfigSnapshot
         }
         return self::withLockedOriginalModel(
             $config, $modelFactory,
-            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand): array {
+            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand, $retired): array {
                 // Both descriptors come from their ORIGINAL owners. The
                 // child receives duped open-file descriptions, not newly
                 // opened paths or guessed flock ownership.
@@ -240,12 +242,27 @@ final class AutoDetectConfigSnapshot
                         $queueSt['ino'] !== $namedQueue['ino']) {
                         throw new \RuntimeException('Foreign original queue descriptor');
                     }
+                    // On the post-Stop route the same ORIGINAL FD9 must
+                    // reach the Config-locked child, not a freshly acquired
+                    // lifecycle lock. Normal running-minute descriptors
+                    // remain unchanged.
+                    $lifecycle = null;
+                    if ($retired) {
+                        SharedApplyLifecycleLock::assertHeld();
+                        $lifecycle = @fopen('php://fd/9', 'r+b');
+                        if (!is_resource($lifecycle)) {
+                            throw new \\RuntimeException('Original retired lifecycle FD9 unavailable');
+                        }
+                    }
+                    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
+                                    2 => ['file', '/dev/null', 'a'],
+                                    3 => $queueStream, 4 => $handle];
+                    if ($retired) {
+                        $descriptors[9] = $lifecycle;
+                    }
                     $pipes = [];
                     $process = @proc_open(
-                        $pythonCommand,
-                        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
-                         2 => ['file', '/dev/null', 'a'],
-                         3 => $queueStream, 4 => $handle],
+                        $pythonCommand, $descriptors,
                         $pipes, null, ['LC_ALL' => 'C']
                     );
                     if (!is_resource($process)) {
@@ -312,6 +329,9 @@ final class AutoDetectConfigSnapshot
                         if (is_resource($process)) {
                             proc_terminate($process);
                             proc_close($process);
+                        }
+                        if (is_resource($lifecycle)) {
+                            fclose($lifecycle);
                         }
                     }
                 } finally {
@@ -432,7 +452,8 @@ final class AutoDetectConfigSnapshot
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
                     static fn() => self::nativeFinalRead()
                 );
-            } elseif (count($argv) === 4 && $argv[1] === 'commit-with-fds' &&
+            } elseif (count($argv) === 4 &&
+                      in_array($argv[1], ['commit-with-fds', 'commit-retired-with-fds'], true) &&
                       preg_match('/^[0-9]{1,4}$/D', $argv[2]) === 1 &&
                       preg_match('/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
                 // No direct worker, no independent Config/XML writer. A
@@ -441,7 +462,10 @@ final class AutoDetectConfigSnapshot
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
                     (int)$argv[2], '/var/db/zapret2-auto-detect/worker.lock',
                     '/conf/config.xml',
-                    [self::NATIVE_PYTHON, self::FD_COMMIT, 'commit-fds', $argv[3]]
+                    [self::NATIVE_PYTHON, self::FD_COMMIT,
+                     $argv[1] === 'commit-retired-with-fds' ? 'commit-retired-fds' : 'commit-fds',
+                     $argv[3]],
+                    $argv[1] === 'commit-retired-with-fds'
                 );
             } else {
                 return 64;
