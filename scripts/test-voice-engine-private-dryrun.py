@@ -31,7 +31,8 @@ if '--dry-run' not in args or os.environ.get('FAKE_ENGINE_FAIL') == '1':
 checked = []
 for token in args:
     name, sep, value = token.partition('=')
-    if not sep or name not in ('--ipset', '--ipset-exclude', '--hostlist', '--hostlist-exclude'):
+    if not sep or name not in ('--ipset', '--ipset-exclude', '--hostlist', '--hostlist-exclude',
+                            '--hostlist-auto', '--hostlist-auto-debug'):
         continue
     p = Path(value)
     for parent in [p.parent, *p.parents]:
@@ -40,7 +41,7 @@ for token in args:
     if not p.is_file() or not (p.stat().st_mode & stat.S_IROTH):
         sys.exit(52)
     checked.append([name, p.read_text(), value])
-if len(checked) != 3:
+if len(checked) != (5 if any(item[0] == '--hostlist-auto' for item in checked) else 3):
     sys.exit(53)
 Path(os.environ['FAKE_ENGINE_RECORD']).write_text(json.dumps(checked))
 """, encoding="utf-8")
@@ -109,6 +110,38 @@ validator_validate_engine_mapped "$2" "$3" "$4" "$5" "$6"
         self.assertTrue(all("/tmp/" + PREFIX in item[2] for item in proof))
         self.assertEqual(0o700, self.work.stat().st_mode & 0o777)
         self.assertEqual(0o700, (self.root / "private").stat().st_mode & 0o777)
+        self.assert_cleanup()
+
+    def test_actual_auto_observer_dryrun_uses_only_temp_mirror(self):
+        # The engine's native dry-run checks file existence. The real FD9
+        # producer is deliberately NOT prepared during candidate preflight.
+        raw = "/var/db/zapret2-auto-detect/inbox.txt"
+        debug = "/var/db/zapret2-auto-detect/debug.log"
+        original = self.args.read_bytes()
+        self.args.write_bytes(original + (
+            "--hostlist-auto-debug=" + debug + "\n" +
+            "--hostlist-auto=" + raw + "\n").encode())
+        outcome = self.invoke()
+        self.assertEqual(outcome.returncode, 0, outcome.stderr)
+        observed = json.loads(self.record.read_text())
+        auto = [item for item in observed
+                if item[0] in ("--hostlist-auto", "--hostlist-auto-debug")]
+        self.assertEqual(len(auto), 2)
+        self.assertEqual([item[1] for item in auto], ["", ""])
+        self.assertTrue(all("/tmp/" + PREFIX in item[2] for item in auto))
+        self.assertNotIn(raw, [item[2] for item in auto])
+        self.assertNotIn(debug, [item[2] for item in auto])
+        self.assert_cleanup()
+
+    def test_auto_dryrun_refuses_foreign_producer_path_without_mirror(self):
+        self.args.write_text(
+            "--hostlist-auto=/tmp/foreign-raw-source.txt\n"
+            "--hostlist-auto-debug=/var/db/zapret2-auto-detect/debug.log\n"
+        )
+        outcome = self.invoke()
+        self.assertNotEqual(outcome.returncode, 0)
+        self.assertIn("unqualified native auto source path", outcome.stderr)
+        self.assertFalse(self.record.exists())
         self.assert_cleanup()
 
     def test_symlink_is_not_staged_or_followed(self):

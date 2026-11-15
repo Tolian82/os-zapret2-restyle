@@ -15,10 +15,11 @@ apply_runtime_clear()
     APPLY_IPFW_INSTALLED=0
 }
 
-# #1052 P2k8i: original FD9's *single* launcher boundary. P2h's
-# nonactivating preview cannot ever create/touch a live raw/debug producer.
-# No native --hostlist-auto= argv is authorized until a durable worker/ACK
-# proves the actual sealed generation. No environment override is accepted.
+# #1052 P2 original FD9's single launcher boundary. A producer is
+# authorized only for an exact original shared-work seal, validated native
+# source profiles and schema-2 generation. The separate original queue,
+# pretraffic zero seed, post-drop process and terminal epoch remain mandatory.
+# No environment override, second Config owner or detached engine is allowed.
 apply_runtime_observer_preflight()
 {
     [ "$#" -eq 1 ] || return 64
@@ -37,13 +38,15 @@ apply_runtime_observer_preflight()
         common_error "shared Apply: native observer lacks sealed generation"
         return 69
     }
-    # Intentionally REFUSES today. The authorization command does not yet
-    # exist: no real generation-bound worker/ACK has been qualified.
-    "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1" \
-        >/dev/null 2>&1 || {
-        common_error "shared Apply: native observer worker/ACK not authorized"
+    # Read-only: the original sealed native candidate must match this
+    # release byte-for-byte BEFORE any durable Apply record or process stop.
+    # Producer creation and fresh-inode checks belong solely to FD9 launcher.
+    _apply_authorized=$("$PYTHON_RUNTIME" \
+        "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1") || {
+        common_error "shared Apply: native observer release not authorized"
         return 69
     }
+    [ "$_apply_authorized" = original-fd9-observer=authorized ] || return 69
 }
 
 apply_runtime_original_launcher_once()
@@ -60,8 +63,14 @@ apply_runtime_original_launcher_once()
         case "$6" in ""|*[!a-f0-9]*) return 69 ;; esac
         case "$7" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#6}" -eq 32 ] && [ "${#7}" -eq 64 ] || return 69
-        # P2k8q3a: two existing original-FD9 calls, no second queue owner.
+        # The exact original native producer is prepared/verified only
+        # under this same held FD9, after read-only release authorization.
+        # Existing raw/debug/pending inodes are never truncated or migrated.
+        _apply_producer=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" prepare) || return 69
+        [ "$_apply_producer" = original-fd9-producer=prepared ] || return 69
         # The immutable empty pretraffic epoch is fsynced BEFORE dvtws2.
+        # Any unprocessed previous-generation event refuses before launch.
         _apply_observer_witness=$("$PYTHON_RUNTIME" \
             "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
         case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac

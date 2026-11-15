@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,9 @@ MARKER = "P2E_ORIGINAL_SHARED_GENERATOR_MAP"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
+import auto_detect_post_drop as post_drop
+from shared_apply_seal import create_seal, SharedBundleError
+from unittest.mock import patch
 
 
 def write_xml(dest: Path, *, voice_on: bool) -> None:
@@ -374,6 +378,42 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         args.write_bytes(active + b"--new\n")
         with self.assertRaises((origin.AttributionError, owner.GenerationRefused)):
             origin.verify_original_promotion(self.work, digest)
+
+    def test_original_fd9_readonly_authorize_exact_source_and_installed_copy(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n",
+            voice_on=True)
+        self.check_nonactivating(mapped, args)
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        digest = "b" * 64
+        origin.stage_original_preview(self.work, digest)
+        origin.promote_original_preview(self.work, digest)
+        create_seal(self.work, owner=os.geteuid())
+        active_copy = self.root / "active"
+        shutil.copytree(self.release, active_copy)
+        with patch("shared_apply_seal.WORK", self.root), \
+             patch("voice_live_inspect.COMMON_ACTIVE", active_copy):
+            # Both pre-journal candidate and copied native release are
+            # verified against the same original sealed source and argv.
+            post_drop.native_authorize_original_release(self.release)
+            post_drop.native_authorize_original_release(active_copy)
+            with self.assertRaises(post_drop.PostDropRefused):
+                post_drop.native_authorize_original_release(self.root / "other")
+            active_args = active_copy / "dvtws.args"
+            active_args.write_bytes(active_args.read_bytes() + b"--new\n")
+            with self.assertRaises((post_drop.PostDropRefused,
+                                    owner.GenerationRefused,
+                                    origin.AttributionError)):
+                post_drop.native_authorize_original_release(active_copy)
+            shutil.copy2(args, active_args)
+            # A changed sealed source is never authorized, even if the
+            # installed copy is still byte-for-byte the prior good one.
+            (self.release / "traffic-user.conf").write_bytes(b"changed\n")
+            with self.assertRaises(SharedBundleError):
+                post_drop.native_authorize_original_release(active_copy)
 
     def test_p2h_original_fd9_preview_before_seal_and_verify_before_kernel(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
