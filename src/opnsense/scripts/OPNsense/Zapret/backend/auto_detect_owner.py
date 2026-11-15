@@ -300,6 +300,112 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
         raise GenerationRefused("original_epoch_finalizing_not_attested") from exc
 
 
+
+def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
+                         child_pidfile: Path, monitor_pidfile: Path,
+                         epoch_root: Path, runner, owner_uid: int) -> GenerationProof:
+    """Attest the SAME immutable original owner after its process has exited.
+
+    This is a strict FD9-only *stopped* counterpart to the running P2c
+    witness. It cannot authorize a new process with the old generation.
+    The original epoch records the old PID/birth before the engine stops;
+    the same committed journal and sealed release are still mandatory.
+    """
+    # Late import avoids an owner -> receipts -> owner module cycle.
+    from auto_detect_epoch_receipts import EpochReceipts, _read as read_receipt
+    from auto_detect_fd import _START
+
+    record = SharedApplyOperation(journal, owner=owner_uid).read()
+    if record is None or record["phase"] != "committed":
+        raise GenerationRefused("stopped_original_committed_owner_required")
+    owner = committed_owner(record)
+    if owner is None or not HEX32.fullmatch(owner["id"]) or not HEX64.fullmatch(owner["candidate"]):
+        raise GenerationRefused("missing_stopped_original_owner")
+    work = work_root / owner["id"]
+    verify_seal(work, owner=owner_uid)
+    plan = json.loads(_secure_bytes(work / "plan.json", 4 * 1024 * 1024, owner_uid))
+    if (not isinstance(plan, dict) or plan.get("page") != owner["page"] or
+            plan.get("dependencies") != owner["base"] or
+            plan.get("changed_fields") != owner["changed_fields"]):
+        raise GenerationRefused("stopped_candidate_not_committed_owner")
+    argv = _secure_bytes(work / "release" / "dvtws.args", MAX_ARGS, owner_uid)
+    mapping_raw = _secure_bytes(work / "release" / MAP_NAME, MAX_MAP, owner_uid)
+    if (argv != _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) or
+            mapping_raw != _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid)):
+        raise GenerationRefused("stopped_active_release_not_same_owner")
+    mapping, profiles = _valid_map(mapping_raw, owner, argv)
+
+    receipts = EpochReceipts(epoch_root, owner_uid=owner_uid)
+    folder = receipts._generation(owner["id"], create=False)
+    saved = json.loads(read_receipt(folder / "epoch.json", owner_uid))
+    if (not isinstance(saved, dict) or
+            type(saved.get("owner_pid")) is not int or saved["owner_pid"] <= 1 or
+            not isinstance(saved.get("owner_start"), str) or
+            not _START.fullmatch(saved["owner_start"]) or
+            saved.get("owner_executable") != CHILD_EXEC):
+        raise GenerationRefused("stopped_original_birth_receipt_unavailable")
+    proof = GenerationProof(
+        OwnerToken(saved["owner_pid"], saved["owner_start"], CHILD_EXEC),
+        owner["id"], mapping["generation"], mapping["final_args_sha256"],
+        mapping["raw_path"], mapping["debug_path"],
+        mapping["observer_native_number"], profiles)
+    # This checks the ORIGINAL pretraffic + postlaunch epoch and precise
+    # sealed PID/birth/argv/profile map, not a new synthetic identity.
+    receipts._epoch(proof)
+
+    def no_engine_or_monitor() -> bool:
+        if (child_pidfile.exists() or child_pidfile.is_symlink() or
+                monitor_pidfile.exists() or monitor_pidfile.is_symlink()):
+            return False
+        census = _run(runner, ["/bin/ps", "-A", "-ww",
+                              "-o", "pid=", "-o", "command="])
+        for line in census.splitlines():
+            fields = line.split()
+            if (len(fields) < 2 or not fields[0].isdigit() or
+                    int(fields[0]) <= 1):
+                raise GenerationRefused("invalid_stopped_process_census")
+            if fields[1] in (CHILD_EXEC, MONITOR_EXEC):
+                return False
+        return True
+
+    if not no_engine_or_monitor():
+        raise GenerationRefused("old_engine_or_monitor_still_alive")
+    if (SharedApplyOperation(journal, owner=owner_uid).read() != record or
+            _secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) != argv or
+            _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid) != mapping_raw or
+            not no_engine_or_monitor()):
+        raise GenerationRefused("stopped_original_owner_changed")
+    return proof
+
+
+def attest_stopped_generation(*,
+                              journal: Path = Path("/var/db/zapret2/shared-apply"),
+                              work_root: Path = WORK,
+                              active: Path = COMMON_ACTIVE,
+                              child_pidfile: Path = CHILD_PID,
+                              monitor_pidfile: Path = MONITOR_PID,
+                              epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
+                              runner=subprocess.run) -> GenerationProof:
+    """Original FD9-only stopped-generation proof for old-data completion.
+
+    A stopped original has no live PID; only its previously sealed epoch
+    proves which process produced those bytes. Every subsequent ACK must
+    re-attest this same record and the absence of any replacement engine.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("root_freebsd_stopped_only")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        return _attest_stopped_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            epoch_root=epoch_root, runner=runner, owner_uid=0)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
+            SharedOperationError, SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("stopped_original_owner_not_attested") from exc
+
+
 def main() -> int:
     raise SystemExit("P2c owner attester is not an active collector or installer")
 
