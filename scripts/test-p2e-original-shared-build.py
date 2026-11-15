@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,9 @@ MARKER = "P2E_ORIGINAL_SHARED_GENERATOR_MAP"
 sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
+import auto_detect_post_drop as post_drop
+from shared_apply_seal import create_seal, SharedBundleError
+from unittest.mock import patch
 
 
 def write_xml(dest: Path, *, voice_on: bool) -> None:
@@ -336,6 +340,81 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             origin.verify_original_preview(self.work, digest)
         self.assertEqual(args.read_bytes(), original)
 
+    def test_original_fd9_preview_promotes_once_to_exact_active_schema2(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n",
+            voice_on=True)
+        source = self.check_nonactivating(mapped, args)
+        old = args.read_bytes()
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        digest = "b" * 64
+        preview = origin.stage_original_preview(self.work, digest)
+        self.assertEqual(origin.verify_original_preview(self.work, digest),
+                         preview)
+        record = origin.promote_original_preview(self.work, digest)
+        self.assertEqual(record["evidence"], "ORIGINAL_SHARED_GENERATOR_CAPTURE")
+        self.assertNotIn("activation_authorized", record)
+        self.assertNotEqual(old, args.read_bytes())
+        self.assertIn(b"--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt",
+                      args.read_bytes())
+        self.assertEqual(record, origin.verify_original_promotion(self.work, digest))
+        self.assertEqual(source, json.loads(mapped.read_bytes()))
+        self.assertEqual(
+            owner._valid_map(
+                (self.release / owner.MAP_NAME).read_bytes(),
+                {"id": self.work.name, "candidate": digest},
+                args.read_bytes())[0],
+            record)
+        self.assertFalse((self.release / "auto-detect-observer-preview.args").exists())
+        self.assertFalse((self.release / "auto-detect-observer-preview.json").exists())
+        with self.assertRaises(origin.AttributionError):
+            origin.promote_original_preview(self.work, digest)
+        with self.assertRaises((origin.AttributionError, owner.GenerationRefused)):
+            origin.verify_original_promotion(self.work, "c" * 64)
+        active = args.read_bytes()
+        args.write_bytes(active + b"--new\n")
+        with self.assertRaises((origin.AttributionError, owner.GenerationRefused)):
+            origin.verify_original_promotion(self.work, digest)
+
+    def test_original_fd9_readonly_authorize_exact_source_and_installed_copy(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n",
+            voice_on=True)
+        self.check_nonactivating(mapped, args)
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        digest = "b" * 64
+        origin.stage_original_preview(self.work, digest)
+        origin.promote_original_preview(self.work, digest)
+        create_seal(self.work, owner=os.geteuid())
+        active_copy = self.root / "active"
+        shutil.copytree(self.release, active_copy)
+        with patch("shared_apply_seal.WORK", self.root), \
+             patch("voice_live_inspect.COMMON_ACTIVE", active_copy):
+            # Both pre-journal candidate and copied native release are
+            # verified against the same original sealed source and argv.
+            post_drop.native_authorize_original_release(self.release)
+            post_drop.native_authorize_original_release(active_copy)
+            with self.assertRaises(post_drop.PostDropRefused):
+                post_drop.native_authorize_original_release(self.root / "other")
+            active_args = active_copy / "dvtws.args"
+            active_args.write_bytes(active_args.read_bytes() + b"--new\n")
+            with self.assertRaises((post_drop.PostDropRefused,
+                                    owner.GenerationRefused,
+                                    origin.AttributionError)):
+                post_drop.native_authorize_original_release(active_copy)
+            shutil.copy2(args, active_args)
+            # A changed sealed source is never authorized, even if the
+            # installed copy is still byte-for-byte the prior good one.
+            (self.release / "traffic-user.conf").write_bytes(b"changed\n")
+            with self.assertRaises(SharedBundleError):
+                post_drop.native_authorize_original_release(active_copy)
+
     def test_p2h_original_fd9_preview_before_seal_and_verify_before_kernel(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
         begin = service.index("shared_apply_prepare_service()\n")
@@ -346,22 +425,26 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertLess(body.index('auto_detect_origin_map.py"'),
                         body.index("shared_apply_bundle_service seal"))
         self.assertIn('preview "$_shared_work" "$_shared_auto_digest"', body)
+        self.assertIn('promote "$_shared_work" "$_shared_auto_digest"', body)
+        self.assertLess(body.index('promote "$_shared_work" "$_shared_auto_digest"'),
+                        body.index("shared_apply_bundle_service seal"))
         begin = service.index("shared_apply_execute_service()\n")
         end = service.index("shared_apply_wan_save_service()\n", begin)
         applied = service[begin:end]
         self.assertLess(applied.index("shared_apply_native_config preflight"),
-                        applied.index('auto_detect_origin_map.py" verify-preview'))
-        self.assertLess(applied.index('auto_detect_origin_map.py" verify-preview'),
+                        applied.index('auto_detect_origin_map.py" verify-active'))
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-active'),
                         applied.index('shared_apply_record_service prepared'))
-        self.assertLess(applied.index('auto_detect_origin_map.py" verify-preview'),
+        self.assertLess(applied.index('auto_detect_origin_map.py" verify-active'),
                         applied.index('apply_runtime_probe "$_shared_apply_root/release"'))
         self.assertIn("preflight-rejected=observer-generation", applied)
-        # P2h remains physically NONACTIVATING: only the source-only preview
-        # is emitted at build time. The new original-FD9 epoch completion is
-        # deliberately reached only after the terminal committed owner, not
-        # while compiling a candidate or before runtime preflight.
-        self.assertNotIn("auto-detect-generation.json", body)
+        # Staging now promotes original P2h after native candidate proof;
+        # pre-activation source authorization remains independently closed
+        # in the original launcher until real producer/FD/epoch qualification.
+        self.assertIn('auto_detect_origin_map.py" verify-active', applied)
         self.assertIn('auto-detect-generation.json" ]; then', applied)
+        runtime = (BACKEND / "apply_runtime.sh").read_text()
+        self.assertIn('auto_detect_post_drop.py" authorize', runtime)
         # The old order was unsafe: a refused epoch left terminal committed.
         # An active schema-2 candidate must remain nonterminal through
         # Config saved/readback, IPFW and final FD9 epoch attestation.
@@ -374,19 +457,29 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
                         applied.index('finish-epoch "$_shared_apply_id"'))
 
-    def test_p2f_fd9_hook_runs_after_php_preflight_and_before_activation(self):
+    def test_p2f_native_candidate_preview_and_promotion_precede_original_seal(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
+        begin = service.index("shared_apply_prepare_service()\n")
+        end = service.index("extra_resources_native_previous_owner_service()\n", begin)
+        stage = service[begin:end]
+        # Original P2f preflight was replaced by an authenticated preview
+        # then one promotion during build. Neither belongs in the executor
+        # after the candidate was already sealed.
+        self.assertLess(stage.index('shared_apply_native_config preflight'),
+                        stage.index('preview "$_shared_work"'))
+        self.assertLess(stage.index('preview "$_shared_work"'),
+                        stage.index('promote "$_shared_work"'))
+        self.assertLess(stage.index('promote "$_shared_work"'),
+                        stage.index('shared_apply_bundle_service seal "$1"'))
+
         begin = service.index("shared_apply_execute_service()\n")
         end = service.index("shared_apply_wan_save_service()\n", begin)
-        body = service[begin:end]
-        self.assertLess(body.index('shared_apply_native_config preflight'),
-                        body.index('auto_detect_origin_map.py" preflight'))
-        self.assertLess(body.index('auto_detect_origin_map.py" preflight'),
-                        body.index('apply_runtime_probe "$_shared_apply_root/release"'))
-        self.assertLess(body.index('auto_detect_origin_map.py" preflight'),
-                        body.index('shared_apply_record_service prepared'))
-        self.assertIn('"$_shared_apply_mode" = 1', body)
-        self.assertIn('"$_shared_apply_candidate" >/dev/null 2>&1 || :', body)
+        execute = service[begin:end]
+        self.assertLess(execute.index('shared_apply_native_config preflight'),
+                        execute.index('apply_runtime_probe "$_shared_apply_root/release"'))
+        self.assertLess(execute.index('apply_runtime_probe "$_shared_apply_root/release"'),
+                        execute.index('shared_apply_record_service prepared'))
+        self.assertIn('"$_shared_apply_mode" = 1', execute)
 
 
 

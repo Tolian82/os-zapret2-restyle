@@ -16,6 +16,7 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
 
@@ -199,7 +200,8 @@ final class AutoDetectConfigSnapshot
      */
     public static function commitWithInheritedOriginalLocks(
         object $config, callable $modelFactory, int $queueFd,
-        string $queuePath, string $configPath, array $pythonCommand
+        string $queuePath, string $configPath, array $pythonCommand,
+        bool $retired = false
     ): array {
         if ($queueFd < 3 || $queueFd > 1024 || $queuePath === '' ||
             $configPath === '' || !str_starts_with($queuePath, '/') ||
@@ -210,7 +212,7 @@ final class AutoDetectConfigSnapshot
         }
         return self::withLockedOriginalModel(
             $config, $modelFactory,
-            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand): array {
+            static function (array $source) use ($config, $queueFd, $queuePath, $configPath, $pythonCommand, $retired): array {
                 // Both descriptors come from their ORIGINAL owners. The
                 // child receives duped open-file descriptions, not newly
                 // opened paths or guessed flock ownership.
@@ -240,15 +242,33 @@ final class AutoDetectConfigSnapshot
                         $queueSt['ino'] !== $namedQueue['ino']) {
                         throw new \RuntimeException('Foreign original queue descriptor');
                     }
+                    // On the post-Stop route the same ORIGINAL FD9 must
+                    // reach the Config-locked child, not a freshly acquired
+                    // lifecycle lock. Normal running-minute descriptors
+                    // remain unchanged.
+                    $lifecycle = null;
+                    if ($retired) {
+                        SharedApplyLifecycleLock::assertHeld();
+                        $lifecycle = @fopen('php://fd/9', 'r+b');
+                        if (!is_resource($lifecycle)) {
+                            throw new \RuntimeException('Original retired lifecycle FD9 unavailable');
+                        }
+                    }
+                    $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
+                                    2 => ['file', '/dev/null', 'a'],
+                                    3 => $queueStream, 4 => $handle];
+                    if ($retired) {
+                        $descriptors[9] = $lifecycle;
+                    }
                     $pipes = [];
                     $process = @proc_open(
-                        $pythonCommand,
-                        [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
-                         2 => ['file', '/dev/null', 'a'],
-                         3 => $queueStream, 4 => $handle],
+                        $pythonCommand, $descriptors,
                         $pipes, null, ['LC_ALL' => 'C']
                     );
                     if (!is_resource($process)) {
+                        if (is_resource($lifecycle)) {
+                            fclose($lifecycle);
+                        }
                         throw new \RuntimeException('Original locked Python child unavailable');
                     }
                     try {
@@ -313,6 +333,9 @@ final class AutoDetectConfigSnapshot
                             proc_terminate($process);
                             proc_close($process);
                         }
+                        if (is_resource($lifecycle)) {
+                            fclose($lifecycle);
+                        }
                     }
                 } finally {
                     fclose($queueStream);
@@ -370,6 +393,99 @@ final class AutoDetectConfigSnapshot
      * when posix_geteuid() is not available. No shell, PATH or environment
      * identity tokens; reject errors, extra output and unsafe executable.
      */
+    /**
+     * Seed only the FIRST original known-list automatic ownership under the
+     * SAME real FD9 and original Config lock. Never alter manual Hostlists,
+     * config.xml or re-import the obsolete legacy auto-hosts file.
+     */
+    public static function bootstrapKnownInitial(
+        object $config, callable $modelFactory, string $expectedDigest
+    ): string {
+        if (preg_match('/^[0-9a-f]{64}$/D', $expectedDigest) !== 1) {
+            throw new \RuntimeException('Invalid original initial Config digest');
+        }
+        SharedApplyLifecycleLock::assertHeld();
+        $config->lock();
+        try {
+            $model = $modelFactory();
+            if (!is_object($model) || !method_exists($model, 'getNodes') ||
+                !is_array($nodes = $model->getNodes()) ||
+                !hash_equals($expectedDigest, VoiceSettingsSnapshot::digest($nodes))) {
+                throw new \RuntimeException('Original initial Config changed');
+            }
+            $fd9 = @fopen('php://fd/9', 'r+b');
+            if (!is_resource($fd9)) {
+                throw new \RuntimeException('Original native FD9 unavailable');
+            }
+            $pipes = [];
+            $process = null;
+            try {
+                $process = @proc_open(
+                    [self::NATIVE_PYTHON, self::FINAL_READER,
+                     'bootstrap', $expectedDigest],
+                    [0 => ['file', '/dev/null', 'r'],
+                     1 => ['pipe', 'w'],
+                     2 => ['file', '/dev/null', 'w'],
+                     9 => $fd9],
+                    $pipes, null, ['LC_ALL' => 'C']
+                );
+                if (!is_resource($process)) {
+                    throw new \RuntimeException('Native owned initialization unavailable');
+                }
+                stream_set_blocking($pipes[1], false);
+                $reply = '';
+                $deadline = microtime(true) + 25;
+                while (!feof($pipes[1])) {
+                    if (microtime(true) >= $deadline || strlen($reply) > 128) {
+                        throw new \RuntimeException('Initial native ownership timeout');
+                    }
+                    $read = [$pipes[1]];
+                    $write = [];
+                    $except = [];
+                    $ready = @stream_select($read, $write, $except, 1);
+                    if ($ready === false) {
+                        throw new \RuntimeException('Initial native ownership read failed');
+                    }
+                    if ($ready > 0) {
+                        $chunk = fread($pipes[1], 129 - strlen($reply));
+                        if ($chunk === false) {
+                            throw new \RuntimeException('Initial native ownership child error');
+                        }
+                        $reply .= $chunk;
+                    }
+                }
+                fclose($pipes[1]);
+                unset($pipes[1]);
+                $exit = proc_close($process);
+                $process = null;
+                if ($exit !== 0 || !in_array($reply,
+                    ["auto-owned-bootstrap=created\n", "auto-owned-bootstrap=existing\n"], true)) {
+                    throw new \RuntimeException('Original automatic baseline refused');
+                }
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+                if (is_resource($process)) {
+                    proc_terminate($process);
+                    proc_close($process);
+                }
+                fclose($fd9);
+            }
+            $after = $modelFactory();
+            if (!is_object($after) || !method_exists($after, 'getNodes') ||
+                !is_array($afterNodes = $after->getNodes()) ||
+                !hash_equals($expectedDigest, VoiceSettingsSnapshot::digest($afterNodes))) {
+                throw new \RuntimeException('Original Config changed after empty baseline');
+            }
+            return trim($reply);
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public static function nativeRootAllowed(): bool
     {
         if (PHP_OS_FAMILY !== 'BSD' || PHP_SAPI !== 'cli') {
@@ -420,7 +536,7 @@ final class AutoDetectConfigSnapshot
     public static function main(array $argv): int
     {
         if (!self::nativeRootAllowed() ||
-            (count($argv) !== 2 && count($argv) !== 4)) {
+            (count($argv) !== 2 && count($argv) !== 3 && count($argv) !== 4)) {
             fwrite(STDERR, "ERROR: root native original Config required\n");
             return 64;
         }
@@ -432,7 +548,14 @@ final class AutoDetectConfigSnapshot
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
                     static fn() => self::nativeFinalRead()
                 );
-            } elseif (count($argv) === 4 && $argv[1] === 'commit-with-fds' &&
+            } elseif (count($argv) === 3 && $argv[1] === 'bootstrap-known' &&
+                      preg_match('/^[0-9a-f]{64}$/D', $argv[2]) === 1) {
+                $state = self::bootstrapKnownInitial(
+                    $config, static fn() => new \OPNsense\Zapret\Zapret(), $argv[2]
+                );
+                $result = ['result' => $state];
+            } elseif (count($argv) === 4 &&
+                      in_array($argv[1], ['commit-with-fds', 'commit-retired-with-fds'], true) &&
                       preg_match('/^[0-9]{1,4}$/D', $argv[2]) === 1 &&
                       preg_match('/^[0-9a-f]{32}-[0-9a-f]{32}\.txt$/D', $argv[3]) === 1) {
                 // No direct worker, no independent Config/XML writer. A
@@ -441,7 +564,10 @@ final class AutoDetectConfigSnapshot
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
                     (int)$argv[2], '/var/db/zapret2-auto-detect/worker.lock',
                     '/conf/config.xml',
-                    [self::NATIVE_PYTHON, self::FD_COMMIT, 'commit-fds', $argv[3]]
+                    [self::NATIVE_PYTHON, self::FD_COMMIT,
+                     $argv[1] === 'commit-retired-with-fds' ? 'commit-retired-fds' : 'commit-fds',
+                     $argv[3]],
+                    $argv[1] === 'commit-retired-with-fds'
                 );
             } else {
                 return 64;

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """#1052 P2k8b: dormant root-private known-HOSTLIST auto-owned components.
 
-Only an already qualified native Config/FD9 owner may initialize them (no CLI
-bootstrap). No user Config/XML changes or native engine/worker writes here.
+Only the exact original held FD9 + native PHP Config-locked first clean
+baseline may initialize them through the restricted internal bootstrap CLI.
+No user Config/XML changes or native engine/worker writes here.
 The read CLI is root-only and obtains the SAME P2k4/P2k5 destination flock
 for the shared final file and all known automatic components at one instant.
 Missing ownership authority is reported as unavailable, never empty.
@@ -182,8 +183,47 @@ def snapshot(final: Path = AUTO_HOSTLIST, gui_lock: Path = AUTO_LOCK,
                 'auto_owned_complete': owned is not None}
 
 
+
+def native_bootstrap_known(config_digest: str) -> str:
+    """Original FD9 + locked Config/P1 owner seeds known components ONCE.
+
+    Never infer an empty historical source from a missing record. The PHP
+    caller must still hold the same original Config lock and original FD9.
+    A missing owned root is safe only before the FIRST native epoch exists.
+    """
+    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
+            not isinstance(config_digest, str) or
+            not SHA256.fullmatch(config_digest)):
+        raise OwnedSourcesRefused('native_original_config_proof_required')
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from auto_detect_epoch_receipts import ROOT as EPOCHS
+    require_lifecycle_lock()
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        if read_owned(OWNED_ROOT, owner_uid=0) is not None:
+            return 'existing'
+        if EPOCHS.exists() or EPOCHS.is_symlink():
+            raise OwnedSourcesRefused('historical_epochs_preclude_clean_baseline')
+        bootstrap_empty(
+            OWNED_ROOT, original_config_sha256=config_digest,
+            owner_uid=0, authorized_clean_start=True)
+        if read_owned(OWNED_ROOT, owner_uid=0) != {
+                'youtube': '', 'user': ''}:
+            raise OwnedSourcesRefused('initial_native_owned_source_not_sealed')
+    return 'created'
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == 'bootstrap':
+        try:
+            state = native_bootstrap_known(argv[1])
+            print('auto-owned-bootstrap=' + state)
+            return 0
+        except (OwnedSourcesRefused, DestinationRefused,
+                ValueError, OSError, RuntimeError) as exc:
+            print('auto-owned-bootstrap-refused=' + type(exc).__name__,
+                  file=sys.stderr)
+            return 69
     if not sys.platform.startswith('freebsd') or os.geteuid() != 0 or argv != ['read']:
         print(json.dumps({'result': 'error', 'reason': 'root_native_snapshot_only'}))
         return 0

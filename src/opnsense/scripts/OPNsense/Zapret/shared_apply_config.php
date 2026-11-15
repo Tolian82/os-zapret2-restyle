@@ -144,8 +144,51 @@ final class SharedApplyConfigWorker
         }
     }
 
+    /**
+     * Read the native persisted Auto Restart preference under the SAME
+     * original FD9 and short standard OPNsense Config lock, without saving.
+     * This is a scheduler gate, never a second Config writer.
+     */
+    public static function autoRestartPreference(): string
+    {
+        if (PHP_OS_FAMILY !== 'BSD' ||
+            SharedApplyLifecycleLock::effectiveUid() !== 0) {
+            throw new \RuntimeException('Native root scheduler owner required');
+        }
+        SharedApplyLifecycleLock::assertHeld();
+        require_once('script/load_phalcon.php');
+        $config = \OPNsense\Core\Config::getInstance();
+        $config->lock();
+        try {
+            $model = new \OPNsense\Zapret\Zapret();
+            $nodes = $model->getNodes();
+            $general = $nodes['general'] ?? null;
+            if (!is_array($general)) {
+                throw new \RuntimeException('Native general Config unavailable');
+            }
+            $enabled = (string)($general['enabled'] ?? '');
+            $interval = (string)($general['autorestart'] ?? 'off');
+            if (!in_array($enabled, ['0', '1'], true) ||
+                !in_array($interval, ['off', 'hourly', 'daily', 'weekly', 'monthly'], true)) {
+                throw new \RuntimeException('Invalid native Auto Restart preference');
+            }
+            return $enabled . ':' . $interval;
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public static function main(array $argv): int
     {
+        if (count($argv) === 2 && $argv[1] === 'auto-restart') {
+            try {
+                echo self::autoRestartPreference(), "\n";
+                return 0;
+            } catch (\Throwable $error) {
+                fwrite(STDERR, "ERROR: original native Auto Restart Config unavailable\n");
+                return 69;
+            }
+        }
         if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save','saved'], true) ||
             !in_array($argv[3], ['voice','strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");

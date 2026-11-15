@@ -22,10 +22,12 @@ from auto_detect_cursor_chain import CursorChain, CursorChainRefused
 from auto_detect_debug_window import MAX_DEBUG, MAX_WINDOW
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_fixture import sealed_original_epoch
-from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
                                              prepare_original_v2_locked)
+from auto_detect_original_lock_handoff import (_original_v2_cycle_locked,
+                                                OriginalLockRefused)
 from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox, MAX_SEGMENT
 
@@ -104,6 +106,199 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
         self.assertEqual(self.queue.inbox.stat().st_ino, before)
         self.assertEqual(list(self.queue.pending.iterdir()), [])
+
+    def test_torn_empty_hardlink_is_recovered_without_changing_live_inode(self):
+        # Crash after link() but before replace(), with zero discovery bytes.
+        # Recovery must remove ONLY the duplicate alias and return true idle.
+        pending = self.queue.pending / (self.generation + "-" + "c" * 32 + ".txt")
+        os.link(self.queue.inbox, pending)
+        live_before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            self.assertIsNone(self.stage())
+            self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
+            self.assertEqual(self.queue.inbox.stat().st_nlink, 1)
+            self.assertFalse(pending.exists())
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+            # The live inode still accepts authentic subsequent discoveries.
+            self.emit("one.example.com")
+            event = self.stage()
+            self.commit_and_ack(event, "one.example.com")
+        self.assertIn("one.example.com\\n", self.auto.read_text())
+
+    def test_detached_empty_pending_retains_original_without_idle(self):
+        # A detached empty pending has NO surviving live alias. Do not
+        # infer that it was a harmless duplicate or delete its only name.
+        pending = self.queue.pending / (self.generation + "-" + "d" * 32 + ".txt")
+        pending.write_bytes(b"")
+        pending.chmod(0o600)
+        live_before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(
+                OriginalV2PrepareRefused, "empty_original_pending_not_accepted"
+            ):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
+            self.assertTrue(pending.exists())
+            self.assertEqual(self.queue.segments(), [pending])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+
+    def test_native_append_races_empty_hardlink_recovery_without_loss(self):
+        # A writer may add a valid raw + native debug positive AFTER the
+        # initial empty-alias check and BEFORE queue.rotate snapshots it.
+        # In that case this becomes an ordinary detached data batch, never
+        # a discarded empty alias or unacknowledged idle minute.
+        pending = self.queue.pending / (self.generation + "-" + "e" * 32 + ".txt")
+        os.link(self.queue.inbox, pending)
+        original_rotate = self.queue.rotate
+
+        def append_just_before_rotate(*, generation, cycle, sequence):
+            self.emit("race.example.com")
+            return original_rotate(
+                generation=generation, cycle=cycle, sequence=sequence)
+
+        with self.queue.exclusive():
+            with patch.object(self.queue, "rotate", side_effect=append_just_before_rotate):
+                event = self.stage()
+            self.assertEqual(event, pending)
+            self.assertNotEqual(self.queue.inbox.stat().st_ino, event.stat().st_ino)
+            self.commit_and_ack(event, "race.example.com")
+            self.assertFalse(event.exists())
+            self.assertEqual(self.queue.inbox.read_bytes(), b"")
+        self.assertIn("race.example.com\\n", self.auto.read_text())
+
+    def test_stopped_epoch_retirement_preserves_ack_and_archived_inodes(self):
+        self.emit("last.example.com")
+        old_debug = self.debug.stat()
+        old_debug_data = self.debug.read_bytes()
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "last.example.com")
+            last_tip = self.chain.tip(self.proof)
+            drained_raw = self.queue.inbox.stat()
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+            folder = self.receipts.root / self.generation
+            self.assertEqual((folder / "retired-inbox.txt").stat().st_ino,
+                             drained_raw.st_ino)
+            self.assertEqual((folder / "retired-debug.log").stat().st_ino,
+                             old_debug.st_ino)
+            self.assertEqual((folder / "retired-debug.log").read_bytes(),
+                             old_debug_data)
+            self.assertEqual((folder / "retired-inbox.txt").read_bytes(), b"")
+            self.assertNotEqual(self.queue.inbox.stat().st_ino,
+                                (folder / "retired-inbox.txt").stat().st_ino)
+            self.assertNotEqual(self.debug.stat().st_ino, old_debug.st_ino)
+            self.assertEqual(self.queue.inbox.read_bytes(), b"")
+            self.assertEqual(self.debug.read_bytes(), b"")
+            self.assertEqual(self.chain.tip(self.proof), last_tip)
+            # Idempotent re-entry does not touch newly provisioned files.
+            live = self.queue.inbox.stat().st_ino
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       side_effect=AssertionError("already retired")):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+            self.assertEqual(self.queue.inbox.stat().st_ino, live)
+        self.assertIn("last.example.com\n", self.auto.read_text())
+
+    def test_unacked_old_source_never_gets_retirement_receipt(self):
+        self.emit("notacked.example.com")
+        before = self.queue.inbox.stat().st_ino
+        with self.queue.exclusive():
+            pending = self.stage()
+            with self.assertRaisesRegex(
+                ReceiptRefused, "unacknowledged_old_generation"
+            ):
+                self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest)
+        self.assertTrue(pending.exists())
+        self.assertNotEqual(self.queue.inbox.stat().st_ino, before)
+        self.assertFalse((self.receipts.root / self.generation /
+                          "retired.json").exists())
+
+    def test_retirement_recovers_crash_between_raw_and_debug_archive(self):
+        self.emit("cut.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "cut.example.com")
+            import auto_detect_epoch_receipts as mod_receipts
+            original = os.replace
+            calls = [0]
+
+            def fail_second(old, new):
+                calls[0] += 1
+                if calls[0] == 2:
+                    raise OSError("injected second atomic replacement failure")
+                return original(old, new)
+
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                with patch.object(mod_receipts.os, "replace",
+                                  side_effect=fail_second):
+                    with self.assertRaisesRegex(
+                        OSError, "injected second atomic replacement failure"
+                    ):
+                        self.receipts.retire_stopped(
+                            self.proof, self.queue, attest=self.attest)
+                self.assertTrue((self.receipts.root / self.generation /
+                                 "retired.json").exists())
+                # The raw source name was atomically replaced; the debug
+                # old inode is still reachable through BOTH live + archive.
+                folder = self.receipts.root / self.generation
+                self.assertTrue((folder / "retired-debug.log").exists())
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
+                self.assertEqual(self.debug.stat().st_ino,
+                                 (folder / "retired-debug.log").stat().st_ino)
+                self.assertEqual(self.debug.stat().st_nlink, 2)
+                self.assertEqual(self.queue.inbox.stat().st_nlink, 1)
+            # Simulate a separate later FD9 invocation: the queue MUST be
+            # openable after every failed atomic step, not only while held.
+        with self.queue.exclusive():
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+                self.assertNotEqual(self.debug.stat().st_ino,
+                                    (self.receipts.root / self.generation /
+                                     "retired-debug.log").stat().st_ino)
+
+    def test_retirement_recovers_crash_after_old_link_before_first_replace(self):
+        self.emit("before-replace.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "before-replace.example.com")
+            import auto_detect_epoch_receipts as mod_receipts
+            old_replace = os.replace
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                with patch.object(mod_receipts.os, "replace",
+                                  side_effect=OSError("crash before first replace")):
+                    with self.assertRaisesRegex(OSError,
+                                                "crash before first replace"):
+                        self.receipts.retire_stopped(
+                            self.proof, self.queue, attest=self.attest)
+                folder = self.receipts.root / self.generation
+                self.assertEqual(self.queue.inbox.stat().st_ino,
+                                 (folder / "retired-inbox.txt").stat().st_ino)
+                self.assertEqual(self.queue.inbox.stat().st_nlink, 2)
+                self.assertTrue((self.root / ".original-retire-inbox-ready").exists())
+        # Recovery must reacquire the SAME root queue and not lose an
+        # original raw name, even when first replacement never happened.
+        with self.queue.exclusive():
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
+                self.assertEqual(self.debug.read_bytes(), b"")
 
     def test_first_raw_rotates_and_persists_v2_not_legacy_intent(self):
         self.emit("one.example.com")
@@ -407,23 +602,22 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 pending = self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
                 self.commit_and_ack(pending, "one.example.com")
                 retired = self.root / mod.DEBUG_OLD
+                retired_inode = retired.stat().st_ino
                 self.emit("two.example.com")
-                current_raw_inode = self.queue.inbox.stat().st_ino
-                with self.assertRaises(OriginalV2PrepareRefused):
-                    self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
-                self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
+                # A BUSY archive may never be unlinked, but pending raw
+                # intake does not have to wait for old-debug retirement.
+                second = self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
+                self.assertIsNotNone(second)
+                self.assertEqual(retired.stat().st_ino, retired_inode)
+                self.commit_and_ack(second, "two.example.com")
                 self.assertEqual(self.queue.segments(), [])
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_live_raw_unprocessed"):
-                    self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
-                self.assertEqual(retired.stat().st_nlink, 1)
-                self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
-                self.assertEqual(self.queue.segments(), [])
-        # A completed ACK alone is insufficient: the next raw discovery
-        # is still live and must not be discarded to force archive retirement.
+                                            "retained_debug_writer_fd_not_drained"):
+                    self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
+                self.assertEqual(retired.stat().st_ino, retired_inode)
+        # The original FD check is required for cleanup, not for
+        # independently ACK-proven current-generation raw intake.
         self.assertTrue(retired.exists())
-
-
     def test_original_second_highwater_requires_acked_raw_then_retires_once(self):
         import auto_detect_original_v2_prepare as mod
         native_drained = lambda *a, **kw: FDState.DRAINED
@@ -435,13 +629,16 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 first_ino = retained.stat().st_ino
                 self.commit_and_ack(first, "one.example.com")
         self.emit("two.example.com")
-        with self.queue.exclusive():
-            second = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(second, "two.example.com")
-        now_old = self.debug.stat().st_ino
-        before_second = self.debug.read_bytes()
         with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
+                # A large second diagnostic file must not block the next
+                # genuine raw batch merely because the first archive exists.
+                second = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, first_ino)
+                self.commit_and_ack(second, "two.example.com")
+            with self.queue.exclusive():
+                now_old = self.debug.stat().st_ino
+                before_second = self.debug.read_bytes()
                 self.assertIsNone(self.stage(inspect_debug=native_drained))
                 self.assertEqual(retained.stat().st_ino, now_old)
                 self.assertNotEqual(retained.stat().st_ino, first_ino)
@@ -452,18 +649,21 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.emit("three.example.com")
         with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
-                with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_ack_not_proven"):
-                    self.stage(inspect_debug=native_drained)
-                self.assertEqual(self.queue.inbox.read_bytes(),
-                                 b"three.example.com\n")
-        with self.queue.exclusive():
-            third = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(third, "three.example.com")
+                # Repeated raw-first intake is not forced to wait for
+                # archive deletion, and does not signal the native engine.
+                third = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, now_old)
+                self.commit_and_ack(third, "three.example.com")
+            with self.queue.exclusive():
+                # The next idle tick may retire the second archive and
+                # cut the third original debug inode.
+                newest = self.debug.stat().st_ino
+                self.assertIsNone(self.stage(inspect_debug=native_drained))
+                self.assertEqual(retained.stat().st_ino, newest)
+                self.assertEqual(self.debug.read_bytes(), b"")
         self.assertEqual(
             self.auto.read_text(),
             "!manual.invalid\none.example.com\ntwo.example.com\nthree.example.com\n")
-
     def test_original_debug_retirement_refuses_unacked_and_live_raw(self):
         import auto_detect_original_v2_prepare as mod
         native_drained = lambda *a, **kw: FDState.DRAINED
@@ -477,21 +677,143 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.assertTrue(retained.exists())
                 self.commit_and_ack(first, "one.example.com")
                 self.queue.inbox.write_bytes(b"two.example.com\n")
-                with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_live_raw_unprocessed"):
-                    self.stage(inspect_debug=native_drained)
+                old_id = retained.stat().st_ino
+                # Previously this rejected the whole minute when active
+                # raw had uncommitted events. It now processes raw first
+                # while preserving the still-unretired archived inode.
+                second = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, old_id)
+                self.commit_and_ack(second, "two.example.com")
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
                 self.assertTrue(retained.exists())
-                self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
-        with self.queue.exclusive():
-            second = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(second, "two.example.com")
-        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
                                             "retained_debug_writer_fd_not_drained"):
                     self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
-                self.assertTrue(retained.exists())
+                self.assertEqual(retained.stat().st_ino, old_id)
                 self.assertEqual(self.queue.segments(), [])
+    def test_original_512_slot_chain_rolls_over_twice_without_engine_action(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for step in range(1, 6):
+                host = f"durable-{step}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage()
+                    self.assertIsNotNone(pending)
+                    self.commit_and_ack(pending, host)
+                if step in (2, 4):
+                    with self.queue.exclusive():
+                        # The next raw-free minute seals the fully ACKed
+                        # original cursor and reclaims the prior root.
+                        self.assertIsNone(self.stage())
+                        tip = self.chain.tip(self.proof)
+                        self.assertEqual(tip.cycle, step // 2)
+                        self.assertEqual(tip.next_sequence, 0)
+                        epoch = self.receipts.root / self.proof.generation
+                        self.assertTrue((epoch / "cursor-chain-v2" /
+                                         "anchor.json").exists())
+                        self.assertFalse((epoch / "cursor-chain-v2.old").exists())
+                        self.assertFalse((epoch / "cursor-chain-v2.next").exists())
+            with self.queue.exclusive():
+                tip = self.chain.tip(self.proof)
+                self.assertEqual((tip.cycle, tip.next_sequence), (2, 1))
+            for step in range(1, 6):
+                self.assertIn(f"durable-{step}.example.com\n", self.auto.read_text())
+
+    def test_original_cursor_rollover_crash_recovers_ack_without_replay(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for step in range(2):
+                host = f"ack-{step}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage()
+                    self.commit_and_ack(pending, host)
+            with self.queue.exclusive():
+                with patch.object(CursorChain, "_erase_old_tree",
+                                  side_effect=OSError("injected-after-durable-anchor")):
+                    with self.assertRaises(OriginalV2PrepareRefused):
+                        self.stage()
+                epoch = self.receipts.root / self.proof.generation
+                self.assertTrue((epoch / "cursor-chain-v2.old").exists())
+                self.assertEqual(self.chain.tip(self.proof).cycle, 1)
+            with self.queue.exclusive():
+                self.assertIsNone(self.stage())
+                self.assertFalse((epoch / "cursor-chain-v2.old").exists())
+                self.assertEqual(self.chain.tip(self.proof).cycle, 1)
+            self.emit("after-crash.example.com")
+            with self.queue.exclusive():
+                pending = self.stage()
+                self.commit_and_ack(pending, "after-crash.example.com")
+            self.assertEqual(self.auto.read_text().count("after-crash.example.com"), 1)
+
+    def test_original_cursor_rollover_recovers_staged_receipt_hardlinks(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        from auto_detect_epoch_receipts import _canonical
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for cycle in (1, 2):
+                for ordinal in (0, 1):
+                    host = f"stage-{cycle}-{ordinal}.example.com"
+                    self.emit(host)
+                    with self.queue.exclusive():
+                        pending = self.stage()
+                        self.commit_and_ack(pending, host)
+                with self.queue.exclusive():
+                    root, _, epoch_bytes = self.chain._root(
+                        self.proof, create=False)
+                    anchor = self.chain._next_anchor(
+                        self.proof, epoch_bytes, self.chain.tip(self.proof))
+                    staged = root.parent / "cursor-chain-v2.next"
+                    staged.mkdir(mode=0o700)
+                    temp = staged / ("." + "f" * 32 + ".part")
+                    temp.write_bytes(_canonical(anchor))
+                    temp.chmod(0o600)
+                    if cycle == 1:
+                        # Crash after hardlink before unlink leaves two
+                        # names for the same protected staged receipt.
+                        os.link(temp, staged / "anchor.json")
+                        self.assertEqual(temp.stat().st_nlink, 2)
+                    # Cycle 2 simulates crash before durable hardlink.
+                    self.assertIsNone(self.stage())
+                    self.assertEqual(self.chain.tip(self.proof).cycle, cycle)
+                    self.assertFalse(staged.exists())
+                    self.assertFalse((root.parent /
+                                      "cursor-chain-v2.old").exists())
+            with self.queue.exclusive():
+                self.assertEqual(self.chain.tip(self.proof).cycle, 2)
+
+    def test_four_continuous_highwater_cycles_without_debug_stall(self):
+        import auto_detect_original_v2_prepare as mod
+        drained = lambda *a, **kw: FDState.DRAINED
+        prior_archive = None
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            for number in range(1, 5):
+                host = f"repeated-{number}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage(inspect_debug=drained)
+                    self.assertIsNotNone(pending)
+                    self.commit_and_ack(pending, host)
+                    archived = self.root / mod.DEBUG_OLD
+                    if prior_archive is not None:
+                        self.assertEqual(archived.stat().st_ino, prior_archive)
+                with self.queue.exclusive():
+                    before_cut = self.debug.stat().st_ino
+                    self.assertIsNone(self.stage(inspect_debug=drained))
+                    self.assertEqual(archived.stat().st_ino, before_cut)
+                    self.assertEqual(self.debug.read_bytes(), b"")
+                    self.assertEqual(self.queue.segments(), [])
+                    prior_archive = archived.stat().st_ino
+        self.assertEqual(self.chain.tip(self.proof).next_sequence, 4)
+        for number in range(1, 5):
+            self.assertIn(f"repeated-{number}.example.com\n", self.auto.read_text())
 
     def test_original_debug_retirement_refuses_corrupted_old_archive(self):
         import auto_detect_original_v2_prepare as mod
@@ -844,12 +1166,100 @@ class OriginalV2PrepareTests(unittest.TestCase):
                         self.proof, first, cp, self.writer,
                         attest=self.attest, inspect=self.drained)
             self.assertFalse(first.exists())
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\none.example.com\n")
+            # GUI deletion after the durable checkpoint must survive
+            # post-unlink ACK replay; the old event is not re-applied.
+            self.auto.write_text("!manual.invalid\n")
             self.emit("two.example.com")
             live = self.queue.inbox.stat().st_ino
             with self.assertRaisesRegex(OriginalV2PrepareRefused, "unacknowledged_pending_needs_original_ack"):
                 self.stage()
             self.assertEqual(self.queue.inbox.stat().st_ino, live)
             self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+            # Real minute cycle must finish ONLY the original durable ACK.
+            # No second PHP child, no duplicate write, no second raw cut.
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")):
+                self.assertTrue(_original_v2_cycle_locked(
+                    self.queue, self.writer, php_bin="/unused/php",
+                    php_script=Path("/unused/config.php"), timeout=25,
+                    attest=self.attest, inspect=self.drained))
+            self.assertIsNone(self.chain.tip(self.proof).open_folder)
+            self.assertEqual(self.queue.inbox.stat().st_ino, live)
+            self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
+            second = self.stage()
+            self.commit_and_ack(second, "two.example.com")
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\ntwo.example.com\n")
+
+    def test_missing_pending_without_checkpoint_cannot_infer_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            intent = self.chain.tip(self.proof).open_intent
+            self.assertIsNotNone(intent)
+            pending.unlink()  # Corrupt/orphan loss, NOT a Config checkpoint.
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "missing_pending_without_original_checkpoint"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertIsNotNone(self.chain.tip(self.proof).open_folder)
+            self.assertFalse((self.base / "epochs" / self.generation /
+                              "cursor-chain-v2" / "00000000" / "ack.json").exists())
+            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
+
+    def test_completed_config_cannot_report_idle_when_physical_ack_refuses(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            checkpoint = self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained)
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       return_value=checkpoint), patch.object(
+                           CursorChain, "acknowledge", return_value=False):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "original_physical_ack_not_durable"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertTrue(pending.exists())
+            self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
+        self.assertEqual(self.auto.read_text(),
+                         "!manual.invalid\none.example.com\n")
+
+    def test_post_unlink_recovery_cannot_report_idle_when_ack_refuses(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained)
+            pending.unlink()
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")), patch.object(
+                           CursorChain, "acknowledge", return_value=False):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "original_post_unlink_ack_not_durable"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\none.example.com\n")
 
     def test_wrong_original_epoch_is_refused_before_rotation(self):
         self.emit("one.example.com")

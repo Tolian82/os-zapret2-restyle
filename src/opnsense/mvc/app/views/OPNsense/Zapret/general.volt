@@ -148,6 +148,7 @@
             'zapret.general.enabled': 'Включить',
             'zapret.general.waninterface': 'Интерфейс WAN',
             'zapret.general.divertport': 'Порт Divert',
+            'zapret.general.autorestart': 'Автоперезагрузка',
             'zapret.strategy.trafficargs': 'Стратегия обработки трафика',
             'zapret.strategy.extraargs': 'Дополнительные аргументы',
             'zapret.hostlist.mode': 'Режим выбора целей',
@@ -163,6 +164,10 @@
                 'Интерфейс WAN, на котором применяется обход DPI. Voice использует тот же WAN.',
             'zapret.general.divertport':
                 'Порт сокета ipfw divert (обычно 989). Меняйте при конфликте с другой службой.',
+            'zapret.general.autorestart':
+                'Необязательный периодический перезапуск только ЗАПУЩЕННОЙ службы через штатный общий lifecycle. ' +
+                'Независим от минутного Auto-detect. При скрытии «Расширенного режима» значение сохраняется; ' +
+                'Off отключает расписание. Остановленная служба никогда не запускается автоматически.',
             'zapret.strategy.trafficargs':
                 'Нативная стратегия <code>dvtws2</code>. Независимые профили разделяются <code>--new</code>; ' +
                 'для потока выбирается первый подходящий профиль по порядку движка. ' +
@@ -315,6 +320,20 @@
         }
 
         // Native OptionField values remain all/list/auto regardless of locale.
+        const autoRestartLabelsRU = {
+            off: 'Выключено', hourly: 'Каждый час', daily: 'Каждый день',
+            weekly: 'Каждую неделю', monthly: 'Каждый месяц'
+        };
+        function localizeAutoRestartOptions() {
+            if (!isRussian) return;
+            const field = document.getElementById('zapret.general.autorestart');
+            if (!field) return;
+            Array.from(field.options || []).forEach(function(option) {
+                if (Object.prototype.hasOwnProperty.call(autoRestartLabelsRU, option.value)) {
+                    option.textContent = autoRestartLabelsRU[option.value];
+                }
+            });
+        }
         const targetModeLabelsRU = {
             all: 'Весь трафик на указанных портах',
             list: 'Только указанные домены',
@@ -339,10 +358,46 @@
                 localizeStrategiesForm();
                 localizeExcludeIPSet();
                 localizeTargetModeOptions();
+                localizeAutoRestartOptions();
                 $('.selectpicker').selectpicker('refresh');
             });
         }
 
+
+        // The approved Advanced-only Auto Restart belongs on the SAME
+        // visible row, to the right of the Enabled switch. Move the actual
+        // native OPNsense SELECT, never clone a second model control.
+        function mountAdvancedAutoRestart() {
+            const enabled = document.getElementById('zapret.general.enabled');
+            const restart = document.getElementById('zapret.general.autorestart');
+            if (!enabled || !restart) return;
+            const from = $(restart).closest('tr');
+            const to = $(enabled).closest('tr').children('td').eq(1);
+            if (!from.length || !to.length || from[0] === to.closest('tr')[0]) return;
+            const select = $(restart);
+            const widget = select.closest('.bootstrap-select');
+            const actual = widget.length ? widget : select;
+            const label = $('<label/>', {
+                'for': 'zapret.general.autorestart',
+                'class': 'control-label'
+            }).text(isRussian ? 'Автоперезагрузка' : 'Auto Restart')
+              .css({'margin': '0', 'white-space': 'nowrap'});
+            const controls = $('<span/>', {id: 'zapretAutoRestartInline'})
+                .css({'display':'inline-flex','gap':'8px','align-items':'center',
+                      'margin-left':'20px','flex-wrap':'wrap'})
+                .append(label, actual.detach());
+            to.append(controls);
+            from.remove();
+            function syncAdvanced() {
+                controls.toggle($('#show_advanced_frm_GeneralSettings').hasClass('fa-toggle-on'));
+            }
+            const toggle = document.getElementById('show_advanced_frm_GeneralSettings');
+            if (toggle && window.MutationObserver) {
+                new MutationObserver(syncAdvanced).observe(
+                    toggle, {attributes:true, attributeFilter:['class']});
+            }
+            syncAdvanced();
+        }
 
         // P2k5: native root-owned Auto Hostlist editor, separate from the
         // OPNsense Config form model and original shared Apply. This row has
@@ -1499,6 +1554,7 @@
             });
         });
 
+        mountAdvancedAutoRestart();
         mountAutoHostlistEditor();
         loadAutoHostlist();
         reloadSettings();

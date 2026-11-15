@@ -22,6 +22,8 @@ sys.path.insert(0, str(BACKEND))
 import auto_detect_owner as owner_mod
 from shared_apply_seal import SharedBundleError, create_seal
 from shared_apply_operation import SharedOperationError
+from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_queue import DurableInbox
 
 EXE = owner_mod.CHILD_EXEC
 MONITOR = owner_mod.MONITOR_EXEC
@@ -42,6 +44,7 @@ class FakePS:
         self.birth = START
         self.monitor_exe = MONITOR
         self.extra = False
+        self.stopped = False
         self.commands: list[list[str]] = []
         self.fail = False
 
@@ -50,6 +53,8 @@ class FakePS:
         if self.fail:
             return subprocess.CompletedProcess(argv, 1, "", "")
         if "-A" in argv:
+            if self.stopped:
+                return subprocess.CompletedProcess(argv, 0, "77 /sbin/init\\n".replace("\\n", "\n"), "")
             lines = [f"{PID} {EXE} {self.args} --sockarg=0x200 --user=nobody"]
             if self.extra:
                 lines.append(f"9999 {EXE} --port=9999")
@@ -241,6 +246,83 @@ class OwnerGenerationTests(unittest.TestCase):
         with self.assertRaises(owner_mod.GenerationRefused):
             self.witness(epoch_finalizing_operation=OP_ID)
         self.assertEqual(self.witness().generation, OP_ID)
+
+    def stopped_fixture(self):
+        # Physically persist the same original root-private pretraffic/epoch
+        # receipt that binds the old PID/birth to a real sealed release.
+        self.producer = self.work_root.parent / "producer"
+        self.producer.mkdir(mode=0o700)
+        (self.producer / "pending").mkdir(mode=0o700)
+        raw = self.producer / "inbox.txt"
+        debug = self.producer / "debug.log"
+        self._write(raw, "")
+        self._write(debug, "")
+        self.queue = DurableInbox(self.producer, owner_uid=UID)
+        self.epochs = self.work_root.parent / "epochs"
+        self.receipts = EpochReceipts(self.epochs, owner_uid=UID)
+        # The original test map must reference exactly those native inodes.
+        self.argv = self.argv.replace(RAW, str(raw)).replace(DEBUG, str(debug))
+        self.map["raw_path"], self.map["debug_path"] = str(raw), str(debug)
+        self.map["final_args_sha256"] = __import__("hashlib").sha256(
+            self.argv.encode()).hexdigest()
+        self.refresh()
+        current = self.witness()
+        with self.queue.exclusive():
+            self.receipts.seal_pretraffic(
+                self.queue, workspace=self.work, candidate_sha256=CANDIDATE)
+            self.receipts.finish_running(
+                current, self.queue, attest=lambda: current)
+        self.child.unlink()
+        self.monitor.unlink()
+        self.ps.stopped = True
+        return current
+
+    def stopped_witness(self):
+        return owner_mod._attest_stopped_core(
+            journal=self.journal, work_root=self.work_root, active=self.active,
+            child_pidfile=self.child, monitor_pidfile=self.monitor,
+            epoch_root=self.epochs, runner=self.ps, owner_uid=UID)
+
+    def test_stopped_exact_prior_epoch_is_not_new_engine_owner(self):
+        previous = self.stopped_fixture()
+        stopped = self.stopped_witness()
+        self.assertEqual(stopped, previous)
+        # The same proof cannot be used as a new running process.
+        # _attest_core is the raw fixture primitive: absent pidfiles cause
+        # its underlying protected read to raise OSError. The public native
+        # attester wraps that as GenerationRefused.
+        with self.assertRaises((owner_mod.GenerationRefused, OSError)):
+            self.witness()
+        self.assertTrue(any("-A" in cmd for cmd in self.ps.commands))
+
+    def test_stopped_refuses_old_engine_or_pidfile_or_changed_journal(self):
+        self.stopped_fixture()
+        self.ps.stopped = False
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.stopped_witness()
+        self.ps.stopped = True
+        self._write(self.child, f"{PID}\\n".replace("\\n", "\n"))
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.stopped_witness()
+        self.child.unlink()
+        self.record["phase"] = "prepared"
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.stopped_witness()
+
+    def test_stopped_refuses_invalid_prior_birth_or_active_release(self):
+        self.stopped_fixture()
+        epoch = self.epochs / OP_ID / "epoch.json"
+        recorded = json.loads(epoch.read_text())
+        recorded["owner_start"] = "not-a-native-process-start"
+        self._write(epoch, json.dumps(recorded))
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.stopped_witness()
+        self._write(epoch, json.dumps({**recorded, "owner_start": START}))
+        self.assertEqual(self.stopped_witness().owner.started, START)
+        self._write(self.active / "dvtws.args", "--port=999\n")
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.stopped_witness()
 
     def test_nonroot_or_offtarget_public_api_refuses(self):
         # The public path is strict; these positive synthetic fixture checks

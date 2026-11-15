@@ -1,0 +1,13 @@
+# Managed by os-zapret2-restyle. Standard FreeBSD/OPNsense system crontab.
+# One short native configd collector per minute, only if an authentic
+# committed active observer exists. NEVER SIGSTOP/CONT, restart or detach IPFW.
+SHELL=/bin/sh
+PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+MAILTO=
+* * * * * root /usr/local/sbin/configctl -d zapret auto_detect_minute > /dev/null 2>&1
+# Four independent calendar anchors. The native saved Config preference
+# determines which (if any) is eligible; Off or STOPPED never starts service.
+0 * * * * root /usr/local/sbin/configctl -d zapret auto_restart_tick hourly > /dev/null 2>&1
+0 3 * * * root /usr/local/sbin/configctl -d zapret auto_restart_tick daily > /dev/null 2>&1
+0 3 * * 0 root /usr/local/sbin/configctl -d zapret auto_restart_tick weekly > /dev/null 2>&1
+0 3 1 * * root /usr/local/sbin/configctl -d zapret auto_restart_tick monthly > /dev/null 2>&1
