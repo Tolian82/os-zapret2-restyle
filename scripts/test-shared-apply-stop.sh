@@ -4,7 +4,11 @@ ROOT=$(mktemp -d /tmp/zapret-native-stop.XXXXXXXX) || exit 1
 trap 'rm -rf "$ROOT"' EXIT HUP INT TERM
 fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_stop_service()$/,/^}$/p' "$SOURCE" > "$ROOT/stop.sh"
+# Exercise the real preflight on an ordinary sealed (non-observer)
+# runtime instead of bypassing its refusal semantics in a mock.
+sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/stop.sh"
 sh -n "$ROOT/stop.sh" || fail "shell syntax"
 . "$ROOT/stop.sh"
 ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
@@ -14,6 +18,7 @@ SUPERVISOR_MONITOR_PIDFILE="$ROOT/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$ROOT/daemon.pid"
 SUPERVISOR_LOOP="$ROOT/monitor-loop"
 mkdir -p "$ROOT/work/release" "$ACTIVE_DIR"
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
 LOG="$ROOT/events"
 preflight_shared_apply_journal() { echo "guard:$1" >> "$LOG"; [ "$GUARD_OK" = 1 ]; }
 shared_apply_require_tools() { return 0; }
