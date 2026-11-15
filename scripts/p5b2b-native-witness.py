@@ -312,7 +312,7 @@ def native_installed_auto_handoff():
         # The real configd path has bounded phase receipts; preserve them
         # without exposing the request envelope or user traffic.
         def brief(blob):
-            line = blob.decode('utf-8', errors='replace').replace('\\n', ' ')
+            line = blob.decode('utf-8', errors='replace').replace('\n', ' ')
             return re.sub(r'[A-Za-z0-9_-]{48,}', '[REDACTED]', line)[:320]
         # On the PRE-JOURNAL runtime-preflight refusal only, execute the
         # exact production validators against the existing private candidate.
@@ -365,6 +365,43 @@ def native_installed_auto_handoff():
                     if auth.returncode != 0:
                         diagnostic += ':observer-authorize-reason=' + brief(
                             auth.stderr or auth.stdout)
+                    else:
+                        # The remaining runtime probe only checks previous
+                        # process/supervisor and exact shared IPFW ownership.
+                        # Inspect those states, never mutate firewall rules.
+                        processes = run('/bin/ps', 'ax', '-o', 'pid=', '-o',
+                                        'command=', timeout=12)
+                        if processes.returncode == 0:
+                            census = [line for line in
+                                      processes.stdout.decode(errors='replace').splitlines()
+                                      if len(line.split()) >= 2 and
+                                      line.split()[1] == str(ENGINE)]
+                            diagnostic += ':engine-census-count=' + str(len(census))
+                        else:
+                            diagnostic += ':ps-rc=' + str(processes.returncode)
+                        for marker, item in (
+                            ('engine-pidfile', Path('/var/run/dvtws2.pid')),
+                            ('supervisor-pidfile',
+                             Path('/var/run/zapret2-supervisor-monitor.pid')),
+                        ):
+                            diagnostic += ':' + marker + '-present=' + str(
+                                item.is_file() and not item.is_symlink())
+                        kernel = run('/sbin/kldstat', '-q', '-m', 'ipfw', timeout=12)
+                        diagnostic += ':ipfw-kernel-rc=' + str(kernel.returncode)
+                        hold_fd9()
+                        try:
+                            fw = subprocess.run([
+                                '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                                str(BACKEND / 'voice_ipfw_adapter.py'),
+                                'shared', 'verify', str(candidate), '-',
+                            ], capture_output=True, timeout=25,
+                                pass_fds=(9,), check=False)
+                        finally:
+                            os.close(9)
+                        diagnostic += ':firewall-verify-rc=' + str(fw.returncode)
+                        if fw.returncode != 0:
+                            diagnostic += ':firewall-reason=' + brief(
+                                fw.stderr or fw.stdout)
             else:
                 diagnostic = ':candidate-count=' + str(len(qualified))
         need(False, 'installed-original-auto-shared-apply-refused:' +
