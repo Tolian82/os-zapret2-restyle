@@ -21,8 +21,9 @@ import sys
 from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import ROOT as QUEUE_ROOT
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
-from auto_detect_fd import probe_pending_fd
-from auto_detect_owner import GenerationProof, attest_running_generation
+from auto_detect_fd import probe_pending_fd, probe_stopped_pending_fd
+from auto_detect_owner import (GenerationProof, attest_running_generation,
+                               attest_stopped_generation)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
 from auto_detect_owned_sources import OWNED_ROOT
@@ -111,7 +112,7 @@ def inherited_original_locks(queue: DurableInbox, queue_fd: int, config_fd: int,
 
 def _original_completion_locked(queue: DurableInbox, pending: Path, *,
                                 php_bin: str, php_script: Path,
-                                timeout: int) -> dict:
+                                timeout: int, retired: bool = False) -> dict:
     """One genuine PHP Config-held completion while ORIGINAL queue FD is held.
 
     The caller owns queue.exclusive(); this function MUST NOT take a second
@@ -130,7 +131,8 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
     original_fd = queue.locked_fd
     try:
         result = subprocess.run(
-            [php_bin, str(php_script), 'commit-with-fds',
+            [php_bin, str(php_script),
+             'commit-retired-with-fds' if retired else 'commit-with-fds',
              str(original_fd), pending.name],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, pass_fds=(original_fd,),
@@ -153,7 +155,8 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
 def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
                               php_bin: str, php_script: Path, timeout: int,
                               attest=attest_running_generation,
-                              inspect=probe_pending_fd) -> bool:
+                              inspect=probe_pending_fd,
+                              retired: bool = False) -> bool:
     """One P2a open-file description: prepare -> PHP child -> v2 ACK.
 
     After physical unlink with a completed checkpoint, recover ONLY the ACK;
@@ -194,7 +197,8 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
                     raise OriginalLockRefused("original_post_unlink_ack_not_durable")
                 return True
         pending = prepare_original_v2_locked(
-            queue, writer.receipts, attest=attest, inspect=inspect)
+            queue, writer.receipts, attest=attest, inspect=inspect,
+            inspect_debug=inspect)
         if pending is None:
             return False
         tip = chain.tip(proof)
@@ -204,7 +208,7 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
             raise OriginalLockRefused("original_v2_intent_or_owner_changed")
         result = _original_completion_locked(
             queue, pending, php_bin=php_bin,
-            php_script=php_script, timeout=timeout)
+            php_script=php_script, timeout=timeout, retired=retired)
         if attest() != proof:
             raise OriginalLockRefused("original_owner_changed_after_config_child")
         if not chain.acknowledge(
@@ -219,7 +223,7 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
         raise OriginalLockRefused("original_v2_transaction_or_ack_unavailable") from exc
 
 
-def run_native_original_v2_cycle_once() -> bool:
+def run_native_original_v2_cycle_once(*, retired: bool = False) -> bool:
     """One original FD9 service-owned native minute, with no new worker."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise OriginalLockRefused("original_native_fd9_required")
@@ -247,12 +251,16 @@ def run_native_original_v2_cycle_once() -> bool:
         with queue.exclusive():
             return _original_v2_cycle_locked(
                 queue, writer, php_bin="/usr/local/bin/php",
-                php_script=PHP_CONFIG, timeout=25)
+                php_script=PHP_CONFIG, timeout=25,
+                attest=attest_stopped_generation if retired else attest_running_generation,
+                inspect=probe_stopped_pending_fd if retired else probe_pending_fd,
+                retired=retired)
     except (KeyError, OSError, QueueSafetyError) as exc:
         raise OriginalLockRefused("original_native_v2_source_unavailable") from exc
 
 
-def _native_fd_child(pending_name: str, payload: dict) -> dict:
+def _native_fd_child(pending_name: str, payload: dict, *,
+                     retired: bool = False) -> dict:
     """Original PHP Config child with BOTH verified inherited lock descriptors."""
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not PENDING_NAME.fullmatch(pending_name) or
@@ -281,7 +289,9 @@ def _native_fd_child(pending_name: str, payload: dict) -> dict:
         completion = commit_with_original_v2_model(
             writer, pending, owned_root=OWNED_ROOT,
             manual_hostlists=payload["manual_hostlists"],
-            global_exclude=payload["global_exclude"])
+            global_exclude=payload["global_exclude"],
+            attest=attest_stopped_generation if retired else attest_running_generation,
+            inspect=probe_stopped_pending_fd if retired else probe_pending_fd)
         if completion.get("ack_authorized") is not False:
             raise OriginalLockRefused("original_v2_checkpoint_not_authorization")
         return completion
@@ -289,7 +299,7 @@ def _native_fd_child(pending_name: str, payload: dict) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if (len(argv) != 2 or argv[0] != "commit-fds" or
+    if (len(argv) != 2 or argv[0] not in ("commit-fds", "commit-retired-fds") or
             not sys.platform.startswith("freebsd") or os.geteuid() != 0):
         return 64
     try:
@@ -303,7 +313,8 @@ def main(argv: list[str] | None = None) -> int:
             if total > (3 << 20):
                 raise OriginalLockRefused("oversized_original_model")
             chunks.append(piece)
-        response = _native_fd_child(argv[1], json.loads(b"".join(chunks)))
+        response = _native_fd_child(argv[1], json.loads(b"".join(chunks)),
+                                    retired=argv[0] == "commit-retired-fds")
         print(json.dumps(response, sort_keys=True, separators=(",", ":")))
         return 0
     except (OriginalLockRefused, V2OriginalConfigRefused,
