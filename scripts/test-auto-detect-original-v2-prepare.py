@@ -107,6 +107,22 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.assertEqual(self.queue.inbox.stat().st_ino, before)
         self.assertEqual(list(self.queue.pending.iterdir()), [])
 
+    def test_torn_empty_hardlink_pending_is_not_idle(self):
+        # A torn P2a hardlink to a now-empty live inode is still pending
+        # recovery, not a clean minute with no original artifacts.
+        pending = self.queue.pending / (self.generation + "-" + "c" * 32 + ".txt")
+        os.link(self.queue.inbox, pending)
+        live_before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(
+                OriginalV2PrepareRefused, "unresolved_original_pending_not_idle"
+            ):
+                self.stage()
+            self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
+            self.assertEqual(pending.stat().st_ino, live_before.st_ino)
+            self.assertEqual(self.queue.segments(), [pending])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+
     def test_first_raw_rotates_and_persists_v2_not_legacy_intent(self):
         self.emit("one.example.com")
         old = self.queue.inbox.stat().st_ino
