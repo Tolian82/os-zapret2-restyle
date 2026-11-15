@@ -323,6 +323,11 @@ def prepare_original_v2_locked(
                 not path.name.startswith(proof.generation + "-")
                 for path in pending)):
             raise OriginalV2PrepareRefused("historical_or_ambiguous_pending_retained")
+        # A pending alias with zero bytes is not a valid discovery. Refuse
+        # before the raw hardlink/replace path can detach that empty inode.
+        # The original pending remains available for explicit review.
+        if pending and pending[0].lstat().st_size == 0:
+            raise OriginalV2PrepareRefused("empty_original_pending_not_accepted")
         # Same original FD9/P2a owner: when 512 immutable ACKed slots fill,
         # fsync and atomically publish the next exact cursor anchor rather
         # than pausing/restarting dvtws2 or discarding raw. Recover partial
@@ -377,11 +382,6 @@ def prepare_original_v2_locked(
                 generation=proof.generation, cycle=tip.cycle,
                 sequence=tip.next_sequence)
         if segment is None:
-            # A genuine idle minute has NO original pending. A previous
-            # hardlink or detached pending (even if empty/corrupt) must not
-            # be converted to a successful idle tick and silently stranded.
-            if pending:
-                raise OriginalV2PrepareRefused("unresolved_original_pending_not_idle")
             return None
         if attest() != proof:
             raise OriginalV2PrepareRefused("original_owner_changed_after_rotation")
