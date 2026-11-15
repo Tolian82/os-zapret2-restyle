@@ -28,7 +28,8 @@ CANDIDATE = "c" * 64
 def sealed_shared_release(base: Path, proof: GenerationProof) -> tuple[Path, GenerationProof]:
     """Create a *real hashed/sealed* candidate, not a live P2c attestation."""
     folder = base / "shared-work"
-    folder.mkdir(mode=0o700)
+    # Successive test epochs reuse the one shared-work parent, not the child.
+    folder.mkdir(mode=0o700, exist_ok=True)
     work = folder / proof.generation
     work.mkdir(mode=0o700)
     release = work / "release"
