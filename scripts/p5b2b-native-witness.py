@@ -348,6 +348,23 @@ def native_installed_auto_handoff():
                         diagnostic += ':' + label + '-reason=' + brief(
                             command.stderr or command.stdout)
                         break
+                else:
+                    # A release-authorize call requires genuine original
+                    # FD9. Do not bypass that guard just to classify failure.
+                    hold_fd9()
+                    try:
+                        auth = subprocess.run([
+                            '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                            str(BACKEND / 'auto_detect_post_drop.py'),
+                            'authorize', str(candidate),
+                        ], capture_output=True, timeout=20, pass_fds=(9,),
+                            check=False)
+                    finally:
+                        os.close(9)
+                    diagnostic += ':observer-authorize-rc=' + str(auth.returncode)
+                    if auth.returncode != 0:
+                        diagnostic += ':observer-authorize-reason=' + brief(
+                            auth.stderr or auth.stdout)
             else:
                 diagnostic = ':candidate-count=' + str(len(qualified))
         need(False, 'installed-original-auto-shared-apply-refused:' +
