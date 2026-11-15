@@ -18,7 +18,7 @@ import re
 import stat
 from typing import Callable
 
-from auto_detect_debug_window import (Cursor, DebugWindowRefused,
+from auto_detect_debug_window import (Cursor, DebugWindowRefused, MAX_DEBUG,
                                       _raw_hosts, _read_exact, propose_window)
 from auto_detect_destination_commit import DestinationCommit, DestinationRefused
 from auto_detect_epoch_receipts import (EMPTY_HASH, EpochReceipts, ReceiptRefused,
@@ -159,6 +159,51 @@ def _ack(intent: dict, checkpoint: dict, cp_bytes: bytes) -> dict:
     }
 
 
+def _resolved_intent(folder: Path, original: dict, original_raw: bytes,
+                     uid: int) -> dict:
+    """Derive effective UNKNOWN mode from one immutable crash recovery.
+
+    The native-debug intent is NEVER overwritten. Original bytes plus one
+    root-private write-once recovery receipt remain the journal authority;
+    both the same original Config commit and subsequent ACK use the derived
+    mode. An existing destination plan/checkpoint cannot be silently
+    converted to another evidence mode.
+    """
+    recovery = folder / "recovery.json"
+    if not recovery.exists() and not recovery.is_symlink():
+        return original
+    record, _ = _load(recovery, uid)
+    expected = {
+        "schema": 2, "kind": "original-native-debug-raw-first-recovery",
+        "generation": original["generation"],
+        "sequence": original["sequence"],
+        "pending_name": original["pending_name"],
+        "pending_sha256": original["pending_sha256"],
+        "previous_ack_sha256": original["previous_ack_sha256"],
+        "original_intent_sha256": _digest(original_raw),
+        "ack_authorized": False,
+    }
+    if (original.get("evidence") != "native-debug" or
+            type(record.get("new_debug_device")) is not int or
+            type(record.get("new_debug_inode")) is not int or
+            type(record.get("new_debug_size")) is not int or
+            record["new_debug_device"] < 0 or
+            record["new_debug_inode"] <= 0 or
+            not 0 <= record["new_debug_size"] <= MAX_DEBUG or
+            not isinstance(record.get("new_debug_sha256"), str) or
+            not HEX64.fullmatch(record["new_debug_sha256"]) or
+            (record["new_debug_device"], record["new_debug_inode"]) ==
+            (original["debug_device"], original["debug_inode"]) or
+            set(record) != set(expected) | {
+                "new_debug_device", "new_debug_inode",
+                "new_debug_size", "new_debug_sha256"} or
+            any(record.get(name) != value for name, value in expected.items())):
+        raise CursorChainRefused("original_native_debug_recovery_tampered")
+    return {**original, "evidence": "raw-first",
+            "debug_end_offset": original["debug_start_offset"],
+            "debug_end_sha256": original["debug_start_sha256"]}
+
+
 class CursorChain:
     """One append-only durable cursor chain; no alternate Config/queue owner."""
 
@@ -208,9 +253,11 @@ class CursorChain:
             folder = root / name
             _directory(folder, self.receipts.uid)
             names = set(os.listdir(folder))
-            if "intent.json" not in names or names - {"intent.json", "destination", "ack.json"}:
+            if ("intent.json" not in names or
+                    names - {"intent.json", "destination", "ack.json",
+                             "recovery.json"}):
                 raise CursorChainRefused("incomplete_or_foreign_cursor_slot")
-            intent, _ = _load(folder / "intent.json", self.receipts.uid)
+            intent, intent_raw = _load(folder / "intent.json", self.receipts.uid)
             expected_keys = {
                 "schema", "kind", "generation", "sequence", "pending_name",
                 "pending_device", "pending_inode", "pending_size", "pending_sha256",
@@ -248,6 +295,12 @@ class CursorChain:
                     intent.get("ack_authorized") is not False):
                 raise CursorChainRefused("cursor_chain_disagrees_with_previous_ack")
             used_pending_names.add(intent["pending_name"])
+            # The original intent is validated against its predecessor
+            # BEFORE resolving recovery. A durable original native-debug
+            # mode must be explicitly anchored by recovery.json, never
+            # rewritten or inferred from a changed pathname alone.
+            intent = _resolved_intent(folder, intent, intent_raw,
+                                      self.receipts.uid)
             checkpoint = _checkpoint(folder, intent, self.receipts.uid)
             if "ack.json" not in names:
                 if index != len(slots) - 1:
@@ -297,17 +350,70 @@ class CursorChain:
             raw = detached_original_raw(self.queue, pending)
             if tip.open_intent is not None:
                 expected = tip.open_intent
-                # After first staging, the original engine may append later
-                # native events to debug. Verify its sealed *prefix* rather
-                # than requiring an identical full debug tail on replay.
                 if (expected["pending_name"] != pending.name or
                         expected["pending_device"] != before.st_dev or
                         expected["pending_inode"] != before.st_ino or
                         expected["pending_size"] != len(raw) or
-                        expected["pending_sha256"] != _digest(raw) or
-                        not _evidence_unchanged(proof, expected, self.receipts.uid,
-                                                self.receipts.writer_gid)):
+                        expected["pending_sha256"] != _digest(raw)):
                     raise CursorChainRefused("different_unacknowledged_cursor_pending")
+                # A previously staged native-debug record may lose its
+                # diagnostic inode before original Config commit. NEVER
+                # rewrite its intent or use a partial destination plan.
+                # Instead seal one separate immutable raw-first recovery
+                # under this SAME held queue lock, original owner/P2b FD,
+                # exact raw SHA and new protected diagnostic identity.
+                if not _evidence_unchanged(proof, expected, self.receipts.uid,
+                                           self.receipts.writer_gid):
+                    if expected["evidence"] != "native-debug":
+                        raise CursorChainRefused("different_unacknowledged_cursor_pending")
+                    current, debug_bytes = _read_exact(
+                        Path(proof.debug_path), owner_uid=self.receipts.uid,
+                        writer_gid=self.receipts.writer_gid)
+                    if ((current.st_dev, current.st_ino) ==
+                            (expected["debug_device"], expected["debug_inode"]) or
+                            tip.open_folder is None or
+                            (tip.open_folder / "destination").exists() or
+                            (tip.open_folder / "destination").is_symlink() or
+                            (tip.open_folder / "recovery.json").exists() or
+                            (tip.open_folder / "recovery.json").is_symlink()):
+                        raise CursorChainRefused("original_native_debug_recovery_unsafe")
+                    if (len(_raw_hosts(raw)) != expected["candidate_count"] or
+                            inspect(pending, before.st_dev, before.st_ino,
+                                    owner=proof.owner,
+                                    writer_gid=self.queue.writer_gid)
+                            is not FDState.DRAINED or
+                            detached_original_raw(self.queue, pending) != raw or
+                            attest() != proof):
+                        raise CursorChainRefused("original_native_debug_recovery_source_changed")
+                    original, original_raw = _load(
+                        tip.open_folder / "intent.json", self.receipts.uid)
+                    if original != expected:
+                        raise CursorChainRefused("original_intent_changed_during_recovery")
+                    recovery = {
+                        "schema": 2,
+                        "kind": "original-native-debug-raw-first-recovery",
+                        "generation": proof.generation,
+                        "sequence": original["sequence"],
+                        "pending_name": pending.name,
+                        "pending_sha256": _digest(raw),
+                        "previous_ack_sha256": original["previous_ack_sha256"],
+                        "original_intent_sha256": _digest(original_raw),
+                        "new_debug_device": current.st_dev,
+                        "new_debug_inode": current.st_ino,
+                        "new_debug_size": len(debug_bytes),
+                        "new_debug_sha256": _digest(debug_bytes),
+                        "ack_authorized": False,
+                    }
+                    _write_once(tip.open_folder, "recovery.json",
+                                _canonical(recovery), self.receipts.uid)
+                    tip = self.tip(proof)
+                    expected = tip.open_intent
+                    if (expected is None or expected["evidence"] != "raw-first" or
+                            expected["pending_name"] != pending.name or
+                            not _evidence_unchanged(proof, expected,
+                                                    self.receipts.uid,
+                                                    self.receipts.writer_gid)):
+                        raise CursorChainRefused("original_recovery_not_durable")
                 if attest() != proof:
                     raise CursorChainRefused("owner_changed_during_intent_replay")
                 return tip.open_folder
@@ -448,7 +554,10 @@ class CursorChain:
                 if tip.next_sequence == 0:
                     raise CursorChainRefused("no_completed_original_cursor")
                 last = root / f"{tip.next_sequence - 1:08d}"
-                previous, _ = _load(last / "intent.json", self.receipts.uid)
+                previous, previous_raw = _load(
+                    last / "intent.json", self.receipts.uid)
+                previous = _resolved_intent(
+                    last, previous, previous_raw, self.receipts.uid)
                 verified = _checkpoint(last, previous, self.receipts.uid,
                                        targets=writer.targets)
                 if (previous["pending_name"] != pending.name or

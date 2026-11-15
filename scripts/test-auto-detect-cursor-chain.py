@@ -239,28 +239,135 @@ class CursorChainTests(unittest.TestCase):
                 self.ack(p, cp)
             self.assertTrue(p.exists())
 
-    def test_open_native_debug_intent_cannot_change_to_raw_first(self):
+    def _cut_debug_nonblocking(self):
+        old = self.debug.with_name("old-native-debug")
+        new = self.debug.with_name(".new-native-debug")
+        new.write_bytes(b"")
+        new.chmod(0o600)
+        os.link(self.debug, old)
+        os.replace(new, self.debug)
+        self.assertEqual(old.stat().st_nlink, 1)
+        self.assertNotEqual(old.stat().st_ino, self.debug.stat().st_ino)
+        return old
+
+    def test_original_preplan_native_debug_recovers_without_overwriting_intent(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
             pending = self.rotate()
-            self.stage(pending)
+            folder = self.stage(pending)
+            original = (folder / "intent.json").read_bytes()
             self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
                              "native-debug")
-            old = self.debug.with_name("old-native-debug")
-            new = self.debug.with_name(".new-native-debug")
-            new.write_bytes(b"")
-            new.chmod(0o600)
-            os.link(self.debug, old)
-            os.replace(new, self.debug)
+            old = self._cut_debug_nonblocking()
+            self.assertEqual(self.stage(pending), folder)
+            recovery = folder / "recovery.json"
+            self.assertTrue(recovery.is_file())
+            receipt = recovery.read_bytes()
+            self.assertEqual((folder / "intent.json").read_bytes(), original)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+            # A lost parent/child between durable recovery and Config commit
+            # must reconstruct EXACT same evidence from the original journal.
+            self.chain = CursorChain(self.receipts, self.queue)
+            self.assertEqual(self.stage(pending), folder)
+            self.assertEqual(recovery.read_bytes(), receipt)
+            cp = self.commit(pending, "one.example.com")
+            self.assertEqual(cp["evidence"], "raw-first")
+            self.assertEqual(self.commit(pending, "one.example.com"), cp)
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+            self.assertFalse(pending.exists())
+            self.assertEqual(old.read_bytes().count(b"adding to "), 1)
+            self.emit("two.example.com")
+            next_pending = self.rotate()
+            self.stage(next_pending)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.assertTrue(self.ack(next_pending,
+                                     self.commit(next_pending, "two.example.com")))
+        self.assertEqual(self.target.read_text(),
+                         "!manual.invalid\none.example.com\ntwo.example.com\n")
+
+    def test_recovery_is_blocked_after_destination_checkpoint(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            cp = self.commit(pending, "one.example.com")
+            self._cut_debug_nonblocking()
             with self.assertRaisesRegex(CursorChainRefused,
-                                        "different_unacknowledged_cursor_pending"):
+                                        "original_native_debug_recovery_unsafe"):
                 self.stage(pending)
             with self.assertRaisesRegex(CursorChainRefused,
-                                        "debug_changed_before_destination"):
-                self.commit(pending, "one.example.com")
+                                        "debug_changed_before_original_ack"):
+                self.ack(pending, cp)
+            self.assertFalse((folder / "recovery.json").exists())
             self.assertTrue(pending.exists())
-            self.assertFalse(self.chain.tip(self.proof).raw_first)
-            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "native-debug")
+
+    def test_recovery_refuses_partial_original_destination_plan(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            (folder / "destination").mkdir(mode=0o700)
+            self._cut_debug_nonblocking()
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "original_native_debug_recovery_unsafe"):
+                self.stage(pending)
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertTrue(pending.exists())
+
+    def test_recovery_receipt_corruption_refuses_before_any_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            self._cut_debug_nonblocking()
+            self.stage(pending)
+            receipt = folder / "recovery.json"
+            original = receipt.read_bytes()
+            import json
+            data = json.loads(original)
+            data["original_intent_sha256"] = "0" * 64
+            receipt.write_text(json.dumps(data) + "\n")
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "original_native_debug_recovery_tampered"):
+                self.chain.tip(self.proof)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "original_native_debug_recovery_tampered"):
+                self.stage(pending)
+            self.assertTrue(pending.exists())
+            self.assertEqual(self.target.read_text(), "!manual.invalid\n")
+            receipt.write_bytes(original)
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.assertTrue(self.ack(pending, self.commit(pending, "one.example.com")))
+
+    def test_recovery_refuses_wrong_process_and_busy_raw(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            self._cut_debug_nonblocking()
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "original_pending_fd_not_drained"):
+                self.chain.prepare(
+                    self.proof, pending, attest=self.attest,
+                    inspect=lambda *args, **kw: FDState.BUSY)
+            self.assertFalse((folder / "recovery.json").exists())
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "current_original_owner_required"):
+                self.chain.prepare(
+                    self.proof, pending,
+                    attest=lambda: replace(self.proof, generation="f" * 32),
+                    inspect=self.drained)
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertTrue(pending.exists())
 
     def test_superseded_v1_epoch_entry_is_rejected_not_imported(self):
         self.emit("one.example.com")
