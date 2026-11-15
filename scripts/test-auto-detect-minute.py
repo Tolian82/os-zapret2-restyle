@@ -123,8 +123,13 @@ class MinuteIngressContract(unittest.TestCase):
         action = config['auto_detect_minute']
         self.assertEqual(action['parameters'], '')
         self.assertEqual(action['type'], 'script_output')
-        self.assertEqual(action['timeout'], '30')
-        self.assertEqual(action['command'], '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh /usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_minute.py')
+        self.assertEqual(action['timeout'], '60')
+        self.assertEqual(action['command'], '/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh auto-detect-minute')
+        service = (BASE / 'src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh').read_text()
+        self.assertIn('auto-detect-minute)', service)
+        self.assertIn('"$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_minute.py"', service)
+        self.assertIn('start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|', service)
+        self.assertIn('require_lifecycle_lock()', (BACKEND / 'auto_detect_original_lock_handoff.py').read_text())
         cron = BASE / 'src/etc/cron.d/zapret2-restyle'
         self.assertTrue(cron.is_file())
         lines = [x for x in cron.read_text().splitlines()
@@ -132,7 +137,6 @@ class MinuteIngressContract(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith('* * * * * root '))
         self.assertNotIn('auto_detect_minute.py', lines[0])
-
 
     def test_original_native_minute_runs_only_after_real_owner_attestation(self):
         # The caller is the original configd-only entry; production owner
@@ -147,6 +151,7 @@ class MinuteIngressContract(unittest.TestCase):
             output, errors = io.StringIO(), io.StringIO()
             with patch.object(minute.sys, 'platform', 'freebsd15'), \
                  patch.object(minute.os, 'geteuid', return_value=0), \
+                 patch.object(minute, 'require_lifecycle_lock'), \
                  patch.object(minute, 'inspect_inert_release',
                               side_effect=MinuteRefused(
                                   'native_observer_worker_ack_not_authorized')), \
@@ -171,6 +176,20 @@ class MinuteIngressContract(unittest.TestCase):
         rc, out, err, called = run_once(True, bad)
         self.assertEqual((rc, out, called), (69, '', 0))
         self.assertIn('auto-detect-minute-refused=MinuteRefused', err)
+
+    def test_native_tick_denied_without_inherited_fd9_before_source_read(self):
+        with patch.object(minute.sys, 'platform', 'freebsd15'), \
+             patch.object(minute.os, 'geteuid', return_value=0), \
+             patch.object(minute, 'require_lifecycle_lock',
+                          side_effect=RuntimeError('fd9 missing')), \
+             patch.object(minute, 'inspect_inert_release') as inspect, \
+             patch.object(minute, 'attest_running_generation') as attest, \
+             patch.object(minute, 'run_native_original_v2_cycle_once') as compose, \
+             redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(minute.native_minute_once([]), 69)
+        inspect.assert_not_called()
+        attest.assert_not_called()
+        compose.assert_not_called()
 
     def test_native_entry_refuses_foreign_platform_and_cli_args(self):
         self.assertEqual(native_minute_once(['arbitrary']), 64)
