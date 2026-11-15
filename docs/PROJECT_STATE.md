@@ -2,6 +2,9 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
+**Owner approved 15 November 2026 — BEFORE further #1052 test-package publication:** Auto Restart defaults to **Off**, even if Auto-detect runs every minute. Long-running `dvtws2` must continue raw/debug hardlink/replace/FD9 collection without stop/pause/restart; diagnostic-only debug high-water archives must roll over repeatedly without inventing raw ACK. Keep **four** most recent fully retired/last-ACK-verified generations; delete only older proof-qualified epochs through original FD9/queue with crash recovery, never live/unACKed data or user's lists. These are **requirements now**, not a claim of installed runtime PASS. Normal-flow bound must be measured; unconditional hard quota under arbitrary upstream append/blocked writer is not proven and must not be silently faked.
+
+
 **Exact candidate identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=70`; prospective `os-zapret2-restyle-0.6.5_70.pkg` **NOT PUBLISHED**. Latest stable owner-installed package is `0.6.5_1`.
 
 **Current integration source (15 November 2026): `v0.6.5_70`**, one squash-compatible native #1052 commit on verified `main v0.6.5_69`. Earlier `_72` WIP commits remain in the original development branch without history rewrite, **not the PR/packaging identity**. Exact candidate tests and installed acceptance remain open; latest stable owner package remains `_1`.
