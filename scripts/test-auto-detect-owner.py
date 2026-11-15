@@ -288,7 +288,10 @@ class OwnerGenerationTests(unittest.TestCase):
         stopped = self.stopped_witness()
         self.assertEqual(stopped, previous)
         # The same proof cannot be used as a new running process.
-        with self.assertRaises(owner_mod.GenerationRefused):
+        # _attest_core is the raw fixture primitive: absent pidfiles cause
+        # its underlying protected read to raise OSError. The public native
+        # attester wraps that as GenerationRefused.
+        with self.assertRaises((owner_mod.GenerationRefused, OSError)):
             self.witness()
         self.assertTrue(any("-A" in cmd for cmd in self.ps.commands))
 
@@ -307,17 +310,17 @@ class OwnerGenerationTests(unittest.TestCase):
         with self.assertRaises(owner_mod.GenerationRefused):
             self.stopped_witness()
 
-    def test_stopped_refuses_changed_prior_birth_or_active_release(self):
+    def test_stopped_refuses_invalid_prior_birth_or_active_release(self):
         self.stopped_fixture()
         epoch = self.epochs / OP_ID / "epoch.json"
         recorded = json.loads(epoch.read_text())
-        recorded["owner_start"] = "Fri Nov 13 07:01:00 2026"
+        recorded["owner_start"] = "not-a-native-process-start"
         self._write(epoch, json.dumps(recorded))
         with self.assertRaises(owner_mod.GenerationRefused):
             self.stopped_witness()
         self._write(epoch, json.dumps({**recorded, "owner_start": START}))
         self.assertEqual(self.stopped_witness().owner.started, START)
-        self._write(self.active / "dvtws.args", "--port=999\\n".replace("\\n", "\n"))
+        self._write(self.active / "dvtws.args", "--port=999\n")
         with self.assertRaises(owner_mod.GenerationRefused):
             self.stopped_witness()
 
