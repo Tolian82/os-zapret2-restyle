@@ -1268,6 +1268,22 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=runtime-preflight
         return 0
     fi
+    # Initial P3 known HOSTLIST ownership is only an EMPTY, root-private
+    # component baseline under the SAME original FD9 and native PHP Config
+    # lock. Once sealed it is preserved across Apply/Boot and cannot import
+    # obsolete zapret-hosts-auto.txt or overwrite manual YouTube/User text.
+    if [ "$_shared_apply_mode" = 1 ] &&
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        _shared_owned_start=$(/usr/local/bin/php \
+            "$SCRIPT_DIR/auto_detect_config_snapshot.php" \
+            bootstrap-known "$_shared_apply_base") || {
+            printf '%s\n' preflight-rejected=owned-baseline
+            return 0
+        }
+        _shared_owned_state=$(printf '%s\n' "$_shared_owned_start" |
+            shared_apply_json_field '.result | select(.=="created" or .=="existing")') || return 69
+        case "$_shared_owned_state" in created|existing) ;; *) return 69 ;; esac
+    fi
     # The journal records only a fixed operation identity and owned-fields
     # proof. It never contains private Config XML or untrusted shell strings.
     shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
