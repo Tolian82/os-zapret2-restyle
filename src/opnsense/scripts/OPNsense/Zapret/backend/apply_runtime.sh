@@ -219,12 +219,46 @@ apply_runtime_observe_live_legacy()
     supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"
 }
 
+# #1052 P2: an old RUNNING native observer cannot be stopped merely
+# because a new candidate passed validation. Raw/debug may still be open
+# and the original v2 pending/ACK chain belongs to that old generation.
+# Until its authenticated final handoff is complete, refuse BEFORE process
+# stop, tree swap or new shared-Apply journal. No file or Config mutation.
+# This is a safety gate, NOT evidence that generation turnover is finished.
+apply_runtime_observer_retirement_preflight()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    _apply_retirement_args="$ACTIVE_DIR/dvtws.args"
+    _apply_retirement_map="$ACTIVE_DIR/auto-detect-generation.json"
+    [ -f "$_apply_retirement_args" ] && [ ! -L "$_apply_retirement_args" ] &&
+        [ -r "$_apply_retirement_args" ] || return 69
+    if [ -e "$_apply_retirement_map" ] || [ -L "$_apply_retirement_map" ]; then
+        common_error "shared Apply: old observer needs durable generation handoff before stop"
+        return 69
+    fi
+    if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' \
+        "$_apply_retirement_args"; then
+        common_error "shared Apply: old observer needs durable generation handoff before stop"
+        return 69
+    else
+        _apply_retirement_grep_status=$?
+        [ "$_apply_retirement_grep_status" -eq 1 ] || return 69
+    fi
+    return 0
+}
+
 # Read-only refusal gate shared by the FD9 executor and the actual runtime
 # preflight. It never acquires a lock, writes Config, starts a process,
 # prepares pf/ipfw, or touches the durable Apply journal.
 apply_runtime_preflight()
 {
     apply_runtime_probe "$@" || return $?
+    # Guard BEFORE firewall preparation and BEFORE replacing the old tree.
+    # A prior live native observer may still have unacknowledged events.
+    if [ "$_apply_engine" = 1 ]; then
+        apply_runtime_observer_retirement_preflight || return 69
+    fi
     # The actual engine activation still repeats all observations after
     # the durable "activating" record (an external actor may change IPFW).
     # Only this second phase is permitted to initialize firewall modules.

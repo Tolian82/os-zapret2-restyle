@@ -910,6 +910,11 @@ shared_apply_stop_service()
     fi
     # Verify the exact installed owner BEFORE stopping its process.
     firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+    # P2: never stop a live schema-2 observer until its old-generation
+    # durable raw/debug/pending handoff has been qualified under original FD9.
+    if [ "$_shared_stop_engine" = 1 ]; then
+        apply_runtime_observer_retirement_preflight || return 69
+    fi
     # supervisor_stop_one unlinks a PID file after signaling even if the
     # original process remains alive. Pin its exact old identity so Stop
     # cannot silently strand the monitor after losing its PID file.
@@ -1130,6 +1135,14 @@ shared_apply_execute_service()
     # when no kernel or Config change has even been attempted.
     if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
         printf '%s\n' preflight-rejected=runtime-preflight
+        return 0
+    fi
+    # The original probe is read-only and also serves idempotent Boot; only
+    # a real replacement Apply needs this extra old-owner retirement gate.
+    # Refuse BEFORE writing prepared/activating, not after replacing the tree.
+    if [ "$_apply_engine" = 1 ] &&
+       ! apply_runtime_observer_retirement_preflight; then
+        printf '%s\\n' preflight-rejected=runtime-preflight
         return 0
     fi
     # The journal records only a fixed operation identity and owned-fields

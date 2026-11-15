@@ -105,6 +105,44 @@ rm -f "$ACTIVE_DIR/auto-detect-generation.json"
 printf 'P2K8I_ORPHAN_OR_SYMLINKED_GENERATION_REFUSED=PASS\n'
 printf 'P2K8I_SCOPE=ORIGINAL_SHARED_LAUNCHER_FAIL_CLOSED_NO_ACTIVE_OBSERVER\n'
 
+# P2 old-generation gate is read-only and blocks a live native observer
+# before Stop or the prepared/activating journal. No producer files are
+# cleared to make a new generation launch.
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
+apply_runtime_observer_retirement_preflight ||
+    fail "ORDINARY_OLD_RUNTIME_RETIREMENT_BLOCKED"
+printf '%s\n' '--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt' > "$ACTIVE_DIR/dvtws.args"
+if apply_runtime_observer_retirement_preflight; then
+    fail "OLD_NATIVE_OBSERVER_RETIREMENT_NOT_BLOCKED"
+fi
+printf '%s\n' '--hostlist-auto-debug=/var/db/zapret2-auto-detect/debug.log' > "$ACTIVE_DIR/dvtws.args"
+if apply_runtime_observer_retirement_preflight; then
+    fail "OLD_DEBUG_ONLY_RETIREMENT_NOT_BLOCKED"
+fi
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
+printf '{}\n' > "$ACTIVE_DIR/auto-detect-generation.json"
+if apply_runtime_observer_retirement_preflight; then
+    fail "OLD_GENERATION_MAP_RETIREMENT_NOT_BLOCKED"
+fi
+rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+ln -s /dev/null "$ACTIVE_DIR/auto-detect-generation.json"
+if apply_runtime_observer_retirement_preflight; then
+    fail "OLD_SYMLINKED_MAP_RETIREMENT_NOT_BLOCKED"
+fi
+rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+APPLY_SOURCE="$TOP/src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh"
+SERVICE_SOURCE="$TOP/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
+sed -n '/^apply_runtime_preflight()/,/^}/p' "$APPLY_SOURCE" |
+    grep -Fq 'apply_runtime_observer_retirement_preflight' ||
+    fail "NATIVE_ACTIVATE_MISSING_OLD_GENERATION_GUARD"
+sed -n '/^shared_apply_execute_service()/,/^}/p' "$SERVICE_SOURCE" |
+    grep -Fq 'apply_runtime_observer_retirement_preflight' ||
+    fail "SHARED_APPLY_MISSING_PRE_JOURNAL_GUARD"
+sed -n '/^shared_apply_stop_service()/,/^}/p' "$SERVICE_SOURCE" |
+    grep -Fq 'apply_runtime_observer_retirement_preflight' ||
+    fail "SHARED_STOP_MISSING_PRE_STOP_GUARD"
+printf 'P2_OLD_GENERATION_STOP_APPLY_PRE_JOURNAL_REFUSAL=PASS\n'
+
 # P2k8q3a exercises the ACTUAL original launcher and activation call chain.
 # A mock Python process represents the ORIGINAL FD9 call ordering.
 # Real sealed-release, physical P2a/pretraffic and native P2c are independent
