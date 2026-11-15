@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_68`** (`VERSION=0.6.5`, `PLUGIN_REVISION=68`; prospective `os-zapret2-restyle-0.6.5_68.pkg` **NOT PUBLISHED**). #1052 P2k8q3f2b adds a second actual RUNNING debug inode cut and native real-IPFW HTTP witness to the same disposable P2i suite, with a test-only schema-2 pretraffic projection sealed under original FD9 before launch, true physical native raw P2a pending, original v2 per-slot destination checkpoint+ACK, all-PID old FD BUSY refusal and injected post-retirement ENOSPC recovery. One separate unknown after the second cut is kept and ACKed; a third cut without cursor anchor still refuses. This **isolated native test** is neither installed original shared Config/P1 GUI authorization nor a real physical disk-full/reboot test; the 4 MiB raw/debug lifetime, 512-step journal and historical process generations remain blocked. ACTIVE native observer/cron OFF; original stable installed `os-zapret2-restyle-0.6.5_1.pkg` untouched. [Exact scope](verification/P2K8Q3F2B_NATIVE_SECOND_SOURCE_CUT.md).
+Current **working source**: `v0.6.5_69`, one consolidated #1052 branch; prospective `os-zapret2-restyle-0.6.5_69.pkg` **NOT PUBLISHED**. Initial product integration edits (not yet exact-head CI accepted): original configd 60-second entry now calls the existing sole original v2 P2a → PHP native Config/P1 → checkpoint/ACK path only after real `attest_running_generation()`; the remaining original native observer preflight deliberately rejects LIVE activation while generation turnover and 512-slot/debug lifetime are unfinished. Independently, the five-choice Advanced-only Auto Restart is model/GUI/cron/configd/FD9 wired as an opt-in standard lifecycle restart, with saved native Config read, RUNNING-status guard and WAN-first before Stop. Existing Auto Hostlist editor, explicit target mode semantics and data preservation unchanged. No added daemon, SIGSTOP/SIGCONT, second writer or package publication. The main stable source `_68` is the last fully CI-accepted revision and the owner installed stable `_1.pkg` remains untouched.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=68`; disposable native P2i second source cut/ACK proof candidate; installed/long-term rollover blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=69` on consolidated development branch; Auto Restart and genuine minute ingress source wired; product observer activation/lifetime still blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_68.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_69.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

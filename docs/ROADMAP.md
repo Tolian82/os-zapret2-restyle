@@ -2,15 +2,15 @@
 
 ## Current priority
 
-Complete owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) through the [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). P0/P1 are complete; P2 is partial; P3–P5 are open. [PROJECT_STATE](PROJECT_STATE.md) owns facts and [START_HERE](START_HERE.md) owns the exact next action. Per-revision measurements and CI receipts belong to the [v0.6.x ledger](history/current/v0.6.x.md).
+Complete owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) **as one integrated implementation before one native end-to-end acceptance**. Previous P0/P1 remain qualified; do not create a PR/VM per small P2k8q3f guard. The consolidated working branch completes missing runtime activation, bounded source/journal retirement and safe restart/Config handoff before one user-facing test package. [PROJECT_STATE](PROJECT_STATE.md) owns facts and [START_HERE](START_HERE.md) owns the exact next action. Per-revision measurements and CI receipts belong to the [v0.6.x ledger](history/current/v0.6.x.md).
 
 | Stage | Bounded result | Status |
 |---|---|---|
 | P0 | Nonactivating native observer feasibility and generation attribution | Completed within recorded scope |
 | P1 | One domain policy, strict IDNA and offline ICANN+PRIVATE PSL | Completed |
-| P2 | Durable queue and native cron/configd worker with real owner, FD drain and generation proof | Partial: P2a–P2e source/proof; offline native builder qualified; observer/schema-2/owned writes remain |
+| P2 | Durable queue and true configd minute, original FD9 owner, FD drain, P1+ACK, continuous bounded source | Integrated minute code prepared; active observer/generation-safe unlimited source not yet implemented |
 | P3 | Auto-owned destination lists, obsolete-path retired in `_30`, and native reload | Partial: obsolete path code retired; active worker/destination provenance and reload open |
-| P4 | Editable Auto Hostlist and independent scheduled restart in native Advanced Mode | Open |
+| P4 | Editable Auto Hostlist and independent scheduled restart in native Advanced Mode | Existing editor done; Advanced-only saved-model / fixed-calendar RUNNING-only Auto Restart source added to one development branch; native acceptance pending |
 | P5 | Proportionate source/native checks, exact testing package and owner acceptance | Open |
 
 ## Completed lifetime path

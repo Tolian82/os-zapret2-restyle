@@ -1392,6 +1392,67 @@ shared_apply_wan_save_service()
     esac
 }
 
+# A periodic RESTART is an explicit saved preference, not a 60-second
+# Auto-detect maintenance operation. The parent already holds original FD9;
+# do not reacquire it and do not start a stopped appliance from a cron tick.
+shared_apply_auto_restart_tick_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in hourly|daily|weekly|monthly) ;; *) return 64 ;; esac
+    _auto_restart_due="$1"
+    # Config is always the authority, never a cron argument or environment.
+    # An absent/stopped common owner means no involuntary engine startup.
+    if ! shared_apply_has_record_service; then
+        printf '%s\n' auto-restart=inactive
+        return 0
+    fi
+    _auto_restart_owner=$(shared_apply_inspect_service) || return 69
+    case "$_auto_restart_owner" in
+        committed\ *) ;;
+        none|restored)
+            printf '%s\n' auto-restart=inactive
+            return 0
+            ;;
+        *) return 69 ;;
+    esac
+    [ -x /usr/local/bin/php ] || return 69
+    _auto_restart_preference=$(/usr/local/bin/php \
+        "$SCRIPT_DIR/shared_apply_config.php" auto-restart) || return 69
+    case "$_auto_restart_preference" in
+        0:*|1:off)
+            printf '%s\n' auto-restart=disabled
+            return 0
+            ;;
+        1:hourly|1:daily|1:weekly|1:monthly) ;;
+        *) return 69 ;;
+    esac
+    [ "$_auto_restart_preference" = "1:$_auto_restart_due" ] || {
+        printf '%s\n' auto-restart=not-due
+        return 0
+    }
+    # The existing status observer proves BOTH current native dvtws2 and
+    # original monitor/kernel ownership. Stopped must never turn into ON.
+    _auto_restart_status_rc=0
+    _auto_restart_status=$(shared_apply_status_observe_service) || _auto_restart_status_rc=$?
+    case "$_auto_restart_status:$_auto_restart_status_rc" in
+        ready:0) ;;
+        stopped:2)
+            printf '%s\n' auto-restart=stopped
+            return 0
+            ;;
+        *) return 69 ;;
+    esac
+    extra_resources_block_pending_start_service || return 69
+    # WAN-first BEFORE the scheduled stop: never tear down a working
+    # service only to discover that its selected WAN cannot be started.
+    wan_first_service require || return $?
+    shared_apply_stop_service "$_auto_restart_owner" || return 70
+    # This is the user-authorized normal restart, with original FD9 and
+    # same rollback-aware common boot. No custom process/IPFW manipulation.
+    shared_apply_boot_service "$_auto_restart_owner" || return 70
+    printf '%s\n' auto-restart=completed
+}
+
 # One indivisible FD9 entrypoint for the EXISTING Voice and Strategies
 # Apply buttons: stage → installed native template → full release →
 # seal → native Config/runtime/IPFW transaction, all under the same lock.
@@ -2368,6 +2429,9 @@ service_dispatch()
         restart)
             reconfigure_service
             ;;
+        auto-restart-tick)
+            shared_apply_auto_restart_tick_service "${2:-}"
+            ;;
         status)
             shared_apply_status_service
             ;;
@@ -2637,7 +2701,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
+            start|restart|reconfigure|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -2768,6 +2832,12 @@ service_with_lifecycle_lock()
                 fi
                 preflight_shared_apply_journal || return 69
                 ;;
+            auto-restart-tick)
+                # The tick itself checks the persisted OPNsense model and
+                # complete RUNNING status; never use legacy fallback.
+                [ "$#" -eq 2 ] || return 64
+                case "$2" in hourly|daily|weekly|monthly) ;; *) return 64 ;; esac
+                ;;
             telegram-voice-enable|telegram-voice-disable)
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
@@ -2834,7 +2904,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

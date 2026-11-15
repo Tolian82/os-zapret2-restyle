@@ -13,7 +13,7 @@ namespace OPNsense\Zapret\Api;
 final class StrategySettingsPayload
 {
     private const FIELDS = [
-        'general' => ['enabled', 'waninterface', 'divertport'],
+        'general' => ['enabled', 'waninterface', 'divertport', 'autorestart'],
         'strategy' => ['trafficargs', 'extraargs'],
         'hostlist' => [
             'mode', 'youtubedomains', 'telegramips',
