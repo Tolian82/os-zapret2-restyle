@@ -973,6 +973,11 @@ class OriginalV2PrepareTests(unittest.TestCase):
                         self.proof, first, cp, self.writer,
                         attest=self.attest, inspect=self.drained)
             self.assertFalse(first.exists())
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\none.example.com\n")
+            # GUI deletion after the durable checkpoint must survive
+            # post-unlink ACK replay; the old event is not re-applied.
+            self.auto.write_text("!manual.invalid\n")
             self.emit("two.example.com")
             live = self.queue.inbox.stat().st_ino
             with self.assertRaisesRegex(OriginalV2PrepareRefused, "unacknowledged_pending_needs_original_ack"):
@@ -990,12 +995,11 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertIsNone(self.chain.tip(self.proof).open_folder)
             self.assertEqual(self.queue.inbox.stat().st_ino, live)
             self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
-            self.assertEqual(self.auto.read_text(),
-                             "!manual.invalid\none.example.com\n")
+            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
             second = self.stage()
             self.commit_and_ack(second, "two.example.com")
             self.assertEqual(self.auto.read_text(),
-                             "!manual.invalid\none.example.com\ntwo.example.com\n")
+                             "!manual.invalid\ntwo.example.com\n")
 
     def test_missing_pending_without_checkpoint_cannot_infer_ack(self):
         self.emit("one.example.com")
