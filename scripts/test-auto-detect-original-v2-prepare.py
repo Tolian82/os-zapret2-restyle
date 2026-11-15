@@ -408,6 +408,39 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
         self.assertEqual(previous.read_bytes().count(b"adding to "), 1)
 
+    def test_original_prepared_checkpoint_after_debug_cut_replays_only_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            folder = self.chain.tip(self.proof).open_folder
+            intent = (folder / "intent.json").read_bytes()
+            cp = self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained)
+            archive = self.debug.with_name("prior-checkpoint-native-debug")
+            prepared = self.debug.with_name(".prepared-next-native-debug")
+            prepared.write_bytes(b"")
+            prepared.chmod(0o600)
+            os.link(self.debug, archive)
+            os.replace(prepared, self.debug)
+            self.auto.write_text("!manual.invalid\n")
+            self.assertEqual(self.stage(), pending)
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertEqual((folder / "intent.json").read_bytes(), intent)
+            self.assertEqual(self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained), cp)
+            self.assertTrue(self.chain.acknowledge(
+                self.proof, pending, cp, self.writer,
+                attest=self.attest, inspect=self.drained))
+            self.assertFalse(pending.exists())
+            self.assertFalse(self.chain.tip(self.proof).raw_first)
+            self.assertGreater(self.chain.tip(self.proof).cursor.offset, 0)
+        self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
+        self.assertEqual(archive.read_bytes().count(b"adding to "), 1)
+
     def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
