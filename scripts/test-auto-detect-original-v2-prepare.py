@@ -115,7 +115,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
         live_before = self.queue.inbox.stat()
         with self.queue.exclusive():
             with self.assertRaisesRegex(
-                OriginalV2PrepareRefused, "unresolved_original_pending_not_idle"
+                OriginalV2PrepareRefused, "empty_original_pending_not_accepted"
             ):
                 self.stage()
             self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
