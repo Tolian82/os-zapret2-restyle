@@ -855,6 +855,35 @@ shared_apply_inspect_service()
 # Stop exactly the committed common owner, using the original FD9 lifecycle.
 # Native Config and the durable committed owner stay unchanged: start can
 # bring the same sealed release back, without legacy fallback or a new Apply.
+# Only after an explicit shared Stop removed the old engine AND scoped
+# divert rules. Every pass uses the same FD9 → original P2a queue → native
+# Config/P1 → durable cursor ACK. A crash can resume through stopped epoch.
+# No minute tick ever calls this and no traffic engine is signaled by it.
+shared_apply_retire_stopped_original_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ -x "$PYTHON_RUNTIME" ] || return 70
+    _shared_retire_round=0
+    while [ "$_shared_retire_round" -lt 16 ]; do
+        _shared_retire_result=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retire-once) || return 70
+        case "$_shared_retire_result" in
+            auto-detect-retire=processed)
+                _shared_retire_round=$((_shared_retire_round + 1))
+                ;;
+            auto-detect-retire=idle)
+                return 0
+                ;;
+            *)
+                return 70
+                ;;
+        esac
+    done
+    # Bounded work, never a fabricated successful Stop. The old journal,
+    # queue, raw and checkpoint remain intact for the next FD9 retry.
+    return 70
+}
+
 shared_apply_stop_service()
 {
     [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || return 64
@@ -897,6 +926,20 @@ shared_apply_stop_service()
     else
         [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
     fi
+    # Classify the old original observer by the SEALED runtime, not by a
+    # user toggle or the presence of a possibly missing PID file.
+    _shared_stop_observer=0
+    if [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
+        _shared_stop_observer=1
+    elif /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' \
+        "$ACTIVE_DIR/dvtws.args"; then
+        return 69
+    else
+        _shared_stop_grep_status=$?
+        [ "$_shared_stop_grep_status" -eq 1 ] || return 69
+    fi
     # A missing PID file is not evidence of an empty engine inventory.
     # The same exact-binary census already protects common Apply.
     _apply_engine="$_shared_stop_engine"
@@ -905,15 +948,27 @@ shared_apply_stop_service()
         # An already stopped common runtime is idempotent only with an
         # empty, independently verified plugin-owned kernel range.
         firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
+        if [ "$_shared_stop_observer" = 1 ]; then
+            shared_apply_retire_stopped_original_service || return 70
+        fi
         printf "native-common-stopped=%s\n" "$_shared_stop_id"
         return 0
     fi
     # Verify the exact installed owner BEFORE stopping its process.
     firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
-    # P2: never stop a live schema-2 observer until its old-generation
-    # durable raw/debug/pending handoff has been qualified under original FD9.
+    # A live original observer may be stopped ONLY with its existing
+    # immutable postlaunch PID/birth epoch already verified. The later
+    # post-Stop path checks exact old owner again with NO live dvtws2.
+    # Normal Stop remains an explicitly requested engine transition, never
+    # a minute-worker rotation or periodic packet pause.
     if [ "$_shared_stop_engine" = 1 ]; then
-        apply_runtime_observer_retirement_preflight || return 69
+        if [ "$_shared_stop_observer" = 1 ]; then
+            _shared_stop_epoch=$("$PYTHON_RUNTIME" \
+                "$BACKEND_DIR/auto_detect_minute.py" --pre-retire) || return 69
+            [ "$_shared_stop_epoch" = auto-detect-retire=original-running-attested ] || return 69
+        else
+            apply_runtime_observer_retirement_preflight || return 69
+        fi
     fi
     # supervisor_stop_one unlinks a PID file after signaling even if the
     # original process remains alive. Pin its exact old identity so Stop
@@ -955,6 +1010,9 @@ shared_apply_stop_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$ACTIVE_DIR" - || return 70
+    if [ "$_shared_stop_observer" = 1 ]; then
+        shared_apply_retire_stopped_original_service || return 70
+    fi
     printf "native-common-stopped=%s\n" "$_shared_stop_id"
 }
 # Reapply the saved COMMON candidate after reboot, without changing Config.
