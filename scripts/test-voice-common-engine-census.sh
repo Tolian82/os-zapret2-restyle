@@ -83,6 +83,10 @@ echo 'PASS: orphan, duplicate, stale and missing-process-inventory refusal'
 # not a text grep or an independent reimplementation of the decision.
 SERVICE="$ROOT/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 sed -n '/^shared_apply_stop_service()$/,/^}$/p' "$SERVICE" > "$TMP/stop.sh"
+# The production Stop now invokes the exact original observer-retirement
+# classifier. Include its genuine shell implementation in this source-mount
+# test instead of stubbing away its safety decision.
+sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$SOURCE" >> "$TMP/stop.sh"
 sh -n "$TMP/stop.sh" || fail "invalid common Stop function"
 . "$TMP/stop.sh"
 QUERY_FAIL=0; export QUERY_FAIL
