@@ -8,6 +8,9 @@ on:
       - src/opnsense/scripts/OPNsense/Zapret/backend/voice_release_stage.py
       - scripts/test-p2e-original-shared-build.py
       - scripts/test-auto-detect-storage.py
+      - scripts/test-auto-detect-storage-lifetime.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_original_v2_prepare.py
+      - src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_epoch_receipts.py
       - scripts/test-p2i-original-preview-native.py
       - scripts/test-auto-detect-post-drop.py
       - scripts/test-auto-detect-fd9-launch.sh
@@ -102,6 +105,11 @@ jobs:
                 raise SystemExit("P2E_REFUSED_NOT_ROOT_FREEBSD")
             PY
             PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-p2e-original-shared-build.py
+            # Run the already-approved uninterrupted debug-only 2-MiB cut
+            # and completed-history GC regressions against genuine FreeBSD
+            # inode, nlink, fsync and atomic rename semantics. Owner/P2b FD
+            # hooks remain isolated fixtures here; do not claim live engine.
+            PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-auto-detect-storage-lifetime.py
             GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
             # P2k8g: qualify the real ORIGINAL OPNsense Config handle and
@@ -155,6 +163,7 @@ jobs:
         shell: bash
         run: |
           echo P2E_SCOPE=ORIGINAL_SHARED_GENERATOR_NATIVE_FREEBSD_DISPOSABLE_OFFLINE_MAP_ONLY
+          echo P2_STORAGE_LIFETIME_SCOPE=NATIVE_FREEBSD_FILESYSTEM_ONLY_NO_REAL_ENGINE_FD_OR_IPFW_CLAIM
           echo P2G_SCOPE=DISPOSABLE_FREEBSD_NOBODY_FILE_ACCESS_AND_DURABLE_QUEUE_PERMISSIONS
           echo P2I_SCOPE=ORIGINAL_GENERATOR_PINNED_DVTWS2_LIVE_MIDCUT_AND_SEQUENTIAL_DISPOSABLE_STOPPED_CUT
           echo P2K8G_SCOPE=DISPOSABLE_NATIVE_ORIGINAL_CONFIG_FD_PHP_PARENT_DEATH_AND_EARLY_UNLOCK_REFUSAL
