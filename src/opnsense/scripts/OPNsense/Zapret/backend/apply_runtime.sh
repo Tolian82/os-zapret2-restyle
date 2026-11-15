@@ -254,6 +254,19 @@ apply_runtime_observer_previous_preflight()
 {
     [ "$#" -eq 0 ] || return 64
     case "${_apply_engine:-}" in 0|1) ;; *) return 69 ;; esac
+    if [ "$_apply_engine" = 0 ] &&
+       { [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+         [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; }; then
+        # One completed original Stop may authorize a DIFFERENT new Apply
+        # generation. The existing old epoch must durably prove all pending
+        # data ACKed and old inodes archived; both original FD9 and the old
+        # process-free journal are rechecked, including the single prepared/
+        # activating predecessor before ACTIVE_DIR is replaced.
+        _apply_retired_ready=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready) || return 69
+        [ "$_apply_retired_ready" = auto-detect-retire=ready ] || return 69
+        return 0
+    fi
     if [ "$_apply_engine" = 1 ] ||
        [ -e "$ACTIVE_DIR/dvtws.args" ] ||
        [ -L "$ACTIVE_DIR/dvtws.args" ] ||
