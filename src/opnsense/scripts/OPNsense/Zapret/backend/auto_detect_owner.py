@@ -303,7 +303,8 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
 
 def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                          child_pidfile: Path, monitor_pidfile: Path,
-                         epoch_root: Path, runner, owner_uid: int) -> GenerationProof:
+                         epoch_root: Path, runner, owner_uid: int,
+                         allow_transition: bool = False) -> GenerationProof:
     """Attest the SAME immutable original owner after its process has exited.
 
     This is a strict FD9-only *stopped* counterpart to the running P2c
@@ -316,9 +317,17 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
     from auto_detect_fd import _START
 
     record = SharedApplyOperation(journal, owner=owner_uid).read()
-    if record is None or record["phase"] != "committed":
+    if record is None:
         raise GenerationRefused("stopped_original_committed_owner_required")
-    owner = committed_owner(record)
+    if record["phase"] == "committed":
+        owner = committed_owner(record)
+    elif allow_transition and record["phase"] in ("prepared", "activating"):
+        # The SAME journal pins one retired predecessor before swapping the
+        # old active tree. Never accept a guessed historical epoch or a
+        # replacement that already passed activation.
+        owner = record.get("previous")
+    else:
+        raise GenerationRefused("stopped_original_committed_owner_required")
     if owner is None or not HEX32.fullmatch(owner["id"]) or not HEX64.fullmatch(owner["candidate"]):
         raise GenerationRefused("missing_stopped_original_owner")
     work = work_root / owner["id"]
@@ -404,6 +413,37 @@ def attest_stopped_generation(*,
     except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("stopped_original_owner_not_attested") from exc
+
+
+
+def attest_retiring_predecessor(*,
+                               journal: Path = Path("/var/db/zapret2/shared-apply"),
+                               work_root: Path = WORK,
+                               active: Path = COMMON_ACTIVE,
+                               child_pidfile: Path = CHILD_PID,
+                               monitor_pidfile: Path = MONITOR_PID,
+                               epoch_root: Path = Path("/var/db/zapret2/auto-detect-epochs"),
+                               runner=subprocess.run) -> GenerationProof:
+    """Read-only retired-previous proof before a fresh original Apply swap.
+
+    In prepared/activating the original journal has ONE exact old committed
+    predecessor. Its sealed old PID/birth/epoch are independently checked
+    again, with zero actual engines. Never authorize a new incarnation as
+    the same old owner, nor use this after activation changes ACTIVE_DIR.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("root_freebsd_retirement_only")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        return _attest_stopped_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            epoch_root=epoch_root, runner=runner, owner_uid=0,
+            allow_transition=True)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
+            SharedOperationError, SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("retiring_previous_generation_not_attested") from exc
 
 
 def main() -> int:
