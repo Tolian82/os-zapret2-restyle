@@ -1137,11 +1137,10 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=runtime-preflight
         return 0
     fi
-    # The original probe is read-only and also serves idempotent Boot; only
-    # a real replacement Apply needs this extra old-owner retirement gate.
+    # Both RUNNING and STOPPED previous observers may retain old raw/debug.
     # Refuse BEFORE writing prepared/activating, not after replacing the tree.
-    if [ "$_apply_engine" = 1 ] &&
-       ! apply_runtime_observer_retirement_preflight; then
+    # A healthy ordinary predecessor passes this read-only safety check.
+    if ! apply_runtime_observer_previous_preflight; then
         printf '%s\\n' preflight-rejected=runtime-preflight
         return 0
     fi
