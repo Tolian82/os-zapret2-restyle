@@ -130,13 +130,31 @@ if apply_runtime_observer_retirement_preflight; then
     fail "OLD_SYMLINKED_MAP_RETIREMENT_NOT_BLOCKED"
 fi
 rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+# STOPPED old native observer remains old-owned even with no live PID.
+_apply_engine=0
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
+apply_runtime_observer_previous_preflight ||
+    fail "STOPPED_ORDINARY_PREDECESSOR_REFUSED"
+printf '%s\n' '--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt' > "$ACTIVE_DIR/dvtws.args"
+if apply_runtime_observer_previous_preflight; then
+    fail "STOPPED_OLD_NATIVE_OBSERVER_NOT_REFUSED"
+fi
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
+printf '%s\n' '{}' > "$ACTIVE_DIR/auto-detect-generation.json"
+if apply_runtime_observer_previous_preflight; then
+    fail "STOPPED_OLD_GENERATION_MAP_NOT_REFUSED"
+fi
+rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+apply_runtime_observer_previous_preflight ||
+    fail "CLEAN_STOPPED_PREDECESSOR_REFUSED"
+printf 'P2_STOPPED_OLD_GENERATION_PREJOURNAL=PASS\n'
 APPLY_SOURCE="$TOP/src/opnsense/scripts/OPNsense/Zapret/backend/apply_runtime.sh"
 SERVICE_SOURCE="$TOP/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 sed -n '/^apply_runtime_preflight()/,/^}/p' "$APPLY_SOURCE" |
-    grep -Fq 'apply_runtime_observer_retirement_preflight' ||
+    grep -Fq 'apply_runtime_observer_previous_preflight' ||
     fail "NATIVE_ACTIVATE_MISSING_OLD_GENERATION_GUARD"
 sed -n '/^shared_apply_execute_service()/,/^}/p' "$SERVICE_SOURCE" |
-    grep -Fq 'apply_runtime_observer_retirement_preflight' ||
+    grep -Fq 'apply_runtime_observer_previous_preflight' ||
     fail "SHARED_APPLY_MISSING_PRE_JOURNAL_GUARD"
 sed -n '/^shared_apply_stop_service()/,/^}/p' "$SERVICE_SOURCE" |
     grep -Fq 'apply_runtime_observer_retirement_preflight' ||
