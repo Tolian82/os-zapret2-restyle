@@ -13,12 +13,19 @@ cat > "${PYTHON_RUNTIME}" <<'MOCKPY'
 MOCKPY
 chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
+# Test the actual non-observer preflight called during a cold Boot; it
+# refuses spoofed old observer metadata and never pauses the native engine.
+sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/boot.sh"
+sed -n '/^apply_runtime_observer_previous_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/boot.sh"
 sh -n "$ROOT/boot.sh" || fail "boot shell syntax"
 . "$ROOT/boot.sh"
 ID=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 mkdir -p "$ROOT/work/release" "$ROOT/active"
 ACTIVE_DIR="$ROOT/active"
+# The sealed ordinary release has native argv even if stopped.
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
 CHILD_PIDFILE="$ROOT/child.pid"
 SUPERVISOR_MONITOR_PIDFILE="$ROOT/supervisor.pid"
 LOG="$ROOT/steps.log"
@@ -53,6 +60,12 @@ apply_runtime_probe() {
   echo probe:$2 >> "$LOG"
   [ "$PROBE_OK" -eq 1 ] && [ "$POST_PROBE_DRIFT" -eq 0 ]
 }
+apply_runtime_attest_engine_inventory() {
+  [ "$_apply_engine" -eq "$ENGINE" ]
+}
+# The fixture models an already-loaded, owned IPFW kernel; no implicit
+# cold-module bootstrap is under test in this shell-only matrix.
+shared_apply_ipfw_kernel_absent_service() { return 1; }
 reset() {
   GUARD=0; SEAL=0; CONFIG=0; ACTIVE=0; COMMIT=0
   ENGINE=0; MONITOR=0; TREE_OK=1; PROBE_OK=1; BOOT_ENABLED=1
