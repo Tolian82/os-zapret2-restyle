@@ -1,7 +1,7 @@
 # Owner / assistant chat rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-10-18
+**Updated:** 2026-11-15
 
 This file is the single normative home for owner-approved rules about how the assistant interprets the owner's words and communicates or acts from project chat.
 
@@ -41,7 +41,7 @@ CHAT-012. **`Продолжаем` means continue from the committed handoff whe
 
 CHAT-013. **Do not ask the owner to repeat information recoverable from the repository, current CI/logs, supplied files, or safe read-only inspection.** Read the available authority first.
 
-CHAT-014. **Ask only at a real owner decision boundary.** If ambiguity cannot be resolved safely from current canon, source, or evidence and materially changes product direction or owner-controlled policy, present one concise consolidated question with evidence and a recommendation.
+CHAT-014. **If unsure about a decision, approach, or choice, ask the owner before acting.** First consult the current approved specification, ordered plan, canonical rules, and available evidence. If a decision, technical approach, or choice remains genuinely uncertain, do not choose silently, invent approval, or implement a plausible alternative: present one concise question to the owner with the relevant options and consequences, then follow the answer. Do not repeatedly ask about a decision already resolved by current authority or an ordinary implementation step already authorized. This is the owner-decision boundary for `DEV-063`.
 
 ## Package and release shorthand
 
@@ -94,6 +94,7 @@ pkg info -x os-zapret2-restyle
 | `CHAT-009` | `DOC-003`, `DOC-008`, `DEV-003` |
 | `CHAT-010` | `GH-010`–`GH-030` |
 | `CHAT-012` | `DOC-021`, `DOC-025`, `GH-004` |
+| `CHAT-014` | `DEV-063` |
 | `CHAT-015` | `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 | `CHAT-016` | `DEV-040`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 | `CHAT-017` | `DEV-039`, `GH-039`–`GH-052` |
@@ -112,6 +113,7 @@ pkg info -x os-zapret2-restyle
 | `CHAT-007` | `DEV-001` |
 | `CHAT-009` | `DEV-001` |
 | `CHAT-010` | `GH-029` |
+| `CHAT-014` | `DEV-063` |
 | `CHAT-015` | `DEV-040`, `GH-034`, `GH-060` |
 | `CHAT-016` | `DEV-040`, `GH-034`, `GH-060` |
 | `CHAT-017` | `DEV-039`, `GH-039` |

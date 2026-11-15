@@ -2,16 +2,18 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current source increment: **`v0.6.5_68`** (`VERSION=0.6.5`, `PLUGIN_REVISION=68`; prospective `os-zapret2-restyle-0.6.5_68.pkg` **NOT PUBLISHED**). #1052 P2k8q3f2b adds a second actual RUNNING debug inode cut and native real-IPFW HTTP witness to the same disposable P2i suite, with a test-only schema-2 pretraffic projection sealed under original FD9 before launch, true physical native raw P2a pending, original v2 per-slot destination checkpoint+ACK, all-PID old FD BUSY refusal and injected post-retirement ENOSPC recovery. One separate unknown after the second cut is kept and ACKed; a third cut without cursor anchor still refuses. This **isolated native test** is neither installed original shared Config/P1 GUI authorization nor a real physical disk-full/reboot test; the 4 MiB raw/debug lifetime, 512-step journal and historical process generations remain blocked. ACTIVE native observer/cron OFF; original stable installed `os-zapret2-restyle-0.6.5_1.pkg` untouched. [Exact scope](verification/P2K8Q3F2B_NATIVE_SECOND_SOURCE_CUT.md).
+Current source increment: **`v0.6.5_69`** (governance-only source revision on `main`; no product behavior change). The owner has made **`DEV-063`** mandatory: implement the approved specification in the approved plan order under canonical rules, without opening side projects for each technical obstacle; unresolved doubt about a decision, approach or choice must be raised **before implementation** through `CHAT-014`. This rule alignment does not qualify or activate #1052. Previous production/native evidence remains `_68`.
+
+Previous product-source boundary: **`v0.6.5_68`** (`VERSION=0.6.5`, `PLUGIN_REVISION=68`; prospective `os-zapret2-restyle-0.6.5_68.pkg` **NOT PUBLISHED**). #1052 P2k8q3f2b adds a second actual RUNNING debug inode cut and native real-IPFW HTTP witness to the same disposable P2i suite, with a test-only schema-2 pretraffic projection sealed under original FD9 before launch, true physical native raw P2a pending, original v2 per-slot destination checkpoint+ACK, all-PID old FD BUSY refusal and injected post-retirement ENOSPC recovery. One separate unknown after the second cut is kept and ACKed; a third cut without cursor anchor still refuses. This **isolated native test** is neither installed original shared Config/P1 GUI authorization nor a real physical disk-full/reboot test; the 4 MiB raw/debug lifetime, 512-step journal and historical process generations remain blocked. ACTIVE native observer/cron OFF; original stable installed `os-zapret2-restyle-0.6.5_1.pkg` untouched. [Exact scope](verification/P2K8Q3F2B_NATIVE_SECOND_SOURCE_CUT.md).
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=68`; disposable native P2i second source cut/ACK proof candidate; installed/long-term rollover blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=69`; governance-only update; P2i product evidence remains `_68`, observer/long-term rollover blocked | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_68.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_69.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

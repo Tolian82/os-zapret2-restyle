@@ -1,7 +1,7 @@
 # Project development rules
 
 **Status:** CANONICAL · MANDATORY LEVEL 1
-**Updated:** 2026-11-12
+**Updated:** 2026-11-15
 
 This file is the single normative home for owner-approved rules, principles, and assertions governing how the project itself is designed, changed, verified, versioned, and released as a product.
 
@@ -154,6 +154,8 @@ DEV-061. **Verification is a bounded means to deliver an accepted result, not an
 
 DEV-062. **Test real user journeys before internal breadth, with an observable red→green result.** Every user-visible or Config/transport change starts with a written shortest complete journey from the real input and native Model through Python validation, request transport, original FD9/Config owner and the consumed output (HOSTLIST/strategy/GUI), with at least one realistic boundary/invalid case. Reproduce every known relevant owner failure on the pre-fix code with a short test that truly fails; fix the cause, then run the identical test on the candidate until it passes. When a step genuinely needs OPNsense/Chromium, keep its installed evidence separate from portable checks. A successful isolated parser, mock, packaging job, synthetic read-only probe or native engine dry-run cannot be presented as successful UI Apply/save. The first automated gate is the cheapest actual changed-path journey; an unknown or safety-critical path retains fail-closed qualified checks. Track what bug the test would catch, what result it decides, scope, elapsed CI time and reused evidence. If the test cannot demonstrate a credible user-visible failure or safety invariant, do not make it an automatic blocking gate; retain optional historical matrices for explicit risk/acceptance/manual use. Follow the permanent GitHub routing contract `GH-072`.
 
+DEV-063. **The approved specification, ordered plan, and canonical rules govern delivery; do not create side projects from technical difficulties.** The owner's current approved specification defines **what** to deliver, the approved plan defines **the sequence**, and the canonical rules govern **how** to implement and verify it. Work toward the observable accepted result using the existing architecture and the smallest necessary same-scope correction; a discovered obstacle is not permission to start a separate subsystem, speculative safety mechanism, open-ended test campaign, documentation project, or competing implementation. Propose an actually necessary change of scope or approach with its evidence and impact, but do not implement it as an assumed prerequisite. **If a decision, approach, or choice remains uncertain after checking the approved authority and evidence, ask the owner before acting on that uncertainty under `CHAT-014`; never silently guess or substitute a plausible personal preference.** Do not ask again for settled decisions or ordinary already-authorized steps.
+
 ## Cross-reference registry
 
 ### Outbound references
@@ -171,6 +173,7 @@ DEV-062. **Test real user journeys before internal breadth, with an observable r
 | `DEV-040` | `CHAT-015`, `CHAT-016`, `CHAT-027`, `GH-034`–`GH-038`, `GH-060`–`GH-061` |
 | `DEV-046` | `DOC-008`, `DOC-042`–`DOC-045` |
 | `DEV-062` | `GH-072` |
+| `DEV-063` | `CHAT-014` |
 <!-- RULE-XREF-OUT-END -->
 
 ### Inbound references
@@ -203,6 +206,7 @@ DEV-062. **Test real user journeys before internal breadth, with an observable r
 | `DEV-040` | `CHAT-016`, `GH-005`, `GH-060` |
 | `DEV-042` | `CHAT-021` |
 | `DEV-061` | `GH-069` |
+| `DEV-063` | `CHAT-014` |
 | `DEV-062` | `GH-072` |
 <!-- RULE-XREF-IN-END -->
 
