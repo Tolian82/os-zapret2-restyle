@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import time
 import sys
 import xml.etree.ElementTree as ET
 
@@ -57,7 +58,18 @@ def native():
         return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
 
     def under_fd9_snapshot():
-        h.hold_fd9()
+        # Real configd Start/cron may temporarily hold the SAME original
+        # FD9. Mirror the existing service's 30-second bounded contention
+        # window: never bypass the lock or treat BUSY as a successful proof.
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                h.hold_fd9()
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("P5C_REFUSED:original_FD9_busy_after_30s") from None
+                time.sleep(0.25)
         try:
             return h.snapshot()
         finally:

@@ -819,7 +819,8 @@ class OriginalV2PrepareTests(unittest.TestCase):
                     self.assertEqual(self.debug.read_bytes(), b"")
                     self.assertEqual(self.queue.segments(), [])
                     prior_archive = archived.stat().st_ino
-        self.assertEqual(self.chain.tip(self.proof).next_sequence, 4)
+        with self.queue.exclusive():
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 4)
         for number in range(1, 5):
             self.assertIn(f"repeated-{number}.example.com\n", self.auto.read_text())
 

@@ -97,11 +97,20 @@ def hold_fd9():
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if fd != 9:
             os.dup2(fd, 9, inheritable=True)
-    finally:
+    except BaseException:
+        # A transiently busy original lifecycle lock must NOT leak fd=9
+        # when the next test attempt retries the exact same native inode.
+        os.close(fd)
+        raise
+    else:
         if fd != 9:
             os.close(fd)
     from voice_ipfw_adapter import require_lifecycle_lock
-    require_lifecycle_lock()
+    try:
+        require_lifecycle_lock()
+    except BaseException:
+        os.close(9)
+        raise
 
 
 def preview_check(builder, label, candidate, expected_engine=None):
