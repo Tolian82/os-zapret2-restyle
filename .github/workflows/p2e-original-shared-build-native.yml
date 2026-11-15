@@ -109,7 +109,12 @@ jobs:
             # and completed-history GC regressions against genuine FreeBSD
             # inode, nlink, fsync and atomic rename semantics. Owner/P2b FD
             # hooks remain isolated fixtures here; do not claim live engine.
-            PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-auto-detect-storage-lifetime.py
+            # Same real /var/run lifecycle lock and FD9 as zapret_service.sh;
+            # the archive GC test must NOT bypass native root ownership.
+            (
+              /usr/bin/lockf -s -t 30 9
+              PYTHONDONTWRITEBYTECODE=1 /usr/local/bin/python3 scripts/test-auto-detect-storage-lifetime.py
+            ) 9>/var/run/zapret2-lifecycle.lock
             GITHUB_ACTIONS=true ZAPRET2_P2G_DISPOSABLE_NATIVE=1 PYTHONDONTWRITEBYTECODE=1 \
               /usr/local/bin/python3 scripts/test-auto-detect-storage.py --native
             # P2k8g: qualify the real ORIGINAL OPNsense Config handle and
