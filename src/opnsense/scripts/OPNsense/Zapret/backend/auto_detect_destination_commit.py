@@ -22,6 +22,7 @@ from auto_detect_queue import DurableInbox
 
 MAX_TARGET = 4 * 1024 * 1024
 HOST = re.compile(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class DestinationRefused(ReceiptRefused):
@@ -151,6 +152,73 @@ def exclusive_destination_lock(gui_lock: Path, owner_uid: int):
         os.close(fd)
 
 
+def qualified_destination_plan(folder: Path, intent: dict, uid: int,
+                               targets: dict[str, Path] | None = None
+                               ) -> tuple[dict, bytes]:
+    """Verify the ONE immutable original plan, including pre-write inodes.
+
+    Schema 2 was chosen for the current dormant journal, not as a legacy
+    migration. A preimage identity must already exist INSIDE the original
+    plan before the first physical destination write; replay cannot invent
+    the identity after a GUI edit or a partial crash.
+    """
+    journal = folder / "destination"
+    _directory(journal, uid)
+    names = set(os.listdir(journal))
+    if names - {"plan.json", "checkpoint.json"} or "plan.json" not in names:
+        raise DestinationRefused("missing_or_foreign_destination_plan")
+    plan_raw = _read(journal / "plan.json", uid)
+    try:
+        plan = json.loads(plan_raw)
+    except (ValueError, UnicodeError) as exc:
+        raise DestinationRefused("corrupt_destination_plan") from exc
+    expected = {
+        "schema": 2, "kind": "durable-destination-plan",
+        "generation": intent["generation"],
+        "pending_name": intent["pending_name"],
+        "pending_sha256": intent["pending_sha256"],
+        "evidence": intent["evidence"],
+        "debug_end_offset": intent["debug_end_offset"],
+        "debug_end_sha256": intent["debug_end_sha256"],
+    }
+    if (not isinstance(plan, dict) or
+            set(plan) != set(expected) | {"writes"} or
+            any(plan.get(k) != v for k, v in expected.items()) or
+            not isinstance(plan.get("writes"), dict) or
+            len(plan["writes"]) > 16 or
+            (targets is not None and set(plan["writes"]) - set(targets))):
+        raise DestinationRefused("destination_plan_not_bound_to_original_intent")
+    for name, change in plan["writes"].items():
+        identity = {
+            "before_device", "before_inode", "before_ctime_ns",
+            "before_mtime_ns", "before_size",
+        }
+        if (not isinstance(name, str) or
+                not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}", name) or
+                not isinstance(change, dict) or
+                set(change) != {"path", "before", "after", "add", "remove"} | identity or
+                not isinstance(change.get("path"), str) or
+                not Path(change["path"]).is_absolute() or
+                (targets is not None and
+                 change["path"] != str(targets[name])) or
+                any(not isinstance(change.get(d), str) or
+                    not SHA256.fullmatch(change[d])
+                    for d in ("before", "after")) or
+                any(type(change.get(k)) is not int or change[k] < 0
+                    for k in identity) or
+                change["before_inode"] == 0 or
+                change["before_size"] > MAX_TARGET or
+                any(type(change.get(k)) is not list or
+                    len(change[k]) > 4096 or
+                    any(type(x) is not str or
+                        not HOST.fullmatch(x) or ".." in x
+                        for x in change[k])
+                    for k in ("add", "remove")) or
+                len(change["add"]) + len(change["remove"]) > 4096):
+            raise DestinationRefused("destination_preimage_plan_invalid")
+    return plan, plan_raw
+
+
 class DestinationCommit:
     """A prepared-intent journal: prepare -> per-file CAS -> checkpoint.
 
@@ -202,12 +270,18 @@ class DestinationCommit:
             writes = {}
             for name, change in sorted(effects.items()):
                 path = self.targets[name]
-                before, _ = _target(path, self.receipts.uid)
+                before, st = _target(path, self.receipts.uid)
                 after = _edit(before, change["add"], change["remove"])
-                writes[name] = {"path": str(path), "before": _sha(before),
-                                "after": _sha(after), "add": change["add"],
-                                "remove": change["remove"]}
-            plan = {"schema": 1, "kind": "durable-destination-plan",
+                writes[name] = {
+                    "path": str(path), "before": _sha(before),
+                    "after": _sha(after), "add": change["add"],
+                    "remove": change["remove"],
+                    "before_device": st.st_dev, "before_inode": st.st_ino,
+                    "before_ctime_ns": st.st_ctime_ns,
+                    "before_mtime_ns": st.st_mtime_ns,
+                    "before_size": st.st_size,
+                }
+            plan = {"schema": 2, "kind": "durable-destination-plan",
                     "generation": intent["generation"],
                     "pending_name": intent["pending_name"],
                     "pending_sha256": intent["pending_sha256"],
@@ -216,17 +290,8 @@ class DestinationCommit:
                     "debug_end_sha256": intent["debug_end_sha256"],
                     "writes": writes}
             _write_once(journal, "plan.json", _canonical(plan), self.receipts.uid)
-        plan_raw = _read(plan_path, self.receipts.uid)
-        try:
-            plan = json.loads(plan_raw)
-        except ValueError as exc:
-            raise DestinationRefused("corrupt_destination_plan") from exc
-        if (not isinstance(plan, dict) or plan.get("kind") != "durable-destination-plan" or
-                any(plan.get(k) != intent[k] for k in (
-                    "generation", "pending_name", "pending_sha256",
-                    "evidence", "debug_end_offset", "debug_end_sha256")) or
-                not isinstance(plan.get("writes"), dict)):
-            raise DestinationRefused("destination_plan_identity_changed")
+        plan, plan_raw = qualified_destination_plan(
+            folder, intent, self.receipts.uid, targets=self.targets)
         if checkpoint_path.exists() or checkpoint_path.is_symlink():
             checkpoint = json.loads(_read(checkpoint_path, self.receipts.uid))
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
@@ -235,19 +300,28 @@ class DestinationCommit:
                     checkpoint.get("committed_cursor_sha256") != intent["debug_end_sha256"]):
                 raise DestinationRefused("checkpoint_differs_from_plan")
             return checkpoint  # never undo later GUI deletion on acknowledged replay
+        # All-target preflight BEFORE any physical CAS replacement. A GUI
+        # delete after an earlier write can restore the original BYTE digest
+        # but not the original inode/ctime. The old content hash ALONE must
+        # never authorize putting the manually deleted row back.
+        todo = []
         for name, change in sorted(plan["writes"].items()):
-            if (name not in self.targets or change.get("path") != str(self.targets[name]) or
-                    any(k not in change for k in ("before", "after", "add", "remove"))):
-                raise DestinationRefused("destination_plan_target_changed")
             path = self.targets[name]
-            current, _ = _target(path, self.receipts.uid)
+            current, st = _target(path, self.receipts.uid)
             if _sha(current) == change["after"]:
-                continue  # completed before crash; never append twice
-            if _sha(current) != change["before"]:
-                raise DestinationRefused("destination_conflict_with_gui")
+                continue  # fully applied (or a no-op); do not rewrite it
+            if (_sha(current) != change["before"] or
+                    (st.st_dev, st.st_ino, st.st_ctime_ns,
+                     st.st_mtime_ns, st.st_size) !=
+                    (change["before_device"], change["before_inode"],
+                     change["before_ctime_ns"], change["before_mtime_ns"],
+                     change["before_size"])):
+                raise DestinationRefused("destination_gui_or_preimage_changed")
             new = _edit(current, change["add"], change["remove"])
             if _sha(new) != change["after"]:
                 raise DestinationRefused("destination_plan_diverged")
+            todo.append((path, current, new))
+        for path, current, new in todo:
             _replace(path, current, new, self.receipts.uid)
         checkpoint = {"schema": 1, "kind": "destination-and-cursor-committed",
                       "generation": intent["generation"], "pending_name": intent["pending_name"],

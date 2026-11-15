@@ -20,7 +20,8 @@ from typing import Callable
 
 from auto_detect_debug_window import (Cursor, DebugWindowRefused, MAX_DEBUG,
                                       _raw_hosts, _read_exact, propose_window)
-from auto_detect_destination_commit import DestinationCommit, DestinationRefused
+from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
+                                           qualified_destination_plan)
 from auto_detect_epoch_receipts import (EMPTY_HASH, EpochReceipts, ReceiptRefused,
                                         _canonical, _directory, _read, _sync, _write_once)
 from auto_detect_fd import FDState, probe_pending_fd
@@ -78,25 +79,8 @@ def _checkpoint(slot: Path, intent: dict, uid: int, *,
         return None
     if "plan.json" not in names:
         raise CursorChainRefused("checkpoint_without_original_plan")
-    plan, plan_raw = _load(journal / "plan.json", uid)
-    expected_plan = {
-        "schema": 1, "kind": "durable-destination-plan",
-        "generation": intent["generation"],
-        "pending_name": intent["pending_name"],
-        "pending_sha256": intent["pending_sha256"],
-        "evidence": intent["evidence"],
-        "debug_end_offset": intent["debug_end_offset"],
-        "debug_end_sha256": intent["debug_end_sha256"],
-    }
-    if (set(plan) != set(expected_plan) | {"writes"} or
-            any(plan.get(k) != v for k, v in expected_plan.items()) or
-            not isinstance(plan.get("writes"), dict)):
-        raise CursorChainRefused("checkpoint_plan_differs_from_original_intent")
-    if targets is not None and (set(plan["writes"]) - set(targets) or
-                                any(not isinstance(entry, dict) or
-                                    entry.get("path") != str(targets[key])
-                                    for key, entry in plan["writes"].items())):
-        raise CursorChainRefused("original_destination_mapping_changed")
+    plan, plan_raw = qualified_destination_plan(
+        slot, intent, uid, targets=targets)
     checkpoint, checkpoint_raw = _load(journal / "checkpoint.json", uid)
     expected = {
         "schema": 1, "kind": "destination-and-cursor-committed",
@@ -400,6 +384,20 @@ class CursorChain:
                         return tip.open_folder
                     if expected["evidence"] != "native-debug":
                         raise CursorChainRefused("different_unacknowledged_cursor_pending")
+                    # The already sealed original destination plan contains
+                    # all pre-write inode identities. Staging may read it,
+                    # but only original Config/P1 under GUI lock can decide
+                    # which exact physical writes may safely resume.
+                    journal = tip.open_folder / "destination"
+                    if journal.exists() or journal.is_symlink():
+                        qualified_destination_plan(
+                            tip.open_folder, expected, self.receipts.uid)
+                        if not _completed_debug_evidence_unchanged(
+                                proof, expected, self.receipts.uid,
+                                self.receipts.writer_gid) or attest() != proof:
+                            raise CursorChainRefused(
+                                "partial_debug_replacement_not_attested")
+                        return tip.open_folder
                     current, debug_bytes = _read_exact(
                         Path(proof.debug_path), owner_uid=self.receipts.uid,
                         writer_gid=self.receipts.writer_gid)
@@ -554,10 +552,16 @@ class CursorChain:
                 # permits an idempotent read-only return by _locked_commit.
                 completed = _checkpoint(
                     folder, intent, self.receipts.uid, targets=writer.targets)
-                if (completed is None or
-                        not _completed_debug_evidence_unchanged(
-                            proof, intent, self.receipts.uid,
-                            self.receipts.writer_gid)):
+                if completed is None:
+                    # A qualified ORIGINAL plan may be partially applied.
+                    # Source replay is never a permit to bypass current P1
+                    # or the all-target preimage GUI lock checks below.
+                    qualified_destination_plan(
+                        folder, intent, self.receipts.uid,
+                        targets=writer.targets)
+                if not _completed_debug_evidence_unchanged(
+                        proof, intent, self.receipts.uid,
+                        self.receipts.writer_gid):
                     raise CursorChainRefused("debug_changed_before_destination")
             with writer.exclusive_targets():
                 checkpoint = writer._locked_commit(folder, intent, raw, effects)
