@@ -438,7 +438,9 @@ class CursorChain:
         epoch_folder, epoch = self.receipts._epoch(proof)
         names = set(os.listdir(epoch_folder))
         if (any(n.startswith("intent-") for n in names) or "destination" in names or
-                names - {"pretraffic.json", "epoch.json", CHAIN, NEXT, OLD}):
+                names - {"pretraffic.json", "epoch.json", CHAIN, NEXT, OLD,
+                         "retired.json", "retired-inbox.txt", "retired-debug.log",
+                         "retired-debug-previous.log"}):
             raise CursorChainRefused("legacy_and_cursor_chain_cannot_mix")
         epoch_raw = _read(epoch_folder / "epoch.json", self.receipts.uid)
         root = epoch_folder / CHAIN
