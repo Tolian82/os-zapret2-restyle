@@ -323,11 +323,16 @@ def prepare_original_v2_locked(
                 not path.name.startswith(proof.generation + "-")
                 for path in pending)):
             raise OriginalV2PrepareRefused("historical_or_ambiguous_pending_retained")
-        # A pending alias with zero bytes is not a valid discovery. Refuse
-        # before the raw hardlink/replace path can detach that empty inode.
-        # The original pending remains available for explicit review.
+        # An empty hardlink on the LIVE inode is a recoverable interrupted
+        # link-before-replace, not an event to ACK. The original queue.rotate
+        # can safely drop only that redundant name while retaining the live
+        # inode, including appends that race with recovery. An independently
+        # detached empty pending is ambiguous and must stay untouched.
         if pending and pending[0].lstat().st_size == 0:
-            raise OriginalV2PrepareRefused("empty_original_pending_not_accepted")
+            item, live = pending[0].lstat(), queue.inbox.lstat()
+            if ((item.st_dev, item.st_ino) != (live.st_dev, live.st_ino) or
+                    item.st_nlink != 2 or live.st_nlink != 2):
+                raise OriginalV2PrepareRefused("empty_original_pending_not_accepted")
         # Same original FD9/P2a owner: when 512 immutable ACKed slots fill,
         # fsync and atomically publish the next exact cursor anchor rather
         # than pausing/restarting dvtws2 or discarding raw. Recover partial
@@ -335,6 +340,11 @@ def prepare_original_v2_locked(
         chain.ensure_capacity(proof, attest=attest)
         tip = chain.tip(proof)
         if tip.open_intent is not None:
+            # An immutable original prepared intent can never describe a
+            # zero-byte alias; retain it for review rather than returning
+            # idle after cleaning the duplicate name.
+            if pending and pending[0].lstat().st_size == 0:
+                raise OriginalV2PrepareRefused("empty_original_open_intent_refused")
             # A crash after physical unlink but before slot ACK must recover
             # under a separate qualified original checkpoint/Config owner.
             # This source-only staging seam may never guess a completion.
