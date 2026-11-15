@@ -205,6 +205,54 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.queue.inbox.stat().st_ino, live)
         self.assertIn("last.example.com\n", self.auto.read_text())
 
+    def test_history_reclaim_accepts_actual_native_config_ack_and_retirement(self):
+        # Empty-only history fixtures cannot establish whether a completed
+        # real P1 destination/physical ACK tree survives four-generation GC.
+        # Exercise the ACTUAL staged pending -> Config commit -> ACK and
+        # stopped inode archive under the same original queue flock.
+        self.emit("completed-history.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "completed-history.example.com")
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+            folder = self.receipts.root / self.generation
+            before = self.chain.tip(self.proof)
+            self.assertEqual(before.next_sequence, 1)
+            self.assertEqual(
+                self.receipts.prune_completed(
+                    self.queue, protect="f" * 32), 0)
+            self.assertEqual(self.chain.tip(self.proof), before)
+            self.assertTrue((folder / "retired.json").is_file())
+            self.assertIn("completed-history.example.com",
+                          self.auto.read_text())
+
+    def test_history_reclaim_refuses_tampered_actual_native_ack(self):
+        self.emit("tampered-history.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "tampered-history.example.com")
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+            folder = self.receipts.root / self.generation
+            # Alter the immutable final retirement receipt WITHOUT changing
+            # any real destination or ACK; GC must refuse all deletion.
+            retired = folder / "retired.json"
+            raw = retired.read_bytes()
+            self.assertIn(b'"last_ack_sha256"', raw)
+            retired.write_bytes(raw.replace(
+                b'"last_ack_sha256":"',
+                b'"last_ack_sha256":"0', 1))
+            with self.assertRaises(ReceiptRefused):
+                self.receipts.prune_completed(
+                    self.queue, protect="f" * 32)
+            self.assertIn("tampered-history.example.com",
+                          self.auto.read_text())
+
     def test_unacked_old_source_never_gets_retirement_receipt(self):
         self.emit("notacked.example.com")
         before = self.queue.inbox.stat().st_ino
