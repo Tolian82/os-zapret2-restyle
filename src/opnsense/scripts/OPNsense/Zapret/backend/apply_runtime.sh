@@ -248,17 +248,30 @@ apply_runtime_observer_retirement_preflight()
     return 0
 }
 
+# A stopped previous release can also retain old-generation raw/debug.
+# This read-only gate runs BEFORE the replacement Apply journal or tree swap.
+apply_runtime_observer_previous_preflight()
+{
+    [ "$#" -eq 0 ] || return 64
+    case "${_apply_engine:-0}" in 0|1) ;; *) return 69 ;; esac
+    if [ "$_apply_engine" = 1 ] ||
+       [ -e "$ACTIVE_DIR/dvtws.args" ] ||
+       [ -L "$ACTIVE_DIR/dvtws.args" ] ||
+       [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        apply_runtime_observer_retirement_preflight || return 69
+    fi
+    return 0
+}
+
 # Read-only refusal gate shared by the FD9 executor and the actual runtime
 # preflight. It never acquires a lock, writes Config, starts a process,
 # prepares pf/ipfw, or touches the durable Apply journal.
 apply_runtime_preflight()
 {
     apply_runtime_probe "$@" || return $?
-    # Guard BEFORE firewall preparation and BEFORE replacing the old tree.
-    # A prior live native observer may still have unacknowledged events.
-    if [ "$_apply_engine" = 1 ]; then
-        apply_runtime_observer_retirement_preflight || return 69
-    fi
+    # Includes a stopped predecessor with retained old-generation data.
+    apply_runtime_observer_previous_preflight || return 69
     # The actual engine activation still repeats all observations after
     # the durable "activating" record (an external actor may change IPFW).
     # Only this second phase is permitted to initialize firewall modules.
