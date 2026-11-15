@@ -46,8 +46,13 @@ def _retire_debug_archive_once(queue: DurableInbox, receipts: EpochReceipts,
                                old_path: Path, attest: Callable,
                                inspect_debug: Callable) -> None:
     """Retire ACK-proven debug archives, including repeated raw-first cuts."""
+    # Native debug is diagnostic, NOT evidence of a successful raw append.
+    # A long-lived engine can log failures for months without any raw ACK.
+    # Only when there is no open intent, no pending/live raw, the same
+    # original owner and DRAINED all-PID debug FD may that old diagnostic
+    # inode be retired; later raw evidence uses raw-first UNKNOWN fallback.
     if (tip.open_folder is not None or tip.open_intent is not None or
-            not tip.raw_first or tip.next_sequence < 1):
+            (tip.raw_first and tip.next_sequence < 1)):
         raise OriginalV2PrepareRefused("retained_debug_ack_not_proven")
     if queue.segments():
         raise OriginalV2PrepareRefused("retained_debug_pending_unacknowledged")
@@ -69,7 +74,7 @@ def _retire_debug_archive_once(queue: DurableInbox, receipts: EpochReceipts,
                 tip.cursor.offset > len(old_bytes) or
                 hashlib.sha256(old_bytes[:tip.cursor.offset]).hexdigest() !=
                 tip.cursor.prefix_sha256)) or
-            (not first_archive and tip.next_sequence < 2) or
+            (not first_archive and tip.raw_first and tip.next_sequence < 2) or
             b"\x00" in old_bytes or
             (old_bytes and not old_bytes.endswith(b"\n"))):
         raise OriginalV2PrepareRefused("retained_debug_cursor_or_content_changed")
@@ -102,8 +107,9 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
     The already sealed original FD9/P2c owner and all-PID P2b FD inspector
     are required on both sides. A torn prepared inode or two-link alias
     is safely rolled back without dropping ANY original debug bytes.
-    One old inode retires only after original raw-first ACK,
-    empty pending/live raw, all-PID drained FD and exact owner recheck.
+    One old diagnostic inode retires only after proven empty pending/live
+    raw and no open cursor (or original raw-first ACK), all-PID drained
+    writer FD and the exact original running owner recheck.
     A newer unanchored archive remains protected; no arbitrary pruning.
     """
     if not queue._held:
@@ -150,7 +156,7 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
             fresh_path.unlink()
         old_path.unlink()
         _sync_directory(queue.root)
-    current, _ = _read_exact(live, owner_uid=uid, writer_gid=gid)
+    current, current_bytes = _read_exact(live, owner_uid=uid, writer_gid=gid)
 
     # Crash between preparing an empty inode and linking the old debug.
     # The new inode was never published; only remove that exact safe temp.
@@ -207,10 +213,35 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
             raise OriginalV2PrepareRefused("unqualified_same_inode_debug_archive")
     if current.st_size < DEBUG_HIGH_WATERMARK:
         return False
-    # Do not hide a corrupted original SAME-inode native prefix by cutting
-    # to a new filename and switching to raw-first without inspection.
-    _require_debug_window_before_raw_cut(
-        proof, cursor, receipts, raw_first=raw_first)
+    # P2k1's 256-KiB attribution window is NOT a disk quota. Native
+    # v1.0.7 fopen("at")/fclose debug may produce >2 MiB diagnostic-only
+    # failures with no discovered raw domain. After checking the SAME
+    # original FD9 owner, empty raw/pending and no open intent, permit
+    # a complete, NUL-free diagnostic-only cut at the real 2-MiB threshold.
+    # A later raw append after this debug inode changed uses the already
+    # accepted raw-first UNKNOWN fallback. Never guess known provenance.
+    live_raw = _stat_regular(queue.inbox, uid, max_size=MAX_SEGMENT,
+                             writer_gid=gid)
+    diagnostic_only = (live_raw.st_nlink == 1 and live_raw.st_size == 0 and
+                       not queue.segments() and
+                       isinstance(retirement_tip, ChainTip) and
+                       retirement_tip.open_intent is None and
+                       retirement_tip.open_folder is None)
+    if diagnostic_only:
+        if ((current_bytes and not current_bytes.endswith(b"\n")) or
+                b"\x00" in current_bytes):
+            raise OriginalV2PrepareRefused("incomplete_diagnostic_only_debug")
+        if ((current.st_dev, current.st_ino) ==
+                (cursor.device, cursor.inode) and
+                (cursor.offset > len(current_bytes) or
+                 hashlib.sha256(current_bytes[:cursor.offset]).hexdigest() !=
+                 cursor.prefix_sha256)):
+            raise OriginalV2PrepareRefused("diagnostic_only_cursor_changed")
+    else:
+        # Raw/pending exists: retain strict bounded debug/window proof
+        # before any source-backed physical mutation.
+        _require_debug_window_before_raw_cut(
+            proof, cursor, receipts, raw_first=raw_first)
     if (inspect_debug(live, current.st_dev, current.st_ino,
                       owner=proof.owner, writer_gid=gid)
             is not FDState.DRAINED or attest() != proof):
