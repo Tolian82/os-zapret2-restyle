@@ -308,8 +308,15 @@ def native_installed_auto_handoff():
     # This is the actual GUI/backend transaction; never set auto in XML
     # behind the one authoritative Config writer.
     prepared = run(cli, 'zapret', 'shared_apply', 'strategies', token, timeout=240)
-    need(prepared.returncode == 0 and b'applied-id=' in prepared.stdout,
-         'installed-original-auto-shared-apply-refused')
+    if prepared.returncode != 0 or b'applied-id=' not in prepared.stdout:
+        # The real configd path has bounded phase receipts; preserve them
+        # without exposing the request envelope or user traffic.
+        def brief(blob):
+            line = blob.decode('utf-8', errors='replace').replace('\\n', ' ')
+            return re.sub(r'[A-Za-z0-9_-]{48,}', '[REDACTED]', line)[:320]
+        need(False, 'installed-original-auto-shared-apply-refused:' +
+             'rc=' + str(prepared.returncode) + ':stdout=' +
+             brief(prepared.stdout) + ':stderr=' + brief(prepared.stderr))
     running = True
     try:
         saved = ET.fromstring(CONFIG.read_bytes())
