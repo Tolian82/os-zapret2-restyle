@@ -414,14 +414,131 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
                 self.assertEqual(self.queue.segments(), [])
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "second_debug_cut_needs_retirement"):
+                                            "retained_debug_live_raw_unprocessed"):
                     self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
                 self.assertEqual(retired.stat().st_nlink, 1)
                 self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
                 self.assertEqual(self.queue.segments(), [])
-        # A future retirement protocol must qualify and delete the OLD
-        # archive before another bounded cut. This increment never guesses.
+        # A completed ACK alone is insufficient: the next raw discovery
+        # is still live and must not be discarded to force archive retirement.
         self.assertTrue(retired.exists())
+
+
+    def test_original_second_highwater_requires_acked_raw_then_retires_once(self):
+        import auto_detect_original_v2_prepare as mod
+        native_drained = lambda *a, **kw: FDState.DRAINED
+        self.emit("one.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                first = self.stage(inspect_debug=native_drained)
+                retained = self.root / mod.DEBUG_OLD
+                first_ino = retained.stat().st_ino
+                self.commit_and_ack(first, "one.example.com")
+        self.emit("two.example.com")
+        with self.queue.exclusive():
+            second = self.stage(inspect_debug=native_drained)
+            self.commit_and_ack(second, "two.example.com")
+        now_old = self.debug.stat().st_ino
+        before_second = self.debug.read_bytes()
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                self.assertIsNone(self.stage(inspect_debug=native_drained))
+                self.assertEqual(retained.stat().st_ino, now_old)
+                self.assertNotEqual(retained.stat().st_ino, first_ino)
+                self.assertEqual(retained.read_bytes(), before_second)
+                self.assertNotEqual(self.debug.stat().st_ino, now_old)
+                self.assertEqual(self.debug.read_bytes(), b"")
+                self.assertEqual(self.queue.segments(), [])
+        self.emit("three.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                            "retained_debug_ack_not_proven"):
+                    self.stage(inspect_debug=native_drained)
+                self.assertEqual(self.queue.inbox.read_bytes(),
+                                 b"three.example.com\n")
+        with self.queue.exclusive():
+            third = self.stage(inspect_debug=native_drained)
+            self.commit_and_ack(third, "three.example.com")
+        self.assertEqual(
+            self.auto.read_text(),
+            "!manual.invalid\none.example.com\ntwo.example.com\nthree.example.com\n")
+
+    def test_original_debug_retirement_refuses_unacked_and_live_raw(self):
+        import auto_detect_original_v2_prepare as mod
+        native_drained = lambda *a, **kw: FDState.DRAINED
+        self.emit("one.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                first = self.stage(inspect_debug=native_drained)
+                retained = self.root / mod.DEBUG_OLD
+                self.debug.write_bytes(b"x" * 80 + b"\n")
+                self.assertEqual(self.stage(inspect_debug=native_drained), first)
+                self.assertTrue(retained.exists())
+                self.commit_and_ack(first, "one.example.com")
+                self.queue.inbox.write_bytes(b"two.example.com\n")
+                with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                            "retained_debug_live_raw_unprocessed"):
+                    self.stage(inspect_debug=native_drained)
+                self.assertTrue(retained.exists())
+                self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+        with self.queue.exclusive():
+            second = self.stage(inspect_debug=native_drained)
+            self.commit_and_ack(second, "two.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                            "retained_debug_writer_fd_not_drained"):
+                    self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
+                self.assertTrue(retained.exists())
+                self.assertEqual(self.queue.segments(), [])
+
+    def test_original_debug_retirement_refuses_corrupted_old_archive(self):
+        import auto_detect_original_v2_prepare as mod
+        self.emit("one.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                first = self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
+                self.commit_and_ack(first, "one.example.com")
+                retained = self.root / mod.DEBUG_OLD
+                with retained.open("ab") as out:
+                    out.write(b"\x00")
+                self.debug.write_bytes(b"x" * 80 + b"\n")
+                with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                            "retained_debug_cursor_or_content_changed"):
+                    self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
+                self.assertTrue(retained.exists())
+                self.assertEqual(self.queue.segments(), [])
+
+    def test_original_debug_retirement_crash_after_unlink_retries_second_cut(self):
+        import auto_detect_original_v2_prepare as mod
+        self.emit("one.example.com")
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                first = self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
+                self.commit_and_ack(first, "one.example.com")
+                retained = self.root / mod.DEBUG_OLD
+                self.debug.write_bytes(b"x" * 80 + b"\n")
+                old_active = self.debug.stat().st_ino
+                actual_sync = mod._sync_directory
+                failed = [False]
+                def fault_after_safe_unlink(path):
+                    if not retained.exists() and not failed[0]:
+                        failed[0] = True
+                        raise OSError("crash-after-acked-retained-unlink")
+                    return actual_sync(path)
+                with patch.object(mod, "_sync_directory",
+                                  side_effect=fault_after_safe_unlink):
+                    with self.assertRaises(OriginalV2PrepareRefused):
+                        self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
+                self.assertTrue(failed[0])
+                self.assertFalse(retained.exists())
+                self.assertEqual(self.debug.stat().st_ino, old_active)
+                self.assertIsNone(self.stage(
+                    inspect_debug=lambda *a, **kw: FDState.DRAINED))
+                self.assertEqual(retained.stat().st_ino, old_active)
+                self.assertEqual(self.debug.read_bytes(), b"")
+                self.assertEqual(self.queue.segments(), [])
 
     def test_debug_replacement_selects_generation_sticky_raw_first(self):
         self.emit("one.example.com")
