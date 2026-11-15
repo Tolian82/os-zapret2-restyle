@@ -237,7 +237,7 @@ class DurableInbox:
                     generation is None or type(cycle) is not int or
                     type(sequence) is not int or
                     not 0 <= cycle < (1 << 32) or
-                    not 0 <= sequence < (1 << 24))):
+                    not 0 <= sequence < (1 << 24)))):
             raise QueueSafetyError("invalid_original_cursor_cycle")
         self._require_lock()
         self._verify()
