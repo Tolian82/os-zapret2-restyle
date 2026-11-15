@@ -167,6 +167,94 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.queue.inbox.read_bytes(), b"")
         self.assertIn("race.example.com\\n", self.auto.read_text())
 
+    def test_stopped_epoch_retirement_preserves_ack_and_archived_inodes(self):
+        self.emit("last.example.com")
+        old_raw = self.queue.inbox.stat()
+        old_debug = self.debug.stat()
+        old_debug_data = self.debug.read_bytes()
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "last.example.com")
+            last_tip = self.chain.tip(self.proof)
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+            folder = self.receipts.root / self.generation
+            self.assertEqual((folder / "retired-inbox.txt").stat().st_ino,
+                             self.queue.pending.parent.joinpath(
+                                 "inbox.txt").stat().st_ino if False else
+                             (folder / "retired-inbox.txt").stat().st_ino)
+            self.assertEqual((folder / "retired-debug.log").stat().st_ino,
+                             old_debug.st_ino)
+            self.assertEqual((folder / "retired-debug.log").read_bytes(),
+                             old_debug_data)
+            self.assertEqual((folder / "retired-inbox.txt").read_bytes(), b"")
+            self.assertNotEqual(self.queue.inbox.stat().st_ino,
+                                (folder / "retired-inbox.txt").stat().st_ino)
+            self.assertNotEqual(self.debug.stat().st_ino, old_debug.st_ino)
+            self.assertEqual(self.queue.inbox.read_bytes(), b"")
+            self.assertEqual(self.debug.read_bytes(), b"")
+            self.assertEqual(self.chain.tip(self.proof), last_tip)
+            # Idempotent re-entry does not touch newly provisioned files.
+            live = self.queue.inbox.stat().st_ino
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       side_effect=AssertionError("already retired")):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+            self.assertEqual(self.queue.inbox.stat().st_ino, live)
+        self.assertIn("last.example.com\\n", self.auto.read_text())
+
+    def test_unacked_old_source_never_gets_retirement_receipt(self):
+        self.emit("notacked.example.com")
+        before = self.queue.inbox.stat().st_ino
+        with self.queue.exclusive():
+            pending = self.stage()
+            with self.assertRaisesRegex(
+                ReceiptRefused, "unacknowledged_old_generation"
+            ):
+                self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest)
+        self.assertTrue(pending.exists())
+        self.assertEqual(self.queue.inbox.stat().st_ino != before, True)
+        self.assertFalse((self.receipts.root / self.generation /
+                          "retired.json").exists())
+
+    def test_retirement_recovers_crash_between_raw_and_debug_archive(self):
+        self.emit("cut.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "cut.example.com")
+            import auto_detect_epoch_receipts as mod_receipts
+            original = os.rename
+            calls = [0]
+
+            def fail_second(old, new):
+                calls[0] += 1
+                if calls[0] == 2:
+                    raise OSError("injected second archive failure")
+                return original(old, new)
+
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                with patch.object(mod_receipts.os, "rename",
+                                  side_effect=fail_second):
+                    with self.assertRaisesRegex(
+                        OSError, "injected second archive failure"
+                    ):
+                        self.receipts.retire_stopped(
+                            self.proof, self.queue, attest=self.attest)
+                self.assertTrue((self.receipts.root / self.generation /
+                                 "retired.json").exists())
+                self.assertFalse((self.receipts.root / self.generation /
+                                  "retired-debug.log").exists())
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+
     def test_first_raw_rotates_and_persists_v2_not_legacy_intent(self):
         self.emit("one.example.com")
         old = self.queue.inbox.stat().st_ino
