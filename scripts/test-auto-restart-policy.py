@@ -43,6 +43,10 @@ class AutoRestartNativePolicy(unittest.TestCase):
         self.assertEqual(cfg["auto_restart_tick"]["parameters"], "%s")
         self.assertIn("auto-restart-tick",
                       cfg["auto_restart_tick"]["command"])
+        # Restart is the normal common Stop + Boot transaction, which can
+        # legitimately exceed the minute worker's timeout on OPNsense.
+        self.assertEqual(cfg["auto_restart_tick"]["timeout"], "600")
+        self.assertEqual(cfg["auto_detect_minute"]["timeout"], "60")
         self.assertEqual(cfg["auto_detect_minute"]["parameters"], "")
         rows = [x.strip() for x in CRON.read_text().splitlines()
                 if x.strip() and not x.startswith("#") and not x.startswith(("SHELL=", "PATH=", "MAILTO="))]
