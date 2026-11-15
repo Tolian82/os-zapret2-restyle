@@ -9,22 +9,178 @@ No Config/FD9 child, destination writes, ACK, cron or old-owner migration.
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
+import stat
 from typing import Callable
 
-from auto_detect_debug_window import _read_exact, DebugWindowRefused, MAX_WINDOW
+from auto_detect_debug_window import _read_exact, DebugWindowRefused, MAX_WINDOW, MAX_DEBUG
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       MAX_STEPS, PENDING)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
-from auto_detect_fd import probe_pending_fd
+from auto_detect_fd import FDState, probe_pending_fd
 from auto_detect_original_v2_source import (qualified_current_source, OriginalSourceRefused)
 from auto_detect_owner import (GenerationProof, GenerationRefused,
                                attest_running_generation)
-from auto_detect_queue import DurableInbox, QueueSafetyError
+from auto_detect_queue import (DurableInbox, QueueSafetyError, _stat_regular,
+                               _sync_directory)
 
 
 class OriginalV2PrepareRefused(RuntimeError):
     """Do not rotate or discard another generation's original raw segment."""
+
+
+# A deliberately conservative ONE-inode debug cut. It is not a circular
+# archive or a complete 4 MiB lifetime policy: old debug remains sealed
+# until the future owner/historical-FD and journal-retirement gates.
+DEBUG_HIGH_WATERMARK = MAX_DEBUG // 2
+DEBUG_NEXT = ".original-debug-prepared"
+DEBUG_OLD = ".original-debug-retained"
+
+
+def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
+                    proof: GenerationProof, cursor, raw_first: bool,
+                    attest: Callable, inspect_debug: Callable) -> bool:
+    """One original P2a-lock debug cut; never pause the native engine.
+
+    The already sealed original FD9/P2c owner and all-PID P2b FD inspector
+    are required on both sides. A torn prepared inode or two-link alias
+    is safely rolled back without dropping ANY original debug bytes.
+    After replace, retained old inode is NEVER unlinked here. The original
+    raw-first v2 evidence handles independently arriving raw/debug events.
+    """
+    if not queue._held:
+        raise OriginalV2PrepareRefused("original_debug_cut_queue_lock_required")
+    live = Path(proof.debug_path)
+    if live != queue.root / "debug.log":
+        raise OriginalV2PrepareRefused("original_debug_cut_path_changed")
+    old_path, fresh_path = queue.root / DEBUG_OLD, queue.root / DEBUG_NEXT
+    uid, gid = receipts.uid, queue.writer_gid
+    mode = 0o660 if gid is not None else 0o600
+    # Recover exactly the torn state after hardlink/dir-fsync but before
+    # atomic replace. The live inode still has TWO names and every byte:
+    # unlink only its EXTRA original alias; never truncate/swap it here.
+    # _read_exact requires a single link, so inspect these two names first.
+    live_stat = _stat_regular(live, uid, max_size=MAX_DEBUG, writer_gid=gid)
+    # The normal original P2a stage already checked owner before calling
+    # this optional helper. When safely BELOW high-water with no unfinished
+    # cut, do NOT introduce an additional owner snapshot before raw rotate:
+    # it would change the established original after-rotation FD9/P2c
+    # TOCTOU gate and falsely reject its precise historical regression.
+    # Any actual cut/recovery still requires its OWN new owner proof.
+    needs_cut_or_recovery = (
+        live_stat.st_nlink != 1 or
+        live_stat.st_size >= DEBUG_HIGH_WATERMARK or
+        old_path.exists() or old_path.is_symlink() or
+        fresh_path.exists() or fresh_path.is_symlink()
+    )
+    if needs_cut_or_recovery and attest() != proof:
+        raise OriginalV2PrepareRefused("original_debug_cut_owner_required")
+    if live_stat.st_nlink != 1:
+        alias = _stat_regular(old_path, uid, max_size=MAX_DEBUG,
+                              writer_gid=gid)
+        if (live_stat.st_nlink != 2 or alias.st_nlink != 2 or
+                (live_stat.st_dev, live_stat.st_ino) !=
+                (alias.st_dev, alias.st_ino)):
+            raise OriginalV2PrepareRefused("original_debug_live_links_not_one")
+        if fresh_path.exists() or fresh_path.is_symlink():
+            prepared = _stat_regular(fresh_path, uid, max_size=0,
+                                     writer_gid=gid)
+            if (prepared.st_dev != live_stat.st_dev or
+                    prepared.st_nlink != 1 or
+                    stat.S_IMODE(prepared.st_mode) != mode):
+                raise OriginalV2PrepareRefused("unsafe_torn_original_debug_temp")
+            fresh_path.unlink()
+        old_path.unlink()
+        _sync_directory(queue.root)
+    current, _ = _read_exact(live, owner_uid=uid, writer_gid=gid)
+
+    # Crash between preparing an empty inode and linking the old debug.
+    # The new inode was never published; only remove that exact safe temp.
+    if (fresh_path.exists() or fresh_path.is_symlink()) and not (
+            old_path.exists() or old_path.is_symlink()):
+        fresh = _stat_regular(fresh_path, uid, max_size=0, writer_gid=gid)
+        if (fresh.st_nlink != 1 or stat.S_IMODE(fresh.st_mode) != mode or
+                fresh.st_dev != current.st_dev):
+            raise OriginalV2PrepareRefused("unsafe_prepared_original_debug")
+        fresh_path.unlink()
+        _sync_directory(queue.root)
+
+    if old_path.exists() or old_path.is_symlink():
+        archived = _stat_regular(old_path, uid, max_size=MAX_DEBUG,
+                                 writer_gid=gid)
+        if archived.st_dev != current.st_dev:
+            raise OriginalV2PrepareRefused("foreign_retained_debug_device")
+        if archived.st_ino != current.st_ino:
+            if archived.st_nlink != 1 or (
+                    fresh_path.exists() or fresh_path.is_symlink()):
+                raise OriginalV2PrepareRefused("unsafe_completed_debug_cut")
+            if (inspect_debug(old_path, archived.st_dev, archived.st_ino,
+                              owner=proof.owner, writer_gid=gid)
+                    is not FDState.DRAINED or attest() != proof):
+                raise OriginalV2PrepareRefused("retained_debug_writer_fd_not_drained")
+            if current.st_size >= DEBUG_HIGH_WATERMARK:
+                # Never create a second archive or discard this one to make
+                # an overfull active debug path apparently healthy.
+                raise OriginalV2PrepareRefused("second_debug_cut_needs_retirement")
+            return False
+        # An archived hardlink to the SAME live inode would have nlink=2,
+        # which the initial torn-alias recovery handles. If the kernel
+        # observation contradicts it, never infer a completed cut.
+        raise OriginalV2PrepareRefused("unqualified_same_inode_debug_archive")
+    if current.st_size < DEBUG_HIGH_WATERMARK:
+        return False
+    # Do not hide a corrupted original SAME-inode native prefix by cutting
+    # to a new filename and switching to raw-first without inspection.
+    _require_debug_window_before_raw_cut(
+        proof, cursor, receipts, raw_first=raw_first)
+    if (inspect_debug(live, current.st_dev, current.st_ino,
+                      owner=proof.owner, writer_gid=gid)
+            is not FDState.DRAINED or attest() != proof):
+        raise OriginalV2PrepareRefused("original_debug_old_fd_not_drained")
+
+    fd = os.open(fresh_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 os.O_NOFOLLOW, mode)
+    try:
+        os.fchown(fd, uid, gid if gid is not None else current.st_gid)
+        os.fchmod(fd, mode)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _sync_directory(queue.root)
+    # The native producer does NOT hold P2a's root-only flock. Recheck the
+    # exact old inode, SHA/size/mtime before hardlink/replace; never silently
+    # pretend that a changed debug was a clean cut.
+    before, old_bytes = _read_exact(live, owner_uid=uid, writer_gid=gid)
+    if ((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) !=
+            (current.st_dev, current.st_ino, current.st_size,
+             current.st_mtime_ns) or attest() != proof):
+        raise OriginalV2PrepareRefused("original_debug_changed_before_cut")
+    os.link(live, old_path, follow_symlinks=False)
+    linked = old_path.lstat()
+    if ((linked.st_dev, linked.st_ino, linked.st_size,
+         linked.st_mtime_ns, linked.st_nlink) !=
+            (before.st_dev, before.st_ino, len(old_bytes),
+             before.st_mtime_ns, 2)):
+        raise OriginalV2PrepareRefused("original_debug_link_modified")
+    _sync_directory(queue.root)
+    os.replace(fresh_path, live)
+    _sync_directory(queue.root)
+    retained = _stat_regular(old_path, uid, max_size=MAX_DEBUG,
+                             writer_gid=gid)
+    active, payload = _read_exact(live, owner_uid=uid, writer_gid=gid)
+    if (retained.st_nlink != 1 or
+            (retained.st_dev, retained.st_ino) !=
+            (before.st_dev, before.st_ino) or
+            (active.st_dev, active.st_ino) ==
+            (before.st_dev, before.st_ino) or payload or
+            inspect_debug(old_path, retained.st_dev, retained.st_ino,
+                          owner=proof.owner, writer_gid=gid)
+            is not FDState.DRAINED or attest() != proof):
+        # Atomic cut already happened. Do not attempt to rename the old
+        # file back under a RUNNING engine; keep both authentic inodes.
+        raise OriginalV2PrepareRefused("original_debug_retained_cut_unqualified")
+    return True
 
 
 def _require_debug_window_before_raw_cut(proof: GenerationProof, cursor,
@@ -59,6 +215,7 @@ def prepare_original_v2_locked(
     queue: DurableInbox, receipts: EpochReceipts, *,
     attest: Callable[[], GenerationProof] = attest_running_generation,
     inspect: Callable = probe_pending_fd,
+    inspect_debug: Callable = probe_pending_fd,
 ) -> Path | None:
     """Return one prepared ORIGINAL pending inode, without commit or ACK.
 
@@ -77,7 +234,8 @@ def prepare_original_v2_locked(
             not isinstance(receipts, EpochReceipts) or
             queue.uid != receipts.uid or
             queue.writer_gid != receipts.writer_gid or
-            not callable(attest) or not callable(inspect)):
+            not callable(attest) or not callable(inspect) or
+            not callable(inspect_debug)):
         raise OriginalV2PrepareRefused("original_queue_epoch_lock_required")
     try:
         proof = qualified_current_source(attest(), queue)
@@ -107,6 +265,12 @@ def prepare_original_v2_locked(
             raise OriginalV2PrepareRefused("acknowledged_pending_name_reused")
         if attest() != proof:
             raise OriginalV2PrepareRefused("original_owner_changed_before_rotation")
+        if tip.open_intent is None:
+            # Torn hardlink recovery must precede the normal strict
+            # single-link debug reader. The cut itself verifies the
+            # original cursor BEFORE changing native diagnostic inodes.
+            _debug_cut_once(queue, receipts, proof, tip.cursor,
+                            tip.raw_first, attest, inspect_debug)
         if pending:
             # Reuse a fully rotated pending first, including if a new live
             # inbox already contains later data. For a P2a crash *after*
