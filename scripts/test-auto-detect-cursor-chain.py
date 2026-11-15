@@ -174,6 +174,30 @@ class CursorChainTests(unittest.TestCase):
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
         self.assertEqual(self.target.read_text().count("one.example.com"), 1)
 
+    def test_crash_after_unlink_then_debug_inode_cut_finishes_same_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            slot = self.stage(pending)
+            cp = self.commit(pending, "one.example.com")
+            old_plan = (slot / "destination" / "plan.json").read_bytes()
+            with patch("auto_detect_cursor_chain._write_once",
+                       side_effect=OSError("interrupted after raw unlink")):
+                with self.assertRaisesRegex(CursorChainRefused,
+                                            "original_cursor_ack_evidence"):
+                    self.ack(pending, cp)
+            self.assertFalse(pending.exists())
+            self.assertFalse((slot / "ack.json").exists())
+            self._cut_debug_nonblocking()
+            self.target.write_text("!manual.invalid\n")
+            self.chain = CursorChain(self.receipts, self.queue)
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.ack(pending, cp))
+            self.assertEqual((slot / "destination" / "plan.json").read_bytes(),
+                             old_plan)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+        self.assertEqual(self.target.read_text(), "!manual.invalid\n")
+
     def test_checkpoint_replay_does_not_restore_later_manual_gui_delete(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
@@ -226,18 +250,59 @@ class CursorChainTests(unittest.TestCase):
             with self.assertRaisesRegex(CursorChainRefused, "cursor_ack_not_bound_to_checkpoint"):
                 self.chain.tip(self.proof)
 
-    def test_replaced_debug_inode_blocks_destination_or_ack(self):
+    def test_postcheckpoint_debug_inode_cut_allows_ack_only(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
             p = self.rotate()
-            self.stage(p)
+            slot = self.stage(p)
             cp = self.commit(p, "one.example.com")
-            self.debug.unlink()
-            self.debug.write_bytes(b"")
-            self.debug.chmod(0o600)
-            with self.assertRaisesRegex(CursorChainRefused, "debug_changed_before_original_ack"):
-                self.ack(p, cp)
-            self.assertTrue(p.exists())
+            original_intent = (slot / "intent.json").read_bytes()
+            original_plan = (slot / "destination" / "plan.json").read_bytes()
+            self._cut_debug_nonblocking()
+            self.assertTrue(self.ack(p, cp))
+            self.assertFalse(p.exists())
+            self.assertFalse((slot / "recovery.json").exists())
+            self.assertEqual((slot / "intent.json").read_bytes(), original_intent)
+            self.assertEqual((slot / "destination" / "plan.json").read_bytes(),
+                             original_plan)
+            self.assertFalse(self.chain.tip(self.proof).raw_first)
+            self.assertGreater(self.chain.tip(self.proof).cursor.offset, 0)
+            self.assertTrue(self.ack(p, cp))
+        self.assertEqual(self.target.read_text().count("one.example.com"), 1)
+
+    def test_postcheckpoint_same_inode_prefix_tamper_still_refuses_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            cp = self.commit(pending, "one.example.com")
+            old_inode = self.debug.stat().st_ino
+            self.debug.write_bytes(b"corrupt-original-prefix\n")
+            self.assertEqual(self.debug.stat().st_ino, old_inode)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "debug_changed_before_original_ack"):
+                self.ack(pending, cp)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "completed_debug_replacement_not_attested"):
+                self.stage(pending)
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "ack.json").exists())
+
+    def test_postcheckpoint_replaced_debug_busy_original_fd_retains_pending(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            cp = self.commit(pending, "one.example.com")
+            self._cut_debug_nonblocking()
+            with self.assertRaisesRegex(CursorChainRefused, "original_pending_fd_not_drained"):
+                self.chain.prepare(
+                    self.proof, pending, attest=self.attest,
+                    inspect=lambda *args, **kw: FDState.BUSY)
+            self.assertFalse(self.ack(pending, cp,
+                                      inspect=lambda *args, **kw: FDState.BUSY))
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "ack.json").exists())
 
     def _cut_debug_nonblocking(self):
         old = self.debug.with_name("old-native-debug")
@@ -291,23 +356,34 @@ class CursorChainTests(unittest.TestCase):
         self.assertEqual(self.target.read_text(),
                          "!manual.invalid\none.example.com\ntwo.example.com\n")
 
-    def test_recovery_is_blocked_after_destination_checkpoint(self):
+    def test_postcheckpoint_replay_after_gui_deletion_never_restores_row(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
             pending = self.rotate()
             folder = self.stage(pending)
             cp = self.commit(pending, "one.example.com")
+            self.assertIn("one.example.com\n", self.target.read_text())
+            plan = (folder / "destination" / "plan.json").read_bytes()
+            checkpoint = (folder / "destination" / "checkpoint.json").read_bytes()
+            intent = (folder / "intent.json").read_bytes()
             self._cut_debug_nonblocking()
-            with self.assertRaisesRegex(CursorChainRefused,
-                                        "original_native_debug_recovery_unsafe"):
-                self.stage(pending)
-            with self.assertRaisesRegex(CursorChainRefused,
-                                        "debug_changed_before_original_ack"):
-                self.ack(pending, cp)
+            self.target.write_text("!manual.invalid\n")
+            # Simulate PHP/parent retry after the already durable checkpoint;
+            # do not re-emit effects or silently restore a GUI-deleted domain.
+            self.chain = CursorChain(self.receipts, self.queue)
+            self.assertEqual(self.stage(pending), folder)
+            self.assertEqual(self.commit(pending, "one.example.com"), cp)
+            self.assertEqual(self.target.read_text(), "!manual.invalid\n")
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.ack(pending, cp))
+            self.assertFalse(pending.exists())
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+            self.assertFalse(self.chain.tip(self.proof).raw_first)
             self.assertFalse((folder / "recovery.json").exists())
-            self.assertTrue(pending.exists())
-            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
-                             "native-debug")
+            self.assertEqual((folder / "intent.json").read_bytes(), intent)
+            self.assertEqual((folder / "destination" / "plan.json").read_bytes(), plan)
+            self.assertEqual((folder / "destination" / "checkpoint.json").read_bytes(), checkpoint)
+        self.assertEqual(self.target.read_text(), "!manual.invalid\n")
 
     def test_recovery_refuses_partial_original_destination_plan(self):
         self.emit("one.example.com")

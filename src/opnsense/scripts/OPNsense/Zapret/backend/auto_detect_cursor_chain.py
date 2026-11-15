@@ -143,6 +143,26 @@ def _evidence_unchanged(proof: GenerationProof, intent: dict,
     return False
 
 
+def _completed_debug_evidence_unchanged(proof: GenerationProof, intent: dict,
+                                        uid: int, writer_gid: int | None) -> bool:
+    """Completed-checkpoint witness, never a pre-commit authorization.
+
+    Before a checkpoint native-debug requires the original inode and SHA.
+    Afterwards the immutable source-bound plan/checkpoint proves the
+    authorized write already happened: a later protected replacement may
+    permit exact same pending ACK, but never recomputation or reapplication.
+    Same-inode truncation/tampering remains a hard refusal.
+    """
+    if _evidence_unchanged(proof, intent, uid, writer_gid):
+        return True
+    if intent.get("evidence") != "native-debug":
+        return False
+    current, _ = _read_exact(Path(proof.debug_path),
+                             owner_uid=uid, writer_gid=writer_gid)
+    return (current.st_dev, current.st_ino) != (
+        intent["debug_device"], intent["debug_inode"])
+
+
 def _ack(intent: dict, checkpoint: dict, cp_bytes: bytes) -> dict:
     return {
         "schema": 2, "kind": "cursor-chain-ack-after-pending-fsync",
@@ -364,6 +384,20 @@ class CursorChain:
                 # exact raw SHA and new protected diagnostic identity.
                 if not _evidence_unchanged(proof, expected, self.receipts.uid,
                                            self.receipts.writer_gid):
+                    # A fully sealed original destination checkpoint is
+                    # already a durable commit witness. No new plan,
+                    # destination write or raw-first receipt is permitted.
+                    # Replaying the parent after a debug inode cut may
+                    # resume only the exact original physical ACK.
+                    completed = _checkpoint(
+                        tip.open_folder, expected, self.receipts.uid)
+                    if completed is not None:
+                        if not _completed_debug_evidence_unchanged(
+                                proof, expected, self.receipts.uid,
+                                self.receipts.writer_gid) or attest() != proof:
+                            raise CursorChainRefused(
+                                "completed_debug_replacement_not_attested")
+                        return tip.open_folder
                     if expected["evidence"] != "native-debug":
                         raise CursorChainRefused("different_unacknowledged_cursor_pending")
                     current, debug_bytes = _read_exact(
@@ -515,7 +549,16 @@ class CursorChain:
                 raise CursorChainRefused("original_pending_differs_from_cursor_intent")
             if not _evidence_unchanged(proof, intent, self.receipts.uid,
                                        self.receipts.writer_gid):
-                raise CursorChainRefused("debug_changed_before_destination")
+                # Never start/restart destination effects after a debug cut.
+                # Only a pre-existing fully durable original checkpoint
+                # permits an idempotent read-only return by _locked_commit.
+                completed = _checkpoint(
+                    folder, intent, self.receipts.uid, targets=writer.targets)
+                if (completed is None or
+                        not _completed_debug_evidence_unchanged(
+                            proof, intent, self.receipts.uid,
+                            self.receipts.writer_gid)):
+                    raise CursorChainRefused("debug_changed_before_destination")
             with writer.exclusive_targets():
                 checkpoint = writer._locked_commit(folder, intent, raw, effects)
             verified = _checkpoint(folder, intent, self.receipts.uid, targets=writer.targets)
@@ -572,8 +615,8 @@ class CursorChain:
             if verified is None or completion != verified[0]:
                 raise CursorChainRefused("original_child_checkpoint_mismatch")
             cp, cp_raw = verified
-            if not _evidence_unchanged(proof, intent, self.receipts.uid,
-                                       self.receipts.writer_gid):
+            if not _completed_debug_evidence_unchanged(
+                    proof, intent, self.receipts.uid, self.receipts.writer_gid):
                 raise CursorChainRefused("debug_changed_before_original_ack")
 
             def still_original() -> bool:
@@ -591,8 +634,9 @@ class CursorChain:
                 return (len(raw) == intent["pending_size"] and
                         _digest(raw) == intent["pending_sha256"] and
                         still_original() and
-                        _evidence_unchanged(proof, intent, self.receipts.uid,
-                                            self.receipts.writer_gid) and
+                        _completed_debug_evidence_unchanged(
+                            proof, intent, self.receipts.uid,
+                            self.receipts.writer_gid) and
                         _checkpoint(folder, intent, self.receipts.uid,
                                     targets=writer.targets) == verified and
                         still_original())

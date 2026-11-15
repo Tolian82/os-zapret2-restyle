@@ -31,7 +31,8 @@ from auto_detect_original_lock_handoff import (
     _original_v2_cycle_locked, OriginalLockRefused, run_native_original_v2_cycle_once)
 from auto_detect_original_v2_model import (
     V2OriginalConfigRefused, commit_with_original_v2_model)
-from auto_detect_original_v2_prepare import prepare_original_v2_locked
+from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
+                                             prepare_original_v2_locked)
 from auto_detect_owner import GenerationProof
 from auto_detect_owned_sources import bootstrap_empty
 from auto_detect_queue import DurableInbox
@@ -307,6 +308,84 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.assertEqual(self.auto.read_text(),
                          "!untouched.example\nexample.co.uk\nsecond.com\n")
         self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
+
+    def test_original_config_postcheckpoint_debug_cut_does_not_restore_gui_delete(self):
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            checkpoint = self.commit(pending)
+            self.assertEqual(checkpoint["evidence"], "native-debug")
+            intent_bytes = (folder / "intent.json").read_bytes()
+            original_plan = (folder / "destination" / "plan.json").read_bytes()
+            original_checkpoint = (folder / "destination" / "checkpoint.json").read_bytes()
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            historical = self.debug.with_name("previous-committed-debug")
+            fresh = self.debug.with_name(".next-committed-debug")
+            fresh.write_bytes(b"")
+            fresh.chmod(0o600)
+            os.link(self.debug, historical)
+            os.replace(fresh, self.debug)
+            # A user removes the committed domain between destination fsync
+            # and original raw ACK. P1 must NOT reapply that old positive.
+            self.auto.write_text("!untouched.example\n")
+            self.chain = CursorChain(self.receipts, self.queue)
+            self.assertEqual(self.prepare(), pending)
+            self.assertEqual(self.commit(pending), checkpoint)
+            self.assertTrue(self.ack(pending, checkpoint))
+            self.assertTrue(self.ack(pending, checkpoint))
+            self.assertEqual(self.auto.read_text(), "!untouched.example\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertFalse(pending.exists())
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertEqual((folder / "intent.json").read_bytes(), intent_bytes)
+            self.assertEqual((folder / "destination" / "plan.json").read_bytes(),
+                             original_plan)
+            self.assertEqual((folder / "destination" / "checkpoint.json").read_bytes(),
+                             original_checkpoint)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+            self.assertGreater(self.chain.tip(self.proof).cursor.offset, 0)
+            self.assertEqual(historical.read_bytes().count(b"adding to "), 1)
+
+    def test_original_config_partial_plan_debug_cut_refuses_and_preserves_gui_edit(self):
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        import auto_detect_destination_commit as mod
+        prior_replace = mod._replace
+        def broken_second_target(path, *args):
+            if path == self.youtube:
+                raise OSError("original-second-target-io-failure")
+            return prior_replace(path, *args)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            with patch.object(mod, "_replace", side_effect=broken_second_target):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            # First target applied before second target failed: NO checkpoint.
+            self.assertTrue((folder / "destination" / "plan.json").is_file())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            old = self.debug.with_name("prior-partial-debug")
+            new = self.debug.with_name(".new-partial-debug")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(new, self.debug)
+            # User GUI deletes the first partial effect. It must not be
+            # recreated from an uncommitted plan after diagnostic cut.
+            self.auto.write_text("!untouched.example\n")
+            with self.assertRaisesRegex(OriginalV2PrepareRefused,
+                                        "original_v2_prepared_intent_unavailable"):
+                self.prepare()
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertEqual(self.auto.read_text(), "!untouched.example\n")
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertFalse((folder / "recovery.json").exists())
 
     def test_recovery_replays_current_gui_exclusion_and_not_stale_plan(self):
         self.emit("video.example.co.uk")

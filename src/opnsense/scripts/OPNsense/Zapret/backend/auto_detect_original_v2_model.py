@@ -17,7 +17,8 @@ import re
 from typing import Callable
 
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
-                                      _checkpoint, _evidence_unchanged)
+                                      _checkpoint, _evidence_unchanged,
+                                      _completed_debug_evidence_unchanged)
 from auto_detect_debug_window import ADD, _raw_hosts, _read_exact, _hostname
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
                                             _target)
@@ -188,10 +189,6 @@ def commit_with_original_v2_model(
                 (intent["pending_device"], intent["pending_inode"],
                  intent["pending_size"], intent["pending_sha256"])):
             raise V2OriginalConfigRefused("original_raw_not_prepared_v2")
-        observations = _domains(proof, intent, raw, owner_uid=writer.receipts.uid,
-                                writer_gid=writer.receipts.writer_gid)
-        if attest() != proof:
-            raise V2OriginalConfigRefused("original_generation_changed_during_debug")
         with writer.exclusive_targets():
             owned = read_owned(root, owner_uid=writer.receipts.uid)
             if owned is None or set(owned) != set(KNOWN_HOSTLISTS):
@@ -201,9 +198,23 @@ def commit_with_original_v2_model(
             completed = _checkpoint(folder, intent, writer.receipts.uid,
                                     targets=writer.targets)
             if completed is not None:
-                if attest() != proof:
-                    raise V2OriginalConfigRefused("original_generation_changed_before_replay")
+                if (attest() != proof or
+                        not _completed_debug_evidence_unchanged(
+                            proof, intent, writer.receipts.uid,
+                            writer.receipts.writer_gid)):
+                    raise V2OriginalConfigRefused(
+                        "original_completed_debug_not_attested")
+                # Never reapply a domain that the GUI removed after this
+                # exact original Config checkpoint was durably completed.
                 return completed[0]
+            # No durable checkpoint: the old native-debug inode MUST still
+            # be valid, even when an immutable partial plan exists.
+            observations = _domains(
+                proof, intent, raw, owner_uid=writer.receipts.uid,
+                writer_gid=writer.receipts.writer_gid)
+            if attest() != proof:
+                raise V2OriginalConfigRefused(
+                    "original_generation_changed_during_debug")
             final, _ = _target(writer.targets["auto"], writer.receipts.uid)
             current_manual = {**manual_hostlists, "auto": final.decode("utf-8")}
             policy = plan_auto_additions(observations, current_manual, owned,
