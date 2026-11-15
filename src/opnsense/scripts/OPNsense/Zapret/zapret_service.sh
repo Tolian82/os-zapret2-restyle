@@ -1025,6 +1025,13 @@ shared_apply_boot_service()
         printf "native-common-boot=%s\n" "$_shared_boot_id"
         return 0
     fi
+    # A STOPPED old auto observer is still an unretired data owner.
+    # Before an otherwise valid cold Boot loads IPFW, reject that old
+    # generation in the same read-only gate as the replacement Apply.
+    # The subsequent runtime preflight repeats the check before any swap.
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    apply_runtime_observer_previous_preflight || return 69
     # After verifying the sealed owner and absence of an engine/monitor,
     # FreeBSD may have no IPFW module loaded after a cold boot. First attest
     # that there are no untracked engines. Only then prepare native firewall
@@ -1141,7 +1148,7 @@ shared_apply_execute_service()
     # Refuse BEFORE writing prepared/activating, not after replacing the tree.
     # A healthy ordinary predecessor passes this read-only safety check.
     if ! apply_runtime_observer_previous_preflight; then
-        printf '%s\\n' preflight-rejected=runtime-preflight
+        printf '%s\n' preflight-rejected=runtime-preflight
         return 0
     fi
     # The journal records only a fixed operation identity and owned-fields
