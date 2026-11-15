@@ -21,6 +21,7 @@ from auto_detect_original_lock_handoff import (
     run_native_original_v2_cycle_once, OriginalLockRefused,
 )
 from voice_live_inspect import COMMON_ACTIVE
+from voice_ipfw_adapter import require_lifecycle_lock
 
 
 class MinuteRefused(RuntimeError):
@@ -87,6 +88,10 @@ def native_minute_once(args: list[str]) -> int:
         print('auto-detect-minute-refused=native-root-only', file=sys.stderr)
         return 69
     try:
+        # No native queue, Config/P1 or engine process evidence may be
+        # accessed by configd outside the sole original held FD9. The
+        # service wrapper owns it; no second lock is taken here.
+        require_lifecycle_lock()
         # Reuse the original P2k8j read-only refusal for malformed release,
         # dangling generation, foreign auto knob and normal inactive start.
         try:

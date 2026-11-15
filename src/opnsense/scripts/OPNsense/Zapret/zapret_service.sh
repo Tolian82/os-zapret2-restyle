@@ -2429,6 +2429,12 @@ service_dispatch()
         restart)
             reconfigure_service
             ;;
+        auto-detect-minute)
+            # Existing FD9 is inherited by the Python child. Never detach,
+            # stop dvtws2, acquire another lifecycle lock or start an engine.
+            [ "$#" -eq 1 ] || return 64
+            "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_minute.py"
+            ;;
         auto-restart-tick)
             shared_apply_auto_restart_tick_service "${2:-}"
             ;;
@@ -2701,7 +2707,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
+            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -2832,6 +2838,11 @@ service_with_lifecycle_lock()
                 fi
                 preflight_shared_apply_journal || return 69
                 ;;
+            auto-detect-minute)
+                [ "$#" -eq 1 ] || return 64
+                # Only the original FD9 service caller can authorize a
+                # native raw/debug reader and Config-held P1 destination.
+                ;;
             auto-restart-tick)
                 # The tick itself checks the persisted OPNsense model and
                 # complete RUNNING status; never use legacy fallback.
@@ -2904,7 +2915,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

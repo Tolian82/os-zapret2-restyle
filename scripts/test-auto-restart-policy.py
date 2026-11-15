@@ -74,6 +74,9 @@ class AutoRestartNativePolicy(unittest.TestCase):
         self.assertIn("SharedApplyLifecycleLock::assertHeld();", php)
         self.assertIn("autoRestartPreference", php)
         self.assertIn("run_native_original_v2_cycle_once()", minute)
+        self.assertIn("require_lifecycle_lock()", minute)
+        self.assertIn("auto-detect-minute",
+                      (SRC / "opnsense/service/conf/actions.d/actions_zapret.conf").read_text())
         self.assertNotIn("launcher_stop", minute)
         self.assertNotIn("SIGSTOP", minute)
         self.assertNotIn("SIGCONT", minute)

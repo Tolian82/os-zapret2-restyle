@@ -115,7 +115,7 @@ class MinuteIngressContract(unittest.TestCase):
         self.assertEqual(before, (pending.stat().st_ino, pending.read_bytes(), pending.stat().st_mtime_ns))
         self.assertFalse((Path(self.temp.name) / 'worker.lock').exists())
 
-    def test_configd_route_is_registered_but_cron_is_not_enabled(self):
+    def test_configd_route_is_registered_via_original_fd9_and_cron(self):
         config = configparser.RawConfigParser()
         path = BASE / 'src/opnsense/service/conf/actions.d/actions_zapret.conf'
         self.assertTrue(config.read(path))
@@ -125,8 +125,13 @@ class MinuteIngressContract(unittest.TestCase):
         self.assertEqual(action['type'], 'script_output')
         self.assertEqual(action['timeout'], '30')
         self.assertEqual(action['command'], '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh /usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_minute.py')
-        self.assertFalse((BASE / 'src/opnsense/etc/cron.d/zapret2-auto-detect').exists())
-        self.assertFalse((BASE / 'src/opnsense/etc/cron.d/zapret2-auto-detect.cron').exists())
+        cron = BASE / 'src/etc/cron.d/zapret2-restyle'
+        self.assertTrue(cron.is_file())
+        lines = [x for x in cron.read_text().splitlines()
+                 if 'zapret auto_detect_minute' in x and not x.startswith('#')]
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith('* * * * * root '))
+        self.assertNotIn('auto_detect_minute.py', lines[0])
 
 
     def test_original_native_minute_runs_only_after_real_owner_attestation(self):

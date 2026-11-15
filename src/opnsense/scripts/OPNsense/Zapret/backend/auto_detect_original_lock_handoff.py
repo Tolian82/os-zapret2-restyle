@@ -189,9 +189,17 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
 
 
 def run_native_original_v2_cycle_once() -> bool:
-    """Fixed native one-shot composer; NOT registered with configd/cron."""
+    """One original FD9 service-owned native minute, with no new worker."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise OriginalLockRefused("original_native_fd9_required")
+    # Defense in depth: do not trust that only the registered configd
+    # wrapper can import this function. Require the actual held lock
+    # BEFORE opening P2a raw/pending or Config.
+    from voice_ipfw_adapter import require_lifecycle_lock
+    try:
+        require_lifecycle_lock()
+    except RuntimeError as exc:
+        raise OriginalLockRefused("original_native_fd9_not_held") from exc
     import pwd
     from auto_detect_storage import ENGINE_USER
     try:
