@@ -200,6 +200,9 @@ case "$2" in
         printf '%s\n' restore >> "$EVENTS"
         printf '%s\n' original-fd9-postdrop=attested
         ;;
+    --retired-ready)
+        printf '%s\n' auto-detect-retire=ready
+        ;;
     *)
         exit 69
         ;;
@@ -248,4 +251,39 @@ fi
     fail "FAILED_PREPARE_DID_NOT_REFUSE_BEFORE_CAPTURE_AND_ENGINE"
 unset FAIL_PREPARE
 printf 'P2_FD9_FAILED_PREPARE_REFUSES_BEFORE_ENGINE=PASS\n'
-printf 'P2_FD9_SCOPE=SOURCE_ONLY_PREPARE_CAPABLE_NATIVE_EPOCH_ACCEPTANCE_OPEN\n'
+# A fully retired original may pass the SAME read-only predecessor gate,
+# but only with the authenticated FD9/epoch verifier's exact ready receipt.
+printf '%s\n' '--port=989' \
+    '--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt' > "$ACTIVE_DIR/dvtws.args"
+printf '%s\n' '{}' > "$ACTIVE_DIR/auto-detect-generation.json"
+_apply_engine=0
+apply_runtime_observer_previous_preflight ||
+    fail "QUALIFIED_RETIRED_PREDECESSOR_WAS_REFUSED"
+PYTHON_RUNTIME=/bin/false
+if apply_runtime_observer_previous_preflight; then
+    fail "FALSE_RETIRED_RECEIPT_ACCEPTED"
+fi
+rm -f "$ACTIVE_DIR/auto-detect-generation.json"
+printf 'P2_RETIRED_SOURCE_HANDOFF_PREJOURNAL=PASS\n'
+
+# Exact original Stop process exit/IPFW commit MUST precede Config/P1
+# retirement processing, with pre-Stop sealed epoch proof before signal.
+awk '
+    /^shared_apply_stop_service\(\)/ { inside=1 }
+    inside && /--pre-retire/ { pre=NR }
+    inside && /supervisor_stop / { stop=NR }
+    inside && /firewall_shared_runtime commit/ { fw=NR }
+    inside && /shared_apply_retire_stopped_original_service/ { done=NR }
+    inside && /^}/ { exit !(pre && stop && fw && done && pre<stop && stop<fw && fw<done) }
+    END { if (!pre || !stop || !fw || !done) exit 1 }
+' "$SERVICE_SOURCE" || fail "NATIVE_STOP_RETIRES_BEFORE_PROCESS_OR_FIREWALL_REMOVAL"
+awk '
+    /^shared_apply_boot_service\(\)/ { inside=1 }
+    inside && /apply_runtime_observer_previous_preflight/ { ready=NR }
+    inside && /saved-unchanged/ { stage=NR }
+    inside && /shared_apply_execute_service/ { execute=NR }
+    inside && /^}/ { exit !(ready && stage && execute && ready<stage && stage<execute) }
+    END { if (!ready || !stage || !execute) exit 1 }
+' "$SERVICE_SOURCE" || fail "NATIVE_BOOT_DID_NOT_CREATE_FRESH_APPLY_OPERATION"
+printf 'P2_STOP_OLD_CONFIG_ACK_THEN_NEW_BOOT_OPERATION_ORDER=PASS\n'
+printf 'P2_FD9_SCOPE=SOURCE_NATIVE_RETIRED_GENERATION_INSTALLED_ACCEPTANCE_OPEN\n'
