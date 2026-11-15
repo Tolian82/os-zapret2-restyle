@@ -24,6 +24,7 @@ import sys
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -34,6 +35,9 @@ import auto_detect_owner as owner
 from auto_detect_post_drop import native_capture_before_launch, _witness_line
 from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PATH)
 from auto_detect_queue import DurableInbox
+from auto_detect_debug_window import Cursor
+from auto_detect_epoch_receipts import EpochReceipts
+import auto_detect_original_v2_prepare as v2_prepare
 from auto_detect_fd import OwnerToken, probe_pending_fd
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
@@ -532,52 +536,48 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                       + "raw:" + mid_raw_route + ",debug:previous",
                       flush=True)
 
-            # P2k8q3e2: experimental SAME-FILESYSTEM nonblocking debug
-            # cohort cut in the disposable guest ONLY. The old diagnostic
-            # test used rename-then-create: debug.log was temporarily absent,
-            # and any native fopen() in that gap could lose the attribution.
-            # Prepare + fsync the empty new inode FIRST, hardlink the old
-            # pathname and fsync its alias, then atomically replace the name.
-            # This never stops dvtws2 or unlinks an old debug source.
-            # It does NOT authorize product rollover or historical v2 ACK.
-            archived_debug = PRODUCER / ".p2i-previous-debug"
-            fresh_debug = PRODUCER / ".p2i-new-debug"
+            # P2k8q3f1: exercise the ACTUAL source P2a original highwater
+            # cut, not a second guest-only rename implementation. Only the
+            # TEST lowers the 2 MiB trigger to zero. The native P2b
+            # all-process inspector and genuine running PID/birth are used,
+            # while the nonactivating preview's synthetic generation
+            # cannot authorize installed production observation.
+            archived_debug = PRODUCER / v2_prepare.DEBUG_OLD
+            fresh_debug = PRODUCER / v2_prepare.DEBUG_NEXT
             need(not archived_debug.exists() and not archived_debug.is_symlink() and
                  not fresh_debug.exists() and not fresh_debug.is_symlink(),
                  "FOREIGN_DISPOSABLE_DEBUG_ARCHIVE")
             old_debug_identity = (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino)
-            replacement_fd = os.open(
-                fresh_debug, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                os.O_NOFOLLOW, 0o660)
-            try:
-                os.fchown(replacement_fd, 0, nobody.pw_gid)
-                os.fchmod(replacement_fd, 0o660)
-                os.fsync(replacement_fd)
-            finally:
-                os.close(replacement_fd)
-            need(DEBUG_PATH.is_file() and DEBUG_PATH.stat().st_nlink == 1 and
-                 fresh_debug.read_bytes() == b"",
-                 "PREPARED_NATIVE_DEBUG_INODE_UNQUALIFIED")
-            os.link(DEBUG_PATH, archived_debug, follow_symlinks=False)
-            need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
-                 old_debug_identity and DEBUG_PATH.stat().st_nlink == 2 and
-                 archived_debug.stat().st_nlink == 2,
-                 "DISPOSABLE_OLD_DEBUG_LINK_NOT_ATTESTED")
-            dir_fd = os.open(PRODUCER, os.O_RDONLY | os.O_DIRECTORY)
-            try:
-                os.fsync(dir_fd)
-                os.replace(fresh_debug, DEBUG_PATH)
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+            actual_owner = OwnerToken(
+                process.pid, birth.stdout.strip(), str(engine))
+            native_proof = owner.GenerationProof(
+                actual_owner, "a" * 32, "a" * 32, "b" * 64,
+                str(RAW_PATH), str(DEBUG_PATH),
+                preview["observer_native_number"],
+                ((0, "unknown-native-default", None),
+                 (preview["observer_native_number"], "observer", None)))
+            native_cursor = Cursor(
+                native_proof.generation, *old_debug_identity, 0,
+                hashlib.sha256(b"").hexdigest())
+            fake_epoch = EpochReceipts(
+                case.root / "debug-cut-epoch-fixture",
+                owner_uid=0, writer_gid=nobody.pw_gid)
+            with original_queue.exclusive():
+                with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
+                    need(v2_prepare._debug_cut_once(
+                        original_queue, fake_epoch, native_proof,
+                        native_cursor, False, lambda: native_proof,
+                        probe_pending_fd), "REAL_ORIGINAL_DEBUG_CUT_NOT_EXECUTED")
             need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
                  old_debug_identity and archived_debug.stat().st_nlink == 1 and
                  (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino) !=
                  old_debug_identity and DEBUG_PATH.stat().st_nlink == 1 and
-                 DEBUG_PATH.stat().st_size == 0,
-                 "DISPOSABLE_NONBLOCKING_DEBUG_COHORT_CUT_UNQUALIFIED")
+                 DEBUG_PATH.stat().st_size == 0 and
+                 not fresh_debug.exists(),
+                 "PRODUCT_P2A_NONBLOCKING_DEBUG_CUT_UNQUALIFIED")
             print(MARK + "_REAL_NATIVE_ATOMIC_DEBUG_CUT="
-                  "old_hardlink_retained_new_path_always_present", flush=True)
+                  "original_p2a_highwater_old_retained_new_path_always_present",
+                  flush=True)
             if not quiesced_cut:
                 # P2 known HOSTLIST can still traverse actual scoped IPFW
                 # immediately after BOTH cuts, with the same running engine.
