@@ -18,7 +18,7 @@ from unittest.mock import patch
 BACKEND = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend"
 sys.path.insert(0, str(BACKEND))
 
-from auto_detect_cursor_chain import CursorChain
+from auto_detect_cursor_chain import CursorChain, CursorChainRefused
 from auto_detect_debug_window import MAX_DEBUG, MAX_WINDOW
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_fixture import sealed_original_epoch
@@ -440,6 +440,29 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertGreater(self.chain.tip(self.proof).cursor.offset, 0)
         self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
         self.assertEqual(archive.read_bytes().count(b"adding to "), 1)
+
+    def test_original_partial_plan_after_debug_cut_stages_readonly(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            folder = self.chain.tip(self.proof).open_folder
+            import auto_detect_destination_commit as mod
+            with patch.object(mod, "_replace", side_effect=OSError("target interrupted")):
+                with self.assertRaises(CursorChainRefused):
+                    self.chain.commit(
+                        self.proof, pending,
+                        {"auto": {"add": ["one.example.com"], "remove": []}},
+                        self.writer, attest=self.attest, inspect=self.drained)
+            old = self.debug.with_name("old-partial-v2-debug")
+            new = self.debug.with_name(".new-partial-v2-debug")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(new, self.debug)
+            self.assertEqual(self.stage(), pending)
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertTrue(pending.exists())
 
     def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
         self.emit("one.example.com")

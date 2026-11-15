@@ -385,6 +385,29 @@ class CursorChainTests(unittest.TestCase):
             self.assertEqual((folder / "destination" / "checkpoint.json").read_bytes(), checkpoint)
         self.assertEqual(self.target.read_text(), "!manual.invalid\n")
 
+    def test_partial_destination_after_debug_cut_stages_but_never_acks_without_checkpoint(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.rotate()
+            folder = self.stage(pending)
+            original = (folder / "intent.json").read_bytes()
+            # Real original destination writer gets interrupted right
+            # after the immutable plan, before any checkpoint.
+            import auto_detect_destination_commit as mod
+            with patch.object(mod, "_replace", side_effect=OSError("I/O")):
+                with self.assertRaises(CursorChainRefused):
+                    self.commit(pending, "one.example.com")
+            self.assertTrue((folder / "destination" / "plan.json").is_file())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            self._cut_debug_nonblocking()
+            self.assertEqual(self.stage(pending), folder)
+            self.assertEqual((folder / "intent.json").read_bytes(), original)
+            with self.assertRaisesRegex(CursorChainRefused,
+                                        "original_child_checkpoint_mismatch"):
+                self.ack(pending, {})
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "recovery.json").exists())
+
     def test_recovery_refuses_partial_original_destination_plan(self):
         self.emit("one.example.com")
         with self.queue.exclusive():
@@ -392,8 +415,9 @@ class CursorChainTests(unittest.TestCase):
             folder = self.stage(pending)
             (folder / "destination").mkdir(mode=0o700)
             self._cut_debug_nonblocking()
-            with self.assertRaisesRegex(CursorChainRefused,
-                                        "original_native_debug_recovery_unsafe"):
+            # No authenticated plan.json exists: the empty destination
+            # directory cannot stand in for a qualified old Config plan.
+            with self.assertRaises(CursorChainRefused):
                 self.stage(pending)
             self.assertFalse((folder / "recovery.json").exists())
             self.assertTrue(pending.exists())

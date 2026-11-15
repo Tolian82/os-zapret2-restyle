@@ -21,7 +21,7 @@ from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       _completed_debug_evidence_unchanged)
 from auto_detect_debug_window import ADD, _raw_hosts, _read_exact, _hostname
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
-                                            _target)
+                                            _target, qualified_destination_plan)
 from auto_detect_epoch_receipts import ReceiptRefused, _read
 from auto_detect_fd import FDState, probe_pending_fd
 from auto_detect_original_v2_source import (qualified_current_source,
@@ -112,6 +112,16 @@ def _validate_partial_plan(folder: Path, writer: DestinationCommit,
     writes = plan.get("writes") if isinstance(plan, dict) else None
     if not isinstance(writes, dict) or set(writes) - set(writer.targets):
         raise V2OriginalConfigRefused("unknown_original_partial_target_plan")
+    # A saved partial plan is the exact original transaction. Current P1
+    # may naturally see fewer effects after the first physical targets were
+    # written; it must NEVER introduce an unplanned new target/effect and
+    # then ACK the raw as if those new effects had been durably handled.
+    for name, current in effects.items():
+        saved = writes.get(name, {"add": [], "remove": []})
+        if (not isinstance(saved, dict) or
+                any(item not in saved.get(field, [])
+                    for field in ("add", "remove") for item in current[field])):
+            raise V2OriginalConfigRefused("new_effects_outside_original_partial_plan")
     for name, change in writes.items():
         if (not isinstance(change, dict) or
                 type(change.get("add")) is not list or
@@ -207,11 +217,33 @@ def commit_with_original_v2_model(
                 # Never reapply a domain that the GUI removed after this
                 # exact original Config checkpoint was durably completed.
                 return completed[0]
-            # No durable checkpoint: the old native-debug inode MUST still
-            # be valid, even when an immutable partial plan exists.
-            observations = _domains(
-                proof, intent, raw, owner_uid=writer.receipts.uid,
-                writer_gid=writer.receipts.writer_gid)
+            # After an independent diagnostic cut, the previously sealed
+            # original intent AND original Config-prepared plan prove the
+            # native event already passed strict debug/raw correlation.
+            # Re-evaluate current P1 from the same authenticated RAW hosts,
+            # never attributing a known HOSTLIST by guess. No fresh plan or
+            # effect may be invented; preimage CAS is required for replay.
+            if _evidence_unchanged(proof, intent, writer.receipts.uid,
+                                   writer.receipts.writer_gid):
+                observations = _domains(
+                    proof, intent, raw, owner_uid=writer.receipts.uid,
+                    writer_gid=writer.receipts.writer_gid)
+            else:
+                if (intent["evidence"] != "native-debug" or
+                        not _completed_debug_evidence_unchanged(
+                            proof, intent, writer.receipts.uid,
+                            writer.receipts.writer_gid)):
+                    raise V2OriginalConfigRefused(
+                        "original_unqualified_partial_debug_cut")
+                qualified_destination_plan(
+                    folder, intent, writer.receipts.uid,
+                    targets=writer.targets)
+                hosts = _raw_hosts(raw)
+                if len(hosts) != intent["candidate_count"]:
+                    raise V2OriginalConfigRefused(
+                        "original_partial_raw_count_changed")
+                observations = [{"hostname": host, "hostlist": None}
+                                for host in hosts]
             if attest() != proof:
                 raise V2OriginalConfigRefused(
                     "original_generation_changed_during_debug")
@@ -241,9 +273,9 @@ def commit_with_original_v2_model(
                             owner=proof.owner,
                             writer_gid=writer.queue.writer_gid) is not FDState.DRAINED or
                     detached_original_raw(writer.queue, pending) != raw or
-                    not _evidence_unchanged(proof, intent,
-                                            writer.receipts.uid,
-                                            writer.receipts.writer_gid)):
+                    not _completed_debug_evidence_unchanged(
+                        proof, intent, writer.receipts.uid,
+                        writer.receipts.writer_gid)):
                 raise V2OriginalConfigRefused("original_generation_or_fd_changed_before_write")
             result = writer._locked_commit(folder, intent, raw, effects)
             if (read_owned(root, owner_uid=writer.receipts.uid) is None or

@@ -377,15 +377,162 @@ class OriginalConfigV2Tests(unittest.TestCase):
             # User GUI deletes the first partial effect. It must not be
             # recreated from an uncommitted plan after diagnostic cut.
             self.auto.write_text("!untouched.example\n")
-            with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                        "original_v2_prepared_intent_unavailable"):
-                self.prepare()
-            with self.assertRaises(V2OriginalConfigRefused):
+            # Stage is read-only: the already bound partial plan can be
+            # inspected by original Config. Actual replay must refuse,
+            # because GUI deletion replaced first-target preimage.
+            self.assertEqual(self.prepare(), pending)
+            with self.assertRaisesRegex(V2OriginalConfigRefused,
+                                        "original_config_v2_commit_refused"):
                 self.commit(pending)
             self.assertTrue(pending.exists())
             self.assertEqual(self.auto.read_text(), "!untouched.example\n")
             self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
             self.assertFalse((folder / "recovery.json").exists())
+
+    def test_original_partial_plan_new_debug_safe_resume_unmodified_targets(self):
+        # P2a + ORIGINAL Config/P1/PSL/GUI shared CAS: auto target is
+        # physically after; known Youtube target still exactly BEFORE on
+        # original dev/inode/ctime. Native debug is independently cut.
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        import auto_detect_destination_commit as mod
+        original_replace = mod._replace
+        def interrupt_second(path, *args):
+            if path == self.youtube:
+                raise OSError("known-source-second-write-failed")
+            return original_replace(path, *args)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            with patch.object(mod, "_replace", side_effect=interrupt_second):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            plan_file = folder / "destination" / "plan.json"
+            plan_before = plan_file.read_bytes()
+            import json
+            planned = json.loads(plan_before)
+            self.assertEqual(planned["schema"], 2)
+            self.assertGreater(planned["writes"]["auto"]["before_inode"], 0)
+            self.assertGreater(planned["writes"]["youtube"]["before_inode"], 0)
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            auto_after_inode = self.auto.stat().st_ino
+            youtube_before_inode = self.youtube.stat().st_ino
+            self.assertIn("example.co.uk\n", self.auto.read_text())
+            old_debug = self.debug.with_name("original-partial-debug")
+            fresh = self.debug.with_name(".new-partial-debug")
+            fresh.write_bytes(b"")
+            fresh.chmod(0o600)
+            os.link(self.debug, old_debug)
+            os.replace(fresh, self.debug)
+            self.chain = CursorChain(self.receipts, self.queue)
+            self.assertEqual(self.prepare(), pending)
+            cp = self.commit(pending)
+            self.assertEqual(cp["evidence"], "native-debug")
+            self.assertEqual(self.commit(pending), cp)
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.ack(pending, cp))
+            self.assertEqual(self.auto.stat().st_ino, auto_after_inode)
+            self.assertNotEqual(self.youtube.stat().st_ino, youtube_before_inode)
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertEqual(plan_file.read_bytes(), plan_before)
+            self.assertFalse((folder / "recovery.json").exists())
+            self.assertFalse(self.chain.tip(self.proof).raw_first)
+            self.assertGreater(self.chain.tip(self.proof).cursor.offset, 0)
+            self.assertFalse(pending.exists())
+        self.assertEqual(self.auto.read_text(),
+                         "!untouched.example\nexample.co.uk\n")
+        self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
+
+    def test_original_partial_plan_user_rewrite_same_bytes_refuses(self):
+        # GUI-style atomic save with identical bytes also changes inode.
+        # A mere SHA(before) match is not proof an original target was
+        # untouched by the user after a plan was prepared.
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        import auto_detect_destination_commit as mod
+        original_replace = mod._replace
+        def interrupt_second(path, *args):
+            if path == self.youtube:
+                raise OSError("known-target-interruption")
+            return original_replace(path, *args)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            with patch.object(mod, "_replace", side_effect=interrupt_second):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            original_plan = (folder / "destination" / "plan.json").read_bytes()
+            # GUI re-saves untouched target: content reverts to old digest
+            # but the old protected file identity no longer exists.
+            changed = self.youtube.with_name(".user-resaved-youtube")
+            changed.write_bytes(self.youtube.read_bytes())
+            changed.chmod(0o600)
+            os.replace(changed, self.youtube)
+            self.assertEqual(self.prepare(), pending)
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertEqual((folder / "destination" / "plan.json").read_bytes(),
+                             original_plan)
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+
+    def test_original_partial_plan_corrupted_preimage_never_replays(self):
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        import auto_detect_destination_commit as mod
+        prior_replace = mod._replace
+        def interrupt_second(path, *args):
+            if path == self.youtube:
+                raise OSError("known-second-write-failed")
+            return prior_replace(path, *args)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            with patch.object(mod, "_replace", side_effect=interrupt_second):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            import json
+            plan_file = folder / "destination" / "plan.json"
+            plan = json.loads(plan_file.read_bytes())
+            plan["writes"]["youtube"]["before_inode"] = 0
+            plan_file.write_text(json.dumps(plan) + "\n")
+            old = self.debug.with_name("retained-tampered-preimage-debug")
+            fresh = self.debug.with_name(".new-tampered-preimage-debug")
+            fresh.write_bytes(b"")
+            fresh.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(fresh, self.debug)
+            with self.assertRaises(OriginalV2PrepareRefused):
+                self.prepare()
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertFalse((folder / "recovery.json").exists())
+
+    def test_same_inode_partial_plan_gui_delete_not_readded(self):
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        import auto_detect_destination_commit as mod
+        original_replace = mod._replace
+        def interrupt_second(path, *args):
+            if path == self.youtube:
+                raise OSError("second-target-failed")
+            return original_replace(path, *args)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(mod, "_replace", side_effect=interrupt_second):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            # Even WITHOUT a debug rotation, user deletion must block the
+            # stale partial plan. Before-sha alone was unsafe in _64.
+            self.auto.write_text("!untouched.example\n")
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertEqual(self.auto.read_text(), "!untouched.example\n")
 
     def test_recovery_replays_current_gui_exclusion_and_not_stale_plan(self):
         self.emit("video.example.co.uk")
