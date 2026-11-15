@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """#1052 P2k8b: dormant root-private known-HOSTLIST auto-owned components.
 
-Only an already qualified native Config/FD9 owner may initialize them (no CLI
-bootstrap). No user Config/XML changes or native engine/worker writes here.
+Only the exact original held FD9 + native PHP Config-locked first clean
+baseline may initialize them through the restricted internal bootstrap CLI.
+No user Config/XML changes or native engine/worker writes here.
 The read CLI is root-only and obtains the SAME P2k4/P2k5 destination flock
 for the shared final file and all known automatic components at one instant.
 Missing ownership authority is reported as unavailable, never empty.
