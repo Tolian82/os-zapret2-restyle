@@ -1119,7 +1119,7 @@ shared_apply_boot_service()
         [ "${#_shared_boot_new_id}" -eq 32 ] &&
         [ "$_shared_boot_new_id" != "$_shared_boot_id" ] || return 69
         _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
-        _shared_boot_last=$(printf '%s\\n' "$_shared_boot_build" | tail -n 1)
+        _shared_boot_last=$(printf '%s\n' "$_shared_boot_build" | tail -n 1)
         case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
         shared_apply_execute_service "$_shared_boot_new_id" strategies
         return $?
