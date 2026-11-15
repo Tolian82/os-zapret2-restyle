@@ -402,7 +402,7 @@ final class AutoDetectConfigSnapshot
         object $config, callable $modelFactory, string $expectedDigest
     ): string {
         if (preg_match('/^[0-9a-f]{64}$/D', $expectedDigest) !== 1) {
-            throw new \\RuntimeException('Invalid original initial Config digest');
+            throw new \RuntimeException('Invalid original initial Config digest');
         }
         SharedApplyLifecycleLock::assertHeld();
         $config->lock();
@@ -411,11 +411,11 @@ final class AutoDetectConfigSnapshot
             if (!is_object($model) || !method_exists($model, 'getNodes') ||
                 !is_array($nodes = $model->getNodes()) ||
                 !hash_equals($expectedDigest, VoiceSettingsSnapshot::digest($nodes))) {
-                throw new \\RuntimeException('Original initial Config changed');
+                throw new \RuntimeException('Original initial Config changed');
             }
             $fd9 = @fopen('php://fd/9', 'r+b');
             if (!is_resource($fd9)) {
-                throw new \\RuntimeException('Original native FD9 unavailable');
+                throw new \RuntimeException('Original native FD9 unavailable');
             }
             $pipes = [];
             $process = null;
@@ -430,26 +430,26 @@ final class AutoDetectConfigSnapshot
                     $pipes, null, ['LC_ALL' => 'C']
                 );
                 if (!is_resource($process)) {
-                    throw new \\RuntimeException('Native owned initialization unavailable');
+                    throw new \RuntimeException('Native owned initialization unavailable');
                 }
                 stream_set_blocking($pipes[1], false);
                 $reply = '';
                 $deadline = microtime(true) + 25;
                 while (!feof($pipes[1])) {
                     if (microtime(true) >= $deadline || strlen($reply) > 128) {
-                        throw new \\RuntimeException('Initial native ownership timeout');
+                        throw new \RuntimeException('Initial native ownership timeout');
                     }
                     $read = [$pipes[1]];
                     $write = [];
                     $except = [];
                     $ready = @stream_select($read, $write, $except, 1);
                     if ($ready === false) {
-                        throw new \\RuntimeException('Initial native ownership read failed');
+                        throw new \RuntimeException('Initial native ownership read failed');
                     }
                     if ($ready > 0) {
                         $chunk = fread($pipes[1], 129 - strlen($reply));
                         if ($chunk === false) {
-                            throw new \\RuntimeException('Initial native ownership child error');
+                            throw new \RuntimeException('Initial native ownership child error');
                         }
                         $reply .= $chunk;
                     }
@@ -459,8 +459,8 @@ final class AutoDetectConfigSnapshot
                 $exit = proc_close($process);
                 $process = null;
                 if ($exit !== 0 || !in_array($reply,
-                    ["auto-owned-bootstrap=created\\n", "auto-owned-bootstrap=existing\\n"], true)) {
-                    throw new \\RuntimeException('Original automatic baseline refused');
+                    ["auto-owned-bootstrap=created\n", "auto-owned-bootstrap=existing\n"], true)) {
+                    throw new \RuntimeException('Original automatic baseline refused');
                 }
             } finally {
                 foreach ($pipes as $pipe) {
@@ -478,7 +478,7 @@ final class AutoDetectConfigSnapshot
             if (!is_object($after) || !method_exists($after, 'getNodes') ||
                 !is_array($afterNodes = $after->getNodes()) ||
                 !hash_equals($expectedDigest, VoiceSettingsSnapshot::digest($afterNodes))) {
-                throw new \\RuntimeException('Original Config changed after empty baseline');
+                throw new \RuntimeException('Original Config changed after empty baseline');
             }
             return trim($reply);
         } finally {
@@ -551,7 +551,7 @@ final class AutoDetectConfigSnapshot
             } elseif (count($argv) === 3 && $argv[1] === 'bootstrap-known' &&
                       preg_match('/^[0-9a-f]{64}$/D', $argv[2]) === 1) {
                 $state = self::bootstrapKnownInitial(
-                    $config, static fn() => new \\OPNsense\\Zapret\\Zapret(), $argv[2]
+                    $config, static fn() => new \OPNsense\Zapret\Zapret(), $argv[2]
                 );
                 $result = ['result' => $state];
             } elseif (count($argv) === 4 &&
