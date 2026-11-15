@@ -107,11 +107,31 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.assertEqual(self.queue.inbox.stat().st_ino, before)
         self.assertEqual(list(self.queue.pending.iterdir()), [])
 
-    def test_torn_empty_hardlink_pending_is_not_idle(self):
-        # A torn P2a hardlink to a now-empty live inode is still pending
-        # recovery, not a clean minute with no original artifacts.
+    def test_torn_empty_hardlink_is_recovered_without_changing_live_inode(self):
+        # Crash after link() but before replace(), with zero discovery bytes.
+        # Recovery must remove ONLY the duplicate alias and return true idle.
         pending = self.queue.pending / (self.generation + "-" + "c" * 32 + ".txt")
         os.link(self.queue.inbox, pending)
+        live_before = self.queue.inbox.stat()
+        with self.queue.exclusive():
+            self.assertIsNone(self.stage())
+            self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
+            self.assertEqual(self.queue.inbox.stat().st_nlink, 1)
+            self.assertFalse(pending.exists())
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+            # The live inode still accepts authentic subsequent discoveries.
+            self.emit("one.example.com")
+            event = self.stage()
+            self.commit_and_ack(event, "one.example.com")
+        self.assertIn("one.example.com\\n", self.auto.read_text())
+
+    def test_detached_empty_pending_retains_original_without_idle(self):
+        # A detached empty pending has NO surviving live alias. Do not
+        # infer that it was a harmless duplicate or delete its only name.
+        pending = self.queue.pending / (self.generation + "-" + "d" * 32 + ".txt")
+        pending.write_bytes(b"")
+        pending.chmod(0o600)
         live_before = self.queue.inbox.stat()
         with self.queue.exclusive():
             with self.assertRaisesRegex(
@@ -119,9 +139,33 @@ class OriginalV2PrepareTests(unittest.TestCase):
             ):
                 self.stage()
             self.assertEqual(self.queue.inbox.stat().st_ino, live_before.st_ino)
-            self.assertEqual(pending.stat().st_ino, live_before.st_ino)
+            self.assertTrue(pending.exists())
             self.assertEqual(self.queue.segments(), [pending])
             self.assertEqual(self.chain.tip(self.proof).next_sequence, 0)
+
+    def test_native_append_races_empty_hardlink_recovery_without_loss(self):
+        # A writer may add a valid raw + native debug positive AFTER the
+        # initial empty-alias check and BEFORE queue.rotate snapshots it.
+        # In that case this becomes an ordinary detached data batch, never
+        # a discarded empty alias or unacknowledged idle minute.
+        pending = self.queue.pending / (self.generation + "-" + "e" * 32 + ".txt")
+        os.link(self.queue.inbox, pending)
+        original_rotate = self.queue.rotate
+
+        def append_just_before_rotate(*, generation, cycle, sequence):
+            self.emit("race.example.com")
+            return original_rotate(
+                generation=generation, cycle=cycle, sequence=sequence)
+
+        with self.queue.exclusive():
+            with patch.object(self.queue, "rotate", side_effect=append_just_before_rotate):
+                event = self.stage()
+            self.assertEqual(event, pending)
+            self.assertNotEqual(self.queue.inbox.stat().st_ino, event.stat().st_ino)
+            self.commit_and_ack(event, "race.example.com")
+            self.assertFalse(event.exists())
+            self.assertEqual(self.queue.inbox.read_bytes(), b"")
+        self.assertIn("race.example.com\\n", self.auto.read_text())
 
     def test_first_raw_rotates_and_persists_v2_not_legacy_intent(self):
         self.emit("one.example.com")
