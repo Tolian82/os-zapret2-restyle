@@ -22,7 +22,7 @@ from auto_detect_cursor_chain import CursorChain, CursorChainRefused
 from auto_detect_debug_window import MAX_DEBUG, MAX_WINDOW
 from auto_detect_destination_commit import DestinationCommit
 from auto_detect_epoch_fixture import sealed_original_epoch
-from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
                                              prepare_original_v2_locked)
@@ -169,13 +169,13 @@ class OriginalV2PrepareTests(unittest.TestCase):
 
     def test_stopped_epoch_retirement_preserves_ack_and_archived_inodes(self):
         self.emit("last.example.com")
-        old_raw = self.queue.inbox.stat()
         old_debug = self.debug.stat()
         old_debug_data = self.debug.read_bytes()
         with self.queue.exclusive():
             pending = self.stage()
             self.commit_and_ack(pending, "last.example.com")
             last_tip = self.chain.tip(self.proof)
+            drained_raw = self.queue.inbox.stat()
             with patch("auto_detect_fd.probe_stopped_pending_fd",
                        return_value=FDState.DRAINED):
                 self.assertTrue(self.receipts.retire_stopped(
@@ -184,9 +184,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
                     self.proof, self.queue))
             folder = self.receipts.root / self.generation
             self.assertEqual((folder / "retired-inbox.txt").stat().st_ino,
-                             self.queue.pending.parent.joinpath(
-                                 "inbox.txt").stat().st_ino if False else
-                             (folder / "retired-inbox.txt").stat().st_ino)
+                             drained_raw.st_ino)
             self.assertEqual((folder / "retired-debug.log").stat().st_ino,
                              old_debug.st_ino)
             self.assertEqual((folder / "retired-debug.log").read_bytes(),
@@ -205,7 +203,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.assertTrue(self.receipts.retire_stopped(
                     self.proof, self.queue, attest=self.attest))
             self.assertEqual(self.queue.inbox.stat().st_ino, live)
-        self.assertIn("last.example.com\\n", self.auto.read_text())
+        self.assertIn("last.example.com\n", self.auto.read_text())
 
     def test_unacked_old_source_never_gets_retirement_receipt(self):
         self.emit("notacked.example.com")
@@ -218,7 +216,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.receipts.retire_stopped(
                     self.proof, self.queue, attest=self.attest)
         self.assertTrue(pending.exists())
-        self.assertEqual(self.queue.inbox.stat().st_ino != before, True)
+        self.assertNotEqual(self.queue.inbox.stat().st_ino, before)
         self.assertFalse((self.receipts.root / self.generation /
                           "retired.json").exists())
 
