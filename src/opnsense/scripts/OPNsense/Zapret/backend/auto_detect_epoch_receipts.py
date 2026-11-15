@@ -388,7 +388,7 @@ class EpochReceipts:
                                      writer_gid=self.writer_gid)
             if ((key == "inbox" and data) or
                     (key != "inbox" and
-                     (b"\\x00" in data or (data and not data.endswith(b"\\n")))) or
+                     (b"\x00" in data or (data and not data.endswith(b"\n")))) or
                     info.st_nlink != 1 or
                     probe_stopped_pending_fd(
                         path, info.st_dev, info.st_ino, owner=proof.owner,
@@ -442,8 +442,8 @@ class EpochReceipts:
         for key, (live, archived) in source_paths.items():
             expected = plan["sources"][key]
             if expected is None:
-                if key != "previous" or live.exists() or live.is_symlink() or
-                        archived.exists() or archived.is_symlink():
+                if (key != "previous" or live.exists() or live.is_symlink() or
+                        archived.exists() or archived.is_symlink()):
                     raise ReceiptRefused("unexpected_old_debug_archive")
                 continue
             if (not isinstance(expected, list) or len(expected) != 4 or
