@@ -253,7 +253,7 @@ apply_runtime_observer_retirement_preflight()
 apply_runtime_observer_previous_preflight()
 {
     [ "$#" -eq 0 ] || return 64
-    case "${_apply_engine:-0}" in 0|1) ;; *) return 69 ;; esac
+    case "${_apply_engine:-}" in 0|1) ;; *) return 69 ;; esac
     if [ "$_apply_engine" = 1 ] ||
        [ -e "$ACTIVE_DIR/dvtws.args" ] ||
        [ -L "$ACTIVE_DIR/dvtws.args" ] ||
