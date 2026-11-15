@@ -1022,6 +1022,52 @@ class OriginalV2PrepareTests(unittest.TestCase):
                               "cursor-chain-v2" / "00000000" / "ack.json").exists())
             self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
 
+    def test_completed_config_cannot_report_idle_when_physical_ack_refuses(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            checkpoint = self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained)
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       return_value=checkpoint), patch.object(
+                           CursorChain, "acknowledge", return_value=False):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "original_physical_ack_not_durable"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertTrue(pending.exists())
+            self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
+        self.assertEqual(self.auto.read_text(),
+                         "!manual.invalid\\none.example.com\\n".replace("\\n", "\n"))
+
+    def test_post_unlink_recovery_cannot_report_idle_when_ack_refuses(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.chain.commit(
+                self.proof, pending,
+                {"auto": {"add": ["one.example.com"], "remove": []}},
+                self.writer, attest=self.attest, inspect=self.drained)
+            pending.unlink()
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")), patch.object(
+                           CursorChain, "acknowledge", return_value=False):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "original_post_unlink_ack_not_durable"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\\none.example.com\\n".replace("\\n", "\n"))
+
     def test_wrong_original_epoch_is_refused_before_rotation(self):
         self.emit("one.example.com")
         stale = EpochReceipts(self.base / "missing-epochs", owner_uid=os.geteuid())
