@@ -72,7 +72,10 @@ for key in ("all", "list", "auto"):
 assert "document.getElementById('zapret.hostlist.mode')" in view
 assert "option.textContent = targetModeLabelsRU[option.value];" in view
 assert "option.value =" not in view
-assert "localizeTargetModeOptions();\n                $('.selectpicker').selectpicker('refresh');" in view
+assert "function localizeAutoRestartOptions()" in view
+assert ("localizeTargetModeOptions();\n                "
+        "localizeAutoRestartOptions();\n                "
+        "$('.selectpicker').selectpicker('refresh');") in view
 controller = (root / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php").read_text()
 assert "'reason' => 'native-preflight-' . $match[1]" in controller
 assert "'reason' => 'strategies-preflight-' . $preflightStage" in controller
