@@ -129,13 +129,17 @@ def _original_completion_locked(queue: DurableInbox, pending: Path, *,
     if pending not in queue.segments():
         raise OriginalLockRefused('original_pending_missing')
     original_fd = queue.locked_fd
+    if retired:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
     try:
         result = subprocess.run(
             [php_bin, str(php_script),
              'commit-retired-with-fds' if retired else 'commit-with-fds',
              str(original_fd), pending.name],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, pass_fds=(original_fd,),
+            stderr=subprocess.DEVNULL,
+            pass_fds=(original_fd, 9) if retired else (original_fd,),
             timeout=timeout, check=False, close_fds=True)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise OriginalLockRefused('original_config_owner_unavailable') from exc
