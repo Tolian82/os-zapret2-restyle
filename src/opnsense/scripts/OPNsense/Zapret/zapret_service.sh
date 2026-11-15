@@ -1083,13 +1083,47 @@ shared_apply_boot_service()
         printf "native-common-boot=%s\n" "$_shared_boot_id"
         return 0
     fi
-    # A STOPPED old auto observer is still an unretired data owner.
-    # Before an otherwise valid cold Boot loads IPFW, reject that old
-    # generation in the same read-only gate as the replacement Apply.
-    # The subsequent runtime preflight repeats the check before any swap.
+    # A stopped original observer has a historical PID/birth and cannot
+    # be launched a second time under its first Apply operation ID.
+    # After verifying empty/absent plugin IPFW and zero live engines,
+    # finish any interrupted old queue/ACK retirement under the SAME FD9.
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 69
+    _shared_boot_prior_observer=0
+    if [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        _shared_boot_prior_observer=1
+        if ! shared_apply_ipfw_kernel_absent_service; then
+            firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
+        fi
+        _shared_boot_retired=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready) || _shared_boot_retired=
+        if [ "$_shared_boot_retired" != auto-detect-retire=ready ]; then
+            shared_apply_retire_stopped_original_service || return 69
+        fi
+    fi
     apply_runtime_observer_previous_preflight || return 69
+    if [ "$_shared_boot_prior_observer" = 1 ] &&
+       [ "$_shared_boot_mode" = 1 ]; then
+        # Reuse the EXISTING native Saved-Unchanged candidate and generator.
+        # This opens a NEW journal operation and native epoch, with the
+        # exact same user Config and only one original shared engine.
+        [ -x /usr/local/bin/php ] || return 69
+        _shared_boot_stage=$(/usr/local/bin/php \
+            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || return 69
+        case "$_shared_boot_stage" in
+            prepared-id=*) _shared_boot_new_id="${_shared_boot_stage#prepared-id=}" ;;
+            *) return 69 ;;
+        esac
+        case "$_shared_boot_new_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+        [ "${#_shared_boot_new_id}" -eq 32 ] &&
+        [ "$_shared_boot_new_id" != "$_shared_boot_id" ] || return 69
+        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
+        _shared_boot_last=$(printf '%s\\n' "$_shared_boot_build" | tail -n 1)
+        case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
+        shared_apply_execute_service "$_shared_boot_new_id" strategies
+        return $?
+    fi
     # After verifying the sealed owner and absence of an engine/monitor,
     # FreeBSD may have no IPFW module loaded after a cold boot. First attest
     # that there are no untracked engines. Only then prepare native firewall
