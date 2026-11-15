@@ -178,17 +178,16 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
             if archived.st_nlink != 1 or (
                     fresh_path.exists() or fresh_path.is_symlink()):
                 raise OriginalV2PrepareRefused("unsafe_completed_debug_cut")
-            # In the generation-sticky raw-first path, an uncommitted
-            # live/pending raw batch wins over cosmetic debug retention.
-            # Do not delete any archive while raw is unprocessed; let the
-            # original queue -> Config/P1 -> checkpoint/ACK finish first.
-            # No native writer lock, SIGSTOP, restart or IPFW action.
-            if raw_first:
-                queued = queue.segments()
-                live_raw = _stat_regular(queue.inbox, uid,
-                                         max_size=MAX_SEGMENT, writer_gid=gid)
-                if queued or live_raw.st_size:
-                    return False
+            # An uncommitted live/pending RAW batch wins over cosmetic
+            # diagnostic retirement in BOTH native-debug and raw-first modes.
+            # The inode change itself already forces the original proven
+            # raw-first UNKNOWN fallback; do not allow a busy old debug FD
+            # to block new native discoveries, and never unlink that archive.
+            queued = queue.segments()
+            live_raw = _stat_regular(queue.inbox, uid,
+                                     max_size=MAX_SEGMENT, writer_gid=gid)
+            if queued or live_raw.st_size:
+                return False
             if (inspect_debug(old_path, archived.st_dev, archived.st_ino,
                               owner=proof.owner, writer_gid=gid)
                     is not FDState.DRAINED or attest() != proof):

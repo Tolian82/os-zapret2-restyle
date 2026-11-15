@@ -101,6 +101,38 @@ class LifetimeTests(unittest.TestCase):
         # Real diagnostic-only file above the P2k1 256-KiB window now
         # rotates safely without inventing an ACK or restarting dvtws2.
 
+    def test_busy_old_debug_archive_never_blocks_new_raw(self):
+        proof = self.proof(1)
+        cursor = Cursor(proof.generation, self.debug.stat().st_dev,
+                        self.debug.stat().st_ino, 0, EMPTY_HASH)
+        tip = ChainTip(0, cursor, "c" * 64, None, None, frozenset(), False)
+        with patch.object(prep, "DEBUG_HIGH_WATERMARK", 64):
+            with self.queue.exclusive():
+                self.debug.write_bytes(b"diagnostic-only-before-raw\n" +
+                                       b"x" * 90 + b"\n")
+                self.assertTrue(_debug_cut_once(
+                    self.queue, self.receipts, proof, cursor, False,
+                    lambda: proof,
+                    lambda *args, **kwargs: FDState.DRAINED,
+                    retirement_tip=tip))
+                old = self.debug.parent / prep.DEBUG_OLD
+                prior_inode = old.stat().st_ino
+                self.inbox.write_bytes(b"new.example.com\n")
+                self.debug.write_bytes(b"diagnostic-only-after-raw\n" +
+                                       b"y" * 90 + b"\n")
+                # The old debug FD may still be busy, but a real raw domain
+                # cannot wait for cosmetic debug retention. No old archive
+                # is dropped or false Config/ACK reported.
+                self.assertFalse(_debug_cut_once(
+                    self.queue, self.receipts, proof, cursor, False,
+                    lambda: proof,
+                    lambda *args, **kwargs: FDState.BUSY,
+                    retirement_tip=tip))
+                self.assertEqual(self.inbox.read_bytes(),
+                                 b"new.example.com\n")
+                self.assertEqual(old.stat().st_ino, prior_inode)
+                self.assertEqual(self.queue.segments(), [])
+
     def seed_completed(self, number: int):
         proof = self.proof(number)
         folder = self.receipts.root / proof.generation
