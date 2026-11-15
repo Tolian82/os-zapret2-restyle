@@ -185,7 +185,9 @@ class EpochReceipts:
         # original-owner recovery witness while its sealed successor is
         # atomically published. No separate epoch, owner or Config writer.
         allowed = ("pretraffic.json", "epoch.json", "cursor-chain-v2",
-                   "cursor-chain-v2.next", "cursor-chain-v2.old")
+                   "cursor-chain-v2.next", "cursor-chain-v2.old",
+                   "retired.json", "retired-inbox.txt", "retired-debug.log",
+                   "retired-debug-previous.log")
         if len(entries) > len(allowed) or any(name not in allowed for name in entries):
             raise ReceiptRefused("superseded_one_intent_epoch_refused")
         for name in ("cursor-chain-v2", "cursor-chain-v2.next",
@@ -363,6 +365,195 @@ class EpochReceipts:
         except (OSError, ValueError, TypeError, QueueSafetyError,
                 DebugWindowRefused, OriginalSourceRefused) as exc:
             raise ReceiptRefused("original_postlaunch_epoch_not_attested") from exc
+
+
+    def _retired_plan(self, proof: GenerationProof, queue: DurableInbox,
+                      tip) -> dict:
+        """One immutable old-generation retirement proof; no other log."""
+        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
+        from auto_detect_fd import FDState, probe_stopped_pending_fd
+        if (queue.segments() or tip.open_folder is not None or
+                tip.open_intent is not None or
+                (queue.root / DEBUG_NEXT).exists() or
+                (queue.root / DEBUG_NEXT).is_symlink()):
+            raise ReceiptRefused("unprocessed_or_interrupted_old_source")
+        snapshot = {}
+        for key, path in (("inbox", queue.inbox),
+                          ("debug", Path(proof.debug_path)),
+                          ("previous", queue.root / DEBUG_OLD)):
+            if key == "previous" and not path.exists() and not path.is_symlink():
+                snapshot[key] = None
+                continue
+            info, data = _read_exact(path, owner_uid=self.uid,
+                                     writer_gid=self.writer_gid)
+            if ((key == "inbox" and data) or
+                    (key != "inbox" and
+                     (b"\\x00" in data or (data and not data.endswith(b"\\n")))) or
+                    info.st_nlink != 1 or
+                    probe_stopped_pending_fd(
+                        path, info.st_dev, info.st_ino, owner=proof.owner,
+                        writer_gid=queue.writer_gid) is not FDState.DRAINED):
+                raise ReceiptRefused("old_native_source_not_drained")
+            snapshot[key] = [info.st_dev, info.st_ino, len(data),
+                             hashlib.sha256(data).hexdigest()]
+        return {
+            "schema": 1, "kind": "original-stopped-source-retirement",
+            "generation": proof.generation,
+            "owner_sha256": hashlib.sha256(
+                _canonical(_proof_fields(proof))).hexdigest(),
+            "last_ack_sha256": tip.previous_ack_sha256,
+            "cycle": tip.cycle,
+            "next_sequence": tip.next_sequence,
+            "sources": snapshot,
+        }
+
+    def _retired_sources(self, proof: GenerationProof, queue: DurableInbox,
+                         plan: dict, *, repair: bool) -> bool:
+        """Preserve old inodes in the SAME epoch, re-create empty producer.
+
+        Old appends are all ACKed before the durable plan is written. No
+        copytruncate, no new engine, no second original writer and no
+        extra service. Each rename is recoverable after a process crash.
+        """
+        if (not isinstance(plan, dict) or
+                set(plan) != {"schema", "kind", "generation", "owner_sha256",
+                             "last_ack_sha256", "cycle", "next_sequence", "sources"} or
+                plan["schema"] != 1 or
+                plan["kind"] != "original-stopped-source-retirement" or
+                plan["generation"] != proof.generation or
+                plan["owner_sha256"] != hashlib.sha256(
+                    _canonical(_proof_fields(proof))).hexdigest() or
+                not isinstance(plan["sources"], dict) or
+                set(plan["sources"]) != {"inbox", "debug", "previous"}):
+            raise ReceiptRefused("unqualified_old_retirement_plan")
+        folder = self._generation(proof.generation, create=False)
+        mode = 0o660 if self.writer_gid is not None else 0o600
+        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
+        if (queue.segments() or
+                (queue.root / DEBUG_NEXT).exists() or
+                (queue.root / DEBUG_NEXT).is_symlink()):
+            raise ReceiptRefused("foreign_pending_during_old_retirement")
+        source_paths = {
+            "inbox": (queue.inbox, folder / "retired-inbox.txt"),
+            "debug": (Path(proof.debug_path), folder / "retired-debug.log"),
+            "previous": (queue.root / DEBUG_OLD,
+                         folder / "retired-debug-previous.log"),
+        }
+        for key, (live, archived) in source_paths.items():
+            expected = plan["sources"][key]
+            if expected is None:
+                if key != "previous" or live.exists() or live.is_symlink() or
+                        archived.exists() or archived.is_symlink():
+                    raise ReceiptRefused("unexpected_old_debug_archive")
+                continue
+            if (not isinstance(expected, list) or len(expected) != 4 or
+                    any(type(v) is not int or v < 0 for v in expected[:3]) or
+                    not isinstance(expected[3], str) or
+                    not HEX64.fullmatch(expected[3]) or expected[1] <= 0):
+                raise ReceiptRefused("invalid_old_source_identity")
+            if not archived.exists() and not archived.is_symlink():
+                if not repair:
+                    return False
+                before, data = _read_exact(
+                    live, owner_uid=self.uid, writer_gid=self.writer_gid)
+                if ([before.st_dev, before.st_ino, len(data),
+                     hashlib.sha256(data).hexdigest()] != expected or
+                        before.st_nlink != 1 or
+                        before.st_dev != folder.stat().st_dev):
+                    raise ReceiptRefused("old_native_source_changed_before_archive")
+                if repair:
+                    # Existing FD9 and stopped epoch are re-attested around
+                    # each source rename by the public caller.
+                    os.rename(live, archived)
+                    _sync(folder)
+                    _sync(queue.root)
+            old, old_bytes = _read_exact(
+                archived, owner_uid=self.uid, writer_gid=self.writer_gid)
+            if [old.st_dev, old.st_ino, len(old_bytes),
+                hashlib.sha256(old_bytes).hexdigest()] != expected:
+                raise ReceiptRefused("retired_old_inode_not_original")
+            if key == "previous":
+                if live.exists() or live.is_symlink():
+                    raise ReceiptRefused("retained_old_debug_archive_reappeared")
+                continue
+            if live.exists() or live.is_symlink():
+                new = _read_exact(live, owner_uid=self.uid,
+                                  writer_gid=self.writer_gid)
+                if (new[1] or (new[0].st_dev, new[0].st_ino) ==
+                        (old.st_dev, old.st_ino) or
+                        stat.S_IMODE(new[0].st_mode) != mode):
+                    raise ReceiptRefused("untrusted_fresh_original_producer")
+            elif repair:
+                # The producer was positively stopped BEFORE the old file
+                # was renamed into the protected epoch. No engine can open
+                # this pathname until a NEW shared operation is committed.
+                fd = os.open(live, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                             os.O_NOFOLLOW, 0o600)
+                try:
+                    os.fchown(fd, self.uid, self.writer_gid
+                              if self.writer_gid is not None else self.uid)
+                    os.fchmod(fd, mode)
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
+                _sync(queue.root)
+            else:
+                return False
+        return True
+
+    def retire_stopped(self, proof: GenerationProof, queue: DurableInbox, *,
+                       attest=None) -> bool:
+        """Finish the original ACKed source lifetime before the NEXT ID.
+
+        Required by explicit Stop/Boot only after engine and supervisor exit.
+        One original epoch receipt is written BEFORE retiring any pathname.
+        """
+        from auto_detect_cursor_chain import CursorChain
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not callable(attest) or attest() != proof):
+            raise ReceiptRefused("stopped_original_fd9_queue_required")
+        folder, _ = self._epoch(proof)
+        tip = CursorChain(self, queue).tip(proof)
+        if (tip.open_intent is not None or queue.segments()):
+            raise ReceiptRefused("unacknowledged_old_generation")
+        plan_path = folder / "retired.json"
+        if plan_path.exists() or plan_path.is_symlink():
+            plan = json.loads(_read(plan_path, self.uid))
+            if (plan["last_ack_sha256"] != tip.previous_ack_sha256 or
+                    plan["cycle"] != tip.cycle or
+                    plan["next_sequence"] != tip.next_sequence):
+                raise ReceiptRefused("old_source_retirement_cursor_changed")
+        else:
+            plan = self._retired_plan(proof, queue, tip)
+            if attest() != proof or queue.segments():
+                raise ReceiptRefused("old_source_changed_before_retirement")
+            _write_once(folder, "retired.json", _canonical(plan), self.uid)
+        if attest() != proof:
+            raise ReceiptRefused("stopped_owner_changed_after_retirement_plan")
+        if not self._retired_sources(proof, queue, plan, repair=True):
+            raise ReceiptRefused("original_retirement_not_complete")
+        if attest() != proof or not self._retired_sources(
+                proof, queue, plan, repair=False):
+            raise ReceiptRefused("retired_source_not_attested")
+        return True
+
+    def verify_retired(self, proof: GenerationProof, queue: DurableInbox) -> bool:
+        """Read-only verification; never an authority to start the old PID."""
+        from auto_detect_cursor_chain import CursorChain
+        if not isinstance(queue, DurableInbox) or not queue._held:
+            raise ReceiptRefused("original_retirement_queue_required")
+        folder, _ = self._epoch(proof)
+        tip = CursorChain(self, queue).tip(proof)
+        plan_path = folder / "retired.json"
+        if not (plan_path.exists() and not plan_path.is_symlink()):
+            return False
+        plan = json.loads(_read(plan_path, self.uid))
+        if (plan.get("last_ack_sha256") != tip.previous_ack_sha256 or
+                plan.get("next_sequence") != tip.next_sequence or
+                plan.get("cycle") != tip.cycle):
+            raise ReceiptRefused("retired_old_ack_not_final")
+        return self._retired_sources(proof, queue, plan, repair=False)
 
     def _epoch(self, proof: GenerationProof) -> tuple[Path, dict]:
         expected = _proof_fields(proof)
