@@ -160,6 +160,20 @@ sed -n '/^shared_apply_stop_service()/,/^}/p' "$SERVICE_SOURCE" |
     grep -Fq 'apply_runtime_observer_retirement_preflight' ||
     fail "SHARED_STOP_MISSING_PRE_STOP_GUARD"
 printf 'P2_OLD_GENERATION_STOP_APPLY_PRE_JOURNAL_REFUSAL=PASS\n'
+# Cold Boot must refuse a stale stopped observer BEFORE the first
+# mutating IPFW prerequisite, not just inside activation after module load.
+awk '
+    /^shared_apply_boot_service\(\)/ { inside=1 }
+    inside && /apply_runtime_observer_previous_preflight/ { gate=NR }
+    inside && /prepare_firewall_prerequisites/ {
+        if (!gate || gate >= NR) exit 1
+        checked=1
+    }
+    inside && /^}/ { exit !checked }
+    END { if (!checked) exit 1 }
+' "$SERVICE_SOURCE" ||
+    fail "COLD_BOOT_PREPARED_IPFW_BEFORE_OLD_OBSERVER_GATE"
+printf 'P2_COLD_BOOT_STALE_OBSERVER_BEFORE_IPFW=PASS\n'
 
 # P2k8q3a exercises the ACTUAL original launcher and activation call chain.
 # A mock Python process represents the ORIGINAL FD9 call ordering.
