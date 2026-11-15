@@ -251,7 +251,7 @@ final class AutoDetectConfigSnapshot
                         SharedApplyLifecycleLock::assertHeld();
                         $lifecycle = @fopen('php://fd/9', 'r+b');
                         if (!is_resource($lifecycle)) {
-                            throw new \\RuntimeException('Original retired lifecycle FD9 unavailable');
+                            throw new \RuntimeException('Original retired lifecycle FD9 unavailable');
                         }
                     }
                     $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'],
@@ -266,6 +266,9 @@ final class AutoDetectConfigSnapshot
                         $pipes, null, ['LC_ALL' => 'C']
                     );
                     if (!is_resource($process)) {
+                        if (is_resource($lifecycle)) {
+                            fclose($lifecycle);
+                        }
                         throw new \RuntimeException('Original locked Python child unavailable');
                     }
                     try {
