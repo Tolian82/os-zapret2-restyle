@@ -4,6 +4,8 @@
 
 ## Exact source boundary
 
+**Current handoff identity:** `v0.6.5_70` — native #1052 single-PR source candidate, **not yet an accepted package**.
+
 **Exact candidate identity:** `VERSION=0.6.5`, `PLUGIN_REVISION=70`; prospective `os-zapret2-restyle-0.6.5_70.pkg` **NOT PUBLISHED**. Latest stable owner-installed package is `0.6.5_1`.
 
 **Publication identity:** `main v0.6.5_69` → integration candidate `v0.6.5_70` (one revision and versioned commit). Original accumulated `_72` feature branch is retained unchanged for audit; it is not the merge candidate. CI and FreeBSD acceptance are incomplete; no package has been published.

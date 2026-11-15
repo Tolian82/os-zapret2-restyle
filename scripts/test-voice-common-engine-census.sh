@@ -88,6 +88,11 @@ sh -n "$TMP/stop.sh" || fail "invalid common Stop function"
 QUERY_FAIL=0; export QUERY_FAIL
 mkdir -p "$TMP/owner/release" "$TMP/active"
 ACTIVE_DIR="$TMP/active"
+# A genuinely committed common release always contains its compiled
+# dvtws.args. This test previously stubbed tree verification while omitting
+# that required file, so the new original-observer classifier correctly
+# refused the artificial "stopped owner" before the engine-census test.
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
 SUPERVISOR_MONITOR_PIDFILE="$TMP/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$TMP/daemon.pid"
 SUPERVISOR_LOOP="$TMP/supervisor_loop.sh"
