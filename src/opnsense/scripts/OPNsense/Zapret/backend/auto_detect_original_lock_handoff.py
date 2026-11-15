@@ -188,9 +188,11 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
                     writer.receipts.uid, targets=writer.targets)
                 if verified is None or attest() != proof:
                     raise OriginalLockRefused("missing_pending_without_original_checkpoint")
-                return chain.acknowledge(
+                if not chain.acknowledge(
                     proof, absent, verified[0], writer,
-                    attest=attest, inspect=inspect)
+                    attest=attest, inspect=inspect):
+                    raise OriginalLockRefused("original_post_unlink_ack_not_durable")
+                return True
         pending = prepare_original_v2_locked(
             queue, writer.receipts, attest=attest, inspect=inspect)
         if pending is None:
@@ -205,8 +207,13 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
             php_script=php_script, timeout=timeout)
         if attest() != proof:
             raise OriginalLockRefused("original_owner_changed_after_config_child")
-        return CursorChain(writer.receipts, queue).acknowledge(
-            proof, pending, result, writer, attest=attest, inspect=inspect)
+        if not chain.acknowledge(
+            proof, pending, result, writer, attest=attest, inspect=inspect):
+            # A completed Config/P1 checkpoint is NOT a completed physical
+            # ACK. If old FD/inode changed during the final race, retain
+            # pending and report a refusal rather than a false idle minute.
+            raise OriginalLockRefused("original_physical_ack_not_durable")
+        return True
     except (CursorChainRefused, OriginalV2PrepareRefused, DestinationRefused,
             ReceiptRefused, OSError, ValueError, TypeError, KeyError) as exc:
         raise OriginalLockRefused("original_v2_transaction_or_ack_unavailable") from exc
