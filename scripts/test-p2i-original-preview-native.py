@@ -968,7 +968,7 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 with original_queue.exclusive():
                     with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
                         try:
-                            v2_prepare._debug_cut_once(
+                            refused_cut = v2_prepare._debug_cut_once(
                                 original_queue, native_receipts, native_proof,
                                 tip.cursor, tip.raw_first, attest_native,
                                 probe_pending_fd,
@@ -979,7 +979,12 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                                 "retained_debug_writer_fd_not_drained"},
                                 "NATIVE_V2_UNPROVEN_THIRD_CUT_WRONG_REFUSAL")
                         else:
-                            raise RuntimeError("NATIVE_V2_UNPROVEN_THIRD_CUT_ACCEPTED")
+                            # No old archive can be cut while this new raw
+                            # discovery is still awaiting a destination ACK.
+                            # The current source intentionally returns False
+                            # (no cut), not an exception, in that state.
+                            need(refused_cut is False,
+                                 "NATIVE_V2_UNPROVEN_THIRD_CUT_ACCEPTED")
                     need(RAW_PATH.read_text(encoding="ascii").splitlines() ==
                          [UNKNOWN_SECOND], "NATIVE_V2_UNPROVEN_THIRD_CUT_DROPPED_RAW")
                     final_pending = v2_prepare.prepare_original_v2_locked(

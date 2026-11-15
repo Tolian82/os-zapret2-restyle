@@ -124,7 +124,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.emit("one.example.com")
             event = self.stage()
             self.commit_and_ack(event, "one.example.com")
-        self.assertIn("one.example.com\\n", self.auto.read_text())
+        self.assertIn("one.example.com\n", self.auto.read_text())
 
     def test_detached_empty_pending_retains_original_without_idle(self):
         # A detached empty pending has NO surviving live alias. Do not
@@ -165,7 +165,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.commit_and_ack(event, "race.example.com")
             self.assertFalse(event.exists())
             self.assertEqual(self.queue.inbox.read_bytes(), b"")
-        self.assertIn("race.example.com\\n", self.auto.read_text())
+        self.assertIn("race.example.com\n", self.auto.read_text())
 
     def test_stopped_epoch_retirement_preserves_ack_and_archived_inodes(self):
         self.emit("last.example.com")
@@ -807,7 +807,15 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 with self.queue.exclusive():
                     before_cut = self.debug.stat().st_ino
                     self.assertIsNone(self.stage(inspect_debug=drained))
-                    self.assertEqual(archived.stat().st_ino, before_cut)
+                    if number == 1:
+                        # First high-water debug cut already occurred in
+                        # stage() before the first raw was detached; idle
+                        # cannot rotate a still empty new debug again.
+                        self.assertNotEqual(archived.stat().st_ino, before_cut)
+                    else:
+                        # The next cycles cut only after their raw ACK,
+                        # retiring the previous fully ACKed debug archive.
+                        self.assertEqual(archived.stat().st_ino, before_cut)
                     self.assertEqual(self.debug.read_bytes(), b"")
                     self.assertEqual(self.queue.segments(), [])
                     prior_archive = archived.stat().st_ino
@@ -1279,21 +1287,43 @@ class OriginalV2PrepareTests(unittest.TestCase):
             return self.proof if calls[0] == 1 else replace(self.proof, generation="f" * 32)
         original = self.queue.inbox.stat().st_ino
         with self.queue.exclusive():
-            with self.assertRaisesRegex(OriginalV2PrepareRefused, "original_owner_changed_before_rotation"):
+            # The original cursor-capacity guard now reattests before raw
+            # rotation, so a changed owner is refused EARLIER than the
+            # subsequent explicit before-rotate check.
+            with self.assertRaisesRegex(
+                OriginalV2PrepareRefused, "original_v2_prepared_intent_unavailable"
+            ):
                 self.stage(attest=changed)
         self.assertEqual(self.queue.inbox.stat().st_ino, original)
         self.assertEqual(len(list(self.queue.pending.iterdir())), 0)
+        self.assertEqual(self.queue.inbox.read_bytes(), b"one.example.com\n")
 
     def test_changed_owner_after_rotation_keeps_original_pending(self):
         self.emit("one.example.com")
-        calls = [0]
+        native_changed = [False]
         def changed():
-            calls[0] += 1
-            return self.proof if calls[0] < 3 else replace(self.proof, generation="f" * 32)
+            return (replace(self.proof, generation="f" * 32)
+                    if native_changed[0] else self.proof)
+        original_rotate = self.queue.rotate
+        def rotate_and_change_owner(*, generation, cycle, sequence):
+            segment = original_rotate(
+                generation=generation, cycle=cycle, sequence=sequence)
+            native_changed[0] = True
+            return segment
         with self.queue.exclusive():
-            with self.assertRaisesRegex(OriginalV2PrepareRefused, "original_owner_changed_after_rotation"):
-                self.stage(attest=changed)
-        self.assertEqual(len(list(self.queue.pending.iterdir())), 1)
+            # Do not count prior attestation calls: switch owner precisely
+            # AFTER physical P2a rotation. The detached pending must remain
+            # unACKed and the fresh live raw pathname must still exist.
+            with patch.object(self.queue, "rotate",
+                              side_effect=rotate_and_change_owner):
+                with self.assertRaisesRegex(
+                    OriginalV2PrepareRefused, "original_owner_changed_after_rotation"
+                ):
+                    self.stage(attest=changed)
+        pending = list(self.queue.pending.iterdir())
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0].read_bytes(), b"one.example.com\n")
+        self.assertEqual(self.queue.inbox.read_bytes(), b"")
 
     def test_unrelated_legacy_receipt_blocks_v2_preflight(self):
         self.emit("one.example.com")
