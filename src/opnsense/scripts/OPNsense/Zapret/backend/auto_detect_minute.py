@@ -175,10 +175,41 @@ def native_retire_once() -> int:
         proof = attest_stopped_generation()
         if not isinstance(proof, GenerationProof):
             raise MinuteRefused('missing_old_generation_proof')
+        import pwd
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise MinuteRefused('invalid_stopped_writer_gid')
+        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        # A crash AFTER the one durable retirement plan but BEFORE all
+        # pathname renames must finish those renames FIRST; never run the
+        # original pending preparer over a half-retired source tree.
+        with queue.exclusive():
+            folder, _ = receipts._epoch(proof)
+            retirement_exists = ((folder / 'retired.json').exists() or
+                                 (folder / 'retired.json').is_symlink())
+            if retirement_exists:
+                receipts.retire_stopped(proof, queue,
+                                        attest=attest_stopped_generation)
+                if not receipts.verify_retired(proof, queue):
+                    raise MinuteRefused('old_retirement_incomplete')
+                print('auto-detect-retire=idle')
+                return 0
         changed = run_native_original_v2_cycle_once(retired=True)
         if type(changed) is not bool or attest_stopped_generation() != proof:
             raise MinuteRefused('old_generation_changed_during_retirement')
-        print('auto-detect-retire=' + ('processed' if changed else 'idle'))
+        if changed:
+            print('auto-detect-retire=processed')
+            return 0
+        # Native raw is now empty, every original pending was ACKed, and
+        # there are no old open cursor intents. Move the exact old inodes
+        # into their existing epoch and provision only fresh empty paths.
+        with queue.exclusive():
+            receipts.retire_stopped(proof, queue,
+                                    attest=attest_stopped_generation)
+            if not receipts.verify_retired(proof, queue):
+                raise MinuteRefused('old_retirement_incomplete')
+        print('auto-detect-retire=idle')
         return 0
     except (MinuteRefused, OriginalLockRefused, GenerationRefused,
             ReceiptRefused, OSError, ValueError, RuntimeError, KeyError) as exc:
