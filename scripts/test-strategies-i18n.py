@@ -15,6 +15,7 @@ ids = [field.findtext("id") for field in form.findall("./field")
        if field.findtext("id") and field.findtext("type") != "info"]
 targets = {
     "zapret.general.enabled", "zapret.general.waninterface", "zapret.general.divertport",
+    "zapret.general.autorestart",
     "zapret.strategy.trafficargs", "zapret.strategy.extraargs", "zapret.hostlist.mode",
     "zapret.hostlist.youtubedomains", "zapret.hostlist.telegramips",
     "zapret.hostlist.userdomains", "zapret.hostlist.excludedomains",
@@ -58,7 +59,7 @@ for name in ("strategiesLabelsRU", "strategiesHelpRU"):
     match = re.search(r"const " + name + r" = \{(.*?)\n        \};", view, re.DOTALL)
     assert match, f"RU dictionary missing: {name}"
     keys = re.findall(r"^\s*'(zapret\.[^']+)':", match.group(1), re.MULTILINE)
-    assert len(keys) == 10 and set(keys) == targets, f"RU {name} map incomplete: {keys}"
+    assert len(keys) == 11 and set(keys) == targets, f"RU {name} map incomplete: {keys}"
 # The production model owns these immutable option keys; translating UI text
 # must not change the selected value, submission or English fallback.
 model = ET.parse(root / "src/opnsense/mvc/app/models/OPNsense/Zapret/Zapret.xml").getroot()
@@ -136,7 +137,7 @@ assert "не готовые стратегии" in view
 
 assert "Additional global dvtws2 arguments" not in view
 assert "Additional global dvtws2 arguments" not in help_fields["zapret.strategy.extraargs"]
-# The runtime RU help dictionary has exactly the same 10 existing fields;
+# The runtime RU help dictionary covers all 11 actual native fields;
 # check that the six enhanced explanations are present there as well.
 help_ru = re.search(
     r"const strategiesHelpRU = \{(.*?)\n        \};", view, re.DOTALL
@@ -192,4 +193,4 @@ if shutil.which("node"):
         text=True, capture_output=True, check=False,
     )
     assert run.returncode == 0, run.stderr
-print("PASS: 10 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")
+print("PASS: 11 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")
