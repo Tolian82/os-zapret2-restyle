@@ -386,6 +386,28 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertEqual(self.queue.segments(), [])
         self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
 
+    def test_original_p2k8o_recovers_existing_native_debug_intent(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            folder = self.chain.tip(self.proof).open_folder
+            original = (folder / "intent.json").read_bytes()
+            previous = self.debug.with_name("original-debug-retained")
+            new = self.debug.with_name(".new-debug-retained")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, previous)
+            os.replace(new, self.debug)
+            self.assertEqual(self.stage(), pending)
+            self.assertEqual((folder / "intent.json").read_bytes(), original)
+            self.assertTrue((folder / "recovery.json").exists())
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.commit_and_ack(pending, "one.example.com")
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+        self.assertEqual(previous.read_bytes().count(b"adding to "), 1)
+
     def test_prior_ack_debug_tamper_refuses_second_original_raw_cut(self):
         self.emit("one.example.com")
         with self.queue.exclusive():

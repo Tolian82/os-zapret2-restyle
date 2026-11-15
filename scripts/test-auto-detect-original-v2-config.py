@@ -268,6 +268,65 @@ class OriginalConfigV2Tests(unittest.TestCase):
                 f"{step:08d}" / "destination" / "checkpoint.json")
         return json.loads(path.read_text())
 
+    def test_original_config_recovers_preplan_native_debug_as_unknown(self):
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            folder = self.chain.tip(self.proof).open_folder
+            original_intent = (folder / "intent.json").read_bytes()
+            old_debug = self.debug.with_name("previous-original-debug")
+            new_debug = self.debug.with_name(".prepared-debug")
+            new_debug.write_bytes(b"")
+            new_debug.chmod(0o600)
+            os.link(self.debug, old_debug)
+            os.replace(new_debug, self.debug)
+            # Original parent re-enters P2k8o with SAME original queue lock
+            # and unchanged pending: one root-private recovery receipt.
+            self.assertEqual(self.prepare(), pending)
+            self.assertEqual((folder / "intent.json").read_bytes(), original_intent)
+            self.assertTrue((folder / "recovery.json").is_file())
+            self.assertEqual(self.chain.tip(self.proof).open_intent["evidence"],
+                             "raw-first")
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+            # Genuine original P1/Config policy is sampled only now.
+            cp = self.commit(pending)
+            self.assertEqual(cp["evidence"], "raw-first")
+            self.assertEqual(self.commit(pending), cp)
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.ack(pending, cp))
+            self.assertTrue(self.chain.tip(self.proof).raw_first)
+            self.assertFalse(pending.exists())
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.emit("cdn.second.com")
+            second = self.prepare()
+            self.assertTrue(self.ack(second, self.commit(second)))
+            self.assertEqual(self.chain.tip(self.proof).cursor.offset, 0)
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 2)
+        self.assertEqual(self.auto.read_text(),
+                         "!untouched.example\nexample.co.uk\nsecond.com\n")
+        self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
+
+    def test_recovery_replays_current_gui_exclusion_and_not_stale_plan(self):
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            old = self.debug.with_name("previous-debug")
+            new = self.debug.with_name(".future-debug")
+            new.write_bytes(b"")
+            new.chmod(0o600)
+            os.link(self.debug, old)
+            os.replace(new, self.debug)
+            self.assertEqual(self.prepare(), pending)
+            # User edits manual exclusions AFTER original native event;
+            # recovery must ask P1/Config now, not reuse earlier guesses.
+            self.excluded = "example.co.uk\n"
+            cp = self.commit(pending)
+            self.assertTrue(self.ack(pending, cp))
+            self.assertEqual(self.auto.read_text(), "!untouched.example\n")
+            self.assertEqual(self.chain.tip(self.proof).next_sequence, 1)
+
     def test_modified_debug_prefix_keeps_original_pending(self):
         self.emit("video.example.co.uk")
         with self.queue.exclusive():
