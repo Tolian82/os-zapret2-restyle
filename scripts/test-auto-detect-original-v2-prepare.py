@@ -497,6 +497,66 @@ class OriginalV2PrepareTests(unittest.TestCase):
                     self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
                 self.assertEqual(retained.stat().st_ino, old_id)
                 self.assertEqual(self.queue.segments(), [])
+    def test_original_512_slot_chain_rolls_over_twice_without_engine_action(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for step in range(1, 6):
+                host = f"durable-{step}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage()
+                    self.assertIsNotNone(pending)
+                    self.commit_and_ack(pending, host)
+                if step in (2, 4):
+                    with self.queue.exclusive():
+                        # The next raw-free minute seals the fully ACKed
+                        # original cursor and reclaims the prior root.
+                        self.assertIsNone(self.stage())
+                        tip = self.chain.tip(self.proof)
+                        self.assertEqual(tip.cycle, step // 2)
+                        self.assertEqual(tip.next_sequence, 0)
+                        epoch = self.receipts.root / self.proof.generation
+                        self.assertTrue((epoch / "cursor-chain-v2" /
+                                         "anchor.json").exists())
+                        self.assertFalse((epoch / "cursor-chain-v2.old").exists())
+                        self.assertFalse((epoch / "cursor-chain-v2.next").exists())
+            with self.queue.exclusive():
+                tip = self.chain.tip(self.proof)
+                self.assertEqual((tip.cycle, tip.next_sequence), (2, 1))
+            for step in range(1, 6):
+                self.assertIn(f"durable-{step}.example.com\n", self.auto.read_text())
+
+    def test_original_cursor_rollover_crash_recovers_ack_without_replay(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for step in range(2):
+                host = f"ack-{step}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage()
+                    self.commit_and_ack(pending, host)
+            with self.queue.exclusive():
+                with patch.object(CursorChain, "_erase_old_tree",
+                                  side_effect=OSError("injected-after-durable-anchor")):
+                    with self.assertRaises(OriginalV2PrepareRefused):
+                        self.stage()
+                epoch = self.receipts.root / self.proof.generation
+                self.assertTrue((epoch / "cursor-chain-v2.old").exists())
+                self.assertEqual(self.chain.tip(self.proof).cycle, 1)
+            with self.queue.exclusive():
+                self.assertIsNone(self.stage())
+                self.assertFalse((epoch / "cursor-chain-v2.old").exists())
+                self.assertEqual(self.chain.tip(self.proof).cycle, 1)
+            self.emit("after-crash.example.com")
+            with self.queue.exclusive():
+                pending = self.stage()
+                self.commit_and_ack(pending, "after-crash.example.com")
+            self.assertEqual(self.auto.read_text().count("after-crash.example.com"), 1)
+
     def test_four_continuous_highwater_cycles_without_debug_stall(self):
         import auto_detect_original_v2_prepare as mod
         drained = lambda *a, **kw: FDState.DRAINED

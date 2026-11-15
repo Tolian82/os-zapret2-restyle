@@ -181,12 +181,17 @@ class EpochReceipts:
             _sync(self.root)
         _directory(folder, self.uid)
         entries = os.listdir(folder)
-        if (len(entries) > 3 or
-                any(name not in ("pretraffic.json", "epoch.json",
-                                 "cursor-chain-v2") for name in entries)):
+        # A rollover keeps the previous fully ACKed cursor tree as one
+        # original-owner recovery witness while its sealed successor is
+        # atomically published. No separate epoch, owner or Config writer.
+        allowed = ("pretraffic.json", "epoch.json", "cursor-chain-v2",
+                   "cursor-chain-v2.next", "cursor-chain-v2.old")
+        if len(entries) > len(allowed) or any(name not in allowed for name in entries):
             raise ReceiptRefused("superseded_one_intent_epoch_refused")
-        if "cursor-chain-v2" in entries:
-            _directory(folder / "cursor-chain-v2", self.uid)
+        for name in ("cursor-chain-v2", "cursor-chain-v2.next",
+                     "cursor-chain-v2.old"):
+            if name in entries:
+                _directory(folder / name, self.uid)
         return folder
 
     def _pretraffic(self, proof: GenerationProof) -> tuple[Path, dict, bytes]:

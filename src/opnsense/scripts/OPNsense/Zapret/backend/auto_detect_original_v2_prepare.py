@@ -317,13 +317,18 @@ def prepare_original_v2_locked(
     try:
         proof = qualified_current_source(attest(), queue)
         chain = CursorChain(receipts, queue)
-        tip = chain.tip(proof)  # actual original P2k2a epoch, not fabricated
         pending = queue.segments()
         if (len(pending) > 1 or any(
                 not PENDING.fullmatch(path.name) or
                 not path.name.startswith(proof.generation + "-")
                 for path in pending)):
             raise OriginalV2PrepareRefused("historical_or_ambiguous_pending_retained")
+        # Same original FD9/P2a owner: when 512 immutable ACKed slots fill,
+        # fsync and atomically publish the next exact cursor anchor rather
+        # than pausing/restarting dvtws2 or discarding raw. Recover partial
+        # prior rollovers before any raw/debug rotation.
+        chain.ensure_capacity(proof, attest=attest)
+        tip = chain.tip(proof)
         if tip.open_intent is not None:
             # A crash after physical unlink but before slot ACK must recover
             # under a separate qualified original checkpoint/Config owner.
@@ -333,7 +338,8 @@ def prepare_original_v2_locked(
             if tip.open_intent["pending_name"] != pending[0].name:
                 raise OriginalV2PrepareRefused("unacknowledged_pending_identity_mismatch")
         elif tip.next_sequence >= MAX_STEPS:
-            raise OriginalV2PrepareRefused("bounded_cursor_chain_capacity")
+            # ensure_capacity must already have sealed a new ACK anchor.
+            raise OriginalV2PrepareRefused("unresolved_original_chain_capacity")
         # The v2 tip includes its currently OPEN intent in used_pending_names.
         # Retrying that exact unacknowledged inode is necessary for durable
         # crash recovery. Only a name from a previously ACKed slot is reuse.
@@ -360,12 +366,16 @@ def prepare_original_v2_locked(
                 # Crash-link repair still cuts the live raw pathname.
                 _require_debug_window_before_raw_cut(proof, tip.cursor, receipts,
                                                      raw_first=tip.raw_first)
-                segment = queue.rotate(generation=proof.generation)
+                segment = queue.rotate(
+                generation=proof.generation, cycle=tip.cycle,
+                sequence=tip.next_sequence)
         else:
             # Refuse known-bad debug before converting live raw to pending.
             _require_debug_window_before_raw_cut(proof, tip.cursor, receipts,
                                                      raw_first=tip.raw_first)
-            segment = queue.rotate(generation=proof.generation)
+            segment = queue.rotate(
+                generation=proof.generation, cycle=tip.cycle,
+                sequence=tip.next_sequence)
         if segment is None:
             return None
         if attest() != proof:
