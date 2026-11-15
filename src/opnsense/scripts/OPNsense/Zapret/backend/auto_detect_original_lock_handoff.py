@@ -26,7 +26,7 @@ from auto_detect_owner import GenerationProof, attest_running_generation
 from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
 from auto_detect_owned_sources import OWNED_ROOT
-from auto_detect_cursor_chain import CursorChain, CursorChainRefused
+from auto_detect_cursor_chain import CursorChain, CursorChainRefused, _checkpoint
 from auto_detect_original_v2_prepare import (prepare_original_v2_locked,
                                              OriginalV2PrepareRefused)
 from auto_detect_original_v2_model import (commit_with_original_v2_model,
@@ -167,11 +167,33 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
         raise OriginalLockRefused("original_v2_queue_config_owner_required")
     try:
         proof = qualified_current_source(attest(), queue)
+        chain = CursorChain(writer.receipts, queue)
+        # Crash window: the original P2a unlink succeeded but the cursor
+        # ACK receipt was not fsynced. The immutable Config/P1 checkpoint
+        # is already complete; do NOT replay PHP/Config or a later raw batch.
+        # Recover only that original ACK with the same live P2c/FD9 owner.
+        if not queue.segments():
+            chain.ensure_capacity(proof, attest=attest)
+            prior = chain.tip(proof)
+            if prior.open_intent is not None:
+                if prior.open_folder is None:
+                    raise OriginalLockRefused("missing_original_open_cursor_folder")
+                absent = queue.pending / prior.open_intent["pending_name"]
+                if absent.exists() or absent.is_symlink():
+                    raise OriginalLockRefused("missing_pending_identity_not_proven")
+                verified = _checkpoint(
+                    prior.open_folder, prior.open_intent,
+                    writer.receipts.uid, targets=writer.targets)
+                if verified is None or attest() != proof:
+                    raise OriginalLockRefused("missing_pending_without_original_checkpoint")
+                return chain.acknowledge(
+                    proof, absent, verified[0], writer,
+                    attest=attest, inspect=inspect)
         pending = prepare_original_v2_locked(
             queue, writer.receipts, attest=attest, inspect=inspect)
         if pending is None:
             return False
-        tip = CursorChain(writer.receipts, queue).tip(proof)
+        tip = chain.tip(proof)
         if (tip.open_intent is None or
                 tip.open_intent["pending_name"] != pending.name or
                 attest() != proof):
