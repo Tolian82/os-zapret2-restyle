@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""#1052 P2k8q2: one forward-only original pretraffic seed and live completion.
+"""#1052: one original pretraffic epoch and exact STOPPED source retirement.
 
 The original held FD9 must seal an authenticated schema-2 shared candidate
 and the *real empty* debug/raw inodes BEFORE dvtws2 starts. The later genuine
