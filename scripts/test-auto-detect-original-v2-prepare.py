@@ -407,23 +407,22 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 pending = self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
                 self.commit_and_ack(pending, "one.example.com")
                 retired = self.root / mod.DEBUG_OLD
+                retired_inode = retired.stat().st_ino
                 self.emit("two.example.com")
-                current_raw_inode = self.queue.inbox.stat().st_ino
-                with self.assertRaises(OriginalV2PrepareRefused):
-                    self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
-                self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
+                # A BUSY archive may never be unlinked, but pending raw
+                # intake does not have to wait for old-debug retirement.
+                second = self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
+                self.assertIsNotNone(second)
+                self.assertEqual(retired.stat().st_ino, retired_inode)
+                self.commit_and_ack(second, "two.example.com")
                 self.assertEqual(self.queue.segments(), [])
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_live_raw_unprocessed"):
-                    self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
-                self.assertEqual(retired.stat().st_nlink, 1)
-                self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
-                self.assertEqual(self.queue.segments(), [])
-        # A completed ACK alone is insufficient: the next raw discovery
-        # is still live and must not be discarded to force archive retirement.
+                                            "retained_debug_writer_fd_not_drained"):
+                    self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
+                self.assertEqual(retired.stat().st_ino, retired_inode)
+        # The original FD check is required for cleanup, not for
+        # independently ACK-proven current-generation raw intake.
         self.assertTrue(retired.exists())
-
-
     def test_original_second_highwater_requires_acked_raw_then_retires_once(self):
         import auto_detect_original_v2_prepare as mod
         native_drained = lambda *a, **kw: FDState.DRAINED
@@ -435,13 +434,16 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 first_ino = retained.stat().st_ino
                 self.commit_and_ack(first, "one.example.com")
         self.emit("two.example.com")
-        with self.queue.exclusive():
-            second = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(second, "two.example.com")
-        now_old = self.debug.stat().st_ino
-        before_second = self.debug.read_bytes()
         with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
+                # A large second diagnostic file must not block the next
+                # genuine raw batch merely because the first archive exists.
+                second = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, first_ino)
+                self.commit_and_ack(second, "two.example.com")
+            with self.queue.exclusive():
+                now_old = self.debug.stat().st_ino
+                before_second = self.debug.read_bytes()
                 self.assertIsNone(self.stage(inspect_debug=native_drained))
                 self.assertEqual(retained.stat().st_ino, now_old)
                 self.assertNotEqual(retained.stat().st_ino, first_ino)
@@ -452,18 +454,21 @@ class OriginalV2PrepareTests(unittest.TestCase):
         self.emit("three.example.com")
         with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
-                with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_ack_not_proven"):
-                    self.stage(inspect_debug=native_drained)
-                self.assertEqual(self.queue.inbox.read_bytes(),
-                                 b"three.example.com\n")
-        with self.queue.exclusive():
-            third = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(third, "three.example.com")
+                # Repeated raw-first intake is not forced to wait for
+                # archive deletion, and does not signal the native engine.
+                third = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, now_old)
+                self.commit_and_ack(third, "three.example.com")
+            with self.queue.exclusive():
+                # The next idle tick may retire the second archive and
+                # cut the third original debug inode.
+                newest = self.debug.stat().st_ino
+                self.assertIsNone(self.stage(inspect_debug=native_drained))
+                self.assertEqual(retained.stat().st_ino, newest)
+                self.assertEqual(self.debug.read_bytes(), b"")
         self.assertEqual(
             self.auto.read_text(),
             "!manual.invalid\none.example.com\ntwo.example.com\nthree.example.com\n")
-
     def test_original_debug_retirement_refuses_unacked_and_live_raw(self):
         import auto_detect_original_v2_prepare as mod
         native_drained = lambda *a, **kw: FDState.DRAINED
@@ -477,21 +482,46 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.assertTrue(retained.exists())
                 self.commit_and_ack(first, "one.example.com")
                 self.queue.inbox.write_bytes(b"two.example.com\n")
-                with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "retained_debug_live_raw_unprocessed"):
-                    self.stage(inspect_debug=native_drained)
+                old_id = retained.stat().st_ino
+                # Previously this rejected the whole minute when active
+                # raw had uncommitted events. It now processes raw first
+                # while preserving the still-unretired archived inode.
+                second = self.stage(inspect_debug=native_drained)
+                self.assertEqual(retained.stat().st_ino, old_id)
+                self.commit_and_ack(second, "two.example.com")
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
                 self.assertTrue(retained.exists())
-                self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
-        with self.queue.exclusive():
-            second = self.stage(inspect_debug=native_drained)
-            self.commit_and_ack(second, "two.example.com")
-        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
             with self.queue.exclusive():
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
                                             "retained_debug_writer_fd_not_drained"):
                     self.stage(inspect_debug=lambda *a, **kw: FDState.BUSY)
-                self.assertTrue(retained.exists())
+                self.assertEqual(retained.stat().st_ino, old_id)
                 self.assertEqual(self.queue.segments(), [])
+    def test_four_continuous_highwater_cycles_without_debug_stall(self):
+        import auto_detect_original_v2_prepare as mod
+        drained = lambda *a, **kw: FDState.DRAINED
+        prior_archive = None
+        with patch.object(mod, "DEBUG_HIGH_WATERMARK", 64):
+            for number in range(1, 5):
+                host = f"repeated-{number}.example.com"
+                self.emit(host)
+                with self.queue.exclusive():
+                    pending = self.stage(inspect_debug=drained)
+                    self.assertIsNotNone(pending)
+                    self.commit_and_ack(pending, host)
+                    archived = self.root / mod.DEBUG_OLD
+                    if prior_archive is not None:
+                        self.assertEqual(archived.stat().st_ino, prior_archive)
+                with self.queue.exclusive():
+                    before_cut = self.debug.stat().st_ino
+                    self.assertIsNone(self.stage(inspect_debug=drained))
+                    self.assertEqual(archived.stat().st_ino, before_cut)
+                    self.assertEqual(self.debug.read_bytes(), b"")
+                    self.assertEqual(self.queue.segments(), [])
+                    prior_archive = archived.stat().st_ino
+        self.assertEqual(self.chain.tip(self.proof).next_sequence, 4)
+        for number in range(1, 5):
+            self.assertIn(f"repeated-{number}.example.com\n", self.auto.read_text())
 
     def test_original_debug_retirement_refuses_corrupted_old_archive(self):
         import auto_detect_original_v2_prepare as mod
