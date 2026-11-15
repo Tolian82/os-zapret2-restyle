@@ -2,16 +2,16 @@
 
 State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE -> version-line archive`.
 
-Current **working source**: `v0.6.5_70` (`VERSION=0.6.5`, `PLUGIN_REVISION=70`; one unmerged #1052 development branch incorporating `main v0.6.5_69`; prospective `os-zapret2-restyle-0.6.5_70.pkg` **NOT PUBLISHED**). The existing native configd minute now reaches the original held FD9 → original v2 P2a queue → PHP native Config/P1 → durable checkpoint/ACK in source. Repeated raw/debug retention and 512-step cursor successor are also present **without exact-head tests or native installed proof**. The genuine ACTIVE schema-2 observer map/args, protected live source bootstrap, cross-generation safe handoff and final known-owned routing/hot reload remain OPEN. Editable Auto Hostlist exists; independent default-Off Auto Restart is GUI/Model/cron/FD9 source-wired but unaccepted on installed OPNsense. `DEV-063`/`CHAT-014` now apply in this branch; remaining approved steps belong only to the [P2–P5 implementation plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). Owner-installed stable `0.6.5_1.pkg` remains unchanged.
+Current **working source**: `v0.6.5_71` (`VERSION=0.6.5`, `PLUGIN_REVISION=71`; one unmerged #1052 branch, `main v0.6.5_69` governance reconciled; `os-zapret2-restyle-0.6.5_71.pkg` **NOT PUBLISHED**). Inside the original shared FD9 pre-seal builder the verified P2h observer is now staged as real native `dvtws.args` plus schema-2 `auto-detect-generation.json`, with a read-only same-source `verify-active` gate before the durable Apply journal. No preview duplicate remains in a promoted release. **This does not authorize a running observer:** the existing launch-side `auto_detect_post_drop.py authorize` intentionally remains unimplemented/refusing until protected producer bootstrap, old-generation source handoff and native FD9/epoch evidence are connected. The source-only P2a/minute/Config/P1/ACK, raw/debug retirement, 512-ACK journal and independent default-Off Advanced-only Auto Restart are unchanged and unaccepted on this exact branch. Added regression coverage for genuine promotion and tamper; executable tests/native installed acceptance are **not run**. Stable owner-installed `0.6.5_1.pkg` untouched. Continue the [single approved P2–P5 execution plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) under `DEV-063`/`CHAT-014`.
 
 ## Identity and delivery
 
 | Item | Current fact | Evidence / owner |
 |---|---|---|
-| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=70` on one unmerged #1052 branch; minute/ACK and Auto Restart source-wired, actual observer and installed acceptance open | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
+| Source | `VERSION=0.6.5`, `PLUGIN_REVISION=71` on one unmerged #1052 branch; native observer pre-seal promotion source-wired, original live authorization and installed acceptance open | `VERSION`, `Makefile`, [handoff](START_HERE.md) |
 | Latest stable package | `os-zapret2-restyle-0.6.5_1.pkg`; immutable tag `v0.6.5` | [release](releases/v0.6.5.md), [publication receipt](verification/evidence/2026-11-12-v0.6.5-full-release-publication.md) |
 | Owner installation | Final stable `_1.pkg` successfully installed through OPNsense GUI | Owner statement: «`0.6.5_1.pkg` успешно установил через GUI OPNsense» |
-| Current source package | No `_70.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
+| Current source package | No `_71.pkg` published; source revisions do not imply installation | [handoff](START_HERE.md) |
 | Supported targets | Qualified OPNsense / FreeBSD ABI and dependencies come from `compatibility.json` and native package metadata | [packaging contract](architecture/OPNSENSE_NATIVE_COMPATIBILITY_AND_PACKAGING_SPEC.md) |
 
 ## Settled product facts

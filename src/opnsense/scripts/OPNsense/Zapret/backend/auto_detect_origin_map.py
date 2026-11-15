@@ -347,7 +347,9 @@ def lookup(mapping: dict, generation: str, final: bytes, native_number: int) -> 
     return dict(matches[0]) if len(matches) == 1 else None
 
 # P2d same-build read-only provenance capture. Only the original orchestrator
-# calls the CLI; there is no active observer, scheduler or second service owner.
+# calls the CLI; the original FD9 may now promote a source-verified
+# native candidate before sealing, while the launcher/epoch safety gate
+# still refuses an unqualified active owner.
 import json
 import os
 
@@ -614,6 +616,102 @@ def verify_original_preview(workspace: Path, candidate_digest: str) -> dict:
     return expected
 
 
+
+def verify_original_promotion(workspace: Path, candidate_digest: str) -> dict:
+    """Recheck the SAME original source-profile map and final authorized argv.
+
+    Only source-verified, generation-bound original FD9 output is accepted.
+    This is a read-only prelaunch verifier, not a second process owner or
+    permission to bypass the original epoch/queue/FD9 pretraffic gates.
+    """
+    from auto_detect_owner import _valid_map, MAP_NAME
+    work = Path(workspace)
+    if (not re.fullmatch(r"[a-f0-9]{32}", work.name) or
+            not re.fullmatch(r"[a-f0-9]{64}", candidate_digest)):
+        raise AttributionError("invalid original promoted generation")
+    release = work / "release"
+    final = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    raw = _capture_file(release / MAP_NAME, owner_uid=os.geteuid())
+    source = json.loads(_capture_file(release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    if (not isinstance(source, dict) or source.get("generation") != work.name
+            or source.get("mode") != "auto"
+            or source.get("evidence") != NONACTIVATING
+            or source.get("activation_authorized") is not False
+            or source.get("observer_attached") is not False
+            or not isinstance(source.get("profiles"), list)
+            or any(not isinstance(row, dict) or
+                   not {"native_number", "status", "hostlist"} <= set(row)
+                   for row in source["profiles"])):
+        raise AttributionError("untrusted original source for promoted observer")
+    record, _ = _valid_map(raw, {"id": work.name,
+                                 "candidate": candidate_digest}, final)
+    expected_profiles = [
+        {"native_number": row["native_number"], "status": row["status"],
+         "hostlist": row["hostlist"]}
+        for row in source["profiles"]
+    ]
+    expected_profiles.append({
+        "native_number": record["observer_native_number"],
+        "status": "observer", "hostlist": None,
+    })
+    if (record["profiles"] != expected_profiles or
+            not re.fullmatch(r"[a-f0-9]{64}",
+                             str(source.get("final_args_sha256", ""))) or
+            any((release / name).exists() or (release / name).is_symlink()
+                for name in (
+                    "auto-detect-observer-preview.args",
+                    "auto-detect-observer-preview.json",
+                    ".auto-detect-final.args.pending",
+                    ".auto-detect-generation.json.pending",
+                ))):
+        raise AttributionError("promoted native owner differs from original source")
+    return record
+
+
+def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
+    """Promote an already reverified P2h original-FD9 preview BEFORE seal.
+
+    Both files are staged as root-owned write-once regular files. No engine,
+    kernel, Config, producer inode or user HOSTLIST is touched here. A torn
+    candidate remains unsealed and cannot be executed by shared Apply.
+    """
+    from auto_detect_owner import MAP_NAME
+    work = Path(workspace)
+    verify_original_preview(work, candidate_digest)
+    original, planned, encoded, record = _authorized_projection(
+        work, candidate_digest)
+    release = work / "release"
+    live_args = release / "dvtws.args"
+    final_map = release / MAP_NAME
+    staged_args = release / ".auto-detect-final.args.pending"
+    staged_map = release / ".auto-detect-generation.json.pending"
+    if (_capture_file(live_args, owner_uid=os.geteuid()) != original or
+            any(path.exists() or path.is_symlink() for path in
+                (final_map, staged_args, staged_map))):
+        raise AttributionError("original observer promotion already modified")
+    _secure_new_file(staged_args, planned)
+    _secure_new_file(staged_map, encoded)
+    if (_capture_file(live_args, owner_uid=os.geteuid()) != original or
+            _capture_file(staged_args, owner_uid=os.geteuid()) != planned or
+            _capture_file(staged_map, owner_uid=os.geteuid()) != encoded):
+        raise AttributionError("changed original observer promotion candidate")
+    os.replace(staged_args, live_args)
+    os.replace(staged_map, final_map)
+    for name in ("auto-detect-observer-preview.args",
+                 "auto-detect-observer-preview.json"):
+        (release / name).unlink()
+    directory = os.open(release, os.O_RDONLY |
+                        getattr(os, "O_DIRECTORY", 0) |
+                        getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    if verify_original_promotion(work, candidate_digest) != record:
+        raise AttributionError("original observer promotion verification failed")
+    return record
+
+
 def _require_original_fd9_cli(work: Path) -> None:
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0
             or work.parent != Path("/var/db/zapret2/shared-work")):
@@ -623,15 +721,19 @@ def _require_original_fd9_cli(work: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preview", "verify-preview"}:
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preview", "verify-preview", "promote", "verify-active"}:
         return 64
     workspace = Path(argv[2])
     try:
-        if argv[1] in {"preview", "verify-preview"}:
+        if argv[1] in {"preview", "verify-preview", "promote", "verify-active"}:
             _require_original_fd9_cli(workspace)
-            record = (stage_original_preview(workspace, argv[3])
-                      if argv[1] == "preview" else
-                      verify_original_preview(workspace, argv[3]))
+            operations = {
+                "preview": stage_original_preview,
+                "verify-preview": verify_original_preview,
+                "promote": promote_original_preview,
+                "verify-active": verify_original_promotion,
+            }
+            record = operations[argv[1]](workspace, argv[3])
             print(json.dumps({"observer_native_number": record["observer_native_number"],
                               "generation": workspace.name}, sort_keys=True))
         elif argv[1] == "preflight":
@@ -640,8 +742,8 @@ def main(argv: list[str]) -> int:
         else:
             publish_origin_map(workspace, workspace / "release", argv[3])
     except (AttributionError, OSError, ValueError, UnicodeError, TypeError) as exc:
-        # Neither read-only observation nor source-map publication can
-        # authorize native observer activation or block a normal Apply.
+        # No malformed or partial original-FD9 candidate is accepted;
+        # any promotion failure leaves the candidate unsealed.
         print("P2 source-only provenance unavailable: " + str(exc), file=sys.stderr)
         return 69
     return 0

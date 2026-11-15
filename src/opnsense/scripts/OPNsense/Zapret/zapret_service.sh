@@ -1104,19 +1104,24 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
-    # Sealed nonactivating preview may be reverified without enabling a
-    # second process, raw append, native auto HOSTLIST or worker.
+    # Re-read the original source-to-native profile mapping after seal:
+    # the promoted schema-2 map/args must still exactly bind this PHP
+    # candidate and the original generated profile order. The launcher
+    # retains its separate fail-closed original-FD9/epoch authorization.
     if [ "$_shared_apply_mode" = 1 ] &&
-       [ -f "$_shared_apply_root/release/auto-detect-observer-preview.json" ]; then
-        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-preview \
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
             "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
             printf '%s\n' preflight-rejected=observer-generation
             return 0
         fi
     elif [ "$_shared_apply_mode" = 1 ] &&
          [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
-        "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" preflight \
-            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null 2>&1 || :
+        # Source says Target Mode=auto, but the one protected schema-2
+        # native promotion is missing: never silently activate ordinary
+        # args in lieu of the approved Auto-detect observer.
+        printf '%s\n' preflight-rejected=observer-generation
+        return 0
     fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
     # invalid candidate BEFORE any durable phase is recorded. This must be
@@ -1558,9 +1563,11 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
-    # P2h: inside the existing FD9, bind the genuine PHP candidate to the
-    # original generated profiles BEFORE seal. Stage only an inert proposal;
-    # leave the real dvtws.args untouched while no durable worker exists.
+    # P2: under the original FD9, reverify the native PHP candidate and
+    # original generated profiles BEFORE seal. The P2h no-action preview
+    # is promoted into the exact native argv/schema-2 owner once, without
+    # leaving an inert duplicate in the final release. Runtime still needs
+    # independent original-FD9 launch/epoch authorization (fail closed).
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
@@ -1579,7 +1586,9 @@ shared_apply_prepare_service()
             shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
         if [ "$_shared_auto_mode" = 1 ]; then
             if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                preview "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+               ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
                 printf '%s\n' preflight-rejected=runtime-build
                 return 0
             fi
