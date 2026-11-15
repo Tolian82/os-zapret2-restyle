@@ -385,6 +385,14 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
         print(MARK + "_TRUE_FD9_PRELAUNCH=PASS", flush=True)
         print(MARK + "_PREPARED_NATIVE_PRODUCER=PASS", flush=True)
         args = _remap_managed(case, planned)
+        # The original FD9/P2a pretraffic seed must be BEFORE even the
+        # native dry-run: upstream may chown the existing producer files
+        # while probing them, which fails the strict root-owned P2a gate.
+        native_args = ("\n".join(args) + "\n").encode("utf-8")
+        if not quiesced_cut:
+            native_private, native_receipts = _seed_disposable_original_v2(
+                case, native_args, preview, original_queue, nobody.pw_gid)
+            print(MARK + "_REAL_NATIVE_V2_PRETRAFFIC=sealed_before_engine", flush=True)
         # First check the uninstrumented preview with real native parser.
         dry = subprocess.run([str(engine), *args, "--user=nobody", "--dry-run"],
                              capture_output=True, timeout=15, check=False)
@@ -392,13 +400,6 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
         print(MARK + "_DRY_RUN=PASS_NATIVE_PARSER", flush=True)
         need(RAW_PATH.read_bytes() == b"" and DEBUG_PATH.read_bytes() == b"",
              "DRY_RUN_PRODUCED_RAW_OR_DEBUG")
-        # Seed the same native producer's P2k8n epoch under the held FD9
-        # BEFORE launch, only inside the disposable RUNNING branch.
-        native_args = ("\n".join(args) + "\n").encode("utf-8")
-        if not quiesced_cut:
-            native_private, native_receipts = _seed_disposable_original_v2(
-                case, native_args, preview, original_queue, nobody.pw_gid)
-            print(MARK + "_REAL_NATIVE_V2_PRETRAFFIC=sealed_before_engine", flush=True)
         # Inject ONLY native --debug for flow-selection evidence; it is not a
         # product argv change, and all target/filter/profile flags are intact.
         diagnostic = [args[0], "--debug=1", *args[1:], "--user=nobody"]
