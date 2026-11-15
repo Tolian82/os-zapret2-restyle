@@ -259,6 +259,28 @@ class DurableInbox:
             segment = same[0]
             if generation is not None and not segment.name.startswith(generation + "-"):
                 raise QueueSafetyError("crash_recovery_generation_changed")
+            if old.st_size == 0:
+                # Interrupted link() before replace() with no raw event.
+                # This is only a second NAME for the live inode, not a
+                # detached pending batch. Removing the extra hardlink is
+                # safe even if dvtws2 appends concurrently: its bytes stay
+                # reachable through the original inbox name and open FD.
+                # Never unlink an independently detached empty segment.
+                live = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
+                alias = _stat_regular(segment, self.uid, writer_gid=self.writer_gid)
+                if ((live.st_dev, live.st_ino) != (old.st_dev, old.st_ino) or
+                        (alias.st_dev, alias.st_ino) != (old.st_dev, old.st_ino) or
+                        live.st_nlink != 2 or alias.st_nlink != 2 or
+                        live.st_size != 0 or alias.st_size != 0):
+                    raise QueueSafetyError("empty_live_alias_changed")
+                segment.unlink()
+                _sync_directory(self.pending)
+                remaining = _stat_regular(self.inbox, self.uid,
+                                          writer_gid=self.writer_gid)
+                if ((remaining.st_dev, remaining.st_ino) !=
+                        (old.st_dev, old.st_ino) or remaining.st_nlink != 1):
+                    raise QueueSafetyError("empty_live_alias_recovery_uncertain")
+                return None
         else:
             if not old.st_size:
                 return None
