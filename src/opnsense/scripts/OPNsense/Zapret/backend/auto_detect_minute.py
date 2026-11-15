@@ -14,12 +14,16 @@ import sys
 
 from auto_detect_owner import (
     MAP_NAME, MAX_ARGS, GenerationProof, GenerationRefused,
-    _secure_bytes, attest_running_generation,
+    _secure_bytes, attest_running_generation, attest_stopped_generation,
 )
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 from auto_detect_original_lock_handoff import (
     run_native_original_v2_cycle_once, OriginalLockRefused,
 )
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
+from auto_detect_original_v2_source import qualified_current_source
+from auto_detect_queue import DurableInbox
+from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
 from voice_live_inspect import COMMON_ACTIVE
 from voice_ipfw_adapter import require_lifecycle_lock
 
@@ -130,5 +134,62 @@ def native_minute_once(args: list[str]) -> int:
     return 0
 
 
+
+def native_retire_preflight() -> int:
+    """Original FD9's last running-owner epoch proof BEFORE explicit Stop."""
+    if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
+        return 69
+    try:
+        require_lifecycle_lock()
+        proof = attest_running_generation()
+        import pwd
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise MinuteRefused("invalid_original_engine_gid")
+        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        with queue.exclusive():
+            qualified_current_source(proof, queue)
+            receipts._epoch(proof)
+            if attest_running_generation() != proof:
+                raise MinuteRefused("old_owner_changed_before_stop")
+        print('auto-detect-retire=original-running-attested')
+        return 0
+    except (MinuteRefused, OriginalLockRefused, GenerationRefused,
+            ReceiptRefused, OSError, ValueError, RuntimeError, KeyError) as exc:
+        print('auto-detect-retire-refused=' + type(exc).__name__, file=sys.stderr)
+        return 69
+
+
+def native_retire_once() -> int:
+    """One old-owner post-Stop Config/P1/ACK, never a cron restart gate.
+
+    Caller must have removed the single old engine and original monitor.
+    Existing immutable pretraffic/epoch + journal remain the only old-owner
+    identity. No old PID is treated as a new engine or live signal target.
+    """
+    if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
+        return 69
+    try:
+        require_lifecycle_lock()
+        proof = attest_stopped_generation()
+        if not isinstance(proof, GenerationProof):
+            raise MinuteRefused('missing_old_generation_proof')
+        changed = run_native_original_v2_cycle_once(retired=True)
+        if type(changed) is not bool or attest_stopped_generation() != proof:
+            raise MinuteRefused('old_generation_changed_during_retirement')
+        print('auto-detect-retire=' + ('processed' if changed else 'idle'))
+        return 0
+    except (MinuteRefused, OriginalLockRefused, GenerationRefused,
+            ReceiptRefused, OSError, ValueError, RuntimeError, KeyError) as exc:
+        print('auto-detect-retire-refused=' + type(exc).__name__, file=sys.stderr)
+        return 69
+
+
 if __name__ == '__main__':
-    raise SystemExit(native_minute_once(sys.argv[1:]))
+    args = sys.argv[1:]
+    if args == ['--pre-retire']:
+        raise SystemExit(native_retire_preflight())
+    if args == ['--retire-once']:
+        raise SystemExit(native_retire_once())
+    raise SystemExit(native_minute_once(args))
