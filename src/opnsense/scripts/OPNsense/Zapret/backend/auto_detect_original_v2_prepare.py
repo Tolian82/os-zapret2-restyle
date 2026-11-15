@@ -181,10 +181,11 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
             # v2 checkpoint/ACK chain already processed its raw discoveries.
             # Continue with the SAME protected live inode below and create
             # a second retained alias atomically, without any engine signal.
-        # An archived hardlink to the SAME live inode would have nlink=2,
-        # which the initial torn-alias recovery handles. If the kernel
-        # observation contradicts it, never infer a completed cut.
-        raise OriginalV2PrepareRefused("unqualified_same_inode_debug_archive")
+        else:
+            # An archived hardlink to the SAME live inode would have nlink=2,
+            # which the initial torn-alias recovery handles. If the kernel
+            # observation contradicts it, never infer a completed cut.
+            raise OriginalV2PrepareRefused("unqualified_same_inode_debug_archive")
     if current.st_size < DEBUG_HIGH_WATERMARK:
         return False
     # Do not hide a corrupted original SAME-inode native prefix by cutting

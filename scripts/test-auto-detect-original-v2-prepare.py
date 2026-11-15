@@ -414,13 +414,13 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
                 self.assertEqual(self.queue.segments(), [])
                 with self.assertRaisesRegex(OriginalV2PrepareRefused,
-                                            "second_debug_cut_needs_retirement"):
+                                            "retained_debug_live_raw_unprocessed"):
                     self.stage(inspect_debug=lambda *a, **kw: FDState.DRAINED)
                 self.assertEqual(retired.stat().st_nlink, 1)
                 self.assertEqual(self.queue.inbox.stat().st_ino, current_raw_inode)
                 self.assertEqual(self.queue.segments(), [])
-        # A future retirement protocol must qualify and delete the OLD
-        # archive before another bounded cut. This increment never guesses.
+        # A completed ACK alone is insufficient: the next raw discovery
+        # is still live and must not be discarded to force archive retirement.
         self.assertTrue(retired.exists())
 
 
