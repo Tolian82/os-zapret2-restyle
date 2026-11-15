@@ -26,6 +26,8 @@ from auto_detect_epoch_receipts import EpochReceipts
 from auto_detect_fd import FDState, OwnerToken
 from auto_detect_original_v2_prepare import (OriginalV2PrepareRefused,
                                              prepare_original_v2_locked)
+from auto_detect_original_lock_handoff import (_original_v2_cycle_locked,
+                                                OriginalLockRefused)
 from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox, MAX_SEGMENT
 
@@ -977,6 +979,44 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.stage()
             self.assertEqual(self.queue.inbox.stat().st_ino, live)
             self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+            # Real minute cycle must finish ONLY the original durable ACK.
+            # No second PHP child, no duplicate write, no second raw cut.
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")):
+                self.assertTrue(_original_v2_cycle_locked(
+                    self.queue, self.writer, php_bin="/unused/php",
+                    php_script=Path("/unused/config.php"), timeout=25,
+                    attest=self.attest, inspect=self.drained))
+            self.assertIsNone(self.chain.tip(self.proof).open_folder)
+            self.assertEqual(self.queue.inbox.stat().st_ino, live)
+            self.assertEqual(self.queue.inbox.read_bytes(), b"two.example.com\n")
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\none.example.com\n")
+            second = self.stage()
+            self.commit_and_ack(second, "two.example.com")
+            self.assertEqual(self.auto.read_text(),
+                             "!manual.invalid\none.example.com\ntwo.example.com\n")
+
+    def test_missing_pending_without_checkpoint_cannot_infer_ack(self):
+        self.emit("one.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            intent = self.chain.tip(self.proof).open_intent
+            self.assertIsNotNone(intent)
+            pending.unlink()  # Corrupt/orphan loss, NOT a Config checkpoint.
+            with patch("auto_detect_original_lock_handoff._original_completion_locked",
+                       side_effect=AssertionError("Config replay forbidden")):
+                with self.assertRaisesRegex(
+                    OriginalLockRefused, "missing_pending_without_original_checkpoint"
+                ):
+                    _original_v2_cycle_locked(
+                        self.queue, self.writer, php_bin="/unused/php",
+                        php_script=Path("/unused/config.php"), timeout=25,
+                        attest=self.attest, inspect=self.drained)
+            self.assertIsNotNone(self.chain.tip(self.proof).open_folder)
+            self.assertFalse((self.base / "epochs" / self.generation /
+                              "cursor-chain-v2" / "00000000" / "ack.json").exists())
+            self.assertEqual(self.auto.read_text(), "!manual.invalid\n")
 
     def test_wrong_original_epoch_is_refused_before_rotation(self):
         self.emit("one.example.com")
