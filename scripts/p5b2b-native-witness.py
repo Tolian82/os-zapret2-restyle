@@ -314,9 +314,46 @@ def native_installed_auto_handoff():
         def brief(blob):
             line = blob.decode('utf-8', errors='replace').replace('\\n', ' ')
             return re.sub(r'[A-Za-z0-9_-]{48,}', '[REDACTED]', line)[:320]
+        # On the PRE-JOURNAL runtime-preflight refusal only, execute the
+        # exact production validators against the existing private candidate.
+        # This never changes Config, firewall, dvtws2 or Auto-detect sources.
+        diagnostic = ''
+        if b'preflight-rejected=runtime-preflight' in prepared.stdout:
+            work_root = Path('/var/db/zapret2/shared-work')
+            qualified = []
+            if work_root.is_dir() and not work_root.is_symlink():
+                for entry in work_root.iterdir():
+                    if (re.fullmatch('[0-9a-f]{32}', entry.name) and
+                            entry.is_dir() and not entry.is_symlink() and
+                            (entry / 'release/auto-detect-generation.json').is_file()):
+                        qualified.append(entry / 'release')
+            if len(qualified) == 1:
+                candidate = qualified[0]
+                validator = str(BACKEND / 'validator.sh')
+                shell = ('common_error() { printf "%s\\n" "$*" >&2; }; '
+                         '. "$1"; shift; "$@"')
+                # The shell calls the production functions; no simulated
+                # validator result and no second FD9 ownership claims.
+                for label, function, arguments in (
+                    ('modes', 'validator_validate_runtime_modes', [str(candidate)]),
+                    ('engine', 'validator_validate_engine_mapped',
+                     [str(ENGINE), str(candidate / 'dvtws.args'),
+                      str(active), str(candidate),
+                      '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh']),
+                ):
+                    command = run('/bin/sh', '-c', shell, 'native-p2-probe',
+                                  validator, function, *arguments, timeout=24)
+                    diagnostic += ':' + label + '-rc=' + str(command.returncode)
+                    if command.returncode != 0:
+                        diagnostic += ':' + label + '-reason=' + brief(
+                            command.stderr or command.stdout)
+                        break
+            else:
+                diagnostic = ':candidate-count=' + str(len(qualified))
         need(False, 'installed-original-auto-shared-apply-refused:' +
              'rc=' + str(prepared.returncode) + ':stdout=' +
-             brief(prepared.stdout) + ':stderr=' + brief(prepared.stderr))
+             brief(prepared.stdout) + ':stderr=' + brief(prepared.stderr) +
+             diagnostic)
     running = True
     try:
         saved = ET.fromstring(CONFIG.read_bytes())
