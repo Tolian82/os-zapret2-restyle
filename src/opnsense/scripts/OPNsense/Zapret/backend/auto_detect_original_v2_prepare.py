@@ -15,14 +15,14 @@ import stat
 from typing import Callable
 
 from auto_detect_debug_window import _read_exact, DebugWindowRefused, MAX_WINDOW, MAX_DEBUG
-from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
+from auto_detect_cursor_chain import (ChainTip, CursorChain, CursorChainRefused,
                                       MAX_STEPS, PENDING)
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_fd import FDState, probe_pending_fd
 from auto_detect_original_v2_source import (qualified_current_source, OriginalSourceRefused)
 from auto_detect_owner import (GenerationProof, GenerationRefused,
                                attest_running_generation)
-from auto_detect_queue import (DurableInbox, QueueSafetyError, _stat_regular,
+from auto_detect_queue import (DurableInbox, QueueSafetyError, MAX_SEGMENT, _stat_regular,
                                _sync_directory)
 
 
@@ -30,24 +30,73 @@ class OriginalV2PrepareRefused(RuntimeError):
     """Do not rotate or discard another generation's original raw segment."""
 
 
-# A deliberately conservative ONE-inode debug cut. It is not a circular
-# archive or a complete 4 MiB lifetime policy: old debug remains sealed
-# until the future owner/historical-FD and journal-retirement gates.
+# Conservative high-water cuts; one ACK-proven original archive can retire.
+# The new retained inode cannot itself retire without a matching durable
+# cursor anchor. This is NOT an unbounded debug/journal rollover.
 DEBUG_HIGH_WATERMARK = MAX_DEBUG // 2
 DEBUG_NEXT = ".original-debug-prepared"
 DEBUG_OLD = ".original-debug-retained"
 
 
+def _retire_debug_archive_once(queue: DurableInbox, receipts: EpochReceipts,
+                               proof: GenerationProof, tip: ChainTip,
+                               current: os.stat_result, archived: os.stat_result,
+                               old_path: Path, attest: Callable,
+                               inspect_debug: Callable) -> None:
+    """Retire only an ACK-proven first-cut debug inode; raw remains truth."""
+    if (tip.open_folder is not None or tip.open_intent is not None or
+            not tip.raw_first or tip.next_sequence < 1 or
+            (tip.cursor.device, tip.cursor.inode) !=
+            (archived.st_dev, archived.st_ino)):
+        raise OriginalV2PrepareRefused("retained_debug_ack_not_proven")
+    if queue.segments():
+        raise OriginalV2PrepareRefused("retained_debug_pending_unacknowledged")
+    live_raw = _stat_regular(queue.inbox, receipts.uid,
+                             max_size=MAX_SEGMENT, writer_gid=queue.writer_gid)
+    if live_raw.st_nlink != 1 or live_raw.st_size != 0:
+        raise OriginalV2PrepareRefused("retained_debug_live_raw_unprocessed")
+    old_stat, old_bytes = _read_exact(
+        old_path, owner_uid=receipts.uid, writer_gid=queue.writer_gid)
+    if ((old_stat.st_dev, old_stat.st_ino) !=
+            (archived.st_dev, archived.st_ino) or
+            tip.cursor.offset > len(old_bytes) or
+            hashlib.sha256(old_bytes[:tip.cursor.offset]).hexdigest() !=
+            tip.cursor.prefix_sha256 or
+            b"\x00" in old_bytes or
+            (old_bytes and not old_bytes.endswith(b"\n"))):
+        raise OriginalV2PrepareRefused("retained_debug_cursor_or_content_changed")
+    if (inspect_debug(old_path, old_stat.st_dev, old_stat.st_ino,
+                      owner=proof.owner, writer_gid=queue.writer_gid)
+            is not FDState.DRAINED or attest() != proof):
+        raise OriginalV2PrepareRefused("retained_debug_writer_fd_not_drained")
+    # The native producer does not hold this flock. Refuse any observed
+    # change instead of discarding an unprocessed historical event.
+    now_old = old_path.lstat()
+    now_raw = queue.inbox.lstat()
+    now_live = Path(proof.debug_path).lstat()
+    identity = lambda s: (s.st_dev, s.st_ino, s.st_size,
+                          s.st_mtime_ns, s.st_nlink)
+    if (identity(now_old) != identity(old_stat) or
+            identity(now_raw) != identity(live_raw) or
+            identity(now_live) != identity(current) or
+            attest() != proof):
+        raise OriginalV2PrepareRefused("retained_debug_changed_before_retirement")
+    old_path.unlink()
+    _sync_directory(queue.root)
+
+
 def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
                     proof: GenerationProof, cursor, raw_first: bool,
-                    attest: Callable, inspect_debug: Callable) -> bool:
-    """One original P2a-lock debug cut; never pause the native engine.
+                    attest: Callable, inspect_debug: Callable, *,
+                    retirement_tip: ChainTip | None = None) -> bool:
+    """Original P2a-lock debug cut; never pause the native engine.
 
     The already sealed original FD9/P2c owner and all-PID P2b FD inspector
     are required on both sides. A torn prepared inode or two-link alias
     is safely rolled back without dropping ANY original debug bytes.
-    After replace, retained old inode is NEVER unlinked here. The original
-    raw-first v2 evidence handles independently arriving raw/debug events.
+    One old inode retires only after same-cursor original raw-first ACK,
+    empty pending/live raw, all-PID drained FD and exact owner recheck.
+    A newer unanchored archive remains protected; no arbitrary pruning.
     """
     if not queue._held:
         raise OriginalV2PrepareRefused("original_debug_cut_queue_lock_required")
@@ -119,11 +168,19 @@ def _debug_cut_once(queue: DurableInbox, receipts: EpochReceipts,
                               owner=proof.owner, writer_gid=gid)
                     is not FDState.DRAINED or attest() != proof):
                 raise OriginalV2PrepareRefused("retained_debug_writer_fd_not_drained")
-            if current.st_size >= DEBUG_HIGH_WATERMARK:
-                # Never create a second archive or discard this one to make
-                # an overfull active debug path apparently healthy.
+            if current.st_size < DEBUG_HIGH_WATERMARK:
+                return False
+            if (not isinstance(retirement_tip, ChainTip) or
+                    retirement_tip.cursor != cursor or
+                    retirement_tip.raw_first != raw_first):
                 raise OriginalV2PrepareRefused("second_debug_cut_needs_retirement")
-            return False
+            _retire_debug_archive_once(
+                queue, receipts, proof, retirement_tip, current, archived,
+                old_path, attest, inspect_debug)
+            # The archived inode was unlink-safe only because the original
+            # v2 checkpoint/ACK chain already processed its raw discoveries.
+            # Continue with the SAME protected live inode below and create
+            # a second retained alias atomically, without any engine signal.
         # An archived hardlink to the SAME live inode would have nlink=2,
         # which the initial torn-alias recovery handles. If the kernel
         # observation contradicts it, never infer a completed cut.
@@ -270,7 +327,8 @@ def prepare_original_v2_locked(
             # single-link debug reader. The cut itself verifies the
             # original cursor BEFORE changing native diagnostic inodes.
             _debug_cut_once(queue, receipts, proof, tip.cursor,
-                            tip.raw_first, attest, inspect_debug)
+                            tip.raw_first, attest, inspect_debug,
+                            retirement_tip=tip)
         if pending:
             # Reuse a fully rotated pending first, including if a new live
             # inbox already contains later data. For a P2a crash *after*
