@@ -15,6 +15,7 @@ import sys
 from auto_detect_owner import (
     MAP_NAME, MAX_ARGS, GenerationProof, GenerationRefused,
     _secure_bytes, attest_running_generation, attest_stopped_generation,
+    attest_retiring_predecessor,
 )
 from auto_detect_storage import RAW_PATH, DEBUG_PATH
 from auto_detect_original_lock_handoff import (
@@ -217,10 +218,42 @@ def native_retire_once() -> int:
         return 69
 
 
+
+def native_retired_ready() -> int:
+    """Pure read-only old-epoch retirement proof before replacing ACTIVE_DIR.
+
+    Both terminal committed and one prepared/activating *predecessor* are
+    allowed, but no LIVE old or NEW engine, and no source mutation.
+    """
+    if not sys.platform.startswith('freebsd') or os.geteuid() != 0:
+        return 69
+    try:
+        require_lifecycle_lock()
+        previous = attest_retiring_predecessor()
+        import pwd
+        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+        if gid <= 0:
+            raise MinuteRefused('invalid_retired_engine_gid')
+        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+        with queue.exclusive():
+            if (not receipts.verify_retired(previous, queue) or
+                    attest_retiring_predecessor() != previous):
+                raise MinuteRefused('old_original_retirement_not_complete')
+        print('auto-detect-retire=ready')
+        return 0
+    except (MinuteRefused, OriginalLockRefused, GenerationRefused,
+            ReceiptRefused, OSError, ValueError, RuntimeError, KeyError) as exc:
+        print('auto-detect-retire-refused=' + type(exc).__name__, file=sys.stderr)
+        return 69
+
+
 if __name__ == '__main__':
     args = sys.argv[1:]
     if args == ['--pre-retire']:
         raise SystemExit(native_retire_preflight())
     if args == ['--retire-once']:
         raise SystemExit(native_retire_once())
+    if args == ['--retired-ready']:
+        raise SystemExit(native_retired_ready())
     raise SystemExit(native_minute_once(args))
