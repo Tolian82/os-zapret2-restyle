@@ -1236,10 +1236,35 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=runtime-preflight
         return 0
     fi
-    # Both RUNNING and STOPPED previous observers may retain old raw/debug.
-    # Refuse BEFORE writing prepared/activating, not after replacing the tree.
-    # A healthy ordinary predecessor passes this read-only safety check.
+    # A previously RUNNING original observer must finish its old PID-bound
+    # source lifetime BEFORE the new prepared/activating journal and runtime
+    # tree can own the same physical producer. This is an explicit user
+    # Apply, not minute maintenance. Use the ONE existing committed Stop,
+    # P2a queue, Config/P1 and ACK, and then re-probe the validated candidate.
+    _shared_apply_retired_old=0
+    if [ "$_apply_engine" = 1 ] &&
+       { [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+         [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; }; then
+        if [ "$_shared_apply_mode" = 1 ]; then
+            wan_first_service require || return $?
+        fi
+        _shared_apply_previous=$(shared_apply_inspect_service) || return 69
+        case "$_shared_apply_previous" in committed\ *) ;; *) return 69 ;; esac
+        shared_apply_stop_service "$_shared_apply_previous" || return 70
+        _shared_apply_retired_old=1
+        if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
+            common_error "shared Apply: candidate changed after retiring old original"
+            return 70
+        fi
+    fi
+    # A STOPPED old observer is allowed ONLY after the same immutable old
+    # epoch proves full ACK, archived original inodes, and empty new paths.
+    # The runtime preflight repeats this proof under prepared/activating.
     if ! apply_runtime_observer_previous_preflight; then
+        if [ "$_shared_apply_retired_old" = 1 ]; then
+            common_error "shared Apply: old generation retired but new candidate unavailable"
+            return 70
+        fi
         printf '%s\n' preflight-rejected=runtime-preflight
         return 0
     fi
