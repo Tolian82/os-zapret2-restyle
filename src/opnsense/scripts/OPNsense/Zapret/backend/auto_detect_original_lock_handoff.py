@@ -4,7 +4,7 @@
 The same ORIGINAL queue open-file description survives PHP/Python inheritance.
 The original native Config::lock owns the only Model snapshot and root P1.
 Legacy one-intent Config/ACK functions are REMOVED, not left dormant.
-No active FD9 observer, configd worker, cron or old-generation replay.
+No second worker/Config writer, second lifecycle lock or old-generation replay.
 """
 from __future__ import annotations
 
@@ -154,8 +154,10 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
                               php_bin: str, php_script: Path, timeout: int,
                               attest=attest_running_generation,
                               inspect=probe_pending_fd) -> bool:
-    """One P2a open-file description: prepare -> original PHP child -> v2 ACK.
+    """One P2a open-file description: prepare -> PHP child -> v2 ACK.
 
+    After physical unlink with a completed checkpoint, recover ONLY the ACK;
+    original PHP/Config must not run again for that same immutable intent.
     P2c/P2b attesters may be injected only by source test callers.
     Production uses the original fixed P2c/P2b and source paths.
     """
