@@ -20,10 +20,10 @@ import sys
 
 from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import ROOT as QUEUE_ROOT
-from auto_detect_destination_commit import DestinationCommit
+from auto_detect_destination_commit import DestinationCommit, DestinationRefused
 from auto_detect_fd import probe_pending_fd
 from auto_detect_owner import GenerationProof, attest_running_generation
-from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
 from auto_detect_owned_sources import OWNED_ROOT
 from auto_detect_cursor_chain import CursorChain, CursorChainRefused, _checkpoint
@@ -205,8 +205,8 @@ def _original_v2_cycle_locked(queue: DurableInbox, writer: DestinationCommit, *,
             raise OriginalLockRefused("original_owner_changed_after_config_child")
         return CursorChain(writer.receipts, queue).acknowledge(
             proof, pending, result, writer, attest=attest, inspect=inspect)
-    except (CursorChainRefused, OriginalV2PrepareRefused, OSError, ValueError,
-            TypeError, KeyError) as exc:
+    except (CursorChainRefused, OriginalV2PrepareRefused, DestinationRefused,
+            ReceiptRefused, OSError, ValueError, TypeError, KeyError) as exc:
         raise OriginalLockRefused("original_v2_transaction_or_ack_unavailable") from exc
 
 
