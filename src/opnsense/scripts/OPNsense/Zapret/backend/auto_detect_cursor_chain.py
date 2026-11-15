@@ -319,6 +319,42 @@ class CursorChain:
                 or item.st_nlink != 1 or item.st_mode & 0o077):
             raise CursorChainRefused("unsafe_old_cursor_receipt")
 
+    def _recover_staged_anchor_write(self, prepared: Path) -> None:
+        """Finish the original receipt writer's crash-torn hardlink stage.
+
+        _write_once() fsyncs a private .<hex32>.part then hardlinks the
+        identical inode to anchor.json. Under the same P2a queue lock only
+        that one strict temporary name may be removed. A foreign entry,
+        changed inode, or unsafe link count always refuses.
+        """
+        _directory(prepared, self.receipts.uid)
+        names = set(os.listdir(prepared))
+        staged = [name for name in names
+                  if re.fullmatch(r"\.[0-9a-f]{32}\.part", name)]
+        if (len(staged) > 1 or names - {ANCHOR, *staged}):
+            raise CursorChainRefused("foreign_original_rollover_stage")
+        if not staged:
+            return
+        temp = prepared / staged[0]
+        st = temp.lstat()
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != self.receipts.uid
+                or stat.S_IMODE(st.st_mode) != 0o600
+                or st.st_nlink not in (1, 2)):
+            raise CursorChainRefused("unsafe_original_rollover_temp")
+        anchor = prepared / ANCHOR
+        if ANCHOR in names:
+            named = anchor.lstat()
+            if (not stat.S_ISREG(named.st_mode) or
+                    named.st_uid != self.receipts.uid or
+                    stat.S_IMODE(named.st_mode) != 0o600 or
+                    named.st_nlink != 2 or st.st_nlink != 2 or
+                    (named.st_dev, named.st_ino) != (st.st_dev, st.st_ino)):
+                raise CursorChainRefused("rollover_hardlink_identity_changed")
+        elif st.st_nlink != 1:
+            raise CursorChainRefused("foreign_original_rollover_temp_link")
+        temp.unlink()
+        _sync(prepared)
+
     def ensure_capacity(self, proof: GenerationProof, *,
                         attest: Callable = attest_running_generation) -> None:
         """Crash-recover the same owner chain, then bound 512 fully ACKed slots.
@@ -351,6 +387,7 @@ class CursorChain:
             _directory(prepared, self.receipts.uid)
             if not root.exists() or root.is_symlink():
                 raise CursorChainRefused("orphan_original_rollover_candidate")
+            self._recover_staged_anchor_write(prepared)
             if not os.listdir(prepared):
                 # Crash after staging mkdir, before durable anchor creation:
                 # no committed state was changed, so recreate safely.

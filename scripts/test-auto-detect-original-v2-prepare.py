@@ -557,6 +557,43 @@ class OriginalV2PrepareTests(unittest.TestCase):
                 self.commit_and_ack(pending, "after-crash.example.com")
             self.assertEqual(self.auto.read_text().count("after-crash.example.com"), 1)
 
+    def test_original_cursor_rollover_recovers_staged_receipt_hardlinks(self):
+        import auto_detect_cursor_chain as chain_mod
+        import auto_detect_original_v2_prepare as prep_mod
+        from auto_detect_epoch_receipts import _canonical
+        with patch.object(chain_mod, "MAX_STEPS", 2), \
+             patch.object(prep_mod, "MAX_STEPS", 2):
+            for cycle in (1, 2):
+                for ordinal in (0, 1):
+                    host = f"stage-{cycle}-{ordinal}.example.com"
+                    self.emit(host)
+                    with self.queue.exclusive():
+                        pending = self.stage()
+                        self.commit_and_ack(pending, host)
+                with self.queue.exclusive():
+                    root, _, epoch_bytes = self.chain._root(
+                        self.proof, create=False)
+                    anchor = self.chain._next_anchor(
+                        self.proof, epoch_bytes, self.chain.tip(self.proof))
+                    staged = root.parent / "cursor-chain-v2.next"
+                    staged.mkdir(mode=0o700)
+                    temp = staged / ("." + "f" * 32 + ".part")
+                    temp.write_bytes(_canonical(anchor))
+                    temp.chmod(0o600)
+                    if cycle == 1:
+                        # Crash after hardlink before unlink leaves two
+                        # names for the same protected staged receipt.
+                        os.link(temp, staged / "anchor.json")
+                        self.assertEqual(temp.stat().st_nlink, 2)
+                    # Cycle 2 simulates crash before durable hardlink.
+                    self.assertIsNone(self.stage())
+                    self.assertEqual(self.chain.tip(self.proof).cycle, cycle)
+                    self.assertFalse(staged.exists())
+                    self.assertFalse((root.parent /
+                                      "cursor-chain-v2.old").exists())
+            with self.queue.exclusive():
+                self.assertEqual(self.chain.tip(self.proof).cycle, 2)
+
     def test_four_continuous_highwater_cycles_without_debug_stall(self):
         import auto_detect_original_v2_prepare as mod
         drained = lambda *a, **kw: FDState.DRAINED
