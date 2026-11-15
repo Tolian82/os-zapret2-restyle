@@ -1121,8 +1121,17 @@ shared_apply_boot_service()
         _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
         _shared_boot_last=$(printf '%s\n' "$_shared_boot_build" | tail -n 1)
         case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
-        shared_apply_execute_service "$_shared_boot_new_id" strategies
-        return $?
+        # Shared Apply intentionally reports preflight-rejected=... with
+        # shell exit 0. A cold Boot must NOT translate that non-activation
+        # into success or claim a new engine merely from the exit status.
+        _shared_boot_apply=$(
+            shared_apply_execute_service "$_shared_boot_new_id" strategies
+        ) || return 70
+        [ "$_shared_boot_apply" = "applied-id=$_shared_boot_new_id" ] || {
+            common_error "native common boot: fresh original Apply was not committed"
+            return 70
+        }
+        return 0
     fi
     # After verifying the sealed owner and absence of an engine/monitor,
     # FreeBSD may have no IPFW module loaded after a cold boot. First attest
