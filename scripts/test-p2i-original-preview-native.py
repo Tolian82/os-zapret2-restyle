@@ -883,6 +883,8 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                     archived_debug, first_archived.st_dev, first_archived.st_ino,
                     owner=actual_owner, writer_gid=nobody.pw_gid) is FDState.DRAINED,
                     "NATIVE_V2_OLD_ARCHIVE_FD_NOT_DRAINED")
+                print(MARK + "_REAL_NATIVE_V2_HISTORICAL_FD="
+                      "busy_refused_then_all_pid_drained", flush=True)
 
                 # Deliberately fault the real original fsync AFTER proven
                 # alias unlink. A physical full disk/power loss remains open.
@@ -910,9 +912,13 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                                 raise RuntimeError("NATIVE_V2_INJECTED_ENOSPC_IGNORED")
                 need(not archived_debug.exists() and
                      DEBUG_PATH.stat().st_ino == before_second_inode and
-                     RAW_PATH.read_bytes() == b"" and
-                     chain.tip(native_proof).next_sequence == 2,
+                     RAW_PATH.read_bytes() == b"",
                      "NATIVE_V2_ENOSPC_LOST_UNPROCESSED_DATA")
+                print(MARK + "_REAL_NATIVE_V2_SYNTHETIC_ENOSPC="
+                      "post_unlink_no_raw_or_debug_loss", flush=True)
+                with original_queue.exclusive():
+                    need(chain.tip(native_proof).next_sequence == 2,
+                         "NATIVE_V2_ENOSPC_ACK_CHAIN_CHANGED")
                 # Send genuine known HTTP in the exact archive-retired,
                 # second-cut-not-yet-published gap, while dvtws2 is RUNNING.
                 gap_count = _scoped_divert_hits(guard, RULES[0])
@@ -933,9 +939,11 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                      DEBUG_PATH.stat().st_ino != before_second_inode and
                      DEBUG_PATH.stat().st_nlink == 1 and
                      DEBUG_PATH.read_bytes() == b"" and
-                     not fresh_debug.exists() and
-                     chain.tip(native_proof).next_sequence == 2,
+                     not fresh_debug.exists(),
                      "NATIVE_V2_SECOND_DEBUG_RETENTION_NOT_QUALIFIED")
+                with original_queue.exclusive():
+                    need(chain.tip(native_proof).next_sequence == 2,
+                         "NATIVE_V2_SECOND_CUT_ACK_CHAIN_CHANGED")
                 second_count = _scoped_divert_hits(guard, RULES[0])
                 second_known = p0.exchange(KNOWN, force_rst=False)
                 need(second_known == p0.request(KNOWN) and
