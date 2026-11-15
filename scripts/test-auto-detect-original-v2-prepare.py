@@ -226,32 +226,79 @@ class OriginalV2PrepareTests(unittest.TestCase):
             pending = self.stage()
             self.commit_and_ack(pending, "cut.example.com")
             import auto_detect_epoch_receipts as mod_receipts
-            original = os.rename
+            original = os.replace
             calls = [0]
 
             def fail_second(old, new):
                 calls[0] += 1
                 if calls[0] == 2:
-                    raise OSError("injected second archive failure")
+                    raise OSError("injected second atomic replacement failure")
                 return original(old, new)
 
             with patch("auto_detect_fd.probe_stopped_pending_fd",
                        return_value=FDState.DRAINED):
-                with patch.object(mod_receipts.os, "rename",
+                with patch.object(mod_receipts.os, "replace",
                                   side_effect=fail_second):
                     with self.assertRaisesRegex(
-                        OSError, "injected second archive failure"
+                        OSError, "injected second atomic replacement failure"
                     ):
                         self.receipts.retire_stopped(
                             self.proof, self.queue, attest=self.attest)
                 self.assertTrue((self.receipts.root / self.generation /
                                  "retired.json").exists())
-                self.assertFalse((self.receipts.root / self.generation /
-                                  "retired-debug.log").exists())
+                # The raw source name was atomically replaced; the debug
+                # old inode is still reachable through BOTH live + archive.
+                folder = self.receipts.root / self.generation
+                self.assertTrue((folder / "retired-debug.log").exists())
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
+                self.assertEqual(self.debug.stat().st_ino,
+                                 (folder / "retired-debug.log").stat().st_ino)
+                self.assertEqual(self.debug.stat().st_nlink, 2)
+                self.assertEqual(self.queue.inbox.stat().st_nlink, 1)
+            # Simulate a separate later FD9 invocation: the queue MUST be
+            # openable after every failed atomic step, not only while held.
+        with self.queue.exclusive():
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
                 self.assertTrue(self.receipts.retire_stopped(
                     self.proof, self.queue, attest=self.attest))
                 self.assertTrue(self.receipts.verify_retired(
                     self.proof, self.queue))
+                self.assertNotEqual(self.debug.stat().st_ino,
+                                    (self.receipts.root / self.generation /
+                                     "retired-debug.log").stat().st_ino)
+
+    def test_retirement_recovers_crash_after_old_link_before_first_replace(self):
+        self.emit("before-replace.example.com")
+        with self.queue.exclusive():
+            pending = self.stage()
+            self.commit_and_ack(pending, "before-replace.example.com")
+            import auto_detect_epoch_receipts as mod_receipts
+            old_replace = os.replace
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                with patch.object(mod_receipts.os, "replace",
+                                  side_effect=OSError("crash before first replace")):
+                    with self.assertRaisesRegex(OSError,
+                                                "crash before first replace"):
+                        self.receipts.retire_stopped(
+                            self.proof, self.queue, attest=self.attest)
+                folder = self.receipts.root / self.generation
+                self.assertEqual(self.queue.inbox.stat().st_ino,
+                                 (folder / "retired-inbox.txt").stat().st_ino)
+                self.assertEqual(self.queue.inbox.stat().st_nlink, 2)
+                self.assertTrue((self.root / ".original-retire-inbox-ready").exists())
+        # Recovery must reacquire the SAME root queue and not lose an
+        # original raw name, even when first replacement never happened.
+        with self.queue.exclusive():
+            with patch("auto_detect_fd.probe_stopped_pending_fd",
+                       return_value=FDState.DRAINED):
+                self.assertTrue(self.receipts.retire_stopped(
+                    self.proof, self.queue, attest=self.attest))
+                self.assertTrue(self.receipts.verify_retired(
+                    self.proof, self.queue))
+                self.assertEqual(self.queue.inbox.read_bytes(), b"")
+                self.assertEqual(self.debug.read_bytes(), b"")
 
     def test_first_raw_rotates_and_persists_v2_not_legacy_intent(self):
         self.emit("one.example.com")
