@@ -1043,7 +1043,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
             self.assertTrue(pending.exists())
             self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
         self.assertEqual(self.auto.read_text(),
-                         "!manual.invalid\\none.example.com\\n".replace("\\n", "\n"))
+                         "!manual.invalid\none.example.com\n")
 
     def test_post_unlink_recovery_cannot_report_idle_when_ack_refuses(self):
         self.emit("one.example.com")
@@ -1066,7 +1066,7 @@ class OriginalV2PrepareTests(unittest.TestCase):
                         attest=self.attest, inspect=self.drained)
             self.assertIsNotNone(self.chain.tip(self.proof).open_intent)
             self.assertEqual(self.auto.read_text(),
-                             "!manual.invalid\\none.example.com\\n".replace("\\n", "\n"))
+                             "!manual.invalid\none.example.com\n")
 
     def test_wrong_original_epoch_is_refused_before_rotation(self):
         self.emit("one.example.com")
