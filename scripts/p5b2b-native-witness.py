@@ -248,6 +248,122 @@ def native():
         'owner-appliance': False, 'public-preview': False,
         'real-isp-dpi-bypass': False, 'owner-A11-A16': False,
     }, sort_keys=True))
+    native_installed_auto_handoff()
+
+
+
+def native_installed_auto_handoff():
+    """One real installed native shared-Apply/FD9 observer on the same VM.
+
+    This checks actual source→installed runtime, real process owner, the
+    registered configd minute and explicit Stop/new-ID Boot. The synthetic
+    raw/debug rollover has separate native filesystem evidence; an idle
+    installed cycle MUST NOT be reported as an actual native discovery.
+    """
+    import base64
+    import re
+    import xml.etree.ElementTree as ET
+
+    cli = '/usr/local/sbin/configctl'
+    active = Path('/usr/local/etc/zapret2/runtime-v2')
+    epochs = Path('/var/db/zapret2/auto-detect-epochs')
+    pidfile = Path('/var/run/dvtws2.pid')
+
+    def current_identity():
+        mapped = active / 'auto-detect-generation.json'
+        need(mapped.is_file() and not mapped.is_symlink(),
+             'installed-auto-generation-map-absent')
+        data = json.loads(mapped.read_text())
+        generation = data.get('generation')
+        need(isinstance(generation, str) and
+             re.fullmatch('[0-9a-f]{32}', generation) is not None,
+             'installed-auto-generation-invalid')
+        need(pidfile.is_file() and not pidfile.is_symlink(),
+             'installed-auto-pidfile-missing')
+        match = re.match(r'([0-9]+)(?:\s|$)', pidfile.read_text().strip())
+        need(match is not None and int(match.group(1)) > 1,
+             'installed-auto-pid-invalid')
+        pid = match.group(1)
+        ps = run('/bin/ps', '-p', pid, '-o', 'lstart=', timeout=12)
+        need(ps.returncode == 0 and ps.stdout.strip(),
+             'installed-auto-real-engine-not-running')
+        need(run(str(SERVICE), 'status', timeout=25).returncode == 0,
+             'installed-auto-owner-status-not-running')
+        return generation, pid, ps.stdout
+
+    def minute(expected):
+        response = run(cli, 'zapret', 'auto_detect_minute', timeout=85)
+        need(response.returncode == 0 and
+             f'auto-detect-minute={expected}'.encode() in response.stdout,
+             'installed-auto-configd-minute-not-' + expected)
+
+    old = ET.fromstring(CONFIG.read_bytes())
+    tg = old.find('./OPNsense/Zapret/hostlist/telegramips')
+    baseline = '' if tg is None or tg.text is None else tg.text
+    request = {'page': 'strategies',
+               'fields': {'hostlist': {'mode': 'auto'}},
+               'sync': {'telegramips_baseline': baseline}}
+    token = base64.urlsafe_b64encode(
+        json.dumps(request, separators=(',', ':')).encode()).decode().rstrip('=')
+    # This is the actual GUI/backend transaction; never set auto in XML
+    # behind the one authoritative Config writer.
+    prepared = run(cli, 'zapret', 'shared_apply', 'strategies', token, timeout=240)
+    need(prepared.returncode == 0 and b'applied-id=' in prepared.stdout,
+         'installed-original-auto-shared-apply-refused')
+    running = True
+    try:
+        saved = ET.fromstring(CONFIG.read_bytes())
+        mode = saved.find('./OPNsense/Zapret/hostlist/mode')
+        need(mode is not None and mode.text == 'auto',
+             'installed-auto-mode-not-saved-by-native-config')
+        original_config = hashlib.sha256(CONFIG.read_bytes()).hexdigest()
+        first_gen, first_pid, first_birth = current_identity()
+        for _ in range(3):
+            minute('idle')
+            need(current_identity() == (first_gen, first_pid, first_birth),
+                 'minute-restarted-installed-original-engine')
+        tick = run(cli, 'zapret', 'auto_restart_tick', 'hourly', timeout=80)
+        need(tick.returncode == 0 and
+             b'auto-restart=disabled' in tick.stdout,
+             'default-off-auto-restart-not-enforced')
+        need(current_identity() == (first_gen, first_pid, first_birth),
+             'off-restart-changed-engine')
+        # This is an EXPLICIT Stop, not minute maintenance. After verified
+        # old archive/ACK the normal common Boot must allocate a distinct ID.
+        stopped = run(cli, 'zapret', 'stop', timeout=150)
+        need(stopped.returncode == 0, 'original-auto-explicit-stop-refused')
+        running = False
+        retired = epochs / first_gen / 'retired.json'
+        need(retired.is_file() and not retired.is_symlink(),
+             'old-installed-original-epoch-not-retired')
+        need(hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
+             'stop-mutated-manual-model')
+        boot = run(cli, 'zapret', 'start', timeout=240)
+        need(boot.returncode == 0, 'original-auto-new-id-boot-refused')
+        running = True
+        second_gen, second_pid, second_birth = current_identity()
+        need(second_gen != first_gen,
+             'stopped-original-observer-reused-old-operation-id')
+        minute('idle')
+        need(current_identity() == (second_gen, second_pid, second_birth),
+             'new-observer-minute-restarted-engine')
+        need(hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
+             'new-id-boot-mutated-saved-manual-model')
+        print('P2_INSTALLED_ORIGINAL_AUTO=' + json.dumps({
+            'result': 'PASS_NATIVE_IDLE_MINUTE_STOP_NEW_ID_BOOT',
+            'observed_minute_ticks': 4,
+            'explicit_stop': True,
+            'old_epoch_retired': True,
+            'distinct_boot_generation': True,
+            'default_auto_restart_off': True,
+            'saved_config_unchanged_during_stop_boot': True,
+            'native_discovery_traffic': False,
+            'owner_appliance': False,
+        }, sort_keys=True))
+    finally:
+        if running:
+            final = run(cli, 'zapret', 'stop', timeout=150)
+            need(final.returncode == 0, 'installed-auto-final-guest-stop-refused')
 
 
 def self_test():
