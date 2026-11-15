@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import fcntl
+import errno
 from contextlib import contextmanager
 import importlib.util
 import json
@@ -37,8 +38,11 @@ from auto_detect_storage import (_prepare, ROOT as PRODUCER, RAW_PATH, DEBUG_PAT
 from auto_detect_queue import DurableInbox
 from auto_detect_debug_window import Cursor
 from auto_detect_epoch_receipts import EpochReceipts
+from auto_detect_cursor_chain import CursorChain
+from auto_detect_destination_commit import DestinationCommit
+from shared_apply_seal import create_seal
 import auto_detect_original_v2_prepare as v2_prepare
-from auto_detect_fd import OwnerToken, probe_pending_fd
+from auto_detect_fd import FDState, OwnerToken, _owner_snapshot, probe_pending_fd
 
 MARK = "P2I_ORIGINAL_FD9_PREVIEW_NATIVE"
 KNOWN = "youtube.com"
@@ -46,6 +50,7 @@ UNKNOWN = "unknown.p2i.invalid"
 UNKNOWN_AFTER = "rotated.p2i.invalid"
 UNKNOWN_MIDCUT = "midcut.p2i.invalid"
 UNKNOWN_QUIESCED = "quiesced.p2i.invalid"
+UNKNOWN_SECOND = "secondcut.p2i.invalid"
 PORT = 6545
 DIVERT = 19899
 RULES = (19351, 19352)
@@ -281,6 +286,44 @@ def _scoped_divert_hits(guard, rule: int) -> int:
     return int(match.group(1))
 
 
+
+def _seed_disposable_original_v2(case, native_args: bytes, preview: dict,
+                                 queue: DurableInbox, gid: int):
+    """Real P2k8n physical pretraffic seed from an isolated preview fixture.
+
+    A test-only schema-2 projection of original P2h source identities is
+    sealed under the same native FD9 and real producer inodes BEFORE launch.
+    It is not an installed authorization, live Config/P1 or cron.
+    """
+    need(preview["activation_authorized"] is False and
+         preview["generation"] == case.work.name,
+         "NATIVE_V2_PREVIEW_NOT_ISOLATED")
+    private = case.root / "native-v2-private"
+    private.mkdir(mode=0o700)
+    workspace_parent = private / "shared-work"
+    workspace_parent.mkdir(mode=0o700)
+    workspace = workspace_parent / case.work.name
+    workspace.mkdir(mode=0o700)
+    release = workspace / "release"
+    release.mkdir(mode=0o700)
+    shutil.copyfile(case.work / "candidate.xml", workspace / "candidate.xml")
+    shutil.copyfile(case.work / "plan.json", workspace / "plan.json")
+    (release / "dvtws.args").write_bytes(native_args)
+    mapping = {key: value for key, value in preview.items()
+               if key not in {"activation_authorized", "evidence"}}
+    mapping["evidence"] = "ORIGINAL_SHARED_GENERATOR_CAPTURE"
+    mapping["final_args_sha256"] = hashlib.sha256(native_args).hexdigest()
+    (release / "auto-detect-generation.json").write_text(
+        json.dumps(mapping, sort_keys=True, separators=(",", ":")) + "\n")
+    create_seal(workspace, owner=0)
+    receipts = EpochReceipts(private / "epochs", owner_uid=0,
+                             writer_gid=gid)
+    with queue.exclusive():
+        receipts.seal_pretraffic(
+            queue, workspace=workspace,
+            candidate_sha256=mapping["owner_candidate_sha256"])
+    return private, receipts
+
 def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
     need(sys.platform.startswith("freebsd") and os.geteuid() == 0,
          "FREEBSD_ROOT_ONLY")
@@ -307,12 +350,17 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
     observed_debug_log = ""
     archived_debug = None
     native_rollover = None
+    first_debug_snapshot = ""
     stopped_by_test = False
+    native_receipts = None
+    native_private = None
     inflight_thread = None
     inflight_reply = {}
     try:
         case, planned, preview = _fixture(native_root)
         _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid)
+        original_queue = DurableInbox(
+            PRODUCER, owner_uid=0, writer_gid=nobody.pw_gid)
         _native_file_modes(nobody.pw_gid, phase="prepared")
         # Original protected inode identities before launching real dvtws2.
         # Reuse the production P2k8h import-only primitive under native VM.
@@ -337,6 +385,14 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
         print(MARK + "_TRUE_FD9_PRELAUNCH=PASS", flush=True)
         print(MARK + "_PREPARED_NATIVE_PRODUCER=PASS", flush=True)
         args = _remap_managed(case, planned)
+        # The original FD9/P2a pretraffic seed must be BEFORE even the
+        # native dry-run: upstream may chown the existing producer files
+        # while probing them, which fails the strict root-owned P2a gate.
+        native_args = ("\n".join(args) + "\n").encode("utf-8")
+        if not quiesced_cut:
+            native_private, native_receipts = _seed_disposable_original_v2(
+                case, native_args, preview, original_queue, nobody.pw_gid)
+            print(MARK + "_REAL_NATIVE_V2_PRETRAFFIC=sealed_before_engine", flush=True)
         # First check the uninstrumented preview with real native parser.
         dry = subprocess.run([str(engine), *args, "--user=nobody", "--dry-run"],
                              capture_output=True, timeout=15, check=False)
@@ -422,9 +478,32 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
             # behavior, not an enabled product debug/raw rollover. The
             # original P2a rotation happens under its ONE real worker.lock.
             # Keep the old raw hardlink; never ACK in this experiment.
-            original_queue = DurableInbox(
-                PRODUCER, owner_uid=0, writer_gid=nobody.pw_gid)
             old_raw_identity = (RAW_PATH.stat().st_dev, RAW_PATH.stat().st_ino)
+            actual_owner = OwnerToken(
+                process.pid, birth.stdout.strip(), str(engine))
+            native_proof = owner.GenerationProof(
+                actual_owner, case.work.name, case.work.name,
+                hashlib.sha256(native_args).hexdigest(),
+                str(RAW_PATH), str(DEBUG_PATH),
+                preview["observer_native_number"],
+                tuple((row["native_number"], row["status"], row["hostlist"])
+                      for row in preview["profiles"]))
+
+            def attest_native():
+                return native_proof if (
+                    process.poll() is None and
+                    not _native_stopped(guard, process.pid) and
+                    _owner_snapshot(actual_owner, subprocess.run)) else None
+
+            if not quiesced_cut:
+                need(native_receipts is not None and
+                     attest_native() == native_proof,
+                     "REAL_NATIVE_V2_EPOCH_OWNER_NOT_ATTESTED")
+                with original_queue.exclusive():
+                    native_receipts.finish_running(
+                        native_proof, original_queue, attest=attest_native)
+                print(MARK + "_REAL_NATIVE_V2_POSTLAUNCH="
+                      "same_initial_inodes_and_real_owner", flush=True)
             if quiesced_cut:
                 # Only a disposable original PID can be stopped. Recheck
                 # engine birth and dropped credentials immediately first.
@@ -484,7 +563,7 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 print(MARK + "_REAL_NATIVE_STOPPED_DIVERT="
                       "ipfw_packet_counted_request_stalled", flush=True)
             with original_queue.exclusive():
-                previous_raw = original_queue.rotate(generation="a" * 32)
+                previous_raw = original_queue.rotate(generation=case.work.name)
                 need(previous_raw is not None and
                      previous_raw.read_text(encoding="ascii").splitlines() == [UNKNOWN] and
                      (previous_raw.stat().st_dev, previous_raw.stat().st_ino) ==
@@ -548,25 +627,18 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                  not fresh_debug.exists() and not fresh_debug.is_symlink(),
                  "FOREIGN_DISPOSABLE_DEBUG_ARCHIVE")
             old_debug_identity = (DEBUG_PATH.stat().st_dev, DEBUG_PATH.stat().st_ino)
-            actual_owner = OwnerToken(
-                process.pid, birth.stdout.strip(), str(engine))
-            native_proof = owner.GenerationProof(
-                actual_owner, "a" * 32, "a" * 32, "b" * 64,
-                str(RAW_PATH), str(DEBUG_PATH),
-                preview["observer_native_number"],
-                ((0, "unknown-native-default", None),
-                 (preview["observer_native_number"], "observer", None)))
             native_cursor = Cursor(
                 native_proof.generation, *old_debug_identity, 0,
                 hashlib.sha256(b"").hexdigest())
-            fake_epoch = EpochReceipts(
+            cut_epoch = (native_receipts if not quiesced_cut else EpochReceipts(
                 case.root / "debug-cut-epoch-fixture",
-                owner_uid=0, writer_gid=nobody.pw_gid)
+                owner_uid=0, writer_gid=nobody.pw_gid))
             with original_queue.exclusive():
                 with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
                     need(v2_prepare._debug_cut_once(
-                        original_queue, fake_epoch, native_proof,
-                        native_cursor, False, lambda: native_proof,
+                        original_queue, cut_epoch, native_proof,
+                        native_cursor, False,
+                        attest_native if not quiesced_cut else lambda: native_proof,
                         probe_pending_fd), "REAL_ORIGINAL_DEBUG_CUT_NOT_EXECUTED")
             need((archived_debug.stat().st_dev, archived_debug.stat().st_ino) ==
                  old_debug_identity and archived_debug.stat().st_nlink == 1 and
@@ -716,6 +788,215 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
                 print(MARK + "_REAL_NATIVE_POST_ROTATION_ROUTE="
                       + "raw:" + raw_route + ",debug:" + debug_route
                       + ",old_inode_fd:" + fd_state.value, flush=True)
+
+            if not quiesced_cut:
+                # P2k8q3f2b: actual real HTTP raw plus original P2k8n
+                # checkpoint/ACK under the SINGLE native P2a queue.
+                need(native_receipts is not None and native_private is not None,
+                     "NATIVE_V2_PRETRAFFIC_EPOCH_MISSING")
+                chain = CursorChain(native_receipts, original_queue)
+                listdir = native_private / "lists"
+                listdir.mkdir(mode=0o700)
+                final = listdir / "auto-domains.txt"
+                final.write_text("!manual.invalid\n")
+                final.chmod(0o600)
+                writer = DestinationCommit(
+                    native_receipts, original_queue,
+                    {"auto": final}, listdir / ".writer.lock")
+
+                def commit_real_raw(pending, hosts):
+                    need(pending is not None and pending.is_file(),
+                         "NATIVE_V2_RAW_PENDING_MISSING")
+                    receipt = chain.commit(
+                        native_proof, pending,
+                        {"auto": {"add": list(hosts), "remove": []}},
+                        writer, attest=attest_native, inspect=probe_pending_fd)
+                    need(chain.acknowledge(
+                        native_proof, pending, receipt, writer,
+                        attest=attest_native, inspect=probe_pending_fd),
+                        "NATIVE_V2_RAW_ACK_NOT_DURABLE")
+                    need(not pending.exists(), "NATIVE_V2_ACK_DID_NOT_RELEASE_PENDING")
+
+                with original_queue.exclusive():
+                    first_slot = chain.prepare(
+                        native_proof, previous_raw, attest=attest_native,
+                        inspect=probe_pending_fd)
+                    need(first_slot.is_dir() and
+                         chain.tip(native_proof).open_intent["evidence"] == "raw-first",
+                         "NATIVE_V2_FIRST_RAW_FIRST_NOT_PREPARED")
+                    commit_real_raw(previous_raw, (UNKNOWN,))
+                    newer = v2_prepare.prepare_original_v2_locked(
+                        original_queue, native_receipts, attest=attest_native,
+                        inspect=probe_pending_fd, inspect_debug=probe_pending_fd)
+                    need(newer is not None and
+                         newer.read_text(encoding="ascii").splitlines() ==
+                         [UNKNOWN_MIDCUT, UNKNOWN_AFTER],
+                         "NATIVE_V2_SECOND_PHYSICAL_RAW_SEGMENT_LOST")
+                    commit_real_raw(newer, (UNKNOWN_MIDCUT, UNKNOWN_AFTER))
+                    tip = chain.tip(native_proof)
+                    need(tip.raw_first and tip.open_folder is None and
+                         tip.next_sequence == 2 and
+                         (tip.cursor.device, tip.cursor.inode) ==
+                         old_debug_identity and
+                         not original_queue.segments() and
+                         RAW_PATH.read_bytes() == b"",
+                         "NATIVE_V2_DOUBLE_ACK_NOT_QUALIFIED")
+                need(set(final.read_text(encoding="ascii").splitlines()) ==
+                     {"!manual.invalid", UNKNOWN, UNKNOWN_MIDCUT, UNKNOWN_AFTER},
+                     "NATIVE_V2_REAL_DISCOVERIES_NOT_ONCE_IN_FINAL")
+                print(MARK + "_REAL_NATIVE_V2_CONFIG_CHECKPOINT_ACK="
+                      "two_original_raw_segments_committed_once", flush=True)
+
+                # A real historical reader FD (not just a mocked state) must
+                # be seen BUSY by the unchanged all-process FreeBSD P2b gate.
+                first_archived = archived_debug.lstat()
+                first_debug_snapshot = archived_debug.read_text(errors="replace")
+                need(_debug_match(first_debug_snapshot,
+                                  preview["observer_native_number"], UNKNOWN) and
+                     _debug_match(first_debug_snapshot,
+                                  preview["observer_native_number"], UNKNOWN_MIDCUT),
+                     "NATIVE_V2_FIRST_ARCHIVE_EVENT_NOT_VERIFIED_BEFORE_ACK_RETIRE")
+                old_fd = os.open(archived_debug, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    need(probe_pending_fd(
+                        archived_debug, first_archived.st_dev,
+                        first_archived.st_ino, owner=actual_owner,
+                        writer_gid=nobody.pw_gid) is FDState.BUSY,
+                        "NATIVE_V2_ALL_PID_HISTORICAL_FD_BUSY_NOT_OBSERVED")
+                    with original_queue.exclusive():
+                        with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
+                            try:
+                                v2_prepare._debug_cut_once(
+                                    original_queue, native_receipts, native_proof,
+                                    tip.cursor, tip.raw_first, attest_native,
+                                    probe_pending_fd, retirement_tip=tip)
+                            except v2_prepare.OriginalV2PrepareRefused as exc:
+                                need(str(exc) == "retained_debug_writer_fd_not_drained",
+                                     "NATIVE_V2_WRONG_BUSY_ARCHIVE_REFUSAL")
+                            else:
+                                raise RuntimeError("NATIVE_V2_BUSY_ARCHIVE_WAS_RETIRED")
+                    need(archived_debug.stat().st_ino == first_archived.st_ino,
+                         "NATIVE_V2_BUSY_ARCHIVE_WAS_REMOVED")
+                finally:
+                    os.close(old_fd)
+                need(probe_pending_fd(
+                    archived_debug, first_archived.st_dev, first_archived.st_ino,
+                    owner=actual_owner, writer_gid=nobody.pw_gid) is FDState.DRAINED,
+                    "NATIVE_V2_OLD_ARCHIVE_FD_NOT_DRAINED")
+                print(MARK + "_REAL_NATIVE_V2_HISTORICAL_FD="
+                      "busy_refused_then_all_pid_drained", flush=True)
+
+                # Deliberately fault the real original fsync AFTER proven
+                # alias unlink. A physical full disk/power loss remains open.
+                before_second_inode = DEBUG_PATH.stat().st_ino
+                sync_native = v2_prepare._sync_directory
+                fault_seen = [False]
+                def inject_post_retire_enospc(path):
+                    if not archived_debug.exists() and not fault_seen[0]:
+                        fault_seen[0] = True
+                        raise OSError(errno.ENOSPC, "disposable-native-post-unlink")
+                    return sync_native(path)
+                with original_queue.exclusive():
+                    with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
+                        with patch.object(v2_prepare, "_sync_directory",
+                                          side_effect=inject_post_retire_enospc):
+                            try:
+                                v2_prepare._debug_cut_once(
+                                    original_queue, native_receipts, native_proof,
+                                    tip.cursor, tip.raw_first, attest_native,
+                                    probe_pending_fd, retirement_tip=tip)
+                            except OSError as exc:
+                                need(exc.errno == errno.ENOSPC and fault_seen[0],
+                                     "NATIVE_V2_INJECTED_ENOSPC_NOT_PROPAGATED")
+                            else:
+                                raise RuntimeError("NATIVE_V2_INJECTED_ENOSPC_IGNORED")
+                need(not archived_debug.exists() and
+                     DEBUG_PATH.stat().st_ino == before_second_inode and
+                     RAW_PATH.read_bytes() == b"",
+                     "NATIVE_V2_ENOSPC_LOST_UNPROCESSED_DATA")
+                print(MARK + "_REAL_NATIVE_V2_SYNTHETIC_ENOSPC="
+                      "post_unlink_no_raw_or_debug_loss", flush=True)
+                with original_queue.exclusive():
+                    need(chain.tip(native_proof).next_sequence == 2,
+                         "NATIVE_V2_ENOSPC_ACK_CHAIN_CHANGED")
+                # Send genuine known HTTP in the exact archive-retired,
+                # second-cut-not-yet-published gap, while dvtws2 is RUNNING.
+                gap_count = _scoped_divert_hits(guard, RULES[0])
+                gap_reply = p0.exchange(KNOWN, force_rst=False)
+                need(gap_reply == p0.request(KNOWN) and
+                     _scoped_divert_hits(guard, RULES[0]) > gap_count and
+                     attest_native() == native_proof and
+                     RAW_PATH.read_bytes() == b"",
+                     "NATIVE_V2_REAL_IPFW_HTTP_STALLED_IN_RETIRE_GAP")
+                with original_queue.exclusive():
+                    with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
+                        need(v2_prepare._debug_cut_once(
+                            original_queue, native_receipts, native_proof,
+                            tip.cursor, tip.raw_first, attest_native,
+                            probe_pending_fd, retirement_tip=tip),
+                            "NATIVE_V2_SECOND_ORIGINAL_DEBUG_CUT_DID_NOT_COMPLETE")
+                need(archived_debug.stat().st_ino == before_second_inode and
+                     DEBUG_PATH.stat().st_ino != before_second_inode and
+                     DEBUG_PATH.stat().st_nlink == 1 and
+                     DEBUG_PATH.read_bytes() == b"" and
+                     not fresh_debug.exists(),
+                     "NATIVE_V2_SECOND_DEBUG_RETENTION_NOT_QUALIFIED")
+                with original_queue.exclusive():
+                    need(chain.tip(native_proof).next_sequence == 2,
+                         "NATIVE_V2_SECOND_CUT_ACK_CHAIN_CHANGED")
+                second_count = _scoped_divert_hits(guard, RULES[0])
+                second_known = p0.exchange(KNOWN, force_rst=False)
+                need(second_known == p0.request(KNOWN) and
+                     _scoped_divert_hits(guard, RULES[0]) > second_count and
+                     attest_native() == native_proof and
+                     not _native_stopped(guard, process.pid),
+                     "NATIVE_V2_HTTP_STALLED_AFTER_SECOND_CUT")
+
+                # The next previously unknown domain must enter ONLY the
+                # new native debug/raw and be ACKed by the original chain.
+                last_reply = p0.exchange(UNKNOWN_SECOND, force_rst=True)
+                need(last_reply == p0.request(UNKNOWN_SECOND),
+                     "NATIVE_V2_SECOND_DEBUG_POST_CUT_RAW_HTTP_FAILED")
+                time.sleep(0.7)
+                need(RAW_PATH.read_text(encoding="ascii").splitlines() ==
+                     [UNKNOWN_SECOND] and
+                     _debug_match(DEBUG_PATH.read_text(errors="replace"),
+                                  preview["observer_native_number"], UNKNOWN_SECOND) and
+                     not _debug_match(archived_debug.read_text(errors="replace"),
+                                      preview["observer_native_number"], UNKNOWN_SECOND),
+                     "NATIVE_V2_POST_SECOND_CUT_EVENT_NOT_EXACTLY_NEW")
+                with original_queue.exclusive():
+                    with patch.object(v2_prepare, "DEBUG_HIGH_WATERMARK", 0):
+                        try:
+                            v2_prepare._debug_cut_once(
+                                original_queue, native_receipts, native_proof,
+                                tip.cursor, tip.raw_first, attest_native,
+                                probe_pending_fd,
+                                retirement_tip=chain.tip(native_proof))
+                        except v2_prepare.OriginalV2PrepareRefused as exc:
+                            need(str(exc) in {
+                                "retained_debug_ack_not_proven",
+                                "retained_debug_writer_fd_not_drained"},
+                                "NATIVE_V2_UNPROVEN_THIRD_CUT_WRONG_REFUSAL")
+                        else:
+                            raise RuntimeError("NATIVE_V2_UNPROVEN_THIRD_CUT_ACCEPTED")
+                    need(RAW_PATH.read_text(encoding="ascii").splitlines() ==
+                         [UNKNOWN_SECOND], "NATIVE_V2_UNPROVEN_THIRD_CUT_DROPPED_RAW")
+                    final_pending = v2_prepare.prepare_original_v2_locked(
+                        original_queue, native_receipts, attest=attest_native,
+                        inspect=probe_pending_fd, inspect_debug=probe_pending_fd)
+                    need(final_pending is not None, "NATIVE_V2_FINAL_RAW_NOT_PREPARED")
+                    commit_real_raw(final_pending, (UNKNOWN_SECOND,))
+                    need(chain.tip(native_proof).next_sequence == 3,
+                         "NATIVE_V2_FINAL_CURSOR_ACK_NOT_PERSISTED")
+                need(set(final.read_text(encoding="ascii").splitlines()) ==
+                     {"!manual.invalid", UNKNOWN, UNKNOWN_MIDCUT,
+                      UNKNOWN_AFTER, UNKNOWN_SECOND},
+                     "NATIVE_V2_POST_SECOND_CUT_USER_DATA_MISSING")
+                print(MARK + "_REAL_NATIVE_SECOND_DEBUG_CUT="
+                      "real_ipfw_running_same_pid_two_ack_before_retire_"
+                      "busy_fd_refused_enospc_recovered_final_raw_acked", flush=True)
+
     finally:
         failures = []
         # Unconditional safe unwind for SIGSTOP even after a failed check,
@@ -749,6 +1030,8 @@ def _native(checkout: Path, *, quiesced_cut: bool = False) -> None:
         # the previous inode; the original first-match assertion must check
         # BOTH files rather than silently discarding their historical bytes.
         debug_parts = []
+        if first_debug_snapshot:
+            debug_parts.append(first_debug_snapshot[-32768:])
         if archived_debug is not None and archived_debug.is_file():
             debug_parts.append(archived_debug.read_text(errors="replace")[-32768:])
         if DEBUG_PATH.is_file():
@@ -832,6 +1115,8 @@ if __name__ == "__main__":
                 pass
             else:
                 raise RuntimeError("DUPLICATE_NATIVE_ROLLOVER_ACCEPTED")
+            need(UNKNOWN_SECOND not in {UNKNOWN, UNKNOWN_AFTER, UNKNOWN_MIDCUT},
+                 "SECOND_NATIVE_DEBUG_TEST_HOST_COLLISION")
             print(MARK + "_SELF_TEST=PASS_SOURCE_ONLY")
         elif len(sys.argv) == 3 and sys.argv[1] in (
                 "--native", "--native-quiesced"):
