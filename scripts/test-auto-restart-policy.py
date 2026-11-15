@@ -72,7 +72,12 @@ class AutoRestartNativePolicy(unittest.TestCase):
         minute = MINUTE.read_text()
         self.assertIn("shared_apply_auto_restart_tick_service()", service)
         self.assertIn("shared_apply_status_observe_service", service)
-        self.assertIn("stopped:2)", service)
+        self.assertIn('case "$_status_state:$_status_rc" in', service)
+        self.assertIn('ready:0|stopped:2) printf', service)
+        restart = service.split("shared_apply_auto_restart_tick_service()\n{", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('case "$_auto_restart_status" in', restart)
+        self.assertIn('stopped)', restart)
+        self.assertNotIn('stopped:2)', restart)
         self.assertIn('shared_apply_stop_service "$_auto_restart_owner"', service)
         self.assertIn('shared_apply_boot_service "$_auto_restart_owner"', service)
         self.assertIn("SharedApplyLifecycleLock::assertHeld();", php)

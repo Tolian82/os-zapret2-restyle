@@ -1432,11 +1432,13 @@ shared_apply_auto_restart_tick_service()
     }
     # The existing status observer proves BOTH current native dvtws2 and
     # original monitor/kernel ownership. Stopped must never turn into ON.
-    _auto_restart_status_rc=0
-    _auto_restart_status=$(shared_apply_status_observe_service) || _auto_restart_status_rc=$?
-    case "$_auto_restart_status:$_auto_restart_status_rc" in
-        ready:0) ;;
-        stopped:2)
+    # Native status observer validates its internal ready:0/stopped:2
+    # JSON process result and returns an ordinary shell exit 0 for BOTH
+    # qualified states. Never infer stopped directly from the inner code 2.
+    _auto_restart_status=$(shared_apply_status_observe_service) || return 69
+    case "$_auto_restart_status" in
+        ready) ;;
+        stopped)
             printf '%s\n' auto-restart=stopped
             return 0
             ;;
