@@ -377,6 +377,11 @@ def prepare_original_v2_locked(
                 generation=proof.generation, cycle=tip.cycle,
                 sequence=tip.next_sequence)
         if segment is None:
+            # A genuine idle minute has NO original pending. A previous
+            # hardlink or detached pending (even if empty/corrupt) must not
+            # be converted to a successful idle tick and silently stranded.
+            if pending:
+                raise OriginalV2PrepareRefused("unresolved_original_pending_not_idle")
             return None
         if attest() != proof:
             raise OriginalV2PrepareRefused("original_owner_changed_after_rotation")
