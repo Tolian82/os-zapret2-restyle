@@ -821,7 +821,7 @@ try {
             counters = {}
             port_seen = False
             for line in reply.stdout.decode('utf-8', 'replace').splitlines():
-                found = re.match(r'^\\s*0*([0-9]+)\\s+([0-9]+)\\s+', line)
+                found = re.match(r'^\s*0*([0-9]+)\s+([0-9]+)\s+', line)
                 if found and 19000 <= int(found[1]) <= 19010:
                     counters[int(found[1])] = int(found[2])
                     if '6545' in line and 'lo0' in line:
