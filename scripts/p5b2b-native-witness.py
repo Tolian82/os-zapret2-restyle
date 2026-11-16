@@ -658,11 +658,29 @@ try {
         # This is an EXPLICIT Stop, not minute maintenance. After verified
         # old archive/ACK the normal common Boot must allocate a distinct ID.
         stopped = run(cli, 'zapret', 'stop', timeout=150)
-        need(stopped.returncode == 0, 'original-auto-explicit-stop-refused')
+        # The disposable test must never issue a second blind Stop after an
+        # ambiguous first transaction; its VM is discarded on failure.
         running = False
+        stop_receipt = (
+            'execute-error' if b'Execute error' in stopped.stdout else
+            'native-stopped' if b'native-common-stopped=' in stopped.stdout else
+            'ok' if stopped.stdout.strip() == b'OK' else 'unqualified')
         retired = epochs / first_gen / 'retired.json'
-        need(retired.is_file() and not retired.is_symlink(),
-             'old-installed-original-epoch-not-retired')
+        retired_present = retired.is_file() and not retired.is_symlink()
+        print('P2_INSTALLED_ORIGINAL_STOP=' + json.dumps({
+            'configctl_rc': stopped.returncode,
+            'receipt': stop_receipt,
+            'retired_present': retired_present,
+            'engine_pidfile_present': pidfile.is_file(),
+            'monitor_pidfile_present': Path(
+                '/var/run/zapret2-supervisor-monitor.pid').is_file(),
+            'active_observer_present': (
+                active / 'auto-detect-generation.json').is_file(),
+            'stderr_present': bool(stopped.stderr),
+        }, sort_keys=True), flush=True)
+        need(stopped.returncode == 0 and stop_receipt in {'ok', 'native-stopped'},
+             'original-auto-explicit-stop-refused:' + stop_receipt)
+        need(retired_present, 'old-installed-original-epoch-not-retired')
         need(hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
              'stop-mutated-manual-model')
         boot = run(cli, 'zapret', 'start', timeout=240)
