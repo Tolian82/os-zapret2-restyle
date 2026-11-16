@@ -46,6 +46,7 @@ class FakePS:
         self.monitor_exe = MONITOR
         self.extra = False
         self.stopped = False
+        self.stopped_rows = "0 [kernel]\\n1 /sbin/init\\n77 /bin/ps\\n".replace("\\n", "\n")
         self.commands: list[list[str]] = []
         self.fail = False
 
@@ -55,7 +56,7 @@ class FakePS:
             return subprocess.CompletedProcess(argv, 1, "", "")
         if "-A" in argv:
             if self.stopped:
-                return subprocess.CompletedProcess(argv, 0, "77 /sbin/init\\n".replace("\\n", "\n"), "")
+                return subprocess.CompletedProcess(argv, 0, self.stopped_rows, "")
             lines = [f"{PID} {EXE} {self.args} --sockarg=0x200 --user=nobody"]
             if self.extra:
                 lines.append(f"9999 {EXE} --port=9999")
@@ -315,6 +316,22 @@ class OwnerGenerationTests(unittest.TestCase):
         with self.assertRaises((owner_mod.GenerationRefused, OSError)):
             self.witness()
         self.assertTrue(any("-A" in cmd for cmd in self.ps.commands))
+
+    def test_stopped_native_ps_includes_kernel_init_but_refuses_owners(self):
+        previous = self.stopped_fixture()
+        # Actual FreeBSD ps -A lists PID 0/1 as well as user processes.
+        self.assertEqual(self.stopped_witness(), previous)
+        for rows in (
+            "0 " + EXE + "\\n",
+            "1 " + MONITOR + "\\n",
+            "82 /bin/sh " + MONITOR + " /var/run/dvtws2.pid\\n",
+            "82 " + EXE + " --port=989\\n",
+            "82\\n",
+            "invalid /bin/ps\\n",
+        ):
+            self.ps.stopped_rows = rows.replace("\\n", "\n")
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.stopped_witness()
 
     def test_stopped_refuses_old_engine_or_pidfile_or_changed_journal(self):
         self.stopped_fixture()

@@ -385,10 +385,21 @@ def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
                               "-o", "pid=", "-o", "command="])
         for line in census.splitlines():
             fields = line.split()
-            if (len(fields) < 2 or not fields[0].isdigit() or
-                    int(fields[0]) <= 1):
+            if not fields or not fields[0].isdigit():
                 raise GenerationRefused("invalid_stopped_process_census")
-            if fields[1] in (CHILD_EXEC, MONITOR_EXEC):
+            pid = int(fields[0])
+            # Native FreeBSD ps -A includes kernel PID 0 and init PID 1.
+            # Neither can be an original launcher PID (>1). A missing
+            # command for ANY ordinary PID remains untrusted, not stopped.
+            if len(fields) < 2:
+                if pid in (0, 1):
+                    continue
+                raise GenerationRefused("invalid_stopped_process_census")
+            # Native daemon -f can expose the supervisor via its /bin/sh
+            # shebang. Missing monitor PIDfile must NOT hide that survivor.
+            if (fields[1] in (CHILD_EXEC, MONITOR_EXEC) or
+                    (len(fields) >= 3 and fields[1] == "/bin/sh" and
+                     fields[2] == MONITOR_EXEC)):
                 return False
         return True
 
