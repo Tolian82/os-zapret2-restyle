@@ -169,6 +169,8 @@ def recovered_status(stage, action, *, optin=False, timeout=180):
         "SCRIPT_DIR": str(stage),
         "BACKEND_DIR": str(stage / "backend"),
         "PYTHON_RUNTIME": str(stage / "python_runtime.sh"),
+        "ZAPRET_INSTALLED_SUPERVISOR_LOOP":
+            str(SERVICE.parent / "supervisor_loop.sh"),
     })
     if optin:
         environment["ZAPRET_OWNER_REVIEW_RECOVERY"] = "1"
@@ -372,6 +374,65 @@ def native():
                 "--pre-retire",
             ], capture_output=True, text=True, timeout=35,
                pass_fds=(9,), check=False)
+            # Run the unchanged original Stop's OTHER read-only validators
+            # under the SAME original FD9 before ever asking pkg to mutate
+            # installed files. These are production entrypoints/functions,
+            # not duplicated Config/IPFW parsers or new on-disk witnesses.
+            work = Path("/var/db/zapret2/shared-work") / generation
+            checks = {
+                "sealed_bundle": [
+                    str(stage / "python_runtime.sh"),
+                    str(stage / "backend" / "shared_apply_seal.py"),
+                    "verify", generation,
+                ],
+                "saved_original_config": [
+                    "/usr/local/bin/php", str(stage / "shared_apply_config.php"),
+                    "saved", generation, "strategies",
+                ],
+                "active_tree_exact": [
+                    "/bin/sh", "-c",
+                    'common_error() { :; }; . "$1"; atomic_verify_tree "$2" "$3"',
+                    "own70-native-tree",
+                    str(stage / "backend" / "atomic.sh"),
+                    str(work / "release"), str(ACTIVE),
+                ],
+                "original_shell_child_and_monitor": [
+                    "/bin/sh", "-c",
+                    ('SCRIPT_DIR="$1"; BACKEND_DIR="$1/backend"; '
+                     'DVTWS_BIN="$2"; SUPERVISOR_LOOP="$3"; '
+                     '. "$BACKEND_DIR/common.sh"; '
+                     '. "$BACKEND_DIR/launcher.sh"; '
+                     '. "$BACKEND_DIR/supervisor.sh"; '
+                     'launcher_is_running /var/run/dvtws2.pid && '
+                     'supervisor_is_running /var/run/zapret2-supervisor-monitor.pid'),
+                    "own70-native-real-process",
+                    str(stage),
+                    "/usr/local/etc/zapret2/binaries/my/dvtws2",
+                    str(SERVICE.parent / "supervisor_loop.sh"),
+                ],
+                "original_observer_authorized": [
+                    str(stage / "python_runtime.sh"),
+                    str(stage / "backend" / "auto_detect_post_drop.py"),
+                    "authorize", str(ACTIVE),
+                ],
+                "committed_original_ipfw": [
+                    str(stage / "python_runtime.sh"),
+                    str(stage / "backend" / "voice_ipfw_adapter.py"),
+                    "shared", "verify", "-", str(ACTIVE),
+                ],
+            }
+            proof = {}
+            for name, command in checks.items():
+                observation = subprocess.run(command, capture_output=True,
+                                             text=True, timeout=35,
+                                             pass_fds=(9,), check=False)
+                valid = observation.returncode == 0
+                if name == "saved_original_config" and valid:
+                    try:
+                        valid = json.loads(observation.stdout).get("result") == "committed"
+                    except (TypeError, ValueError):
+                        valid = False
+                proof[name] = {"rc": observation.returncode, "verified": valid}
         finally:
             os.close(9)
         label = re.search(r"auto-detect-retire-refused=([A-Za-z]{3,50})",
@@ -380,12 +441,14 @@ def native():
             "original_fd9_pre_retire_rc": pre.returncode,
             "pre_retire_running_attested":
                 pre.stdout.strip() == "auto-detect-retire=original-running-attested",
-            "pre_retire_exception_class":
-                label.group(1) if label else "none",
+            "pre_retire_exception_class": label.group(1) if label else "none",
+            "original_readonly_stop_gates": proof,
         }, sort_keys=True), flush=True)
         need(pre.returncode == 0 and
              pre.stdout.strip() == "auto-detect-retire=original-running-attested",
              "native_original_running_epoch_pre_retirement_refused")
+        need(all(item["verified"] for item in proof.values()),
+             "original_stop_readonly_gate_refused_before_pkg")
         # Both original hook generations expose SERVICE_SCRIPT. Whether
         # genuine FreeBSD pkg forwards that environment is what this
         # disposable native test must PROVE, not assume. Use the same real
@@ -396,6 +459,8 @@ def native():
             "SCRIPT_DIR": str(stage),
             "BACKEND_DIR": str(stage / "backend"),
             "PYTHON_RUNTIME": str(stage / "python_runtime.sh"),
+            "ZAPRET_INSTALLED_SUPERVISOR_LOOP":
+                str(SERVICE.parent / "supervisor_loop.sh"),
         })
         update = run(["pkg", "-d", "add", "-f", str(pkg)],
                      timeout=210, env=override)
@@ -504,6 +569,11 @@ def self_test():
             pass
         else:
             raise Refused("ambiguous_or_foreign_tar_alias_accepted")
+    source = (ROOT / "src" / SERVICE_REL / "zapret_service.sh").read_text()
+    need('ZAPRET_INSTALLED_SUPERVISOR_LOOP' in source and
+         'unqualified native supervisor identity path' in source and
+         '/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh' in source,
+         "canonical_installed_supervisor_identity_override_missing")
     print("OWN70_NATIVE_BRIDGE_SOURCE=PASS")
 
 
