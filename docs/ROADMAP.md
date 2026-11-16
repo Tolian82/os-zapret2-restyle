@@ -2,16 +2,16 @@
 
 ## Current priority
 
-The owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) is now integrated as source \`v0.6.5_70\` (merged PR #1161), and the immutable \`v0.6.5_70.pkg\` testing prerelease is published. The current documentation-only \`_71\` increment does not rebuild it. **Next outcome:** owner installs the actual \`.pkg\` and verifies GUI, continuous live traffic, retention, scheduled opt-in restart, preservation on update/uninstall/reinstall, and purge. Preserve fail-closed FD9/Config/IPFW/Voice and do not create an unrelated Strategy Lab workstream.
+The owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) is now integrated as source `v0.6.5_70` (merged PR #1161), and the immutable `v0.6.5_70.pkg` testing prerelease is published. The current documentation-only `_71` increment does not rebuild it. **Next outcome:** owner installs the actual `.pkg` and verifies GUI, continuous live traffic, retention, scheduled opt-in restart, preservation on update/uninstall/reinstall, and purge. Preserve fail-closed FD9/Config/IPFW/Voice and do not create an unrelated Strategy Lab workstream.
 
 | Stage | Bounded result | Status |
 |---|---|---|
 | P0 | Nonactivating native observer feasibility and generation attribution | Completed within recorded scope |
 | P1 | One domain policy, strict IDNA and offline ICANN+PRIVATE PSL | Completed |
 | P2 | Original FD9 queue, native Config/P1/ACK, minute raw/debug maintenance, safe four-generation retention and lifecycle handoff | Integrated; exact-head portable/native and finite installed HTTP/RST/Stop/Boot PASS; prolonged owner forwarding/reboot/failure OPEN |
-| P3 | Protected auto-owned known/unknown lists, explicit-only Auto HOSTLIST, no legacy migration | Integrated; native installed Config/P1/Hostlist and independent \`configd\` CAS tests PASS; owner native hot-reload and exclusion acceptance OPEN |
+| P3 | Protected auto-owned known/unknown lists, explicit-only Auto HOSTLIST, no legacy migration | Integrated; native installed Config/P1/Hostlist and independent `configd` CAS tests PASS; owner native hot-reload and exclusion acceptance OPEN |
 | P4 | Editable RU/EN Auto Hostlist and independent Advanced-only Auto Restart | Real two-tab Chromium Save/conflict/F5 PASS; five choices/default Off GUI PASS; real opt-in scheduled RUNNING/STOPPED behavior OPEN |
-| P5 | Proportionate native checks, exact standalone testing package and owner acceptance | Source/ABI and \`v0.6.5_70.pkg\` publication PASS; owner installed, upgrade, preservation, purge, long-run and rollback acceptance OPEN |
+| P5 | Proportionate native checks, exact standalone testing package and owner acceptance | Source/ABI and `v0.6.5_70.pkg` publication PASS; owner installed, upgrade, preservation, purge, long-run and rollback acceptance OPEN |
 
 ## Completed lifetime path
 
