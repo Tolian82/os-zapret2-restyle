@@ -6,6 +6,8 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 16 November 2026
 
+**Current documentation identity:** `v0.6.5_71` (`VERSION=0.6.5`, `PLUGIN_REVISION=71`); the prospective `os-zapret2-restyle-0.6.5_71.pkg` is **NOT BUILT OR PUBLISHED**. The physically published testing package remains `os-zapret2-restyle-0.6.5_70.pkg`.
+
 **Main source:** `v0.6.5_70` was squash-merged from [PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d`; `v0.6.5_71` is the subsequent **documentation-only** revision recording publication, not a new build. `VERSION=0.6.5` is unchanged. The previously discussed unmerged `_72` branch is retained as history, not current production source.
 
 **Testing package:** [`v0.6.5_70.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_70/os-zapret2-restyle-0.6.5_70.pkg) is published as an immutable standalone prerelease, from the exact merged source commit, with SHA-256 `18acb1793410c055820737c5a30eb9a317208f1aa6a70e7bbaccf1ad1c701644` and `FreeBSD:15:amd64` manifest. [Publication record](verification/evidence/testing-publications/v0.6.5_70.md). This does **not** promote the stable Pages/pkg repository; the owner-installed stable remains `0.6.5_1.pkg`.

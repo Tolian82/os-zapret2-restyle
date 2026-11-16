@@ -4,7 +4,7 @@
 
 ## Exact source and package boundary
 
-**Current source:** `VERSION=0.6.5`, `PLUGIN_REVISION=71` — post-publication **documentation-only** revision, which does not create `_71.pkg`. [Merged source PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) introduced `v0.6.5_70` at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d` after exact-head source, package, native FreeBSD, installed P5b2b, G03 and Chromium checks.
+**Current source:** `v0.6.5_71` (`VERSION=0.6.5`, `PLUGIN_REVISION=71`) — post-publication **documentation-only** revision; prospective `os-zapret2-restyle-0.6.5_71.pkg` is **NOT BUILT OR PUBLISHED**. [Merged source PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) introduced `v0.6.5_70` at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d` after exact-head source, package, native FreeBSD, installed P5b2b, G03 and Chromium checks.
 
 **Published testing package:** [`os-zapret2-restyle-0.6.5_70.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_70/os-zapret2-restyle-0.6.5_70.pkg) — immutable testing prerelease `v0.6.5_70`, SHA-256 `18acb1793410c055820737c5a30eb9a317208f1aa6a70e7bbaccf1ad1c701644`, manifest `FreeBSD:15:amd64`. [Publication evidence](verification/evidence/testing-publications/v0.6.5_70.md). This is a standalone native `.pkg` only; stable Pages/pkg and stable owner-installed `0.6.5_1.pkg` are unchanged.
 
