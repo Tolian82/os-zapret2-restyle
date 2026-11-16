@@ -371,6 +371,75 @@ def native_installed_auto_handoff():
                 entries = re.findall(rb'auto-detect-minute-refused=([A-Za-z]{3,64})', tail)
                 status['native_worker_refusal_class'] = (entries[-1].decode('ascii')
                                                          if entries else 'not-in-log')
+            # Read-only original PHP Config/model diagnostic. The production
+            # minute has returned and released its Config lock. This uses
+            # the real native Model and original Model digest, not a second
+            # XML parser, synthetic hostlist writer or pending replay.
+            php_probe = r'''require_once('/usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php');
+require_once('script/load_phalcon.php');
+$phase='initial';
+try {
+ $c=\OPNsense\Core\Config::getInstance();
+ $phase='model';
+ $result=\OPNsense\Zapret\Native\AutoDetectConfigSnapshot::withLockedOriginalModel(
+    $c, static fn()=>new \OPNsense\Zapret\Zapret(),
+    static function($source) use ($c, &$phase) {
+        $phase='original-config-handle';
+        $r=new \ReflectionObject($c);
+        if (!$r->hasProperty('config_file_handle') ||
+            !$r->hasProperty('config_file')) {
+            throw new \RuntimeException('config_handle_missing');
+        }
+        $handle=$r->getProperty('config_file_handle')->getValue($c);
+        $location=$r->getProperty('config_file')->getValue($c);
+        $held=is_resource($handle)?@fstat($handle):false;
+        $named=@lstat('/conf/config.xml');
+        if ($location!=='/conf/config.xml' || !is_array($held) ||
+            !is_array($named) || $held['dev']!==$named['dev'] ||
+            $held['ino']!==$named['ino']) {
+            throw new \RuntimeException('config_handle_mismatch');
+        }
+        $phase='done';
+        return ['kind'=>'destination-and-cursor-committed',
+                'ack_authorized'=>false];
+    });
+ echo 'ok';
+} catch (\Throwable $error) {
+ $m=$error->getMessage();
+ $allowed=['Native Hostlist model unavailable',
+           'Required native manual Hostlist missing or oversized',
+           'Native global domain exclusion unavailable',
+           'Original Config model unavailable',
+           'Original Config model invalid',
+           'Original Config changed during transaction',
+           'config_handle_missing','config_handle_mismatch'];
+ $why=in_array($m,$allowed,true)?str_replace(' ','_',strtolower($m)):'unqualified';
+ echo 'refused:'.$phase.':'.$why;
+}'''
+            model_probe = run('/usr/local/bin/php', '-r', php_probe, timeout=35)
+            label = model_probe.stdout.decode('ascii', errors='replace').strip()
+            safe_label = (label if label == 'ok' or re.fullmatch(
+                r'refused:[a-z-]+:[a-z_]+', label) else 'unqualified')
+            status['native_php_model'] = safe_label
+            status['native_php_rc'] = model_probe.returncode
+            # Only file-presence evidence at the PREEXISTING original v2 slot;
+            # no file creation, pending mutation, Config or GUI save.
+            from auto_detect_owned_sources import OWNED_ROOT
+            status['known_owned_manifest_present'] = (
+                (OWNED_ROOT / 'manifest.json').is_file())
+            status['known_owned_youtube_present'] = (
+                (OWNED_ROOT / 'youtube.txt').is_file())
+            status['known_owned_user_present'] = (
+                (OWNED_ROOT / 'user.txt').is_file())
+            if 'tip' in locals() and tip.open_folder is not None:
+                destination = tip.open_folder / 'destination'
+                status['original_destination_dir_present'] = (
+                    destination.is_dir() and not destination.is_symlink())
+                if destination.is_dir() and not destination.is_symlink():
+                    status['original_destination_plan_present'] = (
+                        (destination / 'plan.json').is_file())
+                    status['original_destination_checkpoint_present'] = (
+                        (destination / 'checkpoint.json').is_file())
             print('P2_INSTALLED_POSITIVE_MINUTE=' +
                   json.dumps(status, sort_keys=True), flush=True)
         need(succeeded, 'installed-auto-configd-minute-not-' + expected)
