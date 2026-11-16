@@ -85,7 +85,7 @@ class IPFWAdapterTests(unittest.TestCase):
                     IPFWAdapterError):
                 checked_rule_argv(changed)
         native = SimulateFreeBSD()
-        native.rule_listing += "19003 " + " ".join(AUTO_RST) + "\\n"
+        native.rule_listing += "19003 " + " ".join(AUTO_RST) + "\n"
         adapter = FreeBSDIPFWAdapter(19000, 19010, runner=native)
         self.assertEqual(adapter.list_rules(19000, 19010)[19003], AUTO_RST)
 
