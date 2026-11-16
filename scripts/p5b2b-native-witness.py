@@ -855,6 +855,62 @@ try {
             'engine_identity_stable': current_identity() == (
                 second_gen, second_pid, second_birth),
         }, sort_keys=True), flush=True)
+        if RAW_PATH.read_text().splitlines() != [synthetic_host]:
+            # Diagnostic ONLY on disposable guest: original production
+            # capture owns outbound WAN packets but does not yet capture
+            # return RST/SYN+ACK. Verify the documented inbound dependency
+            # with three temporary, precisely scoped lo0 rules OUTSIDE the
+            # reserved plugin ranges. Never misreport a synthetic rule as
+            # an installed-product PASS.
+            temporary = (19355, 19356, 19357)
+            flags = ('syn,ack', 'rst', 'fin')
+            listed = run('/sbin/ipfw', '-q', 'list', timeout=15)
+            need(listed.returncode == 0 and len(listed.stdout) < 1000000,
+                 'native-diagnostic-rules-unreadable')
+            for number in temporary:
+                need(not re.search(rf'(?m)^0*{number}\\s',
+                                   listed.stdout.decode('utf-8', 'replace')),
+                     'native-diagnostic-rule-already-owned')
+            configured = []
+            receipt = {}
+            try:
+                for number, flag in zip(temporary, flags):
+                    created = run('/sbin/ipfw', '-qf', 'add', str(number),
+                                  'divert', '989', 'tcp', 'from', 'any',
+                                  str(test_port), 'to', 'any', 'tcpflags',
+                                  flag, 'in', 'not', 'diverted', 'recv', 'lo0',
+                                  timeout=15)
+                    need(created.returncode == 0,
+                         'native-disposable-inbound-rule-install-failed')
+                    configured.append(number)
+                need(client.exchange(synthetic_host, port=test_port,
+                                     force_rst=True) == client.request(synthetic_host),
+                     'native-reverse-probe-forwarding-failed')
+                for _ in range(12):
+                    if RAW_PATH.read_text().splitlines() == [synthetic_host]:
+                        break
+                    time.sleep(.25)
+                stats = run('/sbin/ipfw', '-a', 'list', timeout=15)
+                if stats.returncode == 0 and len(stats.stdout) < 1000000:
+                    matches = {}
+                    for row in stats.stdout.decode('utf-8', 'replace').splitlines():
+                        match = re.match(r'^\\s*0*([0-9]+)\\s+([0-9]+)\\s+', row)
+                        if match and int(match[1]) in temporary:
+                            matches[int(match[1])] = int(match[2])
+                    receipt['reverse_counters'] = [matches.get(n, -1) for n in temporary]
+                receipt['reverse_raw_count'] = len(RAW_PATH.read_text().splitlines())
+                receipt['reverse_native_debug'] = (
+                    synthetic_host in DEBUG_PATH.read_text())
+                receipt['engine_still_same'] = (
+                    current_identity() == (second_gen, second_pid, second_birth))
+            finally:
+                for number in reversed(configured):
+                    removed = run('/sbin/ipfw', '-q', 'delete', str(number), timeout=15)
+                    need(removed.returncode == 0,
+                         'native-diagnostic-inbound-rule-removal-failed')
+            print('P2_INSTALLED_INBOUND_RST_PROBE=' +
+                  json.dumps(receipt, sort_keys=True), flush=True)
+            need(False, 'original-auto-inbound-rst-capture-not-qualified')
         need(RAW_PATH.read_text().splitlines() == [synthetic_host],
              'native-unknown-raw-append-not-observed')
         old_map = json.loads((active / 'auto-detect-generation.json').read_bytes())
