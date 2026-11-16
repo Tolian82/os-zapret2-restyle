@@ -96,7 +96,7 @@ class VoiceFirewallTransactionTests(unittest.TestCase):
         self.assertEqual(live.tables, prior["tables"])
         voice = fixture(("telegram", "91.108.13.10"), auto_rst=True)
         self.assertEqual(voice["rules"][max(voice["rules"])][9:11], ["rst", "in"])
-        with self.assertRaisesRegex(AdapterFirewallError, "scope"):
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "scope"):
             transaction.prepare_desired(
                 {"schema": 1, "rule_base": 19000, "rule_max": 19010,
                  "ordinary_rule_base": 19000, "divert_port": 989,

@@ -297,9 +297,43 @@ def native_installed_auto_handoff():
 
     def minute(expected):
         response = run(cli, 'zapret', 'auto_detect_minute', timeout=85)
-        need(response.returncode == 0 and
-             f'auto-detect-minute={expected}'.encode() in response.stdout,
-             'installed-auto-configd-minute-not-' + expected)
+        succeeded = (response.returncode == 0 and
+                     f'auto-detect-minute={expected}'.encode() in response.stdout)
+        if expected == 'processed':
+            label = (
+                'processed' if b'auto-detect-minute=processed' in response.stdout else
+                'idle' if b'auto-detect-minute=idle' in response.stdout else
+                'inactive' if b'auto-detect-minute=inactive' in response.stdout else
+                'execute-error' if b'Execute error' in response.stdout else
+                'unknown')
+            status = {'rc': response.returncode, 'receipt': label,
+                      'stderr_present': bool(response.stderr),
+                      'raw_bytes': Path('/var/db/zapret2-auto-detect/inbox.txt').stat().st_size,
+                      'debug_bytes': Path('/var/db/zapret2-auto-detect/debug.log').stat().st_size}
+            from auto_detect_storage import ROOT as storage_root
+            pending = storage_root / 'pending'
+            status['pending_entries'] = (len(list(pending.iterdir()))
+                                         if pending.is_dir() and not pending.is_symlink()
+                                         else -1)
+            epochs_root = Path('/var/db/zapret2/auto-detect-epochs')
+            gen = locals().get('second_gen')
+            if gen is not None:
+                chain = epochs_root / gen / 'cursor-chain'
+                status['cursor_slots'] = (len(list(chain.iterdir()))
+                                          if chain.is_dir() and not chain.is_symlink()
+                                          else 0)
+            log = Path('/var/log/configd/latest.log')
+            if log.is_file() and not log.is_symlink():
+                with log.open('rb') as stream:
+                    stream.seek(0, os.SEEK_END)
+                    stream.seek(max(0, stream.tell() - 65536))
+                    tail = stream.read(65536)
+                entries = re.findall(rb'auto-detect-minute-refused=([A-Za-z]{3,64})', tail)
+                status['native_worker_refusal_class'] = (entries[-1].decode('ascii')
+                                                         if entries else 'not-in-log')
+            print('P2_INSTALLED_POSITIVE_MINUTE=' +
+                  json.dumps(status, sort_keys=True), flush=True)
+        need(succeeded, 'installed-auto-configd-minute-not-' + expected)
 
     old = ET.fromstring(CONFIG.read_bytes())
     tg = old.find('./OPNsense/Zapret/hostlist/telegramips')
