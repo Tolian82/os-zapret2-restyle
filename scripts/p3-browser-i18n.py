@@ -21,6 +21,7 @@ ORIGIN = "https://127.0.0.1:18443"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 FIELDS_GENERAL = (
     "zapret.general.waninterface",
+    "zapret.general.autorestart",
     "zapret.general.divertport",
     "zapret.strategy.trafficargs",
     "zapret.strategy.extraargs",
@@ -258,6 +259,98 @@ def check_resource_help_cache(page, mode: str) -> str:
     return status
 
 
+def check_p4_native_gui(page, mode: str) -> None:
+    """Actual installed Strategies form: native Advanced + final-file editor.
+
+    Read-only Chromium: no form Apply, Auto Hostlist Save, engine or IPFW.
+    The saved-value/concurrency and timed-restart write paths have separate
+    acceptance boundaries; this check does not pretend to exercise them.
+    """
+    form_id = "frm_GeneralSettings"
+    selection = control(page, "zapret.general.autorestart")
+    toggle = native_form_toggle(page, form_id, "show_advanced")
+    row = page.locator("#zapretAutoRestartInline")
+    row.wait_for(state="attached", timeout=12000)
+    need(row.evaluate(
+        "(el) => el.closest('tr') === "
+        "document.getElementById('zapret.general.enabled').closest('tr')"),
+        "P4_RESTART_NOT_INLINE_RIGHT_OF_ENABLED")
+    expected_label = "Автоперезагрузка" if mode == "ru" else "Auto Restart"
+    need(row.locator("label").inner_text().strip() == expected_label,
+         "P4_RESTART_LABEL_WRONG_" + mode)
+    options = selection.evaluate(
+        "s => Array.from(s.options).map(o => [o.value, o.textContent.trim()])")
+    wanted = (
+        [("off", "Выключено"), ("hourly", "Раз в час"),
+         ("daily", "Раз в день"), ("weekly", "Раз в неделю"),
+         ("monthly", "Раз в месяц")]
+        if mode == "ru" else
+        [("off", "Off"), ("hourly", "Every hour"),
+         ("daily", "Every day"), ("weekly", "Every week"),
+         ("monthly", "Every month")]
+    )
+    need(options == [list(pair) for pair in wanted],
+         "P4_RESTART_CHOICES_OR_LOCALE_WRONG_" + mode)
+    saved = selection.input_value()
+    need(saved == "off", "P4_CLEAN_INSTALL_RESTART_NOT_OFF")
+    if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
+        toggle.click()
+    row.wait_for(state="hidden", timeout=12000)
+    need(not row.locator("label").is_visible(),
+         "P4_RESTART_LABEL_VISIBLE_WITH_ADVANCED_OFF")
+    toggle.click()
+    row.wait_for(state="visible", timeout=12000)
+    need(selection.input_value() == saved,
+         "P4_SHOW_ADVANCED_RESET_RESTART")
+    selection.select_option(value="hourly")
+    toggle.click()
+    row.wait_for(state="hidden", timeout=12000)
+    need(selection.input_value() == "hourly",
+         "P4_HIDE_ADVANCED_RESET_UNSAVED_RESTART")
+    toggle.click()
+    row.wait_for(state="visible", timeout=12000)
+    need(selection.input_value() == "hourly",
+         "P4_RESHOW_ADVANCED_LOST_RESTART")
+    selection.select_option(value=saved)
+
+    editor_row = page.locator("#zapretAutoHostlistRow")
+    editor_row.wait_for(state="attached", timeout=12000)
+    after_user = control(page, "zapret.hostlist.userdomains").locator(
+        "xpath=ancestor::tr[1]/following-sibling::tr[1]")
+    need(after_user.get_attribute("id") == "zapretAutoHostlistRow",
+         "P4_AUTO_HOSTLIST_NOT_AFTER_USER_DOMAINS")
+    need(editor_row.locator("label").inner_text().strip() ==
+         ("Найденные домены" if mode == "ru" else "Auto Hostlist"),
+         "P4_AUTO_HOSTLIST_LABEL_WRONG_" + mode)
+    need(editor_row.locator("button#zapretAutoHostlistSave").count() == 1 and
+         editor_row.locator("button#zapretAutoHostlistReload").count() == 1,
+         "P4_AUTO_HOSTLIST_ACTIONS_MISSING")
+    page.wait_for_function(
+        "() => { const e = document.getElementById('zapretAutoHostlistField');"
+        " return !!e && !e.disabled; }", timeout=45000)
+    need(editor_row.locator("#zapretAutoHostlistSave").is_enabled(),
+         "P4_AUTO_HOSTLIST_NOT_READABLE")
+    state = page.locator("#zapretAutoHostlistState").inner_text().strip()
+    allowed = (
+        ("Файл отсутствует", "Список пуст", "Список загружен")
+        if mode == "ru" else ("File missing", "List is empty", "List loaded")
+    )
+    need(state in allowed, "P4_AUTO_HOSTLIST_STATUS_WRONG_" + mode)
+    editor = page.locator("#zapretAutoHostlistField")
+    current = editor.input_value()
+    editor.fill(current + "\np4-unsaved.example.test\n")
+    need(editor.input_value().endswith("p4-unsaved.example.test\n"),
+         "P4_AUTO_HOSTLIST_EDITOR_NOT_EDITABLE")
+    editor.fill(current)
+    f5_and_wait(page, "/api/zapret/settings/get")
+    page.wait_for_function(
+        "() => { const e = document.getElementById('zapretAutoHostlistField');"
+        " return !!e && !e.disabled; }", timeout=45000)
+    need(page.locator("#zapretAutoHostlistField").input_value() == current and
+         control(page, "zapret.general.autorestart").input_value() == saved,
+         "P4_UNSAVED_EDIT_LEAKED_ACROSS_F5")
+
+
 def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
@@ -283,6 +376,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     else:
         need(all("Автоопределение" not in x["text"] for x in options),
              "EN_TARGET_MODE_USES_RU")
+    check_p4_native_gui(page, mode)
     initial = value_snapshot(page, FIELDS_GENERAL)
     need("zapret.hostlist.mode" in initial, "TARGET_MODE_SNAPSHOT_MISSING")
     field = control(page, "zapret.hostlist.userdomains")
@@ -526,6 +620,7 @@ def browser_run(mode: str) -> None:
         "readonly_voice_error_checked": validated,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
+        "p4_native_advanced_and_auto_hostlist_readonly_checked": True,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,

@@ -321,8 +321,8 @@
 
         // Native OptionField values remain all/list/auto regardless of locale.
         const autoRestartLabelsRU = {
-            off: 'Выключено', hourly: 'Каждый час', daily: 'Каждый день',
-            weekly: 'Каждую неделю', monthly: 'Каждый месяц'
+            off: 'Выключено', hourly: 'Раз в час', daily: 'Раз в день',
+            weekly: 'Раз в неделю', monthly: 'Раз в месяц'
         };
         function localizeAutoRestartOptions() {
             if (!isRussian) return;
