@@ -3,7 +3,8 @@
 
 Tests the actual server-selected root user profile locale, native Strategies
 and Voice forms, popup + F5 Full Help source, unsaved editing, reload and one
-read-only Voice invalid-IPSET validation. Never clicks Apply or Save Draft.
+read-only Voice invalid-IPSET validation. No shared Apply or Save Draft;
+explicit disposable-only P4 fixture separately exercises final HOSTLIST Save.
 The owner appliance A12-A16 acceptance remains a separate gate.
 """
 from __future__ import annotations
@@ -418,6 +419,86 @@ def check_p4_native_gui(page, mode: str) -> str:
     return "readable-unsaved-edit"
 
 
+def check_p4_actual_browser_save(context, primary) -> bool:
+    """Real two-tab, revisioned GUI Save in an explicitly disposable guest fixture."""
+    if os.environ.get("ZAPRET2_P4_DISPOSABLE_GUI_SAVE") != "1":
+        return False
+    field = primary.locator("#zapretAutoHostlistField")
+    need(field.is_enabled() and field.input_value() == "",
+         "P4_GUI_SAVE_CLEAN_EDITABLE_FIXTURE_REQUIRED")
+    second = context.new_page()
+    wait_native_load(second, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
+    wait_locale(second, "en")
+    second.wait_for_function(
+        "() => !!document.querySelector('#zapretAutoHostlistField') && "
+        "!document.querySelector('#zapretAutoHostlistField').disabled",
+        timeout=45000)
+    stale = second.locator("#zapretAutoHostlistField")
+    need(stale.input_value() == "", "P4_SECOND_TAB_NOT_SAME_INITIAL_REVISION")
+
+    expected = "p4-gui-save.example.com\n!^p4-gui-exclude.example.net\n"
+    field.fill(expected)
+    with primary.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        primary.locator("#zapretAutoHostlistSave").click()
+    result = response.value.json()
+    need(response.value.status == 200 and result.get("result") == "saved" and
+         result.get("content") == expected, "P4_BROWSER_FIRST_SAVE_NOT_COMMITTED")
+    primary.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
+        timeout=15000)
+
+    # The second tab intentionally retained the pre-save revision.
+    stale_text = "p4-stale-save.example.org\n"
+    stale.fill(stale_text)
+    with second.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        second.locator("#zapretAutoHostlistSave").click()
+    refused = response.value.json()
+    need(refused.get("result") == "conflict" and stale.input_value() == stale_text,
+         "P4_BROWSER_STALE_TAB_OVERWROTE_OR_LOST_DRAFT")
+    second.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.includes('List changed since opening')",
+        timeout=15000)
+    need(not second.locator("#zapretAutoHostlistSave").is_enabled(),
+         "P4_BROWSER_STALE_TAB_SAVE_NOT_BLOCKED")
+    with second.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistRead"),
+        timeout=50000):
+        second.locator("#zapretAutoHostlistReload").click()
+    second.wait_for_function(
+        "v => document.querySelector('#zapretAutoHostlistField')?.value === v",
+        arg=expected, timeout=15000)
+
+    # Restore pre-test empty final file through normal native GUI Save.
+    field.fill("")
+    with primary.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        primary.locator("#zapretAutoHostlistSave").click()
+    restored = response.value.json()
+    need(restored.get("result") == "saved" and restored.get("content") == "",
+         "P4_BROWSER_EMPTY_RESTORE_NOT_COMMITTED")
+    primary.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
+        timeout=15000)
+    f5_and_wait(primary, "/api/zapret/settings/get")
+    primary.wait_for_function(
+        "() => !!document.querySelector('#zapretAutoHostlistField') && "
+        "!document.querySelector('#zapretAutoHostlistField').disabled",
+        timeout=45000)
+    need(primary.locator("#zapretAutoHostlistField").input_value() == "",
+         "P4_BROWSER_RESTORED_FINAL_LIST_CHANGED_AFTER_F5")
+    second.close()
+    return True
+
+
 def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
@@ -660,6 +741,7 @@ def browser_run(mode: str) -> None:
             page = context.new_page()
             login(page)
             strategies, cache_state, p4_editor_status = check_strategies(page, mode)
+            p4_browser_save_verified = check_p4_actual_browser_save(context, page) if mode == "en" else False
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -690,6 +772,7 @@ def browser_run(mode: str) -> None:
         "p4_native_advanced_and_auto_hostlist_readonly_checked": True,
         "p4_native_hostlist_editor_status": p4_editor_status,
         "p4_native_hostlist_save_verified": False,
+        "p4_browser_save_and_conflict_verified": p4_browser_save_verified,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,

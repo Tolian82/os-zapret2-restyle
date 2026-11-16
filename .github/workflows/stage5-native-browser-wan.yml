@@ -179,12 +179,68 @@ jobs:
           set -eu
           /usr/local/bin/php -l scripts/p3-native-profile-locale.php
           GITHUB_ACTIONS=true ZAPRET2_P3_NATIVE_LOCALE=1 /usr/local/bin/php scripts/p3-native-profile-locale.php en_US
+      - name: P4 prepare disposable native hostlist for two-tab browser Save
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true /usr/local/bin/python3 - <<'PY'
+          import hashlib
+          import os
+          import stat
+          from pathlib import Path
+          if os.environ.get('GITHUB_ACTIONS') != 'true' or not Path('/usr/local/opnsense').is_dir():
+              raise SystemExit('P4_NOT_DISPOSABLE_OPNSENSE')
+          # Test fixture ONLY. The separately installed upstream runtime
+          # is not in this browser guest; production paths are unchanged.
+          for item in (Path('/usr/local/etc/zapret2'), Path('/usr/local/etc/zapret2/ipset')):
+              try:
+                  marker = item.lstat()
+              except FileNotFoundError:
+                  item.mkdir(mode=0o755)
+                  marker = item.lstat()
+              if not stat.S_ISDIR(marker.st_mode) or marker.st_uid != 0 or marker.st_mode & 0o022:
+                  raise SystemExit('P4_HOSTLIST_FIXTURE_PARENT_UNSAFE')
+          target = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
+          try:
+              marker = target.lstat()
+          except FileNotFoundError:
+              pass
+          else:
+              if not stat.S_ISREG(marker.st_mode) or marker.st_uid != 0 or marker.st_nlink != 1 or marker.st_mode & 0o022 or target.read_bytes() != b'':
+                  raise SystemExit('P4_HOSTLIST_FIXTURE_NOT_CLEAN')
+          Path('dist').mkdir(exist_ok=True)
+          Path('dist/p4-gui-baseline.sha256').write_text(hashlib.sha256(Path('/conf/config.xml').read_bytes()).hexdigest() + '\n')
+          print('P4_BROWSER_FIXTURE=ROOT_OWNED_EMPTY_TARGET_PARENT')
+          PY
       - name: P3 real Chromium English Strategies and Voice native forms / F5 / validation
         env:
           ZAPRET2_P3_NATIVE_LOCALE: '1'
+          ZAPRET2_P4_DISPOSABLE_GUI_SAVE: '1'
         run: |
           set -eu
           python3.13 scripts/p3-browser-i18n.py --en-browser
+      - name: P4 verify actual GUI Save/restore and unchanged native Config
+        shell: opnsense {0}
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true /usr/local/bin/python3 - <<'PY'
+          import hashlib
+          import os
+          import stat
+          from pathlib import Path
+          if os.environ.get('GITHUB_ACTIONS') != 'true' or not Path('/usr/local/opnsense').is_dir():
+              raise SystemExit('P4_NOT_DISPOSABLE_OPNSENSE')
+          baseline = Path('dist/p4-gui-baseline.sha256')
+          if not baseline.is_file() or baseline.is_symlink():
+              raise SystemExit('P4_BASELINE_MISSING')
+          if baseline.read_text().strip() != hashlib.sha256(Path('/conf/config.xml').read_bytes()).hexdigest():
+              raise SystemExit('P4_GUI_BROWSER_CHANGED_CONFIG_XML')
+          target = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
+          state = target.lstat()
+          if not stat.S_ISREG(state.st_mode) or state.st_uid != 0 or state.st_nlink != 1 or state.st_mode & 0o022 or target.read_bytes() != b'':
+              raise SystemExit('P4_GUI_BROWSER_DID_NOT_RESTORE_EMPTY_FILE')
+          print('P4_BROWSER_SAVE_CAS_CONFIG_CLEANUP=PASS')
+          PY
       - name: P3 set same logged-in root user profile to Russian using native Config (disposable guest ONLY)
         shell: opnsense {0}
         run: |
