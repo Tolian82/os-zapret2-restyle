@@ -72,12 +72,12 @@ def request(mode):
     xml = ET.fromstring(Path("/conf/config.xml").read_bytes())
     tg = xml.find("./OPNsense/Zapret/hostlist/telegramips")
     baseline = "" if tg is None or tg.text is None else tg.text
-    fields = {"mode": mode}
-    if mode == "list":
-        source = xml.find("./OPNsense/Zapret/hostlist/youtubedomains")
-        current = "" if source is None or source.text is None else source.text
-        fields["youtubedomains"] = current.rstrip("\n") + "\nbridge-test.example.org\n"
-    payload = {"page": "strategies", "fields": {"hostlist": fields},
+    # First sealed List owner uses the native unchanged-saved candidate,
+    # matching the real owner's prior base==candidate and empty field set.
+    # The persisted List mode is set once with the original Model BEFORE
+    # this transaction, never by detached guessed XML or a new writer.
+    fields = {} if mode == "list" else {"hostlist": {"mode": "auto"}}
+    payload = {"page": "strategies", "fields": fields,
                "sync": {"telegramips_baseline": baseline}}
     return base64.urlsafe_b64encode(json.dumps(
         payload, separators=(",", ":")).encode()).decode().rstrip("=")
@@ -166,6 +166,20 @@ def recovered_status(stage, action, *, optin=False, timeout=180):
                env=environment, timeout=timeout)
 
 
+def set_guest_list_mode():
+    """Disposable ONLY: normal native Config/Model setup before any Apply."""
+    php = r'''require_once("script/load_phalcon.php");
+$c=\OPNsense\Core\Config::getInstance();$c->lock();try{
+$m=new \OPNsense\Zapret\Zapret();
+if(!$m->setNodeByReference("hostlist.mode","list") ||
+ count($m->performValidation(false)) || !$m->serializeToConfig(false,true))
+ throw new \RuntimeException("disposable-list-model-invalid");
+$c->save(["description"=>"OWN70 disposable initial List mode"]);
+}finally{$c->unlock();}'''
+    require(["/usr/local/bin/php", "-r", php],
+            "disposable_native_list_mode_setup_failed", timeout=35)
+
+
 def native():
     import platform
     need(os.geteuid() == 0 and platform.system() == "FreeBSD" and
@@ -209,6 +223,7 @@ def native():
 
     witness = load_hyphenated("p5b2b-native-witness.py", "own70_p5b_fixture")
     witness.set_guest_lo0()
+    set_guest_list_mode()
     g03 = load_hyphenated("stage2-opnsense-g03-first-install.py", "own70_g03_fixture")
     status = g03.dispatch_and_poll()
     need(status["installed"] == "1", "old_upstream_install_refused")
