@@ -389,7 +389,17 @@
             to.append(controls);
             from.remove();
             function syncAdvanced() {
-                controls.toggle($('#show_advanced_frm_GeneralSettings').hasClass('fa-toggle-on'));
+                // The stock OPNsense handler owns native Advanced visibility.
+                // Observe its actual expanded form row, not just an icon class
+                // that may disagree with the row during restoration/toggling.
+                const reference = document.getElementById('row_zapret.strategy.extraargs');
+                if (reference) {
+                    controls.toggle($(reference).is(':visible'));
+                } else {
+                    // Never expose an advanced-only control without the native
+                    // reference; a missing stock form row remains fail-closed.
+                    controls.hide();
+                }
             }
             const toggle = document.getElementById('show_advanced_frm_GeneralSettings');
             if (toggle) {

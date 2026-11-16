@@ -304,7 +304,33 @@ def check_p4_native_gui(page, mode: str) -> None:
     toggle.click()
     page.locator('[id="help_for_zapret.strategy.extraargs"]').wait_for(
         state="visible", timeout=12000)
-    row.wait_for(state="visible", timeout=12000)
+    try:
+        row.wait_for(state="visible", timeout=12000)
+    except Exception as exc:
+        # Non-sensitive visibility evidence only: no domains, values, cookies,
+        # settings, or Config content from the disposable guest.
+        state = page.evaluate("""() => {
+            const el = document.getElementById('zapretAutoRestartInline');
+            const icon = document.getElementById('show_advanced_frm_GeneralSettings');
+            const native = document.getElementById('row_zapret.strategy.extraargs');
+            const label = el?.querySelector('label');
+            const parent = el?.closest('tr');
+            const td = el?.closest('td');
+            return {
+                inline_style: el?.style.display || '',
+                inline_computed: el ? getComputedStyle(el).display : '',
+                label_visible: !!label && !!label.getClientRects().length,
+                td_display: td ? getComputedStyle(td).display : '',
+                parent_display: parent ? getComputedStyle(parent).display : '',
+                native_display: native ? getComputedStyle(native).display : '',
+                native_visible: !!native && !!native.getClientRects().length,
+                icon_on: !!icon?.classList.contains('fa-toggle-on'),
+                icon_count: document.querySelectorAll(
+                    '[id="show_advanced_frm_GeneralSettings"]').length
+            };
+        }""")
+        raise Refusal("P4_RESTART_NATIVE_ADVANCED_VISIBLE_BUT_INLINE_HIDDEN:" +
+                      json.dumps(state, sort_keys=True)) from exc
     need(selection.input_value() == saved,
          "P4_SHOW_ADVANCED_RESET_RESTART")
     selection.select_option(value="hourly")
