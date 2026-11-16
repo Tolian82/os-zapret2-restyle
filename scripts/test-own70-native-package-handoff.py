@@ -12,7 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import stat
 import subprocess
@@ -83,72 +83,84 @@ def request(mode):
         payload, separators=(",", ":")).encode()).decode().rstrip("=")
 
 
-def safe_member(member, prefix):
-    # A package list entry must name a canonical relative regular source.
-    path = PurePosixPath(member)
-    cleaned = member.removeprefix("./")
-    return (not member.startswith("/") and
-            not member.startswith("../") and
-            all(part not in (".", "..", "") for part in cleaned.split("/")) and
-            cleaned.startswith(prefix + "/") and
-            len(cleaned) <= 512 and
-            path.name not in (".", ".."))
+def qualified_archive_member(names, key):
+    """Accept exactly one harmless tar alias, without trusting write paths."""
+    matches = []
+    for name in names:
+        candidate = (name[2:] if name.startswith("./")
+                     else name[1:] if name.startswith("/")
+                     else name)
+        if candidate != key:
+            continue
+        need(not any(part in ("", ".", "..") for part in
+                     name.removeprefix("./").removeprefix("/").split("/")),
+             "unqualified_package_member_path")
+        matches.append(name)
+    need(len(matches) == 1, "missing_or_duplicated_exact_native_package_member")
+    return matches[0]
 
 
 def staged_source(pkg, root):
-    """Read only exact archive members under one protected unpublished tree."""
+    """Read exact files from ONE .pkg; archive headers never select write paths.
+
+    The source manifest and installed archive use absolute-looking tar names
+    on some FreeBSD bsdtar versions. Never extract them as filesystem paths:
+    read one named regular archive member into memory, require the exact
+    trusted checkout bytes, then create the independently known destination.
+    """
     need(root.is_dir() and not root.is_symlink() and
          root.stat().st_uid == 0 and stat.S_IMODE(root.stat().st_mode) == 0o700,
          "untrusted_staging_root")
     m = manifest(pkg)
     need(m.get("name") == PKG_NAME and m.get("abi") == "FreeBSD:15:amd64",
          "wrong_staged_native_manifest")
-    tar = require(["/usr/bin/tar", "-tf", str(pkg)], "archive_index", timeout=40)
-    prefix = "usr/local/" + SERVICE_REL
-    entries = tar.splitlines()
-    matches = [x for x in entries if safe_member(x, prefix)]
-    need(len(matches) >= 100 and len(matches) == len(set(matches)),
-         "incomplete_or_duplicated_staged_source")
-    need(all(("/" + x.removeprefix("./")) in m.get("files", {})
-             for x in matches), "unmanifested_staged_source")
-    needed = ("/zapret_service.sh", "/python_runtime.sh",
-              "/shared_apply_config.php",
-              "/backend/shared_apply_operation.py",
-              "/backend/auto_detect_owner.py",
-              "/backend/auto_detect_post_drop.py")
-    need(all(any(x.removeprefix("./").endswith(prefix + name) for x in matches)
-                 for name in needed), "missing_native_rescue_components")
-    # The local root staging is NOT the live /usr/local tree. All files
-    # originate from the one verified .pkg, with no alternate installer.
-    listing = require(["/usr/bin/tar", "-tvf", str(pkg)], "archive_types", timeout=40)
-    trusted = [x for x in listing.splitlines()
-               if any(x.endswith(" " + item) for item in matches)]
-    need(len(trusted) == len(matches) and
-         all(line.startswith("-") for line in trusted),
-         "nonregular_staged_archive_entry")
-    require(["/usr/bin/tar", "-xf", str(pkg), "-C", str(root), *matches],
-            "archive_staging_refused", timeout=90)
-    stage = root / prefix
-    for x in matches:
-        item = root / x.removeprefix("./")
-        info = item.lstat()
-        need(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and
-             info.st_nlink == 1 and not item.is_symlink(),
-             "nonregular_staged_runtime_source")
-    for name in needed:
-        item = stage / name.lstrip("/")
-        need(item.is_file() and not item.is_symlink(),
-             "staged_component_missing")
-    need(stat.S_IMODE((stage / "zapret_service.sh").stat().st_mode) == 0o755 and
-         stat.S_IMODE((stage / "python_runtime.sh").stat().st_mode) == 0o755,
-         "staged_executable_mode_changed")
-    # Physical archive source must also be identical to exact checked-out
-    # commit, not merely point at an arbitrary executable in /root.
-    for name in needed:
-        source = ROOT / "src" / SERVICE_REL / name.lstrip("/")
-        need(source.is_file() and sha(source) == sha(stage / name.lstrip("/")),
-             "staged_source_differs_from_qualified_candidate")
-    return stage
+    names = require(["/usr/bin/tar", "-tf", str(pkg)],
+                    "archive_index", timeout=40).splitlines()
+    native = ROOT / "src" / SERVICE_REL
+    need(native.is_dir() and not native.is_symlink(),
+         "untrusted_tracked_service_source")
+    files = sorted(p for p in native.rglob("*") if p.is_file())
+    need(len(files) >= 100, "incomplete_tracked_service_source")
+    source_bytes = 0
+    dest = root / "usr/local" / SERVICE_REL
+    for source in files:
+        need(not source.is_symlink() and
+             stat.S_ISREG(source.lstat().st_mode),
+             "foreign_tracked_source_type")
+        rel = source.relative_to(ROOT / "src").as_posix()
+        key = "usr/local/" + rel
+        member = qualified_archive_member(names, key)
+        need("/usr/local/" + rel in m.get("files", {}),
+             "unmanifested_exact_native_package_member")
+        # Use tar ONLY for -xOf data extraction; no filesystem path from the
+        # package is ever passed to tar -xf, mkdir, rename or chmod.
+        item = subprocess.run(["/usr/bin/tar", "-xOf", str(pkg), member],
+                              capture_output=True, timeout=18, check=False)
+        need(item.returncode == 0, "native_package_member_read_refused")
+        source_data = source.read_bytes()
+        source_bytes += len(source_data)
+        need(len(source_data) <= 4 * 1024 * 1024 and
+             source_bytes <= 32 * 1024 * 1024 and
+             item.stdout == source_data, "native_package_source_bytes_differ")
+        target = root / "usr/local" / rel
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        mode = stat.S_IMODE(source.stat().st_mode)
+        need(mode in (0o644, 0o755) and
+             not target.exists() and not target.is_symlink(),
+             "unqualified_original_native_source_mode")
+        with target.open("xb") as stream:
+            stream.write(item.stdout)
+            stream.flush()
+            os.fsync(stream.fileno())
+        target.chmod(mode)
+        need(target.stat().st_uid == 0 and target.stat().st_nlink == 1 and
+             sha(target) == sha(source), "staged_native_source_changed")
+    need((dest / "zapret_service.sh").is_file() and
+         stat.S_IMODE((dest / "zapret_service.sh").stat().st_mode) == 0o755 and
+         (dest / "python_runtime.sh").is_file() and
+         stat.S_IMODE((dest / "python_runtime.sh").stat().st_mode) == 0o755,
+         "staged_original_service_or_interpreter_missing")
+    return dest
 
 
 def recovered_status(stage, action, *, optin=False, timeout=180):
@@ -286,6 +298,12 @@ def native():
              run([str(SERVICE), "status"], timeout=20).returncode == 0,
              "old_auto_was_neither_healthy_nor_reviewed")
 
+    print("OWN70_OLD_AUTO_RESULT=" + json.dumps({
+        "requires_review_reproduced": reproduced,
+        "old_journal_phase": state["phase"],
+        "original_pretraffic_present": (EPOCHS / generation / "pretraffic.json").is_file(),
+        "original_epoch_present": (EPOCHS / generation / "epoch.json").is_file(),
+    }, sort_keys=True), flush=True)
     before_config = sha(Path("/conf/config.xml"))
     engine_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
     need(engine_pid.isdecimal() and
@@ -358,14 +376,20 @@ def native():
 
 
 def self_test():
-    assert safe_member("./usr/local/opnsense/scripts/OPNsense/Zapret/a.py",
-                       "usr/local/opnsense/scripts/OPNsense/Zapret")
-    for name in ("/usr/local/opnsense/scripts/OPNsense/Zapret/a.py",
-                 "../usr/local/opnsense/scripts/OPNsense/Zapret/a.py",
-                 "usr/local/opnsense/scripts/OPNsense/Zapret/../a.py",
-                 "usr/local/opnsense/scripts/OPNsense/Zapret/a.py/../../b"):
-        need(not safe_member(name, "usr/local/opnsense/scripts/OPNsense/Zapret"),
-             "unsafe_archive_entry_accepted")
+    key = "usr/local/opnsense/scripts/OPNsense/Zapret/a.py"
+    for prefix in ("", "./", "/"):
+        need(qualified_archive_member([prefix + key], key) == prefix + key,
+             "valid_original_native_tar_alias_rejected")
+    for entries in ((key, "./" + key),
+                    ("../../" + key,),
+                    ("/../" + key,),
+                    (key + ".foreign",)):
+        try:
+            qualified_archive_member(list(entries), key)
+        except Refused:
+            pass
+        else:
+            raise Refused("ambiguous_or_foreign_tar_alias_accepted")
     print("OWN70_NATIVE_BRIDGE_SOURCE=PASS")
 
 
