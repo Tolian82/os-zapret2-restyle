@@ -43,10 +43,10 @@ do
 done
 
 # Current authority follows VERSION/PLUGIN_REVISION and the active second-component line.
-# Validate the exact filename, not obsolete Markdown wording ("package candidate:").
+# Validate exact current source/package identity without depending on retired heading wording.
 require "${STATE}" "State-line scope: **\`${line}\`**"
 require "${STATE}" "\`${candidate_pkg}\`"
-require "${START_HERE}" "Current handoff identity:** \`${candidate_tag}\`"
+require "${START_HERE}" "\`${candidate_tag}\`"
 require "${START_HERE}" "\`VERSION=${version}\`"
 require "${START_HERE}" "\`PLUGIN_REVISION=${revision}\`"
 # The active ROADMAP was deliberately rewritten with an English current
