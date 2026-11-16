@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - scripts/own70-native-package-handoff.py
+      - scripts/test-own70-native-package-handoff.py
       - .github/workflows/own70-native-package-handoff.yml
   workflow_dispatch:
 
@@ -30,8 +30,8 @@ jobs:
       - name: Real portable archive path negative tests and native hook contracts
         run: |
           set -eu
-          python3.13 -m py_compile scripts/own70-native-package-handoff.py
-          python3.13 scripts/own70-native-package-handoff.py --self-test
+          python3.13 -m py_compile scripts/test-own70-native-package-handoff.py
+          python3.13 scripts/test-own70-native-package-handoff.py --self-test
           for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL pkg/+POST_DEINSTALL; do sh -n "$hook"; done
           sh scripts/test-package-lifecycle-restart.sh
 
@@ -76,4 +76,4 @@ jobs:
             export ZAPRET2_OWN70_NATIVE_BRIDGE=1
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-            /usr/local/bin/python3 scripts/own70-native-package-handoff.py --native
+            /usr/local/bin/python3 scripts/test-own70-native-package-handoff.py --native

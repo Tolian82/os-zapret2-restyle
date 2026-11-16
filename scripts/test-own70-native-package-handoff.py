@@ -212,14 +212,34 @@ def native():
     g03 = load_hyphenated("stage2-opnsense-g03-first-install.py", "own70_g03_fixture")
     status = g03.dispatch_and_poll()
     need(status["installed"] == "1", "old_upstream_install_refused")
-    require(["/usr/local/sbin/configctl", "zapret", "start"],
-            "old_native_initial_start", timeout=130)
+    # The installed G03 runtime is deliberately STOPPED. First commit the
+    # ordinary List Strategies candidate through original configd; do not
+    # insert a legacy Start that has no sealed shared owner predecessor.
+    need(run([str(SERVICE), "status"], timeout=20).returncode == 1,
+         "old_native_cold_list_precondition_missing")
 
     # One genuine ordinary List common owner must exist as predecessor.
     old_list = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
                     "strategies", request("list")], timeout=240)
-    need(old_list.returncode == 0 and "applied-id=" in old_list.stdout,
-         "old_installed_list_owner_not_committed")
+    if old_list.returncode != 0 or "applied-id=" not in old_list.stdout:
+        # A preflight rejection returns shell status zero. Do not interpret
+        # it as successful first Apply or expose user Config/argv in CI.
+        marker = re.search(r"preflight-rejected=[a-z-]{2,64}",
+                           old_list.stdout)
+        result = marker.group(0) if marker else "unqualified"
+        phase = "no-journal"
+        if JOURNAL.is_file():
+            try:
+                phase = str(json.loads(JOURNAL.read_bytes()).get("phase", "invalid"))
+            except (OSError, ValueError):
+                phase = "unreadable"
+        print("OWN70_FIRST_LIST_DIAGNOSTIC=" + json.dumps({
+            "native_configd_rc": old_list.returncode,
+            "result_marker": result,
+            "journal_phase": phase,
+            "service_stopped_before_list": True
+        }, sort_keys=True), flush=True)
+        raise Refused("old_installed_list_owner_not_committed")
     baseline = json.loads(JOURNAL.read_bytes())
     need(baseline.get("phase") == "committed" and
          run([str(SERVICE), "status"], timeout=20).returncode == 0,
