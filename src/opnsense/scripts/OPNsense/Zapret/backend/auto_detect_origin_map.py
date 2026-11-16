@@ -250,8 +250,8 @@ def _attach_original_global_exclusions(release: Path, original: bytes,
     if not witness.exists() and not witness.is_symlink():
         return planned  # Historical marker-less releases keep legacy proof.
     try:
-        proof = __import__("json").loads(_capture_file(
-            witness, limit=16384, owner_uid=__import__("os").geteuid()))
+        proof = json.loads(_capture_file(
+            witness, limit=16384, owner_uid=os.geteuid()))
         original_text, proposed_text = _text(original), _text(planned)
         if (not isinstance(proof, dict) or set(proof) !=
                 {"schema", "argv_sha256", "profiles"} or
@@ -703,7 +703,7 @@ def verify_original_promotion(workspace: Path, candidate_digest: str) -> dict:
     witness = release / "dvtws.args.global-policy.json"
     if witness.exists() or witness.is_symlink():
         from global_exclusions import audit
-        policy = __import__("json").loads(_capture_file(
+        policy = json.loads(_capture_file(
             witness, limit=16384, owner_uid=os.geteuid()))
         if (not isinstance(policy, dict) or set(policy) !=
                 {"schema", "argv_sha256", "profiles"} or
@@ -767,7 +767,7 @@ def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
     if has_policy:
         # Existing Stage 3 digest/count applies to the original generator.
         # Only the new, audited native observer is allowed to change it.
-        proof = __import__("json").loads(_capture_file(
+        proof = json.loads(_capture_file(
             policy_path, limit=16384, owner_uid=os.geteuid()))
         if (proof.get("argv_sha256") != _sha(original) or
                 proof.get("profiles") != len(segments(_text(original)))):
@@ -775,8 +775,8 @@ def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
         renewed = {"schema": 1, "argv_sha256": _sha(planned),
                    "profiles": len(segments(_text(planned)))}
         _secure_new_file(staged_policy, (
-            __import__("json").dumps(renewed, sort_keys=True,
-                                    separators=(",", ":")) + "\\n").encode())
+            json.dumps(renewed, sort_keys=True,
+                                    separators=(",", ":")) + "\n").encode())
     if (_capture_file(live_args, owner_uid=os.geteuid()) != original or
             _capture_file(staged_args, owner_uid=os.geteuid()) != planned or
             _capture_file(staged_map, owner_uid=os.geteuid()) != encoded):
