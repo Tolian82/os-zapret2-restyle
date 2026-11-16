@@ -347,6 +347,28 @@ def native_installed_auto_handoff():
                             status['pending_fd_state'] = probe_pending_fd(
                                 entries[0], item.st_dev, item.st_ino,
                                 owner=proof.owner, writer_gid=gid).value
+                            # Re-run ONLY the pure original debug/raw
+                            # correlation. It cannot create a target plan,
+                            # read Config, write a list or authorize an ACK.
+                            if tip.open_intent is not None:
+                                from auto_detect_original_v2_source import (
+                                    detached_original_raw,
+                                )
+                                from auto_detect_original_v2_model import _domains
+                                try:
+                                    hosts = _domains(
+                                        proof, tip.open_intent,
+                                        detached_original_raw(queue, entries[0]),
+                                        owner_uid=0, writer_gid=gid)
+                                    status['native_debug_attribution'] = (
+                                        'attested' if len(hosts) == 1
+                                        else 'unexpected-candidate-count')
+                                except (OSError, RuntimeError, ValueError,
+                                        TypeError, KeyError) as err:
+                                    code = str(err)
+                                    status['native_debug_attribution'] = (
+                                        code if re.fullmatch('[a-z][a-z0-9_]{2,79}', code)
+                                        else 'refused')
                         cursor_root = Path('/var/db/zapret2/auto-detect-epochs') / (
                             proof.generation) / CHAIN
                         status['cursor_slots'] = (
