@@ -453,6 +453,10 @@ try {
                 (OWNED_ROOT / 'youtube.txt').is_file())
             status['known_owned_user_present'] = (
                 (OWNED_ROOT / 'user.txt').is_file())
+            final_target = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
+            status['shared_auto_target'] = (
+                'present' if final_target.is_file() and not final_target.is_symlink()
+                else 'missing-or-untrusted')
             if 'tip' in locals() and tip.open_folder is not None:
                 destination = tip.open_folder / 'destination'
                 status['original_destination_dir_present'] = (
@@ -726,6 +730,11 @@ try {
              'installed-auto-mode-not-saved-by-native-config')
         original_config = hashlib.sha256(CONFIG.read_bytes()).hexdigest()
         first_gen, first_pid, first_birth = current_identity()
+        # Native original first-clean ownership must provision a safe
+        # empty shared P1 target without a separate GUI save.
+        auto_final = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
+        need(auto_final.is_file() and not auto_final.is_symlink(),
+             'original-first-auto-shared-destination-not-provisioned')
         for _ in range(3):
             minute('idle')
             need(current_identity() == (first_gen, first_pid, first_birth),

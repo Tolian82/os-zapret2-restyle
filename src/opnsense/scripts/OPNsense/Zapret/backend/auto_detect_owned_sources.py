@@ -20,7 +20,7 @@ import stat
 import sys
 
 from auto_detect_destination_commit import DestinationRefused, exclusive_destination_lock, _sync
-from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK, _read_current, _revision
+from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK, _read_current, _revision, _create
 from domain_policy import normalize, DomainPolicyError, AutoDomainPolicyError
 
 OWNED_ROOT = Path('/var/db/zapret2/auto-detect-owned')
@@ -137,7 +137,8 @@ def read_owned(root: Path = OWNED_ROOT, *, owner_uid: int = 0) -> dict | None:
 
 
 def bootstrap_empty(root: Path, *, original_config_sha256: str,
-                    owner_uid: int = 0, authorized_clean_start: bool = False) -> None:
+                    owner_uid: int = 0, authorized_clean_start: bool = False,
+                    initial_final: Path | None = None) -> None:
     """Dormant *explicit* empty origin seal; no CLI calls this initializer.
 
     Authorized native FD9 owner must prove no prior automatic known-list
@@ -151,6 +152,20 @@ def bootstrap_empty(root: Path, *, original_config_sha256: str,
     _safe_dir(root.parent, owner_uid)
     if root.exists() or root.is_symlink():
         raise OwnedSourcesRefused('ownership_already_present_or_partial')
+    # The first real observer needs a writable shared final HOSTLIST.
+    # GUI intentionally permits its absence until the first save, while
+    # original P1 requires a regular existing destination BEFORE writing
+    # its v2 plan. Seed ONLY an empty missing file during the original
+    # first-clean Config+GUI locked bootstrap, never during normal Apply.
+    # Do this before the known-owned seal: if power fails between the two
+    # write-once steps, the next clean bootstrap can reuse the exact empty
+    # final inode without discarding or overwriting any GUI data.
+    if initial_final is not None:
+        final = Path(initial_final)
+        if not final.is_absolute() or final == root or final.parent == root:
+            raise OwnedSourcesRefused('invalid_initial_shared_destination')
+        if _read_current(final, owner_uid) is None:
+            _create(final, b'', owner_uid)
     root.mkdir(mode=0o700)
     _sync(root.parent)
     _safe_dir(root, owner_uid)
@@ -205,7 +220,8 @@ def native_bootstrap_known(config_digest: str) -> str:
             raise OwnedSourcesRefused('historical_epochs_preclude_clean_baseline')
         bootstrap_empty(
             OWNED_ROOT, original_config_sha256=config_digest,
-            owner_uid=0, authorized_clean_start=True)
+            owner_uid=0, authorized_clean_start=True,
+            initial_final=AUTO_HOSTLIST)
         if read_owned(OWNED_ROOT, owner_uid=0) != {
                 'youtube': '', 'user': ''}:
             raise OwnedSourcesRefused('initial_native_owned_source_not_sealed')
