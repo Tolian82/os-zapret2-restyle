@@ -315,14 +315,53 @@ def native_installed_auto_handoff():
             status['pending_entries'] = (len(list(pending.iterdir()))
                                          if pending.is_dir() and not pending.is_symlink()
                                          else -1)
-            epochs_root = Path('/var/db/zapret2/auto-detect-epochs')
-            # The second-generation ID is bound in the outer installed journey.
-            gen = second_gen
-            if gen is not None:
-                chain = epochs_root / gen / 'cursor-chain'
-                status['cursor_slots'] = (len(list(chain.iterdir()))
-                                          if chain.is_dir() and not chain.is_symlink()
-                                          else 0)
+            # Original root FD9 read-only post-failure attestation.
+            # Pending remains untouched; do not replay Config/P1 or ACK.
+            try:
+                import pwd
+                from auto_detect_owner import attest_running_generation
+                from auto_detect_cursor_chain import CursorChain, CHAIN
+                from auto_detect_queue import DurableInbox
+                from auto_detect_epoch_receipts import EpochReceipts
+                from auto_detect_fd import probe_pending_fd
+                from auto_detect_storage import ENGINE_USER
+                hold_fd9()
+                try:
+                    proof = attest_running_generation()
+                    status['owner_stable'] = (proof.generation == second_gen)
+                    gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                    queue = DurableInbox(storage_root, owner_uid=0, writer_gid=gid)
+                    if not queue.lock.is_file() or queue.lock.is_symlink():
+                        raise RuntimeError('native_queue_lock_missing')
+                    with queue.exclusive():
+                        chain = CursorChain(
+                            EpochReceipts(owner_uid=0, writer_gid=gid), queue)
+                        tip = chain.tip(proof)
+                        status['cursor_open_intent'] = tip.open_intent is not None
+                        status['cursor_open_folder'] = tip.open_folder is not None
+                        status['cursor_next_sequence'] = tip.next_sequence
+                        entries = queue.segments()
+                        status['pending_entries_verified'] = len(entries)
+                        if len(entries) == 1:
+                            item = entries[0].lstat()
+                            status['pending_fd_state'] = probe_pending_fd(
+                                entries[0], item.st_dev, item.st_ino,
+                                owner=proof.owner, writer_gid=gid).value
+                        cursor_root = Path('/var/db/zapret2/auto-detect-epochs') / (
+                            proof.generation) / CHAIN
+                        status['cursor_slots'] = (
+                            len(list(cursor_root.iterdir()))
+                            if cursor_root.is_dir() and not cursor_root.is_symlink()
+                            else 0)
+                finally:
+                    os.close(9)
+            except (OSError, ValueError, RuntimeError, TypeError,
+                    KeyError) as error:
+                msg = str(error)
+                status['readonly_probe_refusal_class'] = type(error).__name__
+                status['readonly_probe_refusal_code'] = (
+                    msg if re.fullmatch('[a-z][a-z0-9_]{2,79}', msg)
+                    else 'unqualified')
             log = Path('/var/log/configd/latest.log')
             if log.is_file() and not log.is_symlink():
                 with log.open('rb') as stream:
