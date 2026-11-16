@@ -21,6 +21,9 @@ TCP = ["divert", "989", "tcp", "from", "any", "to", "any", "443",
        "out", "not", "diverted", "not", "sockarg", "xmit", "vtnet1"]
 UDP = ["divert", "989", "udp", "from", "any", "to", "any", "596-599",
        "out", "not", "diverted", "not", "sockarg", "xmit", "vtnet1"]
+AUTO_RST = ["divert", "989", "tcp", "from", "any", "443",
+            "to", "any", "tcpflags", "rst", "in", "not",
+            "diverted", "recv", "vtnet1"]
 
 class SimulateFreeBSD:
     def __init__(self):
@@ -69,6 +72,23 @@ class SimulateFreeBSD:
 
 
 class IPFWAdapterTests(unittest.TestCase):
+    def test_native_auto_inbound_rst_is_exact_and_no_broad_feedback(self):
+        self.assertEqual(checked_rule_argv(AUTO_RST), AUTO_RST)
+        for slot, value in (
+            (2, "udp"), (5, "any"), (9, "syn,ack"), (9, "fin"),
+            (10, "out"), (12, "sockarg"), (13, "xmit"),
+            (14, "bad interface"),
+        ):
+            changed = list(AUTO_RST)
+            changed[slot] = value
+            with self.subTest(slot=slot, value=value), self.assertRaises(
+                    IPFWAdapterError):
+                checked_rule_argv(changed)
+        native = SimulateFreeBSD()
+        native.rule_listing += "19003 " + " ".join(AUTO_RST) + "\\n"
+        adapter = FreeBSDIPFWAdapter(19000, 19010, runner=native)
+        self.assertEqual(adapter.list_rules(19000, 19010)[19003], AUTO_RST)
+
     def test_reads_known_rules_without_treating_foreign_outside_range_as_ours(self):
         fake = SimulateFreeBSD()
         adapter = FreeBSDIPFWAdapter(19000, 19010, runner=fake)
