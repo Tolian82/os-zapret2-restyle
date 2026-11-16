@@ -330,11 +330,39 @@ def native():
                  sha(Path("/conf/config.xml")) == before_config,
                  "staged_package_original_fd9_recovery_unproven")
 
-        # Both incoming and installed old hooks accept SERVICE_SCRIPT. They
-        # still execute unchanged through genuine native pkg add -f.
-        # Incoming PRE_INSTALL sees running=0, creates restart intent,
-        # invokes the corrected staged Stop; old PRE_DEINSTALL sees STOPPED.
-        # New POST_INSTALL starts the genuinely installed successor.
+        # Establish independent OLD and NEW-staged status before pkg. A
+        # pre-install status=1 will silently take the "already STOPPED" path
+        # and preserve a stale dvtws2 even though an outer status is RUNNING.
+        # Do not infer hook execution from final pkg/version alone.
+        source_status = run([str(SERVICE), "status"], timeout=25)
+        staged_status = recovered_status(stage, "status", timeout=25)
+        before_markers = {
+            "replacement": Path(
+                "/var/run/zapret2-restyle/pkg-replacement.restart").exists(),
+            "upgrade": Path(
+                "/var/run/zapret2-restyle/pkg-upgrade.restart").exists(),
+        }
+        print("OWN70_NATIVE_PKG_PREFLIGHT=" + json.dumps({
+            "installed_service_status_rc": source_status.returncode,
+            "staged_service_status_rc": staged_status.returncode,
+            "installed_status_exact_running":
+                source_status.stdout.strip() == "zapret is running",
+            "staged_status_exact_running":
+                staged_status.stdout.strip() == "zapret is running",
+            "restart_markers_before_pkg": before_markers,
+            "old_engine_pid_present": bool(engine_pid),
+            "old_generation_phase_committed":
+                json.loads(JOURNAL.read_bytes())["phase"] == "committed",
+        }, sort_keys=True), flush=True)
+        need(source_status.returncode == staged_status.returncode == 0 and
+             source_status.stdout.strip() == "zapret is running" and
+             staged_status.stdout.strip() == "zapret is running" and
+             not any(before_markers.values()),
+             "native_prepackage_running_owner_not_qualified")
+        # Both original hook generations expose SERVICE_SCRIPT. Whether
+        # genuine FreeBSD pkg forwards that environment is what this
+        # disposable native test must PROVE, not assume. Use the same real
+        # pkg add -f with the pkg(8) global -d diagnostics enabled.
         override = dict(os.environ)
         override.update({
             "SERVICE_SCRIPT": str(stage / "zapret_service.sh"),
@@ -342,9 +370,21 @@ def native():
             "BACKEND_DIR": str(stage / "backend"),
             "PYTHON_RUNTIME": str(stage / "python_runtime.sh"),
         })
-        update = run(["pkg", "add", "-f", str(pkg)], timeout=210, env=override)
-        need(update.returncode == 0, "native_old_hook_handoff_refused:" +
-             str(update.returncode))
+        update = run(["pkg", "-d", "add", "-f", str(pkg)],
+                     timeout=210, env=override)
+        debug = (update.stdout + "\n" + update.stderr).lower()
+        phases = {
+            label: (label in debug) for label in
+            ("pre-install", "pre-deinstall", "post-install")
+        }
+        print("OWN70_NATIVE_PKG_DIAGNOSTIC=" + json.dumps({
+            "native_pkg_rc": update.returncode,
+            "pkg_debug_mentions_phases": phases,
+            "pkg_reports_successful_extract": "extracting" in debug,
+            "pkg_debug_output_bounded": len(debug) <= 512 * 1024,
+        }, sort_keys=True), flush=True)
+        need(update.returncode == 0 and len(debug) <= 512 * 1024,
+             "native_old_hook_handoff_refused:" + str(update.returncode))
     version = require(["pkg", "query", "%v", PKG_NAME],
                       "installed_successor_version")
     need(version == manifest(pkg)["version"] and
