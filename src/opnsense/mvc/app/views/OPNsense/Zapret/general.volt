@@ -392,9 +392,17 @@
                 controls.toggle($('#show_advanced_frm_GeneralSettings').hasClass('fa-toggle-on'));
             }
             const toggle = document.getElementById('show_advanced_frm_GeneralSettings');
-            if (toggle && window.MutationObserver) {
-                new MutationObserver(syncAdvanced).observe(
-                    toggle, {attributes:true, attributeFilter:['class']});
+            if (toggle) {
+                if (window.MutationObserver) {
+                    new MutationObserver(syncAdvanced).observe(
+                        toggle, {attributes:true, attributeFilter:['class']});
+                }
+                // The stock OPNsense Advanced click handler can run after
+                // our DOM-ready binding. Reconcile at the end of that same
+                // native click, not before the icon has reached its new state.
+                $(toggle).on('click', function() {
+                    window.setTimeout(syncAdvanced, 0);
+                });
             }
             syncAdvanced();
         }

@@ -298,7 +298,12 @@ def check_p4_native_gui(page, mode: str) -> None:
     row.wait_for(state="hidden", timeout=12000)
     need(not row.locator("label").is_visible(),
          "P4_RESTART_LABEL_VISIBLE_WITH_ADVANCED_OFF")
+    # Native form initialization and its Advanced event handler own the
+    # state change; verify that real advanced fields opened before our row.
+    page.wait_for_timeout(250)
     toggle.click()
+    page.locator('[id="help_for_zapret.strategy.extraargs"]').wait_for(
+        state="visible", timeout=12000)
     row.wait_for(state="visible", timeout=12000)
     need(selection.input_value() == saved,
          "P4_SHOW_ADVANCED_RESET_RESTART")
@@ -308,6 +313,8 @@ def check_p4_native_gui(page, mode: str) -> None:
     need(selection.input_value() == "hourly",
          "P4_HIDE_ADVANCED_RESET_UNSAVED_RESTART")
     toggle.click()
+    page.locator('[id="help_for_zapret.strategy.extraargs"]').wait_for(
+        state="visible", timeout=12000)
     row.wait_for(state="visible", timeout=12000)
     need(selection.input_value() == "hourly",
          "P4_RESHOW_ADVANCED_LOST_RESTART")
