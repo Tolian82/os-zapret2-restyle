@@ -14,7 +14,7 @@ BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Z
 sys.path.insert(0, str(BACKEND))
 from auto_detect_owned_sources import (bootstrap_empty, read_owned, snapshot,
                                        OwnedSourcesRefused)
-from auto_detect_destination_commit import DestinationRefused
+from auto_detect_destination_commit import DestinationRefused, exclusive_destination_lock
 
 class OwnedSourceTests(unittest.TestCase):
     def setUp(self):
@@ -137,6 +137,38 @@ class OwnedSourceTests(unittest.TestCase):
         finally:
             os.close(fd)
         self.assertTrue(self.read()['auto_owned_complete'])
+
+    def test_first_clean_auto_baseline_creates_only_missing_final(self):
+        # Portable reproduction of the native first Config+GUI locked
+        # bootstrap; never touch the production AUTO_HOSTLIST path.
+        self.final.unlink()
+        with exclusive_destination_lock(self.lock, self.uid):
+            bootstrap_empty(
+                self.root, original_config_sha256='a'*64,
+                owner_uid=self.uid, authorized_clean_start=True,
+                initial_final=self.final)
+        self.assertTrue(self.final.is_file())
+        self.assertFalse(self.final.is_symlink())
+        self.assertEqual(self.final.read_bytes(), b'')
+        self.assertEqual(read_owned(self.root, owner_uid=self.uid),
+                         {'youtube':'', 'user':''})
+
+    def test_initial_final_preserves_existing_and_partial_predecessor(self):
+        original = self.final.read_bytes()
+        with exclusive_destination_lock(self.lock, self.uid):
+            bootstrap_empty(
+                self.root, original_config_sha256='a'*64,
+                owner_uid=self.uid, authorized_clean_start=True,
+                initial_final=self.final)
+        self.assertEqual(self.final.read_bytes(), original)
+        self.final.unlink()
+        with exclusive_destination_lock(self.lock, self.uid):
+            with self.assertRaisesRegex(OwnedSourcesRefused, 'ownership_already'):
+                bootstrap_empty(
+                    self.root, original_config_sha256='a'*64,
+                    owner_uid=self.uid, authorized_clean_start=True,
+                    initial_final=self.final)
+        self.assertFalse(self.final.exists())
 
     def test_missing_final_and_root_only_cli_gates(self):
         self.init()

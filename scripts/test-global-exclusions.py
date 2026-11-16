@@ -55,6 +55,48 @@ class GlobalExclusionTests(unittest.TestCase):
     def render(self, text):
         return compose(text, *self.kw)
 
+    def test_trailing_original_observer_rebinds_global_exclusions_without_weakening_witness(self):
+        # Exact Stage 3 manifest, canonical final argv and original digest.
+        # The observer must inherit BOTH existing global exclusion families,
+        # while every earlier Strategies profile stays byte-for-byte intact.
+        from auto_detect_origin_map import (
+            _attach_original_global_exclusions, AttributionError,
+        )
+        original = self.render(
+            "--port=989\n--filter-tcp=443\n--filter-l7=tls\n"
+        ).encode("utf-8")
+        marker = self.release / "dvtws.args.global-policy.json"
+        marker.write_text(json.dumps({
+            "schema": 1, "argv_sha256": hashlib.sha256(original).hexdigest(),
+            "profiles": len(segments(original.decode())),
+        }))
+        tokens = original.decode().split()
+        proposed = ("\n".join([
+            tokens[0], "--hostlist-auto-debug=/var/db/zapret2-auto-detect/debug.log",
+            *tokens[1:], "--new", "--filter-tcp=80,443",
+            "--filter-l7=http,tls",
+            "--hostlist-auto=/var/db/zapret2-auto-detect/inbox.txt",
+            "--hostlist-auto-fail-threshold=1",
+            "--hostlist-auto-retrans-reset=0",
+        ]) + "\n").encode("utf-8")
+        final = _attach_original_global_exclusions(self.release, original, proposed)
+        original_rows = segments(proposed.decode())
+        updated_rows = segments(final.decode())
+        self.assertEqual(original_rows[:-1], updated_rows[:-1])
+        self.assertIn("--hostlist-exclude=" + self.domain_ref, updated_rows[-1])
+        self.assertIn("--ipset-exclude=" + self.ip_ref, updated_rows[-1])
+        self.assertEqual(len(updated_rows), 2)
+        audit(final.decode(), *self.kw)
+        self.assertNotEqual(hashlib.sha256(original).hexdigest(),
+                            hashlib.sha256(final).hexdigest())
+        # The original old-marker SHA is not an authorization to promote
+        # arbitrary new argv. Fail closed on a forged historical marker.
+        bad = json.loads(marker.read_text())
+        bad["argv_sha256"] = "0" * 64
+        marker.write_text(json.dumps(bad))
+        with self.assertRaises(AttributionError):
+            _attach_original_global_exclusions(self.release, original, proposed)
+
     def test_first_middle_last_voice_and_hostless(self):
         raw = ("\n".join([
             "--port=989", "--filter-tcp=443", "--filter-l7=tls",

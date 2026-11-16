@@ -18,6 +18,17 @@
                 <Required>Y</Required>
                 <ValidationMessage>Please enter a valid port number.</ValidationMessage>
             </divertport>
+            <autorestart type="OptionField">
+                <Default>off</Default>
+                <OptionValues>
+                    <off>Off</off>
+                    <hourly>Every hour</hourly>
+                    <daily>Every day</daily>
+                    <weekly>Every week</weekly>
+                    <monthly>Every month</monthly>
+                </OptionValues>
+                <Required>Y</Required>
+            </autorestart>
             <ports type="TextField">
                 <Default>80,443</Default>
                 <Required>Y</Required>

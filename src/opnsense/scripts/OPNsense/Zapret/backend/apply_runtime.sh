@@ -15,10 +15,11 @@ apply_runtime_clear()
     APPLY_IPFW_INSTALLED=0
 }
 
-# #1052 P2k8i: original FD9's *single* launcher boundary. P2h's
-# nonactivating preview cannot ever create/touch a live raw/debug producer.
-# No native --hostlist-auto= argv is authorized until a durable worker/ACK
-# proves the actual sealed generation. No environment override is accepted.
+# #1052 P2 original FD9's single launcher boundary. A producer is
+# authorized only for an exact original shared-work seal, validated native
+# source profiles and schema-2 generation. The separate original queue,
+# pretraffic zero seed, post-drop process and terminal epoch remain mandatory.
+# No environment override, second Config owner or detached engine is allowed.
 apply_runtime_observer_preflight()
 {
     [ "$#" -eq 1 ] || return 64
@@ -37,13 +38,15 @@ apply_runtime_observer_preflight()
         common_error "shared Apply: native observer lacks sealed generation"
         return 69
     }
-    # Intentionally REFUSES today. The authorization command does not yet
-    # exist: no real generation-bound worker/ACK has been qualified.
-    "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1" \
-        >/dev/null 2>&1 || {
-        common_error "shared Apply: native observer worker/ACK not authorized"
+    # Read-only: the original sealed native candidate must match this
+    # release byte-for-byte BEFORE any durable Apply record or process stop.
+    # Producer creation and fresh-inode checks belong solely to FD9 launcher.
+    _apply_authorized=$("$PYTHON_RUNTIME" \
+        "$BACKEND_DIR/auto_detect_post_drop.py" authorize "$1") || {
+        common_error "shared Apply: native observer release not authorized"
         return 69
     }
+    [ "$_apply_authorized" = original-fd9-observer=authorized ] || return 69
 }
 
 apply_runtime_original_launcher_once()
@@ -60,8 +63,14 @@ apply_runtime_original_launcher_once()
         case "$6" in ""|*[!a-f0-9]*) return 69 ;; esac
         case "$7" in ""|*[!a-f0-9]*) return 69 ;; esac
         [ "${#6}" -eq 32 ] && [ "${#7}" -eq 64 ] || return 69
-        # P2k8q3a: two existing original-FD9 calls, no second queue owner.
+        # The exact original native producer is prepared/verified only
+        # under this same held FD9, after read-only release authorization.
+        # Existing raw/debug/pending inodes are never truncated or migrated.
+        _apply_producer=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_post_drop.py" prepare) || return 69
+        [ "$_apply_producer" = original-fd9-producer=prepared ] || return 69
         # The immutable empty pretraffic epoch is fsynced BEFORE dvtws2.
+        # Any unprocessed previous-generation event refuses before launch.
         _apply_observer_witness=$("$PYTHON_RUNTIME" \
             "$BACKEND_DIR/auto_detect_post_drop.py" capture) || return 69
         case "$_apply_observer_witness" in p2k8i:*) ;; *) return 69 ;; esac
@@ -210,12 +219,72 @@ apply_runtime_observe_live_legacy()
     supervisor_is_running "$SUPERVISOR_MONITOR_PIDFILE"
 }
 
+# #1052 P2: an old RUNNING native observer cannot be stopped merely
+# because a new candidate passed validation. Raw/debug may still be open
+# and the original v2 pending/ACK chain belongs to that old generation.
+# Until its authenticated final handoff is complete, refuse BEFORE process
+# stop, tree swap or new shared-Apply journal. No file or Config mutation.
+# This is a safety gate, NOT evidence that generation turnover is finished.
+apply_runtime_observer_retirement_preflight()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ -d "$ACTIVE_DIR" ] && [ ! -L "$ACTIVE_DIR" ] || return 69
+    _apply_retirement_args="$ACTIVE_DIR/dvtws.args"
+    _apply_retirement_map="$ACTIVE_DIR/auto-detect-generation.json"
+    [ -f "$_apply_retirement_args" ] && [ ! -L "$_apply_retirement_args" ] &&
+        [ -r "$_apply_retirement_args" ] || return 69
+    if [ -e "$_apply_retirement_map" ] || [ -L "$_apply_retirement_map" ]; then
+        common_error "shared Apply: old observer needs durable generation handoff before stop"
+        return 69
+    fi
+    if /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' \
+        "$_apply_retirement_args"; then
+        common_error "shared Apply: old observer needs durable generation handoff before stop"
+        return 69
+    else
+        _apply_retirement_grep_status=$?
+        [ "$_apply_retirement_grep_status" -eq 1 ] || return 69
+    fi
+    return 0
+}
+
+# A stopped previous release can also retain old-generation raw/debug.
+# This read-only gate runs BEFORE the replacement Apply journal or tree swap.
+apply_runtime_observer_previous_preflight()
+{
+    [ "$#" -eq 0 ] || return 64
+    case "${_apply_engine:-}" in 0|1) ;; *) return 69 ;; esac
+    if [ "$_apply_engine" = 0 ] &&
+       { [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+         [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; }; then
+        # One completed original Stop may authorize a DIFFERENT new Apply
+        # generation. The existing old epoch must durably prove all pending
+        # data ACKed and old inodes archived; both original FD9 and the old
+        # process-free journal are rechecked, including the single prepared/
+        # activating predecessor before ACTIVE_DIR is replaced.
+        _apply_retired_ready=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready) || return 69
+        [ "$_apply_retired_ready" = auto-detect-retire=ready ] || return 69
+        return 0
+    fi
+    if [ "$_apply_engine" = 1 ] ||
+       [ -e "$ACTIVE_DIR/dvtws.args" ] ||
+       [ -L "$ACTIVE_DIR/dvtws.args" ] ||
+       [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        apply_runtime_observer_retirement_preflight || return 69
+    fi
+    return 0
+}
+
 # Read-only refusal gate shared by the FD9 executor and the actual runtime
 # preflight. It never acquires a lock, writes Config, starts a process,
 # prepares pf/ipfw, or touches the durable Apply journal.
 apply_runtime_preflight()
 {
     apply_runtime_probe "$@" || return $?
+    # Includes a stopped predecessor with retained old-generation data.
+    apply_runtime_observer_previous_preflight || return 69
     # The actual engine activation still repeats all observations after
     # the durable "activating" record (an external actor may change IPFW).
     # Only this second phase is permitted to initialize firewall modules.

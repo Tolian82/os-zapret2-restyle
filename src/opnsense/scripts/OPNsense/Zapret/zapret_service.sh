@@ -855,6 +855,35 @@ shared_apply_inspect_service()
 # Stop exactly the committed common owner, using the original FD9 lifecycle.
 # Native Config and the durable committed owner stay unchanged: start can
 # bring the same sealed release back, without legacy fallback or a new Apply.
+# Only after an explicit shared Stop removed the old engine AND scoped
+# divert rules. Every pass uses the same FD9 → original P2a queue → native
+# Config/P1 → durable cursor ACK. A crash can resume through stopped epoch.
+# No minute tick ever calls this and no traffic engine is signaled by it.
+shared_apply_retire_stopped_original_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ -x "$PYTHON_RUNTIME" ] || return 70
+    _shared_retire_round=0
+    while [ "$_shared_retire_round" -lt 16 ]; do
+        _shared_retire_result=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retire-once) || return 70
+        case "$_shared_retire_result" in
+            auto-detect-retire=processed)
+                _shared_retire_round=$((_shared_retire_round + 1))
+                ;;
+            auto-detect-retire=idle)
+                return 0
+                ;;
+            *)
+                return 70
+                ;;
+        esac
+    done
+    # Bounded work, never a fabricated successful Stop. The old journal,
+    # queue, raw and checkpoint remain intact for the next FD9 retry.
+    return 70
+}
+
 shared_apply_stop_service()
 {
     [ "$#" -eq 1 ] || [ "$#" -eq 2 ] || return 64
@@ -897,6 +926,20 @@ shared_apply_stop_service()
     else
         [ "$_shared_stop_engine" = "$_shared_stop_monitor" ] || return 69
     fi
+    # Classify the old original observer by the SEALED runtime, not by a
+    # user toggle or the presence of a possibly missing PID file.
+    _shared_stop_observer=0
+    if [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        apply_runtime_observer_preflight "$ACTIVE_DIR" || return 69
+        _shared_stop_observer=1
+    elif /usr/bin/grep -Eq -- '(^|[[:space:]])--hostlist-auto([=-]|[[:space:]]|$)' \
+        "$ACTIVE_DIR/dvtws.args"; then
+        return 69
+    else
+        _shared_stop_grep_status=$?
+        [ "$_shared_stop_grep_status" -eq 1 ] || return 69
+    fi
     # A missing PID file is not evidence of an empty engine inventory.
     # The same exact-binary census already protects common Apply.
     _apply_engine="$_shared_stop_engine"
@@ -905,11 +948,28 @@ shared_apply_stop_service()
         # An already stopped common runtime is idempotent only with an
         # empty, independently verified plugin-owned kernel range.
         firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
+        if [ "$_shared_stop_observer" = 1 ]; then
+            shared_apply_retire_stopped_original_service || return 70
+        fi
         printf "native-common-stopped=%s\n" "$_shared_stop_id"
         return 0
     fi
     # Verify the exact installed owner BEFORE stopping its process.
     firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+    # A live original observer may be stopped ONLY with its existing
+    # immutable postlaunch PID/birth epoch already verified. The later
+    # post-Stop path checks exact old owner again with NO live dvtws2.
+    # Normal Stop remains an explicitly requested engine transition, never
+    # a minute-worker rotation or periodic packet pause.
+    if [ "$_shared_stop_engine" = 1 ]; then
+        if [ "$_shared_stop_observer" = 1 ]; then
+            _shared_stop_epoch=$("$PYTHON_RUNTIME" \
+                "$BACKEND_DIR/auto_detect_minute.py" --pre-retire) || return 69
+            [ "$_shared_stop_epoch" = auto-detect-retire=original-running-attested ] || return 69
+        else
+            apply_runtime_observer_retirement_preflight || return 69
+        fi
+    fi
     # supervisor_stop_one unlinks a PID file after signaling even if the
     # original process remains alive. Pin its exact old identity so Stop
     # cannot silently strand the monitor after losing its PID file.
@@ -950,6 +1010,9 @@ shared_apply_stop_service()
     _apply_engine=0
     apply_runtime_attest_engine_inventory || return 70
     firewall_shared_runtime verify "$ACTIVE_DIR" - || return 70
+    if [ "$_shared_stop_observer" = 1 ]; then
+        shared_apply_retire_stopped_original_service || return 70
+    fi
     printf "native-common-stopped=%s\n" "$_shared_stop_id"
 }
 # Reapply the saved COMMON candidate after reboot, without changing Config.
@@ -1018,6 +1081,56 @@ shared_apply_boot_service()
         # census, mapped native argv and exact installed IPFW ownership.
         apply_runtime_probe "$_shared_boot_dir/release" 1 || return 69
         printf "native-common-boot=%s\n" "$_shared_boot_id"
+        return 0
+    fi
+    # A stopped original observer has a historical PID/birth and cannot
+    # be launched a second time under its first Apply operation ID.
+    # After verifying empty/absent plugin IPFW and zero live engines,
+    # finish any interrupted old queue/ACK retirement under the SAME FD9.
+    _apply_engine=0
+    apply_runtime_attest_engine_inventory || return 69
+    _shared_boot_prior_observer=0
+    if [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+       [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; then
+        _shared_boot_prior_observer=1
+        if ! shared_apply_ipfw_kernel_absent_service; then
+            firewall_shared_runtime verify "$ACTIVE_DIR" - || return 69
+        fi
+        _shared_boot_retired=$("$PYTHON_RUNTIME" \
+            "$BACKEND_DIR/auto_detect_minute.py" --retired-ready) || _shared_boot_retired=
+        if [ "$_shared_boot_retired" != auto-detect-retire=ready ]; then
+            shared_apply_retire_stopped_original_service || return 69
+        fi
+    fi
+    apply_runtime_observer_previous_preflight || return 69
+    if [ "$_shared_boot_prior_observer" = 1 ] &&
+       [ "$_shared_boot_mode" = 1 ]; then
+        # Reuse the EXISTING native Saved-Unchanged candidate and generator.
+        # This opens a NEW journal operation and native epoch, with the
+        # exact same user Config and only one original shared engine.
+        [ -x /usr/local/bin/php ] || return 69
+        _shared_boot_stage=$(/usr/local/bin/php \
+            "$SCRIPT_DIR/shared_apply_request.php" saved-unchanged) || return 69
+        case "$_shared_boot_stage" in
+            prepared-id=*) _shared_boot_new_id="${_shared_boot_stage#prepared-id=}" ;;
+            *) return 69 ;;
+        esac
+        case "$_shared_boot_new_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+        [ "${#_shared_boot_new_id}" -eq 32 ] &&
+        [ "$_shared_boot_new_id" != "$_shared_boot_id" ] || return 69
+        _shared_boot_build=$(shared_apply_prepare_service "$_shared_boot_new_id") || return 69
+        _shared_boot_last=$(printf '%s\n' "$_shared_boot_build" | tail -n 1)
+        case "$_shared_boot_last" in preflight-rejected=*) return 69 ;; esac
+        # Shared Apply intentionally reports preflight-rejected=... with
+        # shell exit 0. A cold Boot must NOT translate that non-activation
+        # into success or claim a new engine merely from the exit status.
+        _shared_boot_apply=$(
+            shared_apply_execute_service "$_shared_boot_new_id" strategies
+        ) || return 70
+        [ "$_shared_boot_apply" = "applied-id=$_shared_boot_new_id" ] || {
+            common_error "native common boot: fresh original Apply was not committed"
+            return 70
+        }
         return 0
     fi
     # After verifying the sealed owner and absence of an engine/monitor,
@@ -1104,19 +1217,24 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
-    # Sealed nonactivating preview may be reverified without enabling a
-    # second process, raw append, native auto HOSTLIST or worker.
+    # Re-read the original source-to-native profile mapping after seal:
+    # the promoted schema-2 map/args must still exactly bind this PHP
+    # candidate and the original generated profile order. The launcher
+    # retains its separate fail-closed original-FD9/epoch authorization.
     if [ "$_shared_apply_mode" = 1 ] &&
-       [ -f "$_shared_apply_root/release/auto-detect-observer-preview.json" ]; then
-        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-preview \
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" verify-active \
             "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null; then
             printf '%s\n' preflight-rejected=observer-generation
             return 0
         fi
     elif [ "$_shared_apply_mode" = 1 ] &&
          [ -f "$_shared_apply_root/release/auto-detect-source-map.json" ]; then
-        "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" preflight \
-            "$_shared_apply_root" "$_shared_apply_candidate" >/dev/null 2>&1 || :
+        # Source says Target Mode=auto, but the one protected schema-2
+        # native promotion is missing: never silently activate ordinary
+        # args in lieu of the approved Auto-detect observer.
+        printf '%s\n' preflight-rejected=observer-generation
+        return 0
     fi
     # Reject an active old/legacy owner, partial monitor, foreign IPFW, or
     # invalid candidate BEFORE any durable phase is recorded. This must be
@@ -1126,6 +1244,54 @@ shared_apply_execute_service()
     if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
         printf '%s\n' preflight-rejected=runtime-preflight
         return 0
+    fi
+    # A previously RUNNING original observer must finish its old PID-bound
+    # source lifetime BEFORE the new prepared/activating journal and runtime
+    # tree can own the same physical producer. This is an explicit user
+    # Apply, not minute maintenance. Use the ONE existing committed Stop,
+    # P2a queue, Config/P1 and ACK, and then re-probe the validated candidate.
+    _shared_apply_retired_old=0
+    if [ "$_apply_engine" = 1 ] &&
+       { [ -e "$ACTIVE_DIR/auto-detect-generation.json" ] ||
+         [ -L "$ACTIVE_DIR/auto-detect-generation.json" ]; }; then
+        if [ "$_shared_apply_mode" = 1 ]; then
+            wan_first_service require || return $?
+        fi
+        _shared_apply_previous=$(shared_apply_inspect_service) || return 69
+        case "$_shared_apply_previous" in committed\ *) ;; *) return 69 ;; esac
+        shared_apply_stop_service "$_shared_apply_previous" || return 70
+        _shared_apply_retired_old=1
+        if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
+            common_error "shared Apply: candidate changed after retiring old original"
+            return 70
+        fi
+    fi
+    # A STOPPED old observer is allowed ONLY after the same immutable old
+    # epoch proves full ACK, archived original inodes, and empty new paths.
+    # The runtime preflight repeats this proof under prepared/activating.
+    if ! apply_runtime_observer_previous_preflight; then
+        if [ "$_shared_apply_retired_old" = 1 ]; then
+            common_error "shared Apply: old generation retired but new candidate unavailable"
+            return 70
+        fi
+        printf '%s\n' preflight-rejected=runtime-preflight
+        return 0
+    fi
+    # Initial P3 known HOSTLIST ownership is only an EMPTY, root-private
+    # component baseline under the SAME original FD9 and native PHP Config
+    # lock. Once sealed it is preserved across Apply/Boot and cannot import
+    # obsolete zapret-hosts-auto.txt or overwrite manual YouTube/User text.
+    if [ "$_shared_apply_mode" = 1 ] &&
+       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+        _shared_owned_start=$(/usr/local/bin/php \
+            "$SCRIPT_DIR/auto_detect_config_snapshot.php" \
+            bootstrap-known "$_shared_apply_base") || {
+            printf '%s\n' preflight-rejected=owned-baseline
+            return 0
+        }
+        _shared_owned_state=$(printf '%s\n' "$_shared_owned_start" |
+            shared_apply_json_field '.result | select(.=="created" or .=="existing")') || return 69
+        case "$_shared_owned_state" in created|existing) ;; *) return 69 ;; esac
     fi
     # The journal records only a fixed operation identity and owned-fields
     # proof. It never contains private Config XML or untrusted shell strings.
@@ -1392,6 +1558,69 @@ shared_apply_wan_save_service()
     esac
 }
 
+# A periodic RESTART is an explicit saved preference, not a 60-second
+# Auto-detect maintenance operation. The parent already holds original FD9;
+# do not reacquire it and do not start a stopped appliance from a cron tick.
+shared_apply_auto_restart_tick_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    case "$1" in hourly|daily|weekly|monthly) ;; *) return 64 ;; esac
+    _auto_restart_due="$1"
+    # Config is always the authority, never a cron argument or environment.
+    # An absent/stopped common owner means no involuntary engine startup.
+    if ! shared_apply_has_record_service; then
+        printf '%s\n' auto-restart=inactive
+        return 0
+    fi
+    _auto_restart_owner=$(shared_apply_inspect_service) || return 69
+    case "$_auto_restart_owner" in
+        committed\ *) ;;
+        none|restored)
+            printf '%s\n' auto-restart=inactive
+            return 0
+            ;;
+        *) return 69 ;;
+    esac
+    [ -x /usr/local/bin/php ] || return 69
+    _auto_restart_preference=$(/usr/local/bin/php \
+        "$SCRIPT_DIR/shared_apply_config.php" auto-restart) || return 69
+    case "$_auto_restart_preference" in
+        0:*|1:off)
+            printf '%s\n' auto-restart=disabled
+            return 0
+            ;;
+        1:hourly|1:daily|1:weekly|1:monthly) ;;
+        *) return 69 ;;
+    esac
+    [ "$_auto_restart_preference" = "1:$_auto_restart_due" ] || {
+        printf '%s\n' auto-restart=not-due
+        return 0
+    }
+    # The existing status observer proves BOTH current native dvtws2 and
+    # original monitor/kernel ownership. Stopped must never turn into ON.
+    # Native status observer validates its internal ready:0/stopped:2
+    # JSON process result and returns an ordinary shell exit 0 for BOTH
+    # qualified states. Never infer stopped directly from the inner code 2.
+    _auto_restart_status=$(shared_apply_status_observe_service) || return 69
+    case "$_auto_restart_status" in
+        ready) ;;
+        stopped)
+            printf '%s\n' auto-restart=stopped
+            return 0
+            ;;
+        *) return 69 ;;
+    esac
+    extra_resources_block_pending_start_service || return 69
+    # WAN-first BEFORE the scheduled stop: never tear down a working
+    # service only to discover that its selected WAN cannot be started.
+    wan_first_service require || return $?
+    shared_apply_stop_service "$_auto_restart_owner" || return 70
+    # This is the user-authorized normal restart, with original FD9 and
+    # same rollback-aware common boot. No custom process/IPFW manipulation.
+    shared_apply_boot_service "$_auto_restart_owner" || return 70
+    printf '%s\n' auto-restart=completed
+}
+
 # One indivisible FD9 entrypoint for the EXISTING Voice and Strategies
 # Apply buttons: stage → installed native template → full release →
 # seal → native Config/runtime/IPFW transaction, all under the same lock.
@@ -1495,9 +1724,11 @@ shared_apply_prepare_service()
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
-    # P2h: inside the existing FD9, bind the genuine PHP candidate to the
-    # original generated profiles BEFORE seal. Stage only an inert proposal;
-    # leave the real dvtws.args untouched while no durable worker exists.
+    # P2: under the original FD9, reverify the native PHP candidate and
+    # original generated profiles BEFORE seal. The P2h no-action preview
+    # is promoted into the exact native argv/schema-2 owner once, without
+    # leaving an inert duplicate in the final release. Runtime still needs
+    # independent original-FD9 launch/epoch authorization (fail closed).
     if [ -f "$_shared_work/release/auto-detect-source-map.json" ]; then
         _shared_auto_page=$(/usr/local/bin/jq -er \
             '.page | select(.=="voice" or .=="strategies")' \
@@ -1516,7 +1747,9 @@ shared_apply_prepare_service()
             shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
         if [ "$_shared_auto_mode" = 1 ]; then
             if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
-                preview "$_shared_work" "$_shared_auto_digest" >/dev/null; then
+                preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
+               ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
+                promote "$_shared_work" "$_shared_auto_digest" >/dev/null; then
                 printf '%s\n' preflight-rejected=runtime-build
                 return 0
             fi
@@ -2368,6 +2601,15 @@ service_dispatch()
         restart)
             reconfigure_service
             ;;
+        auto-detect-minute)
+            # Existing FD9 is inherited by the Python child. Never detach,
+            # stop dvtws2, acquire another lifecycle lock or start an engine.
+            [ "$#" -eq 1 ] || return 64
+            "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_minute.py"
+            ;;
+        auto-restart-tick)
+            shared_apply_auto_restart_tick_service "${2:-}"
+            ;;
         status)
             shared_apply_status_service
             ;;
@@ -2637,7 +2879,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
+            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -2768,6 +3010,17 @@ service_with_lifecycle_lock()
                 fi
                 preflight_shared_apply_journal || return 69
                 ;;
+            auto-detect-minute)
+                [ "$#" -eq 1 ] || return 64
+                # Only the original FD9 service caller can authorize a
+                # native raw/debug reader and Config-held P1 destination.
+                ;;
+            auto-restart-tick)
+                # The tick itself checks the persisted OPNsense model and
+                # complete RUNNING status; never use legacy fallback.
+                [ "$#" -eq 2 ] || return 64
+                case "$2" in hourly|daily|weekly|monthly) ;; *) return 64 ;; esac
+                ;;
             telegram-voice-enable|telegram-voice-disable)
                 # Compatibility names are common native Apply, not old PoC.
                 preflight_shared_apply_journal common-apply || return 69
@@ -2834,7 +3087,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

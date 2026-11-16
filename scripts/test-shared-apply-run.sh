@@ -87,9 +87,19 @@ grep -Fq 'telegram_voice_native_status_service()' "$SOURCE" ||
     fail "Telegram status still reports only hardcoded PoC profile"
 grep -Fq 'shared_apply_request.php" telegram-saved' "$SOURCE" ||
     fail "Telegram status uses old marker as saved preference"
-# Public Telegram status is in the same original FD9 dispatch as lifecycle.
-grep -Fq 'reconfigure|telegram-voice-status|native-voice-lifecycle-inspect' "$SOURCE" ||
-    fail "compatibility status must own original FD9"
+# Public Telegram status and common Voice inspection must use the SAME
+# original FD9 dispatch as lifecycle. Verify the dispatch arm and its
+# lock call, not an obsolete assumption that no newer action may appear
+# between reconfigure and telegram-voice-status.
+awk '
+    index($0, "start|stop|restart|reconfigure|") &&
+    index($0, "|telegram-voice-status|native-voice-lifecycle-inspect|") {
+        if (getline > 0 &&
+            index($0, "service_with_lifecycle_lock") &&
+            index($0, "LIFECYCLE_LOCK_TIMEOUT")) matched = 1
+    }
+    END { exit !matched }
+' "$SOURCE" || fail "compatibility status must own original FD9"
 # Verify the actual release finalizer, not a mock of its implementation.
 sed -n '/^shared_apply_finalize_release_modes()$/,/^}$/p' "$SOURCE" > "$TMP/release-modes.sh"
 [ -s "$TMP/release-modes.sh" ] || fail "common runtime mode finalizer missing"

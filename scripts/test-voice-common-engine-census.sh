@@ -83,11 +83,20 @@ echo 'PASS: orphan, duplicate, stale and missing-process-inventory refusal'
 # not a text grep or an independent reimplementation of the decision.
 SERVICE="$ROOT/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"
 sed -n '/^shared_apply_stop_service()$/,/^}$/p' "$SERVICE" > "$TMP/stop.sh"
+# The production Stop now invokes the exact original observer-retirement
+# classifier. Include its genuine shell implementation in this source-mount
+# test instead of stubbing away its safety decision.
+sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$SOURCE" >> "$TMP/stop.sh"
 sh -n "$TMP/stop.sh" || fail "invalid common Stop function"
 . "$TMP/stop.sh"
 QUERY_FAIL=0; export QUERY_FAIL
 mkdir -p "$TMP/owner/release" "$TMP/active"
 ACTIVE_DIR="$TMP/active"
+# A genuinely committed common release always contains its compiled
+# dvtws.args. This test previously stubbed tree verification while omitting
+# that required file, so the new original-observer classifier correctly
+# refused the artificial "stopped owner" before the engine-census test.
+printf '%s\n' '--port=989' > "$ACTIVE_DIR/dvtws.args"
 SUPERVISOR_MONITOR_PIDFILE="$TMP/monitor.pid"
 SUPERVISOR_DAEMON_PIDFILE="$TMP/daemon.pid"
 SUPERVISOR_LOOP="$TMP/supervisor_loop.sh"

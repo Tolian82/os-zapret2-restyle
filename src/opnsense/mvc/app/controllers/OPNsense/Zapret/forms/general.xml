@@ -16,6 +16,13 @@
         <help>Select the WAN interface where DPI bypass should be applied.</help>
     </field>
     <field>
+        <id>zapret.general.autorestart</id>
+        <label>Auto Restart</label>
+        <type>dropdown</type>
+        <advanced>true</advanced>
+        <help>Optional scheduled restart of the running shared Zapret2 service. Off disables it. This setting is independent of the one-minute Auto-detect collector and is preserved when Advanced Mode is hidden. A stopped service is never started by the schedule.</help>
+    </field>
+    <field>
         <id>zapret.general.divertport</id>
         <label>Divert Port</label>
         <type>text</type>

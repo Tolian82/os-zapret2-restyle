@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""#1052 P2k8h: original-owner pre-IPFW native producer reownership.
+"""#1052 P2: single original-FD9 sealed observer/producer and PID gates.
 
-Import-only. Only the ORIGINAL shared-FD9 owner may eventually call the native
-entry after starting its ONE sealed dvtws2 process and before IPFW divert.
-No start, discovery, Config write, worker, ACK, daemon or public CLI.
+The existing configd/service FD9 owner authorizes a source-bound schema-2
+candidate, verifies the native raw/debug layout before starting the ONE
+engine, seals immutable pretraffic identities and restores exact producer
+inode ownership after the engine drops credentials but before IPFW divert.
+No second start route, collector, Config writer, ACK or daemon.
 """
 from __future__ import annotations
 
@@ -179,7 +181,7 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
 
 
 def native_capture_before_launch() -> OriginalProducer:
-    """Original FD9-only pretraffic proof; live producer still disabled."""
+    """Original FD9-only pretraffic proof: empty exact physical inodes."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise PostDropRefused("native_root_fd9_only")
     try:
@@ -211,10 +213,77 @@ def native_restore_before_ipfw(witness: OriginalProducer, owner: OwnerToken,
         raise PostDropRefused("native_original_process_unavailable") from exc
 
 
-# P2k8q3a: route the sole original FD9 through the existing immutable
-# pretraffic -> committed process epoch. These commands are not authorizers:
-# normal original Apply still refuses active native recording until the
-# existing worker/FD/rollover gates are qualified.
+def native_authorize_original_release(release: Path) -> None:
+    """Read-only authorization of the exact original sealed schema-2 candidate.
+
+    Called by both pre-journal release preflight and installed runtime launch
+    under the ORIGINAL FD9. A syntactically valid --hostlist-auto alone is not
+    an authorization: the same root-owned sealed workspace, native source
+    profiles, candidate digest and final argv must all agree. No producer
+    file, Config, journal or process is changed here.
+    """
+    import json
+    from auto_detect_owner import MAP_NAME, MAX_ARGS, MAX_MAP, _secure_bytes, _valid_map
+    from auto_detect_origin_map import verify_original_promotion
+    from shared_apply_seal import WORK, verify_seal
+    from voice_live_inspect import COMMON_ACTIVE
+
+    owner_uid = os.geteuid()  # Production CLI permits only FreeBSD uid 0 + FD9.
+    if not isinstance(release, Path) or not release.is_absolute():
+        raise PostDropRefused("invalid_original_observer_release")
+    if (release != COMMON_ACTIVE and
+            (release.name != "release" or release.parent.parent != WORK or
+             re.fullmatch(r"[a-f0-9]{32}", release.parent.name) is None)):
+        raise PostDropRefused("observer_release_outside_original_owner")
+    directory = release.lstat()
+    if (not stat.S_ISDIR(directory.st_mode) or
+            directory.st_uid != owner_uid or directory.st_mode & 0o022):
+        raise PostDropRefused("untrusted_original_observer_release_directory")
+    raw = _secure_bytes(release / MAP_NAME, MAX_MAP, owner_uid)
+    argv = _secure_bytes(release / "dvtws.args", MAX_ARGS, owner_uid)
+    try:
+        mapping = json.loads(raw)
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise PostDropRefused("corrupt_original_observer_generation") from exc
+    if (not isinstance(mapping, dict) or
+            not isinstance(mapping.get("generation"), str) or
+            not re.fullmatch(r"[a-f0-9]{32}", mapping["generation"]) or
+            not isinstance(mapping.get("owner_candidate_sha256"), str) or
+            not re.fullmatch(r"[a-f0-9]{64}", mapping["owner_candidate_sha256"])):
+        raise PostDropRefused("unqualified_original_observer_generation")
+    operation = mapping["generation"]
+    digest = mapping["owner_candidate_sha256"]
+    work = WORK / operation
+    if release not in (work / "release", COMMON_ACTIVE):
+        raise PostDropRefused("observer_release_outside_original_owner")
+    # Verify the immutable candidate bundle before comparing this release;
+    # live ACTIVE_DIR is an exact copy only after the existing atomic install.
+    verify_seal(work, owner=owner_uid)
+    expected = verify_original_promotion(work, digest)
+    _valid_map(raw, {"id": operation, "candidate": digest}, argv)
+    if (expected["generation"] != operation or
+            expected["final_args_sha256"] != mapping["final_args_sha256"] or
+            _secure_bytes(work / "release" / MAP_NAME, MAX_MAP, owner_uid) != raw or
+            _secure_bytes(work / "release" / "dvtws.args", MAX_ARGS, owner_uid) != argv):
+        raise PostDropRefused("original_observer_differs_from_sealed_candidate")
+    # The valid map and original source are prerequisites to the ORIGINAL
+    # pretraffic/epoch proof, not a bypass around that later proof.
+
+
+def native_prepare_original_producer() -> None:
+    """Create/verify original native producer before launch, under FD9 only.
+
+    A retained raw/debug/pending from any prior generation is never reset
+    or reassigned. The original capture/seal-epoch gate separately demands
+    genuine empty, distinct inodes before any new observer starts.
+    """
+    from auto_detect_storage import prepare_native
+    prepare_native()
+
+
+# Route the sole original FD9 through the existing immutable
+# pretraffic -> committed process epoch. Release authorization is read-only
+# and never by itself permits launch, receipt ACK or native file deletion.
 def _original_epoch_queue():
     from auto_detect_epoch_receipts import EpochReceipts
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
@@ -324,18 +393,25 @@ def _original_owner_from_pid(pid_text: str, executable: str) -> OwnerToken:
 def original_fd9_command(args: list[str]) -> int:
     """Restricted internal CLI, only from inherited original held FD9.
 
-    A normal release with P2h's inert preview never invokes this command.
-    Activation is deliberately a separate original-builder/worker gate.
+    A source-verified promoted release may pass the read-only authorize
+    gate, but the original pretraffic/queue and post-drop process proof are
+    still mandatory before the engine can be connected to IPFW.
     """
-    shapes = {"capture": 1, "restore": 4, "seal-epoch": 3,
-              "finish-epoch": 2}
+    shapes = {"authorize": 2, "prepare": 1, "capture": 1,
+              "restore": 4, "seal-epoch": 3, "finish-epoch": 2}
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()  # REAL original same-OFD held FD9, no new lock.
-        if args[0] == "capture":
+        if args[0] == "authorize":
+            native_authorize_original_release(Path(args[1]))
+            print("original-fd9-observer=authorized")
+        elif args[0] == "prepare":
+            native_prepare_original_producer()
+            print("original-fd9-producer=prepared")
+        elif args[0] == "capture":
             print(_witness_line(native_capture_before_launch()))
         elif args[0] == "restore":
             # Caller already started the single original engine. A false

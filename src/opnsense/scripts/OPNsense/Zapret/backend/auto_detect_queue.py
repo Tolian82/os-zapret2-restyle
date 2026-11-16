@@ -221,16 +221,24 @@ class DurableInbox:
             _stat_regular(path, self.uid, writer_gid=self.writer_gid)
         return files
 
-    def rotate(self, *, generation: str | None = None) -> Path | None:
-        """Under original exclusive(); recover only a genuine generation link.
+    def rotate(self, *, generation: str | None = None,
+               cycle: int | None = None, sequence: int | None = None) -> Path | None:
+        """Rotate the same original inode under the original queue lock.
 
-        The original v2 preparation passes its 32-hex shared-Apply ID.
-        Existing no-tag queue callers remain supported. No historical
-        inode may silently acquire a different generation during recovery.
+        Native v2 supplies a bounded compaction cycle plus local sequence
+        to make each pending filename unique across prior pruned journals;
+        other original queue users retain their untagged random names.
         """
         if generation is not None and (type(generation) is not str or
                                        re.fullmatch(r"[a-f0-9]{32}", generation) is None):
             raise QueueSafetyError("invalid_producer_generation")
+        if ((cycle is None) != (sequence is None) or
+                (cycle is not None and (
+                    generation is None or type(cycle) is not int or
+                    type(sequence) is not int or
+                    not 0 <= cycle < (1 << 32) or
+                    not 0 <= sequence < (1 << 24)))):
+            raise QueueSafetyError("invalid_original_cursor_cycle")
         self._require_lock()
         self._verify()
         # The original v2 reader and physical ACK both refuse >4 MiB.
@@ -251,13 +259,37 @@ class DurableInbox:
             segment = same[0]
             if generation is not None and not segment.name.startswith(generation + "-"):
                 raise QueueSafetyError("crash_recovery_generation_changed")
+            if old.st_size == 0:
+                # Interrupted link() before replace() with no raw event.
+                # This is only a second NAME for the live inode, not a
+                # detached pending batch. Removing the extra hardlink is
+                # safe even if dvtws2 appends concurrently: its bytes stay
+                # reachable through the original inbox name and open FD.
+                # Never unlink an independently detached empty segment.
+                live = _stat_regular(self.inbox, self.uid, writer_gid=self.writer_gid)
+                alias = _stat_regular(segment, self.uid, writer_gid=self.writer_gid)
+                if ((live.st_dev, live.st_ino) != (old.st_dev, old.st_ino) or
+                        (alias.st_dev, alias.st_ino) != (old.st_dev, old.st_ino) or
+                        live.st_nlink != 2 or alias.st_nlink != 2 or
+                        live.st_size != 0 or alias.st_size != 0):
+                    raise QueueSafetyError("empty_live_alias_changed")
+                segment.unlink()
+                _sync_directory(self.pending)
+                remaining = _stat_regular(self.inbox, self.uid,
+                                          writer_gid=self.writer_gid)
+                if ((remaining.st_dev, remaining.st_ino) !=
+                        (old.st_dev, old.st_ino) or remaining.st_nlink != 1):
+                    raise QueueSafetyError("empty_live_alias_recovery_uncertain")
+                return None
         else:
             if not old.st_size:
                 return None
             if old.st_nlink != 1 or len(existing) >= MAX_PENDING:
                 raise QueueSafetyError("unsafe_inbox_links_or_capacity")
+            suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
+                      if cycle is not None else secrets.token_hex(16))
             segment = self.pending / ((generation + "-" if generation is not None else "") +
-                                      secrets.token_hex(16) + ".txt")
+                                      suffix + ".txt")
         # A new inode is fully synced before the live name is replaced.
         temp = self.root / (".new-inbox-" + secrets.token_hex(16))
         fd = None

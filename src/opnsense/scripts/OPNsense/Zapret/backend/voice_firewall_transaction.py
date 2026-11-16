@@ -64,7 +64,8 @@ def _validate_port_string(text: str, label: str) -> str:
     return text
 
 
-def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
+def prepare_desired(capture_plan: dict, tcp: str, udp: str, *,
+                    auto_rst_tcp: str | None = None) -> dict:
     """Turn a validated capture plan into an explicit plugin-owned manifest."""
     if not isinstance(capture_plan, dict) or capture_plan.get("schema") != 1:
         raise VoiceFirewallError("invalid capture plan schema")
@@ -145,6 +146,20 @@ def prepare_desired(capture_plan: dict, tcp: str, udp: str) -> dict:
             rules[next_number] = ["divert", str(divert), proto, "from", "any",
                                   "to", "any", ports, *guards]
             next_number += 1
+    if auto_rst_tcp is not None:
+        # The original sealed schema-2 observer, NOT user preferences,
+        # authorizes this narrowly scoped feedback rule. No SYN/ACK/FIN
+        # interception: native FreeBSD loopback showed that broad feedback
+        # could interrupt a connection before it reached the observer.
+        if not tcp or auto_rst_tcp != tcp:
+            raise VoiceFirewallError("unqualified original auto TCP feedback scope")
+        if next_number > last:
+            raise VoiceFirewallError("auto RST feedback exceeds owned rule range")
+        rules[next_number] = [
+            "divert", str(divert), "tcp", "from", "any", tcp,
+            "to", "any", "tcpflags", "rst", "in", "not",
+            "diverted", "recv", wan,
+        ]
     return {"rule_base": first, "rule_max": last, "rules": rules, "tables": tables}
 
 

@@ -30,6 +30,9 @@ from auto_detect_owner import GenerationProof, GenerationRefused, attest_running
 from auto_detect_queue import DurableInbox, QueueSafetyError
 
 CHAIN = "cursor-chain-v2"
+ANCHOR = "anchor.json"
+NEXT = CHAIN + ".next"
+OLD = CHAIN + ".old"
 MAX_STEPS = 512
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 PENDING = re.compile(r"[0-9a-f]{32}-[0-9a-f]{32}\.txt\Z")
@@ -49,6 +52,7 @@ class ChainTip:
     open_intent: dict | None
     used_pending_names: frozenset[str]
     raw_first: bool
+    cycle: int = 0
 
 
 def _digest(data: bytes) -> str:
@@ -219,6 +223,214 @@ class CursorChain:
             raise CursorChainRefused("original_epoch_and_queue_identity_required")
         self.receipts, self.queue = receipts, queue
 
+    def _next_anchor(self, proof: GenerationProof, epoch_raw: bytes,
+                     tip: ChainTip) -> dict:
+        if (tip.open_folder is not None or tip.open_intent is not None or
+                tip.next_sequence != MAX_STEPS or
+                type(tip.cycle) is not int or not 0 <= tip.cycle < (1 << 32) - 1 or
+                not HEX64.fullmatch(tip.previous_ack_sha256)):
+            raise CursorChainRefused("incomplete_original_rollover_source")
+        return {
+            "schema": 2, "kind": "original-v2-cursor-anchor",
+            "generation": proof.generation,
+            "owner_operation_id": proof.operation_id,
+            "final_args_sha256": proof.final_args_sha256,
+            "epoch_sha256": _digest(epoch_raw),
+            "cycle": tip.cycle + 1,
+            "debug_device": tip.cursor.device,
+            "debug_inode": tip.cursor.inode,
+            "debug_offset": tip.cursor.offset,
+            "debug_prefix_sha256": tip.cursor.prefix_sha256,
+            "raw_first": tip.raw_first,
+            "previous_ack_sha256": tip.previous_ack_sha256,
+            "ack_authorized": False,
+        }
+
+    def _checked_anchor(self, proof: GenerationProof, epoch: dict,
+                        epoch_raw: bytes, path: Path) -> dict:
+        value, _ = _load(path, self.receipts.uid)
+        required = {
+            "schema", "kind", "generation", "owner_operation_id",
+            "final_args_sha256", "epoch_sha256", "cycle",
+            "debug_device", "debug_inode", "debug_offset",
+            "debug_prefix_sha256", "raw_first", "previous_ack_sha256",
+            "ack_authorized",
+        }
+        if (set(value) != required or value["schema"] != 2 or
+                value["kind"] != "original-v2-cursor-anchor" or
+                value["generation"] != proof.generation or
+                value["owner_operation_id"] != proof.operation_id or
+                value["final_args_sha256"] != proof.final_args_sha256 or
+                value["epoch_sha256"] != _digest(epoch_raw) or
+                type(value["cycle"]) is not int or
+                not 1 <= value["cycle"] < (1 << 32) or
+                type(value["debug_device"]) is not int or
+                type(value["debug_inode"]) is not int or
+                value["debug_device"] != epoch["debug_device"] or
+                value["debug_inode"] != epoch["debug_inode"] or
+                type(value["debug_offset"]) is not int or
+                not 0 <= value["debug_offset"] <= MAX_DEBUG or
+                not HEX64.fullmatch(str(value["debug_prefix_sha256"])) or
+                type(value["raw_first"]) is not bool or
+                not HEX64.fullmatch(str(value["previous_ack_sha256"])) or
+                value["ack_authorized"] is not False):
+            raise CursorChainRefused("invalid_original_rollover_anchor")
+        return value
+
+    def _erase_old_tree(self, path: Path) -> None:
+        """Reclaim only an already superseded, root-private ACKed tree.
+
+        The successor anchor was durably staged and atomically installed
+        before this unlink. On crash, the same original queue lock repeats
+        these idempotent, path/owner-checked removals. No live raw or
+        debug producer path is even referenced here.
+        """
+        _directory(path, self.receipts.uid)
+        for slot in sorted(path.iterdir()):
+            if slot.name == ANCHOR:
+                _load(slot, self.receipts.uid)
+                slot.unlink()
+                continue
+            if not STEP.fullmatch(slot.name):
+                raise CursorChainRefused("foreign_old_cursor_entry")
+            _directory(slot, self.receipts.uid)
+            for entry in list(slot.iterdir()):
+                if entry.name == "destination":
+                    _directory(entry, self.receipts.uid)
+                    for child in list(entry.iterdir()):
+                        if child.name not in {"plan.json", "checkpoint.json"}:
+                            raise CursorChainRefused("foreign_old_destination_entry")
+                        self._check_old_file(child)
+                        child.unlink()
+                    entry.rmdir()
+                elif entry.name in {"intent.json", "ack.json", "recovery.json"}:
+                    self._check_old_file(entry)
+                    entry.unlink()
+                else:
+                    raise CursorChainRefused("foreign_old_cursor_artifact")
+            slot.rmdir()
+        _sync(path)
+        path.rmdir()
+        _sync(path.parent)
+
+    def _check_old_file(self, path: Path) -> None:
+        item = path.lstat()
+        if (not stat.S_ISREG(item.st_mode) or item.st_uid != self.receipts.uid
+                or item.st_nlink != 1 or item.st_mode & 0o077):
+            raise CursorChainRefused("unsafe_old_cursor_receipt")
+
+    def _recover_staged_anchor_write(self, prepared: Path) -> None:
+        """Finish the original receipt writer's crash-torn hardlink stage.
+
+        _write_once() fsyncs a private .<hex32>.part then hardlinks the
+        identical inode to anchor.json. Under the same P2a queue lock only
+        that one strict temporary name may be removed. A foreign entry,
+        changed inode, or unsafe link count always refuses.
+        """
+        _directory(prepared, self.receipts.uid)
+        names = set(os.listdir(prepared))
+        staged = [name for name in names
+                  if re.fullmatch(r"\.[0-9a-f]{32}\.part", name)]
+        if (len(staged) > 1 or names - {ANCHOR, *staged}):
+            raise CursorChainRefused("foreign_original_rollover_stage")
+        if not staged:
+            return
+        temp = prepared / staged[0]
+        st = temp.lstat()
+        if (not stat.S_ISREG(st.st_mode) or st.st_uid != self.receipts.uid
+                or stat.S_IMODE(st.st_mode) != 0o600
+                or st.st_nlink not in (1, 2)):
+            raise CursorChainRefused("unsafe_original_rollover_temp")
+        anchor = prepared / ANCHOR
+        if ANCHOR in names:
+            named = anchor.lstat()
+            if (not stat.S_ISREG(named.st_mode) or
+                    named.st_uid != self.receipts.uid or
+                    stat.S_IMODE(named.st_mode) != 0o600 or
+                    named.st_nlink != 2 or st.st_nlink != 2 or
+                    (named.st_dev, named.st_ino) != (st.st_dev, st.st_ino)):
+                raise CursorChainRefused("rollover_hardlink_identity_changed")
+        elif st.st_nlink != 1:
+            raise CursorChainRefused("foreign_original_rollover_temp_link")
+        temp.unlink()
+        _sync(prepared)
+
+    def ensure_capacity(self, proof: GenerationProof, *,
+                        attest: Callable = attest_running_generation) -> None:
+        """Crash-recover the same owner chain, then bound 512 fully ACKed slots.
+
+        Original queue FD and running generation stay unchanged. First
+        fsync the successor's immutable epoch-bound ACK anchor, then rename
+        the old tree away, rename the successor into place, and only then
+        unlink old ACKed receipts. Each interrupted rename is recoverable.
+        """
+        if (not self.queue._held or not callable(attest) or attest() != proof):
+            raise CursorChainRefused("original_rollover_queue_owner_required")
+        root, epoch, epoch_raw = self._root(proof, create=False)
+        folder = root.parent
+        prepared, retired = folder / NEXT, folder / OLD
+        if retired.exists() or retired.is_symlink():
+            _directory(retired, self.receipts.uid)
+            if not root.exists() and not root.is_symlink():
+                # Crash after old-root rename, before new-root rename.
+                # Recover the complete predecessor first, then verify
+                # the prepared next anchor against its genuine full tip.
+                retired.rename(root)
+                _sync(folder)
+            elif prepared.exists() or prepared.is_symlink():
+                raise CursorChainRefused("ambiguous_original_rollover_paths")
+            else:
+                _directory(root, self.receipts.uid)
+                self._checked_anchor(proof, epoch, epoch_raw, root / ANCHOR)
+                self._erase_old_tree(retired)
+        if prepared.exists() or prepared.is_symlink():
+            _directory(prepared, self.receipts.uid)
+            if not root.exists() or root.is_symlink():
+                raise CursorChainRefused("orphan_original_rollover_candidate")
+            self._recover_staged_anchor_write(prepared)
+            if not os.listdir(prepared):
+                # Crash after staging mkdir, before durable anchor creation:
+                # no committed state was changed, so recreate safely.
+                prepared.rmdir()
+                _sync(folder)
+            else:
+                tip = self.tip(proof)
+                expected = self._next_anchor(proof, epoch_raw, tip)
+                proposed = self._checked_anchor(
+                    proof, epoch, epoch_raw, prepared / ANCHOR)
+                if proposed != expected or set(os.listdir(prepared)) != {ANCHOR}:
+                    raise CursorChainRefused("stale_original_rollover_candidate")
+                if self.queue.segments() or attest() != proof:
+                    raise CursorChainRefused("pending_or_changed_original_rollover")
+                root.rename(retired)
+                _sync(folder)
+                prepared.rename(root)
+                _sync(folder)
+                self._erase_old_tree(retired)
+        tip = self.tip(proof)
+        if tip.next_sequence < MAX_STEPS:
+            return
+        if (tip.open_folder is not None or tip.open_intent is not None or
+                self.queue.segments() or attest() != proof):
+            raise CursorChainRefused("full_original_chain_not_terminal")
+        expected = self._next_anchor(proof, epoch_raw, tip)
+        if prepared.exists() or prepared.is_symlink() or (
+                retired.exists() or retired.is_symlink()):
+            raise CursorChainRefused("original_rollover_root_collision")
+        prepared.mkdir(mode=0o700)
+        _sync(folder)
+        _write_once(prepared, ANCHOR, _canonical(expected), self.receipts.uid)
+        _sync(prepared)
+        if attest() != proof or self.tip(proof) != tip or self.queue.segments():
+            raise CursorChainRefused("original_rollover_owner_changed_before_swap")
+        root.rename(retired)
+        _sync(folder)
+        prepared.rename(root)
+        _sync(folder)
+        self._erase_old_tree(retired)
+        if attest() != proof or self.tip(proof).cycle != tip.cycle + 1:
+            raise CursorChainRefused("original_rollover_anchor_not_published")
+
     def _root(self, proof: GenerationProof, *, create: bool) -> tuple[Path, dict, bytes]:
         if not self.queue._held:
             raise CursorChainRefused("original_queue_lock_required")
@@ -226,7 +438,9 @@ class CursorChain:
         epoch_folder, epoch = self.receipts._epoch(proof)
         names = set(os.listdir(epoch_folder))
         if (any(n.startswith("intent-") for n in names) or "destination" in names or
-                names - {"pretraffic.json", "epoch.json", CHAIN}):
+                names - {"pretraffic.json", "epoch.json", CHAIN, NEXT, OLD,
+                         "retired.json", "retired-inbox.txt", "retired-debug.log",
+                         "retired-debug-previous.log"}):
             raise CursorChainRefused("legacy_and_cursor_chain_cannot_mix")
         epoch_raw = _read(epoch_folder / "epoch.json", self.receipts.uid)
         root = epoch_folder / CHAIN
@@ -244,8 +458,20 @@ class CursorChain:
         anchor = _digest(epoch_raw)
         raw_first = False
         if not root.exists():
+            if (root.parent / NEXT).exists() or (root.parent / OLD).exists():
+                raise CursorChainRefused("original_cursor_rollover_incomplete")
             return ChainTip(0, cursor, anchor, None, None, frozenset(), False)
-        slots = sorted(os.listdir(root))
+        cycle = 0
+        if (root / ANCHOR).exists() or (root / ANCHOR).is_symlink():
+            checkpoint = self._checked_anchor(proof, epoch, epoch_raw,
+                                              root / ANCHOR)
+            cursor = Cursor(proof.generation, checkpoint["debug_device"],
+                            checkpoint["debug_inode"], checkpoint["debug_offset"],
+                            checkpoint["debug_prefix_sha256"])
+            anchor = checkpoint["previous_ack_sha256"]
+            raw_first = checkpoint["raw_first"]
+            cycle = checkpoint["cycle"]
+        slots = sorted(name for name in os.listdir(root) if name != ANCHOR)
         if len(slots) > MAX_STEPS or any(
                 not STEP.fullmatch(name) or int(name) != i
                 for i, name in enumerate(slots)):
@@ -277,6 +503,9 @@ class CursorChain:
                     not PENDING.fullmatch(intent["pending_name"]) or
                     not intent["pending_name"].startswith(proof.generation + "-") or
                     intent["pending_name"] in used_pending_names or
+                    (cycle > 0 and not intent["pending_name"].startswith(
+                        proof.generation + "-" +
+                        f"{cycle:08x}{index:06x}")) or
                     any(type(intent.get(k)) is not int or intent[k] <= 0 for k in
                         ("pending_inode", "pending_size", "candidate_count")) or
                     type(intent.get("pending_device")) is not int or
@@ -322,7 +551,7 @@ class CursorChain:
             raw_first = raw_first or intent["evidence"] == "raw-first"
             anchor = _digest(ack_raw)
         return ChainTip(len(slots), cursor, anchor, open_folder, open_intent,
-                        frozenset(used_pending_names), raw_first)
+                        frozenset(used_pending_names), raw_first, cycle)
 
     def prepare(self, proof: GenerationProof, pending: Path, *,
                 attest: Callable = attest_running_generation,
@@ -451,6 +680,10 @@ class CursorChain:
                 return tip.open_folder
             if pending.name in tip.used_pending_names:
                 raise CursorChainRefused("completed_pending_name_reused")
+            if (tip.cycle > 0 and not pending.name.startswith(
+                    proof.generation + "-" +
+                    f"{tip.cycle:08x}{tip.next_sequence:06x}")):
+                raise CursorChainRefused("historical_pending_cycle_reused")
             current_debug, _ = _read_exact(
                 Path(proof.debug_path), owner_uid=self.receipts.uid,
                 writer_gid=self.queue.writer_gid)

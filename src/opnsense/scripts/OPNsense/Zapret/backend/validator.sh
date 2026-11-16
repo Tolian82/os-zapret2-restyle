@@ -638,6 +638,17 @@ try:
         public_managed.mkdir(mode=0o755)
         os.chmod(public_managed, 0o755)
         copied = set()
+        # Native --dry-run checks that its auto producer files exist. The
+        # real files belong exclusively to original FD9 AFTER read-only
+        # Apply preflight, so the validator must never create/touch them.
+        # Mirror only these two source-qualified absolute native options in
+        # the existing disposable public tempdir, just like managed lists.
+        auto_files = {
+            "--hostlist-auto": (
+                "/var/db/zapret2-auto-detect/inbox.txt", "native-auto-inbox.txt"),
+            "--hostlist-auto-debug": (
+                "/var/db/zapret2-auto-detect/debug.log", "native-auto-debug.log"),
+        }
 
         def remap(value):
             if not value.startswith(prefix):
@@ -666,6 +677,17 @@ try:
             elif sep and option == "--blob" and ":@" in value:
                 kind, path = value.split(":@", 1)
                 token = option + "=" + kind + ":@" + remap(path)
+            elif sep and option in auto_files:
+                expected, name = auto_files[option]
+                if value != expected:
+                    raise ValueError("unqualified native auto source path")
+                temporary = public_root / name
+                if not temporary.exists():
+                    with temporary.open("xb") as writer:
+                        writer.flush()
+                        os.fsync(writer.fileno())
+                    os.chmod(temporary, 0o644)
+                token = option + "=" + str(temporary)
             mapped.append(token)
         result = subprocess.run([binary, *mapped, "--dry-run"], capture_output=True, timeout=15)
 except (OSError, ValueError, subprocess.TimeoutExpired) as exc:

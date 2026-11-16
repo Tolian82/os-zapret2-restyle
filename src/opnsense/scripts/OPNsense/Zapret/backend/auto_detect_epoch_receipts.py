@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""#1052 P2k8q2: one forward-only original pretraffic seed and live completion.
+"""#1052: one original pretraffic epoch and exact STOPPED source retirement.
 
 The original held FD9 must seal an authenticated schema-2 shared candidate
 and the *real empty* debug/raw inodes BEFORE dvtws2 starts. The later genuine
@@ -31,6 +31,7 @@ HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 EMPTY_HASH = hashlib.sha256(b"").hexdigest()
 MAX_EPOCHS = 128
+COMPLETED_HISTORY_KEEP = 4  # root-private ACKed runs, never domain count
 MAX_RECORD = 16 * 1024
 
 
@@ -171,6 +172,195 @@ class EpochReceipts:
         if len(entries) > MAX_EPOCHS or any(not HEX32.fullmatch(v) for v in entries):
             raise ReceiptRefused("foreign_or_excessive_epoch_entries")
 
+    def prune_completed(self, queue: DurableInbox, *, protect: str,
+                        keep: int = COMPLETED_HISTORY_KEEP) -> int:
+        """Reclaim ONLY fully ACKed prior epochs, never live discovery data.
+
+        Called by the ORIGINAL FD9 pretraffic seed while holding P2a's
+        original flock and only after the old owner was retired. A .gc-
+        tombstone makes deletion recoverable if interrupted: a later native
+        pretraffic seed finishes it, without trusting a half-erased receipt.
+        No Config write, engine stop, live raw or pending mutation.
+        """
+        from auto_detect_cursor_chain import CursorChain, CursorChainRefused
+        from auto_detect_fd import OwnerToken
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not isinstance(protect, str) or not HEX32.fullmatch(protect) or
+                type(keep) is not int or not 1 <= keep <= 16):
+            raise ReceiptRefused("original_fd9_history_maintenance_owner_required")
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        _directory(self.root.parent, self.uid)
+        if not self.root.exists() and not self.root.is_symlink():
+            return 0
+        _directory(self.root, self.uid)
+        all_names = os.listdir(self.root)
+        if (len(all_names) > MAX_EPOCHS or
+                any(not (HEX32.fullmatch(n) or
+                         (n.startswith(".gc-") and HEX32.fullmatch(n[4:])))
+                    for n in all_names)):
+            raise ReceiptRefused("foreign_historical_epoch_before_reclaim")
+
+        # Finish only exact, already-renamed root-private deletion. A .gc
+        # name is never an owner, log or ACK. Its allowed children are
+        # checked without following symlinks after partial prior deletion.
+        for name in sorted(n for n in all_names if n.startswith(".gc-")):
+            self._erase_completed_tree(self.root / name, "generation")
+
+        completed = []
+        for name in sorted(os.listdir(self.root)):
+            if name == protect:
+                continue
+            folder = self.root / name
+            _directory(folder, self.uid)
+            if not (folder / "retired.json").exists():
+                # An unfinished or aborted source is never reclaimed.
+                continue
+            try:
+                epoch = json.loads(_read(folder / "epoch.json", self.uid))
+                if (not isinstance(epoch, dict) or
+                        epoch.get("generation") != name or
+                        epoch.get("operation_id") != name):
+                    raise ReceiptRefused("foreign_completed_generation")
+                owner = OwnerToken(epoch["owner_pid"],
+                                   epoch["owner_start"],
+                                   epoch["owner_executable"])
+                proof = GenerationProof(
+                    owner, name, name, epoch["final_args_sha256"],
+                    epoch["raw_path"], epoch["debug_path"],
+                    epoch["observer_native_number"],
+                    tuple(tuple(row) for row in epoch["profiles"]))
+                folder, verified_epoch = self._epoch(proof)
+                if verified_epoch != epoch:
+                    raise ReceiptRefused("changed_completed_epoch")
+                # Refuse torn or unpublished cursor rollover: the newest
+                # ACK must be proved by the exact immutable v2 chain.
+                if any((folder / x).exists() or (folder / x).is_symlink()
+                       for x in ("cursor-chain-v2.next", "cursor-chain-v2.old")):
+                    raise ReceiptRefused("unfinished_historical_cursor_rollover")
+                tip = CursorChain(self, queue).tip(proof)
+                if tip.open_folder is not None or tip.open_intent is not None:
+                    raise ReceiptRefused("unacknowledged_historical_generation")
+                plan = json.loads(_read(folder / "retired.json", self.uid))
+                if (not isinstance(plan, dict) or
+                        set(plan) != {"schema", "kind", "generation",
+                                     "owner_sha256", "last_ack_sha256",
+                                     "cycle", "next_sequence", "sources"} or
+                        plan["schema"] != 1 or
+                        plan["kind"] != "original-stopped-source-retirement" or
+                        plan["generation"] != name or
+                        plan["owner_sha256"] != hashlib.sha256(
+                            _canonical(_proof_fields(proof))).hexdigest() or
+                        plan["last_ack_sha256"] != tip.previous_ack_sha256 or
+                        plan["cycle"] != tip.cycle or
+                        plan["next_sequence"] != tip.next_sequence or
+                        not isinstance(plan["sources"], dict) or
+                        set(plan["sources"]) != {"inbox", "debug", "previous"}):
+                    raise ReceiptRefused("historical_final_ack_not_proven")
+                for key, filename in (("inbox", "retired-inbox.txt"),
+                                      ("debug", "retired-debug.log"),
+                                      ("previous", "retired-debug-previous.log")):
+                    expected = plan["sources"][key]
+                    target = folder / filename
+                    if expected is None:
+                        if key != "previous" or target.exists() or target.is_symlink():
+                            raise ReceiptRefused("unexpected_historical_archive")
+                        continue
+                    if (not isinstance(expected, list) or len(expected) != 4 or
+                            any(type(n) is not int or n < 0 for n in expected[:3]) or
+                            expected[1] <= 0 or
+                            not isinstance(expected[3], str) or
+                            not HEX64.fullmatch(expected[3])):
+                        raise ReceiptRefused("corrupt_historical_inode_identity")
+                    entry = target.lstat()
+                    mode = 0o660 if self.writer_gid is not None else 0o600
+                    if (not stat.S_ISREG(entry.st_mode) or
+                            entry.st_uid != self.uid or entry.st_nlink != 1 or
+                            stat.S_IMODE(entry.st_mode) != mode or
+                            (self.writer_gid is not None and
+                             entry.st_gid != self.writer_gid) or
+                            entry.st_size > 4 * 1024 * 1024):
+                        raise ReceiptRefused("untrusted_historical_archive")
+                    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+                    try:
+                        opened = os.fstat(fd)
+                        data = os.read(fd, 4 * 1024 * 1024 + 1)
+                        after = os.fstat(fd)
+                    finally:
+                        os.close(fd)
+                    final = target.lstat()
+                    identity = lambda st: (st.st_dev, st.st_ino, st.st_size,
+                                           st.st_mtime_ns, st.st_nlink)
+                    if (identity(entry) != identity(opened) or
+                            identity(opened) != identity(after) or
+                            identity(after) != identity(final) or
+                            [entry.st_dev, entry.st_ino, len(data),
+                             hashlib.sha256(data).hexdigest()] != expected or
+                            (key == "inbox" and data)):
+                        raise ReceiptRefused("changed_historical_archive")
+                completed.append((folder.stat().st_mtime_ns, name))
+            except (OSError, ValueError, TypeError, KeyError, IndexError,
+                    CursorChainRefused, GenerationRefused,
+                    OriginalSourceRefused) as exc:
+                raise ReceiptRefused("historical_epoch_not_qualified_for_reclaim") from exc
+
+        # Active/new generation plus last four fully verified completed
+        # runs never enter the deletion set. No date-only TTL.
+        completed.sort()
+        removed = 0
+        for _, name in completed[:-keep]:
+            original = self.root / name
+            tombstone = self.root / (".gc-" + name)
+            if tombstone.exists() or tombstone.is_symlink():
+                raise ReceiptRefused("concurrent_historical_reclaim")
+            original.rename(tombstone)
+            _sync(self.root)
+            self._erase_completed_tree(tombstone, "generation")
+            removed += 1
+        return removed
+
+    def _erase_completed_tree(self, path: Path, kind: str) -> None:
+        """Idempotent strict-name removal only inside sealed tombstones."""
+        _directory(path, self.uid)
+        from auto_detect_cursor_chain import STEP
+        allowed_files = {
+            "generation": {"pretraffic.json", "epoch.json", "retired.json",
+                           "retired-inbox.txt", "retired-debug.log",
+                           "retired-debug-previous.log"},
+            "chain": {"anchor.json"},
+            "slot": {"intent.json", "ack.json", "recovery.json"},
+            "destination": {"plan.json", "checkpoint.json"},
+        }
+        for child in sorted(path.iterdir()):
+            name = child.name
+            childkind = (
+                "chain" if kind == "generation" and name == "cursor-chain-v2"
+                else "slot" if kind == "chain" and STEP.fullmatch(name)
+                else "destination" if kind == "slot" and name == "destination"
+                else None)
+            if childkind is not None:
+                self._erase_completed_tree(child, childkind)
+                continue
+            if name not in allowed_files[kind]:
+                raise ReceiptRefused("foreign_completed_tree_entry")
+            info = child.lstat()
+            mode = stat.S_IMODE(info.st_mode)
+            is_log = name.startswith("retired-") and name.endswith((".txt", ".log"))
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != self.uid or
+                    info.st_nlink != 1 or
+                    (is_log and mode != (0o660 if self.writer_gid is not None
+                                         else 0o600)) or
+                    (not is_log and mode != 0o600) or
+                    (is_log and self.writer_gid is not None and
+                     info.st_gid != self.writer_gid)):
+                raise ReceiptRefused("untrusted_completed_tree_file")
+            child.unlink()
+        _sync(path)
+        path.rmdir()
+        _sync(path.parent)
+
     def _generation(self, generation: str, *, create: bool) -> Path:
         if not isinstance(generation, str) or not HEX32.fullmatch(generation):
             raise ReceiptRefused("invalid_historical_generation")
@@ -181,12 +371,19 @@ class EpochReceipts:
             _sync(self.root)
         _directory(folder, self.uid)
         entries = os.listdir(folder)
-        if (len(entries) > 3 or
-                any(name not in ("pretraffic.json", "epoch.json",
-                                 "cursor-chain-v2") for name in entries)):
+        # A rollover keeps the previous fully ACKed cursor tree as one
+        # original-owner recovery witness while its sealed successor is
+        # atomically published. No separate epoch, owner or Config writer.
+        allowed = ("pretraffic.json", "epoch.json", "cursor-chain-v2",
+                   "cursor-chain-v2.next", "cursor-chain-v2.old",
+                   "retired.json", "retired-inbox.txt", "retired-debug.log",
+                   "retired-debug-previous.log")
+        if len(entries) > len(allowed) or any(name not in allowed for name in entries):
             raise ReceiptRefused("superseded_one_intent_epoch_refused")
-        if "cursor-chain-v2" in entries:
-            _directory(folder / "cursor-chain-v2", self.uid)
+        for name in ("cursor-chain-v2", "cursor-chain-v2.next",
+                     "cursor-chain-v2.old"):
+            if name in entries:
+                _directory(folder / name, self.uid)
         return folder
 
     def _pretraffic(self, proof: GenerationProof) -> tuple[Path, dict, bytes]:
@@ -305,6 +502,10 @@ class EpochReceipts:
                 "profiles": [list(row) for row in profiles],
                 "ack_authorized": False,
             }
+            # Qualify the original candidate, inodes and saved Config first;
+            # reclaim only old fully ACKed epochs while the SAME original
+            # FD9/P2a lock is held, before launching the real engine.
+            self.prune_completed(queue, protect=workspace.name)
             folder = self._generation(workspace.name, create=True)
             if (folder / "epoch.json").exists() or (folder / "cursor-chain-v2").exists():
                 raise ReceiptRefused("pretraffic_already_consumed")
@@ -358,6 +559,262 @@ class EpochReceipts:
         except (OSError, ValueError, TypeError, QueueSafetyError,
                 DebugWindowRefused, OriginalSourceRefused) as exc:
             raise ReceiptRefused("original_postlaunch_epoch_not_attested") from exc
+
+
+    def _retired_plan(self, proof: GenerationProof, queue: DurableInbox,
+                      tip) -> dict:
+        """One immutable old-generation retirement proof; no other log."""
+        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
+        from auto_detect_fd import FDState, probe_stopped_pending_fd
+        if (queue.segments() or tip.open_folder is not None or
+                tip.open_intent is not None or
+                (queue.root / DEBUG_NEXT).exists() or
+                (queue.root / DEBUG_NEXT).is_symlink()):
+            raise ReceiptRefused("unprocessed_or_interrupted_old_source")
+        snapshot = {}
+        for key, path in (("inbox", queue.inbox),
+                          ("debug", Path(proof.debug_path)),
+                          ("previous", queue.root / DEBUG_OLD)):
+            if key == "previous" and not path.exists() and not path.is_symlink():
+                snapshot[key] = None
+                continue
+            info, data = _read_exact(path, owner_uid=self.uid,
+                                     writer_gid=self.writer_gid)
+            if ((key == "inbox" and data) or
+                    (key != "inbox" and
+                     (b"\x00" in data or (data and not data.endswith(b"\n")))) or
+                    info.st_nlink != 1 or
+                    probe_stopped_pending_fd(
+                        path, info.st_dev, info.st_ino, owner=proof.owner,
+                        writer_gid=queue.writer_gid) is not FDState.DRAINED):
+                raise ReceiptRefused("old_native_source_not_drained")
+            snapshot[key] = [info.st_dev, info.st_ino, len(data),
+                             hashlib.sha256(data).hexdigest()]
+        return {
+            "schema": 1, "kind": "original-stopped-source-retirement",
+            "generation": proof.generation,
+            "owner_sha256": hashlib.sha256(
+                _canonical(_proof_fields(proof))).hexdigest(),
+            "last_ack_sha256": tip.previous_ack_sha256,
+            "cycle": tip.cycle,
+            "next_sequence": tip.next_sequence,
+            "sources": snapshot,
+        }
+
+    def _retired_sources(self, proof: GenerationProof, queue: DurableInbox,
+                         plan: dict, *, repair: bool) -> bool:
+        """Atomically retire exact STOPPED old inodes without losing live names.
+
+        The original queue lock MUST remain obtainable through every crash:
+        both native producer paths stay present across every hardlink/replace.
+        An immutable epoch retirement plan pins the old dev/inode/SHA before
+        any source change. No copytruncate, signal, parallel Config or owner.
+        """
+        from auto_detect_original_v2_prepare import DEBUG_OLD, DEBUG_NEXT
+        from auto_detect_queue import _stat_regular, MAX_SEGMENT
+        from auto_detect_debug_window import MAX_DEBUG
+
+        if (not isinstance(plan, dict) or
+                set(plan) != {"schema", "kind", "generation", "owner_sha256",
+                             "last_ack_sha256", "cycle", "next_sequence", "sources"} or
+                plan["schema"] != 1 or
+                plan["kind"] != "original-stopped-source-retirement" or
+                plan["generation"] != proof.generation or
+                plan["owner_sha256"] != hashlib.sha256(
+                    _canonical(_proof_fields(proof))).hexdigest() or
+                not isinstance(plan["sources"], dict) or
+                set(plan["sources"]) != {"inbox", "debug", "previous"}):
+            raise ReceiptRefused("unqualified_old_retirement_plan")
+        folder = self._generation(proof.generation, create=False)
+        if (queue.segments() or
+                (queue.root / DEBUG_NEXT).exists() or
+                (queue.root / DEBUG_NEXT).is_symlink()):
+            raise ReceiptRefused("foreign_pending_during_old_retirement")
+        mode = 0o660 if self.writer_gid is not None else 0o600
+        gid = self.writer_gid if self.writer_gid is not None else self.uid
+
+        def exact_old(path: Path, expected: list, limit: int) -> os.stat_result:
+            """Pinned nofollow snapshot allows nlink=2 ONLY during torn cut."""
+            named = _stat_regular(path, self.uid, max_size=limit,
+                                  writer_gid=self.writer_gid)
+            if named.st_nlink not in (1, 2):
+                raise ReceiptRefused("foreign_retired_source_links")
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                opened = os.fstat(fd)
+                data = os.read(fd, limit + 1)
+                after = os.fstat(fd)
+            finally:
+                os.close(fd)
+            final = path.lstat()
+            identity = lambda st: (st.st_dev, st.st_ino, st.st_size,
+                                   st.st_mtime_ns, st.st_nlink,
+                                   stat.S_IMODE(st.st_mode))
+            if (identity(named) != identity(opened) or
+                    identity(opened) != identity(after) or
+                    identity(after) != identity(final) or
+                    len(data) != named.st_size or
+                    [named.st_dev, named.st_ino, len(data),
+                     hashlib.sha256(data).hexdigest()] != expected):
+                raise ReceiptRefused("retired_original_source_changed")
+            return named
+
+        def fresh_empty(path: Path) -> os.stat_result:
+            info, data = _read_exact(path, owner_uid=self.uid,
+                                     writer_gid=self.writer_gid)
+            if (data or info.st_nlink != 1 or
+                    stat.S_IMODE(info.st_mode) != mode):
+                raise ReceiptRefused("untrusted_fresh_original_producer")
+            return info
+
+        for key, (live, archived) in {
+            "inbox": (queue.inbox, folder / "retired-inbox.txt"),
+            "debug": (Path(proof.debug_path), folder / "retired-debug.log"),
+            "previous": (queue.root / DEBUG_OLD,
+                         folder / "retired-debug-previous.log"),
+        }.items():
+            expected = plan["sources"][key]
+            archive_exists = archived.exists() or archived.is_symlink()
+            live_exists = live.exists() or live.is_symlink()
+            if expected is None:
+                if key != "previous" or live_exists or archive_exists:
+                    raise ReceiptRefused("unexpected_old_debug_archive")
+                continue
+            if (not isinstance(expected, list) or len(expected) != 4 or
+                    any(type(x) is not int or x < 0 for x in expected[:3]) or
+                    expected[1] <= 0 or not isinstance(expected[3], str) or
+                    not HEX64.fullmatch(expected[3])):
+                raise ReceiptRefused("invalid_old_source_identity")
+            limit = MAX_SEGMENT if key == "inbox" else MAX_DEBUG
+            if key == "previous":
+                # An old diagnostic archive is not a live producer path.
+                # Its rename is safe to resume after a crash.
+                if live_exists and archive_exists:
+                    raise ReceiptRefused("duplicate_previous_debug_archive")
+                if not archive_exists:
+                    if not repair:
+                        return False
+                    old = exact_old(live, expected, limit)
+                    if old.st_nlink != 1 or old.st_dev != folder.stat().st_dev:
+                        raise ReceiptRefused("old_previous_archive_not_owned")
+                    os.rename(live, archived)
+                    _sync(folder)
+                    _sync(queue.root)
+                if exact_old(archived, expected, limit).st_nlink != 1:
+                    raise ReceiptRefused("previous_debug_retired_with_open_alias")
+                continue
+
+            # Raw and native debug must NEVER disappear from queue.root,
+            # including after a power loss. A prepared empty replacement
+            # lives in the SAME producer directory, never in the epoch.
+            if not live_exists:
+                raise ReceiptRefused("old_live_source_missing")
+            temp = queue.root / (".original-retire-" + key + "-ready")
+            temp_exists = temp.exists() or temp.is_symlink()
+            if not archive_exists:
+                if not repair:
+                    return False
+                old = exact_old(live, expected, limit)
+                if (old.st_nlink != 1 or old.st_dev != folder.stat().st_dev):
+                    raise ReceiptRefused("old_live_inode_not_archive_safe")
+                if not temp_exists:
+                    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                 os.O_NOFOLLOW, 0o600)
+                    try:
+                        os.fchown(fd, self.uid, gid)
+                        os.fchmod(fd, mode)
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
+                    _sync(queue.root)
+                prepared = fresh_empty(temp)
+                if prepared.st_dev != old.st_dev:
+                    raise ReceiptRefused("replacement_not_same_filesystem")
+                os.link(live, archived, follow_symlinks=False)
+                _sync(folder)
+                archive_exists = True
+
+            old = exact_old(archived, expected, limit)
+            current = _stat_regular(live, self.uid, max_size=limit,
+                                    writer_gid=self.writer_gid)
+            if (current.st_dev, current.st_ino) == (old.st_dev, old.st_ino):
+                # Crash after hardlink/fsync, before atomic replace. Both
+                # names point at the EXACT original bytes (nlink=2). Do
+                # not unlink either one until the fresh inode is installed.
+                if (not repair):
+                    return False
+                if current.st_nlink != 2 or old.st_nlink != 2:
+                    raise ReceiptRefused("torn_original_archive_links_unsafe")
+                exact_old(live, expected, limit)
+                if not (temp.exists() and not temp.is_symlink()):
+                    raise ReceiptRefused("missing_prepared_original_replacement")
+                prepared = fresh_empty(temp)
+                if prepared.st_dev != old.st_dev:
+                    raise ReceiptRefused("different_original_replacement_device")
+                os.replace(temp, live)
+                _sync(queue.root)
+                old = exact_old(archived, expected, limit)
+            if old.st_nlink != 1:
+                raise ReceiptRefused("retired_original_still_has_alias")
+            new = fresh_empty(live)
+            if (new.st_dev != old.st_dev or new.st_ino == old.st_ino or
+                    temp.exists() or temp.is_symlink()):
+                raise ReceiptRefused("retired_original_replacement_not_complete")
+        return True
+
+    def retire_stopped(self, proof: GenerationProof, queue: DurableInbox, *,
+                       attest=None) -> bool:
+        """Finish the original ACKed source lifetime before the NEXT ID.
+
+        Required by explicit Stop/Boot only after engine and supervisor exit.
+        One original epoch receipt is written BEFORE retiring any pathname.
+        """
+        from auto_detect_cursor_chain import CursorChain
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not callable(attest) or attest() != proof):
+            raise ReceiptRefused("stopped_original_fd9_queue_required")
+        folder, _ = self._epoch(proof)
+        tip = CursorChain(self, queue).tip(proof)
+        if (tip.open_intent is not None or queue.segments()):
+            raise ReceiptRefused("unacknowledged_old_generation")
+        plan_path = folder / "retired.json"
+        if plan_path.exists() or plan_path.is_symlink():
+            plan = json.loads(_read(plan_path, self.uid))
+            if (plan["last_ack_sha256"] != tip.previous_ack_sha256 or
+                    plan["cycle"] != tip.cycle or
+                    plan["next_sequence"] != tip.next_sequence):
+                raise ReceiptRefused("old_source_retirement_cursor_changed")
+        else:
+            plan = self._retired_plan(proof, queue, tip)
+            if attest() != proof or queue.segments():
+                raise ReceiptRefused("old_source_changed_before_retirement")
+            _write_once(folder, "retired.json", _canonical(plan), self.uid)
+        if attest() != proof:
+            raise ReceiptRefused("stopped_owner_changed_after_retirement_plan")
+        if not self._retired_sources(proof, queue, plan, repair=True):
+            raise ReceiptRefused("original_retirement_not_complete")
+        if attest() != proof or not self._retired_sources(
+                proof, queue, plan, repair=False):
+            raise ReceiptRefused("retired_source_not_attested")
+        return True
+
+    def verify_retired(self, proof: GenerationProof, queue: DurableInbox) -> bool:
+        """Read-only verification; never an authority to start the old PID."""
+        from auto_detect_cursor_chain import CursorChain
+        if not isinstance(queue, DurableInbox) or not queue._held:
+            raise ReceiptRefused("original_retirement_queue_required")
+        folder, _ = self._epoch(proof)
+        tip = CursorChain(self, queue).tip(proof)
+        plan_path = folder / "retired.json"
+        if not (plan_path.exists() and not plan_path.is_symlink()):
+            return False
+        plan = json.loads(_read(plan_path, self.uid))
+        if (plan.get("last_ack_sha256") != tip.previous_ack_sha256 or
+                plan.get("next_sequence") != tip.next_sequence or
+                plan.get("cycle") != tip.cycle):
+            raise ReceiptRefused("retired_old_ack_not_final")
+        return self._retired_sources(proof, queue, plan, repair=False)
 
     def _epoch(self, proof: GenerationProof) -> tuple[Path, dict]:
         expected = _proof_fields(proof)

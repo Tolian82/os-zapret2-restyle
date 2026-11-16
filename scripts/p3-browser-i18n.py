@@ -3,7 +3,8 @@
 
 Tests the actual server-selected root user profile locale, native Strategies
 and Voice forms, popup + F5 Full Help source, unsaved editing, reload and one
-read-only Voice invalid-IPSET validation. Never clicks Apply or Save Draft.
+read-only Voice invalid-IPSET validation. No shared Apply or Save Draft;
+explicit disposable-only P4 fixture separately exercises final HOSTLIST Save.
 The owner appliance A12-A16 acceptance remains a separate gate.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ ORIGIN = "https://127.0.0.1:18443"
 SERVICES = ("telegram", "discord", "x", "sip", "custom")
 FIELDS_GENERAL = (
     "zapret.general.waninterface",
+    "zapret.general.autorestart",
     "zapret.general.divertport",
     "zapret.strategy.trafficargs",
     "zapret.strategy.extraargs",
@@ -258,6 +260,245 @@ def check_resource_help_cache(page, mode: str) -> str:
     return status
 
 
+def check_p4_native_gui(page, mode: str) -> str:
+    """Actual installed Strategies form: native Advanced + final-file editor.
+
+    Read-only Chromium: no form Apply, Auto Hostlist Save, engine or IPFW.
+    The saved-value/concurrency and timed-restart write paths have separate
+    acceptance boundaries; this check does not pretend to exercise them.
+    """
+    form_id = "frm_GeneralSettings"
+    selection = control(page, "zapret.general.autorestart")
+    toggle = native_form_toggle(page, form_id, "show_advanced")
+    row = page.locator("#zapretAutoRestartInline")
+    row.wait_for(state="attached", timeout=12000)
+    need(row.evaluate(
+        "(el) => el.closest('tr') === "
+        "document.getElementById('zapret.general.enabled').closest('tr')"),
+        "P4_RESTART_NOT_INLINE_RIGHT_OF_ENABLED")
+    expected_label = "Автоперезагрузка" if mode == "ru" else "Auto Restart"
+    need(row.locator("label").inner_text().strip() == expected_label,
+         "P4_RESTART_LABEL_WRONG_" + mode)
+    options = selection.evaluate(
+        "s => Array.from(s.options).map(o => [o.value, o.textContent.trim()])")
+    wanted = (
+        [("off", "Выключено"), ("hourly", "Раз в час"),
+         ("daily", "Раз в день"), ("weekly", "Раз в неделю"),
+         ("monthly", "Раз в месяц")]
+        if mode == "ru" else
+        [("off", "Off"), ("hourly", "Every hour"),
+         ("daily", "Every day"), ("weekly", "Every week"),
+         ("monthly", "Every month")]
+    )
+    need(options == [list(pair) for pair in wanted],
+         "P4_RESTART_CHOICES_OR_LOCALE_WRONG_" + mode)
+    saved = selection.input_value()
+    need(saved == "off", "P4_CLEAN_INSTALL_RESTART_NOT_OFF")
+    if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
+        toggle.click()
+    row.wait_for(state="hidden", timeout=12000)
+    need(not row.locator("label").is_visible(),
+         "P4_RESTART_LABEL_VISIBLE_WITH_ADVANCED_OFF")
+    # Native form initialization and its Advanced event handler own the
+    # state change; verify that real advanced fields opened before our row.
+    page.wait_for_timeout(250)
+    toggle.click()
+    page.locator('[id="help_for_zapret.strategy.extraargs"]').wait_for(
+        state="visible", timeout=12000)
+    try:
+        row.wait_for(state="visible", timeout=12000)
+    except Exception as exc:
+        # Non-sensitive visibility evidence only: no domains, values, cookies,
+        # settings, or Config content from the disposable guest.
+        state = page.evaluate("""() => {
+            const el = document.getElementById('zapretAutoRestartInline');
+            const icon = document.getElementById('show_advanced_frm_GeneralSettings');
+            const native = document.getElementById('row_zapret.strategy.extraargs');
+            const label = el?.querySelector('label');
+            const parent = el?.closest('tr');
+            const td = el?.closest('td');
+            return {
+                inline_style: el?.style.display || '',
+                inline_computed: el ? getComputedStyle(el).display : '',
+                label_visible: !!label && !!label.getClientRects().length,
+                td_display: td ? getComputedStyle(td).display : '',
+                parent_display: parent ? getComputedStyle(parent).display : '',
+                native_display: native ? getComputedStyle(native).display : '',
+                native_visible: !!native && !!native.getClientRects().length,
+                icon_on: !!icon?.classList.contains('fa-toggle-on'),
+                icon_count: document.querySelectorAll(
+                    '[id="show_advanced_frm_GeneralSettings"]').length
+            };
+        }""")
+        raise Refusal("P4_RESTART_NATIVE_ADVANCED_VISIBLE_BUT_INLINE_HIDDEN:" +
+                      json.dumps(state, sort_keys=True)) from exc
+    need(selection.input_value() == saved,
+         "P4_SHOW_ADVANCED_RESET_RESTART")
+    selection.select_option(value="hourly")
+    toggle.click()
+    row.wait_for(state="hidden", timeout=12000)
+    need(selection.input_value() == "hourly",
+         "P4_HIDE_ADVANCED_RESET_UNSAVED_RESTART")
+    toggle.click()
+    page.locator('[id="help_for_zapret.strategy.extraargs"]').wait_for(
+        state="visible", timeout=12000)
+    row.wait_for(state="visible", timeout=12000)
+    need(selection.input_value() == "hourly",
+         "P4_RESHOW_ADVANCED_LOST_RESTART")
+    selection.select_option(value=saved)
+
+    editor_row = page.locator("#zapretAutoHostlistRow")
+    editor_row.wait_for(state="attached", timeout=12000)
+    after_user = control(page, "zapret.hostlist.userdomains").locator(
+        "xpath=ancestor::tr[1]/following-sibling::tr[1]")
+    need(after_user.get_attribute("id") == "zapretAutoHostlistRow",
+         "P4_AUTO_HOSTLIST_NOT_AFTER_USER_DOMAINS")
+    need(editor_row.locator("label").inner_text().strip() ==
+         ("Найденные домены" if mode == "ru" else "Auto Hostlist"),
+         "P4_AUTO_HOSTLIST_LABEL_WRONG_" + mode)
+    need(editor_row.locator("button#zapretAutoHostlistSave").count() == 1 and
+         editor_row.locator("button#zapretAutoHostlistReload").count() == 1,
+         "P4_AUTO_HOSTLIST_ACTIONS_MISSING")
+    # P3 installs only the .pkg, not the separate upstream runtime.
+    # Refuse on absent/unsafe native storage; do not seed directories, save
+    # settings, or claim an unexecuted editor/save scenario has passed.
+    states = (
+        ("Файл отсутствует", "Список пуст", "Список загружен",
+         "Невозможно прочитать список. Сохранение недоступно.",
+         "Ошибка чтения списка. Сохранение недоступно.")
+        if mode == "ru" else
+        ("File missing", "List is empty", "List loaded",
+         "Cannot read list. Saving is unavailable.",
+         "List read failed. Saving is unavailable.")
+    )
+    page.wait_for_function(
+        "allowed => allowed.includes(document.getElementById("
+        "'zapretAutoHostlistState')?.textContent?.trim())",
+        arg=states, timeout=45000)
+    status = page.locator("#zapretAutoHostlistState").inner_text().strip()
+    if status in states[3:]:
+        editor = page.locator("#zapretAutoHostlistField")
+        need(not editor.is_enabled() and
+             not editor_row.locator("#zapretAutoHostlistSave").is_enabled() and
+             page.locator("#zapretAutoHostlistState").evaluate(
+                 "el => el.classList.contains('text-danger')"),
+             "P4_UNAVAILABLE_EDITOR_DID_NOT_FAIL_CLOSED_" + mode)
+        f5_and_wait(page, "/api/zapret/settings/get")
+        page.wait_for_function(
+            "allowed => allowed.includes(document.getElementById("
+            "'zapretAutoHostlistState')?.textContent?.trim())",
+            arg=states[3:], timeout=45000)
+        need(not page.locator("#zapretAutoHostlistField").is_enabled() and
+             control(page, "zapret.general.autorestart").input_value() == saved,
+             "P4_UNAVAILABLE_EDITOR_F5_CHANGED_STATE")
+        return "unavailable-package-only"
+    page.wait_for_function(
+        "() => { const e = document.getElementById('zapretAutoHostlistField');"
+        " return !!e && !e.disabled; }", timeout=45000)
+    need(editor_row.locator("#zapretAutoHostlistSave").is_enabled(),
+         "P4_AUTO_HOSTLIST_NOT_READABLE")
+    state = page.locator("#zapretAutoHostlistState").inner_text().strip()
+    allowed = (
+        ("Файл отсутствует", "Список пуст", "Список загружен")
+        if mode == "ru" else ("File missing", "List is empty", "List loaded")
+    )
+    need(state in allowed, "P4_AUTO_HOSTLIST_STATUS_WRONG_" + mode)
+    editor = page.locator("#zapretAutoHostlistField")
+    current = editor.input_value()
+    editor.fill(current + "\np4-unsaved.example.test\n")
+    need(editor.input_value().endswith("p4-unsaved.example.test\n"),
+         "P4_AUTO_HOSTLIST_EDITOR_NOT_EDITABLE")
+    editor.fill(current)
+    f5_and_wait(page, "/api/zapret/settings/get")
+    page.wait_for_function(
+        "() => { const e = document.getElementById('zapretAutoHostlistField');"
+        " return !!e && !e.disabled; }", timeout=45000)
+    need(page.locator("#zapretAutoHostlistField").input_value() == current and
+         control(page, "zapret.general.autorestart").input_value() == saved,
+         "P4_UNSAVED_EDIT_LEAKED_ACROSS_F5")
+    return "readable-unsaved-edit"
+
+
+def check_p4_actual_browser_save(context, primary) -> bool:
+    """Real two-tab, revisioned GUI Save in an explicitly disposable guest fixture."""
+    if os.environ.get("ZAPRET2_P4_DISPOSABLE_GUI_SAVE") != "1":
+        return False
+    field = primary.locator("#zapretAutoHostlistField")
+    need(field.is_enabled() and field.input_value() == "",
+         "P4_GUI_SAVE_CLEAN_EDITABLE_FIXTURE_REQUIRED")
+    second = context.new_page()
+    wait_native_load(second, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
+    wait_locale(second, "en")
+    second.wait_for_function(
+        "() => !!document.querySelector('#zapretAutoHostlistField') && "
+        "!document.querySelector('#zapretAutoHostlistField').disabled",
+        timeout=45000)
+    stale = second.locator("#zapretAutoHostlistField")
+    need(stale.input_value() == "", "P4_SECOND_TAB_NOT_SAME_INITIAL_REVISION")
+
+    expected = "p4-gui-save.example.com\n!^p4-gui-exclude.example.net\n"
+    field.fill(expected)
+    with primary.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        primary.locator("#zapretAutoHostlistSave").click()
+    result = response.value.json()
+    need(response.value.status == 200 and result.get("result") == "saved" and
+         result.get("content") == expected, "P4_BROWSER_FIRST_SAVE_NOT_COMMITTED")
+    primary.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
+        timeout=15000)
+
+    # The second tab intentionally retained the pre-save revision.
+    stale_text = "p4-stale-save.example.org\n"
+    stale.fill(stale_text)
+    with second.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        second.locator("#zapretAutoHostlistSave").click()
+    refused = response.value.json()
+    need(refused.get("result") == "conflict" and stale.input_value() == stale_text,
+         "P4_BROWSER_STALE_TAB_OVERWROTE_OR_LOST_DRAFT")
+    second.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.includes('List changed since opening')",
+        timeout=15000)
+    need(not second.locator("#zapretAutoHostlistSave").is_enabled(),
+         "P4_BROWSER_STALE_TAB_SAVE_NOT_BLOCKED")
+    with second.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistRead"),
+        timeout=50000):
+        second.locator("#zapretAutoHostlistReload").click()
+    second.wait_for_function(
+        "v => document.querySelector('#zapretAutoHostlistField')?.value === v",
+        arg=expected, timeout=15000)
+
+    # Restore pre-test empty final file through normal native GUI Save.
+    field.fill("")
+    with primary.expect_response(
+        lambda r: r.request.method == "POST" and
+        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
+        timeout=50000) as response:
+        primary.locator("#zapretAutoHostlistSave").click()
+    restored = response.value.json()
+    need(restored.get("result") == "saved" and restored.get("content") == "",
+         "P4_BROWSER_EMPTY_RESTORE_NOT_COMMITTED")
+    primary.wait_for_function(
+        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
+        timeout=15000)
+    f5_and_wait(primary, "/api/zapret/settings/get")
+    primary.wait_for_function(
+        "() => !!document.querySelector('#zapretAutoHostlistField') && "
+        "!document.querySelector('#zapretAutoHostlistField').disabled",
+        timeout=45000)
+    need(primary.locator("#zapretAutoHostlistField").input_value() == "",
+         "P4_BROWSER_RESTORED_FINAL_LIST_CHANGED_AFTER_F5")
+    second.close()
+    return True
+
+
 def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
@@ -283,6 +524,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     else:
         need(all("Автоопределение" not in x["text"] for x in options),
              "EN_TARGET_MODE_USES_RU")
+    p4_editor_status = check_p4_native_gui(page, mode)
     initial = value_snapshot(page, FIELDS_GENERAL)
     need("zapret.hostlist.mode" in initial, "TARGET_MODE_SNAPSHOT_MISSING")
     field = control(page, "zapret.hostlist.userdomains")
@@ -331,7 +573,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
         inventory_page.close()
     need(value_snapshot(page, FIELDS_GENERAL) == initial,
          "P4B_RESOURCE_HELP_CHANGED_SAVED_VALUES")
-    return initial, cache_state
+    return initial, cache_state, p4_editor_status
 
 
 def check_lab_guidance(page, mode: str) -> bool:
@@ -498,7 +740,8 @@ def browser_run(mode: str) -> None:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
             login(page)
-            strategies, cache_state = check_strategies(page, mode)
+            strategies, cache_state, p4_editor_status = check_strategies(page, mode)
+            p4_browser_save_verified = check_p4_actual_browser_save(context, page) if mode == "en" else False
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -526,6 +769,10 @@ def browser_run(mode: str) -> None:
         "readonly_voice_error_checked": validated,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
+        "p4_native_advanced_and_auto_hostlist_readonly_checked": True,
+        "p4_native_hostlist_editor_status": p4_editor_status,
+        "p4_native_hostlist_save_verified": False,
+        "p4_browser_save_and_conflict_verified": p4_browser_save_verified,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,

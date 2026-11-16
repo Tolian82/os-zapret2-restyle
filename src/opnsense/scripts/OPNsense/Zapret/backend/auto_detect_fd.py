@@ -93,17 +93,19 @@ def _all_rows(output: str, device: int, inode: int, *,
         busy = True
     return FDState.BUSY if busy else FDState.DRAINED
 
-def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
+def _probe_original_inode(segment: Path, device_id: int, inode: int, *,
                      owner: OwnerToken, runner=subprocess.run,
                      platform: str | None = None,
-                     writer_gid: int | None = None) -> FDState:
-    """Attest current P2c process AND every open original raw inode FD.
+                     writer_gid: int | None = None,
+                     attest_owner=None) -> FDState:
+    """Verify exact pending inode and ALL global FreeBSD open descriptors.
 
-    A currently running owner with no FD is insufficient: a historical
-    engine/child may still append to the same hardlink. Kernel-wide -m
-    fstat and exact protected inode/owner snapshots must all be stable.
+    Running and stopped lifecycle owners supply separate, strictly defined
+    predicates; neither can skip the kernel-wide all-PID fstat scan.
     Never call the P2a ACK directly: original Config/v2 checkpoints rule.
     """
+    if not callable(attest_owner):
+        return FDState.UNKNOWN
     if platform is None:
         platform = sys.platform
     if not platform.startswith("freebsd") or os.geteuid() != 0:
@@ -132,7 +134,7 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
               before.st_gid != writer_gid or
               stat.S_IMODE(before.st_mode) != 0o660):
             return FDState.UNKNOWN
-        if not _owner_snapshot(owner, runner):
+        if not attest_owner():
             return FDState.UNKNOWN
         # -m includes memory maps; -n produces a native hex dev_t (0x...).
         # Crucially NO -p filter: an older engine/child with a retained FD
@@ -141,7 +143,7 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
                             runner)
         state = _all_rows(evidence, before.st_dev, inode,
                           inspector_pid=os.getpid(), inspector_fd=fd)
-        if state == FDState.UNKNOWN or not _owner_snapshot(owner, runner):
+        if state == FDState.UNKNOWN or not attest_owner():
             return FDState.UNKNOWN
         after = os.fstat(fd)
         pathname = path.lstat()
@@ -153,11 +155,43 @@ def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
                 before.st_dev, before.st_ino, 1):
             return FDState.UNKNOWN
         return state
-    except (OSError, ValueError, subprocess.SubprocessError, UnicodeError):
+    except (OSError, ValueError, RuntimeError, TypeError,
+            subprocess.SubprocessError, UnicodeError):
         return FDState.UNKNOWN
     finally:
         if fd is not None:
             os.close(fd)
+
+
+def probe_pending_fd(segment: Path, device_id: int, inode: int, *,
+                     owner: OwnerToken, runner=subprocess.run,
+                     platform: str | None = None,
+                     writer_gid: int | None = None) -> FDState:
+    """Normal minute: the true currently RUNNING owner must still exist."""
+    return _probe_original_inode(
+        segment, device_id, inode, owner=owner, runner=runner,
+        platform=platform, writer_gid=writer_gid,
+        attest_owner=lambda: _owner_snapshot(owner, runner))
+
+
+def probe_stopped_pending_fd(segment: Path, device_id: int, inode: int, *,
+                             owner: OwnerToken, runner=subprocess.run,
+                             platform: str | None = None,
+                             writer_gid: int | None = None) -> FDState:
+    """Post-Stop ONLY: original FD9, sealed OLD epoch and zero live engines.
+
+    No retired raw source can be freed merely because its original PID died.
+    The exact stopped owner is re-attested around the same global inode scan.
+    No extra lock, daemon, port, list writer or FD9 bypass exists here.
+    """
+    def old_owner_still_quiescent() -> bool:
+        from auto_detect_owner import attest_stopped_generation
+        return attest_stopped_generation().owner == owner
+
+    return _probe_original_inode(
+        segment, device_id, inode, owner=owner, runner=runner,
+        platform=platform, writer_gid=writer_gid,
+        attest_owner=old_owner_still_quiescent)
 
 
 def main() -> int:

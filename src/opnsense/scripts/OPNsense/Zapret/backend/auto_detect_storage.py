@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""#1052 P2g: protected native raw/debug producer layout, NOT an active collector.
+"""#1052 P2: protected native raw/debug producer layout, not a collector.
 
-Only a future original-FD9 caller may invoke prepare_native(). No CLI path,
-Config mutation, engine or worker is implemented here. A named unprivileged
-engine may open pre-existing raw/debug files but cannot list/create/unlink
-entries or access root-owned pending. Raw content remains untrusted until the
-original generation/process/debug/FD proof is qualified.
+Only the existing original shared-FD9 launch path invokes prepare_native()
+before the ONE native engine starts; the existing post-drop worker verifies
+its exact original inodes. The unprivileged engine may open the two files
+but may not create/unlink root-owned queue entries or access pending.
+No reset, Config mutation, alternate daemon or second worker is permitted.
 """
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ def _prepare(root: Path, *, uid: int, engine_gid: int) -> None:
 
 
 def prepare_native() -> None:
-    """Reserved for the future original-FD9 owner: not registered as a CLI."""
+    """Original-FD9 launcher-only primitive, never a standalone CLI."""
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise StorageRefused("native_root_freebsd_only")
     # NEVER use the generic nobody account as a separate process owner.

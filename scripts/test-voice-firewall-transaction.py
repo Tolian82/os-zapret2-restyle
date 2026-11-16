@@ -61,7 +61,7 @@ class FakeIPFW:
             raise OSError("rule number collision")
         self.rules[number] = deepcopy(argv)
 
-def fixture(*services, tcp="443", udp="596-599"):
+def fixture(*services, tcp="443", udp="596-599", auto_rst=False):
     data = {
         "strategy_wan":"WAN", "voice_wan":"",
         "services":{s:{"enabled":False,"args":"","ips":""} for s in compiler.SERVICES}
@@ -70,9 +70,39 @@ def fixture(*services, tcp="443", udp="596-599"):
         data["services"][name] = {"enabled":True,"args":ARGS,"ips":ips}
     _, profile = compiler.compile_candidate(data, MANAGED)
     plan = capture.compile_capture_plan(profile, 19000, 19010, 989, physical_wan="vtnet1")
-    return transaction.prepare_desired(plan, tcp, udp)
+    return transaction.prepare_desired(
+        plan, tcp, udp, auto_rst_tcp=tcp if auto_rst else None)
 
 class VoiceFirewallTransactionTests(unittest.TestCase):
+    def test_only_native_auto_adds_owned_inbound_rst_without_touching_ordinary(self):
+        prior = fixture()
+        active = fixture(auto_rst=True)
+        number = max(active["rules"])
+        self.assertEqual(number, max(prior["rules"]) + 1)
+        self.assertEqual(active["rules"][number], [
+            "divert", "989", "tcp", "from", "any", "443", "to",
+            "any", "tcpflags", "rst", "in", "not", "diverted",
+            "recv", "vtnet1"])
+        for key in prior["rules"]:
+            self.assertEqual(prior["rules"][key], active["rules"][key])
+        self.assertNotIn(number, prior["rules"])
+        live = FakeIPFW(prior["rules"], prior["tables"])
+        for before, after in ((prior, active), (active, prior)):
+            shared_firewall_action(live, "install", before, after)
+            shared_firewall_action(live, "verify-staged", before, after)
+            shared_firewall_action(live, "commit", before, after)
+            shared_firewall_action(live, "verify", before, after)
+        self.assertEqual(live.rules, prior["rules"])
+        self.assertEqual(live.tables, prior["tables"])
+        voice = fixture(("telegram", "91.108.13.10"), auto_rst=True)
+        self.assertEqual(voice["rules"][max(voice["rules"])][9:11], ["rst", "in"])
+        with self.assertRaisesRegex(transaction.VoiceFirewallError, "scope"):
+            transaction.prepare_desired(
+                {"schema": 1, "rule_base": 19000, "rule_max": 19010,
+                 "ordinary_rule_base": 19000, "divert_port": 989,
+                 "wan": "vtnet1", "voice": []},
+                "443", "", auto_rst_tcp="80")
+
     def test_zero_ordinary_rules_preserve_voice_and_foreign_ipfw(self):
         # The shared manifest, not an ordinary wildcard rule, owns Voice-only.
         voice = fixture(("telegram", "91.108.13.10"), tcp="", udp="")

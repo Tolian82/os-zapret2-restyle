@@ -120,6 +120,23 @@ def checked_rule_argv(argv: Sequence[str]) -> list[str]:
         not isinstance(token, str) for token in argv
     ):
         raise IPFWAdapterError("unexpected owned rule structure")
+    # One AND ONLY one additional inbound native Auto-detect rule form:
+    # TCP RST replies from an already-verified captured destination port.
+    # It is manifest-owned and rollbacks use the same ordinary transaction.
+    if (len(argv) == 15 and argv[:5] == [
+            "divert", argv[1], "tcp", "from", "any"] and
+            argv[6:11] == ["to", "any", "tcpflags", "rst", "in"] and
+            argv[11:14] == ["not", "diverted", "recv"] and
+            argv[1].isdecimal() and 1 <= int(argv[1]) <= 65535 and
+            INTERFACE.fullmatch(argv[14]) and
+            NUMERIC_PORTS.fullmatch(argv[5])):
+        for token in argv[5].split(","):
+            terms = token.split("-")
+            if not 1 <= len(terms) <= 2 or any(
+                    not part.isdecimal() or not 1 <= int(part) <= 65535
+                    for part in terms) or int(terms[0]) > int(terms[-1]):
+                raise IPFWAdapterError("invalid inbound auto TCP port selector")
+        return list(argv)
     if argv[:6] != ["divert", argv[1], argv[2], "from", "any", "to"] or \
        not argv[1].isdecimal() or not 1 <= int(argv[1]) <= 65535 or \
        argv[2] not in ("udp", "tcp"):
@@ -544,7 +561,37 @@ def shared_release_manifest(release: Path) -> dict:
     _verify_shared_voice_engine(release, plan, read)
     tcp = read("tcp-ports.txt").decode("utf-8").strip()
     udp = read("udp-ports.txt").decode("utf-8").strip()
-    manifest = prepare_desired(plan.get("capture"), tcp, udp)
+    # Never derive feedback capture from a GUI toggle or a bare native
+    # option. The exact sealed generation map must attest the original
+    # trailing no-action observer and SAME immutable engine argv.
+    from auto_detect_owner import _valid_map, MAP_NAME, GenerationRefused
+    raw_args = read("dvtws.args")
+    generation_file = release / MAP_NAME
+    observer_tcp = None
+    if generation_file.exists() or generation_file.is_symlink():
+        raw_map = read(MAP_NAME)
+        try:
+            metadata = json.loads(raw_map)
+            if not isinstance(metadata, dict):
+                raise GenerationRefused("invalid_autodetect_map_for_firewall")
+            owner = {"id": metadata.get("generation"),
+                     "candidate": metadata.get("owner_candidate_sha256")}
+            _valid_map(raw_map, owner, raw_args)
+            from global_exclusions import segments
+            observer = segments(raw_args.decode("utf-8"))[-1]
+            selectors = [item.partition("=")[2] for item in observer
+                         if item.startswith("--filter-tcp=")]
+            if selectors != [tcp] or "--filter-l7=http,tls" not in observer or not tcp:
+                raise GenerationRefused("auto_TCP_scope_not_sealed_in_manifest")
+            observer_tcp = tcp
+        except (GenerationRefused, ValueError, TypeError, UnicodeError,
+                IndexError) as error:
+            raise IPFWAdapterError("unqualified native Auto RST firewall scope") from error
+    elif any(token.startswith("--hostlist-auto=")
+             for token in raw_args.decode("utf-8").split()):
+        raise IPFWAdapterError("native auto capture lacks sealed generation")
+    manifest = prepare_desired(plan.get("capture"), tcp, udp,
+                               auto_rst_tcp=observer_tcp)
     source = plan.get("source")
     if not isinstance(source, dict):
         raise IPFWAdapterError("missing shared Voice staging evidence")
