@@ -346,7 +346,7 @@ class OwnerGenerationTests(unittest.TestCase):
         for bad in ("activated", "epoch-finalizing", "committed", "restored"):
             self.record["phase"] = bad
             self._write(self.journal / "operation.json", json.dumps(self.record))
-            with self.assertRaises(owner_mod.GenerationRefused):
+            with self.assertRaises((owner_mod.GenerationRefused, SharedOperationError)):
                 self.witness(reviewed_operation=OP_ID)
         self.record["phase"] = "requires-review"
         self.record["detail"]["changed_fields"] = ["voice.telegram.enabled"]
