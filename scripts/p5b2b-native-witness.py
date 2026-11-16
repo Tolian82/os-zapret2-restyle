@@ -316,7 +316,8 @@ def native_installed_auto_handoff():
                                          if pending.is_dir() and not pending.is_symlink()
                                          else -1)
             epochs_root = Path('/var/db/zapret2/auto-detect-epochs')
-            gen = locals().get('second_gen')
+            # The second-generation ID is bound in the outer installed journey.
+            gen = second_gen
             if gen is not None:
                 chain = epochs_root / gen / 'cursor-chain'
                 status['cursor_slots'] = (len(list(chain.iterdir()))
