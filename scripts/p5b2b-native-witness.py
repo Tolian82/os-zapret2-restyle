@@ -561,9 +561,49 @@ def native_installed_auto_handoff():
             minute('idle')
             need(current_identity() == (first_gen, first_pid, first_birth),
                  'minute-restarted-installed-original-engine')
+        # Read only the exact saved native preference under the original
+        # lifecycle FD9. Do not risk executing a scheduled restart if the
+        # disposable saved model is unexpectedly opted in.
+        hold_fd9()
+        try:
+            preference = subprocess.run([
+                '/usr/local/bin/php', str(SERVICE.parent / 'shared_apply_config.php'),
+                'auto-restart',
+            ], capture_output=True, timeout=25, pass_fds=(9,), check=False)
+        finally:
+            os.close(9)
+        raw_preference = preference.stdout.strip()
+        pref_label = (raw_preference.decode('ascii')
+                      if raw_preference in {b'0:off', b'1:off',
+                                            b'1:hourly', b'1:daily',
+                                            b'1:weekly', b'1:monthly'}
+                      else 'unqualified')
+        saved_model = ET.fromstring(CONFIG.read_bytes())
+        saved_setting = saved_model.find('./OPNsense/Zapret/general/autorestart')
+        model_label = ('missing' if saved_setting is None else
+                       saved_setting.text if saved_setting.text in {
+                           'off', 'hourly', 'daily', 'weekly', 'monthly'
+                       } else 'unqualified')
+        print('P2_INSTALLED_AUTORESTART_PREF=' + json.dumps({
+            'native_preference_rc': preference.returncode,
+            'native_preference': pref_label,
+            'saved_field': model_label,
+        }, sort_keys=True), flush=True)
+        need(preference.returncode == 0 and pref_label == '1:off',
+             'default-off-native-preference-refused')
         tick = run(cli, 'zapret', 'auto_restart_tick', 'hourly', timeout=80)
-        need(tick.returncode == 0 and
-             b'auto-restart=disabled' in tick.stdout,
+        tick_label = (
+            'disabled' if b'auto-restart=disabled' in tick.stdout else
+            'inactive' if b'auto-restart=inactive' in tick.stdout else
+            'not-due' if b'auto-restart=not-due' in tick.stdout else
+            'stopped' if b'auto-restart=stopped' in tick.stdout else
+            'execute-error' if b'Execute error' in tick.stdout else
+            'other')
+        print('P2_INSTALLED_AUTORESTART_TICK=' + json.dumps({
+            'configctl_rc': tick.returncode, 'receipt': tick_label,
+            'stderr_present': bool(tick.stderr),
+        }, sort_keys=True), flush=True)
+        need(tick.returncode == 0 and tick_label == 'disabled',
              'default-off-auto-restart-not-enforced')
         need(current_identity() == (first_gen, first_pid, first_birth),
              'off-restart-changed-engine')
