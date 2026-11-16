@@ -10,6 +10,7 @@ import platform
 import stat
 import subprocess
 import sys
+import time
 import tempfile
 from unittest.mock import patch
 
@@ -140,8 +141,11 @@ def set_guest_lo0():
     php = '''require_once("script/load_phalcon.php");
 $c=\\OPNsense\\Core\\Config::getInstance();$c->lock();try{
 $m=new \\OPNsense\\Zapret\\Zapret();
+$strategy="--filter-tcp=6545\\n--filter-l7=http\\n<HOSTLIST:youtube>\\n--payload=http_req\\n--lua-desync=multisplit:pos=method+2\\n";
 if(!$m->setNodeByReference("general.enabled","1") ||
  !$m->setNodeByReference("general.waninterface","lo0") ||
+ !$m->setNodeByReference("general.ports","6545") ||
+ !$m->setNodeByReference("strategy.trafficargs",$strategy) ||
  count($m->performValidation(false)) || !$m->serializeToConfig(false,true))
  throw new \\RuntimeException("invalid disposable model");
 $c->save(["description"=>"P5b2b disposable lo0 setup"]);
@@ -791,21 +795,103 @@ try {
              'new-observer-minute-restarted-engine')
         need(hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
              'new-id-boot-mutated-saved-manual-model')
+        # Reuse the already-qualified P0 real FreeBSD loopback HTTP/RST
+        # client against THIS installed service's original IPFW/FD9 owner.
+        # All changes remain disposable-VM-only; no raw/debug forgery.
+        import pwd
+        from auto_detect_storage import RAW_PATH, DEBUG_PATH, ROOT as QUEUE_ROOT, ENGINE_USER
+        from auto_detect_owner import attest_running_generation
+        from auto_detect_cursor_chain import CursorChain
+        from auto_detect_queue import DurableInbox
+        from auto_detect_epoch_receipts import EpochReceipts
+        test_port = 6545
+        testcase = importlib.util.spec_from_file_location(
+            'p5b2b_real_http_client', ROOT / 'scripts/test-p0-native-auto-observer.py')
+        need(testcase is not None and testcase.loader is not None,
+             'native-p0-traffic-client-unavailable')
+        client = importlib.util.module_from_spec(testcase)
+        testcase.loader.exec_module(client)
+        synthetic_host = 'native-observer-p5b2b.example.org'
+        need(RAW_PATH.is_file() and RAW_PATH.read_bytes() == b'',
+             'native-source-not-idle-before-positive')
+        need(client.exchange(synthetic_host, port=test_port, force_rst=True)
+             == client.request(synthetic_host),
+             'native-unknown-http-forwarding-failed')
+        for _ in range(12):
+            if RAW_PATH.read_text().splitlines() == [synthetic_host]:
+                break
+            time.sleep(.25)
+        need(RAW_PATH.read_text().splitlines() == [synthetic_host],
+             'native-unknown-raw-append-not-observed')
+        old_map = json.loads((active / 'auto-detect-generation.json').read_bytes())
+        number = old_map.get('observer_native_number')
+        need(type(number) is int and number > 0,
+             'native-observer-ordinal-unavailable')
+        positive = [line for line in DEBUG_PATH.read_text().splitlines()
+                    if synthetic_host in line and ' : adding to ' in line]
+        need(len(positive) == 1 and
+             f' : profile {number} (' in positive[0] and
+             str(RAW_PATH) in positive[0],
+             'native-profile-debug-source-correlation-missing')
+        minute('processed')
+        need(current_identity() == (second_gen, second_pid, second_birth),
+             'native-positive-minute-restarted-engine')
+        final_hosts = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
+        need(final_hosts.is_file() and not final_hosts.is_symlink() and
+             'example.org' in final_hosts.read_text().splitlines(),
+             'native-real-unknown-destination-not-committed')
+        need(RAW_PATH.read_bytes() == b'',
+             'native-processed-producer-not-rotated')
+        hold_fd9()
+        try:
+            proof = attest_running_generation()
+            need(proof.generation == second_gen, 'positive-ack-owner-changed')
+            gid = pwd.getpwnam(ENGINE_USER).pw_gid
+            queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+            with queue.exclusive():
+                tip = CursorChain(EpochReceipts(owner_uid=0, writer_gid=gid),
+                                  queue).tip(proof)
+                need(tip.next_sequence >= 1 and
+                     tip.open_intent is None and tip.open_folder is None and
+                     not queue.segments(),
+                     'native-positive-physical-ack-not-verified')
+        finally:
+            os.close(9)
+        need(client.exchange(synthetic_host, port=test_port, force_rst=False)
+             == client.request(synthetic_host),
+             'native-known-after-ack-http-forwarding-failed')
+        need(current_identity() == (second_gen, second_pid, second_birth) and
+             hashlib.sha256(CONFIG.read_bytes()).hexdigest() == original_config,
+             'native-positive-minute-changed-engine-or-manual-config')
+        print('P2_INSTALLED_NATIVE_DISCOVERY=' + json.dumps({
+            'result': 'PASS_NATIVE_UNKNOWN_HTTP_CONFIG_P1_PHYSICAL_ACK',
+            'real_loopback_rst': True,
+            'native_observer_profile_debug_correlated': True,
+            'registrable_root_destination': True,
+            'native_physical_ack': True,
+            'pid_birth_unchanged': True,
+            'manual_config_unchanged': True,
+            'owner_appliance': False,
+            'public_internet_dpi': False,
+        }, sort_keys=True), flush=True)
         print('P2_INSTALLED_ORIGINAL_AUTO=' + json.dumps({
             'result': 'PASS_NATIVE_IDLE_MINUTE_STOP_NEW_ID_BOOT',
-            'observed_minute_ticks': 4,
+            'observed_minute_ticks': 5,
             'explicit_stop': True,
             'old_epoch_retired': True,
             'distinct_boot_generation': True,
             'default_auto_restart_off': True,
             'saved_config_unchanged_during_stop_boot': True,
-            'native_discovery_traffic': False,
+            'native_discovery_traffic': True,
             'owner_appliance': False,
         }, sort_keys=True))
     finally:
         if running:
             final = run(cli, 'zapret', 'stop', timeout=150)
-            need(final.returncode == 0, 'installed-auto-final-guest-stop-refused')
+            need(final.returncode == 0 and
+                 (b'Execute error' not in final.stdout) and
+                 (epochs / second_gen / 'retired.json').is_file(),
+                 'installed-auto-final-positive-generation-not-retired')
 
 
 def self_test():
