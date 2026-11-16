@@ -589,6 +589,54 @@ def native_installed_auto_handoff():
             'native_preference': pref_label,
             'saved_field': model_label,
         }, sort_keys=True), flush=True)
+        if preference.returncode != 0:
+            # This is an installed *read-only* exact failure classification:
+            # no Config mutation, no domain/argv leakage, and no tick call.
+            php_probe = r'''require_once('/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php');
+$phase='uid';
+try {
+  if (\\OPNsense\\Zapret\\Native\\SharedApplyLifecycleLock::effectiveUid() !== 0) throw new \\RuntimeException('uid');
+  $phase='fd9';
+  \\OPNsense\\Zapret\\Native\\SharedApplyLifecycleLock::assertHeld();
+  $phase='framework';
+  require_once('script/load_phalcon.php');
+  $phase='config-lock';
+  $c=\\OPNsense\\Core\\Config::getInstance(); $c->lock();
+  try {
+    $phase='model';
+    $m=new \\OPNsense\\Zapret\\Zapret(); $nodes=$m->getNodes();
+    $g=$nodes['general']??null;
+    if (!is_array($g)) throw new \\RuntimeException('invalid-general');
+    $e=$g['enabled']??null;
+    $a=$g['autorestart']??null;
+    $enabled=($e==='1'?'1':($e==='0'?'0':'unqualified'));
+    $auto=($a===null?'missing':($a===''?'empty':
+      (in_array($a,['off','hourly','daily','weekly','monthly'],true)?$a:'unqualified')));
+  } finally { $c->unlock(); }
+  echo 'ok:'.$enabled.':'.$auto;
+} catch (\\Throwable $error) {
+  echo 'refused:'.$phase;
+}'''
+            hold_fd9()
+            try:
+                probe = subprocess.run(['/usr/local/bin/php', '-r', php_probe],
+                                       capture_output=True, timeout=25,
+                                       pass_fds=(9,), check=False)
+            finally:
+                os.close(9)
+            reply = probe.stdout.strip().decode('ascii', errors='replace')
+            allowed = ({'ok:1:' + x for x in
+                        ('missing', 'empty', 'off', 'hourly', 'daily',
+                         'weekly', 'monthly', 'unqualified')} |
+                       {'ok:0:' + x for x in
+                        ('missing', 'empty', 'off', 'hourly', 'daily',
+                         'weekly', 'monthly', 'unqualified')} |
+                       {'refused:' + x for x in
+                        ('uid', 'fd9', 'framework', 'config-lock', 'model')})
+            print('P2_INSTALLED_AUTORESTART_PROBE=' + json.dumps({
+                'rc': probe.returncode,
+                'stage': reply if reply in allowed else 'unqualified',
+            }, sort_keys=True), flush=True)
         need(preference.returncode == 0 and pref_label == '1:off',
              'default-off-native-preference-refused')
         tick = run(cli, 'zapret', 'auto_restart_tick', 'hourly', timeout=80)
