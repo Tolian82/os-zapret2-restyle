@@ -309,21 +309,24 @@ def native_seal_original_epoch(generation: str, candidate: str) -> None:
             queue, workspace=WORK / generation, candidate_sha256=candidate)
 
 
-def native_finish_original_epoch(generation: str) -> None:
+def native_finish_original_epoch(generation: str, *, reviewed: bool = False) -> None:
     from auto_detect_epoch_receipts import HEX32
-    from auto_detect_owner import attest_epoch_finalizing_generation
+    from auto_detect_owner import (attest_epoch_finalizing_generation,
+                                   attest_reviewed_native_generation)
     if not isinstance(generation, str) or not HEX32.fullmatch(generation):
         raise PostDropRefused("invalid_original_epoch_generation")
-    # Same FD9 after Config save, IPFW commit, supervisor and final runtime
-    # proof, but BEFORE terminal committed. A minute worker cannot enter.
-    proof = attest_epoch_finalizing_generation(generation)
+    # The reviewed rescue uses the SAME original queue/pretraffic receipt,
+    # never a new epoch or a different owning generation. It is deliberately
+    # separate from the ordinary first Apply and from the public minute gate.
+    attester = (attest_reviewed_native_generation if reviewed
+                else attest_epoch_finalizing_generation)
+    proof = attester(generation)
     if proof.generation != generation or proof.operation_id != generation:
         raise PostDropRefused("precommit_original_owner_differs")
     queue, receipts = _original_epoch_queue()
     with queue.exclusive():
         receipts.finish_running(
-            proof, queue,
-            attest=lambda: attest_epoch_finalizing_generation(generation))
+            proof, queue, attest=lambda: attester(generation))
 
 
 # P2k8i: the two half-calls are a *single* original-FD9 shell operation.
@@ -398,7 +401,8 @@ def original_fd9_command(args: list[str]) -> int:
     still mandatory before the engine can be connected to IPFW.
     """
     shapes = {"authorize": 2, "prepare": 1, "capture": 1,
-              "restore": 4, "seal-epoch": 3, "finish-epoch": 2}
+              "restore": 4, "seal-epoch": 3, "finish-epoch": 2,
+              "finish-reviewed-epoch": 2}
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
@@ -423,6 +427,9 @@ def original_fd9_command(args: list[str]) -> int:
         elif args[0] == "seal-epoch":
             native_seal_original_epoch(args[1], args[2])
             print("original-fd9-pretraffic=sealed")
+        elif args[0] == "finish-reviewed-epoch":
+            native_finish_original_epoch(args[1], reviewed=True)
+            print("original-fd9-reviewed-epoch=attested")
         else:
             native_finish_original_epoch(args[1])
             print("original-fd9-running-epoch=attested")

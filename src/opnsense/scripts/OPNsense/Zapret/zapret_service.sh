@@ -2349,6 +2349,90 @@ shared_apply_reviewed_legacy_attest_service()
     fi
 }
 
+# Only an owner-invoked recovery of the exact failed native Strategies
+# Target Mode generation. No new lock, Config writer, IPFW mutation or Stop.
+shared_apply_recover_reviewed_native_service()
+{
+    [ "$#" -eq 0 ] || return 64
+    [ "${ZAPRET_OWNER_REVIEW_RECOVERY:-0}" = 1 ] || return 75
+    preflight_shared_apply_journal common-recover-reviewed-native || return 69
+    shared_apply_require_tools || return 69
+    _review_native_line=$("$PYTHON_RUNTIME" \
+        "$BACKEND_DIR/shared_apply_operation.py" review-native) || return 69
+    set -- $_review_native_line
+    [ "$#" -eq 5 ] && [ "$1" = review-native ] &&
+        [ "$3" = strategies ] || return 69
+    _review_native_id="$2"
+    _review_native_base="$4"
+    _review_native_candidate="$5"
+    case "$_review_native_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_review_native_id}" -eq 32 ] || return 69
+    case "$_review_native_base:$_review_native_candidate" in
+        *[!a-f0-9:]*|'') return 69 ;;
+    esac
+    [ "${#_review_native_base}" -eq 64 ] &&
+        [ "${#_review_native_candidate}" -eq 64 ] || return 69
+    # Follow the WAN-first runtime gate, even for a running recovery.
+    wan_first_service require || return $?
+    _review_native_root=$(shared_apply_workspace "$_review_native_id") || return 69
+    [ -d "$_review_native_root/release" ] &&
+        [ ! -L "$_review_native_root/release" ] || return 69
+
+    # Original locked Config snapshot. A pre-save failure cannot be marked
+    # committed just because the child or its supervisor is still alive.
+    shared_apply_bundle_service verify "$_review_native_id" || return 69
+    _review_native_saved=$(shared_apply_native_config saved \
+        "$_review_native_id" strategies) || return 69
+    _review_native_result=$(printf '%s\n' "$_review_native_saved" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 69
+    _review_native_mode=$(printf '%s\n' "$_review_native_saved" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 69
+    _review_native_digest=$(printf '%s\n' "$_review_native_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 69
+    [ "$_review_native_result" = committed ] &&
+    [ "$_review_native_mode" = 1 ] &&
+    [ "$_review_native_digest" = "$_review_native_candidate" ] || return 69
+
+    # Protected exact active copy; committed (never staged) managed IPFW,
+    # same one physical process/monitor. No signal or forceful repair.
+    atomic_verify_tree "$_review_native_root/release" "$ACTIVE_DIR" || return 69
+    apply_runtime_probe "$_review_native_root/release" 1 || return 69
+    firewall_shared_runtime verify - "$ACTIVE_DIR" || return 69
+
+    # Original FD9 -> original P2a queue -> original pretraffic inode proof.
+    # This only publishes the same write-once original epoch.json.
+    _review_native_epoch=$("$PYTHON_RUNTIME" \
+        "$BACKEND_DIR/auto_detect_post_drop.py" \
+        finish-reviewed-epoch "$_review_native_id") || return 70
+    [ "$_review_native_epoch" = original-fd9-reviewed-epoch=attested ] || return 70
+
+    # Repeat Config, sealed runtime and final IPFW before terminal journal.
+    preflight_shared_apply_journal common-recover-reviewed-native || return 70
+    shared_apply_bundle_service verify "$_review_native_id" || return 70
+    _review_native_again=$(shared_apply_native_config saved \
+        "$_review_native_id" strategies) || return 70
+    _review_native_again_result=$(printf '%s\n' "$_review_native_again" |
+        shared_apply_json_field '.result | select(.=="committed")') || return 70
+    _review_native_again_digest=$(printf '%s\n' "$_review_native_again" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 70
+    _review_native_again_mode=$(printf '%s\n' "$_review_native_again" |
+        shared_apply_json_field '.enabled | select(.=="1")') || return 70
+    [ "$_review_native_again_result" = committed ] &&
+    [ "$_review_native_again_digest" = "$_review_native_candidate" ] &&
+    [ "$_review_native_again_mode" = 1 ] || return 70
+    atomic_verify_tree "$_review_native_root/release" "$ACTIVE_DIR" || return 70
+    apply_runtime_probe "$_review_native_root/release" 1 || return 70
+    firewall_shared_runtime verify - "$ACTIVE_DIR" || return 70
+    # The durable writer itself re-attests true child/birth/argv, monitor
+    # and the original epoch receipt, then fsyncs exactly this journal.
+    _review_native_final=$("$PYTHON_RUNTIME" \
+        "$BACKEND_DIR/shared_apply_operation.py" \
+        finish-reviewed-native "$_review_native_id") || return 70
+    [ "$_review_native_final" = reviewed-native-committed ] || return 70
+    [ "$(shared_apply_status_observe_service)" = ready ] || return 70
+    printf 'recovered-reviewed-native-id=%s\n' "$_review_native_id"
+}
+
 shared_apply_recover_reviewed_legacy_service()
 {
     [ "$#" -eq 0 ] || return 64
@@ -2627,6 +2711,9 @@ service_dispatch()
             ;;
         shared-apply-recover-reviewed-legacy)
             shared_apply_recover_reviewed_legacy_service
+            ;;
+        shared-apply-recover-reviewed-native)
+            shared_apply_recover_reviewed_native_service
             ;;
         shared-apply-wan)
             shared_apply_wan_save_service "${2:-}"
@@ -3087,7 +3174,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

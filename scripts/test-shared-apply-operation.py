@@ -22,6 +22,61 @@ class TestJournal(unittest.TestCase):
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
 
+    def test_reviewed_native_only_proved_auto_transition_may_close(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            old = {"id": "a" * 32, "page": "strategies", "base": "e" * 64,
+                   "candidate": "c" * 64, "changed_fields": []}
+            fresh = {"id": "b" * 32, "page": "strategies",
+                     "base": old["candidate"], "candidate": "d" * 64,
+                     "changed_fields": ["hostlist.mode"]}
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, old)
+            for phase in ("prepared", "activating", "activated", "requires-review"):
+                store.advance(phase, fresh)
+            before = store.read()
+            self.assertEqual(store.reviewed_native_detail(), fresh)
+            with self.assertRaises(SharedOperationError):
+                store.advance("committed", fresh)  # generic bypass remains banned
+            for ident, proof in (("f" * 32, lambda: True),
+                                 (fresh["id"], lambda: False),
+                                 (fresh["id"], None)):
+                with self.assertRaises(SharedOperationError):
+                    store.finish_reviewed_native(ident, proof)
+                self.assertEqual(store.read(), before)
+            proof = store.finish_reviewed_native(fresh["id"], lambda: True)
+            self.assertEqual(proof["phase"], "committed")
+            self.assertEqual(committed_owner(proof), fresh)
+            self.assertEqual(proof["previous"], old)
+            with self.assertRaises(SharedOperationError):
+                store.reviewed_native_detail()
+        for kind in ("unrelated-field", "wrong-base", "unchanged",
+                     "wrong-page", "first-install"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                store = SharedApplyOperation(Path(tmp) / "shared-apply")
+                old = {"id": "a" * 32, "page": "strategies", "base": "e" * 64,
+                       "candidate": "c" * 64, "changed_fields": []}
+                fresh = {"id": "b" * 32, "page": "strategies",
+                         "base": old["candidate"], "candidate": "d" * 64,
+                         "changed_fields": ["hostlist.mode"]}
+                if kind != "first-install":
+                    for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                        store.advance(phase, old)
+                if kind == "unrelated-field":
+                    fresh["changed_fields"] = ["hostlist.userdomains"]
+                elif kind == "wrong-base":
+                    fresh["base"] = "f" * 64
+                elif kind == "unchanged":
+                    fresh["candidate"] = fresh["base"]
+                elif kind == "wrong-page":
+                    fresh["page"] = "voice"
+                for phase in ("prepared", "activating", "requires-review"):
+                    store.advance(phase, fresh)
+                before = store.read()
+                with self.assertRaises(SharedOperationError):
+                    store.finish_reviewed_native(fresh["id"], lambda: True)
+                self.assertEqual(store.read(), before)
+
     def test_original_epoch_must_complete_before_terminal_commit(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = SharedApplyOperation(Path(tmp) / "shared-apply")

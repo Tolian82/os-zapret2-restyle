@@ -167,12 +167,13 @@ class OwnerGenerationTests(unittest.TestCase):
         create_seal(self.work, owner=UID)
         self.ps.args = " ".join(self.argv.split())
 
-    def witness(self, *, epoch_finalizing_operation=None):
+    def witness(self, *, epoch_finalizing_operation=None, reviewed_operation=None):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
             epoch_finalizing_operation=epoch_finalizing_operation,
+            reviewed_operation=reviewed_operation,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
                                      "--sockarg=0x200", "--user=nobody"],
         )
@@ -324,6 +325,77 @@ class OwnerGenerationTests(unittest.TestCase):
         self.assertEqual(self.witness().generation, OP_ID)
         self.ps.args += " --foreign-hidden-after-2048"
         self.refuses()
+
+    def test_reviewed_native_is_never_public_minute_owner(self):
+        # Owner _70 auto-mode failure: one previous committed owner, the new
+        # sealed process/monitor present, but no terminal shared journal.
+        prior = {"id": "a" * 32, "page": "strategies",
+                 "base": "c" * 64, "candidate": BASE, "changed_fields": []}
+        self.record["phase"] = "requires-review"
+        self.record["previous"] = prior
+        self.record["detail"]["page"] = "strategies"
+        self.record["detail"]["changed_fields"] = ["hostlist.mode"]
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        self._write(self.work / "plan.json",
+                    json.dumps({"page": "strategies", "dependencies": BASE,
+                                "changed_fields": ["hostlist.mode"]}) + "\n")
+        self.refresh()
+        self.refuses()
+        reviewed = self.witness(reviewed_operation=OP_ID)
+        self.assertEqual(reviewed.operation_id, OP_ID)
+        for bad in ("activated", "epoch-finalizing", "committed", "restored"):
+            self.record["phase"] = bad
+            self._write(self.journal / "operation.json", json.dumps(self.record))
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(reviewed_operation=OP_ID)
+        self.record["phase"] = "requires-review"
+        self.record["detail"]["changed_fields"] = ["voice.telegram.enabled"]
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        with self.assertRaises((owner_mod.GenerationRefused, SharedOperationError)):
+            self.witness(reviewed_operation=OP_ID)
+        self.record["detail"]["changed_fields"] = ["hostlist.mode"]
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        self.ps.args += " --foreign-after-verified-tail"
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.witness(reviewed_operation=OP_ID)
+        self.ps.args = " ".join(self.argv.split())
+        self.assertEqual(self.witness(reviewed_operation=OP_ID), reviewed)
+        with self.assertRaises(owner_mod.GenerationRefused):
+            self.witness(reviewed_operation="f" * 32)
+
+    def test_reviewed_native_service_uses_real_fd9_and_postcommit_proof(self):
+        service = (ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
+        shell = service.read_text(encoding="utf-8")
+        prefix = "shared_apply_recover_reviewed_native_service()\n{\n"
+        start = shell.index(prefix)
+        end = shell.index("\n}\n", start) + 3
+        recovery = shell[start:end]
+        syntax = subprocess.run(["/bin/sh", "-n", str(service)],
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
+        required = (
+            'ZAPRET_OWNER_REVIEW_RECOVERY',
+            'preflight_shared_apply_journal common-recover-reviewed-native',
+            'shared_apply_native_config saved',
+            'atomic_verify_tree',
+            'apply_runtime_probe',
+            'firewall_shared_runtime verify - "$ACTIVE_DIR"',
+            'finish-reviewed-epoch',
+            'finish-reviewed-native',
+            'shared_apply_status_observe_service',
+        )
+        for token in required:
+            self.assertIn(token, recovery)
+        self.assertLess(recovery.index('wan_first_service require'),
+                        recovery.index('finish-reviewed-epoch'))
+        self.assertLess(recovery.index('firewall_shared_runtime verify - "$ACTIVE_DIR"'),
+                        recovery.index('finish-reviewed-epoch'))
+        self.assertLess(recovery.index('finish-reviewed-epoch'),
+                        recovery.index('finish-reviewed-native'))
+        for forbidden in ("supervisor_stop", "launcher_stop", "ipfw delete",
+                          "rm -f", "SIGSTOP", "SIGCONT", "configctl"):
+            self.assertNotIn(forbidden, recovery)
+        self.assertIn('shared-apply-recover-reviewed-native)', shell)
 
     def stopped_fixture(self):
         # Physically persist the same original root-private pretraffic/epoch

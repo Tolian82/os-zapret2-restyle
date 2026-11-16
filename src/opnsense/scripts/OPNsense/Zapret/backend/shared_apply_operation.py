@@ -387,6 +387,45 @@ class SharedApplyOperation:
             raise SharedOperationError("not an initial reviewed Voice handoff")
         return record["detail"]
 
+
+    def reviewed_native_detail(self) -> dict:
+        """Only a failed in-place Strategies auto transition may be reviewed.
+
+        The former journal phase is lost in requires-review, so this does NOT
+        assume Config was saved, IPFW committed or an epoch completed.
+        Those independent facts must be proved by the original FD9 service.
+        """
+        record = self.read()
+        if record is None or record["phase"] != "requires-review":
+            raise SharedOperationError("no reviewed native generation")
+        current, previous = record["detail"], record.get("previous")
+        if (not isinstance(previous, dict) or
+                current["page"] != "strategies" or
+                current["changed_fields"] != ["hostlist.mode"] or
+                current["base"] != previous["candidate"] or
+                current["candidate"] == current["base"]):
+            raise SharedOperationError("foreign reviewed native operation")
+        return current
+
+    def finish_reviewed_native(self, identity: str, attest) -> dict:
+        """Finish only an independently proved existing live generation.
+
+        No generic requires-review transition is added to NEXT. The callback
+        must re-attest original FD9, the saved Config, committed IPFW and a
+        complete real pretraffic/epoch/engine receipt before journal write.
+        """
+        detail = self.reviewed_native_detail()
+        before = self.read()
+        if detail["id"] != identity:
+            raise SharedOperationError("reviewed native operation ID differs")
+        if not callable(attest) or attest() is not True:
+            raise SharedOperationError("reviewed native generation not attested")
+        if self.read() != before:
+            raise SharedOperationError("reviewed native operation changed")
+        result = dict(before)
+        result["phase"] = "committed"
+        return self._persist_record(result)
+
     def finish_reviewed_legacy(self, identity: str, attest) -> dict:
         """Terminalize only a fully attested old Strategies runtime.
 
@@ -532,6 +571,7 @@ def native_lifecycle_gate(action: str | None = None, *,
         "common-recover-activating": "activating",
         "common-recover-activated": "activated",
         "common-recover-reviewed-legacy": "requires-review",
+        "common-recover-reviewed-native": "requires-review",
         "strategy-lab-native": "committed",
     }
     if action is not None and action not in exceptions:
@@ -564,7 +604,8 @@ def main(argv: list[str]) -> int:
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
             "common-recover-activating", "common-recover-activated",
-            "common-recover-reviewed-legacy", "strategy-lab-native",
+            "common-recover-reviewed-legacy",
+            "common-recover-reviewed-native", "strategy-lab-native",
         )
     )
     owner_witness = len(argv) == 2 and argv[1] == "owner-witness"
@@ -575,6 +616,9 @@ def main(argv: list[str]) -> int:
         OP_ID.fullmatch(value) for value in argv[2:]
     )
     review = len(argv) == 2 and argv[1] == "review-legacy"
+    review_native = len(argv) == 2 and argv[1] == "review-native"
+    finish_review_native = (len(argv) == 3 and argv[1] == "finish-reviewed-native" and
+                            bool(OP_ID.fullmatch(argv[2])))
     finish_review = len(argv) == 3 and argv[1] == "finish-reviewed-legacy" and bool(OP_ID.fullmatch(argv[2]))
     recording = len(argv) == 8 and argv[1] == "record"
     recovery = len(argv) == 3 and argv[1] == "recover-prepared" and bool(OP_ID.fullmatch(argv[2]))
@@ -585,7 +629,7 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
@@ -646,6 +690,25 @@ def main(argv: list[str]) -> int:
             detail = SharedApplyOperation(owner=0).reviewed_legacy_detail()
             print("review-legacy " + detail["id"] + " " + detail["base"] +
                   " " + detail["candidate"])
+        elif review_native:
+            detail = SharedApplyOperation(owner=0).reviewed_native_detail()
+            print("review-native " + detail["id"] + " " + detail["page"] +
+                  " " + detail["base"] + " " + detail["candidate"])
+        elif finish_review_native:
+            # Original FD9 service has JUST rechecked Config/active tree/IPFW.
+            # The terminal writer independently re-attests the real original
+            # live process and the immutable pretraffic-derived epoch receipt.
+            from auto_detect_owner import attest_reviewed_native_generation
+            from auto_detect_epoch_receipts import EpochReceipts
+            from shared_apply_seal import verify_seal, WORK
+            def exact_native_receipt() -> bool:
+                proof = attest_reviewed_native_generation(argv[2])
+                verify_seal(WORK / argv[2], owner=0)
+                EpochReceipts()._epoch(proof)
+                return attest_reviewed_native_generation(argv[2]) == proof
+            SharedApplyOperation(owner=0).finish_reviewed_native(
+                argv[2], exact_native_receipt)
+            print("reviewed-native-committed")
         elif finish_review:
             from shared_apply_seal import verify_seal, WORK
             store = SharedApplyOperation(owner=0)
