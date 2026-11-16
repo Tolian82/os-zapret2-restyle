@@ -244,11 +244,23 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  child_pidfile: Path, monitor_pidfile: Path,
                  runner, owner_uid: int,
                  epoch_finalizing_operation: str | None = None,
+                 reviewed_operation: str | None = None,
                  argv_reader=None) -> GenerationProof:
     if argv_reader is None:
         argv_reader = _freebsd_argv
     record = SharedApplyOperation(journal, owner=owner_uid).read()
-    if epoch_finalizing_operation is None:
+    if reviewed_operation is not None:
+        # Only the explicit original-FD9 rescue may inspect a reviewed
+        # generation. Minute/ACK must still reject every unfinished journal.
+        if (epoch_finalizing_operation is not None or
+                not isinstance(reviewed_operation, str) or
+                not HEX32.fullmatch(reviewed_operation) or record is None):
+            raise GenerationRefused("invalid_reviewed_native_scope")
+        detail = SharedApplyOperation(journal, owner=owner_uid).reviewed_native_detail()
+        if detail["id"] != reviewed_operation or record["detail"] != detail:
+            raise GenerationRefused("foreign_reviewed_native_generation")
+        owner = detail
+    elif epoch_finalizing_operation is None:
         # Public worker and ACK never trust an unfinished original epoch.
         if record is None or record["phase"] not in TERMINAL:
             raise GenerationRefused("missing_terminal_common_owner")
@@ -366,6 +378,34 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("original_epoch_finalizing_not_attested") from exc
 
+
+
+def attest_reviewed_native_generation(operation_id: str, *,
+                                      journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                      work_root: Path = WORK,
+                                      active: Path = COMMON_ACTIVE,
+                                      child_pidfile: Path = CHILD_PID,
+                                      monitor_pidfile: Path = MONITOR_PID,
+                                      runner=subprocess.run) -> GenerationProof:
+    """Original FD9 only: prove a narrowly reviewed live generation.
+
+    This never allows an unfinished generation into the public minute/ACK
+    attester. The caller must separately prove saved Config and final IPFW.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or
+            not HEX32.fullmatch(operation_id)):
+        raise GenerationRefused("native_root_reviewed_generation_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        return _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0, reviewed_operation=operation_id)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError,
+            SharedOperationError, SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("original_reviewed_generation_not_attested") from exc
 
 
 def _attest_stopped_core(*, journal: Path, work_root: Path, active: Path,
