@@ -39,8 +39,9 @@ MONITOR_PID = 1833
 
 
 class FakePS:
-    def __init__(self, args: str):
+    def __init__(self, args: str, child_pidfile: Path):
         self.args = args
+        self.child_pidfile = child_pidfile
         self.birth = START
         self.monitor_exe = MONITOR
         self.extra = False
@@ -62,7 +63,8 @@ class FakePS:
         if str(PID) in argv:
             data = f"{self.birth} {EXE} {self.args} --sockarg=0x200 --user=nobody\n"
         elif str(MONITOR_PID) in argv:
-            data = f"{self.birth} {self.monitor_exe} /var/run/dvtws2.pid\n"
+            data = (f"{self.birth} {self.monitor_exe} {self.child_pidfile} "
+                    f"{Path(MONITOR).with_name('zapret_service.sh')} {EXE}\n")
         else:
             return subprocess.CompletedProcess(argv, 1, "", "")
         return subprocess.CompletedProcess(argv, 0, data, "")
@@ -118,7 +120,7 @@ class OwnerGenerationTests(unittest.TestCase):
         self._write(self.work / "plan.json",
                     json.dumps({"page": "strategies", "dependencies": BASE,
                                 "changed_fields": []}) + "\n")
-        self.ps = FakePS(" ".join(self.argv.split()))
+        self.ps = FakePS(" ".join(self.argv.split()), self.child)
         self.refresh()
 
     @staticmethod
@@ -191,6 +193,25 @@ class OwnerGenerationTests(unittest.TestCase):
         self.refuses()
         self.ps.extra = False
         self.ps.monitor_exe = "/tmp/foreign-monitor"
+        self.refuses()
+
+    def test_exact_native_freebsd_shebang_monitor_and_foreign_argv_refusal(self):
+        # The real OPNsense monitor is a #!/bin/sh script started via
+        # /usr/sbin/daemon -f. Its ps(1) argv can start with /bin/sh.
+        self.ps.monitor_exe = "/bin/sh " + MONITOR
+        self.assertEqual(self.witness().operation_id, OP_ID)
+        # Exact executable, callback, child PIDfile and child binary still
+        # matter. No shell -c, alternate interpreter, or trailing tokens.
+        for foreign in (
+            "/bin/sh -c " + MONITOR,
+            "/usr/bin/env sh " + MONITOR,
+            "/bin/sh " + MONITOR + " --foreign",
+            "/bin/sh /tmp/foreign-monitor",
+        ):
+            self.ps.monitor_exe = foreign
+            self.refuses()
+        self.ps.monitor_exe = "/bin/sh " + MONITOR
+        self.ps.child_pidfile = self.run / "other-child.pid"
         self.refuses()
 
     def test_missing_map_or_map_from_other_generation_refused(self):
