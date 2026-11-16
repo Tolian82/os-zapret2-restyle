@@ -38,6 +38,29 @@ function expectFailure(callable $f,string $description):void
     throw new RuntimeException("expected refusal: $description");
 }
 $count=0;
+// The real native child emits a prefixed status line; the existing shared
+// Apply consumes ONLY {result: created|existing}. This must not become a 69
+// before the first journal merely because the PHP adapter passes the prefix.
+foreach (['created','existing'] as $state) {
+    $wire = json_encode(['result'=>Snapshot::parseNativeBootstrapReceipt(
+        "auto-owned-bootstrap=$state\n")], JSON_THROW_ON_ERROR);
+    check(json_decode($wire, true, 4, JSON_THROW_ON_ERROR)['result'] === $state,
+          'original native known baseline not decoded for shared Apply');
+    ++$count;
+}
+foreach (['', 'auto-owned-bootstrap=created',
+          "auto-owned-bootstrap=created\ntrailer",
+          "auto-owned-bootstrap=unexpected\n",
+          "auto-owned-bootstrap=existing\r\n"] as $invalid) {
+    expectFailure(fn()=>Snapshot::parseNativeBootstrapReceipt($invalid),
+                  'unqualified original known baseline should refuse');
+    ++$count;
+}
+$executeSource = file_get_contents(__DIR__.'/../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh');
+check(is_string($executeSource) && str_contains($executeSource,
+      '.result | select(.=="created" or .=="existing")'),
+      'original Apply bootstrap result contract drifted');
+++$count;
 $source = file_get_contents(__DIR__.'/../src/opnsense/scripts/OPNsense/Zapret/backend/registry.sh');
 check(is_string($source),'registry unavailable');
 preg_match_all("/printf 'HOSTLIST\\\\t([a-z]+)\\\\t/",$source,$matches);

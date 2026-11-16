@@ -398,6 +398,16 @@ final class AutoDetectConfigSnapshot
      * SAME real FD9 and original Config lock. Never alter manual Hostlists,
      * config.xml or re-import the obsolete legacy auto-hosts file.
      */
+    /** Map the exact existing native bootstrap receipt to the Apply wire status. */
+    public static function parseNativeBootstrapReceipt(string $reply): string
+    {
+        return match ($reply) {
+            "auto-owned-bootstrap=created\n" => 'created',
+            "auto-owned-bootstrap=existing\n" => 'existing',
+            default => throw new \RuntimeException('Unqualified original automatic baseline'),
+        };
+    }
+
     public static function bootstrapKnownInitial(
         object $config, callable $modelFactory, string $expectedDigest
     ): string {
@@ -458,10 +468,10 @@ final class AutoDetectConfigSnapshot
                 unset($pipes[1]);
                 $exit = proc_close($process);
                 $process = null;
-                if ($exit !== 0 || !in_array($reply,
-                    ["auto-owned-bootstrap=created\n", "auto-owned-bootstrap=existing\n"], true)) {
+                if ($exit !== 0) {
                     throw new \RuntimeException('Original automatic baseline refused');
                 }
+                $state = self::parseNativeBootstrapReceipt($reply);
             } finally {
                 foreach ($pipes as $pipe) {
                     if (is_resource($pipe)) {
@@ -480,7 +490,7 @@ final class AutoDetectConfigSnapshot
                 !hash_equals($expectedDigest, VoiceSettingsSnapshot::digest($afterNodes))) {
                 throw new \RuntimeException('Original Config changed after empty baseline');
             }
-            return trim($reply);
+            return $state;
         } finally {
             $config->unlock();
         }
