@@ -4,7 +4,7 @@
 
 ## Exact source and package boundary
 
-**Current source:** `v0.6.5_74` (`VERSION=0.6.5`, `PLUGIN_REVISION=74`) — **documentation-only owner live-diagnostic record** following the prior requirements-only `_73` source. There is **NO built or published `_74.pkg`** and no source/runtime/GUI/worker/package repair. The owner is still running the immutable `v0.6.5_70.pkg` testing candidate, integrated by [PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d`. The approved [ТЗ_6v2](architecture/TZ_6v2.md) remains a future implementation contract, not installed behavior.
+**Current source:** `v0.6.5_74` (`VERSION=0.6.5`, `PLUGIN_REVISION=74`) — **documentation-only owner live-diagnostic record** following the prior requirements-only `_73` source. The prospective `os-zapret2-restyle-0.6.5_74.pkg` is **NOT BUILT OR PUBLISHED** and no source/runtime/GUI/worker/package repair. The owner is still running the immutable `v0.6.5_70.pkg` testing candidate, integrated by [PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d`. The approved [ТЗ_6v2](architecture/TZ_6v2.md) remains a future implementation contract, not installed behavior.
 
 **Published testing package:** [`os-zapret2-restyle-0.6.5_70.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_70/os-zapret2-restyle-0.6.5_70.pkg) — immutable testing prerelease `v0.6.5_70`, SHA-256 `18acb1793410c055820737c5a30eb9a317208f1aa6a70e7bbaccf1ad1c701644`, manifest `FreeBSD:15:amd64`. [Publication evidence](verification/evidence/testing-publications/v0.6.5_70.md). This is a standalone native `.pkg` only; stable Pages/pkg and stable owner-installed `0.6.5_1.pkg` are unchanged.
 

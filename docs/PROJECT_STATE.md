@@ -6,7 +6,7 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 16 November 2026
 
-**Current documentation identity:** `v0.6.5_74` (`VERSION=0.6.5`, `PLUGIN_REVISION=74`) — documentation-only record of owner-native `_70.pkg` diagnostic evidence. **No `_74.pkg` built or published.** Prior `_73` was requirements-only approval of [ТЗ_6v2](architecture/TZ_6v2.md); neither revision changed product code or repaired the user-installed `_70` P0 blockers. The physically published testing package remains `os-zapret2-restyle-0.6.5_70.pkg`.
+**Current documentation identity:** `v0.6.5_74` (`VERSION=0.6.5`, `PLUGIN_REVISION=74`) — documentation-only record of owner-native `_70.pkg` diagnostic evidence. The prospective `os-zapret2-restyle-0.6.5_74.pkg` is **NOT BUILT OR PUBLISHED**. Prior `_73` was requirements-only approval of [ТЗ_6v2](architecture/TZ_6v2.md); neither revision changed product code or repaired the user-installed `_70` P0 blockers. The physically published testing package remains `os-zapret2-restyle-0.6.5_70.pkg`.
 
 **Main source:** `v0.6.5_70` was squash-merged from [PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) at `b5bd28ad49ab14504bffa7a40ddab6e780690a8d`; `v0.6.5_71` is the subsequent **documentation-only** revision recording publication, not a new build. `VERSION=0.6.5` is unchanged. The previously discussed unmerged `_72` branch is retained as history, not current production source.
 
