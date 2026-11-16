@@ -404,6 +404,58 @@ def native_installed_auto_handoff():
                                 fw.stderr or fw.stdout)
             else:
                 diagnostic = ':candidate-count=' + str(len(qualified))
+        if b'Execute error' in prepared.stdout:
+            # The first real Apply may already have changed the engine,
+            # Config or journal. Never retry/recover it speculatively here.
+            # Record ONLY fixed structural statuses, no argv/domains/IDs.
+            state = {'journal': 'absent', 'epoch': 'not-attributable'}
+            journal = Path('/var/db/zapret2/shared-apply/operation.json')
+            try:
+                if journal.exists() or journal.is_symlink():
+                    info = journal.lstat()
+                    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or
+                            info.st_mode & 0o077 or info.st_size > 8192):
+                        state['journal'] = 'unsafe'
+                    else:
+                        document = json.loads(journal.read_bytes())
+                        stage = document.get('phase')
+                        state['journal'] = (stage if stage in {
+                            'prepared', 'activating', 'activated',
+                            'config-saved', 'epoch-finalizing', 'committed',
+                            'restored', 'restore-failed', 'requires-review',
+                        } else 'invalid')
+                        entry = document.get('detail')
+                        identity = entry.get('id') if isinstance(entry, dict) else None
+                        if isinstance(identity, str) and re.fullmatch('[0-9a-f]{32}', identity):
+                            gen = epochs / identity
+                            state['epoch'] = {
+                                'pretraffic': (gen / 'pretraffic.json').is_file(),
+                                'running': (gen / 'epoch.json').is_file(),
+                                'retired': (gen / 'retired.json').is_file(),
+                            }
+                            state['candidate_release_present'] = (
+                                Path('/var/db/zapret2/shared-work') /
+                                identity / 'release').is_dir()
+            except (OSError, ValueError, TypeError):
+                state['journal'] = 'unreadable'
+            state['live_generation_present'] = (
+                active / 'auto-detect-generation.json').is_file()
+            state['engine_pidfile_present'] = pidfile.is_file()
+            state['supervisor_pidfile_present'] = Path(
+                '/var/run/zapret2-supervisor-monitor.pid').is_file()
+            state['producer_raw_present'] = Path(
+                '/var/db/zapret2-auto-detect/inbox.txt').is_file()
+            state['producer_debug_present'] = Path(
+                '/var/db/zapret2-auto-detect/debug.log').is_file()
+            try:
+                current = ET.fromstring(CONFIG.read_bytes())
+                mode_node = current.find('./OPNsense/Zapret/hostlist/mode')
+                state['config_saved_auto'] = (
+                    mode_node is not None and mode_node.text == 'auto')
+            except (OSError, ET.ParseError):
+                state['config_saved_auto'] = 'unreadable'
+            print('P2_INSTALLED_ORIGINAL_FAILURE_STATE=' +
+                  json.dumps(state, sort_keys=True), flush=True)
         need(False, 'installed-original-auto-shared-apply-refused:' +
              'rc=' + str(prepared.returncode) + ':stdout=' +
              brief(prepared.stdout) + ':stderr=' + brief(prepared.stderr) +
