@@ -2,7 +2,7 @@
 
 ## Current priority
 
-The owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) is now integrated as source `v0.6.5_70` (merged PR #1161), and the immutable `v0.6.5_70.pkg` testing prerelease is published. The current documentation-only `_71` increment does not rebuild it. **Next outcome:** owner installs the actual `.pkg` and verifies GUI, continuous live traffic, retention, scheduled opt-in restart, preservation on update/uninstall/reinstall, and purge. Preserve fail-closed FD9/Config/IPFW/Voice and do not create an unrelated Strategy Lab workstream.
+The owner-approved [#1052 Auto-detect / Target Mode / HOSTLIST / Auto Restart](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) is now integrated as source `v0.6.5_70` (merged PR #1161), and the immutable `v0.6.5_70.pkg` testing prerelease is published. The latest documentation-only `_72` revision records owner-observed `_70` **P0 startup/Auto-detect/recovery failures and P1 GUI regressions**; no `_72.pkg` exists. The current owner P5 acceptance is **BLOCKED** until [OWN70-01…06](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) are fixed and retested. **Next outcome:** owner installs the actual `.pkg` and verifies GUI, continuous live traffic, retention, scheduled opt-in restart, preservation on update/uninstall/reinstall, and purge. Preserve fail-closed FD9/Config/IPFW/Voice and do not create an unrelated Strategy Lab workstream.
 
 | Stage | Bounded result | Status |
 |---|---|---|
