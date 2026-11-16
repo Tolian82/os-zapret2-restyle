@@ -1,11 +1,120 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
+## ACTIVE — transition from integrated _70 to ТЗ_6v2 (16 November 2026)
+
+**Authority:** This is the **single current execution sequence**, and the original P0–P5 entries below remain intact as evidence/history, not competing instructions. [ТЗ_6v2](TZ_6v2.md) owns new GUI, five-list normalization/edit/Apply, and Auto Restart layout; [original #1052 specification](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) still owns unchanged native P0–P3/FD9/Config/Voice/IPFW/PSL/ACK/no-pause safety. [PR #1161](https://github.com/Tolian82/os-zapret2-restyle/pull/1161) integrated the published `_70.pkg` product; [PR #1165](https://github.com/Tolian82/os-zapret2-restyle/pull/1165) approved **requirements only**; [PR #1166](https://github.com/Tolian82/os-zapret2-restyle/pull/1166) recorded owner-live diagnostics. The new documentation-only source revision is `v0.6.5_75`; prospective `os-zapret2-restyle-0.6.5_75.pkg` is **NOT BUILT / NOT PUBLISHED**. The physically installed testing package remains `v0.6.5_70.pkg`.
+
+**OWNER HOLD remains active:** This change only updates documentation and planning. No live OPNsense tests, recovery, journal edits, start/apply, service/IPFW/cron changes, implementation, product CI, packaging or publication until a new explicit owner instruction. **STEP 0 only** is currently authorized. The ordered tasks below are planned future work.
+
+### A. Honest original P0–P5 progress ledger — do not erase completed work
+
+| Old stage | Proven done (not necessarily owner accepted) | Open/changed work for ТЗ_6v2 | Status |
+| --- | --- | --- | --- |
+| **P0 — native technical feasibility** | Original no-action observer, native first-match and generation attribution [qualified in scoped feasibility](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). | **Different owner P0 regression:** installed `_70` shared Apply/start/auto failure `OWN70-01…03`. Do **not** repeat completed feasibility as if missing. | **DONE scoped / new P0 REPAIR** |
+| **P1 — canonical domain policy** | Python `domain_policy.py`, IDNA, ICANN+PRIVATE PSL, origin-first eTLD+1 and exclusions [qualified](../verification/P1_AUTO_DETECT_DOMAIN_POLICY.md). | **ADAPT**, not rewrite: three positive-only discovered editors, modifier-aware semantic dedup/sort and editor merge. | **DONE original / ADAPT** |
+| **P2 — original minute observer and lifetime** | Original FD9, native event→raw/debug→Config/P1→checkpoint/physical ACK, finite real HTTP/RST and Stop/new-generation Boot in [P5b2b installed disposable OPNsense](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43840070955); bounded debug/retired-generation machinery exists. | Live owner lifecycle failure and open abnormal/cross-generation/long-run/Voice/forwarding acceptance; correct demonstrated failures, never recreate the collector/engine/FD9. | **INTEGRATED / scoped PASS / owner BLOCKED** |
+| **P3 — separate known/shared auto HOSTLIST** | Root-private `youtube.txt`/`user.txt` and shared `auto-domains.txt`, explicit-only `<HOSTLIST:auto>`, original target writer; [G03](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43840070950) proves installed read/CAS in a guest. | Adapt native coherent five-source read/edit/write, and qualify same-running-PID **effective** HOSTLIST reload on owner-relevant route. | **INTEGRATED / ADAPT + VERIFY** |
+| **P4 — old GUI and schedule** | Earlier [Chromium](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43840070937) checked old standalone shared Save/Reload, revision conflict, RU/EN, schedule choices; only this older UI was proved. | **REWORK** to five editors, one bottom Apply with normal lifecycle, three-way merge, new help, separate Enabled and Advanced-only full-width Auto Restart. Old GUI PASS is not ТЗ_6v2 PASS. | **OLD implementation / NEW + REWORK** |
+| **P5 — delivery/owner acceptance** | `_70.pkg` physically published with scoped source/native/ABI verification. | Owner-installed `_70` acceptance **FAIL** on `OWN70-01…03`; `OWN70-04…06` are older GUI observations, now judged by updated TZ6V2 criteria. Update/reinstall/purge, traffic, hot reload and recovery acceptance OPEN. | **PACKAGE DONE / OWNER BLOCKED** |
+
+**Evidence levels must never be merged:** source integrated ≠ exact-head/source/CI/native guest PASS ≠ owner-live PASS. Reuse completed old P0/P1 and matching proven P2/P3 paths; qualify changed/failed paths only. Previously accepted original stage records below stay available.
+
+### B. Explicit old → ТЗ_6v2 change map
+
+| Current/old `_70` implementation | Keep / rework / new outcome |
+| --- | --- |
+| Two manual YouTube/User `config.xml` textareas, manual `!`/`^`/`!^` | **KEEP**, never move automatic finds into Config and never sort/rewrite untouched manual fields |
+| Existing root-private YouTube/User discovered files | **KEEP storage; ADD** two independently editable collapsible fields beneath their manual editors |
+| Existing shared `auto-domains.txt` plus separate Save List / Reload List | **KEEP final file and worker atomic/CAS primitives; REPLACE user-facing save flow** with full-size shared editor and existing single bottom Apply; no second Apply |
+| Prior shared auto list help allows `!/^`, save without restart | **CHANGE** all three discovered editors to positive canonical domain roots only; manual editors retain modifiers; intentional Apply restarts via standard lifecycle, minute detection never does |
+| Stale-form CAS refusal only | **EXTEND** original revisions/locks to approved `base + user draft + current` three-way delta merge: explicit viewed deletion wins, unrelated new background positives survive, true semantic conflicts refuse |
+| Old same-row Auto Restart + Enabled mislabel | **FIX** separate native Advanced-only full-width dropdown and correctly labelled original service Enabled; reuse schedule and five values without new Boolean/daemon |
+| Original FD9/Shared Apply/Config/P1/ACK; P2 minute event | **REUSE AND REPAIR**, never install a second owner/process/parser. Keep background automatic hot reload/no pause separate from intentional Apply/restart |
+| Development-only historical automatic-file contents | **OPTIONAL ONE-TIME qualified clean baseline**, never automatic purge/migration; no manual Config/foreign/active raw/debug/pending/epoch/ACK loss |
+
+If a genuinely unspecified semantic decision arises (cross-profile duplicate coverage, exact-vs-broad exclusion, concurrent conflict), **consult the owner** before changing approved behavior (`DEV-063`), not a speculative new subsystem. Existing five-source grammar, priority and acceptance are fixed by [ТЗ_6v2](TZ_6v2.md).
+
+### C. One ordered STEP-BY-STEP route from current state to ТЗ_6v2
+
+Every step has the **existing input → minimum actual change → observable exit**. These are logical gates in the same #1052 product scope, not one PR/VM/subproject per line. New status may be advanced only with recorded evidence.
+
+**STEP 0 — Document present owner evidence and HOLD. STATUS: DONE (documentation only).**
+- **Input:** owner `v0.6.5_70.pkg`; [§9 live diagnostic](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md), [PR #1166](https://github.com/Tolian82/os-zapret2-restyle/pull/1166). Native runtime `v1.0.7` installed; `service=error`, service status `rc=2` with explicit unfinished common Shared Apply boot refusal, `operation.json` 544-byte presence, persistent `pkg-replacement.restart`, one `dvtws2` PID but **no healthy service proof**, repeated minute exit `69`, sampled zero IPFW counters and successful upstream setup only.
+- **Exit already true:** evidence recorded without service mutation. **Unknown and OPEN:** operation journal stage/content, original FD9/PID owner, root trigger, relation between minute `69` and package post-install `69`, safe recovery. Remain HOLD until owner lifts it.
+
+**STEP 1 — Fix installed `_70` P0 before any ТЗ_6v2 GUI work. STATUS: BLOCKED BY HOLD / FUTURE.**
+- **Input:** `OWN70-01…03` from retained §9; treat unfinished Shared Apply as **current refusal**, not proven trigger. When authorized, inspect original journal/FD9/process/package replacement hook trace **read-only first**, then safely reproduce the shortest true failing installed upgrade/`list→auto`/`auto→list/all` path in a controlled native environment. Do not purge, blindly delete receipts, reinstall upstream or issue repeated dangerous owner Apply.
+- **Minimum change:** one proof-led source repair of existing Shared Apply/lifecycle/rollback/diagnostic route; old-code red test → same fixed-code green test. Keep intentional stopped/disabled intent and original WAN/Voice/IPFW/Config.
+- **Exit:** previously RUNNING enabled instance upgrades to coherent RUNNING **without extra manual Apply**; intentionally STOPPED remains STOPPED; Target Mode auto uses one authentic engine/FD9 without implicit shared strategy; failures restore/refuse coherently and do not permanently block other modes. Real installed acceptance kept distinct from source proof.
+
+**STEP 2 — Map exact reusable code/ownership boundaries, no refactor campaign. STATUS: FUTURE.**
+- **Input:** working repaired P0 plus existing P1/P2/P3; trace actual native form/model → Python policy → root snapshot/GUI destination flock → original Config and single Shared Apply → managed effective HOSTLIST and original FD9/minute. Identify original service Enabled and schedule bindings.
+- **Minimum change:** none except correcting a demonstrated incompatible existing contract. Classify the only remaining file paths as KEEP / REWORK / NEW / VERIFY; reuse all scoped native results unaffected by code changes.
+- **Exit:** one concise current production call-path map and focused regression list, with no new journal, daemon, SQLite, duplicate Config writer or Strategy Lab changes.
+
+**STEP 3 — Adapt the one P1 canonical policy to new five-editor grammar. STATUS: FUTURE (ADAPT).**
+- **Input:** existing Python `domain_policy.py` and proven PSL.
+- **Minimum change:** manual `!/^/!^` retained; three found-only inputs positive registrable roots with clear invalid-line errors; origin-before-eTLD+1 (`new.example.org→example.org`, `video.example.com→example.com`); exclusions and effective-coverage/source-aware duplicate handling; automatic sorting only on mutation; manual sort only when that editor changed, by entire normalized prefix-first line; leave untouched manual bytes.
+- **Exit:** focused IDNA/PRIVATE/unknown-suffix, explicit exact/broad modifier, cross-source collision and unchanged/manual-sort tests. Do not silently delete entries used by a distinct profile or guess unresolved policy.
+
+**STEP 4 — Extend existing root-backed read to one coherent five-source snapshot. STATUS: FUTURE (NEW GUI sources, REUSE P3 storage).**
+- **Input:** two manual Config fields, two known-found files, one shared final file.
+- **Minimum change:** original Config/protected-file snapshot with per-source baselines/revisions, safely empty missing-file status vs unreadable/foreign/error refusal; open/F5 loads all five even if panels collapsed; expanding visibility does not save/re-read; no polling overwrites a draft and no on-read initialization.
+- **Exit:** native root/API + actual rendered browser shows correct five values/ownership, intact original manual fields and useful failure diagnostics.
+
+**STEP 5 — Add three-way edits to the existing protected save/Apply bridge. STATUS: FUTURE (NEW behavior).**
+- **Input:** validated base `B` at page open, user draft `U`, lock-held actual current `L`.
+- **Minimum change:** translate user additions/deletions/modifiers relative to `B` onto `L`, retaining independently discovered new positives; explicit deletion from viewed base wins, ambiguous simultaneous semantic edits fail with exact typed draft retained. Recheck canonical policy/locks immediately before commit. Extend existing Config/file durable transaction and original GUI destination lock, **write only changed sources**, preserve manual order and pending/physical ACK. A failed lifecycle recovery must not overwrite newer confirmed worker additions. No revision DB or new coordinator.
+- **Exit:** focused two-tabs, worker inserts new root during stale editor, user deletes old root, syntax/exclusion conflict, inaccessible file, failed preparation/partial-write/recovery and unchanged original Config case; no lost live finds or unACKed input.
+
+**STEP 6 — Connect all five editors to the ONE existing bottom Apply. STATUS: FUTURE (REWORK).**
+- **Input:** new safe validated five-source transaction and existing Strategies+Voice WAN-first shared original Apply/FD9.
+- **Minimum change:** original bottom Apply persists correct Config+three auto files, then follows **normal native lifecycle**, including **intentional restart if RUNNING even when only found-files or unchanged form**; STOPPED/Disabled intent stays stopped. Remove independent GUI Save/Reload/found-only file Apply path; do not remove native protected writer reused by minute worker. Unknown transport outcome requires status review, never extra blind restart.
+- **Exit:** rendered native input → real protected commit → same original service restart/rollback → F5 persisted all sources; invalid value fails before mutation; no second service/Config owner or double restart. Test RUNNING, STOPPED and failure separately.
+
+**STEP 7 — Rework the P4 native Strategies GUI/help. STATUS: FUTURE (REWORK/NEW).**
+- **Input:** original two native manual editors + original shared field.
+- **Minimum change:** add YouTube/User expandable found editors beneath respective main lists, maintain full-width shared editor; disclosure buttons toggle **visibility only**; same native width/height/mobile/resize; existing Help OFF/ON with orange icon left of labels, text below editor, RU/EN; no obsolete Save/Reload, ordinary List Empty caption, competing right help column or second Apply. Correct help: auto is plain-only; manual `!` suppresses future re-add, `!^` exact only; shared file is active **only with explicit `<HOSTLIST:auto>`**.
+- **Exit:** native rendered OPNsense RU/EN/Advanced layout, disclosure and F5, validation messages and one Apply. The old `OWN70-04…06` observations remain as evidence; **their legacy proposed fixes are superseded** by [ТЗ_6v2](TZ_6v2.md).
+
+**STEP 8 — Correct native Auto Restart layout and persisted schedule. STATUS: FUTURE (REWORK).**
+- **Input:** current Enabled model and original five-choice schedule.
+- **Minimum change:** preserve the single Enabled checkbox with accurate label; separate native full-width Off/hour/day/week/month select shown only in standard Advanced ON, hidden without resetting interval or disabling scheduler, Off default on new installation; no redundant schedule Boolean or timer. Selected schedule uses original Shared Restart for RUNNING even with no list changes, never starts deliberately STOPPED/Disabled.
+- **Exit:** RU/EN actual DOM, F5/hidden-field/unrelated Apply persistence and scoped real scheduled RUNNING/STOPPED evidence. No claim from appearance alone.
+
+**STEP 9 — Close *remaining* P2/P3 native effective reload and lifetime evidence. STATUS: FUTURE (VERIFY/REPAIR proven gaps only).**
+- **Input:** already-integrated finite [P5b2b](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43840070955) and [G03](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43840070950).
+- **Minimum change:** qualify an actual discovered domain → protected normalized per-source row → **effective managed HOSTLIST file currently consumed by the same RUNNING `dvtws2`** with stable PID/birth and real forwarded traffic/Voice/IPFW, no minute restart/SIGSTOP/SIGCONT/divert interruption; verify explicit-only shared selector and physical ACK. Reuse original safe raw/debug hardlink/replace and last **four fully ACKed/retired generations**; target only unproved restart/cross-generation/reboot/diagnostic-only repeated rotation/failure edges. Distinguish 2 MiB high-water trigger from 4 MiB validation/read limit and former 512-ACK/128-epoch history; none is unlimited-disk quota.
+- **Exit:** proportionate end-to-end same-PID hot reload and affected recovery/lifetime checks. Do not rerun historical P0/P1/old native matrices simply for count or claim indefinite owner stability from finite guest test.
+
+**STEP 10 — Scoped package qualification, GitHub native `.pkg`, owner acceptance. STATUS: FUTURE (P5 BLOCKED until prior exits).**
+- **Input:** new source path meeting [TZ6V2-01…09](TZ_6v2.md) and unchanged original [eleven #1052 safety groups](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md); owner `OWN70-01…06`.
+- **Minimum change:** one mapping of requirement → **existing applicable or newly executed** proof; shortest failing pre-fix and passing post-fix real paths, only relevant FreeBSD/native-browser/GUI/FD9/Voice tests, then qualified exact native package. Verify standard original G01–G11 relevant update from RUNNING, STOPPED preservation, ordinary uninstall/reinstall settings, full purge, real traffic and schedule; no unrelated exhaustive VM loops.
+- **Exit:** a *new* approved source revision and its **separately built/published standalone `.pkg`** via original GitHub route (no SH); owner installed acceptance recorded **after** actual tests, never implied by publication. Leave unexecuted rows OPEN; stop once justified gates are met.
+
+### D. Control of scope, historical text and verification reuse
+
+- **Right now: STEP 0 only.** The owner has authorized this plan update, not restoration, testing, new code or package. STOP before STEP 1 until expressly directed.
+- The stage map, older “Approved remaining execution order”, old P4 GUI prose and `OWN70-04…06` legacy **expected** solutions below are kept for chronology and source links. They are **not** an alternative to current section C steps and [ТЗ_6v2](TZ_6v2.md).
+- Red→green tests apply to demonstrated new failures and edited critical paths; use existing evidence unchanged where valid. **No double Config writer/FD9, standalone new observer, SQL, pkg interposer, process pause, arbitrary service restart or Strategy Lab changes**.
+- For future completion, annotate the corresponding section C step with its exact evidence and update the progress ledger, keeping original historical records untouched.
+
+---
+
+## PRESERVED historical P0–P5 plan, original sequence and proof (not current execution authority)
+
+> Original old-stage sections and headings below are intentionally retained, including dated intermediate attempts and explicit uncertainty. Status annotations are added to distinguish established evidence from obligations superseded by the new `C path. Do not reinterpret old “next/current” text as current instructions when it conflicts with above.
+
+
 **Historical pre-publication status (16 November 2026, then Draft PR #1161, `v0.6.5_70`, installed real-positive P5b2b PASS; this block is not the current delivery state):** P0/P1 original domain/PSL policy accepted. The original same-FD9 P2 no-action native observer is now installed under a single real dvtws2 and native owned WAN IPFW; a *RST-only* incoming reply rule is added for sealed original Auto generations without intercepting SYN/ACK/FIN or changing non-Auto Voice rules. [Exact installed native P5b2b 43825971702](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43825971702) passed original Apply, idle minutes/Off tick, Stop/old retired receipt/cleaned IPFW/new-ID Boot, plus genuine HTTP/RST positive raw/debug, Config/P1 normalized shared auto target, physical ACK with no pending/open intent, stable engine PID/HTTP forwarding and final positive-data retirement. The initial clean shared `auto-domains.txt` target is now bootstrapped **empty** only under original FD9 + Config+GUI lock with existing manual and known-owned files preserved. P2/P3's **finite installed positive-native case** is qualified; separate continuous-traffic/long-term retention/disk-failure/reboot and physical owner-device acceptance are not. P4 GUI/Auto Restart opt-in and GUI edit/lock acceptance remain to verify. P5 exact-head full CI/native package gating, owner acceptance and publication remain OPEN; no .pkg published and `main` unchanged. Source-only four completed generations and 2 MiB debug cuts remain separate controls, not proof of unlimited disk safety.
 
 **Normative specification:** [approved newer ТЗ_6v2](TZ_6v2.md) for GUI, five lists, manual Apply and Auto Restart presentation, alongside [unchanged original #1052 native worker contract](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [latest Issue #1052 decision](https://github.com/Tolian82/os-zapret2-restyle/issues/1052); earlier [consolidated comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626) is historical where superseded.
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
 ## Current approved execution order — ТЗ_6v2
+
+> **RETAINED early transition sketch, not current execution authority.** It is replaced by active §C above. Old P4 and owner-acceptance text retained below is not an alternative to the approved five-field/single Apply/Advanced-only dropdown contract.
+
 
 **Owner-approved 16 November 2026, requirements only:** [ТЗ_6v2](TZ_6v2.md) replaces the obsolete independent shared Auto Hostlist Save/Reload GUI, the old inline auto-restart placement, and a proposal to save found-only edits without restarting. The published `v0.6.5_70.pkg` is unchanged, and its real owner-installed lifecycle/Target Mode failure remains P0. The new requirements are not implemented merely by this documentation commit.
 
@@ -34,6 +143,9 @@ The GUI's **All traffic on specified ports**, **Only specified domains**, and **
 
 ## 2. Stage map
 
+> **Historical stage ledger.** Original P0/P1 scoped DONE, P2/P3 source integrated with owner gaps, old P4 to REWORK, P5 owner blocked. Use active §A and §C for next tasks.
+
+
 | Stage | Observable deliverable | Exit evidence |
 | --- | --- | --- |
 | **P0** | Read-only native capability/first-match and generation attribution proof | Real qualified `dvtws2` establishes no covert inclusion of another strategy or IPSET; otherwise written blocker and **no further implementation** |
@@ -48,6 +160,9 @@ The GUI's **All traffic on specified ports**, **Only specified domains**, and **
 Stages are **logical gates, not promised commit counts or an invitation to expand unrelated verification**. Record source, exact-head CI, native packaged and owner-installed evidence independently; a new build does not prove the user's GUI or traffic.
 
 ### Approved remaining execution order — one #1052 delivery, not new stages
+
+> **RETAINED historical work order.** Some P2 tasks below subsequently integrated in `_70`; the old same-row P4 placement is superseded. Do not duplicate completed P0–P3 work. Follow active §C instead.
+
 
 1. **P2: Activate the authentic native observer in the existing original FD9 Apply (SOURCE CANDIDATE/AUTHORIZE/PREPARE NOW WIRED; LIVE TURNOVER NEXT).** After native PHP candidate preflight and before sealing the common release, use the *existing* original generator capture and `auto_detect_origin_map._authorized_projection()` to install the previously P0-qualified last no-action observer in the real `dvtws.args` with matching original schema-2 `auto-detect-generation.json`, only for the approved eligible `Target Mode=auto` traffic. Integrate the existing `auto_detect_storage.prepare_native()` and original pretraffic/postdrop epoch; retain `auto_detect_owner._valid_map()`, native profile attribution and first-match/explicit `<HOSTLIST:auto>` gates. Replace the deliberate missing `auto_detect_post_drop.py authorize` refusal **only after** the same original sealed candidate/FD9/worker/ACK/actual process source is proved. Keep ordinary non-auto Apply unchanged and unknown state fail-closed. An actual unresolved approach decision goes to the owner first (`DEV-063`, `CHAT-014`), not a parallel workaround.
 2. **P2: Finish the original minute and cross-generation handoff.** Exercise the real `cron → configd → zapret_service.sh` (held FD9) → `auto_detect_minute.py` → P2a pending/FD proof → native Config/P1 → durable checkpoint → ACK. On normal Apply/reboot/STOPPED, attest and reconcile prior-generation raw/debug/pending before ownership can change; no silent loss, reattribution or inferred ACK. Reuse one Config writer, existing transaction/journal and same engine. **Minute collection, rotation and recovery never signal/pause/restart `dvtws2` or interrupt IPFW divert**. Ordinary explicitly initiated Apply and separately opted-in Auto Restart retain their approved restart behavior.
@@ -65,6 +180,9 @@ Stages are **logical gates, not promised commit counts or an invitation to expan
 
 ## 3. P0 — source audit and generated native feasibility completed
 
+> **DONE in original scoped technical-feasibility proof.** The new owner-native P0 is `OWN70-01…03` unfinished Shared Apply/lifecycle repair in active STEP 1.
+
+
 **Current P0 evidence:** [source analysis and native witnesses](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md). Direct auto-on-existing-action-profile is rejected. The trailing no-action observer passed both the earlier two-profile experiment and the final actual-generated native first-match/map/raw-debug witness. P0 is complete within the bounded TCP/HTTP/IPSET/STUN scope; production persistence, UDP/QUIC coverage and owner acceptance belong to P2/P5.
 
 **Generation-attribution boundary:** the [noninstalled map/full-generator fixture](../verification/P0_NATIVE_AUTO_DETECT_FEASIBILITY.md#p0-generation-bound-attribution-13-november-2026) captures raw sources, Target Mode, normalized/resolved order, Voice/Extra and exact argv identity, preserving mixed-IPSET ancestry and refusing stale/uncertain imports/tails. The [actual native generated witness](../../scripts/test-p0-native-generated-observer.py) passed on [run 43327217834](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/43327217834), including isolation and confirmed raw/debug generation attribution. This establishes feasibility, not a persisted production map or universal traffic coverage. The steps below describe that completed gate.
@@ -76,9 +194,15 @@ Stages are **logical gates, not promised commit counts or an invitation to expan
 
 ## 4. P1 — one canonical Python domain policy
 
+> **DONE in original canonical domain-policy scope; ADAPT only** for new five-field/three-way requirements in active STEPS 3/5.
+
+
 Extend **`backend/domain_policy.py`**, not a new parser. Qualify PSL delivery/update including PRIVATE and ICANN; derive eTLD+1 for `example.co.uk` and `user.github.io`, collapse arbitrary subdomain depth to a plain root without adding `^`. Preserve user's original `!/^` syntax, distinguish broad from exact local exclusions, separately check global Exclude Domains, and inspect **all** HOSTLISTs before positive auto-add. Attribute source before normalizing; ambiguous roots go to shared fallback without contradictory records. Verify Unicode/IDNA, bad/public-suffix hosts, multi-event dedup, normal deletion followed by new discovery and fail-closed invalid input. **Source status:** implemented in the same canonical module; [qualified PSL update path, API and executed checks](../verification/P1_AUTO_DETECT_DOMAIN_POLICY.md). Native archive/provider qualification is mandatory before moving to P2; no live discovery is enabled by P1.
 
 ## 5. P2 — short, durable cron/configd worker
+
+> **INTEGRATED / finite native proof; owner and rare lifetime edges OPEN.** Keep original records; see active STEPS 1/9, not a restart of P2 from scratch.
+
 
 One native cron tick every **60 seconds**, configd registered action and one locked Python worker. No kqueue daemon, new long-running process, per-event global Apply or per-event restart. Protect raw `inbox.txt`, old `pending/<id>.txt` and prepared replacement on one filesystem. Use approved **`os.link` → `os.replace`**, confirm correct directory sync and old dev/inode writer-FD closure of the verified FreeBSD `dvtws2` with qualified `procstat -f`/`fstat`, then correlate native debug/profile generation, parse and write durable final results before deleting completed pending. Recover all interrupted boundaries, particularly pending still hard-linked to live inbox after link-before-replace. **At-least-once + idempotency**; never `truncate`/`copytruncate` or expire unprocessed segments by age. Test open writer FD, partial line, concurrent cron, corrupt/oversized input, disk errors and reboot.
 
@@ -128,9 +252,15 @@ A source-only planner now consumes the P2d `ORIGINAL_SHARED_GENERATOR_CAPTURE_NO
 
 ## 6. P3 — auto-owned lists, obsolete-path retirement and native reload
 
+> **INTEGRATED / G03 and native source proof; full owner hot reload OPEN.** Extend existing files for five-source editing; see active STEPS 4–6/9.
+
+
 Route an attributed discovery immediately to that known HOSTLIST's **auto-owned** component, separate from manual YouTube/User text and Config. Source `_32` introduces root-private `/var/db/zapret2/auto-detect-owned/{youtube,user}.txt` with strict explicit seal/read. Source `_33` composes the fully sealed known-owned and manual rows in the original detached managed-target generator under the shared GUI flock. Source `_34` adds an **import-only** durable P2k3/P1→P2k2b bridge: authenticated unknown observer events may relocate previously sealed automatic known-list rows into shared fallback, with both target writes and cursor checkpoint crash-replay-safe under one GUI flock. It does **not** activate native observation, attribute new known-list events, hold original Config through the transaction, or acknowledge pending. The clean-bootstrap flag is not FD9 proof. Unknown/ambiguous events go to final **`/usr/local/etc/zapret2/ipset/auto-domains.txt`**; no duplicate shared unknown store. **No legacy import or migration:** the obsolete `zapret-hosts-auto.txt` contents have no value or retention requirement. Source `_30` removes P2k5 first-copy, P2k6 manual import and its API/configd action, migration planner/receipts and legacy-specific tests; keep this source-only restriction permanent. Do not read, create, sync or treat the old file as a source or final target on any GUI, startup, Apply, upgrade or native-worker path. Retire only files proven to be plugin-owned via existing safe package/cleanup conventions; do not bulk-delete unidentified user data. Preserve genuine `auto-domains.txt` entries, manual lists, exclusions and new findings. Remove current implicit `<HOSTLIST:auto>` from `Target Mode=auto`. **Only the explicitly authored placeholder** enables a specific profile to use the final shared file through ordinary `--hostlist`; detection can still collect without this selector. Preserve unchanged IPSET, Voice, WAN-first, FD9, IPFW/Apply and native file hot reload. Never use raw `inbox.txt` as a GUI/readable final HOSTLIST.
 
 ## 7. P4 — editable GUI and independent scheduled restarts
+
+> **HISTORICAL P4 behavior, SUPERSEDED.** Earlier independent Save/Reload and same-row dropdown below remain only to explain `_70`; they must NOT be implemented or accepted instead of [ТЗ_6v2](TZ_6v2.md). Active STEPS 4–8 govern replacement.
+
 
 **Current replacement:** [ТЗ_6v2](TZ_6v2.md) and its TZ6V2-01…09 acceptance govern the current P4/P5 behavior. The older below independent Save/Reload design and same-row dropdown layout are historical; do not reintroduce them. Only automatic collection—not intentional bottom Apply—must avoid restart.
 
@@ -140,6 +270,9 @@ In the **same upper row to the right of Enabled**, show **label and dropdown** f
 
 ## 8. P5 — proportionate verification and actual package/owner acceptance
 
+> **`_70.pkg` published PASS; owner P5 BLOCKED.** Reuse unaffected eleven original P0–P3 acceptance groups, use nine TZ6V2 groups for new behavior, avoid repeat-test campaigns; see active STEP 10.
+
+
 Follow [GH-016, GH-062 and GH-069](../GITHUB_PUBLICATION.md) with [DEV-061/DEV-062](../PROJECT_PRINCIPLES.md): focused S0 source/parser/rotation/UI checks before PR, fast S1 current-head version/docs/link/identity gates, S2 truly required native first-match/FreeBSD FD/OPNsense checks and scoped S3 real native `.pkg`/owner acceptance. Do not turn unrelated historical VM matrices into mandatory gates, and do not report unexecuted checks as PASS.
 
 The **eleven acceptance groups** in [the normative specification](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md#10-mandatory-acceptance-matrix) must all receive applicable real evidence, including IPSET exclusion, all file races, PSL/private suffixes, GUI concurrency, native advanced visibility with hidden-value persistence, scheduled unchanged-list restart, stopped service, upgrade/remove/purge behavior and **no Strategy Lab change**. A testing package is the input for owner's real verification, not proof of it.
@@ -147,6 +280,9 @@ The **eleven acceptance groups** in [the normative specification](ZAPRET2_NATIVE
 **P5 preparation identified during P1:** the historical installed-receipt shape readers in `scripts/stage5-native-single-artifact.py` and `scripts/stage5-native-running-voice-artifact.py` still assume seven dependencies. Adapt them to the qualified archive/provider identity before their P5 installed campaigns; IDNA is now a declared eighth provider. Their obsolete-head metadata refusals are not P1 policy/package-execution failures or a completed P5 proof. The current P1 copyback gate already compares exact actual dependencies rather than a fixed count.
 
 ## 9. Owner acceptance defects on installed `v0.6.5_70.pkg` — 16 November 2026
+
+> **Owner evidence and old-UI acceptance record preserved.** OWN70-01…03 remain active P0; OWN70-04…06 observations remain valid, **but their historical Save/Reload/help/placement expected results below are superseded** by [ТЗ_6v2](TZ_6v2.md) and active STEPS 7/8. No live action authorized under HOLD.
+
 
 **Evidence tier: owner-installed OPNsense (not CI), 16 November 2026.** The owner confirms `pkg info -x os-zapret2-restyle` reports `os-zapret2-restyle-0.6.5_70` and supplied the real Strategies screenshot, `/var/log/zapret2/setup.log` tail and subsequent read-only diagnostic output. These are genuine device observations; no owner-runtime repair or new service acceptance is claimed. **P5 owner acceptance remains BLOCKED; no source-only or disposable VM PASS overrides it.** Stable repository must not be promoted.
 
