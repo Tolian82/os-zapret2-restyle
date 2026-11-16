@@ -667,9 +667,10 @@ try {
             'ok' if stopped.stdout.strip() == b'OK' else 'unqualified')
         retired = epochs / first_gen / 'retired.json'
         retired_present = retired.is_file() and not retired.is_symlink()
-        print('P2_INSTALLED_ORIGINAL_STOP=' + json.dumps({
+        stopped_diagnostic = {
             'configctl_rc': stopped.returncode,
             'receipt': stop_receipt,
+            'stdout_length': len(stopped.stdout),
             'retired_present': retired_present,
             'engine_pidfile_present': pidfile.is_file(),
             'monitor_pidfile_present': Path(
@@ -677,7 +678,47 @@ try {
             'active_observer_present': (
                 active / 'auto-detect-generation.json').is_file(),
             'stderr_present': bool(stopped.stderr),
-        }, sort_keys=True), flush=True)
+        }
+        if (not pidfile.is_file() and not Path(
+                '/var/run/zapret2-supervisor-monitor.pid').is_file()):
+            # One read-only check of the exact common stopped IPFW state,
+            # never repair/flush/retry the user's stopped original owner.
+            try:
+                hold_fd9()
+                try:
+                    stopped_fw = subprocess.run([
+                        '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                        str(BACKEND / 'voice_ipfw_adapter.py'),
+                        'shared', 'verify', str(active), '-',
+                    ], capture_output=True, timeout=25,
+                        pass_fds=(9,), check=False)
+                    stopped_diagnostic['stopped_ipfw_rc'] = stopped_fw.returncode
+                finally:
+                    os.close(9)
+            except (OSError, subprocess.TimeoutExpired, RuntimeError):
+                stopped_diagnostic['stopped_ipfw_rc'] = 'unavailable'
+            stopped_diagnostic['pretraffic_present'] = (
+                epochs / first_gen / 'pretraffic.json').is_file()
+            stopped_diagnostic['epoch_present'] = (
+                epochs / first_gen / 'epoch.json').is_file()
+            try:
+                log = Path('/var/log/configd/latest.log')
+                if log.is_file() and not log.is_symlink():
+                    with log.open('rb') as stream:
+                        stream.seek(0, os.SEEK_END)
+                        stream.seek(max(0, stream.tell() - 65536))
+                        tail = stream.read(65536)
+                    stopped_diagnostic['retire_refusal_class'] = next((
+                        name for name in ('ReceiptRefused', 'GenerationRefused',
+                                          'MinuteRefused', 'OriginalLockRefused',
+                                          'RuntimeError', 'OSError', 'ValueError',
+                                          'KeyError')
+                        if (b'auto-detect-retire-refused=' + name.encode()) in tail
+                    ), 'not-in-log')
+            except OSError:
+                stopped_diagnostic['retire_refusal_class'] = 'unavailable'
+        print('P2_INSTALLED_ORIGINAL_STOP=' +
+              json.dumps(stopped_diagnostic, sort_keys=True), flush=True)
         need(stopped.returncode == 0 and stop_receipt in {'ok', 'native-stopped'},
              'original-auto-explicit-stop-refused:' + stop_receipt)
         need(retired_present, 'old-installed-original-epoch-not-retired')
