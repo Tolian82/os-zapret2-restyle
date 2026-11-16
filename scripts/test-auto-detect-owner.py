@@ -7,6 +7,9 @@ not prove the actual source generator writes a map or that a real dvtws2 owns it
 from __future__ import annotations
 
 import importlib.util
+import ctypes
+import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -49,6 +52,7 @@ class FakePS:
         self.stopped_rows = "0 [kernel]\\n1 /sbin/init\\n77 /bin/ps\\n".replace("\\n", "\n")
         self.commands: list[list[str]] = []
         self.fail = False
+        self.truncate_child_at = 0
 
     def __call__(self, argv, **_):
         self.commands.append(argv)
@@ -63,12 +67,34 @@ class FakePS:
             return subprocess.CompletedProcess(argv, 0, "\n".join(lines) + "\n", "")
         if str(PID) in argv:
             data = f"{self.birth} {EXE} {self.args} --sockarg=0x200 --user=nobody\n"
+            if self.truncate_child_at:
+                data = data[:self.truncate_child_at].rstrip("\n") + "\n"
         elif str(MONITOR_PID) in argv:
             data = (f"{self.birth} {self.monitor_exe} {self.child_pidfile} "
                     f"{Path(MONITOR).with_name('zapret_service.sh')} {EXE}\n")
         else:
             return subprocess.CompletedProcess(argv, 1, "", "")
         return subprocess.CompletedProcess(argv, 0, data, "")
+
+
+class FakeArgvSysctl:
+    """Fixture preserves kernel NUL boundaries past ps text truncation."""
+
+    def __init__(self, argv):
+        self.raw = b"\x00".join(x.encode("utf-8") for x in argv) + b"\x00"
+
+    def __call__(self, mib, miblen, pointer, length_ptr, new_ptr, new_len):
+        assert miblen == 4 and list(mib) == [1, 14, 7, PID]
+        n = ctypes.cast(length_ptr, ctypes.POINTER(ctypes.c_size_t))
+        if pointer is None:
+            n[0] = len(self.raw)
+        else:
+            if n[0] < len(self.raw):
+                ctypes.set_errno(errno.ENOMEM)
+                return -1
+            ctypes.memmove(pointer, self.raw, len(self.raw))
+            n[0] = len(self.raw)
+        return 0
 
 
 class OwnerGenerationTests(unittest.TestCase):
@@ -147,6 +173,8 @@ class OwnerGenerationTests(unittest.TestCase):
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
             epoch_finalizing_operation=epoch_finalizing_operation,
+            argv_reader=lambda pid: [EXE, *self.ps.args.split(),
+                                     "--sockarg=0x200", "--user=nobody"],
         )
 
     def refuses(self):
@@ -268,6 +296,34 @@ class OwnerGenerationTests(unittest.TestCase):
         with self.assertRaises(owner_mod.GenerationRefused):
             self.witness(epoch_finalizing_operation=OP_ID)
         self.assertEqual(self.witness().generation, OP_ID)
+
+    def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
+        long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,
+                     "--sockarg=0x200", "--user=nobody"]
+        kernel = FakeArgvSysctl(long_argv)
+        self.assertGreater(len(kernel.raw), 2048)
+        self.assertEqual(owner_mod._freebsd_argv(PID, sysctl_call=kernel), long_argv)
+        for bad in (b"\x00", b"/bin/foo", b"/bin/foo\x00\x00",
+                    b"/bin/foo\xff\x00"):
+            malformed = FakeArgvSysctl([EXE])
+            malformed.raw = bad
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod._freebsd_argv(PID, sysctl_call=malformed)
+        with self.assertRaises(owner_mod.GenerationRefused):
+            owner_mod._freebsd_argv(PID, sysctl_call=lambda *args: -1)
+
+    def test_realistic_long_ps_display_is_not_kernel_argv(self):
+        # Owner FreeBSD: ps -ww 2049 bytes; sealed args 2410;
+        # procstat -c 2582 bytes, including both mandatory suffix flags.
+        self.argv = self.argv.replace(
+            "--filter-tcp=443\n",
+            "--lua-init=@" + "x" * 2200 + "\n--filter-tcp=443\n", 1)
+        self.map["final_args_sha256"] = hashlib.sha256(self.argv.encode()).hexdigest()
+        self.refresh()
+        self.ps.truncate_child_at = 2048
+        self.assertEqual(self.witness().generation, OP_ID)
+        self.ps.args += " --foreign-hidden-after-2048"
+        self.refuses()
 
     def stopped_fixture(self):
         # Physically persist the same original root-private pretraffic/epoch

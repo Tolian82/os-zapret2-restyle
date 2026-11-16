@@ -10,6 +10,8 @@ RUNNING attestation remains separate from exact STOPPED old-epoch retirement.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -91,6 +93,48 @@ def _run(runner, argv: list[str]) -> str:
             or len(result.stdout) > 131072):
         raise GenerationRefused("native_process_query_unavailable")
     return result.stdout
+
+
+def _freebsd_argv(pid: int, *, sysctl_call=None) -> list[str]:
+    """Read exact FreeBSD KERN_PROC_ARGS vector, not the truncated ps display."""
+    if type(pid) is not int or not 1 < pid < (1 << 31):
+        raise GenerationRefused("invalid_native_process_pid")
+    if sysctl_call is None:
+        if not sys.platform.startswith("freebsd"):
+            raise GenerationRefused("native_argv_requires_freebsd")
+        libc = ctypes.CDLL(None, use_errno=True)
+        sysctl_call = libc.sysctl
+        sysctl_call.argtypes = (
+            ctypes.POINTER(ctypes.c_int), ctypes.c_uint, ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_size_t), ctypes.c_void_p, ctypes.c_size_t)
+        sysctl_call.restype = ctypes.c_int
+    # <sys/sysctl.h>: CTL_KERN, KERN_PROC, KERN_PROC_ARGS, pid.
+    mib = (ctypes.c_int * 4)(1, 14, 7, pid)
+    for _ in range(3):
+        length = ctypes.c_size_t(0)
+        if sysctl_call(mib, 4, None, ctypes.byref(length), None, 0) != 0:
+            raise GenerationRefused("native_argv_query_failed")
+        if not 1 < length.value <= MAX_ARGS:
+            raise GenerationRefused("native_argv_invalid_length")
+        buf = ctypes.create_string_buffer(length.value)
+        size = ctypes.c_size_t(length.value)
+        if sysctl_call(mib, 4, buf, ctypes.byref(size), None, 0) != 0:
+            if ctypes.get_errno() == errno.ENOMEM:
+                continue
+            raise GenerationRefused("native_argv_read_failed")
+        if not 1 < size.value <= len(buf):
+            raise GenerationRefused("native_argv_changed_length")
+        raw = buf.raw[:size.value]
+        if not raw.endswith(b"\x00"):
+            raise GenerationRefused("native_argv_unterminated")
+        parts = raw[:-1].split(b"\x00")
+        if not parts or any(not part for part in parts):
+            raise GenerationRefused("native_argv_empty_argument")
+        try:
+            return [part.decode("utf-8") for part in parts]
+        except UnicodeDecodeError as exc:
+            raise GenerationRefused("native_argv_invalid_encoding") from exc
+    raise GenerationRefused("native_argv_unstable")
 
 
 def _snapshot(runner, pid: int) -> tuple[str, list[str]]:
@@ -199,7 +243,10 @@ def _exact_common_supervisor_argv(argv: list[str], child_pidfile: Path) -> bool:
 def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  child_pidfile: Path, monitor_pidfile: Path,
                  runner, owner_uid: int,
-                 epoch_finalizing_operation: str | None = None) -> GenerationProof:
+                 epoch_finalizing_operation: str | None = None,
+                 argv_reader=None) -> GenerationProof:
+    if argv_reader is None:
+        argv_reader = _freebsd_argv
     record = SharedApplyOperation(journal, owner=owner_uid).read()
     if epoch_finalizing_operation is None:
         # Public worker and ACK never trust an unfinished original epoch.
@@ -234,7 +281,12 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     mapping, profiles = _valid_map(raw_map, owner, sealed_argv)
 
     pid, monitor = _pid(child_pidfile, owner_uid), _pid(monitor_pidfile, owner_uid)
-    birth, command = _snapshot(runner, pid)
+    birth, ps_command = _snapshot(runner, pid)
+    # Owner FreeBSD ps -ww truncates this genuine argv at 2048 bytes.
+    # ps attests birth/executable only; use the kernel vector for equality.
+    if not ps_command or ps_command[0] != CHILD_EXEC:
+        raise GenerationRefused("running_engine_executable_differs")
+    command = argv_reader(pid)
     expected = [CHILD_EXEC] + sealed_argv.decode("utf-8").split() + [
         "--sockarg=0x200", "--user=nobody"]
     if command != expected:
@@ -257,7 +309,7 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
         raise GenerationRefused("engine_birth_or_executable_changed")
     if (_pid(child_pidfile, owner_uid), _pid(monitor_pidfile, owner_uid)) != (pid, monitor):
         raise GenerationRefused("launcher_owner_changed")
-    if _snapshot(runner, pid) != (birth, command):
+    if _snapshot(runner, pid)[0] != birth or argv_reader(pid) != command:
         raise GenerationRefused("engine_changed_during_owner_read")
     if SharedApplyOperation(journal, owner=owner_uid).read() != record:
         raise GenerationRefused("common_owner_changed_during_read")
