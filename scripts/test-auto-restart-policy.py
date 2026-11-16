@@ -82,6 +82,13 @@ class AutoRestartNativePolicy(unittest.TestCase):
         self.assertIn('shared_apply_boot_service "$_auto_restart_owner"', service)
         self.assertIn("SharedApplyLifecycleLock::assertHeld();", php)
         self.assertIn("autoRestartPreference", php)
+        # Stock OPNsense OptionField getNodes() is a UI choices map.
+        # The saved restart enum must use the raw canonical Model content.
+        restart = php.split("public static function autoRestartPreference(): string", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("$model->getNodeContent()", restart)
+        self.assertNotIn("$model->getNodes()", restart)
+        self.assertIn("$general['autorestart'] ?? 'off'", restart)
+        self.assertIn("['off', 'hourly', 'daily', 'weekly', 'monthly']", restart)
         self.assertIn("run_native_original_v2_cycle_once()", minute)
         self.assertIn("require_lifecycle_lock()", minute)
         self.assertIn("auto-detect-minute",

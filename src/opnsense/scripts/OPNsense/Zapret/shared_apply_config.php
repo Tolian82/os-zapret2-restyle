@@ -161,7 +161,10 @@ final class SharedApplyConfigWorker
         $config->lock();
         try {
             $model = new \OPNsense\Zapret\Zapret();
-            $nodes = $model->getNodes();
+            // OptionField::getNodeData() (and thus getNodes()) is a GUI
+            // options/selected map, NOT the saved enum. The stock OPNsense
+            // getNodeContent() reads the exact underlying field values.
+            $nodes = $model->getNodeContent();
             $general = $nodes['general'] ?? null;
             if (!is_array($general)) {
                 throw new \RuntimeException('Native general Config unavailable');
