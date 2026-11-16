@@ -814,6 +814,21 @@ try {
         synthetic_host = 'native-observer-p5b2b.example.org'
         need(RAW_PATH.is_file() and RAW_PATH.read_bytes() == b'',
              'native-source-not-idle-before-positive')
+        def scoped_counters():
+            reply = run('/sbin/ipfw', '-a', 'list', timeout=18)
+            if reply.returncode != 0 or len(reply.stdout) > 1048576:
+                return None, False
+            counters = {}
+            port_seen = False
+            for line in reply.stdout.decode('utf-8', 'replace').splitlines():
+                found = re.match(r'^\\s*0*([0-9]+)\\s+([0-9]+)\\s+', line)
+                if found and 19000 <= int(found[1]) <= 19010:
+                    counters[int(found[1])] = int(found[2])
+                    if '6545' in line and 'lo0' in line:
+                        port_seen = True
+            return counters, port_seen
+        before_packets, _ = scoped_counters()
+
         need(client.exchange(synthetic_host, port=test_port, force_rst=True)
              == client.request(synthetic_host),
              'native-unknown-http-forwarding-failed')
@@ -821,6 +836,25 @@ try {
             if RAW_PATH.read_text().splitlines() == [synthetic_host]:
                 break
             time.sleep(.25)
+        after_packets, scope_port_seen = scoped_counters()
+        compiled = (active / 'dvtws.args').read_text()
+        observed_raw = RAW_PATH.read_text().splitlines()
+        observed_debug = DEBUG_PATH.read_text()
+        packet_changed = (before_packets is not None and after_packets is not None and
+                          any(after_packets.get(i, 0) > n for i, n in before_packets.items()))
+        print('P2_INSTALLED_NATIVE_HTTP_SCOPE=' + json.dumps({
+            'exact_known_tcp_profile': compiled.count('--filter-tcp=6545') >= 1,
+            'native_auto_present': '--hostlist-auto=' in compiled,
+            'observer_http_l7': '--filter-l7=http' in compiled,
+            'scoped_ipfw_rule_has_lo0_test_port': scope_port_seen,
+            'scoped_ipfw_packet_counter_changed': packet_changed,
+            'scoped_rule_count': len(after_packets or {}),
+            'raw_event_count': len(observed_raw),
+            'debug_mentions_test_host': synthetic_host in observed_debug,
+            'debug_has_profile_search': 'desync profile search' in observed_debug,
+            'engine_identity_stable': current_identity() == (
+                second_gen, second_pid, second_birth),
+        }, sort_keys=True), flush=True)
         need(RAW_PATH.read_text().splitlines() == [synthetic_host],
              'native-unknown-raw-append-not-observed')
         old_map = json.loads((active / 'auto-detect-generation.json').read_bytes())
