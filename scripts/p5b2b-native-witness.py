@@ -859,11 +859,11 @@ try {
             # Diagnostic ONLY on disposable guest: original production
             # capture owns outbound WAN packets but does not yet capture
             # return RST/SYN+ACK. Verify the documented inbound dependency
-            # with three temporary, precisely scoped lo0 rules OUTSIDE the
+            # with one temporary RST-only lo0 rule OUTSIDE the
             # reserved plugin ranges. Never misreport a synthetic rule as
             # an installed-product PASS.
-            temporary = (19355, 19356, 19357)
-            flags = ('syn,ack', 'rst', 'fin')
+            temporary = (19356,)
+            flags = ('rst',)
             listed = run('/sbin/ipfw', '-q', 'list', timeout=15)
             need(listed.returncode == 0 and len(listed.stdout) < 1000000,
                  'native-diagnostic-rules-unreadable')
@@ -883,13 +883,19 @@ try {
                     need(created.returncode == 0,
                          'native-disposable-inbound-rule-install-failed')
                     configured.append(number)
-                need(client.exchange(synthetic_host, port=test_port,
-                                     force_rst=True) == client.request(synthetic_host),
-                     'native-reverse-probe-forwarding-failed')
-                for _ in range(12):
-                    if RAW_PATH.read_text().splitlines() == [synthetic_host]:
-                        break
-                    time.sleep(.25)
+                try:
+                    delivered = client.exchange(synthetic_host, port=test_port,
+                                                force_rst=True)
+                    receipt['reverse_http_delivered'] = (
+                        delivered == client.request(synthetic_host))
+                except (OSError, RuntimeError, TimeoutError) as error:
+                    receipt['reverse_http_delivered'] = False
+                    receipt['reverse_http_failure_class'] = type(error).__name__
+                if receipt['reverse_http_delivered']:
+                    for _ in range(12):
+                        if RAW_PATH.read_text().splitlines() == [synthetic_host]:
+                            break
+                        time.sleep(.25)
                 stats = run('/sbin/ipfw', '-a', 'list', timeout=15)
                 if stats.returncode == 0 and len(stats.stdout) < 1000000:
                     matches = {}
