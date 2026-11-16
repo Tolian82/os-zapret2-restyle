@@ -401,19 +401,23 @@
                     controls.hide();
                 }
             }
-            const toggle = document.getElementById('show_advanced_frm_GeneralSettings');
-            if (toggle) {
-                if (window.MutationObserver) {
-                    new MutationObserver(syncAdvanced).observe(
-                        toggle, {attributes:true, attributeFilter:['class']});
-                }
-                // The stock OPNsense Advanced click handler can run after
-                // our DOM-ready binding. Reconcile at the end of that same
-                // native click, not before the icon has reached its new state.
-                $(toggle).on('click', function() {
-                    window.setTimeout(syncAdvanced, 0);
-                });
+            // Stock OPNsense 26.7 uses a form-local Advanced toggle ID
+            // that is not guaranteed to equal show_advanced_frm_GeneralSettings.
+            // Require the one real native toggle, never fabricate a new one.
+            const switches = $('#frm_GeneralSettings').find('[id^="show_advanced_"]');
+            if (switches.length !== 1) {
+                controls.hide();
+                return;
             }
+            const toggle = switches[0];
+            if (window.MutationObserver) {
+                new MutationObserver(syncAdvanced).observe(
+                    toggle, {attributes:true, attributeFilter:['class']});
+            }
+            // Run after the stock handler has changed native row visibility.
+            $(toggle).on('click', function() {
+                window.setTimeout(syncAdvanced, 0);
+            });
             syncAdvanced();
         }
 
