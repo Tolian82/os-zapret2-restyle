@@ -456,6 +456,47 @@ def native_installed_auto_handoff():
                 state['config_saved_auto'] = 'unreadable'
             if (state['journal'] == 'requires-review' and
                     state['live_generation_present']):
+                # Post-error read-only comparison against the SAME exact
+                # process token grammar as the original native P2c owner.
+                # Report boolean results only: process argv stays private.
+                try:
+                    from auto_detect_owner import _snapshot as process_snapshot
+                    child_pid = int(pidfile.read_text('ascii').strip())
+                    monitor_pid = int(Path(
+                        '/var/run/zapret2-supervisor-monitor.pid'
+                    ).read_text('ascii').strip())
+                    _, child_argv = process_snapshot(subprocess.run, child_pid)
+                    _, monitor_argv = process_snapshot(subprocess.run, monitor_pid)
+                    installed_argv = (active / 'dvtws.args').read_text().split()
+                    state['engine_exact_native_argv'] = (
+                        child_argv == [str(ENGINE), *installed_argv,
+                                       '--sockarg=0x200', '--user=nobody'])
+                    supervisor = str(SERVICE.parent / 'supervisor_loop.sh')
+                    state['monitor_first_token_exact'] = bool(
+                        monitor_argv and monitor_argv[0] == supervisor)
+                    state['monitor_script_in_argv'] = (
+                        supervisor in monitor_argv)
+                    census = subprocess.run([
+                        '/bin/ps', '-A', '-ww', '-o', 'pid=', '-o', 'command=',
+                    ], capture_output=True, text=True, timeout=8, check=False)
+                    if census.returncode == 0:
+                        state['exact_engine_process_count'] = sum(
+                            1 for line in census.stdout.splitlines()
+                            if len(line.split()) >= 2 and
+                            line.split()[1] == str(ENGINE))
+                    entry = document.get('detail', {})
+                    if isinstance(entry, dict):
+                        name = entry.get('id', '')
+                        if isinstance(name, str) and re.fullmatch('[0-9a-f]{32}', name):
+                            plan = json.loads((Path('/var/db/zapret2/shared-work') /
+                                               name / 'plan.json').read_bytes())
+                            state['original_plan_matches_owner'] = (
+                                isinstance(plan, dict) and
+                                plan.get('dependencies') == entry.get('base') and
+                                plan.get('changed_fields') == entry.get('changed_fields'))
+                except (OSError, ValueError, TypeError,
+                        subprocess.TimeoutExpired, RuntimeError) as error:
+                    state['native_process_snapshot'] = type(error).__name__
                 # The existing native firewall adapter's verify action is
                 # strictly read-only. Capture only status, not rules/hosts.
                 try:
