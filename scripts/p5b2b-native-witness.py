@@ -888,10 +888,14 @@ try {
     finally:
         if running:
             final = run(cli, 'zapret', 'stop', timeout=150)
+            # On an earlier failure second_gen may never have been created.
+            # Do not mask the original reason with UnboundLocalError.
+            stopped_generation = locals().get('second_gen', locals().get('first_gen'))
+            retirement_ok = (stopped_generation is None or
+                             (epochs / stopped_generation / 'retired.json').is_file())
             need(final.returncode == 0 and
-                 (b'Execute error' not in final.stdout) and
-                 (epochs / second_gen / 'retired.json').is_file(),
-                 'installed-auto-final-positive-generation-not-retired')
+                 b'Execute error' not in final.stdout and retirement_ok,
+                 'installed-auto-final-generation-not-retired')
 
 
 def self_test():
