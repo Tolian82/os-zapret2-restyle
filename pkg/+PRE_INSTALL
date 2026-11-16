@@ -127,7 +127,11 @@ case "${service_status}" in
 esac
 
 if [ "${service_status}" -ne 1 ]; then
-    if ! "${SERVICE_SCRIPT}" stop >/dev/null 2>&1; then
+    if "${SERVICE_SCRIPT}" stop >/dev/null 2>&1; then
+        printf 'zapret-pkg-preinstall-stop-rc=0\n'
+    else
+        _pkg_stop_rc=$?
+        printf 'zapret-pkg-preinstall-stop-rc=%s\n' "${_pkg_stop_rc}"
         rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
         echo "ERROR: zapret service could not be stopped; package replacement aborted" >&2
         exit 1
@@ -135,6 +139,7 @@ if [ "${service_status}" -ne 1 ]; then
 
     read_service_status
     stopped_status=$?
+    printf 'zapret-pkg-preinstall-poststop-status=%s\n' "${stopped_status}"
     if [ "${stopped_status}" -ne 1 ]; then
         rm -f "${UPGRADE_RESTART_MARKER}" "${REPLACEMENT_RESTART_MARKER}"
         echo "ERROR: zapret service still owns runtime state; package replacement aborted" >&2

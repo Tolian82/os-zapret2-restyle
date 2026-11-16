@@ -359,6 +359,33 @@ def native():
              staged_status.stdout.strip() == "zapret is running" and
              not any(before_markers.values()),
              "native_prepackage_running_owner_not_qualified")
+        # The original Stop requires a stronger running-epoch proof
+        # than GUI status. Probe exactly its pre-retire read-only gate under
+        # the ORIGINAL held FD9 and queue lock without any service signal,
+        # Config/IPFW change or new lifecycle owner.
+        sys.path.insert(0, str(stage / "backend"))
+        witness.hold_fd9()
+        try:
+            pre = subprocess.run([
+                str(stage / "python_runtime.sh"),
+                str(stage / "backend" / "auto_detect_minute.py"),
+                "--pre-retire",
+            ], capture_output=True, text=True, timeout=35,
+               pass_fds=(9,), check=False)
+        finally:
+            os.close(9)
+        label = re.search(r"auto-detect-retire-refused=([A-Za-z]{3,50})",
+                          pre.stderr)
+        print("OWN70_NATIVE_STOP_PREFLIGHT=" + json.dumps({
+            "original_fd9_pre_retire_rc": pre.returncode,
+            "pre_retire_running_attested":
+                pre.stdout.strip() == "auto-detect-retire=original-running-attested",
+            "pre_retire_exception_class":
+                label.group(1) if label else "none",
+        }, sort_keys=True), flush=True)
+        need(pre.returncode == 0 and
+             pre.stdout.strip() == "auto-detect-retire=original-running-attested",
+             "native_original_running_epoch_pre_retirement_refused")
         # Both original hook generations expose SERVICE_SCRIPT. Whether
         # genuine FreeBSD pkg forwards that environment is what this
         # disposable native test must PROVE, not assume. Use the same real
@@ -383,6 +410,14 @@ def native():
             "new_preinstall_saw_stopped": "zapret-pkg-preinstall-status=1" in debug,
             "new_preinstall_stop_verified":
                 "zapret-pkg-preinstall-stop-verified=1" in debug,
+            "new_preinstall_stop_command_rc":
+                (int(re.search(r"zapret-pkg-preinstall-stop-rc=(\d+)",debug).group(1))
+                 if re.search(r"zapret-pkg-preinstall-stop-rc=(\d+)",debug)
+                 else "missing"),
+            "new_preinstall_poststop_status":
+                (int(re.search(r"zapret-pkg-preinstall-poststop-status=(\d+)",debug).group(1))
+                 if re.search(r"zapret-pkg-preinstall-poststop-status=(\d+)",debug)
+                 else "missing"),
             "new_postinstall_restart_intent":
                 ("true" if "zapret-pkg-postinstall-restart-intent=1" in debug
                  else "false" if
@@ -393,6 +428,10 @@ def native():
             "native_pkg_rc": update.returncode,
             "pkg_debug_mentions_phases": phases,
             "native_original_hook_receipts": hook,
+            "native_pkg_reports_stop_failure":
+                "zapret service could not be stopped; package replacement aborted" in debug,
+            "native_pkg_reports_poststop_failure":
+                "zapret service still owns runtime state; package replacement aborted" in debug,
             "pkg_reports_successful_extract": "extracting" in debug,
             "pkg_debug_output_bounded": len(debug) <= 512 * 1024,
         }, sort_keys=True), flush=True)
