@@ -701,6 +701,57 @@ try {
                 epochs / first_gen / 'pretraffic.json').is_file()
             stopped_diagnostic['epoch_present'] = (
                 epochs / first_gen / 'epoch.json').is_file()
+            # Strict *read-only* post-Stop owner and cursor evidence, using
+            # the original physical FD9. Do NOT invoke retire-once, ACK or
+            # the source-rotation mutators from the diagnostics.
+            try:
+                hold_fd9()
+                try:
+                    from auto_detect_owner import attest_stopped_generation
+                    from auto_detect_cursor_chain import CursorChain
+                    from auto_detect_queue import DurableInbox
+                    from auto_detect_epoch_receipts import EpochReceipts
+                    from auto_detect_storage import ROOT as QUEUE_ROOT, ENGINE_USER
+                    import pwd
+                    try:
+                        proof = attest_stopped_generation()
+                        stopped_diagnostic['stopped_owner'] = 'attested'
+                        gid = pwd.getpwnam(ENGINE_USER).pw_gid
+                        queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
+                        queue._verify()  # no lock creation or filesystem write
+                        receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
+                        tip = CursorChain(receipts, queue).tip(proof)
+                        stopped_diagnostic['pending_count'] = len(queue.segments())
+                        stopped_diagnostic['cursor_open_intent'] = (
+                            tip.open_intent is not None)
+                        stopped_diagnostic['cursor_open_folder'] = (
+                            tip.open_folder is not None)
+                        stopped_diagnostic['raw_bytes'] = queue.inbox.stat().st_size
+                        stopped_diagnostic['debug_bytes'] = Path(
+                            proof.debug_path).stat().st_size
+                    except (OSError, ValueError, TypeError, RuntimeError,
+                            KeyError) as error:
+                        stopped_diagnostic['stopped_owner'] = 'refused'
+                        # Internal machine-only error slugs are safe; never
+                        # print exception text containing private input.
+                        reasons = []
+                        current = error
+                        for _ in range(4):
+                            if current is None:
+                                break
+                            reason = str(current)
+                            reasons.append({
+                                'class': type(current).__name__[:48],
+                                'code': (reason if re.fullmatch(
+                                    '[a-z][a-z0-9_]{2,79}', reason)
+                                    else 'unqualified'),
+                            })
+                            current = current.__cause__
+                        stopped_diagnostic['retire_readonly_refusal'] = reasons
+                finally:
+                    os.close(9)
+            except (OSError, ValueError, RuntimeError) as error:
+                stopped_diagnostic['stopped_owner'] = 'probe-unavailable'
             try:
                 log = Path('/var/log/configd/latest.log')
                 if log.is_file() and not log.is_symlink():
