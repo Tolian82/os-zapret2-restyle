@@ -454,6 +454,54 @@ def native_installed_auto_handoff():
                     mode_node is not None and mode_node.text == 'auto')
             except (OSError, ET.ParseError):
                 state['config_saved_auto'] = 'unreadable'
+            if (state['journal'] == 'requires-review' and
+                    state['live_generation_present']):
+                # The existing native firewall adapter's verify action is
+                # strictly read-only. Capture only status, not rules/hosts.
+                try:
+                    hold_fd9()
+                    try:
+                        end = subprocess.run([
+                            '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                            str(BACKEND / 'voice_ipfw_adapter.py'),
+                            'shared', 'verify', '-', str(active),
+                        ], capture_output=True, timeout=25,
+                            pass_fds=(9,), check=False)
+                        state['final_ipfw_rc'] = end.returncode
+                    finally:
+                        os.close(9)
+                except (OSError, subprocess.TimeoutExpired, RuntimeError):
+                    state['final_ipfw_rc'] = 'unavailable'
+                # Read only a bounded disposable-VM log suffix; emit a
+                # fixed set of known diagnostic classifications, NEVER the
+                # log text (which may contain private Config or argv).
+                log = Path('/var/log/configd/latest.log')
+                if log.is_file() and not log.is_symlink():
+                    try:
+                        with log.open('rb') as stream:
+                            stream.seek(0, os.SEEK_END)
+                            stream.seek(max(0, stream.tell() - 65536))
+                            tail = stream.read(65536)
+                        markers = {
+                            'epoch-completion-refused':
+                                b'shared Apply: original epoch completion refused',
+                            'epoch-completion-unverified':
+                                b'shared Apply: original epoch completion unverified',
+                            'engine-process-census':
+                                b'shared Apply: unexpected or untracked dvtws2 process',
+                            'restore-failed': b'RESTORE_FAILED',
+                        }
+                        state['native_error_markers'] = sorted(
+                            name for name, phrase in markers.items()
+                            if phrase in tail)
+                        match = re.search(
+                            rb'original-fd9-postdrop-refused=([A-Za-z]{1,48})',
+                            tail)
+                        if match:
+                            state['postdrop_exception_class'] = (
+                                match.group(1).decode('ascii'))
+                    except (OSError, ValueError):
+                        state['native_error_markers'] = 'unavailable'
             print('P2_INSTALLED_ORIGINAL_FAILURE_STATE=' +
                   json.dumps(state, sort_keys=True), flush=True)
         need(False, 'installed-original-auto-shared-apply-refused:' +
