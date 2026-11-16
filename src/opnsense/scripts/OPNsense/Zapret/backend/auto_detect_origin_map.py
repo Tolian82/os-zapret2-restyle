@@ -225,9 +225,62 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
                 strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(), profiles=records)
 
 
+def _original_global_policy_paths(release: Path) -> tuple:
+    """Reuse the one Stage 3 manifest and canonical global exclusion policy."""
+    reference = Path("/usr/local/etc/zapret2/runtime-v2")
+    return (release / "managed/hostlist-exclude.txt",
+            str(reference / "managed/hostlist-exclude.txt"),
+            release / "managed/ipset-exclude.txt",
+            str(reference / "managed/ipset-exclude.txt"),
+            reference, release, Path("/usr/local/etc/zapret2"))
+
+
+def _attach_original_global_exclusions(release: Path, original: bytes,
+                                        planned: bytes) -> bytes:
+    """Append only Stage 3 global exclusions to the new observer profile.
+
+    The original generated argv, native IPSET manifest, and global-policy
+    marker must already agree. Never silently drop an exclusion just to
+    activate Auto-detect, or change earlier Voice/Strategies profiles.
+    This is read-only; the existing original FD9 promotes the output.
+    """
+    from global_exclusions import audit, compose
+    release = Path(release)
+    witness = release / "dvtws.args.global-policy.json"
+    if not witness.exists() and not witness.is_symlink():
+        return planned  # Historical marker-less releases keep legacy proof.
+    try:
+        proof = __import__("json").loads(_capture_file(
+            witness, limit=16384, owner_uid=__import__("os").geteuid()))
+        original_text, proposed_text = _text(original), _text(planned)
+        if (not isinstance(proof, dict) or set(proof) !=
+                {"schema", "argv_sha256", "profiles"} or
+                type(proof["schema"]) is not int or proof["schema"] != 1 or
+                proof["argv_sha256"] != _sha(original) or
+                type(proof["profiles"]) is not int or
+                proof["profiles"] != len(segments(original_text))):
+            raise AttributionError("untrusted original global exclusion witness")
+        arguments = _original_global_policy_paths(release)
+        audit(original_text, *arguments)
+        final_text = compose(proposed_text, *arguments)
+        old_rows, new_rows = segments(proposed_text), segments(final_text)
+        if (len(old_rows) != len(new_rows) or old_rows[:-1] != new_rows[:-1]
+                or new_rows[-1][:len(old_rows[-1])] != old_rows[-1]
+                or any(t not in {
+                    "--hostlist-exclude=" + arguments[1],
+                    "--ipset-exclude=" + arguments[3],
+                } for t in new_rows[-1][len(old_rows[-1]):])):
+            raise AttributionError("global policy changed prior native profile")
+        audit(final_text, *arguments)
+        return final_text.encode("utf-8")
+    except (OSError, ValueError, TypeError, KeyError) as exc:
+        raise AttributionError("observer global exclusion proof unavailable") from exc
+
+
 def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
                            owner_candidate_sha256: str, raw_path: str,
-                           debug_path: str, tcp_ports: str) -> tuple[bytes, dict]:
+                           debug_path: str, tcp_ports: str,
+                           policy_release: Path | None = None) -> tuple[bytes, dict]:
     """Plan the P0 no-action tail from the original same-build source map.
 
     This is strictly an OFFLINE proposal: it never edits the sealed release,
@@ -317,6 +370,8 @@ def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
                f"--hostlist-auto={raw_path}", "--hostlist-auto-fail-threshold=1",
                "--hostlist-auto-retrans-reset=0"]
     output = ("\n".join(planned) + "\n").encode("utf-8")
+    if policy_release is not None:
+        output = _attach_original_global_exclusions(policy_release, original, output)
     if len(output) > 256 * 1024:
         raise AttributionError("planned native arguments exceed safety limit")
     rows.append({"native_number": observer, "status": "observer", "hostlist": None})
@@ -507,7 +562,7 @@ def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
         owner_candidate_sha256=candidate_digest,
         raw_path=str(RAW_PATH),
         debug_path=str(DEBUG_PATH),
-        tcp_ports=tcp,
+        tcp_ports=tcp, policy_release=release,
     )
     if mapping["evidence"] != "P2F_OFFLINE_PLAN_ONLY":
         raise AttributionError("observer proposal unexpectedly authorizes activation")
@@ -547,7 +602,7 @@ def _authorized_projection(work: Path, digest: str) -> tuple[bytes, bytes, bytes
     proposed, record = plan_trailing_observer(
         source, original, owner_id=work.name,
         owner_candidate_sha256=digest, raw_path=str(RAW_PATH),
-        debug_path=str(DEBUG_PATH), tcp_ports=tcp)
+        debug_path=str(DEBUG_PATH), tcp_ports=tcp, policy_release=release)
     record["evidence"] = "ORIGINAL_SHARED_GENERATOR_CAPTURE"
     encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode()
     # The production owner's schema-2 verifier remains the one authority.
@@ -645,6 +700,19 @@ def verify_original_promotion(workspace: Path, candidate_digest: str) -> dict:
         raise AttributionError("untrusted original source for promoted observer")
     record, _ = _valid_map(raw, {"id": work.name,
                                  "candidate": candidate_digest}, final)
+    witness = release / "dvtws.args.global-policy.json"
+    if witness.exists() or witness.is_symlink():
+        from global_exclusions import audit
+        policy = __import__("json").loads(_capture_file(
+            witness, limit=16384, owner_uid=os.geteuid()))
+        if (not isinstance(policy, dict) or set(policy) !=
+                {"schema", "argv_sha256", "profiles"} or
+                type(policy["schema"]) is not int or policy["schema"] != 1 or
+                policy["argv_sha256"] != _sha(final) or
+                type(policy["profiles"]) is not int or
+                policy["profiles"] != len(segments(_text(final)))):
+            raise AttributionError("promoted observer global policy witness changed")
+        audit(_text(final), *_original_global_policy_paths(release))
     expected_profiles = [
         {"native_number": row["native_number"], "status": row["status"],
          "hostlist": row["hostlist"]}
@@ -685,18 +753,38 @@ def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
     final_map = release / MAP_NAME
     staged_args = release / ".auto-detect-final.args.pending"
     staged_map = release / ".auto-detect-generation.json.pending"
+    policy_path = release / "dvtws.args.global-policy.json"
+    staged_policy = release / ".dvtws.args.global-policy.json.pending"
+    has_policy = policy_path.exists() or policy_path.is_symlink()
+    if has_policy and (staged_policy.exists() or staged_policy.is_symlink()):
+        raise AttributionError("partial original global policy promotion")
     if (_capture_file(live_args, owner_uid=os.geteuid()) != original or
             any(path.exists() or path.is_symlink() for path in
                 (final_map, staged_args, staged_map))):
         raise AttributionError("original observer promotion already modified")
     _secure_new_file(staged_args, planned)
     _secure_new_file(staged_map, encoded)
+    if has_policy:
+        # Existing Stage 3 digest/count applies to the original generator.
+        # Only the new, audited native observer is allowed to change it.
+        proof = __import__("json").loads(_capture_file(
+            policy_path, limit=16384, owner_uid=os.geteuid()))
+        if (proof.get("argv_sha256") != _sha(original) or
+                proof.get("profiles") != len(segments(_text(original)))):
+            raise AttributionError("stale original global policy during promotion")
+        renewed = {"schema": 1, "argv_sha256": _sha(planned),
+                   "profiles": len(segments(_text(planned)))}
+        _secure_new_file(staged_policy, (
+            __import__("json").dumps(renewed, sort_keys=True,
+                                    separators=(",", ":")) + "\\n").encode())
     if (_capture_file(live_args, owner_uid=os.geteuid()) != original or
             _capture_file(staged_args, owner_uid=os.geteuid()) != planned or
             _capture_file(staged_map, owner_uid=os.geteuid()) != encoded):
         raise AttributionError("changed original observer promotion candidate")
     os.replace(staged_args, live_args)
     os.replace(staged_map, final_map)
+    if has_policy:
+        os.replace(staged_policy, policy_path)
     for name in ("auto-detect-observer-preview.args",
                  "auto-detect-observer-preview.json"):
         (release / name).unlink()
