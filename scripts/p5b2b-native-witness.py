@@ -595,18 +595,18 @@ def native_installed_auto_handoff():
             php_probe = r'''require_once('/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php');
 $phase='uid';
 try {
-  if (\\OPNsense\\Zapret\\Native\\SharedApplyLifecycleLock::effectiveUid() !== 0) throw new \\RuntimeException('uid');
+  if (\OPNsense\Zapret\Native\SharedApplyLifecycleLock::effectiveUid() !== 0) throw new \RuntimeException('uid');
   $phase='fd9';
-  \\OPNsense\\Zapret\\Native\\SharedApplyLifecycleLock::assertHeld();
+  \OPNsense\Zapret\Native\SharedApplyLifecycleLock::assertHeld();
   $phase='framework';
   require_once('script/load_phalcon.php');
   $phase='config-lock';
-  $c=\\OPNsense\\Core\\Config::getInstance(); $c->lock();
+  $c=\OPNsense\Core\Config::getInstance(); $c->lock();
   try {
     $phase='model';
-    $m=new \\OPNsense\\Zapret\\Zapret(); $nodes=$m->getNodes();
+    $m=new \OPNsense\Zapret\Zapret(); $nodes=$m->getNodes();
     $g=$nodes['general']??null;
-    if (!is_array($g)) throw new \\RuntimeException('invalid-general');
+    if (!is_array($g)) throw new \RuntimeException('invalid-general');
     $e=$g['enabled']??null;
     $a=$g['autorestart']??null;
     $enabled=($e==='1'?'1':($e==='0'?'0':'unqualified'));
@@ -614,7 +614,7 @@ try {
       (in_array($a,['off','hourly','daily','weekly','monthly'],true)?$a:'unqualified')));
   } finally { $c->unlock(); }
   echo 'ok:'.$enabled.':'.$auto;
-} catch (\\Throwable $error) {
+} catch (\Throwable $error) {
   echo 'refused:'.$phase;
 }'''
             hold_fd9()
