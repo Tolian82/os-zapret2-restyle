@@ -20,8 +20,8 @@ Read through EOF in this order:
 
 | Need | Primary document |
 |---|---|
-| #1052 approved behavior | [Auto-detect / Target Mode / HOSTLIST / Auto Restart specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) |
-| #1052 staged work | [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
+| #1052 approved behavior | [Original native discovery/FD9 contract](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [**ТЗ_6v2** current five-list GUI/Apply contract](architecture/TZ_6v2.md) (implementation OPEN) |
+| #1052 staged work | [Current ТЗ_6v2 prioritized P0→P5 plan, TZ6V2-01…09 and owner acceptance](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
 | P2e completed original-builder qualification | [Original shared-builder witness](verification/P2E_ORIGINAL_SHARED_BUILDER.md); [P0–P2 proof map](verification/README.md) |
 | P2f source-only observer proposal | [Nonactivating P2f contract](verification/P2F_OFFLINE_OBSERVER_PLAN.md); owner/FD9 and raw/debug qualification remains open |
 | P2g protected raw/debug producer permissions | [Native writer and queue path contract](verification/P2G_NATIVE_WRITER_STORAGE.md); production observer inactive |
