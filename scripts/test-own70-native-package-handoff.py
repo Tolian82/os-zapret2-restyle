@@ -353,9 +353,31 @@ def native():
          not Path("/var/run/zapret2-restyle/pkg-replacement.restart").exists(),
          "native_pkg_successor_did_not_resume")
     new = json.loads(JOURNAL.read_bytes())
-    need(new["phase"] == "committed" and new["detail"]["id"] != generation and
-         (EPOCHS / generation / "retired.json").is_file() and
-         (EPOCHS / new["detail"]["id"] / "epoch.json").is_file(),
+    new_id = new.get("detail", {}).get("id", "")
+    replacement_pid = Path("/var/run/dvtws2.pid")
+    after_pid = (replacement_pid.read_text().strip().split()[0]
+                 if replacement_pid.is_file() and not replacement_pid.is_symlink()
+                 else "missing")
+    old_retired = (EPOCHS / generation / "retired.json").is_file()
+    new_epoch = (HEX32.fullmatch(new_id) is not None and
+                 (EPOCHS / new_id / "epoch.json").is_file())
+    same_engine = after_pid == engine_pid
+    result = {
+        "old_requires_review_reproduced": reproduced,
+        "original_generation_replaced": new_id != generation,
+        "old_original_epoch_retired": old_retired,
+        "replacement_epoch_present": new_epoch,
+        "original_engine_pid_survived_pkg": same_engine,
+        "new_journal_phase": new.get("phase", "invalid"),
+        "installed_version_matched": version == manifest(pkg)["version"],
+        "native_postinstall_message_seen": "os-zapret2-restyle was installed." in update.stdout,
+        "native_postinstall_restart_marker_consumed":
+            not Path("/var/run/zapret2-restyle/pkg-replacement.restart").exists(),
+    }
+    print("OWN70_NATIVE_HOOK_OUTCOME=" + json.dumps(result, sort_keys=True),
+          flush=True)
+    need(new["phase"] == "committed" and new_id != generation and
+         old_retired and new_epoch and not same_engine,
          "old_auto_epoch_not_retired_or_successor_not_committed")
     print("OWN70_NATIVE_BRIDGE=" + json.dumps({
         "result": ("PASS_REAL_OLD_AUTO_FAIL_STAGED_RESCUE_PKG_ADD_RUNNING"
