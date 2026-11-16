@@ -718,17 +718,22 @@ try {
                         stopped_diagnostic['stopped_owner'] = 'attested'
                         gid = pwd.getpwnam(ENGINE_USER).pw_gid
                         queue = DurableInbox(QUEUE_ROOT, owner_uid=0, writer_gid=gid)
-                        queue._verify()  # no lock creation or filesystem write
+                        # Existing original minute already created its
+                        # queue lock. Refuse a missing lock to avoid creating
+                        # or repairing any protected file in diagnosis.
+                        if not queue.lock.is_file() or queue.lock.is_symlink():
+                            raise RuntimeError('original_queue_lock_missing')
                         receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
-                        tip = CursorChain(receipts, queue).tip(proof)
-                        stopped_diagnostic['pending_count'] = len(queue.segments())
-                        stopped_diagnostic['cursor_open_intent'] = (
-                            tip.open_intent is not None)
-                        stopped_diagnostic['cursor_open_folder'] = (
-                            tip.open_folder is not None)
-                        stopped_diagnostic['raw_bytes'] = queue.inbox.stat().st_size
-                        stopped_diagnostic['debug_bytes'] = Path(
-                            proof.debug_path).stat().st_size
+                        with queue.exclusive():
+                            tip = CursorChain(receipts, queue).tip(proof)
+                            stopped_diagnostic['pending_count'] = len(queue.segments())
+                            stopped_diagnostic['cursor_open_intent'] = (
+                                tip.open_intent is not None)
+                            stopped_diagnostic['cursor_open_folder'] = (
+                                tip.open_folder is not None)
+                            stopped_diagnostic['raw_bytes'] = queue.inbox.stat().st_size
+                            stopped_diagnostic['debug_bytes'] = Path(
+                                proof.debug_path).stat().st_size
                     except (OSError, ValueError, TypeError, RuntimeError,
                             KeyError) as error:
                         stopped_diagnostic['stopped_owner'] = 'refused'
