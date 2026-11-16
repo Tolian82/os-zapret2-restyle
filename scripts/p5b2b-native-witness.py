@@ -868,7 +868,7 @@ try {
             need(listed.returncode == 0 and len(listed.stdout) < 1000000,
                  'native-diagnostic-rules-unreadable')
             for number in temporary:
-                need(not re.search(rf'(?m)^0*{number}\\s',
+                need(not re.search(rf'(?m)^0*{number}\s',
                                    listed.stdout.decode('utf-8', 'replace')),
                      'native-diagnostic-rule-already-owned')
             configured = []
@@ -894,7 +894,7 @@ try {
                 if stats.returncode == 0 and len(stats.stdout) < 1000000:
                     matches = {}
                     for row in stats.stdout.decode('utf-8', 'replace').splitlines():
-                        match = re.match(r'^\\s*0*([0-9]+)\\s+([0-9]+)\\s+', row)
+                        match = re.match(r'^\s*0*([0-9]+)\s+([0-9]+)\s+', row)
                         if match and int(match[1]) in temporary:
                             matches[int(match[1])] = int(match[2])
                     receipt['reverse_counters'] = [matches.get(n, -1) for n in temporary]
