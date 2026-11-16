@@ -259,7 +259,7 @@ def check_resource_help_cache(page, mode: str) -> str:
     return status
 
 
-def check_p4_native_gui(page, mode: str) -> None:
+def check_p4_native_gui(page, mode: str) -> str:
     """Actual installed Strategies form: native Advanced + final-file editor.
 
     Read-only Chromium: no form Apply, Auto Hostlist Save, engine or IPFW.
@@ -358,6 +358,39 @@ def check_p4_native_gui(page, mode: str) -> None:
     need(editor_row.locator("button#zapretAutoHostlistSave").count() == 1 and
          editor_row.locator("button#zapretAutoHostlistReload").count() == 1,
          "P4_AUTO_HOSTLIST_ACTIONS_MISSING")
+    # P3 installs only the .pkg, not the separate upstream runtime.
+    # Refuse on absent/unsafe native storage; do not seed directories, save
+    # settings, or claim an unexecuted editor/save scenario has passed.
+    states = (
+        ("Файл отсутствует", "Список пуст", "Список загружен",
+         "Невозможно прочитать список. Сохранение недоступно.",
+         "Ошибка чтения списка. Сохранение недоступно.")
+        if mode == "ru" else
+        ("File missing", "List is empty", "List loaded",
+         "Cannot read list. Saving is unavailable.",
+         "List read failed. Saving is unavailable.")
+    )
+    page.wait_for_function(
+        "allowed => allowed.includes(document.getElementById("
+        "'zapretAutoHostlistState')?.textContent?.trim())",
+        arg=states, timeout=45000)
+    status = page.locator("#zapretAutoHostlistState").inner_text().strip()
+    if status in states[3:]:
+        editor = page.locator("#zapretAutoHostlistField")
+        need(not editor.is_enabled() and
+             not editor_row.locator("#zapretAutoHostlistSave").is_enabled() and
+             page.locator("#zapretAutoHostlistState").evaluate(
+                 "el => el.classList.contains('text-danger')"),
+             "P4_UNAVAILABLE_EDITOR_DID_NOT_FAIL_CLOSED_" + mode)
+        f5_and_wait(page, "/api/zapret/settings/get")
+        page.wait_for_function(
+            "allowed => allowed.includes(document.getElementById("
+            "'zapretAutoHostlistState')?.textContent?.trim())",
+            arg=states[3:], timeout=45000)
+        need(not page.locator("#zapretAutoHostlistField").is_enabled() and
+             control(page, "zapret.general.autorestart").input_value() == saved,
+             "P4_UNAVAILABLE_EDITOR_F5_CHANGED_STATE")
+        return "unavailable-package-only"
     page.wait_for_function(
         "() => { const e = document.getElementById('zapretAutoHostlistField');"
         " return !!e && !e.disabled; }", timeout=45000)
@@ -382,6 +415,7 @@ def check_p4_native_gui(page, mode: str) -> None:
     need(page.locator("#zapretAutoHostlistField").input_value() == current and
          control(page, "zapret.general.autorestart").input_value() == saved,
          "P4_UNSAVED_EDIT_LEAKED_ACROSS_F5")
+    return "readable-unsaved-edit"
 
 
 def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
@@ -409,7 +443,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     else:
         need(all("Автоопределение" not in x["text"] for x in options),
              "EN_TARGET_MODE_USES_RU")
-    check_p4_native_gui(page, mode)
+    p4_editor_status = check_p4_native_gui(page, mode)
     initial = value_snapshot(page, FIELDS_GENERAL)
     need("zapret.hostlist.mode" in initial, "TARGET_MODE_SNAPSHOT_MISSING")
     field = control(page, "zapret.hostlist.userdomains")
@@ -458,7 +492,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
         inventory_page.close()
     need(value_snapshot(page, FIELDS_GENERAL) == initial,
          "P4B_RESOURCE_HELP_CHANGED_SAVED_VALUES")
-    return initial, cache_state
+    return initial, cache_state, p4_editor_status
 
 
 def check_lab_guidance(page, mode: str) -> bool:
@@ -625,7 +659,7 @@ def browser_run(mode: str) -> None:
             context = browser.new_context(ignore_https_errors=True)
             page = context.new_page()
             login(page)
-            strategies, cache_state = check_strategies(page, mode)
+            strategies, cache_state, p4_editor_status = check_strategies(page, mode)
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -654,6 +688,8 @@ def browser_run(mode: str) -> None:
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
         "p4_native_advanced_and_auto_hostlist_readonly_checked": True,
+        "p4_native_hostlist_editor_status": p4_editor_status,
+        "p4_native_hostlist_save_verified": False,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,
