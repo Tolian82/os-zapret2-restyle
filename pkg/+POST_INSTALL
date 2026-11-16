@@ -223,6 +223,10 @@ elif [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
     restore_running_state=1
 fi
 
+# Distinguish a genuine restart intent from an old engine that happened to
+# survive package replacement; no marker creation, signals or extra writers.
+printf 'zapret-pkg-postinstall-restart-intent=%s\n' "${restore_running_state}"
+
 if [ "${restore_running_state}" -eq 1 ]; then
     [ -x "${SERVICE_SCRIPT}" ] || {
         echo "ERROR: zapret service control is unavailable after package replacement" >&2

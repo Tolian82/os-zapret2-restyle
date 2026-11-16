@@ -89,6 +89,10 @@ read_service_status()
 }
 
 
+# A fixed-field receipt proves that genuine pkg entered the ORIGINAL hook
+# before any runtime observation. No Config/argv/process data are printed.
+printf 'zapret-pkg-preinstall-entered=1\n'
+
 # No installed service script means a fresh installation or a repair of an
 # already incomplete package. Neither case may inherit stale restart intent.
 if [ ! -x "${SERVICE_SCRIPT}" ]; then
@@ -98,6 +102,7 @@ fi
 
 read_service_status
 service_status=$?
+printf 'zapret-pkg-preinstall-status=%s\n' "${service_status}"
 
 case "${service_status}" in
     0)
@@ -135,6 +140,7 @@ if [ "${service_status}" -ne 1 ]; then
         echo "ERROR: zapret service still owns runtime state; package replacement aborted" >&2
         exit 1
     fi
+    printf 'zapret-pkg-preinstall-stop-verified=1\n'
 fi
 
 exit 0

@@ -377,9 +377,22 @@ def native():
             label: (label in debug) for label in
             ("pre-install", "pre-deinstall", "post-install")
         }
+        hook = {
+            "new_preinstall_entered": "zapret-pkg-preinstall-entered=1" in debug,
+            "new_preinstall_saw_running": "zapret-pkg-preinstall-status=0" in debug,
+            "new_preinstall_saw_stopped": "zapret-pkg-preinstall-status=1" in debug,
+            "new_preinstall_stop_verified":
+                "zapret-pkg-preinstall-stop-verified=1" in debug,
+            "new_postinstall_restart_intent":
+                ("true" if "zapret-pkg-postinstall-restart-intent=1" in debug
+                 else "false" if
+                 "zapret-pkg-postinstall-restart-intent=0" in debug
+                 else "missing"),
+        }
         print("OWN70_NATIVE_PKG_DIAGNOSTIC=" + json.dumps({
             "native_pkg_rc": update.returncode,
             "pkg_debug_mentions_phases": phases,
+            "native_original_hook_receipts": hook,
             "pkg_reports_successful_extract": "extracting" in debug,
             "pkg_debug_output_bounded": len(debug) <= 512 * 1024,
         }, sort_keys=True), flush=True)
