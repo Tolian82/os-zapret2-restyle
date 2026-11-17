@@ -1,0 +1,83 @@
+name: Published _79 to current native pkg (one disposable OPNsense)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/stage5-native-owner79-bootstrap.py
+      - .github/workflows/native-owner79-bootstrap.yml
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - pkg/+PRE_INSTALL
+      - pkg/+PRE_DEINSTALL
+      - pkg/+POST_INSTALL
+  workflow_dispatch:
+
+concurrency:
+  group: native-owner79-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: Verify precise native _79 migration fixture syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Source, original shell hooks and strict predecessor pin
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage5-native-owner79-bootstrap.py
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL; do sh -n "$hook"; done
+          grep -Fq '7095e0b72098d181456c8cd16a8a844af9d1464de158dd5f27b706e0d7eef558' scripts/stage5-native-owner79-bootstrap.py
+
+  native:
+    needs: fast
+    name: Real published _79 FD9 Stop to current Mk pkg and new Auto epoch
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bounded QEMU and runner network preflight
+        run: |
+          set -eu
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error::No qualified isolated OPNsense runner infrastructure"
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99zapret-owner79-network >/dev/null
+      - name: Single OPNsense 26.7 verified _79 archive to new native pkg
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_OWNER79_BOOTSTRAP_NATIVE_TEST=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            sh scripts/build-pkg.sh
+            /usr/local/bin/python3 scripts/stage5-native-owner79-bootstrap.py
