@@ -78,7 +78,7 @@ Every step has the **existing input → minimum actual change → observable exi
 - **Minimum change:** none except correcting a demonstrated incompatible existing contract. Classify the only remaining file paths as KEEP / REWORK / NEW / VERIFY; reuse all scoped native results unaffected by code changes.
 - **Exit:** one concise current production call-path map and focused regression list, with no new journal, daemon, SQLite, duplicate Config writer or Strategy Lab changes.
 
-**STEP 3 — Adapt the one P1 canonical policy to new five-editor grammar. STATUS: FUTURE (ADAPT).**
+**STEP 3 — Adapt the one P1 canonical policy to new five-editor grammar. STATUS: SOURCE PARTIAL: positive-only editor grammar, PSL collapse, manual-edit full-line sort; cross-source coverage/Apply integration OPEN.**
 - **Input:** existing Python `domain_policy.py` and proven PSL.
 - **Minimum change:** manual `!/^/!^` retained; three found-only inputs positive registrable roots with clear invalid-line errors; origin-before-eTLD+1 (`new.example.org→example.org`, `video.example.com→example.com`); exclusions and effective-coverage/source-aware duplicate handling; automatic sorting only on mutation; manual sort only when that editor changed, by entire normalized prefix-first line; leave untouched manual bytes.
 - **Exit:** focused IDNA/PRIVATE/unknown-suffix, explicit exact/broad modifier, cross-source collision and unchanged/manual-sort tests. Do not silently delete entries used by a distinct profile or guess unresolved policy.
@@ -103,7 +103,7 @@ Every step has the **existing input → minimum actual change → observable exi
 - **Minimum change:** add YouTube/User expandable found editors beneath respective main lists, maintain full-width shared editor; disclosure buttons toggle **visibility only**; same native width/height/mobile/resize; existing Help OFF/ON with orange icon left of labels, text below editor, RU/EN; no obsolete Save/Reload, ordinary List Empty caption, competing right help column or second Apply. Correct help: auto is plain-only; manual `!` suppresses future re-add, `!^` exact only; shared file is active **only with explicit `<HOSTLIST:auto>`**.
 - **Exit:** native rendered OPNsense RU/EN/Advanced layout, disclosure and F5, validation messages and one Apply. The old `OWN70-04…06` observations remain as evidence; **their legacy proposed fixes are superseded** by [ТЗ_6v2](TZ_6v2.md).
 
-**STEP 8 — Correct native Auto Restart layout and persisted schedule. STATUS: SOURCE PARTIAL (native row correction; rendered GUI and scheduler acceptance OPEN).**
+**STEP 8 — Correct native Auto Restart layout and persisted schedule. STATUS: NATIVE RENDERED ROW PASS `_89` [#44129229425](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44129229425), schedule lifecycle/persisted service acceptance OPEN.**
 - **Input:** current Enabled model and original five-choice schedule.
 - **Minimum change:** preserve the single Enabled checkbox with accurate label; separate native full-width Off/hour/day/week/month select shown only in standard Advanced ON, hidden without resetting interval or disabling scheduler, Off default on new installation; no redundant schedule Boolean or timer. Selected schedule uses original Shared Restart for RUNNING even with no list changes, never starts deliberately STOPPED/Disabled.
 - **Exit:** RU/EN actual DOM, F5/hidden-field/unrelated Apply persistence and scoped real scheduled RUNNING/STOPPED evidence. No claim from appearance alone.

@@ -288,5 +288,75 @@ class DomainPolicyTests(unittest.TestCase):
             self.assertEqual(json.loads(invalid.stdout)['error']['code'], 'conflicting_modifiers')
 
 
+
+
+class TZ6v2EditorPolicyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.psl = policy.PublicSuffixList.load()
+
+    def found(self, source, text):
+        return policy.normalize_found_editor(text, source, psl=self.psl)
+
+    def test_found_sources_collapse_sort_and_dedupe_roots(self):
+        for source in ("youtube", "user", "auto"):
+            with self.subTest(source=source):
+                found = self.found(source,
+                    "New.Example.ORG\nVIDEO.EXAMPLE.COM\nexample.org\n")
+                self.assertEqual(found["normalized"], "example.com\nexample.org")
+                self.assertEqual((found["entry_count"], found["duplicates"]), (2, 1))
+                self.assertEqual(self.found(source, "")["normalized"], "")
+
+    def test_idna_and_private_psl_without_suffix_guess(self):
+        normalized = self.found("youtube",
+            "x.user.github.io\nвидео.пример.рф\nwww.faß.de\n")["normalized"]
+        self.assertEqual(normalized,
+            "user.github.io\nxn--e1afmkfd.xn--p1ai\nxn--fa-hia.de")
+        for bad, reason in [
+            ("example.unknownsuffix", "unknown_suffix"),
+            ("com", "public_suffix"),
+            ("127.0.0.1", "ip_literal"),
+            ("https://example.com", "invalid_host"),
+        ]:
+            with self.subTest(bad=bad), self.assertRaises(policy.FoundEditorPolicyError) as exc:
+                self.found("user", "ok.example.com\n" + bad)
+            self.assertEqual(exc.exception.evidence(),
+                {"source": "user", "line": 2, "code": reason})
+
+    def test_all_found_editors_forbid_manual_flags(self):
+        for source in ("youtube", "user", "auto"):
+            for invalid in ("!example.com", "^example.com", "!^example.com"):
+                with self.subTest(source=source, invalid=invalid):
+                    with self.assertRaises(policy.FoundEditorPolicyError) as exc:
+                        self.found(source, "ok.example.com\n" + invalid)
+                    self.assertEqual(exc.exception.evidence(),
+                        {"source": source, "line": 2, "code": "modifiers_not_allowed"})
+
+    def test_manual_only_changed_sort_by_full_flags(self):
+        draft = "z.example.com\n^test.example.net\n!^example.com\n!test.example.org"
+        self.assertEqual(policy.normalize(draft, "user")["normalized"].splitlines()[0],
+                         "z.example.com")  # untouched native path keeps order
+        self.assertEqual(policy.normalize_manual_editor(draft, "user")["normalized"].splitlines(),
+            ["!^example.com", "!test.example.org", "^test.example.net", "z.example.com"])
+        self.assertEqual(policy.normalize_manual_editor("!Example.COM", "youtube")["normalized"],
+                         "!example.com")
+
+    def test_native_cli_positive_and_line_error_not_raw_text(self):
+        cmd = [sys.executable, str(MODULE)]
+        valid = subprocess.run(cmd + ["found-inspect"], text=True, capture_output=True,
+            input=json.dumps({"source": "auto", "text": "new.example.org\nvideo.example.com"}))
+        self.assertEqual(valid.returncode, 0, valid.stderr)
+        self.assertEqual(json.loads(valid.stdout)["normalized"], "example.com\nexample.org")
+        bad = subprocess.run(cmd + ["found-inspect"], text=True, capture_output=True,
+            input=json.dumps({"source": "user", "text": "ok.example.com\n!bad.example.org"}))
+        self.assertEqual(bad.returncode, 2)
+        self.assertEqual(json.loads(bad.stdout)["error"],
+            {"source": "user", "line": 2, "code": "modifiers_not_allowed"})
+        self.assertNotIn("bad.example.org", bad.stdout)
+        manual = subprocess.run(cmd + ["manual-edit"], text=True, capture_output=True,
+            input=json.dumps({"kind": "youtube", "text": "z.example.com\n!example.org"}))
+        self.assertEqual(manual.returncode, 0, manual.stderr)
+        self.assertEqual(json.loads(manual.stdout)["normalized"], "!example.org\nz.example.com")
+
 if __name__ == '__main__':
     unittest.main()
