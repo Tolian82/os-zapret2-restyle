@@ -117,10 +117,25 @@ def staged_source(pkg, root):
     names = require(["/usr/bin/tar", "-tf", str(pkg)],
                     "archive_index", timeout=40).splitlines()
     native = ROOT / "src" / SERVICE_REL
-    need(native.is_dir() and not native.is_symlink(),
-         "untrusted_tracked_service_source")
-    files = sorted(p for p in native.rglob("*") if p.is_file())
-    need(len(files) >= 100, "incomplete_tracked_service_source")
+    api = ROOT / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api"
+    need(native.is_dir() and not native.is_symlink() and
+         api.is_dir() and not api.is_symlink(),
+         "untrusted_tracked_native_or_mvc_source")
+    # The real original shared_apply_config.php loads apply_settings.php,
+    # which requires MVC classes through relative __DIR__ directives.
+    # A private service-only extraction is not executable from staging:
+    # its saved native PHP entrypoint exits 255 without these classes.
+    # Stage only package-owned API PHP files plus the original service tree.
+    mvc = sorted(api.glob("*.php"))
+    need(len(mvc) >= 12 and
+         all(p.is_file() and not p.is_symlink() for p in mvc) and
+         all((api / name).is_file() for name in (
+             "SettingsApply.php", "DomainSetPolicyBridge.php",
+             "IPSetPolicyBridge.php", "VoiceSettingsSnapshot.php",
+             "VoiceModelValues.php", "WanRequirement.php")),
+         "missing_same_package_mvc_dependencies")
+    files = sorted([p for p in native.rglob("*") if p.is_file()] + mvc)
+    need(len(files) >= 115, "incomplete_tracked_service_and_mvc_source")
     source_bytes = 0
     dest = root / "usr/local" / SERVICE_REL
     for source in files:
@@ -569,6 +584,12 @@ def self_test():
             pass
         else:
             raise Refused("ambiguous_or_foreign_tar_alias_accepted")
+    php_bridge = (ROOT / "src" / SERVICE_REL / "apply_settings.php").read_text()
+    for name in ("SettingsApply.php", "DomainSetPolicyBridge.php",
+                 "IPSetPolicyBridge.php"):
+        need(("/Api/" + name) in php_bridge and
+             (ROOT / "src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api" /
+              name).is_file(), "private_staging_php_relative_dependency_missing")
     source = (ROOT / "src" / SERVICE_REL / "zapret_service.sh").read_text()
     need('ZAPRET_INSTALLED_SUPERVISOR_LOOP' in source and
          'unqualified native supervisor identity path' in source and
