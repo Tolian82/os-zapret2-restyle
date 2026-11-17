@@ -24,6 +24,13 @@ class WitnessTests(unittest.TestCase):
             y.unlink()
             self.assertEqual(module.witness_state(w),(0,1,1))
 
+    def test_truss_invocation_uses_supported_freebsd_15_arguments(self):
+        command = module.trace_pkg_command(Path("/root/trace"), Path("/root/candidate.pkg"))
+        self.assertEqual(command, ["/usr/bin/truss", "-f", "-o", "/root/trace",
+                                   "/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+                                   "add", "-f", "/root/candidate.pkg"])
+        self.assertNotIn("-t", command)
+
     def test_witness_declares_only_verifiable_installed_files(self):
         self.assertEqual(len(set(module.WITNESS_RELATIVE)),len(module.WITNESS_RELATIVE))
         self.assertGreaterEqual(len(module.WITNESS_RELATIVE),5)

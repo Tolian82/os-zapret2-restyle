@@ -65,6 +65,14 @@ def select_native_witnesses(root, stage, run, need):
     return witnesses
 
 
+def trace_pkg_command(trace, stage):
+    """Portable FreeBSD 15 truss form; -t filters exist only in newer HEAD."""
+    return ["/usr/bin/truss", "-f", "-o", str(trace),
+            "/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+            "add", "-f", str(stage)]
+
+
+
 def interrupt_real_native_pkg_midextract(stage, witnesses, need):
     """A real pkg with syscall tracing for enough observation time.
 
@@ -72,6 +80,12 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
     GUI state mutation or alternate lifecycle owner. The test guest is discarded.
     """
     need(Path("/usr/bin/truss").is_file(), "MIDEXTRACT_NATIVE_TRUSS_UNAVAILABLE")
+    # Refuse before any test-owned GUI marker write if the exact installed
+    # FreeBSD ptrace tracer cannot actually run a harmless local command.
+    with tempfile.TemporaryDirectory(prefix="native-truss-probe-", dir="/root") as preflight:
+        probe = subprocess.run(["/usr/bin/truss", "-o", str(Path(preflight) / "trace"),
+                                "/usr/bin/true"], capture_output=True, timeout=15)
+        need(probe.returncode == 0, "MIDEXTRACT_TRUSS_NATIVE_PREFLIGHT_FAILED")
     # Distinct known tampered states are test-only evidence; never pre-corrupt
     # shared Apply/runtime/Config/IPFW. The old Auto generation must be STOPPED.
     for path, original, marked in witnesses:
@@ -96,9 +110,7 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
         env["FIRMWARE_REGISTER"] = str(helper)
         with output.open("wb") as pkg_out:
             proc = subprocess.Popen(
-                ["/usr/bin/truss", "-f", "-t", "@file", "-o", str(trace),
-                 "/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
-                 "add", "-f", str(stage)],
+                trace_pkg_command(trace, stage),
                 env=env, stdout=pkg_out, stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
