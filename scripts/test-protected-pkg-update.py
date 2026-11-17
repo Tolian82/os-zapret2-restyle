@@ -165,6 +165,24 @@ class ProtectedPkgUpdate(unittest.TestCase):
                 with self.assertRaisesRegex(m.Refused, "POSTINSTALL_PHASE_REFUSED"):
                     m.postinstall_attest()
 
+    def test_native_runtime_release_cache_is_disposable_only(self):
+        fixture_path = ROOT / "scripts" / "stage5-native-protected-update.py"
+        spec = importlib.util.spec_from_file_location(
+            "protected_native_cache_fixture", fixture_path)
+        fixture = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fixture)
+
+        class OfficialUpstream:
+            RELEASE = "v1.0.7"
+
+        with mock.patch.dict(fixture.os.environ,
+                             {"GITHUB_ACTIONS": "false",
+                              "ZAPRET2_PROTECTED_PKG_NATIVE_TEST": "1"},
+                             clear=True):
+            with self.assertRaisesRegex(
+                    RuntimeError, "NATIVE_STABLE_RELEASE_CACHE_NOT_QUALIFIED"):
+                fixture.seed_qualified_stable_tag_for_disposable_guest(OfficialUpstream())
+
     def test_single_fd9_owner_and_deferred_postinstall(self):
         service = SERVICE.read_text()
         post = POST.read_text()

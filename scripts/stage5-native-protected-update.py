@@ -54,6 +54,41 @@ def original_fixture(filename, module_name):
     return module
 
 
+def seed_qualified_stable_tag_for_disposable_guest(g03):
+    """Reuse the already native-verified _85 public stable-release cache tactic.
+
+    This is test-only setup metadata, never a runtime fallback. The installed
+    setup worker still clones, verifies the exact upstream Git tag and compiles.
+    """
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
+         os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
+         g03.RELEASE == "v1.0.7",
+         "NATIVE_STABLE_RELEASE_CACHE_NOT_QUALIFIED")
+    base = Path("/var/db/zapret2-restyle")
+    base.mkdir(mode=0o755, parents=True, exist_ok=True)
+    parent = base.lstat()
+    need(stat.S_ISDIR(parent.st_mode) and not base.is_symlink() and
+         parent.st_uid == 0 and not (parent.st_mode & 0o022),
+         "NATIVE_STABLE_RELEASE_CACHE_PARENT_UNTRUSTED")
+    cache = base / "releases.cache"
+    need(not cache.exists() and not cache.is_symlink(),
+         "NATIVE_STABLE_RELEASE_CACHE_PREEXISTS")
+    fd = os.open(cache, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
+                 0o644)
+    with os.fdopen(fd, "wb") as writer:
+        writer.write(g03.RELEASE.encode("ascii") + b"\n")
+        writer.flush()
+        os.fsync(writer.fileno())
+    meta = cache.lstat()
+    need(stat.S_ISREG(meta.st_mode) and meta.st_uid == 0 and
+         meta.st_mode & 0o777 == 0o644 and
+         cache.read_bytes() == b"v1.0.7\n",
+         "NATIVE_STABLE_RELEASE_CACHE_MISMATCH")
+    print("NATIVE_PROTECTED_TEST_ONLY_STABLE_CACHE=VERIFIED_PUBLIC_v1.0.7",
+          flush=True)
+
+
 def native_running_reinstall(archive, target, candidate_sha):
     """Both LIST and AUTO on one genuinely installed native OPNsense guest.
 
@@ -69,7 +104,13 @@ def native_running_reinstall(archive, target, candidate_sha):
     # The Model defaults HOSTLIST mode to "all". Explicitly select real
     # manual List through the established native OPNsense Config Model.
     old_bridge.set_guest_list_mode()
-    setup = g03.dispatch_and_poll()
+    seed_qualified_stable_tag_for_disposable_guest(g03)
+    try:
+        setup = g03.dispatch_and_poll()
+    except (g03.Refusal, OSError, subprocess.TimeoutExpired):
+        # Log only the G03 helper's existing bounded/redacted state summary.
+        g03.bounded_disposable_failure_evidence()
+        raise
     need(setup["installed"] == "1" and setup["service"] == "stopped",
          "UPSTREAM_RUNTIME_NOT_READY_STOPPED")
     initial = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
