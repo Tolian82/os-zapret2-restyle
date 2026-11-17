@@ -161,7 +161,8 @@ class HardResetContracts(unittest.TestCase):
         source = SOURCE.read_text()
         self.assertIn('def guest_setup():', source)
         self.assertIn('strategies.request("auto")', source)
-        self.assertIn("native.native_partial_payload_interruption(", source)
+        self.assertIn("native_reviewed.interrupt_for_reset(", source)
+        self.assertIn('"stage5-native-reviewed-recovery.py"', source)
         self.assertNotIn("native.native_running_reinstall(", source)
         self.assertNotIn("native.native_interrupted_handoff(", source)
 

@@ -119,6 +119,65 @@ def assert_no_engine(fixture):
          "ENGINE_RUNNING_IN_REVIEW_STATE")
 
 
+
+def interrupt_for_reset(native, archive, target, expected_digest):
+    """Real native partial extraction, followed by NO installed code execution.
+
+    This is a disposable guest fixture only. It reuses native original FD9
+    prepare and the independently qualified physical mid-extract SIGKILL,
+    but DOES NOT probe a possibly torn installed service afterwards.
+    """
+    witness = native.original_fixture("stage5-native-pkg-midextract.py",
+                                      "reviewed_physical_pkg_extract")
+    installed_source = native.SERVICE.parent / "protected_pkg_update.py"
+    product = load_file("reviewed_original_pre_extract", installed_source)
+    prior = json.loads(native.JOURNAL.read_text())
+    old_id = prior.get("detail", {}).get("id", "")
+    need(prior.get("phase") == "committed" and
+         (native.EPOCHS / old_id / "epoch.json").is_file() and
+         native.run([str(native.SERVICE), "status"]).returncode == 0,
+         "MIDEXTRACT_REQUIRES_REAL_RUNNING_AUTO")
+    before_config = native.sha(native.CONFIG)
+    stage, stage_digest, stage_version = product.stage_archive(archive)
+    need(stage_digest == expected_digest and stage_version == target,
+         "NATIVE_PRIVATE_STAGE_IDENTITY_DRIFT")
+    prepared = native.run([str(native.SERVICE), "pkg-update-prepare",
+                           str(stage), stage_digest, stage_version], timeout=150)
+    need(prepared.returncode == 0 and
+         "zapret-pkg-update-prepared=1" in prepared.stdout and
+         native.ACTIVE.is_file() and native.MARKER.is_file() and
+         (native.EPOCHS / old_id / "retired.json").is_file() and
+         native.run([str(native.SERVICE), "status"]).returncode == 1,
+         "ORIGINAL_FD9_PREPARE_NOT_STOPPED")
+    record_digest = native.sha(native.ACTIVE)
+    need(json.loads(native.ACTIVE.read_text()).get("phase") == "prepared",
+         "ORIGINAL_PREPARED_RECORD_MISSING")
+    paths = witness.select_native_witnesses(native.ROOT, stage,
+                                            native.run, native.need)
+    restored, marked, missing, foreign = witness.interrupt_real_native_pkg_midextract(
+        stage, paths, native.need)
+    need(restored > 0 and marked + missing > 0 and foreign == 0 and
+         native.ACTIVE.is_file() and native.sha(native.ACTIVE) == record_digest and
+         native.MARKER.is_file() and native.sha(native.CONFIG) == before_config and
+         (native.EPOCHS / old_id / "retired.json").is_file() and
+         native.sha(stage) == expected_digest,
+         "PHYSICAL_EXTRACTION_OR_GUARD_PROOF_MISSING")
+    ps = native.run(["/bin/ps", "-axo", "comm="], timeout=20)
+    need(ps.returncode == 0 and not any(
+         line.strip() == "dvtws2" for line in ps.stdout.splitlines()),
+         "ENGINE_NOT_PHYSICALLY_STOPPED_AFTER_INTERRUPT")
+    print("NATIVE_REVIEWED_MIDEXTRACT=" + json.dumps({
+        "genuine_pkg_killed": True,
+        "restored": restored, "unrestored": marked + missing,
+        "foreign": foreign, "original_fd9_prepared": True,
+        "old_auto_retired": True, "config_unchanged": True,
+        "dvtws2_absent": True, "postkill_installed_code_executed": False,
+        "owner_appliance_modified": False,
+    }, sort_keys=True), flush=True)
+    print("NATIVE_REVIEWED_MIDEXTRACT=PASS_GENUINE_PARTIAL_PAYLOAD_NO_UNTRUSTED_EXECUTION",
+          flush=True)
+
+
 def reinstall():
     isolation("reinstall")
     fixture = load_file("review_recovery_fixture", FIXTURE)

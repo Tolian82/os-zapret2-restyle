@@ -39,6 +39,16 @@ class ReviewedRecoveryContracts(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
                 fixture.absent_pkgdb()
 
+    def test_postkill_partial_payload_proof_never_calls_installed_service(self):
+        contents = SOURCE.read_text()
+        scope = contents.split("def interrupt_for_reset(", 1)[1].split("def reinstall():", 1)[0]
+        tail = scope.split("witness.interrupt_real_native_pkg_midextract(", 1)[1]
+        self.assertIn('"postkill_installed_code_executed": False', tail)
+        self.assertIn('["/bin/ps", "-axo", "comm="]', tail)
+        self.assertNotIn('native.SERVICE)', tail)
+        self.assertNotIn('"start"', tail)
+        self.assertNotIn('"pkg-update-finish"', tail)
+
     def test_only_one_reviewed_native_pkg_call_and_no_other_writer(self):
         s = SOURCE.read_text()
         self.assertIn('"add", "-f", str(stage)', s)

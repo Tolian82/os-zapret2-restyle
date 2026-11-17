@@ -453,9 +453,11 @@ def guest_setup():
             call_rc[argv[1]] = result.returncode
         return result
     native.run = observing_run
+    native_reviewed = load_test_only(
+        "stage5-native-reviewed-recovery.py", "reviewed_physical_guest")
     try:
-        native.native_partial_payload_interruption(
-            archive, version, digest(archive))
+        native_reviewed.interrupt_for_reset(
+            native, archive, version, digest(archive))
     except RuntimeError:
         # No raw service logs, Config contents, domains or user hostlists.
         pending = GUARD.is_file() and not GUARD.is_symlink()
@@ -491,7 +493,9 @@ def load_test_only(filename, module_name):
 def guest_prepare():
     guest_gate()
     version, archive = version_archive()
-    need(trusted_service(), "SERVICE_NOT_TRUSTED_BEFORE_RESET")
+    # A partial native package may remove a service script or its runtime
+    # dependencies. Do not EXECUTE it after the SIGKILL. The old original
+    # FD9 Stop and retired epoch were proven before extraction began.
     need(archive.is_file() and not archive.is_symlink(),
          "EXACT_NATIVE_ARCHIVE_MISSING")
     record = read_guard()
@@ -517,8 +521,12 @@ def guest_prepare():
     need(observed["restored"] > 0 and
          observed["marked"] + observed["missing"] > 0 and
          observed["foreign"] == 0, "NO_REAL_TORN_PAYLOAD")
-    need(run([str(SERVICE), "status"]).returncode == 1,
-         "SERVICE_NOT_STOPPED_BEFORE_RESET")
+    # Read the actual native process table, never run an untrusted or
+    # partially installed service after a real package extraction tear.
+    ps = run(["/bin/ps", "-axo", "comm="])
+    need(ps.returncode == 0 and not any(
+         name.strip() == "dvtws2" for name in ps.stdout.splitlines()),
+         "NATIVE_ENGINE_NOT_PHYSICALLY_STOPPED_BEFORE_RESET")
     config_before = config_snapshot()
     data = {
         "schema": 1, "test_guest_only": True,
