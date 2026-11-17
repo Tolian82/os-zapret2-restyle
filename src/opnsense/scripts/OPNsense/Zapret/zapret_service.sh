@@ -1066,6 +1066,36 @@ shared_apply_ipfw_kernel_absent_service()
     esac
 }
 
+# Cold Auto-detect boot's saved-unchanged Apply emits exactly two native
+# receipts: one PHP Config result (unchanged) and one terminal Apply ID.
+# Reject extra lines, malformed JSON and mismatched IDs under original FD9.
+shared_apply_boot_receipt_verified_service()
+{
+    [ "$#" -eq 2 ] || return 64
+    _shared_boot_receipt_text="$1"
+    _shared_boot_receipt_id="$2"
+    case "$_shared_boot_receipt_id" in ""|*[!a-f0-9]*) return 69 ;; esac
+    [ "${#_shared_boot_receipt_id}" -eq 32 ] || return 69
+    _shared_boot_receipt_lines=$(printf '%s\n' "$_shared_boot_receipt_text" |
+        /usr/bin/wc -l) || return 69
+    [ "$_shared_boot_receipt_lines" -eq 2 ] || return 69
+    _shared_boot_receipt_header=$(printf '%s\n' "$_shared_boot_receipt_text" |
+        /usr/bin/sed -n '1p') || return 69
+    _shared_boot_receipt_final=$(printf '%s\n' "$_shared_boot_receipt_text" |
+        /usr/bin/sed -n '2p') || return 69
+    [ "$_shared_boot_receipt_final" = "applied-id=$_shared_boot_receipt_id" ] ||
+        return 69
+    _shared_boot_receipt_valid=$(printf '%s\n' "$_shared_boot_receipt_header" |
+        shared_apply_json_field '
+            if type=="object" and .result=="unchanged" and
+               .saved==false and .change_count==0 and
+               (.snapshot | type)=="string" and
+               (.snapshot | test("^[a-f0-9]{64}$"))
+            then "verified" else empty end
+        ') || return 69
+    [ "$_shared_boot_receipt_valid" = verified ]
+}
+
 shared_apply_boot_service()
 {
     [ "$#" -eq 1 ] || return 64
@@ -1154,8 +1184,8 @@ shared_apply_boot_service()
         _shared_boot_apply=$(
             shared_apply_execute_service "$_shared_boot_new_id" strategies
         ) || return 70
-        [ "$_shared_boot_apply" = "applied-id=$_shared_boot_new_id" ] || {
-            common_error "native common boot: fresh original Apply was not committed"
+        shared_apply_boot_receipt_verified_service             "$_shared_boot_apply" "$_shared_boot_new_id" || {
+            common_error "native common boot: saved-unchanged Config/Apply receipts do not match"
             return 70
         }
         return 0

@@ -15,6 +15,7 @@ chmod 0700 "${PYTHON_RUNTIME}"
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_boot_service()$/,/^}$/p' "$SOURCE" > "$ROOT/boot.sh"
+sed -n '/^shared_apply_boot_receipt_verified_service()$/,/^}$/p' "$SOURCE" >> "$ROOT/boot.sh"
 # Test the actual non-observer preflight called during a cold Boot; it
 # refuses spoofed old observer metadata and never pauses the native engine.
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/boot.sh"
@@ -95,6 +96,32 @@ WAN_OK=1
 reset; BOOT_ENABLED=0
 expect 0 'guard:common-apply seal:verify config:saved activate commit tree-verify probe:0 '
 grep -Fqx "native-common-boot=$ID" "$ROOT/output" || fail "OFF boot receipt"
+# The SAME production parser must accept exactly PHP's saved-unchanged
+# receipt followed by the terminal Apply ID, and reject other output.
+# This covers the Auto-detect cold Boot that changes the epoch and would
+# otherwise fail after a fully committed new engine.
+(
+  command -v jq >/dev/null 2>&1 || fail "native JSON test tool missing"
+  shared_apply_json_field() { jq -er "$1"; }
+  receipt='{"result":"unchanged","saved":false,"change_count":0,"snapshot":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+  good=$(printf '%s\napplied-id=%s\n' "$receipt" "$ID")
+  shared_apply_boot_receipt_verified_service "$good" "$ID" ||
+      fail "valid original saved-unchanged plus applied-id receipt refused"
+  for bad in \
+      "applied-id=$ID" \
+      "$(printf '%s\napplied-id=%s\nunexpected' "$receipt" "$ID")" \
+      "$(printf '%s\napplied-id=%s' "$receipt" bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)" \
+      "$(printf '%s\napplied-id=%s' '{"result":"saved","saved":true,"change_count":0,"snapshot":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' "$ID")" \
+      "$(printf '%s\napplied-id=%s' '{"result":"unchanged","saved":false,"change_count":1,"snapshot":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}' "$ID")" \
+      "$(printf '%s\napplied-id=%s' '{"result":"unchanged","saved":false,"change_count":0,"snapshot":"bad"}' "$ID")" \
+      "$(printf '%s\napplied-id=%s' 'not-json' "$ID")"; do
+    if shared_apply_boot_receipt_verified_service "$bad" "$ID" 2>/dev/null; then
+      fail "invalid cold Auto-detect boot receipt was accepted"
+    fi
+  done
+)
+echo 'PASS: cold Auto-detect native PHP plus terminal Apply receipts are exact and fail closed'
+
 # A cold start must never print a success receipt if its installed release
 # changes, the kernel/argv proof fails or a process dies AFTER IPFW commit.
 for fault in tree probe child monitor; do
