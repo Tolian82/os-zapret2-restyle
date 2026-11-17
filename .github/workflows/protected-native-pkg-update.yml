@@ -1,0 +1,82 @@
+name: Protected native pkg update (original FD9, one disposable OPNsense)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py
+      - src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+      - pkg/+PRE_INSTALL
+      - pkg/+POST_INSTALL
+      - scripts/test-protected-pkg-update.py
+      - scripts/stage5-native-protected-update.py
+      - .github/workflows/protected-native-pkg-update.yml
+  workflow_dispatch:
+
+concurrency:
+  group: protected-native-pkg-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: Fast protected-update guard and failure tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Real Python parser and negative staging/pkg hook cases
+        run: |
+          set -eu
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py scripts/test-protected-pkg-update.py scripts/stage5-native-protected-update.py
+          python3.13 scripts/test-protected-pkg-update.py -v
+          sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
+          for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL pkg/+POST_DEINSTALL; do sh -n "$hook"; done
+
+  native:
+    needs: fast
+    name: Real stopped same-pkg replacement and pending guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bounded runner infrastructure readiness
+        run: |
+          set -eu
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error::Native protected-update test not run: QEMU/DNS unavailable"
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99zapret-protected-pkg-network >/dev/null
+      - name: One genuine Mk-built package, installed native stopped upgrade
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_PROTECTED_PKG_NATIVE_TEST=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            sh scripts/build-pkg.sh
+            /usr/local/bin/python3 scripts/stage5-native-protected-update.py

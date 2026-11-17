@@ -54,6 +54,9 @@ LIFECYCLE_LOCK_FILE="${LIFECYCLE_LOCK_FILE:-/var/run/zapret2-lifecycle.lock}"
 LIFECYCLE_LOCK_TIMEOUT=30
 STRATEGY_LAB_LOCK_TIMEOUT=3
 LOCKF_BIN="${LOCKF_BIN:-/usr/bin/lockf}"
+PKG_UPDATE_RECORD="/var/db/zapret2/pkg-update/operation.json"
+PKG_UPDATE_RESTART_MARKER="/var/run/zapret2-restyle/pkg-replacement.restart"
+PKG_UPDATE_LEGACY_MARKER="/var/run/zapret2-restyle/pkg-upgrade.restart"
 STRATEGY_LAB_WORKER="${STRATEGY_LAB_WORKER:-${SCRIPT_DIR}/strategy_lab_worker.sh}"
 STRATEGY_LAB_CIRCULAR_WORKER="${STRATEGY_LAB_CIRCULAR_WORKER:-${SCRIPT_DIR}/strategy_lab_circular_worker.sh}"
 STRATEGY_LAB_RECOVERY_WORKER="${STRATEGY_LAB_RECOVERY_WORKER:-${SCRIPT_DIR}/strategy_lab_recovery_worker.sh}"
@@ -286,6 +289,14 @@ strategy_lab_internal_dispatch()
         echo "ERROR: Strategy Lab internal lifecycle action has no lock owner" >&2
         return 77
     }
+    # The Lab's inherited-FD9 internal actions bypass the ordinary service
+    # wrapper. They must honor the SAME native package-update transaction.
+    if [ -e "${PKG_UPDATE_RECORD}" ] || [ -L "${PKG_UPDATE_RECORD}" ]; then
+        case "${1:-}" in strategy-lab-status|strategy-lab-evidence) ;;
+            *) echo "ERROR: protected package update requires review" >&2
+               return 69 ;;
+        esac
+    fi
 
     # Strategy Lab already owns inherited lockf fd 9 and calls these
     # privileged internal actions directly. Do not let its stop/start
@@ -2688,6 +2699,96 @@ telegram_voice_compat_status_service()
     telegram_voice_native_status_service
 }
 
+
+# The same original FD9 owner prepares and finishes package replacement.
+# Native pkg runs only after its lock is released, so hooks can acquire FD9.
+pkg_update_prepare_service()
+{
+    [ "$#" -eq 4 ] || return 64
+    [ ! -e "${PKG_UPDATE_RECORD}" ] && [ ! -L "${PKG_UPDATE_RECORD}" ] ||
+        return 69
+    [ ! -e "${PKG_UPDATE_RESTART_MARKER}" ] &&
+        [ ! -e "${PKG_UPDATE_LEGACY_MARKER}" ] || {
+        echo "ERROR: prior pkg restart marker needs review" >&2
+        return 69
+    }
+    shared_apply_status_service >/dev/null 2>&1
+    _pkg_prev_rc=$?
+    case "${_pkg_prev_rc}" in
+        0) _pkg_prev_running=running ;;
+        1) _pkg_prev_running=stopped ;;
+        *) echo "ERROR: protected package update refuses incomplete owner" >&2
+           return 69 ;;
+    esac
+    "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" record \
+        "$2" "$3" "$4" "${_pkg_prev_running}" || return 69
+    if [ "${_pkg_prev_running}" = running ]; then
+        # The live original common/Voice generation has its own complete
+        # owner, observer retirement and IPFW proof. Never call legacy Stop.
+        if shared_apply_has_record_service; then
+            _pkg_current_owner=$(shared_apply_inspect_service) || return 69
+            case "${_pkg_current_owner}" in
+                committed\ *) shared_apply_stop_service "${_pkg_current_owner}" || return 70 ;;
+                *) return 69 ;;
+            esac
+        else
+            stop_service || return 70
+        fi
+    fi
+    shared_apply_status_service >/dev/null 2>&1
+    [ "$?" -eq 1 ] || {
+        echo "ERROR: original runtime did not reach verified STOPPED" >&2
+        return 70
+    }
+    if [ "${_pkg_prev_running}" = running ]; then
+        mkdir -p /var/run/zapret2-restyle || return 70
+        : > "${PKG_UPDATE_RESTART_MARKER}" || return 70
+    fi
+    echo "zapret-pkg-update-prepared=1"
+    return 0
+}
+
+pkg_update_finish_service()
+{
+    [ "$#" -eq 3 ] || return 64
+    "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" verify \
+        "$2" "$3" || return 69
+    _pkg_prior=$("${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" previous \
+        "$2" "$3") || return 69
+    case "${_pkg_prior}" in running|stopped) ;; *) return 69 ;; esac
+    shared_apply_status_service >/dev/null 2>&1
+    [ "$?" -eq 1 ] || {
+        echo "ERROR: successor not verified stopped before guarded restore" >&2
+        return 69
+    }
+    if [ "${_pkg_prior}" = running ]; then
+        # Restore uses the same WAN-first rule as ordinary Start.
+        wan_first_service require || return 69
+        extra_resources_block_pending_start_service || return 69
+        if shared_apply_has_record_service; then
+            _pkg_new_owner=$(shared_apply_inspect_service) || return 69
+            case "${_pkg_new_owner}" in
+                committed\ *) shared_apply_boot_service "${_pkg_new_owner}" || return 70 ;;
+                *) return 69 ;;
+            esac
+        else
+            start_service || return 70
+        fi
+        shared_apply_status_service >/dev/null 2>&1
+        [ "$?" -eq 0 ] || {
+            echo "ERROR: successor did not reach verified RUNNING" >&2
+            return 70
+        }
+    fi
+    # Do not clear durable blocking state on failed marker removal.
+    rm -f "${PKG_UPDATE_RESTART_MARKER}" "${PKG_UPDATE_LEGACY_MARKER}" ||
+        return 70
+    "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" complete \
+        "$2" "$3" || return 70
+    echo "zapret-pkg-update-committed=1"
+    return 0
+}
+
 service_dispatch()
 {
     case "${1:-}" in
@@ -2708,6 +2809,12 @@ service_dispatch()
             ;;
         auto-restart-tick)
             shared_apply_auto_restart_tick_service "${2:-}"
+            ;;
+        pkg-update-prepare)
+            pkg_update_prepare_service "$@"
+            ;;
+        pkg-update-finish)
+            pkg_update_finish_service "$@"
             ;;
         status)
             shared_apply_status_service
@@ -2968,6 +3075,14 @@ service_with_lifecycle_lock()
         if ! "${LOCKF_BIN}" -s -t "${_service_lock_timeout}" 9; then
             return 75
         fi
+        # The original FD9 owns the durable guarded-package state.
+        if [ -e "${PKG_UPDATE_RECORD}" ] || [ -L "${PKG_UPDATE_RECORD}" ]; then
+            case "${1:-}" in
+                status|stop|pkg-update-finish) ;;
+                *) echo "ERROR: protected package update requires review" >&2
+                   return 69 ;;
+            esac
+        fi
         # WAN-first runtime gate; no effect on Stop, setup or passive Save.
         case "${1:-}" in
             start) wan_first_service require || return $? ;;
@@ -2981,7 +3096,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install)
+            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install|pkg-update-prepare|pkg-update-finish)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -3161,6 +3276,12 @@ service_with_lifecycle_lock()
 }
 
 case "${1:-}" in
+    pkg-update)
+        # Root-only installed updater delegates both mutations to original FD9.
+        [ "$#" -eq 2 ] || exit 64
+        "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py" replace "$2"
+        exit $?
+        ;;
     status)
         # Status may inspect the persisted shared-Apply journal, whose
         # read-only Python owner validates the ORIGINAL held FD9. Previous
@@ -3189,7 +3310,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-finish|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then

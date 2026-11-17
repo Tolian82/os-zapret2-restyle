@@ -18,6 +18,7 @@ SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
 UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
+PROTECTED_UPDATE_JOURNAL="/var/db/zapret2/pkg-update/operation.json"
 EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}"
 PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
@@ -227,7 +228,12 @@ fi
 # survive package replacement; no marker creation, signals or extra writers.
 printf 'zapret-pkg-postinstall-restart-intent=%s\n' "${restore_running_state}"
 
-if [ "${restore_running_state}" -eq 1 ]; then
+if [ -e "${PROTECTED_UPDATE_JOURNAL}" ] || [ -L "${PROTECTED_UPDATE_JOURNAL}" ]; then
+    # The plugin-owned protected updater already stopped the old engine
+    # under original FD9. Let it recheck installed identity and restore
+    # under FD9 AFTER pkg finishes: no nested configd Start here.
+    printf "zapret-pkg-postinstall-guarded=1\n"
+elif [ "${restore_running_state}" -eq 1 ]; then
     [ -x "${SERVICE_SCRIPT}" ] || {
         echo "ERROR: zapret service control is unavailable after package replacement" >&2
         exit 1
