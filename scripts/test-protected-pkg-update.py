@@ -152,6 +152,8 @@ class ProtectedPkgUpdate(unittest.TestCase):
                  mock.patch.object(m, "ACTIVE", record), \
                  mock.patch.object(m, "fd9_is_original_owner"), \
                  mock.patch.object(m, "root_and_private_base"), \
+                 mock.patch.object(m, "read_active",
+                     side_effect=lambda: json.loads(record.read_text())), \
                  mock.patch.object(m, "validated_stage"):
                 m.postinstall_attest()
                 done = json.loads(record.read_text())
