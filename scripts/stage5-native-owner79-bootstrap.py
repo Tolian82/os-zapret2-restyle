@@ -133,7 +133,13 @@ def main():
                       "published79_native_setup")
     witness.set_guest_lo0()
     bridge.set_guest_list_mode()
-    setup = g03.dispatch_and_poll()
+    try:
+        setup = g03.dispatch_and_poll()
+    except (g03.Refusal, OSError, subprocess.TimeoutExpired):
+        # Only this guarded disposable CI guest. Existing G03 helper redacts
+        # URLs, token-bearing lines and raw Config; do not conceal setup fail.
+        g03.bounded_disposable_failure_evidence()
+        raise
     need(setup["installed"] == "1" and setup["service"] == "stopped",
          "PUBLISHED_79_UPSTREAM_NOT_STOPPED_READY")
 

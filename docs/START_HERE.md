@@ -4,6 +4,9 @@
 
 ## Exact source and package boundary
 
+**Current source identity:** `v0.6.5_85` (`VERSION=0.6.5`, `PLUGIN_REVISION=85`) is a draft, source-only native acceptance candidate; `os-zapret2-restyle-0.6.5_85.pkg` is not published. The last merged protected updater is `_84`, and the owner's installed `_79` remains unchanged.
+
+
 **Current task branch _85 (source-only):** native acceptance of the **published immutable `_79.pkg`** as the actual installed predecessor, rather than same-package `_84` self-replacement. Candidate must prove original old FD9 `stop` + completed Auto epoch, real `pkg add -f` **only after independent verified STOPPED**, native successor version and Config, and new original FD9 cold `start` with fresh committed Auto epoch. The historical `_79` has no new protected `pkg-update` CLI; this one-time controlled STOPPED bootstrap is a separately tested scenario, **not** generic safe direct pkg and not proof of mid-extraction power-loss recovery. No owner install or `.pkg` publication before native result.
 
 

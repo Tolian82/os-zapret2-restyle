@@ -6,6 +6,9 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
+**Current source identity:** `v0.6.5_85` (`VERSION=0.6.5`, `PLUGIN_REVISION=85`) is a draft, source-only native acceptance candidate; `os-zapret2-restyle-0.6.5_85.pkg` is not published. The last merged protected updater is `_84`, and the owner's installed `_79` remains unchanged.
+
+
 **New `_85` source-only acceptance scope:** install the actual immutable published `_79.pkg` (known SHA-256 and native ABI) on ONE disposable OPNsense 26.7, create verified common LIST then AUTO owner, stop via the old installed original FD9, verify old observer retirement, replace with native `_85.pkg` only while STOPPED, and verify Config/epoch/PID/native new FD9 Start. This qualifies a **one-time migration path** only. The `_84` protected updater is already merged and natively qualified for already-installed guarded versions; `_79` does not have that action. Arbitrary interruption inside pkg, owner physical traffic/Voice/GUI/purge still OPEN. No new asset or release.
 
 
