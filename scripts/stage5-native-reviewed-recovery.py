@@ -51,19 +51,39 @@ def isolation(command):
          "NOT_EXPLICITLY_REVIEWED_DISPOSABLE_FREEBSD")
 
 
+# Keep the pre-existing error vocabulary exactly unchanged; only split its
+# read-only per-probe diagnosis into finite categories without leaking stderr.
+PKGDB_ERROR_SIGNATURES = (
+    ("locked", "database is locked"),
+    ("malformed", "malformed"),
+    ("corrupt", "corrupt"),
+    ("sql_error", "sql error"),
+    ("io_error", "io error"),
+)
+
+
+def pkgdb_error_categories(stderr):
+    low = stderr.lower()
+    return [label for label, pattern in PKGDB_ERROR_SIGNATURES
+            if pattern in low]
+
+
 def absent_pkgdb():
     query = cmd(["/usr/sbin/pkg", "query", "%v", NAME])
     info = cmd(["/usr/sbin/pkg", "info", "-e", NAME])
-    errors = (query.stderr + info.stderr).lower()
-    bad_db = any(word in errors for word in
-                 ("database is locked", "malformed", "corrupt", "sql error", "io error"))
+    query_db_errors = pkgdb_error_categories(query.stderr)
+    info_db_errors = pkgdb_error_categories(info.stderr)
+    bad_db = bool(query_db_errors or info_db_errors)
     # Diagnostic only: never print stderr/stdout or silently override a
     # disagreement between the two independent native pkg observations.
     print("NATIVE_REVIEWED_RECOVERY_PKGDB_READONLY=" + json.dumps({
         "query_rc": query.returncode, "info_exists_rc": info.returncode,
         "query_stdout_nonempty": bool(query.stdout.strip()),
         "info_stdout_nonempty": bool(info.stdout.strip()),
-        "possible_db_error": bad_db, "no_write": True,
+        "possible_db_error": bad_db,
+        "query_db_error_categories": query_db_errors,
+        "info_db_error_categories": info_db_errors,
+        "no_write": True,
     }, sort_keys=True), flush=True)
     need(query.returncode == 1 and not query.stdout.strip() and
          info.returncode == 1 and not info.stdout.strip() and not bad_db,

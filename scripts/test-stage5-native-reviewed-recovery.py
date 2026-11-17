@@ -39,6 +39,21 @@ class ReviewedRecoveryContracts(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
                 fixture.absent_pkgdb()
 
+    def test_pkgdb_failure_categories_are_bounded_and_never_override_refusal(self):
+        self.assertEqual(fixture.pkgdb_error_categories("No packages matching"), [])
+        self.assertEqual(
+            fixture.pkgdb_error_categories("pkg: SQL Error; IO ERROR: user-secret"),
+            ["sql_error", "io_error"])
+        self.assertNotIn("user-secret", str(
+            fixture.pkgdb_error_categories("IO ERROR: user-secret")))
+        query = mock.Mock(returncode=1, stdout="", stderr="No packages matching")
+        info = mock.Mock(returncode=1, stdout="", stderr="database is LOCKED")
+        with mock.patch.object(fixture, "cmd", side_effect=[query, info]):
+            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
+                fixture.absent_pkgdb()
+        # A true ambiguity is still a hard refusal, not permission to reinstall.
+        self.assertIn("need(query.returncode == 1", SOURCE.read_text())
+
     def test_postkill_partial_payload_proof_never_calls_installed_service(self):
         contents = SOURCE.read_text()
         scope = contents.split("def interrupt_for_reset(", 1)[1].split("def reinstall():", 1)[0]
