@@ -17,6 +17,7 @@ require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
 require_once __DIR__ . '/DomainSetPolicyBridge.php';
+require_once __DIR__ . '/../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -153,6 +154,14 @@ class SettingsController extends ApiMutableModelControllerBase
                         ],
                     ];
                 }
+                // This request's actual PHP upload only. Do not accept a
+                // client-specified file path, and never create a second writer.
+                // The root FD9 executor continues to refuse uncommitted
+                // found intent BEFORE Config, runtime or IPFW mutation.
+                $preflightStage = 'found-upload';
+                $foundUpload = \OPNsense\Zapret\Native\SharedApplyFoundIntent::uploadedMetadata(
+                    $_FILES
+                );
                 // Native missing-upstream diagnosis must precede seeded
                 // candidate overlay/normalization; WAN-first already ran.
                 if (SettingsApply::isPassiveStrategiesRequest($current, $post)) {
@@ -187,7 +196,8 @@ class SettingsController extends ApiMutableModelControllerBase
                 // LC-06: the actual changed-field scope, not the full POST,
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
-                $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
+                $wanOnlyCandidate = $foundUpload === null &&
+                    $plan['changed_fields'] === ['general.waninterface'];
                 if (!$wanOnlyCandidate) {
                 $preflightStage = 'normalization';
                 // Native Python is the only IP/CIDR grammar. This read-only
@@ -302,6 +312,10 @@ class SettingsController extends ApiMutableModelControllerBase
                         throw new \InvalidArgumentException('Invalid Strategies changed value');
                     }
                     $transport[$group][$field] = $value;
+                }
+                // Bind only the short descriptor, never the multi-KiB body.
+                if ($foundUpload !== null) {
+                    $sync['found_upload'] = $foundUpload;
                 }
                 // Do not relax envelope size checks for actually edited lists.
                 $encoded = SharedApplyEnvelope::encode('strategies',

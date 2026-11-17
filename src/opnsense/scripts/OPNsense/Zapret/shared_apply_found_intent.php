@@ -82,6 +82,102 @@ final class SharedApplyFoundIntent
         return $data;
     }
 
+    /**
+     * Accept only a real PHP multipart file in this very HTTP request.
+     * Never trust client-supplied temp paths or file metadata in POST.
+     * This structural first gate is portable; the second checks PHP's
+     * actual uploaded-file table and pins file content.
+     */
+    public static function httpFileShape(array $files): ?array
+    {
+        if ($files === []) {
+            return null; // ordinary Strategies Apply is unchanged
+        }
+        if (array_keys($files) !== ['found_intent'] ||
+            !is_array($entry = $files['found_intent'])) {
+            throw new \InvalidArgumentException('Untrusted found upload field');
+        }
+        $allowed = ['name', 'type', 'tmp_name', 'error', 'size', 'full_path'];
+        foreach (array_keys($entry) as $key) {
+            if (!in_array($key, $allowed, true)) {
+                throw new \InvalidArgumentException('Unexpected PHP upload shape');
+            }
+        }
+        foreach (['name', 'tmp_name', 'error', 'size'] as $key) {
+            if (!array_key_exists($key, $entry)) {
+                throw new \InvalidArgumentException('Incomplete PHP upload');
+            }
+        }
+        if ($entry['name'] !== 'found-intent.json' ||
+            !is_string($entry['tmp_name']) ||
+            !is_int($entry['error']) || $entry['error'] !== UPLOAD_ERR_OK ||
+            !is_int($entry['size']) || $entry['size'] < 1 ||
+            $entry['size'] > self::MAX_JSON ||
+            (isset($entry['full_path']) &&
+             $entry['full_path'] !== 'found-intent.json') ||
+            (isset($entry['type']) && !is_string($entry['type'])) ||
+            preg_match('#^/var/lib/php/tmp/php[A-Za-z0-9]{6,16}$#D',
+                $entry['tmp_name']) !== 1) {
+            throw new \InvalidArgumentException('Untrusted native PHP upload');
+        }
+        return $entry;
+    }
+
+    /** Read once within the original authenticated HTTP request. No writes. */
+    public static function uploadedMetadata(array $files): ?array
+    {
+        $file = self::httpFileShape($files);
+        if ($file === null) {
+            return null;
+        }
+        $path = $file['tmp_name'];
+        if (!is_uploaded_file($path)) {
+            throw new \InvalidArgumentException('Not a native PHP upload');
+        }
+        $same = static function (array $left, array $right): bool {
+            foreach (['dev', 'ino', 'mode', 'nlink', 'uid',
+                      'size', 'mtime', 'ctime'] as $key) {
+                if (($left[$key] ?? null) !== ($right[$key] ?? null)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        $before = @lstat($path);
+        if (!is_array($before) ||
+            ($before['mode'] & 0170000) !== 0100000 ||
+            ($before['mode'] & 0777) !== 0600 ||
+            $before['nlink'] !== 1 ||
+            $before['uid'] !== posix_geteuid() ||
+            $before['size'] !== $file['size']) {
+            throw new \InvalidArgumentException('Invalid native PHP upload inode');
+        }
+        $fp = @fopen($path, 'rb');
+        if ($fp === false) {
+            throw new \InvalidArgumentException('Native PHP upload unreadable');
+        }
+        try {
+            $opened = fstat($fp);
+            $bytes = stream_get_contents($fp, self::MAX_JSON + 1);
+            $finished = fstat($fp);
+        } finally {
+            fclose($fp);
+        }
+        $after = @lstat($path);
+        if (!is_array($opened) || !is_array($finished) ||
+            !is_array($after) || !is_string($bytes) ||
+            strlen($bytes) !== $file['size'] ||
+            !$same($before, $opened) || !$same($before, $finished) ||
+            !$same($before, $after)) {
+            throw new \InvalidArgumentException('Native PHP upload changed');
+        }
+        // Root independently verifies owner, nofollow inode, size and SHA.
+        return self::metadata([
+            'path' => $path, 'size' => $file['size'],
+            'sha256' => hash('sha256', $bytes), 'owner_uid' => $before['uid'],
+        ]);
+    }
+
     /** Synchronously called only by original native FD9 request stage. */
     public static function consume(array $metadata, string $configRevision): array
     {

@@ -79,6 +79,39 @@ $bad = $metadata; $bad['size'] = 999999;
 rejects(fn() => Intent::metadata($bad), 'oversized body');
 $bad = $metadata; $bad['owner_uid'] = -1;
 rejects(fn() => Intent::metadata($bad), 'negative owner');
+must(Intent::httpFileShape([]) === null, 'ordinary Apply altered by upload contract');
+$nativeUpload = [
+    'name' => 'found-intent.json', 'type' => 'application/json',
+    'tmp_name' => '/var/lib/php/tmp/phpAaBbCc', 'error' => UPLOAD_ERR_OK,
+    'size' => strlen($json), 'full_path' => 'found-intent.json',
+];
+must(Intent::httpFileShape(['found_intent' => $nativeUpload]) === $nativeUpload,
+     'real PHP upload form field shape not preserved');
+$bad = $nativeUpload; $bad['error'] = UPLOAD_ERR_NO_FILE;
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'upload error');
+$bad = $nativeUpload; $bad['size'] = 320 * 1024 + 1;
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'too large upload');
+$bad = $nativeUpload; $bad['tmp_name'] = '/tmp/phpAaBbCc';
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'wrong native upload path');
+$bad = $nativeUpload; $bad['name'] = '../bad.json';
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'foreign upload name');
+$bad = $nativeUpload; $bad['full_path'] = '../found-intent.json';
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'foreign full path');
+$bad = $nativeUpload; $bad['tmp_name'] = ['phpAaBbCc'];
+rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'multiple temp file');
+rejects(fn()=>Intent::httpFileShape(['other'=>$nativeUpload]), 'foreign upload field');
+rejects(fn()=>Intent::httpFileShape([
+    'found_intent'=>$nativeUpload,'other'=>$nativeUpload
+]), 'extra upload field');
+rejects(fn()=>Intent::uploadedMetadata(['found_intent'=>$nativeUpload]),
+    'fabricated CLI file is not genuine PHP HTTP uploaded file');
+$controller = file_get_contents(__DIR__ .
+    '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
+must(str_contains($controller, 'SharedApplyFoundIntent::uploadedMetadata(') &&
+     str_contains($controller, "\$sync['found_upload'] = \$foundUpload;") &&
+     str_contains($controller, "\$wanOnlyCandidate = \$foundUpload === null") &&
+     str_contains($controller, "SharedApplyEnvelope::encode('strategies'"),
+     'Existing Strategies Apply does not bind original PHP upload');
 $run = file_get_contents(__DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh');
 must(str_contains($run, 'preflight-rejected=found-transaction-pending') &&
      str_contains($run, "has(\"found_intent\")"),
