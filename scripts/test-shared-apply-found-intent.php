@@ -44,6 +44,13 @@ must(strlen($token) < 65536 && $decoded['sync']['found_upload'] === $metadata &&
      $decoded['page'] === 'strategies', 'existing root envelope lost short upload pointer');
 rejects(fn() => Envelope::encode('voice', [],
     ['snapshot' => $digest, 'found_upload' => $metadata]), 'Voice upload');
+rejects(fn() => Envelope::encode('strategies', [],
+    ['telegramips_baseline' => '', 'found_upload' => null]), 'null upload encoded');
+$nullTransport = rtrim(strtr(base64_encode(json_encode([
+    'page' => 'strategies', 'fields' => [],
+    'sync' => ['telegramips_baseline' => '', 'found_upload' => null],
+], JSON_THROW_ON_ERROR)), '+/', '-_'), '=');
+rejects(fn() => Request::decode($nullTransport), 'null upload decoded');
 $bad = $payload;
 $bad['config_revision'] = str_repeat('0', 64);
 rejects(fn() => Intent::validateJson(json_encode($bad), $digest), 'stale Config');

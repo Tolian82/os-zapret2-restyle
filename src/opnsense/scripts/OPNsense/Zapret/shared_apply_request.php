@@ -58,7 +58,7 @@ final class SharedApplyRequest
                 !is_string($data['sync']['telegramips_baseline'] ?? null)) {
                 throw new \InvalidArgumentException('Strategies baseline required');
             }
-            if (isset($data['sync']['found_upload'])) {
+            if (array_key_exists('found_upload', $data['sync'])) {
                 if (!is_array($data['sync']['found_upload'])) {
                     throw new \InvalidArgumentException('Invalid found upload');
                 }
@@ -106,7 +106,7 @@ final class SharedApplyRequest
         // cannot replay a Voice candidate as a Strategies transaction.
         $plan['page'] = $request['page'];
         if ($request['page'] === 'strategies' &&
-            isset($request['sync']['found_upload'])) {
+            array_key_exists('found_upload', $request['sync'])) {
             // The one original root FD9 stage reads the existing PHP upload,
             // and retains EXACT typed baselines/drafts only in its private
             // candidate plan. Later P1 locked comparison is still mandatory.

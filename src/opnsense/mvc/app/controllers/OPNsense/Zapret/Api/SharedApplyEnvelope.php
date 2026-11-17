@@ -114,7 +114,7 @@ final class SharedApplyEnvelope
             !is_string($sync[$required])) {
             throw new \InvalidArgumentException('Missing shared Apply form baseline');
         }
-        if ($page === 'strategies' && isset($sync['found_upload'])) {
+        if ($page === 'strategies' && array_key_exists('found_upload', $sync)) {
             $upload = $sync['found_upload'];
             if (!is_array($upload) ||
                 array_keys($upload) !== ['path', 'size', 'sha256', 'owner_uid'] ||
