@@ -6,7 +6,7 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
-**Current source identity (17 November 2026):** product main **v0.6.5_93** (`0d1cc69d`), `_94` (`VERSION=0.6.5`, `PLUGIN_REVISION=94`) GUI draft NOT MERGED/PUBLISHED; `os-zapret2-restyle-0.6.5_94.pkg` **NOT PUBLISHED**. Owner installed OPNsense unchanged.
+**Current source identity (17 November 2026):** draft candidate `v0.6.5_94` (`VERSION=0.6.5`, `PLUGIN_REVISION=94`) based on merged `main` v0.6.5_93 (`0d1cc69d`); GUI draft is NOT MERGED/RELEASED, `os-zapret2-restyle-0.6.5_94.pkg` **NOT PUBLISHED**. Owner installed OPNsense unchanged.
 
 **Merged `_93` P1 five-source semantics:** [PR #1187](https://github.com/Tolian82/os-zapret2-restyle/pull/1187) main `0d1cc69d2fb1b78cead34dcf84ccfcb67f025a00` (16 true PSL cross-source tests, [CI #44148244746](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44148244746) PASS). Backend unified FD9 Config+file commit and actual five GUI editors in main OPEN.
 
