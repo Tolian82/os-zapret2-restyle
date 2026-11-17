@@ -200,6 +200,15 @@ class HardResetContracts(unittest.TestCase):
         self.assertNotIn("run([str(SERVICE)", refusal_branch)
         self.assertIn('postboot["guard_private_staged_package_unchanged"]', verify)
 
+    def test_postboot_payload_diagnostics_never_authorize_foreign_bytes(self):
+        code = SOURCE.read_text()
+        assert 'def postboot_witness_named_states():' in code
+        tail = code.split('NATIVE_HARDRESET_POSTBOOT_PAYLOAD_WITNESSES=', 1)[1]
+        self.assertIn('postboot_witness_named_states()', tail)
+        self.assertIn('observed["foreign"] == 0', tail)
+        self.assertIn('"UNCLASSIFIED_PAYLOAD_AFTER_RESET"', tail)
+        self.assertNotIn('candidate_bytes', tail.split("need(observed", 1)[0])
+
     def test_reboot_is_not_host_power_loss_or_pkgdb_repair(self):
         source = SOURCE.read_text()
         self.assertIn('monitor_command(port, "system_reset")', source)

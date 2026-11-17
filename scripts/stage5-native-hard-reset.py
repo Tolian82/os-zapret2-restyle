@@ -278,6 +278,39 @@ def witness_inventory():
     return out
 
 
+
+def postboot_witness_named_states():
+    """Only allowlisted static package filenames and finite state labels.
+
+    Do not log package file contents, Config, runtime arguments or hostlists.
+    Unknown bytes remain FAIL, not a replacement eligibility verdict.
+    """
+    result = []
+    for rel in load_witnesses():
+        target = Path("/usr/local/opnsense") / rel
+        source = ROOT / "src" / "opnsense" / rel
+        need(source.is_file() and not source.is_symlink(),
+             "POSTBOOT_SOURCE_WITNESS_UNTRUSTED")
+        expected = source.read_bytes()
+        try:
+            actual = target.read_bytes()
+        except FileNotFoundError:
+            status = "missing"
+        except OSError:
+            status = "foreign"
+        else:
+            if actual == expected:
+                status = "restored"
+            elif actual == expected + MARKER:
+                status = "marked"
+            else:
+                status = "foreign"
+        if status != "restored":
+            result.append({"path": rel, "state": status})
+    return result
+
+
+
 def version_archive():
     version = (ROOT / "VERSION").read_text().strip()
     match = re.search(r"(?m)^PLUGIN_REVISION=\s*(\d+)$",
@@ -552,6 +585,11 @@ def guest_verify():
          postboot["guard_private_staged_package_unchanged"],
          "PRIVATE_STAGED_ARCHIVE_CHANGED_ON_RESET")
     observed = witness_inventory()
+    print("NATIVE_HARDRESET_POSTBOOT_PAYLOAD_WITNESSES=" + json.dumps({
+        "counts": observed,
+        "non_restored_package_file_states": postboot_witness_named_states(),
+        "read_only": True,
+    }, sort_keys=True), flush=True)
     need(observed["foreign"] == 0 and
          observed["restored"] + observed["marked"] + observed["missing"] ==
              len(load_witnesses()),
