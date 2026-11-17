@@ -769,6 +769,8 @@ jobs:
           python3.13 scripts/test-domain-policy.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_editor_merge.py scripts/test-auto-detect-editor-merge.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-editor-merge.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py scripts/test-shared-apply-found-files.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-found-files.py -v
           python3.13 scripts/test-owner-p6-list-ui.py
           sh -n scripts/test-domain-policy-shell.sh
           sh scripts/test-domain-policy-shell.sh

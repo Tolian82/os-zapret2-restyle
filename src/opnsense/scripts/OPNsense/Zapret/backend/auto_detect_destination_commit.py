@@ -332,3 +332,188 @@ class DestinationCommit:
                       "ack_authorized": False}
         _write_once(journal, "checkpoint.json", _canonical(checkpoint), self.receipts.uid)
         return checkpoint
+
+
+# TZ6v2 Shared Apply: the SAME original P2 destination CAS owner.
+# No alternative file writer, no new CLI, no new Config writer or journal.
+# The public operation is bound to the existing original FD9 + activating
+# Shared Apply record + sealed original candidate. The low-level helper is
+# deliberately private for controlled preflight/partial-failure tests.
+SHARED_FOUND_NAMES = ("youtube", "user", "auto")
+SHARED_FOUND_LIMIT = 40 * 1024
+
+
+def _qualified_shared_found_batch(rows: dict) -> dict:
+    from domain_policy import PublicSuffixList, normalize_found_editor
+
+    if not isinstance(rows, dict) or list(rows) != list(SHARED_FOUND_NAMES):
+        raise DestinationRefused("shared_found_batch_incomplete")
+    psl = PublicSuffixList.load()
+    out = {}
+    identity = ("before_device", "before_inode", "before_ctime_ns",
+                "before_mtime_ns", "before_size")
+    for name in SHARED_FOUND_NAMES:
+        entry = rows[name]
+        if (not isinstance(entry, dict) or
+                set(entry) != {"before", "after", "before_revision", *identity} or
+                not isinstance(entry["before"], str) or
+                not isinstance(entry["after"], str) or
+                not isinstance(entry["before_revision"], str) or
+                not SHA256.fullmatch(entry["before_revision"]) or
+                any(type(entry.get(k)) is not int or entry[k] < 0 for k in identity) or
+                entry["before_inode"] == 0):
+            raise DestinationRefused("shared_found_candidate_shape")
+        before, after = (entry[k].encode("utf-8") for k in ("before", "after"))
+        if (len(before) > SHARED_FOUND_LIMIT or len(after) > SHARED_FOUND_LIMIT or
+                entry["before_size"] != len(before) or
+                _sha(b"present\0" + before) != entry["before_revision"]):
+            raise DestinationRefused("shared_found_candidate_revision")
+        try:
+            for text in (entry["before"], entry["after"]):
+                parsed = normalize_found_editor(text, name, psl=psl)["normalized"]
+                if text != (parsed + "\n" if parsed else ""):
+                    raise DestinationRefused("shared_found_candidate_noncanonical")
+        except (ValueError, TypeError) as exc:
+            raise DestinationRefused("shared_found_candidate_domain_policy") from exc
+        out[name] = before, after, tuple(entry[k] for k in identity)
+    return out
+
+
+def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
+                                 replace_fn=None) -> dict:
+    """All-target preflight, original P2 CAS replacements, bounded compensation.
+
+    Caller MUST hold original FD9 and Config→P2 destination lock. A fault is
+    never sufficient proof that the whole Config/runtime transaction restored.
+    """
+    if (not isinstance(targets, dict) or
+            list(targets) != list(SHARED_FOUND_NAMES) or
+            len(set(map(str, targets.values()))) != len(SHARED_FOUND_NAMES)):
+        raise DestinationRefused("shared_found_targets_incomplete")
+    batch = _qualified_shared_found_batch(rows)
+    replace = _replace if replace_fn is None else replace_fn
+    original = {}
+    for name in SHARED_FOUND_NAMES:
+        path = Path(targets[name])
+        if not path.is_absolute():
+            raise DestinationRefused("shared_found_target_not_absolute")
+        before, after, preimage = batch[name]
+        now, st = _target(path, uid)
+        observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                    st.st_mtime_ns, st.st_size)
+        if now != before or observed != preimage:
+            raise DestinationRefused("shared_found_preimage_changed")
+        original[name] = (path, before, after)
+    modified = []
+    try:
+        for name in SHARED_FOUND_NAMES:
+            path, before, after = original[name]
+            if before == after:
+                continue
+            # Include a replacement that may raise *after* os.replace/fsync.
+            modified.append(name)
+            replace(path, before, after, uid)
+            actual, _ = _target(path, uid)
+            if actual != after:
+                raise DestinationRefused("shared_found_postwrite_unverified")
+        return {
+            "result": "files-applied-under-original-transaction",
+            "files": {
+                name: {"before_sha256": _sha(original[name][1]),
+                       "after_sha256": _sha(original[name][2]),
+                       "changed": original[name][1] != original[name][2]}
+                for name in SHARED_FOUND_NAMES
+            },
+            # A file-only receipt is NOT durable Apply success.
+            "config_committed": False, "commit_authorized": False,
+        }
+    except (OSError, ValueError, DestinationRefused) as error:
+        try:
+            for name in reversed(modified):
+                path, before, after = original[name]
+                current, _ = _target(path, uid)
+                if current == after:
+                    replace(path, after, before, uid)
+                elif current != before:
+                    raise DestinationRefused("shared_found_restore_foreign_state")
+            for name in SHARED_FOUND_NAMES:
+                path, before, _ = original[name]
+                current, _ = _target(path, uid)
+                if current != before:
+                    raise DestinationRefused("shared_found_restore_mismatch")
+        except (OSError, ValueError, DestinationRefused) as rollback:
+            raise DestinationRefused("shared_found_requires_review") from rollback
+        raise DestinationRefused("shared_found_restored_after_failure") from error
+
+
+def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> dict:
+    """Apply the three files ONLY from existing activating FD9/sealed plan.
+
+    This API has NO registered configd action and cannot independently save
+    Config or claim a successful native Apply. Its caller must additionally
+    hold the original Config/P2 lock ordering across plan qualification.
+    """
+    import sys
+    from shared_apply_seal import WORK, verify_seal
+    from shared_apply_operation import SharedApplyOperation, OP_ID
+    from auto_detect_owned_sources import OWNED_ROOT, read_owned
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd)
+    from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or not OP_ID.fullmatch(operation_id)):
+        raise DestinationRefused("original_native_fd9_required")
+    require_lifecycle_lock()
+    # The original OPNsense Config lock is an inherited real open file
+    # description; a JSON token or fresh guessed lock is insufficient.
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    record = SharedApplyOperation().read()
+    if (record is None or record["phase"] != "activating" or
+            record["detail"]["id"] != operation_id or
+            record["detail"]["page"] != "strategies"):
+        raise DestinationRefused("original_apply_not_activating")
+    work = WORK / operation_id
+    signed = verify_seal(work, owner=0)
+    target = work / "plan.json"
+    st = target.lstat()
+    if (not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or
+            st.st_nlink != 1 or stat.S_IMODE(st.st_mode) != 0o600 or
+            not 0 < st.st_size <= 4 * 1024 * 1024):
+        raise DestinationRefused("shared_found_original_plan_untrusted")
+    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        pinned = os.fstat(fd)
+        raw = os.read(fd, 4 * 1024 * 1024 + 1)
+        after = os.fstat(fd)
+    finally:
+        os.close(fd)
+    identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns)
+    if (identity(st) != identity(pinned) or identity(st) != identity(after) or
+            len(raw) != st.st_size or
+            _sha(raw) != signed["sha256"]["plan.json"]):
+        raise DestinationRefused("shared_found_original_plan_changed")
+    try:
+        plan = json.loads(raw)
+    except (UnicodeError, ValueError) as exc:
+        raise DestinationRefused("shared_found_original_plan_invalid") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            not isinstance(plan.get("found_batch"), dict)):
+        raise DestinationRefused("shared_found_plan_not_original_owner")
+    targets = {"youtube": OWNED_ROOT / "youtube.txt",
+               "user": OWNED_ROOT / "user.txt",
+               "auto": AUTO_HOSTLIST}
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        owned = read_owned(OWNED_ROOT, owner_uid=0)
+        if not isinstance(owned, dict) or list(owned) != ["youtube", "user"]:
+            raise DestinationRefused("shared_found_known_owner_uninitialized")
+        rows = plan["found_batch"]
+        if not isinstance(rows, dict) or list(rows) != list(SHARED_FOUND_NAMES):
+            raise DestinationRefused("shared_found_plan_not_complete")
+        if any(owned[name] != rows[name].get("before") for name in ("youtube", "user")
+               if isinstance(rows[name], dict)):
+            raise DestinationRefused("shared_found_known_owner_changed")
+        result = _locked_shared_found_replace(rows, targets, uid=0)
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return result
