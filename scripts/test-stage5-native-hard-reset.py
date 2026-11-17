@@ -42,6 +42,20 @@ class HardResetContracts(unittest.TestCase):
                 b"-monitor\0tcp:0.0.0.0:4488,server,nowait,nodelay\0")
             self.assertEqual(fixture.qemu_candidates(proc), [])
 
+    def test_os_owned_config_accepts_native_file_and_rejects_symlink(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "config.xml"
+            path.write_bytes(b"<opnsense/>")
+            twin = Path(root) / "hardlinked"
+            import os
+            os.link(path, twin)
+            with mock.patch.object(fixture, "CONFIG", path):
+                self.assertTrue(fixture.opnsense_config_readable())
+            link = Path(root) / "symlink"
+            link.symlink_to(path)
+            with mock.patch.object(fixture, "CONFIG", link):
+                self.assertFalse(fixture.opnsense_config_readable())
+
     def test_guest_and_host_actions_refuse_outside_disposable_context(self):
         with mock.patch.dict(fixture.os.environ, {
                 "GITHUB_ACTIONS": "false",

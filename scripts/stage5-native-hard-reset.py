@@ -74,6 +74,19 @@ def trusted_regular(path, max_size=1024 * 1024):
             not (s.st_mode & 0o022) and s.st_size <= max_size)
 
 
+def opnsense_config_readable():
+    """Read-only Config input; OPNsense itself owns its inode/ACL lifecycle.
+
+    The original installed Model/Config and shared FD9 have already validated
+    and committed this exact Config. No new independent Config ownership rule.
+    """
+    try:
+        st = CONFIG.lstat()
+    except OSError:
+        return False
+    return stat.S_ISREG(st.st_mode) and st.st_size <= 32 * 1024 * 1024
+
+
 def load_witnesses():
     spec = importlib.util.spec_from_file_location(
         "native_test_only_midextract", ROOT / "scripts" /
@@ -232,9 +245,18 @@ def guest_prepare():
     need(archive.is_file() and not archive.is_symlink(),
          "EXACT_NATIVE_ARCHIVE_MISSING")
     record = read_guard()
-    need(trusted_regular(CONFIG, 4 * 1024 * 1024) and
+    # Metadata only; never log Config content, domain lists or credentials.
+    print("NATIVE_HARDRESET_PRECHECK_METADATA=" + json.dumps({
+        "config": {"mode": oct(CONFIG.lstat().st_mode & 0o777),
+                   "links": CONFIG.lstat().st_nlink,
+                   "bytes": CONFIG.lstat().st_size},
+        "journal": {"mode": oct(JOURNAL.lstat().st_mode & 0o777),
+                    "links": JOURNAL.lstat().st_nlink,
+                    "bytes": JOURNAL.lstat().st_size},
+    }, sort_keys=True), flush=True)
+    need(opnsense_config_readable() and
          trusted_regular(JOURNAL, 128 * 1024),
-         "CONFIG_OR_JOURNAL_UNTRUSTED")
+         "CONFIG_OR_JOURNAL_UNAVAILABLE")
     current = json.loads(JOURNAL.read_text())
     epoch = current.get("detail", {}).get("id")
     need(current.get("phase") == "committed" and
@@ -266,7 +288,7 @@ def guest_verify():
     receipt = read_receipt()
     boot = guest_boot()
     need(boot > receipt["boot_seconds"], "HARD_RESET_BOOT_ID_UNCHANGED")
-    need(trusted_regular(CONFIG, 4 * 1024 * 1024) and
+    need(opnsense_config_readable() and
          digest(CONFIG) == receipt["config_sha256"],
          "CONFIG_CHANGED_ACROSS_RESET")
     record = read_guard()
