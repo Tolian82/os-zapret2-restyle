@@ -20,7 +20,8 @@ sys.path.insert(0, str(BACKEND))
 
 from auto_detect_destination_commit import (
     DestinationRefused, SHARED_FOUND_NAMES, _locked_shared_found_replace,
-    _replace, shared_apply_found_files_original_fd9,
+    _replace, _plan_shared_found_under_original_locks,
+    shared_apply_found_files_original_fd9,
 )
 
 
@@ -180,6 +181,79 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertFalse(any(x["changed"] for x in result["files"].values()))
         self.assertEqual(
             {name: path.lstat().st_ino for name, path in self.targets.items()}, inodes)
+
+    def base_records(self):
+        return {
+            name: {"status": "populated" if value else "empty",
+                   "content": value, "revision": sha(value.encode())}
+            for name, value in self.old.items()
+        }
+
+    def proposed(self, *, draft=None, baseline=None, manual=None, exclude=""):
+        return _plan_shared_found_under_original_locks(
+            self.base_records() if baseline is None else baseline,
+            dict(self.old) if draft is None else draft,
+            {"youtube": "", "user": ""} if manual is None else manual,
+            exclude, self.targets, uid=self.uid)
+
+    def test_rebased_user_deletion_keeps_concurrent_minute_addition(self):
+        # User removes a seen root; the one-minute writer added another.
+        self.targets["youtube"].write_text("example.com\nexample.net\n")
+        drafts = dict(self.old, youtube="")
+        rows, preview = self.proposed(draft=drafts)
+        self.assertTrue(preview["sources"]["youtube"]["rebased"])
+        self.assertEqual(rows["youtube"]["before"], "example.com\nexample.net\n")
+        self.assertEqual(rows["youtube"]["after"], "example.net\n")
+        self.apply(plan=rows)
+        self.assertEqual(self.targets["youtube"].read_text(), "example.net\n")
+        self.assertEqual(self.targets["user"].read_text(), self.old["user"])
+
+    def test_two_tab_stale_base_rebases_against_first_tab_commit(self):
+        first = dict(self.old, youtube="example.com\nfirst.net\n")
+        rows, _ = self.proposed(draft=first)
+        self.apply(plan=rows)
+        second = dict(self.old, youtube="example.com\nsecond.net\n")
+        rows, preview = self.proposed(draft=second)
+        self.assertTrue(preview["sources"]["youtube"]["rebased"])
+        self.assertEqual(rows["youtube"]["after"],
+                         "example.com\nfirst.net\nsecond.net\n")
+        self.apply(plan=rows)
+        self.assertEqual(self.targets["youtube"].read_text(),
+                         "example.com\nfirst.net\nsecond.net\n")
+
+    def test_drift_after_preparation_refuses_all_writes(self):
+        rows, _ = self.proposed(draft=dict(self.old, youtube="example.com\nnew.net\n"))
+        self.targets["user"].write_text("example.org\nlate.net\n")
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_preimage_changed"):
+            self.apply(plan=rows)
+        self.assertEqual(self.targets["youtube"].read_text(), self.old["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), "example.org\nlate.net\n")
+
+    def test_cross_known_provenance_conflict_does_not_mutate(self):
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "ambiguous_known_source_provenance"):
+            self.proposed(draft=dict(self.old,
+                               youtube="example.com\nexample.org\n"))
+        self.assert_old()
+
+    def test_invalid_draft_and_uninitialized_owned_base_refuse(self):
+        with self.assertRaisesRegex(DestinationRefused, "invalid_draft_line"):
+            self.proposed(draft=dict(self.old, auto="!bad.example.com"))
+        baseline = self.base_records()
+        baseline["youtube"] = {
+            "status": "uninitialized", "revision": None, "content": ""}
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "owned_source_not_initialized"):
+            self.proposed(baseline=baseline)
+        self.assert_old()
+
+    def test_missing_shared_auto_is_not_invented_as_existing_file(self):
+        self.targets["auto"].unlink()
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_preimage_unavailable"):
+            self.proposed()
+        self.assert_old_others()
 
     @unittest.skipIf(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                      "A native root requires a real FD9 parent, not a fixture")

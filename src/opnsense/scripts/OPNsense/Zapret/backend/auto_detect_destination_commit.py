@@ -379,6 +379,76 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
     return out
 
 
+
+def _plan_shared_found_under_original_locks(
+        baselines: dict, drafts: dict, manual: dict, global_exclude: str,
+        targets: dict, *, uid: int) -> tuple[dict, dict]:
+    """Rebase P1 user intent onto exact locked P2 before-images (PRIVATE).
+
+    The original FD9 service must hold original Config -> destination locks
+    and supply verified candidate manual/exclusion fields. This read-only
+    preparation does not authorize writes or initialize missing files.
+    """
+    from auto_detect_five_editor_plan import (
+        FiveEditorPlanRefused, preview_five_sources,
+    )
+
+    if (not isinstance(targets, dict) or
+            list(targets) != list(SHARED_FOUND_NAMES) or
+            len(set(map(str, targets.values()))) != len(SHARED_FOUND_NAMES) or
+            not isinstance(global_exclude, str)):
+        raise DestinationRefused("shared_found_planner_input_incomplete")
+    currents = {}
+    pinned = {}
+    for name in SHARED_FOUND_NAMES:
+        path = Path(targets[name])
+        if not path.is_absolute():
+            raise DestinationRefused("shared_found_target_not_absolute")
+        try:
+            raw, st = _target(path, uid)
+        except (OSError, DestinationRefused) as exc:
+            # A missing shared auto source needs separate durable creation
+            # and rollback; it cannot be represented as a present inode.
+            raise DestinationRefused("shared_found_preimage_unavailable") from exc
+        if len(raw) > SHARED_FOUND_LIMIT:
+            raise DestinationRefused("shared_found_preimage_too_large")
+        content = raw.decode("utf-8")
+        currents[name] = {
+            "status": "populated" if content else "empty",
+            "revision": _sha(b"present\0" + raw),
+            "content": content,
+        }
+        pinned[name] = st
+
+    try:
+        preview = preview_five_sources(
+            baselines, drafts, currents, manual, global_exclude)
+    except FiveEditorPlanRefused as exc:
+        raise DestinationRefused(
+            "shared_found_planner_" + exc.source + "_" + exc.code) from None
+    if (preview.get("result") != "preview_only" or
+            preview.get("cross_source_validated") is not True or
+            preview.get("commit_authorized") is not False):
+        raise DestinationRefused("shared_found_planner_not_qualified")
+
+    rows = {}
+    for name in SHARED_FOUND_NAMES:
+        st = pinned[name]
+        rows[name] = {
+            "before": currents[name]["content"],
+            "after": preview["sources"][name]["content"],
+            "before_revision": currents[name]["revision"],
+            "before_device": st.st_dev,
+            "before_inode": st.st_ino,
+            "before_ctime_ns": st.st_ctime_ns,
+            "before_mtime_ns": st.st_mtime_ns,
+            "before_size": st.st_size,
+        }
+    # Existing P2 writer validates the identical canonical/identity schema.
+    _qualified_shared_found_batch(rows)
+    return rows, preview
+
+
 def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                                  replace_fn=None) -> dict:
     """All-target preflight, original P2 CAS replacements, bounded compensation.
