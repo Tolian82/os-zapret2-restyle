@@ -1,0 +1,91 @@
+name: Protected native pkg hard reset after partial extraction (one OPNsense)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/stage5-native-hard-reset.py
+      - scripts/test-stage5-native-hard-reset.py
+  workflow_dispatch:
+
+concurrency:
+  group: protected-hardreset-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: Portable reset-phase and no-foreign-QEMU contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Python parser and strict isolation gates
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/stage5-native-hard-reset.py scripts/test-stage5-native-hard-reset.py
+          python3.13 scripts/test-stage5-native-hard-reset.py -v
+
+  native:
+    name: Original FD9 torn pkg then QEMU hardware reset, postboot refusal
+    needs: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bounded host virtualization readiness
+        run: |
+          set -eu
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo "::error::One-VM native reset NOT TESTED: QEMU/DNS unavailable"
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99zapret-hardreset-network >/dev/null
+      - name: Real native pkg partial extraction, original FD9 guarded STOPPED
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_PROTECTED_PKG_NATIVE_TEST=1
+            export ZAPRET2_NATIVE_HARDRESET_TEST=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            sh scripts/build-pkg.sh
+            /usr/local/bin/python3 scripts/stage5-native-protected-update.py
+            /usr/local/bin/python3 scripts/stage5-native-hard-reset.py prepare
+      - name: QEMU system_reset without guest shutdown or disk image replacement
+        run: |
+          set -eu
+          GITHUB_ACTIONS=true ZAPRET2_NATIVE_HARDRESET_HOST=1 \
+            python3 scripts/stage5-native-hard-reset.py host-reset
+      - name: Native post-boot protected journal and no automatic daemon restart
+        shell: opnsense {0}
+        run: |
+          set -eu
+          export GITHUB_ACTIONS=true
+          export ZAPRET2_NATIVE_HARDRESET_TEST=1
+          /usr/local/bin/python3 scripts/stage5-native-hard-reset.py verify
