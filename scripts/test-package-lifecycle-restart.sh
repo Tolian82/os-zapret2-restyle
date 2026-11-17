@@ -114,7 +114,10 @@ write_mock "${TMP_ROOT}/configctl" \
     'case "$*" in' \
     '  "system status") [ -e "${RELOADED}" ] ;;' \
     '  "template reload OPNsense/Zapret") printf "%s\n" OK ;;' \
-    '  "zapret start") printf "%s\n" running > "${SERVICE_STATE}"; printf "%s\n" OK ;;' \
+    '  "zapret start")' \
+    '    if [ "${MOCK_KEEP_STOPPED:-0}" != 1 ]; then printf "%s\n" running > "${SERVICE_STATE}"; fi' \
+    '    printf "%s\n" "${MOCK_START_REPLY:-OK}"' \
+    '    exit "${MOCK_START_RESULT:-0}" ;;' \
     '  webgui*) exit 99 ;;' \
     '  *) exit 64 ;;' \
     'esac'
@@ -196,6 +199,37 @@ assert_absent "${REPLACEMENT_MARKER}"
 assert_absent "${LEGACY_MARKER}"
 grep -Fxq running "${SERVICE_STATE}" || fail "forced replacement did not restore running service"
 grep -Fq 'configctl:zapret start' "${TRACE}" || fail "forced replacement did not invoke replacement Start"
+
+# A successful action may return non-OK text; the real installed status
+# remains the independent authority for marking the replacement restored.
+reset_case
+printf '%s\n' running > "${SERVICE_STATE}"
+run_pre_install
+MOCK_START_REPLY='native-start-complete' run_post_install ||
+    fail "healthy non-OK configd Start reply rejected"
+assert_absent "${REPLACEMENT_MARKER}"
+grep -Fxq running "${SERVICE_STATE}" ||
+    fail "successful non-OK reply did not restore runtime"
+
+# A false-positive configd rc=0 without a RUNNING engine is never enough.
+reset_case
+printf '%s\n' running > "${SERVICE_STATE}"
+run_pre_install
+if MOCK_KEEP_STOPPED=1 MOCK_START_REPLY=native-start-complete run_post_install > "${TMP_ROOT}/bad-running-receipt" 2>&1; then
+    fail "postinstall accepted rc0 without attested RUNNING"
+fi
+assert_present "${REPLACEMENT_MARKER}"
+grep -Fxq stopped "${SERVICE_STATE}" ||
+    fail "false running receipt modified service"
+
+# A nonzero configd Start is refused even when the process became RUNNING.
+reset_case
+printf '%s\n' running > "${SERVICE_STATE}"
+run_pre_install
+if MOCK_START_RESULT=69 MOCK_START_REPLY=native-start-error run_post_install > "${TMP_ROOT}/bad-start-rc" 2>&1; then
+    fail "postinstall accepted nonzero configd Start"
+fi
+assert_present "${REPLACEMENT_MARKER}"
 
 # A replacement started while stopped remains stopped and does not create intent.
 reset_case

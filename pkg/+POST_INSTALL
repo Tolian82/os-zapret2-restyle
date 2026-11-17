@@ -247,8 +247,10 @@ if [ "${restore_running_state}" -eq 1 ]; then
     esac
     printf 'zapret-pkg-postinstall-start-rc=%s\n' "${service_result}"
     printf 'zapret-pkg-postinstall-start-reply=%s\n' "${_pkg_start_reply}"
-    if [ "${service_result}" -ne 0 ] || [ "${service_output}" != "OK" ]; then
-        printf '%s\n' "${service_output}" >&2
+    # Configd type:script can return non-OK human-readable output on success.
+    # Text is not runtime proof. Only command rc=0 AND the independent,
+    # existing native status attestation permit restart intent consumption.
+    if [ "${service_result}" -ne 0 ]; then
         echo "ERROR: zapret service could not be started after package replacement" >&2
         exit 1
     fi
