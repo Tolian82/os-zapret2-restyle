@@ -122,8 +122,43 @@ def config_snapshot():
         "full": digest(CONFIG),
         "plugin": fingerprint(plugin),
         "interfaces": fingerprint(interfaces),
+        "plugin_diagnostic_paths": plugin_diagnostic_paths(plugin),
     }
 
+
+
+
+def plugin_diagnostic_paths(plugin):
+    """VM-only, value-free fingerprints of bounded named plugin paths.
+
+    Safety remains the complete semantic fingerprint; this diagnostic cannot
+    authorize any field change. Only structural names, never values, print.
+    """
+    result = {}
+    def descend(node, path, depth):
+        need(len(result) < 300, "PLUGIN_DIAGNOSTIC_TOO_MANY_FIELDS")
+        encoded = json.dumps(stable_xml_value(node), ensure_ascii=True,
+                             separators=(",", ":")).encode("utf-8")
+        result[path] = hashlib.sha256(encoded).hexdigest()[:24]
+        if depth >= 4:
+            return
+        counters = {}
+        for child in list(node):
+            number = counters.get(child.tag, 0)
+            counters[child.tag] = number + 1
+            descend(child, path + "/" + child.tag + "[" + str(number) + "]",
+                    depth + 1)
+    descend(plugin, "Zapret", 0)
+    return result
+
+
+def diagnostic_changed_paths(before, after):
+    """Return only deepest changed XML path labels; never return node data."""
+    changed = {key for key in before.keys() | after.keys()
+               if before.get(key) != after.get(key)}
+    deepest = [key for key in changed
+               if not any(other.startswith(key + "/") for other in changed)]
+    return sorted(deepest)
 
 
 def config_structure():
@@ -160,11 +195,22 @@ def postboot_readonly_classification(receipt):
         config["config_regular"] and
         digest(CONFIG) == receipt["config_sha256"])
     try:
-        read_guard()
+        record = read_guard()
         valid_record = True
     except (RuntimeError, OSError, ValueError, json.JSONDecodeError):
+        record = None
         valid_record = False
     guard_equal = valid_record and digest(GUARD) == receipt["guard_sha256"]
+    staged_guarded = False
+    if valid_record and guard_equal:
+        staged_path = Path(record.get("stage", ""))
+        staged_guarded = (
+            staged_path.parent == GUARD.parent and
+            staged_path.name.startswith("incoming-") and
+            staged_path.suffix == ".pkg" and
+            trusted_regular(staged_path, 256 * 1024 * 1024) and
+            digest(staged_path) == receipt["archive_sha256"] and
+            record.get("sha256") == receipt["archive_sha256"])
     epoch = receipt["original_epoch_id"]
     retired = (EPOCHS / epoch / "retired.json").is_file()
     process = run(["/bin/ps", "-axo", "comm="])
@@ -179,6 +225,7 @@ def postboot_readonly_classification(receipt):
     report = {
         **config,
         "prepared_guard_present_unchanged": guard_equal,
+        "guard_private_staged_package_unchanged": staged_guarded,
         "old_auto_retired": retired,
         "process_table_available": process_readable,
         "dvtws2_absent": dvtws2_absent,
@@ -254,7 +301,7 @@ def read_guard():
 
 
 def read_receipt():
-    need(trusted_regular(RECEIPT, 16 * 1024) and
+    need(trusted_regular(RECEIPT, 64 * 1024) and
          RECEIPT.stat().st_mode & 0o777 == 0o600,
          "ROOT_PRIVATE_RESET_RECEIPT_UNTRUSTED")
     data = json.loads(RECEIPT.read_text())
@@ -269,7 +316,9 @@ def save_private_receipt(data):
     fd = os.open(RECEIPT, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                  0o600)
     with os.fdopen(fd, "wb") as f:
-        f.write((json.dumps(data, sort_keys=True) + "\n").encode())
+        body = (json.dumps(data, sort_keys=True) + "\n").encode()
+        need(len(body) <= 64 * 1024, "TEST_RECEIPT_TOO_LARGE")
+        f.write(body)
         f.flush()
         os.fsync(f.fileno())
     folder = os.open(RECEIPT.parent, os.O_RDONLY | os.O_DIRECTORY)
@@ -423,6 +472,12 @@ def guest_verify():
         "raw_config_bytes_equal": config_bytes_preserved,
         "saved_plugin_settings_equal": plugin_preserved,
         "saved_wan_interfaces_equal": interfaces_preserved,
+        "changed_plugin_paths_count": len(diagnostic_changed_paths(
+            before_config["plugin_diagnostic_paths"],
+            after_config["plugin_diagnostic_paths"])),
+        "changed_plugin_paths": diagnostic_changed_paths(
+            before_config["plugin_diagnostic_paths"],
+            after_config["plugin_diagnostic_paths"])[:24],
         "opnsense_other_boot_writes_possible": not config_bytes_preserved,
     }, sort_keys=True), flush=True)
     need(plugin_preserved and interfaces_preserved,

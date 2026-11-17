@@ -128,6 +128,23 @@ class HardResetContracts(unittest.TestCase):
         self.assertNotIn('[str(SERVICE), "start"]', before_mutations)
         self.assertIn('"postboot_mutation_attempted": False', content)
 
+    def test_value_free_plugin_path_diagnostics_find_only_modified_names(self):
+        import xml.etree.ElementTree as ET
+        before = ET.fromstring(
+            "<Zapret><hostlist><mode>auto</mode></hostlist>"
+            "<strategy><trafficargs>--filter-tcp=443</trafficargs>"
+            "</strategy></Zapret>")
+        after = ET.fromstring(
+            "<Zapret><hostlist><mode>list</mode></hostlist>"
+            "<strategy><trafficargs>--filter-tcp=443</trafficargs>"
+            "</strategy></Zapret>")
+        saved = fixture.plugin_diagnostic_paths(before)
+        modified = fixture.plugin_diagnostic_paths(after)
+        changed = fixture.diagnostic_changed_paths(saved, modified)
+        self.assertEqual(changed, ["Zapret/hostlist[0]/mode[0]"])
+        self.assertTrue(all("--filter-tcp" not in item and "auto" not in item
+                            for item in changed))
+
     def test_guest_and_host_actions_refuse_outside_disposable_context(self):
         with mock.patch.dict(fixture.os.environ, {
                 "GITHUB_ACTIONS": "false",
