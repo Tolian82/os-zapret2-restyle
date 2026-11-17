@@ -74,6 +74,41 @@ $backend->configdRun($command, false, 10);
         with self.assertRaisesRegex(ValueError,'wrong exact HEAD'):
             audit.audit(self.root, '0'*40)
 
+    def test_only_exact_package_php_read_is_accepted(self):
+        action = '''[hostlist_editors_read]
+command:/usr/local/bin/php /usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php read-editors
+type:script_output
+'''
+        script = 'src/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php'
+        self.write(script, '<?php // package-owned read-only snapshot\\n')
+        reg = self.root / self.actions
+        original = reg.read_text()
+        reg.write_text(original + action)
+        subprocess.run(['git', '-C', str(self.root), 'add', script], check=True)
+        result = audit.audit(self.root)
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(result['explicit_php_actions'], ['hostlist_editors_read'])
+        resolved = next(x for x in result['direct_actions']
+                        if x['action'] == 'hostlist_editors_read')
+        self.assertEqual(resolved['source'], script)
+        self.assertEqual(resolved['kind'], 'explicit-php')
+        self.assertNotIn('hostlist_editors_read', result['source_mode_review'])
+        for bad in (
+            action.replace(' read-editors', ' bootstrap-known'),
+            action.replace('auto_detect_config_snapshot.php', 'foreign.php'),
+            action.replace('/usr/local/bin/php ', '/usr/local/bin/php8.4 '),
+            action.replace('[hostlist_editors_read]', '[unapproved_php]'),
+            action.replace('type:script_output', 'type:script'),
+        ):
+            with self.subTest(bad=bad):
+                reg.write_text(original + bad)
+                self.assertTrue(audit.audit(self.root)['errors'])
+        reg.write_text(original + action)
+        subprocess.run(['git', '-C', str(self.root), 'rm', '-q', '--cached', script],
+                       check=True)
+        self.assertTrue(any('missing tracked source' in e
+                            for e in audit.audit(self.root)['errors']))
+
     def test_unknown_controller_and_missing_script_rejected(self):
         ref=audit.CONTROLLERS+'FakeController.php'
         self.write(ref,"<?php\n$backend->configdRun('zapret missing', false, 10);\n")

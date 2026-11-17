@@ -83,7 +83,7 @@ Every step has the **existing input → minimum actual change → observable exi
 - **Minimum change:** manual `!/^/!^` retained; three found-only inputs positive registrable roots with clear invalid-line errors; origin-before-eTLD+1 (`new.example.org→example.org`, `video.example.com→example.com`); exclusions and effective-coverage/source-aware duplicate handling; automatic sorting only on mutation; manual sort only when that editor changed, by entire normalized prefix-first line; leave untouched manual bytes.
 - **Exit:** focused IDNA/PRIVATE/unknown-suffix, explicit exact/broad modifier, cross-source collision and unchanged/manual-sort tests. Do not silently delete entries used by a distinct profile or guess unresolved policy.
 
-**STEP 4 — Extend existing root-backed read to one coherent five-source snapshot. STATUS: FUTURE (NEW GUI sources, REUSE P3 storage).**
+**STEP 4 — Extend existing root-backed read to one coherent five-source snapshot. STATUS: SOURCE PARTIAL (`_91` original Config-lock and P2-file-lock read-only projection, root CLI/configd/API; actual browser page/F5 five-editor integration OPEN).**
 - **Input:** two manual Config fields, two known-found files, one shared final file.
 - **Minimum change:** original Config/protected-file snapshot with per-source baselines/revisions, safely empty missing-file status vs unreadable/foreign/error refusal; open/F5 loads all five even if panels collapsed; expanding visibility does not save/re-read; no polling overwrites a draft and no on-read initialization.
 - **Exit:** native root/API + actual rendered browser shows correct five values/ownership, intact original manual fields and useful failure diagnostics.
