@@ -37,4 +37,4 @@ jobs:
           run: |
             set -eu
             /usr/local/bin/python3 scripts/stage0-opnsense-guest-readonly.py
-            /usr/local/bin/python3 scripts/stage0-opnsense-preinstall-abort.py
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_PKG_REFUSAL_EXPERIMENT=1 /usr/local/bin/python3 scripts/stage0-opnsense-preinstall-abort.py

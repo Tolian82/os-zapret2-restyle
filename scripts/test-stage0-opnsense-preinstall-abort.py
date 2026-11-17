@@ -79,6 +79,34 @@ class NativeIncomingRefusal(unittest.TestCase):
             with self.assertRaisesRegex(s.Refusal, "NATIVE_COMMAND_FAILED:opnsense-version"):
                 s.successful(["opnsense-version"])
 
+    def test_native_case_refuses_mismatched_mode_before_any_pkg(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(s, "invoke") as process:
+                with self.assertRaisesRegex(s.Refusal, "INVALID_NATIVE_CASE"):
+                    s.native_case(Path(tmp), "default", True)
+                with self.assertRaisesRegex(s.Refusal, "INVALID_NATIVE_CASE"):
+                    s.native_case(Path(tmp), "developer", False)
+                process.assert_not_called()
+
+    def test_guest_refuses_missing_disposable_optin_before_any_pkg(self):
+        class FreeBSD:
+            sysname = "FreeBSD"
+            machine = "amd64"
+        with mock.patch.object(s.os, "geteuid", return_value=0), \
+             mock.patch.object(s.os, "uname", return_value=FreeBSD()), \
+             mock.patch.dict(s.os.environ, {"GITHUB_ACTIONS": "false",
+                                            "ZAPRET2_NATIVE_PKG_REFUSAL_EXPERIMENT": "0"}), \
+             mock.patch.object(s, "invoke") as process:
+            with self.assertRaisesRegex(s.Refusal, "EXPLICIT_DISPOSABLE_GITHUB_CI_REQUIRED"):
+                s.run_vm()
+            process.assert_not_called()
+
+    def test_native_developer_mode_is_observation_not_product_pass(self):
+        source = path.read_text(encoding="utf-8")
+        self.assertIn('pkg.extend(["-o", "DEVELOPER_MODE=true"])', source)
+        self.assertIn('"product_safety_acceptance_passed": False', source)
+        self.assertIn('"private_fixture_pkgdb": True', source)
+
     def test_non_target_refuses_before_any_mutation(self):
         class Linux:
             sysname = "Linux"
