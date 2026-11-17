@@ -1611,6 +1611,7 @@
         refreshReleases();
         refreshExtrasStatus();
 
+        $('#zapretReleaseApplyText').text(runtimeText.apply);
         $('#zapretPreviewAct span').text(isRussian ? 'Проверить и показать' : 'Validate and Preview');
         // P5c: use UNSAVED form data; never submit an Apply transaction.
         $('#zapretPreviewAct').off('click').on('click', function(event) {
