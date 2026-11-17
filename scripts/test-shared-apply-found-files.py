@@ -18,9 +18,11 @@ BACKEND = (Path(__file__).resolve().parents[1] / "src/opnsense/scripts"
            / "OPNsense/Zapret/backend")
 sys.path.insert(0, str(BACKEND))
 
+from auto_detect_gui_hostlist import _create
 from auto_detect_destination_commit import (
     DestinationRefused, SHARED_FOUND_NAMES, _locked_shared_found_replace,
     _replace, _plan_shared_found_under_original_locks,
+    _shared_found_assert_missing,
     shared_apply_found_files_original_fd9,
 )
 
@@ -55,6 +57,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             st = path.lstat()
             rows[name] = {
                 "before": before.decode(), "after": new[name],
+                "before_status": "present",
                 "before_revision": sha(before),
                 "before_device": st.st_dev, "before_inode": st.st_ino,
                 "before_ctime_ns": st.st_ctime_ns,
@@ -248,12 +251,88 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             self.proposed(baseline=baseline)
         self.assert_old()
 
-    def test_missing_shared_auto_is_not_invented_as_existing_file(self):
+    def missing_base(self):
+        baseline = self.base_records()
+        baseline["auto"] = {"status": "missing", "content": "",
+                            "revision": hashlib.sha256(b"missing\0").hexdigest()}
+        return baseline
+
+    def test_missing_shared_auto_unmodified_stays_missing(self):
         self.targets["auto"].unlink()
-        with self.assertRaisesRegex(DestinationRefused,
-                                    "shared_found_preimage_unavailable"):
-            self.proposed()
+        rows, preview = self.proposed(baseline=self.missing_base())
+        self.assertEqual(rows["auto"]["before_status"], "missing")
+        self.assertEqual(rows["auto"]["before_inode"], 0)
+        self.assertFalse(preview["sources"]["auto"]["would_change_current"])
+        receipt = self.apply(plan=rows)
+        self.assertFalse(receipt["files"]["auto"]["changed"])
+        self.assertFalse(self.targets["auto"].exists())
         self.assert_old_others()
+
+    def test_missing_shared_auto_changed_is_durably_created_once(self):
+        self.targets["auto"].unlink()
+        rows, _ = self.proposed(
+            baseline=self.missing_base(),
+            draft=dict(self.old, auto="shared.org\n"))
+        result = self.apply(plan=rows)
+        self.assertEqual(result["files"]["auto"]["before_status"], "missing")
+        self.assertTrue(result["files"]["auto"]["changed"])
+        self.assertEqual(self.targets["auto"].read_text(), "shared.org\n")
+        self.assertFalse(result["config_committed"])
+        self.assertFalse(result["commit_authorized"])
+        self.assert_old_others()
+
+    def test_missing_shared_auto_rejects_occupied_and_symlink_target(self):
+        for mode in ("occupied", "symlink"):
+            with self.subTest(mode=mode):
+                self.targets["auto"].unlink()
+                rows, _ = self.proposed(
+                    baseline=self.missing_base(),
+                    draft=dict(self.old, auto="shared.org\n"))
+                if mode == "occupied":
+                    self.targets["auto"].write_text("foreign.org\n")
+                else:
+                    self.targets["auto"].symlink_to(self.root / "foreign-target")
+                with self.assertRaisesRegex(
+                        DestinationRefused, "shared_found_expected_missing"):
+                    self.apply(plan=rows)
+                self.assert_old_others()
+
+    def test_missing_shared_auto_create_failure_before_link_restores_known(self):
+        self.targets["auto"].unlink()
+        rows, _ = self.proposed(
+            baseline=self.missing_base(),
+            draft=dict(self.old, youtube="example.com\nfresh.net\n",
+                       auto="shared.org\n"))
+        def fail_before_link(path, data, uid):
+            raise OSError("injected before link")
+        with self.assertRaisesRegex(
+                DestinationRefused, "shared_found_restored_after_failure"):
+            self.apply(plan=rows, create_fn=fail_before_link)
+        self.assertFalse(self.targets["auto"].exists())
+        self.assert_old_others()
+
+    def test_missing_shared_auto_postlink_unknown_requires_review(self):
+        self.targets["auto"].unlink()
+        rows, _ = self.proposed(
+            baseline=self.missing_base(),
+            draft=dict(self.old, auto="shared.org\n"))
+        def fail_after_link(path, data, uid):
+            _create(path, data, uid)
+            raise OSError("injected after link and fsync")
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_requires_review"):
+            self.apply(plan=rows, create_fn=fail_after_link)
+        self.assertEqual(self.targets["auto"].read_text(), "shared.org\n")
+        self.assert_old_others()
+
+    def test_missing_shared_auto_shape_must_not_forge_known_ownership(self):
+        rows = self.plan()
+        rows["youtube"]["before_status"] = "missing"
+        rows["youtube"]["before_inode"] = 0
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_candidate_revision"):
+            self.apply(plan=rows)
+        self.assert_old()
 
     @unittest.skipIf(sys.platform.startswith("freebsd") and os.geteuid() == 0,
                      "A native root requires a real FD9 parent, not a fixture")

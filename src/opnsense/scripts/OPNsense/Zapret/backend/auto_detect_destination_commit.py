@@ -355,18 +355,26 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
     for name in SHARED_FOUND_NAMES:
         entry = rows[name]
         if (not isinstance(entry, dict) or
-                set(entry) != {"before", "after", "before_revision", *identity} or
+                set(entry) != {"before", "after", "before_status",
+                               "before_revision", *identity} or
                 not isinstance(entry["before"], str) or
                 not isinstance(entry["after"], str) or
+                entry["before_status"] not in ("present", "missing") or
                 not isinstance(entry["before_revision"], str) or
                 not SHA256.fullmatch(entry["before_revision"]) or
-                any(type(entry.get(k)) is not int or entry[k] < 0 for k in identity) or
-                entry["before_inode"] == 0):
+                any(type(entry.get(k)) is not int or entry[k] < 0 for k in identity)):
             raise DestinationRefused("shared_found_candidate_shape")
         before, after = (entry[k].encode("utf-8") for k in ("before", "after"))
-        if (len(before) > SHARED_FOUND_LIMIT or len(after) > SHARED_FOUND_LIMIT or
-                entry["before_size"] != len(before) or
-                _sha(b"present\0" + before) != entry["before_revision"]):
+        if len(before) > SHARED_FOUND_LIMIT or len(after) > SHARED_FOUND_LIMIT:
+            raise DestinationRefused("shared_found_candidate_revision")
+        if entry["before_status"] == "missing":
+            if (name != "auto" or before != b"" or
+                    any(entry[k] != 0 for k in identity) or
+                    _sha(b"missing\0") != entry["before_revision"]):
+                raise DestinationRefused("shared_found_candidate_revision")
+        elif (entry["before_inode"] == 0 or
+              entry["before_size"] != len(before) or
+              _sha(b"present\0" + before) != entry["before_revision"]):
             raise DestinationRefused("shared_found_candidate_revision")
         try:
             for text in (entry["before"], entry["after"]):
@@ -375,9 +383,24 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
                     raise DestinationRefused("shared_found_candidate_noncanonical")
         except (ValueError, TypeError) as exc:
             raise DestinationRefused("shared_found_candidate_domain_policy") from exc
-        out[name] = before, after, tuple(entry[k] for k in identity)
+        out[name] = (before, after, tuple(entry[k] for k in identity),
+                     entry["before_status"])
     return out
 
+
+def _shared_found_assert_missing(path: Path, uid: int) -> None:
+    """Qualify an absent shared-auto name without following any symlink."""
+    try:
+        parent = path.parent.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != uid or
+                parent.st_mode & 0o022):
+            raise DestinationRefused("shared_found_missing_parent_unsafe")
+        path.lstat()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise DestinationRefused("shared_found_missing_unreadable") from exc
+    raise DestinationRefused("shared_found_expected_missing")
 
 
 def _plan_shared_found_under_original_locks(
@@ -406,16 +429,21 @@ def _plan_shared_found_under_original_locks(
             raise DestinationRefused("shared_found_target_not_absolute")
         try:
             raw, st = _target(path, uid)
-        except (OSError, DestinationRefused) as exc:
-            # A missing shared auto source needs separate durable creation
-            # and rollback; it cannot be represented as a present inode.
-            raise DestinationRefused("shared_found_preimage_unavailable") from exc
+            status = "present"
+        except DestinationRefused as exc:
+            if name != "auto" or not isinstance(exc.__cause__, FileNotFoundError):
+                raise DestinationRefused("shared_found_preimage_unavailable") from exc
+            # Only this shared source may be genuinely absent on first install.
+            _shared_found_assert_missing(path, uid)
+            raw, st, status = b"", None, "missing"
         if len(raw) > SHARED_FOUND_LIMIT:
             raise DestinationRefused("shared_found_preimage_too_large")
         content = raw.decode("utf-8")
         currents[name] = {
-            "status": "populated" if content else "empty",
-            "revision": _sha(b"present\0" + raw),
+            "status": "missing" if status == "missing" else (
+                "populated" if content else "empty"),
+            "revision": _sha(b"missing\0" if status == "missing"
+                             else b"present\0" + raw),
             "content": content,
         }
         pinned[name] = st
@@ -437,12 +465,13 @@ def _plan_shared_found_under_original_locks(
         rows[name] = {
             "before": currents[name]["content"],
             "after": preview["sources"][name]["content"],
+            "before_status": "missing" if st is None else "present",
             "before_revision": currents[name]["revision"],
-            "before_device": st.st_dev,
-            "before_inode": st.st_ino,
-            "before_ctime_ns": st.st_ctime_ns,
-            "before_mtime_ns": st.st_mtime_ns,
-            "before_size": st.st_size,
+            "before_device": st.st_dev if st is not None else 0,
+            "before_inode": st.st_ino if st is not None else 0,
+            "before_ctime_ns": st.st_ctime_ns if st is not None else 0,
+            "before_mtime_ns": st.st_mtime_ns if st is not None else 0,
+            "before_size": st.st_size if st is not None else 0,
         }
     # Existing P2 writer validates the identical canonical/identity schema.
     _qualified_shared_found_batch(rows)
@@ -450,11 +479,12 @@ def _plan_shared_found_under_original_locks(
 
 
 def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
-                                 replace_fn=None) -> dict:
-    """All-target preflight, original P2 CAS replacements, bounded compensation.
+                                 replace_fn=None, create_fn=None) -> dict:
+    """All-target CAS before any write, with bounded synchronous compensation.
 
-    Caller MUST hold original FD9 and Config→P2 destination lock. A fault is
-    never sufficient proof that the whole Config/runtime transaction restored.
+    Caller MUST hold original FD9 and Config->P2 destination lock. A missing
+    shared-auto file is qualified as ABSENT, never as a present empty inode.
+    The return is file-only and cannot authorize native Config success.
     """
     if (not isinstance(targets, dict) or
             list(targets) != list(SHARED_FOUND_NAMES) or
@@ -462,55 +492,90 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
         raise DestinationRefused("shared_found_targets_incomplete")
     batch = _qualified_shared_found_batch(rows)
     replace = _replace if replace_fn is None else replace_fn
+    if create_fn is None:
+        # Original P2k5 root/private same-directory durable link-once writer.
+        from auto_detect_gui_hostlist import _create
+        create = _create
+    else:
+        create = create_fn
     original = {}
     for name in SHARED_FOUND_NAMES:
         path = Path(targets[name])
         if not path.is_absolute():
             raise DestinationRefused("shared_found_target_not_absolute")
-        before, after, preimage = batch[name]
-        now, st = _target(path, uid)
-        observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
-                    st.st_mtime_ns, st.st_size)
-        if now != before or observed != preimage:
-            raise DestinationRefused("shared_found_preimage_changed")
-        original[name] = (path, before, after)
+        before, after, preimage, status = batch[name]
+        if status == "missing":
+            _shared_found_assert_missing(path, uid)
+        else:
+            now, st = _target(path, uid)
+            observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                        st.st_mtime_ns, st.st_size)
+            if now != before or observed != preimage:
+                raise DestinationRefused("shared_found_preimage_changed")
+        original[name] = (path, before, after, status)
     modified = []
+    created_pins = {}
     try:
         for name in SHARED_FOUND_NAMES:
-            path, before, after = original[name]
+            path, before, after, status = original[name]
             if before == after:
                 continue
-            # Include a replacement that may raise *after* os.replace/fsync.
+            # Include a potentially completed rename/link that raises before
+            # returning. Never blindly unlink an unpinned ambiguous create.
             modified.append(name)
-            replace(path, before, after, uid)
-            actual, _ = _target(path, uid)
+            if status == "missing":
+                create(path, after, uid)
+            else:
+                replace(path, before, after, uid)
+            actual, st = _target(path, uid)
+            if status == "missing":
+                created_pins[name] = (st.st_dev, st.st_ino)
             if actual != after:
                 raise DestinationRefused("shared_found_postwrite_unverified")
         return {
             "result": "files-applied-under-original-transaction",
             "files": {
                 name: {"before_sha256": _sha(original[name][1]),
+                       "before_status": original[name][3],
+                       "before_revision": rows[name]["before_revision"],
                        "after_sha256": _sha(original[name][2]),
                        "changed": original[name][1] != original[name][2]}
                 for name in SHARED_FOUND_NAMES
             },
-            # A file-only receipt is NOT durable Apply success.
             "config_committed": False, "commit_authorized": False,
         }
     except (OSError, ValueError, DestinationRefused) as error:
         try:
             for name in reversed(modified):
-                path, before, after = original[name]
+                path, before, after, status = original[name]
+                if status == "missing":
+                    try:
+                        current, st = _target(path, uid)
+                    except DestinationRefused as exc:
+                        if not isinstance(exc.__cause__, FileNotFoundError):
+                            raise
+                        _shared_found_assert_missing(path, uid)
+                        continue
+                    if (name not in created_pins or current != after or
+                            (st.st_dev, st.st_ino) != created_pins[name]):
+                        raise DestinationRefused("shared_found_restore_unknown_create")
+                    path.unlink()
+                    _sync(path.parent)
+                    _shared_found_assert_missing(path, uid)
+                    continue
                 current, _ = _target(path, uid)
                 if current == after:
                     replace(path, after, before, uid)
                 elif current != before:
                     raise DestinationRefused("shared_found_restore_foreign_state")
             for name in SHARED_FOUND_NAMES:
-                path, before, _ = original[name]
-                current, _ = _target(path, uid)
-                if current != before:
-                    raise DestinationRefused("shared_found_restore_mismatch")
+                path, before, _, status = original[name]
+                if status == "missing":
+                    _shared_found_assert_missing(path, uid)
+                else:
+                    current, _ = _target(path, uid)
+                    if current != before:
+                        raise DestinationRefused("shared_found_restore_mismatch")
         except (OSError, ValueError, DestinationRefused) as rollback:
             raise DestinationRefused("shared_found_requires_review") from rollback
         raise DestinationRefused("shared_found_restored_after_failure") from error
