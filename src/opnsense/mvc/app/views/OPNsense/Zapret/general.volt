@@ -36,7 +36,7 @@
             error: '{{ lang._("Error") }}',
             start: '{{ lang._("Start") }}',
             stop: '{{ lang._("Stop") }}',
-            apply: '{{ lang._("Apply") }}',
+            apply: isRussian ? 'Установить версию' : 'Install Version',
             applying: isRussian ? 'Применение…' : 'Applying…',
             installing: isRussian ? 'Установка…' : 'Installing…',
             loading: isRussian ? 'Загрузка…' : 'Loading…',
@@ -50,6 +50,9 @@
                 : 'Zapret2 installation failed. See /var/log/zapret2/setup.log for details.',
             setupError: isRussian ? 'Ошибка установки Zapret2' : 'Zapret2 setup error',
             applyError: isRussian ? 'Ошибка применения настроек' : 'Settings Apply failed',
+            strategiesReview: isRussian
+                ? 'Результат применения настроек не подтверждён. Не повторяйте применение до проверки состояния Shared Apply и службы.'
+                : 'Settings Apply result is unconfirmed. Do not retry until Shared Apply and service state have been inspected.',
             applyReview: isRussian
                 ? 'Результат обновления upstream не подтверждён. Обновите страницу и проверьте версию и службу перед повтором. Подробности: /var/log/zapret2/setup.log'
                 : 'Upstream update result is unconfirmed. Reload and inspect the version and service before retrying. See /var/log/zapret2/setup.log.'
@@ -286,13 +289,14 @@
                 const row = $(input).closest('tr');
                 // Stock OPNsense form_input_tr uses div.control-label > b,
                 // not an HTML <label> element. Never replace help icons.
-                row.find('div.control-label > b').first().text(strategiesLabelsRU[id]);
+                const nativeLabel = document.getElementById('control_label_' + id);
+                if (nativeLabel) $(nativeLabel).children('b').first().text(strategiesLabelsRU[id]);
                 $(input).attr('aria-label', strategiesLabelsRU[id]);
                 const help = strategiesHelpRU[id];
                 // Source for both native popup and F5 Full Help.
-                row.find('div[data-for^="help_for_"] small').html(help);
-                const visible = row.find('.help-block').first();
-                if (visible.length && visible.text().trim()) visible.html(help);
+                row.find('[data-for="help_for_' + id + '"] small').html(help);
+                const visible = document.getElementById('help_block_' + id);
+                if (visible && $(visible).text().trim()) $(visible).html(help);
             });
         }
 
@@ -441,16 +445,31 @@
             const row = original ? $(original).closest('tr') : $();
             if (!row.length) return;
             const next = $('<tr/>', {id: 'zapretAutoHostlistRow'});
+            const helpId = 'help_for_zapretAutoHostlistField';
+            const helpText = isRussian
+                ? 'Общий редактируемый список. По одному домену в строке, допускаются ! и ^. '
+                  + 'Сохранение не запускает службу и не изменяет настройки. '
+                  + 'Список используется только профилями с явным <HOSTLIST:auto>.'
+                : 'Shared editable domains, one per line; ! and ^ are supported. '
+                  + 'Saving does not Apply or restart the service. Only a profile '
+                  + 'with explicit <HOSTLIST:auto> uses this list.';
             const name = $('<td/>').append(
-                $('<label/>', {for: 'zapretAutoHostlistField'})
-                    .text(isRussian ? 'Найденные домены' : 'Auto Hostlist')
+                $('<div/>', {'class': 'control-label'}).append(
+                    $('<a/>', {href: '#', id: helpId}).append(
+                        $('<i/>', {'class': 'fa fa-info-circle fa-fw'})
+                    ),
+                    $('<label/>', {for: 'zapretAutoHostlistField'})
+                        .text(isRussian ? 'Найденные домены' : 'Auto Hostlist')
+                        .css('margin-bottom', '0')
+                )
             );
             const input = $('<td/>').append(
                 $('<textarea/>', {
                     id: 'zapretAutoHostlistField', 'class': 'form-control',
                     rows: 6, spellcheck: 'false', autocomplete: 'off',
                     disabled: true
-                }).css('min-height', '9em'),
+                }).css({'min-height': '9em', 'width': '100%',
+                        'max-width': '346px', 'box-sizing': 'border-box'}),
                 $('<div/>').css({'margin-top': '7px', 'display': 'flex',
                                  'align-items': 'center', 'gap': '8px',
                                  'flex-wrap': 'wrap'}).append(
@@ -464,17 +483,25 @@
                     }).text(isRussian ? 'Обновить список' : 'Reload List'),
                     $('<span/>', {id: 'zapretAutoHostlistState', role: 'status',
                                    'aria-live': 'polite'})
+                ),
+                $('<div/>', {'class': 'hidden', 'data-for': helpId}).append(
+                    $('<small/>').text(helpText)
                 )
             );
-            const help = $('<td/>').append($('<small/>').text(isRussian
-                ? 'Общий редактируемый список. По одному домену в строке, допускаются ! и ^. '
-                  + 'Сохранение не запускает службу и не изменяет настройки. '
-                  + 'Список используется только профилями с явным <HOSTLIST:auto>.'
-                : 'Shared editable domains, one per line; ! and ^ are supported. '
-                  + 'Saving does not Apply or restart the service. Only a profile '
-                  + 'with explicit <HOSTLIST:auto> uses this list.'));
+            const help = $('<td/>').append(
+                $('<span/>', {'class': 'help-block',
+                              id: 'help_block_zapretAutoHostlistField'})
+            );
             next.append(name, input, help);
             row.after(next);
+            const helpSource = next.find('[data-for="' + helpId + '"]');
+            $('#' + helpId).on('click', function(event) {
+                event.preventDefault();
+                helpSource.toggleClass('hidden show');
+            });
+            if ($('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on')) {
+                helpSource.removeClass('hidden').addClass('show');
+            }
             $('#zapretAutoHostlistReload').on('click', function(e) {
                 e.preventDefault();
                 if (autoHostlistReady &&
@@ -1689,7 +1716,7 @@
             }
             function needsReview() {
                 strategiesApplyNeedsReview = true;
-                showRuntimeError(runtimeText.applyError, runtimeText.applyReview);
+                showRuntimeError(runtimeText.applyError, runtimeText.strategiesReview);
             }
 
             $.ajax({
@@ -1758,8 +1785,8 @@
     /* The native help toggle must not create a duplicate third-column help
        for Exclude IPSet. The inline .help-block under its textarea remains
        visible, matching Exclude Domains in RU and EN. */
-    #frm_GeneralSettings tr.zapret-exclude-ipset-inline-help-only > td:nth-child(3) {
-        visibility: hidden !important;
+    #frm_GeneralSettings tr.zapret-exclude-ipset-inline-help-only > td:nth-child(3) > .help-block {
+        display: none !important;
     }
     #zapretExtraResourceHelp { padding: 12px 4px 4px; }
     .zapret-resource-legend { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 12px; }
@@ -1846,7 +1873,7 @@
                                 <option value="">Loading…</option>
                             </select>
                             <button class="btn btn-primary" id="zapretReleaseApply" type="button" disabled>
-                                <span id="zapretReleaseApplyText">{{ lang._("Apply") }}</span>
+                                <span id="zapretReleaseApplyText">Install Version</span>
                                 <i id="zapretReleaseApplyProgress"></i>
                             </button>
                         </div>
