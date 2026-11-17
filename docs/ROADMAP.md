@@ -2,6 +2,9 @@
 
 ## Current priority
 
+**Qualified `_85` predecessor transition (17 November 2026):** [exact-head OPNsense native PASS #44053453048](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44053453048) verified the immutable published `_79.pkg`, actual LIST→AUTO, retired old epoch under installed original FD9, native pkg replacement only after verified STOPPED, and new distinct committed RUNNING Auto epoch under successor FD9, with unchanged Config and no stale guard. The disposable VM used stock releases.cache seeded with independently verified official upstream stable `v1.0.7` because GitHub releases API returned `Forbidden`; real Git/tag/build still passed. This does NOT qualify GitHub API retrieval, mid-extraction failure, direct RUNNING upgrade, owner physical/Voice/GUI/purge. No `_85.pkg` published. [Evidence](verification/evidence/2026-11-17-v0.6.5_85-published79-native-bootstrap.md).
+
+
 **Next one-time `_79` bootstrap acceptance (`_85` source-only):** pinned immutable published `_79` → original-FD9 STOPPED & retired epoch → genuine new Mk package `pkg add -f` while stopped → new guarded code & original-FD9 fresh committed Auto epoch; all on a disposable OPNsense. Not yet PASS, never an owner command without native evidence, does not qualify interruption within pkg. The separately merged `_84` protected same-package and controlled interruption scope remains complete.
 
 
