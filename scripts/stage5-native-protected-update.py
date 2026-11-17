@@ -10,9 +10,12 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import stat
 import subprocess
 import sys
+import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = "os-zapret2-restyle"
@@ -296,6 +299,112 @@ def native_interrupted_handoff(archive, version, digest):
           flush=True)
 
 
+
+def native_interrupt_during_postinstall(archive, version, digest):
+    """Kill real pkg *inside* its POST_INSTALL on a disposable guest.
+
+    The test-only register helper is reached after native pkg extraction;
+    this proves an in-pkg hook interruption, NOT mid-extraction/power loss.
+    Leave the guard intact, do not automatically finish/restart or repair.
+    """
+    module_path = SERVICE.parent / "protected_pkg_update.py"
+    spec = importlib.util.spec_from_file_location("installed_abort_pkg_update", module_path)
+    product = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(product)
+    previous = json.loads(JOURNAL.read_text())
+    old_id = previous["detail"]["id"]
+    need(previous.get("phase") == "committed" and
+         (EPOCHS / old_id / "epoch.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "ABORT_PREDECESSOR_NOT_VERIFIED_RUNNING_AUTO")
+    previous_config = sha(CONFIG)
+    stage, stage_sha, stage_version = product.stage_archive(archive)
+    need(stage_sha == digest and stage_version == version,
+         "ABORT_STAGED_CANDIDATE_MISMATCH")
+    prepared = run([str(SERVICE), "pkg-update-prepare",
+                    str(stage), stage_sha, stage_version], timeout=150)
+    need(prepared.returncode == 0 and
+         "zapret-pkg-update-prepared=1" in prepared.stdout and
+         (EPOCHS / old_id / "retired.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 1 and
+         MARKER.is_file() and ACTIVE.is_file(),
+         "ABORT_REAL_PREPARE_NOT_COMMITTED_STOPPED")
+    before_record = sha(ACTIVE)
+    need(json.loads(ACTIVE.read_text()).get("phase") == "prepared",
+         "ABORT_RECORD_NOT_PREPARED")
+
+    # The helper exists ONLY inside this disposable VM. The installed package
+    # hook stays unchanged; it executes through its existing native variable.
+    with tempfile.TemporaryDirectory(prefix="native-pkg-abort-", dir="/root") as temp:
+        root = Path(temp)
+        entered = root / "postinstall-entered"
+        helper = root / "register-block.sh"
+        helper.write_text(
+            "#!/bin/sh\n"
+            "[ \"${1:-}\" = install ] || exit 71\n"
+            f"printf 'entered\\n' > '{entered}'\n"
+            "while :; do /bin/sleep 1; done\n"
+        )
+        helper.chmod(0o700)
+        env = dict(os.environ)
+        env["FIRMWARE_REGISTER"] = str(helper)
+        process = subprocess.Popen(
+            ["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+             "add", "-f", str(stage)],
+            env=env, start_new_session=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            deadline = time.monotonic() + 90
+            while time.monotonic() < deadline:
+                if entered.is_file():
+                    break
+                need(process.poll() is None, "ABORT_PKG_EXITED_BEFORE_TEST_HOOK")
+                time.sleep(0.1)
+            need(entered.is_file() and entered.read_text() == "entered\n" and
+                 process.poll() is None, "ABORT_PKG_HOOK_NOT_OBSERVED")
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=15)
+            need(process.returncode == -signal.SIGKILL,
+                 "ABORT_PKG_NOT_ACTUALLY_KILLED")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate(timeout=15)
+
+    need(ACTIVE.is_file() and sha(ACTIVE) == before_record and
+         json.loads(ACTIVE.read_text()).get("phase") == "prepared" and
+         MARKER.is_file() and sha(CONFIG) == previous_config and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "ABORT_MID_PKG_GUARD_OR_CONFIG_LOST")
+    denied = {
+        "start": run([str(SERVICE), "start"], timeout=45).returncode,
+        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45).returncode,
+        "repeat_pkg": run([str(SERVICE), "pkg-update", str(archive)], timeout=45).returncode,
+        "premature_finish": run([str(SERVICE), "pkg-update-finish",
+                                stage_sha, stage_version], timeout=45).returncode,
+    }
+    need(all(rc == 69 for rc in denied.values()) and
+         run([str(SERVICE), "status"]).returncode == 1 and
+         sha(ACTIVE) == before_record and
+         (EPOCHS / old_id / "retired.json").is_file() and
+         sha(CONFIG) == previous_config,
+         "ABORT_UNAUTHORISED_START_OR_FINISH")
+    print("NATIVE_PROTECTED_KILLED_IN_POSTINSTALL=" + json.dumps({
+        "scope": "actual pkg process killed in native POST_INSTALL before attestation",
+        "pkg_signal": "SIGKILL",
+        "hook_entered": True,
+        "operation_phase": "prepared",
+        "previous_epoch_retired": True,
+        "guarded_service_stopped": True,
+        "config_unchanged": True,
+        "all_mutating_actions_refused": True,
+        "mid_extraction_or_power_loss_tested": False,
+        "owner_appliance_modified": False,
+    }, sort_keys=True), flush=True)
+    print("NATIVE_PROTECTED_KILLED_IN_POSTINSTALL=PASS_FAIL_CLOSED", flush=True)
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
@@ -379,7 +488,9 @@ def main():
     print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_AND_PENDING_REFUSAL")
     native_running_reinstall(archive, target, candidate_sha)
     native_interrupted_handoff(archive, target, candidate_sha)
-    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_PENDING_RUNNING_AND_INTERRUPTED")
+    # Intentionally end the disposable guest with a blocked, incomplete pkg.
+    native_interrupt_during_postinstall(archive, target, candidate_sha)
+    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_RUNNING_AND_KILLED_POSTINSTALL")
 
 
 if __name__ == "__main__":
