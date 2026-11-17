@@ -148,7 +148,11 @@ final class SharedApplyFoundIntent
             ($before['mode'] & 0170000) !== 0100000 ||
             ($before['mode'] & 0777) !== 0600 ||
             $before['nlink'] !== 1 ||
-            $before['uid'] !== posix_geteuid() ||
+            // OPNsense PHP CLI/web may omit the optional POSIX extension.
+            // is_uploaded_file() is the HTTP-owner proof; root repeats the
+            // exact inode + uid + hash comparison before trusted staging.
+            (function_exists('posix_geteuid') &&
+                $before['uid'] !== posix_geteuid()) ||
             $before['size'] !== $file['size']) {
             throw new \InvalidArgumentException('Invalid native PHP upload inode');
         }

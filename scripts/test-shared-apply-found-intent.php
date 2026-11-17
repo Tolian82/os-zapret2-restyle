@@ -112,6 +112,11 @@ $mvcControllerDir = dirname(__DIR__) .
 must(is_file($mvcControllerDir .
     '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php'),
     'MVC upload helper resolution points outside installed OPNsense scripts');
+$helperSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/shared_apply_found_intent.php');
+must(str_contains($helperSource, "function_exists('posix_geteuid')") &&
+     str_contains($helperSource, 'is_uploaded_file($path)'),
+     'Native HTTP upload depends unconditionally on optional PHP POSIX');
 must(str_contains($controller, 'SharedApplyFoundIntent::uploadedMetadata(') &&
      str_contains($controller, "\$sync['found_upload'] = \$foundUpload;") &&
      str_contains($controller, "\$wanOnlyCandidate = \$foundUpload === null") &&
