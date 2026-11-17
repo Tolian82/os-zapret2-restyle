@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Characterize real pkg add -f with a refusing incoming pre-install hook.
+"""Characterize default/developer pkg add -f with a refusing pre-install.
 
 Only a disposable OPNsense 26.7 KVM guest. Both packages are synthetic and
 use a private pkg database and files underneath a new temporary directory.
@@ -94,58 +94,75 @@ def classify(exit_code, installed, payload, trace):
     return "PARTIAL_OR_INCONSISTENT_MUTATION_AFTER_REFUSAL"
 
 
+def native_case(work, label, developer_mode):
+    # No shared DB, package files or trace between independent variants.
+    require(label in ("default", "developer") and
+            developer_mode == (label == "developer"), "INVALID_NATIVE_CASE")
+    case = work / label
+    case.mkdir(mode=0o700)
+    db, cache = case / "pkgdb", case / "cache"
+    db.mkdir(mode=0o700)
+    cache.mkdir(mode=0o700)
+    trace = case / "trace.txt"
+    old, marker = fixture(case, "old", OLD_VERSION, trace)
+    new, other_marker = fixture(case, "new", NEW_VERSION, trace)
+    require(marker == other_marker, "FIXTURE_PAYLOAD_PATH_DIFFERENT")
+    env = dict(os.environ, PKG_DBDIR=str(db), PKG_CACHEDIR=str(cache),
+               ASSUME_ALWAYS_YES="yes")
+    pkg = ["pkg", "-o", "REPO_AUTOUPDATE=false"]
+    if developer_mode:
+        pkg.extend(["-o", "DEVELOPER_MODE=true"])
+    successful(pkg + ["add", str(old)], env)
+    before = successful(pkg + ["query", "%n|%v", FIXTURE], env).strip()
+    require(before == FIXTURE + "|" + OLD_VERSION and
+            marker.read_bytes() == b"old\n", "PREDECESSOR_FIXTURE_NOT_INSTALLED")
+    attempted = invoke(pkg + ["add", "-f", str(new)], env)
+    query = invoke(pkg + ["query", "%n|%v", FIXTURE], env)
+    require(query.returncode in (0, 1), "PKG_DB_UNREADABLE_AFTER_REFUSAL")
+    installed = query.stdout.strip() if query.returncode == 0 else "ABSENT"
+    payload = marker.read_bytes() if marker.is_file() and not marker.is_symlink() else None
+    lines = trace.read_text(encoding="utf-8").splitlines()
+    outcome = classify(attempted.returncode, installed, payload, lines)
+    preserved = (outcome == "ABORT_PRESERVED_OLD_FIXTURE" and
+                 lines == ["old:pre-install", "old:post-install", REFUSAL_LINE])
+    result = {
+        "mode": label, "pkg_add_exit_code": attempted.returncode,
+        "pkg_add_stderr_tail": attempted.stderr[-500:],
+        "outcome": outcome, "installed_after": installed,
+        "payload_after": payload.decode("ascii") if payload is not None else None,
+        "hook_trace": lines, "preinstall_refusal_observed": REFUSAL_LINE in lines,
+        "old_payload_and_db_and_hooks_preserved": preserved,
+    }
+    print("STAGE0_PREINSTALL_NATIVE_OBSERVATION=" +
+          json.dumps(result, sort_keys=True), flush=True)
+    return result
+
+
 def run_vm():
     require(os.geteuid() == 0 and os.uname().sysname == "FreeBSD" and
             os.uname().machine == "amd64", "ONLY_ROOT_DISPOSABLE_OPNSENSE_AMD64")
+    require(os.environ.get("GITHUB_ACTIONS") == "true" and
+            os.environ.get("ZAPRET2_NATIVE_PKG_REFUSAL_EXPERIMENT") == "1",
+            "EXPLICIT_DISPOSABLE_GITHUB_CI_REQUIRED")
     version = successful(["opnsense-version", "-a"]).strip()
     require(version.startswith("26.7"), "WRONG_OPNSENSE_GUEST")
     require(successful(["pkg", "config", "ABI"]).strip() == "FreeBSD:15:amd64",
             "WRONG_PKG_ABI")
     with tempfile.TemporaryDirectory(prefix="zapret2-stage0-incoming-pre-") as path:
         work = Path(path)
-        db, cache = work / "pkgdb", work / "cache"
-        db.mkdir(mode=0o700)
-        cache.mkdir(mode=0o700)
-        trace = work / "trace.txt"
-        old, marker = fixture(work, "old", OLD_VERSION, trace)
-        new, other_marker = fixture(work, "new", NEW_VERSION, trace)
-        require(marker == other_marker, "FIXTURE_PAYLOAD_PATH_DIFFERENT")
-        env = dict(os.environ, PKG_DBDIR=str(db), PKG_CACHEDIR=str(cache),
-                   ASSUME_ALWAYS_YES="yes")
-        pkg = ["pkg", "-o", "REPO_AUTOUPDATE=false"]
-        successful(pkg + ["add", str(old)], env)
-        before = successful(pkg + ["query", "%n|%v", FIXTURE], env).strip()
-        require(before == FIXTURE + "|" + OLD_VERSION and
-                marker.read_bytes() == b"old\n", "PREDECESSOR_FIXTURE_NOT_INSTALLED")
-        attempted = invoke(pkg + ["add", "-f", str(new)], env)
-        query = invoke(pkg + ["query", "%n|%v", FIXTURE], env)
-        require(query.returncode in (0, 1), "PKG_DB_UNREADABLE_AFTER_REFUSAL")
-        installed = query.stdout.strip() if query.returncode == 0 else "ABSENT"
-        payload = marker.read_bytes() if marker.is_file() and not marker.is_symlink() else None
-        lines = trace.read_text(encoding="utf-8").splitlines()
-        # A refusing hook must be observed, not inferred from a nonzero pkg
-        # exit; always print enough exact native evidence before classification.
-        print("STAGE0_PREINSTALL_NATIVE_OBSERVATION=" + json.dumps({
-            "pkg_add_exit_code": attempted.returncode,
-            "pkg_add_stdout_tail": attempted.stdout[-900:],
-            "pkg_add_stderr_tail": attempted.stderr[-900:],
-            "installed_after": installed,
-            "payload_after": (payload.decode("ascii") if payload is not None else None),
-            "hook_trace": lines,
-        }, sort_keys=True), flush=True)
-        outcome = classify(attempted.returncode, installed, payload, lines)
-        return {
-            "schema": 1, "status": "OBSERVED_INCOMING_PRE_INSTALL_REFUSAL_PKG_OUTCOME",
-            "outcome": outcome, "pkg_add_exit_code": attempted.returncode,
-            "installed_after": installed, "payload_after": (
-                payload.decode("ascii") if payload is not None else None),
-            "hook_trace": lines, "opnsense_version": version,
-            "private_fixture_pkgdb": True, "private_fixture_payload": True,
-            "synthetic_hooks_only": True, "actual_old_hook_tested": False,
-            "actual_successor_tested": False,
-            "independent_pretransaction_gate_qualified": False,
-            "product_safety_acceptance_passed": False, "stage0_closed": False,
-        }
+        ordinary = native_case(work, "default", False)
+        developer = native_case(work, "developer", True)
+    return {
+        "schema": 2, "status": "OBSERVED_PKG_REFUSAL_DEFAULT_AND_DEVELOPER",
+        "ordinary": ordinary, "developer_mode": developer,
+        "developer_mode_qualified_pretransaction_barrier": (
+            developer["old_payload_and_db_and_hooks_preserved"] and
+            developer["pkg_add_exit_code"] != 0),
+        "opnsense_version": version, "private_fixture_pkgdb": True,
+        "private_fixture_payload": True, "synthetic_hooks_only": True,
+        "actual_old_hook_tested": False, "actual_successor_tested": False,
+        "product_safety_acceptance_passed": False,
+    }
 
 
 def main():
