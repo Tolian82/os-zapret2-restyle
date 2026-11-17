@@ -5,6 +5,7 @@ Only genuine pkg/Mk hooks, installed source and installed native FD9 service;
 no engine setup, no owner router, no synthetic service process.
 """
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,8 @@ NAME = "os-zapret2-restyle"
 SERVICE = Path("/usr/local/opnsense/scripts/OPNsense/Zapret/zapret_service.sh")
 ACTIVE = Path("/var/db/zapret2/pkg-update/operation.json")
 MARKER = Path("/var/run/zapret2-restyle/pkg-replacement.restart")
+JOURNAL = Path("/var/db/zapret2/shared-apply/operation.json")
+EPOCHS = Path("/var/db/zapret2/auto-detect-epochs")
 CONFIG = Path("/conf/config.xml")
 
 
@@ -39,6 +42,75 @@ def installed_version():
     p = run(["pkg", "query", "%v", NAME])
     need(p.returncode == 0, "PKGDB_MISSING")
     return p.stdout.strip()
+
+
+def original_fixture(filename, module_name):
+    spec = importlib.util.spec_from_file_location(module_name, ROOT / "scripts" / filename)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def native_running_reinstall(archive, target, candidate_sha):
+    # Reuse the actual pre-existing native G03/Shared-Apply fixture instead of
+    # fabricating a process, kernel rule, epoch or Config writer.
+    witness = original_fixture("p5b2b-native-witness.py", "protected_native_witness")
+    old_bridge = original_fixture("test-own70-native-package-handoff.py",
+                                  "protected_native_saved_strategies")
+    g03 = original_fixture("stage2-opnsense-g03-first-install.py",
+                           "protected_native_upstream_setup")
+    witness.set_guest_lo0()
+    old_bridge.set_guest_list_mode()
+    setup = g03.dispatch_and_poll()
+    need(setup["installed"] == "1" and setup["service"] == "stopped",
+         "UPSTREAM_RUNTIME_NOT_READY_STOPPED")
+    initial = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
+                   "strategies", old_bridge.request("list")], timeout=240)
+    need(initial.returncode == 0 and "applied-id=" in initial.stdout,
+         "REAL_SHARED_APPLY_NOT_COMMITTED")
+    old_record = json.loads(JOURNAL.read_text())
+    need(old_record.get("phase") == "committed" and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "INITIAL_COMMON_RUNTIME_NOT_RUNNING")
+    old_id = old_record["detail"]["id"]
+    old_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
+    need(old_pid.isdecimal() and (EPOCHS / old_id / "epoch.json").is_file(),
+         "REAL_OLD_ENGINE_EPOCH_NOT_COMMITTED")
+    before_config = sha(CONFIG)
+    replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
+    new_status = run([str(SERVICE), "status"], timeout=30)
+    new_record = json.loads(JOURNAL.read_text())
+    new_id = new_record.get("detail", {}).get("id", "")
+    next_pid_file = Path("/var/run/dvtws2.pid")
+    new_pid = (next_pid_file.read_text().strip().split()[0]
+               if next_pid_file.is_file() and not next_pid_file.is_symlink()
+               else "missing")
+    proof = {
+        "schema": 1, "platform": "OPNsense 26.7",
+        "protected_running_replacement_rc": replaced.returncode,
+        "receipt": "pkg-update=verified-installed-and-restored" in replaced.stdout,
+        "after_status_rc": new_status.returncode,
+        "old_committed_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
+        "new_committed_epoch_present":
+            new_record.get("phase") == "committed" and
+            new_id != old_id and (EPOCHS / new_id / "epoch.json").is_file(),
+        "new_engine_pid_distinct": new_pid.isdecimal() and new_pid != old_pid,
+        "config_unchanged": sha(CONFIG) == before_config,
+        "pkgdb_current_version": installed_version() == target,
+        "same_pkg_sha256": sha(archive) == candidate_sha,
+        "no_guard_record": not ACTIVE.exists() and not ACTIVE.is_symlink(),
+        "no_restart_marker": not MARKER.exists(),
+        "owner_appliance_modified": False,
+    }
+    print("NATIVE_PROTECTED_RUNNING=" + json.dumps(proof, sort_keys=True),
+          flush=True)
+    need(proof["protected_running_replacement_rc"] == 0 and proof["receipt"] and
+         proof["after_status_rc"] == 0 and proof["old_committed_epoch_retired"] and
+         proof["new_committed_epoch_present"] and proof["new_engine_pid_distinct"] and
+         proof["config_unchanged"] and proof["pkgdb_current_version"] and
+         proof["same_pkg_sha256"] and proof["no_guard_record"] and
+         proof["no_restart_marker"], "PROTECTED_NATIVE_RUNNING_REINSTALL_NOT_CONFIRMED")
+    print("NATIVE_PROTECTED_RUNNING=PASS_REAL_COMMON_STOP_PKG_BOOT")
 
 
 def main():
@@ -122,6 +194,8 @@ def main():
         ACTIVE.unlink()
     need(not ACTIVE.exists(), "PENDING_TEST_CLEANUP_FAILED")
     print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_AND_PENDING_REFUSAL")
+    native_running_reinstall(archive, target, candidate_sha)
+    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_PENDING_AND_RUNNING")
 
 
 if __name__ == "__main__":

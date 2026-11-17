@@ -42,7 +42,7 @@ jobs:
 
   native:
     needs: fast
-    name: Real stopped same-pkg replacement and pending guard
+    name: Real same-pkg STOPPED/RUNNING replacement and pending guard
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -59,7 +59,7 @@ jobs:
           fi
           echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
             sudo tee /etc/apt/apt.conf.d/99zapret-protected-pkg-network >/dev/null
-      - name: One genuine Mk-built package, installed native stopped upgrade
+      - name: One Mk-built package, stopped and running guarded upgrade
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: '26.7'
