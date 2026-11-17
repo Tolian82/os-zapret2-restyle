@@ -98,6 +98,36 @@ class HardResetContracts(unittest.TestCase):
         self.assertNotEqual(fixture.stable_xml_value(c),
                             fixture.stable_xml_value(d))
 
+    def test_native_xml_structure_is_read_only_and_identifies_missing_plugin(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "config.xml"
+            path.write_bytes(b"<opnsense><interfaces/><OPNsense><Zapret/></OPNsense></opnsense>")
+            with mock.patch.object(fixture, "CONFIG", path):
+                got = fixture.config_structure()
+                self.assertTrue(got["valid_xml"])
+                self.assertTrue(got["zapret_section_present"])
+                self.assertTrue(got["interfaces_section_present"])
+                path.write_bytes(b"<opnsense><interfaces/></opnsense>")
+                missing = fixture.config_structure()
+                self.assertFalse(missing["zapret_section_present"])
+                self.assertTrue(missing["interfaces_section_present"])
+                path.write_bytes(b"<opnsense><OPNsense><Zapret/></OPNsense></opnsense>")
+                other = fixture.config_structure()
+                self.assertTrue(other["zapret_section_present"])
+                self.assertFalse(other["interfaces_section_present"])
+                path.write_bytes(b"<opnsense")
+                invalid = fixture.config_structure()
+                self.assertFalse(invalid["valid_xml"])
+
+    def test_postboot_avoids_lifecycle_calls_if_saved_section_missing(self):
+        content = SOURCE.read_text()
+        verify = content.split("def guest_verify():", 1)[1]
+        before_mutations = verify.split('denied = {', 1)[0]
+        self.assertIn('postboot_readonly_classification(receipt)', before_mutations)
+        self.assertIn('"POSTBOOT_SAVED_PLUGIN_OR_INTERFACES_MISSING"', before_mutations)
+        self.assertNotIn('[str(SERVICE), "start"]', before_mutations)
+        self.assertIn('"postboot_mutation_attempted": False', content)
+
     def test_guest_and_host_actions_refuse_outside_disposable_context(self):
         with mock.patch.dict(fixture.os.environ, {
                 "GITHUB_ACTIONS": "false",

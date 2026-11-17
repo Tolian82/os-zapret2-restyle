@@ -125,6 +125,77 @@ def config_snapshot():
     }
 
 
+
+def config_structure():
+    """Read-only persisted native XML classification; never print values."""
+    evidence = {
+        "config_regular": opnsense_config_readable(),
+        "valid_xml": False,
+        "opnsense_container_present": False,
+        "zapret_section_present": False,
+        "interfaces_section_present": False,
+    }
+    if not evidence["config_regular"]:
+        return evidence
+    try:
+        root = ET.fromstring(CONFIG.read_bytes())
+    except (OSError, ET.ParseError):
+        return evidence
+    evidence["valid_xml"] = root.tag == "opnsense"
+    if not evidence["valid_xml"]:
+        return evidence
+    evidence["opnsense_container_present"] = (
+        root.find("./OPNsense") is not None)
+    evidence["zapret_section_present"] = (
+        root.find("./OPNsense/Zapret") is not None)
+    evidence["interfaces_section_present"] = (
+        root.find("./interfaces") is not None)
+    return evidence
+
+
+def postboot_readonly_classification(receipt):
+    """Independent physical evidence before any lifecycle command."""
+    config = config_structure()
+    config["raw_bytes_preserved"] = (
+        config["config_regular"] and
+        digest(CONFIG) == receipt["config_sha256"])
+    try:
+        read_guard()
+        valid_record = True
+    except (RuntimeError, OSError, ValueError, json.JSONDecodeError):
+        valid_record = False
+    guard_equal = valid_record and digest(GUARD) == receipt["guard_sha256"]
+    epoch = receipt["original_epoch_id"]
+    retired = (EPOCHS / epoch / "retired.json").is_file()
+    process = run(["/bin/ps", "-axo", "comm="])
+    process_readable = process.returncode == 0
+    dvtws2_absent = process_readable and not any(
+        line.strip() == "dvtws2" for line in process.stdout.splitlines())
+    version, archive = version_archive()
+    staged = (version == receipt["version"] and archive.is_file() and
+              not archive.is_symlink() and
+              digest(archive) == receipt["archive_sha256"])
+    pkg = run(["/usr/sbin/pkg", "query", "%v", NAME], timeout=15)
+    report = {
+        **config,
+        "prepared_guard_present_unchanged": guard_equal,
+        "old_auto_retired": retired,
+        "process_table_available": process_readable,
+        "dvtws2_absent": dvtws2_absent,
+        "installed_service_source_trusted": trusted_service(),
+        "candidate_archive_unchanged": staged,
+        "pkgdb_query_rc": pkg.returncode,
+        "pkgdb_version_matches_candidate":
+            pkg.returncode == 0 and pkg.stdout.strip() == version,
+        "owner_appliance_modified": False,
+        "postboot_mutation_attempted": False,
+    }
+    print("NATIVE_HARDRESET_POSTBOOT_READONLY=" +
+          json.dumps(report, sort_keys=True), flush=True)
+    return report
+
+
+
 def load_witnesses():
     spec = importlib.util.spec_from_file_location(
         "native_test_only_midextract", ROOT / "scripts" /
@@ -329,6 +400,16 @@ def guest_verify():
     receipt = read_receipt()
     boot = guest_boot()
     need(boot > receipt["boot_seconds"], "HARD_RESET_BOOT_ID_UNCHANGED")
+    postboot = postboot_readonly_classification(receipt)
+    need(postboot["prepared_guard_present_unchanged"],
+         "POSTBOOT_PREPARED_GUARD_NOT_DURABLE")
+    need(postboot["old_auto_retired"],
+         "POSTBOOT_AUTO_RETIREMENT_LOST")
+    need(postboot["process_table_available"] and postboot["dvtws2_absent"],
+         "POSTBOOT_ENGINE_AUTO_STARTED_OR_UNKNOWN")
+    need(postboot["zapret_section_present"] and
+         postboot["interfaces_section_present"],
+         "POSTBOOT_SAVED_PLUGIN_OR_INTERFACES_MISSING")
     after_config = config_snapshot()
     before_config = receipt["config_snapshot"]
     need(before_config["full"] == receipt["config_sha256"],
