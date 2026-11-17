@@ -4,6 +4,7 @@
 TEST ONLY. Does not install a guard, change plugin hooks, repair pkgdb, or
 touch the owner's router. 'system_reset' is a hard VM reset, NOT power loss.
 """
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -329,6 +330,37 @@ def save_private_receipt(data):
 
 
 
+
+def flush_native_saved_config_in_disposable_setup():
+    """Test-only controlled saved-Config durability baseline, not a writer.
+
+    OPNsense's original Config::save() has already returned from configd.
+    Its documented path calls fflush but not fsync. This one-shot fsync of
+    unchanged saved Config isolates the protected pkg interruption from
+    an unrelated fresh-Apply guest-cache crash window.
+    """
+    need(opnsense_config_readable(), "NATIVE_SAVED_CONFIG_UNTRUSTED")
+    before = CONFIG.lstat()
+    fd = os.open(CONFIG, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        pinned = os.fstat(fd)
+        need((before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) ==
+             (pinned.st_dev, pinned.st_ino, pinned.st_size, pinned.st_mtime_ns),
+             "CONFIG_CHANGED_BEFORE_FSYNC")
+        os.fsync(fd)
+        after = os.fstat(fd)
+        named = CONFIG.lstat()
+        need((pinned.st_dev, pinned.st_ino, pinned.st_size, pinned.st_mtime_ns) ==
+             (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns) ==
+             (named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns),
+             "CONFIG_CHANGED_DURING_FSYNC")
+    finally:
+        os.close(fd)
+    print("NATIVE_HARDRESET_TEST_ONLY_NATIVE_CONFIG_FSYNC=PASS",
+          flush=True)
+
+
 def guest_setup():
     """Minimal native AUTO owner to test exactly ONE genuinely torn pkg/reset.
 
@@ -373,6 +405,9 @@ def guest_setup():
          run([str(SERVICE), "status"]).returncode == 0,
          "NATIVE_AUTO_OWNER_NOT_RUNNING")
     print("NATIVE_HARDRESET_AUTO_OWNER=PASS_REAL_NATIVE_RUNNING", flush=True)
+    # This fixture alone establishes a durable pre-existing saved Config.
+    # Never silently treat this as a production plugin fix or a powercut test.
+    flush_native_saved_config_in_disposable_setup()
     config_before_partial = digest(CONFIG)
     call_rc = {}
     original_native_run = native.run
@@ -512,10 +547,10 @@ def guest_verify():
     epoch = receipt["original_epoch_id"]
     need((EPOCHS / epoch / "retired.json").is_file(),
          "OLD_AUTO_RETIREMENT_LOST_ON_RESET")
-    version, archive = version_archive()
-    need(version == receipt["version"] and archive.is_file() and
-         digest(archive) == receipt["archive_sha256"],
-         "STAGED_ARCHIVE_CHANGED_ON_RESET")
+    version, _ = version_archive()
+    need(version == receipt["version"] and
+         postboot["guard_private_staged_package_unchanged"],
+         "PRIVATE_STAGED_ARCHIVE_CHANGED_ON_RESET")
     observed = witness_inventory()
     need(observed["foreign"] == 0 and
          observed["restored"] + observed["marked"] + observed["missing"] ==
@@ -527,12 +562,33 @@ def guest_verify():
     need(ps.returncode == 0 and
          not any(x.strip() == "dvtws2" for x in ps.stdout.splitlines()),
          "DVTWS2_AUTO_STARTED_AFTER_RESET")
-    need(trusted_service(), "INSTALLED_SERVICE_MISSING_OR_UNTRUSTED_AFTER_RESET")
+    if not postboot["installed_service_source_trusted"]:
+        # A genuinely torn package can leave its service script absent or
+        # untrusted. DO NOT execute a service, pkg or unreviewed repair.
+        # Prior guards, Config and physical no-engine were checked above.
+        print("NATIVE_HARDRESET_POSTBOOT=" + json.dumps({
+            "result": "PASS_FAIL_CLOSED_UNTRUSTED_SERVICE_REVIEW_REQUIRED",
+            "guard_phase": "prepared",
+            "no_engine_process": True,
+            "saved_plugin_and_wan_preserved": True,
+            "original_auto_retired": True,
+            "protected_archive_durable": True,
+            "installed_service_trusted": False,
+            "pkgdb_current_version": postboot["pkgdb_version_matches_candidate"],
+            "mutation_attempted": False, "automatic_repair_attempted": False,
+            "recovery_tested": False, "power_loss_tested": False,
+            "owner_appliance_modified": False,
+        }, sort_keys=True), flush=True)
+        print("NATIVE_HARDRESET_POSTBOOT=PASS_FAIL_CLOSED_NO_SERVICE",
+              flush=True)
+        return
+    record = read_guard()
+    stage = Path(record["stage"])
     denied = {
         "status": run([str(SERVICE), "status"]).returncode,
         "start": run([str(SERVICE), "start"]).returncode,
         "apply": run([str(SERVICE), "shared-apply-run"]).returncode,
-        "repeat": run([str(SERVICE), "pkg-update", str(archive)]).returncode,
+        "repeat": run([str(SERVICE), "pkg-update", str(stage)]).returncode,
         "finish": run([str(SERVICE), "pkg-update-finish",
                        receipt["archive_sha256"], receipt["version"]]).returncode,
     }

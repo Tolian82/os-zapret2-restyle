@@ -176,6 +176,30 @@ class HardResetContracts(unittest.TestCase):
                       contents)
         self.assertIn("native.run = original_native_run", contents)
 
+    def test_disposable_native_config_fsync_is_read_only_and_no_symlink(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "config.xml"
+            path.write_bytes(b"<opnsense><interfaces/></opnsense>")
+            before = path.read_bytes()
+            with mock.patch.object(fixture, "CONFIG", path):
+                fixture.flush_native_saved_config_in_disposable_setup()
+            self.assertEqual(path.read_bytes(), before)
+            link = Path(root) / "config-link"
+            link.symlink_to(path)
+            with mock.patch.object(fixture, "CONFIG", link):
+                with self.assertRaisesRegex(RuntimeError, "NATIVE_SAVED_CONFIG_UNTRUSTED"):
+                    fixture.flush_native_saved_config_in_disposable_setup()
+
+    def test_untrusted_installed_service_does_not_execute_lifecycle(self):
+        code = SOURCE.read_text()
+        verify = code.split("def guest_verify():", 1)[1]
+        refusal_branch = verify.split('if not postboot["installed_service_source_trusted"]:', 1)[1]
+        refusal_branch = refusal_branch.split('return', 1)[0]
+        self.assertIn('"mutation_attempted": False', refusal_branch)
+        self.assertIn('"recovery_tested": False', refusal_branch)
+        self.assertNotIn("run([str(SERVICE)", refusal_branch)
+        self.assertIn('postboot["guard_private_staged_package_unchanged"]', verify)
+
     def test_reboot_is_not_host_power_loss_or_pkgdb_repair(self):
         source = SOURCE.read_text()
         self.assertIn('monitor_command(port, "system_reset")', source)
