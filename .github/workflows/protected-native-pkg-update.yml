@@ -76,7 +76,9 @@ jobs:
             set -eu
             export GITHUB_ACTIONS=true
             export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
             export ZAPRET2_PROTECTED_PKG_NATIVE_TEST=1
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             sh scripts/build-pkg.sh
             /usr/local/bin/python3 scripts/stage5-native-protected-update.py
