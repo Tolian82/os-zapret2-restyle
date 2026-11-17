@@ -219,6 +219,17 @@ class HardResetContracts(unittest.TestCase):
         self.assertIn('"power_loss_tested": False', source)
         self.assertIn('"automatic_repair_attempted": False', source)
 
+    def test_host_observer_does_not_bypass_strict_boot_id_gate(self):
+        source = SOURCE.read_text()
+        reset = source.split("def host_hard_reset():", 1)[1]
+        self.assertIn('load_test_only("stage5-native-reset-observer.py"', reset)
+        self.assertIn('observer.safe_serial_size(serial_path)', reset)
+        self.assertIn('observer.observe(pid, port, monitor_command,', reset)
+        self.assertIn('need(new_kernel_via_ssh, "HARD_RESET_BOOT_NOT_OBSERVED")', reset)
+        self.assertIn('deadline = time.monotonic() + 240', reset)
+        self.assertNotIn("hostfwd_add", reset)
+        self.assertNotIn("hostfwd_remove", reset)
+
 
 if __name__ == "__main__":
     unittest.main()

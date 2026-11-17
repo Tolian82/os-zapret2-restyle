@@ -736,6 +736,12 @@ def host_hard_reset():
     targets = qemu_candidates()
     need(len(targets) == 1, "NOT_EXACTLY_ONE_SNAPSHOT_QEMU_OPNSENSE")
     pid, port = targets[0]
+    observer = load_test_only("stage5-native-reset-observer.py",
+                              "reset_linux_host_readonly_observer")
+    # Native AnyVM already maintains a host serial log and SSH forwarding.
+    # Read only; neither QEMU's guest disk nor FreeBSD Config is modified.
+    serial_path = observer.serial_log_path(observer.qemu_argv(pid))
+    serial_before = observer.safe_serial_size(serial_path)
     before = ssh_boot()
     need(isinstance(before, int), "GUEST_UNREACHABLE_BEFORE_RESET")
     status = monitor_command(port, "info status")
@@ -745,6 +751,7 @@ def host_hard_reset():
     reset = monitor_command(port, "system_reset")
     need("Error" not in reset, "QEMU_SYSTEM_RESET_REFUSED")
     deadline = time.monotonic() + 240
+    next_observation = time.monotonic() + 60
     after = None
     while time.monotonic() < deadline:
         need(Path("/proc").joinpath(str(pid), "cmdline").is_file(),
@@ -752,9 +759,22 @@ def host_hard_reset():
         after = ssh_boot()
         if isinstance(after, int) and after > before:
             break
+        if time.monotonic() >= next_observation:
+            print("NATIVE_HARDRESET_HOST_READONLY_OBSERVATION=" + json.dumps(
+                observer.observe(pid, port, monitor_command,
+                                 serial_before, serial_path), sort_keys=True),
+                  flush=True)
+            next_observation += 60
         time.sleep(3)
-    need(isinstance(after, int) and after > before,
-         "HARD_RESET_BOOT_NOT_OBSERVED")
+    new_kernel_via_ssh = isinstance(after, int) and after > before
+    final_observation = observer.observe(pid, port, monitor_command,
+                                         serial_before, serial_path)
+    final_observation["strict_new_kernel_via_ssh"] = new_kernel_via_ssh
+    print("NATIVE_HARDRESET_HOST_READONLY_FINAL=" +
+          json.dumps(final_observation, sort_keys=True), flush=True)
+    # Console signal, a running HMP or an SSH banner alone is NOT proof of
+    # the required strictly later guest kern.boottime.
+    need(new_kernel_via_ssh, "HARD_RESET_BOOT_NOT_OBSERVED")
     print("NATIVE_QEMU_SYSTEM_RESET=" + json.dumps({
         "same_qemu_process": True, "new_kernel_boot": True,
         "snapshot_disk_retained_in_vm": True, "graceful_guest_shutdown": False,

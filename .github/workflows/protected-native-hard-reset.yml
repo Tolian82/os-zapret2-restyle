@@ -8,6 +8,8 @@ on:
       - scripts/test-stage5-native-hard-reset.py
       - scripts/stage5-native-reviewed-recovery.py
       - scripts/test-stage5-native-reviewed-recovery.py
+      - scripts/stage5-native-reset-observer.py
+      - scripts/test-stage5-native-reset-observer.py
   workflow_dispatch:
 
 concurrency:
@@ -32,9 +34,10 @@ jobs:
       - name: Python parser and strict isolation gates
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-native-hard-reset.py scripts/test-stage5-native-hard-reset.py scripts/stage5-native-reviewed-recovery.py scripts/test-stage5-native-reviewed-recovery.py
+          python3.13 -m py_compile scripts/stage5-native-hard-reset.py scripts/test-stage5-native-hard-reset.py scripts/stage5-native-reviewed-recovery.py scripts/test-stage5-native-reviewed-recovery.py scripts/stage5-native-reset-observer.py scripts/test-stage5-native-reset-observer.py
           python3.13 scripts/test-stage5-native-hard-reset.py -v
           python3.13 scripts/test-stage5-native-reviewed-recovery.py -v
+          python3.13 scripts/test-stage5-native-reset-observer.py -v
 
   native:
     name: Original FD9 torn pkg then QEMU hardware reset, postboot refusal
