@@ -52,65 +52,115 @@ def original_fixture(filename, module_name):
 
 
 def native_running_reinstall(archive, target, candidate_sha):
-    # Reuse the actual pre-existing native G03/Shared-Apply fixture instead of
-    # fabricating a process, kernel rule, epoch or Config writer.
+    """Both LIST and AUTO on one genuinely installed native OPNsense guest.
+
+    LIST has no obligation to create a P2 auto-detect epoch. Only AUTO
+    requires the observer epoch/retirement receipts.
+    """
     witness = original_fixture("p5b2b-native-witness.py", "protected_native_witness")
     old_bridge = original_fixture("test-own70-native-package-handoff.py",
                                   "protected_native_saved_strategies")
     g03 = original_fixture("stage2-opnsense-g03-first-install.py",
                            "protected_native_upstream_setup")
     witness.set_guest_lo0()
-    old_bridge.set_guest_list_mode()
     setup = g03.dispatch_and_poll()
     need(setup["installed"] == "1" and setup["service"] == "stopped",
          "UPSTREAM_RUNTIME_NOT_READY_STOPPED")
     initial = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
                    "strategies", old_bridge.request("list")], timeout=240)
-    need(initial.returncode == 0 and "applied-id=" in initial.stdout,
-         "REAL_SHARED_APPLY_NOT_COMMITTED")
-    old_record = json.loads(JOURNAL.read_text())
-    need(old_record.get("phase") == "committed" and
+    initial_state = json.loads(JOURNAL.read_text())
+    need(initial.returncode == 0 and "applied-id=" in initial.stdout and
+         initial_state.get("phase") == "committed" and
          run([str(SERVICE), "status"]).returncode == 0,
-         "INITIAL_COMMON_RUNTIME_NOT_RUNNING")
-    old_id = old_record["detail"]["id"]
-    old_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
-    need(old_pid.isdecimal() and (EPOCHS / old_id / "epoch.json").is_file(),
-         "REAL_OLD_ENGINE_EPOCH_NOT_COMMITTED")
-    before_config = sha(CONFIG)
-    replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
-    new_status = run([str(SERVICE), "status"], timeout=30)
-    new_record = json.loads(JOURNAL.read_text())
-    new_id = new_record.get("detail", {}).get("id", "")
-    next_pid_file = Path("/var/run/dvtws2.pid")
-    new_pid = (next_pid_file.read_text().strip().split()[0]
-               if next_pid_file.is_file() and not next_pid_file.is_symlink()
-               else "missing")
-    proof = {
-        "schema": 1, "platform": "OPNsense 26.7",
-        "protected_running_replacement_rc": replaced.returncode,
-        "receipt": "pkg-update=verified-installed-and-restored" in replaced.stdout,
-        "after_status_rc": new_status.returncode,
-        "old_committed_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
-        "new_committed_epoch_present":
-            new_record.get("phase") == "committed" and
-            new_id != old_id and (EPOCHS / new_id / "epoch.json").is_file(),
-        "new_engine_pid_distinct": new_pid.isdecimal() and new_pid != old_pid,
-        "config_unchanged": sha(CONFIG) == before_config,
-        "pkgdb_current_version": installed_version() == target,
-        "same_pkg_sha256": sha(archive) == candidate_sha,
-        "no_guard_record": not ACTIVE.exists() and not ACTIVE.is_symlink(),
-        "no_restart_marker": not MARKER.exists(),
-        "owner_appliance_modified": False,
-    }
-    print("NATIVE_PROTECTED_RUNNING=" + json.dumps(proof, sort_keys=True),
-          flush=True)
-    need(proof["protected_running_replacement_rc"] == 0 and proof["receipt"] and
-         proof["after_status_rc"] == 0 and proof["old_committed_epoch_retired"] and
-         proof["new_committed_epoch_present"] and proof["new_engine_pid_distinct"] and
-         proof["config_unchanged"] and proof["pkgdb_current_version"] and
-         proof["same_pkg_sha256"] and proof["no_guard_record"] and
-         proof["no_restart_marker"], "PROTECTED_NATIVE_RUNNING_REINSTALL_NOT_CONFIRMED")
-    print("NATIVE_PROTECTED_RUNNING=PASS_REAL_COMMON_STOP_PKG_BOOT")
+         "REAL_LIST_SHARED_APPLY_NOT_COMMITTED")
+
+    def check_running_replacement(label, observer_required):
+        old = json.loads(JOURNAL.read_text())
+        old_id = old["detail"]["id"]
+        old_pid_path = Path("/var/run/dvtws2.pid")
+        old_pid = old_pid_path.read_text().strip().split()[0]
+        need(old.get("phase") == "committed" and old_pid.isdecimal() and
+             run([str(SERVICE), "status"]).returncode == 0,
+             "REAL_PREDECESSOR_NOT_RUNNING_" + label)
+        old_epoch_present = (EPOCHS / old_id / "epoch.json").is_file()
+        if observer_required:
+            need(old_epoch_present, "AUTO_PREDECESSOR_EPOCH_MISSING")
+        config_before = sha(CONFIG)
+        replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
+        status_after = run([str(SERVICE), "status"], timeout=30)
+        successor = json.loads(JOURNAL.read_text())
+        new_id = successor.get("detail", {}).get("id", "")
+        new_pid = (old_pid_path.read_text().strip().split()[0]
+                   if old_pid_path.is_file() and not old_pid_path.is_symlink()
+                   else "missing")
+        why = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
+                        replaced.stderr)
+        evidence = {
+            "schema": 1, "scope": label, "observer_required": observer_required,
+            "predecessor_epoch_exists": old_epoch_present,
+            "protected_running_replacement_rc": replaced.returncode,
+            "refusal": why.group(1) if why else "none",
+            "verified_receipt":
+                "pkg-update=verified-installed-and-restored" in replaced.stdout,
+            "after_status_rc": status_after.returncode,
+            "old_epoch_retired":
+                (EPOCHS / old_id / "retired.json").is_file(),
+            "distinct_committed_generation":
+                successor.get("phase") == "committed" and new_id != old_id,
+            "successor_epoch_exists":
+                (EPOCHS / new_id / "epoch.json").is_file(),
+            "new_engine_pid_distinct":
+                new_pid.isdecimal() and new_pid != old_pid,
+            "config_unchanged": sha(CONFIG) == config_before,
+            "pkgdb_current_version": installed_version() == target,
+            "same_pkg_sha256": sha(archive) == candidate_sha,
+            "no_guard_record":
+                not ACTIVE.exists() and not ACTIVE.is_symlink(),
+            "no_restart_marker": not MARKER.exists(),
+            "owner_appliance_modified": False,
+        }
+        print("NATIVE_PROTECTED_RUNNING=" + json.dumps(evidence, sort_keys=True),
+              flush=True)
+        checks = (
+            evidence["protected_running_replacement_rc"] == 0 and
+            evidence["verified_receipt"] and evidence["after_status_rc"] == 0 and
+            evidence["distinct_committed_generation"] and
+            evidence["new_engine_pid_distinct"] and evidence["config_unchanged"] and
+            evidence["pkgdb_current_version"] and
+            evidence["same_pkg_sha256"] and evidence["no_guard_record"] and
+            evidence["no_restart_marker"])
+        if observer_required:
+            checks = (checks and evidence["old_epoch_retired"] and
+                      evidence["successor_epoch_exists"])
+        else:
+            # LIST may use no observer; if it has one, it cannot be lost.
+            checks = checks and (not old_epoch_present or evidence["old_epoch_retired"])
+        need(checks, "PROTECTED_NATIVE_" + label + "_REINSTALL_NOT_CONFIRMED")
+        print("NATIVE_PROTECTED_" + label + "=PASS_COMMON_STOP_PKG_BOOT",
+              flush=True)
+
+    check_running_replacement("LIST", observer_required=False)
+
+    # Native user action explicitly turns on AUTO. Unlike LIST, AUTO must
+    # produce a committed P2 observer epoch before pkg replacement.
+    auto_apply = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
+                      "strategies", old_bridge.request("auto")], timeout=240)
+    auto_state = json.loads(JOURNAL.read_text())
+    auto_id = auto_state.get("detail", {}).get("id", "")
+    auto_epoch = (EPOCHS / auto_id / "epoch.json").is_file()
+    print("NATIVE_PROTECTED_AUTO_PREFLIGHT=" + json.dumps({
+        "configctl_rc": auto_apply.returncode,
+        "native_applied_receipt": "applied-id=" in auto_apply.stdout,
+        "journal_committed": auto_state.get("phase") == "committed",
+        "native_service_running": run([str(SERVICE), "status"]).returncode == 0,
+        "observer_epoch_present": auto_epoch,
+    }, sort_keys=True), flush=True)
+    need(auto_apply.returncode == 0 and
+         "applied-id=" in auto_apply.stdout and
+         auto_state.get("phase") == "committed" and auto_epoch and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "NATIVE_AUTO_SHARED_APPLY_NOT_COMMITTED")
+    check_running_replacement("AUTO", observer_required=True)
 
 
 def main():

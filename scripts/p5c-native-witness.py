@@ -111,7 +111,33 @@ def native():
     )
     g03 = importlib.util.module_from_spec(install_spec)
     install_spec.loader.exec_module(g03)
-    installed = g03.dispatch_and_poll()
+    try:
+        installed = g03.dispatch_and_poll()
+    except g03.Refusal:
+        # Diagnostic only, exclusively in this disposable native witness.
+        # Report bounded setup evidence; NEVER promote a failed worker to PASS.
+        setup_log = Path("/var/log/zapret2/setup.log")
+        lines = []
+        if setup_log.is_file() and not setup_log.is_symlink():
+            raw = setup_log.read_bytes()[-8192:].decode("utf-8", "replace")
+            lines = [
+                row[-280:] for row in raw.splitlines()
+                if any(key in row.lower() for key in (
+                    "error", "fail", "fatal", "fetch", "timeout", "certificate",
+                    "clone", "release", "upstream", "network", "denied"))
+            ][-8:]
+        try:
+            state = g03.status()
+        except (OSError, g03.Refusal):
+            state = {}
+        print("P5C_G03_SETUP_FAILURE_EVIDENCE=" + json.dumps({
+            "worker_setup": state.get("setup", "unknown"),
+            "worker_busy": state.get("busy", "unknown"),
+            "worker_installed": state.get("installed", "unknown"),
+            "worker_service": state.get("service", "unknown"),
+            "bounded_setup_log_errors": lines,
+        }, sort_keys=True), flush=True)
+        raise
     h.need(installed["installed"] == "1" and installed["service"] == "stopped",
            "engine-setup-refused")
 
