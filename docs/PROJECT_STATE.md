@@ -6,7 +6,11 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
-**Current source identity (17 November 2026):** `v0.6.5_91` (`VERSION=0.6.5`, `PLUGIN_REVISION=91`), `os-zapret2-restyle-0.6.5_91.pkg` **NOT PUBLISHED**. Source-only STEP 4 candidate from merged `_90`. Owner `_79.pkg` remains installed; closed #1182 not merged.
+**Current source identity (17 November 2026):** `v0.6.5_92` (`VERSION=0.6.5`, `PLUGIN_REVISION=92`), `os-zapret2-restyle-0.6.5_92.pkg` **NOT PUBLISHED**. Source-only STEP 5 candidate based on merged `_91`. Owner `_79.pkg` unchanged; research #1182 closed, not merged.
+
+**Merged `_91` STEP 4 native five-source read:** [#1185](https://github.com/Tolian82/os-zapret2-restyle/pull/1185) merged to main `8dfec57c57bcedfdc3669f9a2f89a6452d746db5`. Root Config+P2 destination lock snapshot, explicit statuses and per-source revisions, POST API, real disposable OPNsense Chromium/F5 PASS on [PR #44139149454](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44139149454) and [main #44140162066](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44140162066). No five separate rendered controls or combined Apply yet, no owner package published.
+
+**New `_92` STEP 5 source-only, native not yet tested:** pure found-only three-way baseline/draft/current candidate uses original P1 PSL/IDNA and original source revision semantics; explicit baseline deletions override matching live rows, independent concurrent additions survive. Unknown/uninitialized/malformed source state refuses, no write, FD9, Model change or permission; `cross_source_validated=false` and `commit_authorized=false` are mandatory. Isolated pre-push 7 user-intent tests PASS with a test-only P1 stub; actual pinned PSL and newly added exact production code await CI. Full five-source coverage and original synchronized Config/files Apply remain OPEN.
 
 **Research scope closed, no product changes:** [#1182](https://github.com/Tolian82/os-zapret2-restyle/pull/1182) CLOSED NOT MERGED. Last [native #44117648982](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44117648982) retained original FD9 fail-closed under malformed pkgdb; postboot reinstall/Finish never qualified. This does not affect the current native GUI/product delivery.
 
