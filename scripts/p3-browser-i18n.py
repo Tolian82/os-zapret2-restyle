@@ -529,6 +529,71 @@ def check_p4_actual_browser_save(context, primary) -> bool:
     return True
 
 
+def check_tz6v2_five_source_read(page) -> dict:
+    """Read the installed Config-locked five-source API, without Apply/save.
+
+    The route is allowed to return unavailable only as FAIL; never fake
+    a response, initialize files or claim browser acceptance on source alone.
+    """
+    snapshot = page.evaluate("""async () => {
+        return await new Promise(resolve => {
+            $.ajax({
+                type: 'POST',
+                url: '/api/zapret/settings/hostlistEditorsRead',
+                dataType: 'json',
+                timeout: 15000
+            }).done(resolve).fail(() => resolve({result: 'error'}));
+        });
+    }""")
+    need(isinstance(snapshot, dict) and snapshot.get('result') == 'ok' and
+         snapshot.get('kind') == 'tz6v2-five-hostlist-snapshot' and
+         snapshot.get('schema_version') == 2 and
+         snapshot.get('commit_authorized') is False and
+         isinstance(snapshot.get('config_revision'), str) and
+         len(snapshot['config_revision']) == 64,
+         "TZ6V2_INSTALLED_FIVE_SOURCE_READ_NOT_QUALIFIED")
+    editors = snapshot.get('editors')
+    owners = {
+        "youtube_manual": "config", "youtube_found": "auto-owned",
+        "user_manual": "config", "user_found": "auto-owned",
+        "shared_found": "shared-auto",
+    }
+    need(isinstance(editors, dict) and list(editors) == list(owners),
+         "TZ6V2_FIVE_SOURCE_NAMES_NOT_ORDERED")
+    for name, owner in owners.items():
+        row = editors[name]
+        need(isinstance(row, dict) and row.get('owner') == owner and
+             isinstance(row.get('content'), str),
+             "TZ6V2_SOURCE_OWNER_INVALID")
+        status, revision = row.get('status'), row.get('revision')
+        allowed = (("empty", "populated") if owner == "config" else
+                   ("missing", "empty", "populated") if owner == "shared-auto"
+                   else ("uninitialized", "empty", "populated"))
+        need(status in allowed, "TZ6V2_SOURCE_STATUS_INVALID")
+        if status == "uninitialized":
+            need(owner == "auto-owned" and row['content'] == "" and
+                 revision is None, "TZ6V2_UNINITIALIZED_FORGED_EMPTY")
+        else:
+            need(isinstance(revision, str) and len(revision) == 64 and
+                 all(c in "0123456789abcdef" for c in revision),
+                 "TZ6V2_SOURCE_REVISION_MISSING")
+            need((status == "populated") == bool(row['content']),
+                 "TZ6V2_SOURCE_CONTENT_STATUS_INCONSISTENT")
+    complete = snapshot.get('auto_owned_complete')
+    need(type(complete) is bool and
+         (editors['youtube_found']['status'] != 'uninitialized') == complete and
+         (editors['user_found']['status'] != 'uninitialized') == complete,
+         "TZ6V2_OWNERSHIP_INCOMPLETE_MISREPRESENTED")
+    # The manual fields must be precisely those rendered by the native
+    # original Model, not a detached inferred/legacy text source.
+    need(editors['youtube_manual']['content'] ==
+         control(page, 'zapret.hostlist.youtubedomains').input_value() and
+         editors['user_manual']['content'] ==
+         control(page, 'zapret.hostlist.userdomains').input_value(),
+         "TZ6V2_FIVE_SOURCE_MODEL_AND_FORM_DISAGREE")
+    return snapshot
+
+
 def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     wait_native_load(page, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
     wait_locale(page, mode)
@@ -558,6 +623,7 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
         need(all("Автоопределение" not in x["text"] for x in options),
              "EN_TARGET_MODE_USES_RU")
     p4_editor_status = check_p4_native_gui(page, mode)
+    original_five_source_read = check_tz6v2_five_source_read(page)
     initial = value_snapshot(page, FIELDS_GENERAL)
     need("zapret.hostlist.mode" in initial, "TARGET_MODE_SNAPSHOT_MISSING")
     field = control(page, "zapret.hostlist.userdomains")
@@ -592,6 +658,8 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
     f5_and_wait(page, "/api/zapret/settings/get")
     wait_locale(page, mode)
     need(value_snapshot(page, FIELDS_GENERAL) == initial, "STRATEGIES_F5_SAVED_OR_CHANGED_VALUES")
+    need(check_tz6v2_five_source_read(page) == original_five_source_read,
+         "TZ6V2_NATIVE_F5_CHANGED_FIVE_SOURCE_BASELINE")
     # P4b runs in a separate real tab sharing this authenticated OPNsense
     # context/user profile. Earlier Full Help popup probes in the first tab
     # cannot leak their per-tab native sessionStorage/animation state.
