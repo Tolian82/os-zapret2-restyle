@@ -71,6 +71,12 @@ def classify_path(path):
     p = PurePosixPath(path)
     if not path or any(part in ("..", ".", "") for part in p.parts):
         raise Refusal("UNQUALIFIED_CHANGED_PATH:" + path)
+    # The manifest is the ONE authoritative external compatibility policy.
+    # It is qualified by validate-compatibility.py and actual native Mk/pkg
+    # checks, not a newly discovered root-level executable to reject.
+    # Unknown root-level JSON/Python/script files remain fail-closed.
+    if path == "compatibility.json":
+        return "production"
     if path.startswith(("src/", "pkg/")):
         return "production"
     if path.startswith("scripts/"):

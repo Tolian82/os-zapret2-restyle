@@ -101,9 +101,15 @@ def check_record(record, package, source_sha, *, manifest=True):
          isinstance(record.get("installed_elf_sha256"), str) and
          re.fullmatch(r"[0-9a-f]{64}", record["installed_elf_sha256"]) is not None,
          "STAGE5_INSTALLED_FILE_OR_ELF_WITNESS_MISSING")
-    need(isinstance(record.get("native_dependencies"), list) and
-         len(record["native_dependencies"]) == 7 and
-         all(isinstance(x, str) and x for x in record["native_dependencies"]),
+    # Dependency COUNT is defined by the exact official Mk manifest, not
+    # by an obsolete frozen fixture (signed current native Mk has eight).
+    # The manifest equality below still rejects missing/extra dependencies.
+    deps = record.get("native_dependencies")
+    need(isinstance(deps, list) and 0 < len(deps) <= 32 and
+         all(isinstance(x, str) and
+             re.fullmatch(r"[a-z0-9][a-z0-9+_.-]{0,63}", x) is not None
+             for x in deps) and
+         deps == sorted(set(deps)),
          "STAGE5_NATIVE_DEPENDENCY_RECEIPT_INVALID")
     if manifest:
         obj, manifest_sha = read_manifest(package)
@@ -264,7 +270,7 @@ def self_test():
                 "archive_sha256": digest(ARCHIVE.read_bytes()),
                 "archive_bytes": ARCHIVE.stat().st_size,
                 "manifest_sha256": "b" * 64,
-                "native_dependencies": list("abcdefg"),
+                "native_dependencies": list("abcdefgh"),
                 "checked_file_count": 1, "installed_elf_sha256": "c" * 64,
                 "genuine_clean_pkg_add": True, "pkgdb_manifest_equal": True,
                 "all_installed_package_files_equal": True,
@@ -287,7 +293,11 @@ def self_test():
                                ("publication_approved", True),
                                ("final_lifecycle_matrix_qualified", True),
                                ("identity", "foreign-plugin"),
-                               ("native_dependencies", [])):
+                               ("native_dependencies", []),
+                               ("native_dependencies", ["a", "a"]),
+                               ("native_dependencies", ["z", "a"]),
+                               ("native_dependencies", ["a", "bad/path"]),
+                               ("native_dependencies", list("abcdefgh") + ["h"])):
                 altered = dict(record)
                 altered[field] = bad
                 try:
