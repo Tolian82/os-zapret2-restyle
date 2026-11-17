@@ -2,6 +2,8 @@
 
 ## Current priority
 
+**`_88` first native outcome:** [#44078658045](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44078658045) REFUSED before reset: protected AUTO prepare rc69 in a prior, redundant multiple-update setup chain. No QEMU reset occurred. The bounded native test now uses one freshly installed, genuine RUNNING Auto → one original-FD9 partial-pkg interruption → QEMU hard reset → postboot check. Any actual FD9 refusal still blocks the reset. All owner runtime/release and future power-cut acceptance claims remain unchanged.
+
 **Next `_88` isolated safety boundary:** one genuine QEMU hardware `system_reset` after real guarded partial `.pkg` extraction, preserving the SAME VM/snapshot disk across boot. Actual kernel reboot must be proved; independently confirm persistent original-FD9 `prepared` guard, unchanged Config, retired old Auto, no running `dvtws2`, and blocked Start/Apply/repeat/finish. This is not host power removal or automatic pkgdb repair. Native result remains OPEN until exact-head evidence. No testing `.pkg` publication, no appliance change; continue owner-approved TZ6v2 STEP 2–10 once relevant upgrade safety is bounded.
 
 **Same-scope `_87` repeatability check:** prior actual mid-extraction PASS #44073157187 remains valid evidence for its 4/3 byte state. A subsequent native run #44074379606 with the original seven clustered GUI witnesses missed that transient window (all seven already restored by POST_INSTALL). The revised test witnesses span MVC/service/share, **without changing product or package payload**. Check PR #1180 exact-head native S2 outcome before merge. The next independent safety gate after this remains abrupt VM power loss/reboot and torn pkgdb recovery.

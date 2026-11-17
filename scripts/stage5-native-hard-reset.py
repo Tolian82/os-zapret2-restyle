@@ -157,6 +157,74 @@ def save_private_receipt(data):
         os.close(folder)
 
 
+
+def guest_setup():
+    """Minimal native AUTO owner to test exactly ONE genuinely torn pkg/reset.
+
+    LIST and repeated successful upgrades have already qualified under _87.
+    Their replay is not a prerequisite for the separate reset boundary.
+    """
+    guest_gate()
+    need(not GUARD.exists() and not GUARD.is_symlink(),
+         "BASELINE_UPDATE_GUARD_PRESENT")
+    version, archive = version_archive()
+    need(archive.is_file(), "EXACT_NATIVE_ARCHIVE_MISSING")
+    native = load_test_only("stage5-native-protected-update.py",
+                            "reset_reuse_native")
+    witness = load_test_only("p5b2b-native-witness.py", "reset_native_wan")
+    strategies = load_test_only("test-own70-native-package-handoff.py",
+                                "reset_saved_config")
+    g03 = load_test_only("stage2-opnsense-g03-first-install.py",
+                         "reset_real_upstream_setup")
+    initial = run(["/usr/sbin/pkg", "add", "-f", str(archive)], timeout=210)
+    need(initial.returncode == 0 and trusted_service() and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "REAL_NATIVE_PACKAGE_CLEAN_INSTALL_REFUSED")
+    witness.set_guest_lo0()
+    strategies.set_guest_list_mode()
+    native.seed_qualified_stable_tag_for_disposable_guest(g03)
+    try:
+        setup = g03.dispatch_and_poll()
+    except (g03.Refusal, OSError, subprocess.TimeoutExpired):
+        g03.bounded_disposable_failure_evidence()
+        raise
+    need(setup["installed"] == "1" and setup["service"] == "stopped",
+         "NATIVE_UPSTREAM_NOT_READY")
+    applied = run(["/usr/local/sbin/configctl", "zapret", "shared_apply",
+                   "strategies", strategies.request("auto")], timeout=240)
+    need(applied.returncode == 0 and "applied-id=" in applied.stdout and
+         trusted_regular(JOURNAL, 128 * 1024),
+         "NATIVE_AUTO_CONFIGD_APPLY_FAILED")
+    before = json.loads(JOURNAL.read_text())
+    old_id = before.get("detail", {}).get("id", "")
+    need(before.get("phase") == "committed" and
+         (EPOCHS / old_id / "epoch.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "NATIVE_AUTO_OWNER_NOT_RUNNING")
+    print("NATIVE_HARDRESET_AUTO_OWNER=PASS_REAL_NATIVE_RUNNING", flush=True)
+    try:
+        native.native_partial_payload_interruption(
+            archive, version, digest(archive))
+    except RuntimeError:
+        # No raw service logs, Config contents or user hostlist data.
+        pending = GUARD.is_file() and not GUARD.is_symlink()
+        print("NATIVE_HARDRESET_PRE_RESET_REFUSAL=" + json.dumps({
+            "prepared_record_present": pending,
+            "auto_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
+            "service_status_rc": run([str(SERVICE), "status"]).returncode,
+            "owner_appliance_modified": False,
+        }, sort_keys=True), flush=True)
+        raise
+
+
+def load_test_only(filename, module_name):
+    spec = importlib.util.spec_from_file_location(
+        module_name, ROOT / "scripts" / filename)
+    loaded = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(loaded)
+    return loaded
+
+
 def guest_prepare():
     guest_gate()
     version, archive = version_archive()
@@ -352,8 +420,10 @@ def host_hard_reset():
 
 
 def main():
-    need(len(sys.argv) == 2, "EXPECTED_PREPARE_VERIFY_OR_HOST_RESET")
-    if sys.argv[1] == "prepare":
+    need(len(sys.argv) == 2, "EXPECTED_SETUP_PREPARE_VERIFY_OR_HOST_RESET")
+    if sys.argv[1] == "setup":
+        guest_setup()
+    elif sys.argv[1] == "prepare":
         guest_prepare()
     elif sys.argv[1] == "verify":
         guest_verify()

@@ -52,7 +52,7 @@ jobs:
           fi
           echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
             sudo tee /etc/apt/apt.conf.d/99zapret-hardreset-network >/dev/null
-      - name: Real native pkg partial extraction, original FD9 guarded STOPPED
+      - name: One real AUTO owner, native partial pkg and original FD9 STOPPED
         uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
         with:
           release: '26.7'
@@ -75,7 +75,7 @@ jobs:
             export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             sh scripts/build-pkg.sh
-            /usr/local/bin/python3 scripts/stage5-native-protected-update.py
+            /usr/local/bin/python3 scripts/stage5-native-hard-reset.py setup
             /usr/local/bin/python3 scripts/stage5-native-hard-reset.py prepare
       - name: QEMU system_reset without guest shutdown or disk image replacement
         run: |

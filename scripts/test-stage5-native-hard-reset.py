@@ -54,6 +54,14 @@ class HardResetContracts(unittest.TestCase):
                     RuntimeError, "NOT_DISPOSABLE_FREEBSD_GUEST"):
                 fixture.guest_gate()
 
+    def test_minimal_auto_setup_reuses_exact_native_midextract(self):
+        source = SOURCE.read_text()
+        self.assertIn('def guest_setup():', source)
+        self.assertIn('strategies.request("auto")', source)
+        self.assertIn("native.native_partial_payload_interruption(", source)
+        self.assertNotIn("native.native_running_reinstall(", source)
+        self.assertNotIn("native.native_interrupted_handoff(", source)
+
     def test_reboot_is_not_host_power_loss_or_pkgdb_repair(self):
         source = SOURCE.read_text()
         self.assertIn('monitor_command(port, "system_reset")', source)
