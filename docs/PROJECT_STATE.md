@@ -6,7 +6,11 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
-**Current source identity (17 November 2026):** `v0.6.5_92` (`VERSION=0.6.5`, `PLUGIN_REVISION=92`), `os-zapret2-restyle-0.6.5_92.pkg` **NOT PUBLISHED**. Source-only STEP 5 candidate based on merged `_91`. Owner `_79.pkg` unchanged; research #1182 closed, not merged.
+**Current source identity (17 November 2026):** `v0.6.5_93` (`VERSION=0.6.5`, `PLUGIN_REVISION=93`), `os-zapret2-restyle-0.6.5_93.pkg` **NOT PUBLISHED**. Source-only cross-source STEP 5 candidate from merged `_92`; owner installed appliance unchanged.
+
+**Merged `_92` STEP 5 three-way single-source basis:** [PR #1186](https://github.com/Tolian82/os-zapret2-restyle/pull/1186), main `89246a12fed57162296369c6c1e4d1461109c822`. Seven real pinned-PSL user-intent tests, full [PR CI #44142975270](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44142975270) and FreeBSD source gate PASS. No original Apply writer or five rendered GUI yet.
+
+**New `_93` STEP 5 source-only cross-source planner (CI/native and owner acceptance OPEN):** one non-writing `auto_detect_five_editor_plan.py` reuses existing `domain_policy._list_entries/_covers` and prior three-way merge. It considers two manual lists + three found-only sources, broad/exact exclusions, known-source coverage and ambiguous provenance; returns a bounded preview with `commit_authorized=false`. Tests added to original `test-auto-detect-editor-merge.py` (16 existing+new cases; isolated stub S0 PASS, exact original pinned PSL still CI OPEN). No change to native Config/FD9, durable transaction, GUI or restart. The next required step is **original FD9 protected all-resource atomic Apply**, not another independent writer.
 
 **Merged `_91` STEP 4 native five-source read:** [#1185](https://github.com/Tolian82/os-zapret2-restyle/pull/1185) merged to main `8dfec57c57bcedfdc3669f9a2f89a6452d746db5`. Root Config+P2 destination lock snapshot, explicit statuses and per-source revisions, POST API, real disposable OPNsense Chromium/F5 PASS on [PR #44139149454](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44139149454) and [main #44140162066](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44140162066). No five separate rendered controls or combined Apply yet, no owner package published.
 
