@@ -280,16 +280,16 @@ awk '
 awk '
     /^shared_apply_boot_service\(\)/ { inside=1 }
     inside && /apply_runtime_observer_previous_preflight/ { ready=NR }
-    inside && /saved-unchanged/ { stage=NR }
+    inside && /shared_apply_request.php" saved-unchanged/ { stage=NR }
     inside && /shared_apply_execute_service/ { execute=NR }
     inside && /^}/ { exit !(ready && stage && execute && ready<stage && stage<execute) }
     END { if (!ready || !stage || !execute) exit 1 }
 ' "$SERVICE_SOURCE" || fail "NATIVE_BOOT_DID_NOT_CREATE_FRESH_APPLY_OPERATION"
 printf 'P2_STOP_OLD_CONFIG_ACK_THEN_NEW_BOOT_OPERATION_ORDER=PASS\n'
 # In the original shared Apply API a preflight-rejected receipt exits zero;
-# Boot must require the EXACT new committed Apply receipt instead.
+# Boot must require both exact native Config and terminal Apply receipts.
 sed -n '/^shared_apply_boot_service()/,/^}/p' "$SERVICE_SOURCE" |
-    grep -Fq '$_shared_boot_apply" = "applied-id=$_shared_boot_new_id"' ||
+    grep -Fq 'shared_apply_boot_receipt_verified_service' ||
     fail "FRESH_BOOT_ACCEPTED_PREFLIGHT_REJECTION_AS_APPLY_SUCCESS"
 printf 'P2_NEW_GENERATION_BOOT_REQUIRES_EXACT_COMMITTED_RECEIPT=PASS\n'
 printf 'P2_FD9_SCOPE=SOURCE_NATIVE_RETIRED_GENERATION_INSTALLED_ACCEPTANCE_OPEN\n'
