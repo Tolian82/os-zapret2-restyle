@@ -72,11 +72,14 @@ def main():
     again = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
     installed_after = installed_version()
     state = run([str(SERVICE), "status"])
+    reason = re.search(r"(?m)^pkg-update-refused=([A-Z0-9_]+)$",
+                       again.stderr)
     evidence = {
         "schema": 1,
         "platform": ver.stdout.strip(), "installed_version": installed_after,
         "same_archive_sha256": candidate_sha, "previous_status": before.returncode,
         "protected_update_rc": again.returncode,
+        "protected_refusal_code": reason.group(1) if reason else "none",
         "verified_receipt": "pkg-update=verified-installed-and-restored" in again.stdout,
         "native_status_after": state.returncode,
         "pkgdb_unchanged_identity": package_before == installed_after == target,

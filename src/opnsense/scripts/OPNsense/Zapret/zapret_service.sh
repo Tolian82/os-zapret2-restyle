@@ -285,6 +285,7 @@ strategy_lab_semantic_evidence()
 
 strategy_lab_internal_dispatch()
 {
+    : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     strategy_lab_lock_owner_valid || {
         echo "ERROR: Strategy Lab internal lifecycle action has no lock owner" >&2
         return 77
@@ -3063,6 +3064,8 @@ stop_legacy_without_python_service()
 
 service_with_lifecycle_lock()
 {
+    # This function is also sourced alone by native fail-closed shell tests.
+    : "${PKG_UPDATE_RECORD:=/var/db/zapret2/pkg-update/operation.json}"
     _service_lock_timeout="$1"
     shift
 

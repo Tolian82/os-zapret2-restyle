@@ -54,8 +54,16 @@ def trusted_directory(path: Path) -> None:
 
 def root_and_private_base() -> None:
     need(os.geteuid() == 0, "ROOT_REQUIRED")
-    for parent in (Path("/var"), Path("/var/db"), BASE.parent):
+    for parent in (Path("/var"), Path("/var/db")):
         trusted_directory(parent)
+    if not BASE.parent.exists() and not BASE.parent.is_symlink():
+        BASE.parent.mkdir(mode=0o700)
+        fd = os.open(Path("/var/db"), os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    trusted_directory(BASE.parent)
     if not BASE.exists() and not BASE.is_symlink():
         BASE.mkdir(mode=0o700)
     trusted_directory(BASE)
