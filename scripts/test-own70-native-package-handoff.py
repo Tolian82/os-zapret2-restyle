@@ -314,28 +314,32 @@ def native():
     need(state.get("previous", {}).get("id") == base_id and
          state["detail"]["changed_fields"] == ["hostlist.mode"] and
          HEX32.fullmatch(generation), "native_old_auto_did_not_change_mode")
-    reproduced = (broken.returncode != 0)
-    if reproduced:
-        need(state.get("phase") == "requires-review" and
-             (EPOCHS / generation / "pretraffic.json").is_file() and
-             not (EPOCHS / generation / "epoch.json").exists() and
-             run([str(SERVICE), "status"], timeout=20).returncode == 2,
-             "published_old_failure_did_not_match_observed_owner")
-    else:
-        # The fixture may produce shorter argv than the owner's real 2410
-        # bytes. A successful ordinary Auto is NOT evidence of reviewed
-        # recovery: qualify only the staged-hook RUNNING upgrade in this run.
-        need(state.get("phase") == "committed" and
-             (EPOCHS / generation / "epoch.json").is_file() and
-             run([str(SERVICE), "status"], timeout=20).returncode == 0,
-             "old_auto_was_neither_healthy_nor_reviewed")
-
+    # configctl script_output may return 0 even when native Apply emitted
+    # an ERROR and left a nonterminal owner. Classify the ORIGINAL _70 by
+    # persisted phase, independent epoch receipt and status; no fabricated
+    # journal files, no signal and no retry. Never infer success from rc alone.
+    original_pret=(EPOCHS / generation / "pretraffic.json").is_file()
+    original_epoch=(EPOCHS / generation / "epoch.json").is_file()
+    original_status=run([str(SERVICE), "status"], timeout=20).returncode
+    phase=state.get("phase", "invalid")
+    reproduced=(phase == "requires-review" and original_pret and
+                not original_epoch and original_status == 2)
+    healthy=(phase == "committed" and original_epoch and
+             original_status == 0)
     print("OWN70_OLD_AUTO_RESULT=" + json.dumps({
         "requires_review_reproduced": reproduced,
-        "old_journal_phase": state["phase"],
-        "original_pretraffic_present": (EPOCHS / generation / "pretraffic.json").is_file(),
-        "original_epoch_present": (EPOCHS / generation / "epoch.json").is_file(),
+        "old_journal_phase": phase,
+        "original_pretraffic_present": original_pret,
+        "original_epoch_present": original_epoch,
+        "native_configd_rc": broken.returncode,
+        "native_configd_reports_applied_id":
+            ("applied-id=" + generation) in broken.stdout,
+        "native_configd_reports_error":
+            "ERROR:" in (broken.stdout + broken.stderr),
+        "native_original_status_rc": original_status,
+        "old_auto_healthy_committed": healthy,
     }, sort_keys=True), flush=True)
+    need(reproduced or healthy, "published_old_auto_not_physically_qualified")
     # This follow-up must reproduce true old _70 requires-review via
     # original configd and argv; healthy short-argv upgrade is already proven.
     need(reproduced, "old_original_long_argv_requires_review_not_reproduced")
@@ -353,17 +357,16 @@ def native():
         stage = staged_source(pkg, root)
         denied = recovered_status(stage, "shared-apply-recover-reviewed-native")
         need(denied.returncode == 75, "root_optin_gate_not_enforced")
-        if reproduced:
-            need(not (EPOCHS / generation / "epoch.json").exists(),
-                 "denied_root_optin_mutated_epoch")
-            rescue = recovered_status(stage, "shared-apply-recover-reviewed-native",
-                                      optin=True, timeout=150)
-            need(rescue.returncode == 0 and
-                 "recovered-reviewed-native-id=" + generation in rescue.stdout and
-                 (EPOCHS / generation / "epoch.json").is_file() and
-                 json.loads(JOURNAL.read_bytes())["phase"] == "committed" and
-                 sha(Path("/conf/config.xml")) == before_config,
-                 "staged_package_original_fd9_recovery_unproven")
+        need(not (EPOCHS / generation / "epoch.json").exists(),
+             "denied_root_optin_mutated_epoch")
+        rescue = recovered_status(stage, "shared-apply-recover-reviewed-native",
+                                  optin=True, timeout=150)
+        need(rescue.returncode == 0 and
+             "recovered-reviewed-native-id=" + generation in rescue.stdout and
+             (EPOCHS / generation / "epoch.json").is_file() and
+             json.loads(JOURNAL.read_bytes())["phase"] == "committed" and
+             sha(Path("/conf/config.xml")) == before_config,
+             "staged_package_original_fd9_recovery_unproven")
 
         # Establish independent OLD and NEW-staged status before pkg. A
         # pre-install status=1 will silently take the "already STOPPED" path
@@ -608,9 +611,7 @@ def native():
          old_retired and new_epoch and not same_engine,
          "old_auto_epoch_not_retired_or_successor_not_committed")
     print("OWN70_NATIVE_BRIDGE=" + json.dumps({
-        "result": ("PASS_REAL_OLD_AUTO_FAIL_STAGED_RESCUE_PKG_ADD_RUNNING"
-                   if reproduced else
-                   "PASS_REAL_OLD_AUTO_RUNNING_STAGED_HOOK_PKG_ADD_ONLY"),
+        "result": "PASS_REAL_OLD_AUTO_FAIL_STAGED_RESCUE_PKG_ADD_RUNNING",
         "old_pkg_sha256": OLD_SHA256,
         "successor_pkg_sha256": sha(pkg),
         "old_requires_review_reproduced": reproduced,
