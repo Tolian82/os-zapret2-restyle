@@ -6,6 +6,8 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
+**Current source identity (17 November 2026):** `v0.6.5_89` (`VERSION=0.6.5`, `PLUGIN_REVISION=89`), `os-zapret2-restyle-0.6.5_89.pkg` **NOT PUBLISHED**. This is a source-only GUI candidate from merged `_88` and separate from the Draft `_89` forensic PR #1182; no binary is installed on the owner's device.
+
 **New separate source-only `_89` GUI candidate:** the native general.xml form/model already defines separate Enable checkbox and Advanced-only Auto Restart dropdown, default Off with all five schedule values. The old general.volt JavaScript moved this select into the Enabled row and deleted its native Advanced row, violating TZ6v2. The bounded candidate removes the relocation with source/model red-to-green guard. Native rendered UI, schedule persistence, five-editor Apply, working package and owner acceptance remain OPEN. Experimental PR #1182 stays Draft and unmerged (malformed pkgdb refusal); no new .pkg, owner's installed _79 unmodified.
 
 

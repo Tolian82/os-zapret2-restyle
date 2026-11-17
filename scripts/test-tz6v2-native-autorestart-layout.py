@@ -39,6 +39,13 @@ class AutoRestartNativeForm(unittest.TestCase):
         self.assertIn("localizeAutoRestartOptions();", page)
         self.assertEqual(page.count('id="reconfigureAct"'), 1)
 
+    def test_native_browser_expects_new_separate_schedule_row(self):
+        browser = (ROOT / "scripts/p3-browser-i18n.py").read_text()
+        self.assertIn("P4_RESTART_NOT_SEPARATE_NATIVE_ROW", browser)
+        self.assertIn("row_zapret.general.autorestart", browser)
+        self.assertNotIn("zapretAutoRestartInline", browser)
+        self.assertNotIn("P4_RESTART_NOT_INLINE_RIGHT_OF_ENABLED", browser)
+
 
 if __name__ == "__main__":
     unittest.main()
