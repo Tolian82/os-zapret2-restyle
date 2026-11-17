@@ -278,6 +278,66 @@ def normalize(text: str, kind: str) -> dict:
     }
 
 
+FOUND_EDITOR_SOURCES = frozenset(("youtube", "user", "auto"))
+
+
+class FoundEditorPolicyError(ValueError):
+    """Stable source/line/code only: never echo a user's typed hostname."""
+
+    def __init__(self, source: str, line: int, code: str):
+        super().__init__(code)
+        self.source, self.line, self.code = source, line, code
+
+    def evidence(self) -> dict:
+        return {"source": self.source, "line": self.line, "code": self.code}
+
+
+def normalize_found_editor(text: str, source: str, *,
+                           psl: PublicSuffixList | None = None) -> dict:
+    """Only positive PSL-root entries for three TZ6v2 discovered editors.
+
+    Use the qualified P1 PSL and its strict host parser. Read/validate only:
+    no Config, FD9, disk or engine mutation.
+    """
+    if source not in FOUND_EDITOR_SOURCES:
+        raise ValueError("unknown discovered editor source")
+    if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_INPUT_BYTES:
+        raise ValueError("unbounded discovered editor text")
+    psl = psl if psl is not None else PublicSuffixList.load()
+    unique: set[str] = set()
+    changed = duplicates = 0
+    for line_no, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line:
+            continue
+        if "!" in line or "^" in line:
+            raise FoundEditorPolicyError(source, line_no, "modifiers_not_allowed")
+        try:
+            root = psl.registrable_domain(line)
+        except AutoDomainPolicyError as error:
+            raise FoundEditorPolicyError(source, line_no, error.code) from None
+        if root != line:
+            changed += 1
+        if root in unique:
+            duplicates += 1
+        unique.add(root)
+    return {"schema_version": 1, "source": source,
+            "normalized": "\n".join(sorted(unique)), "changed": changed,
+            "duplicates": duplicates, "entry_count": len(unique)}
+
+
+def normalize_manual_editor(text: str, kind: str) -> dict:
+    """Only an explicitly edited manual field uses prefix-inclusive sort."""
+    if kind not in ("youtube", "user"):
+        raise ValueError("unknown manual editor kind")
+    result = normalize(text, kind)
+    before = result["normalized"].splitlines()
+    after = sorted(before)
+    result["normalized"] = "\n".join(after)
+    result["changed"] += sum(a != b for a, b in zip(before, after))
+    return result
+
+
 def _list_entries(text: str, kind: str = "user") -> list[tuple[str, bool, bool]]:
     try:
         normalized = normalize(text, kind)["normalized"]
@@ -403,6 +463,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="command", required=True)
     subs.add_parser("inspect")
+    subs.add_parser("found-inspect")
+    subs.add_parser("manual-edit")
     subs.add_parser("auto-plan")
     subs.add_parser("psl-status")
     single = subs.add_parser("single")
@@ -428,9 +490,23 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("invalid domain inspection payload")
             result = normalize(payload["text"], payload["kind"])
             print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+        elif args.command in ("found-inspect", "manual-edit"):
+            payload = json.loads(_read_bounded(sys.stdin.buffer))
+            keys = ({"source", "text"} if args.command == "found-inspect"
+                    else {"kind", "text"})
+            if not isinstance(payload, dict) or set(payload) != keys:
+                raise ValueError("invalid domain editor inspection payload")
+            result = (normalize_found_editor(payload["text"], payload["source"])
+                      if args.command == "found-inspect" else
+                      normalize_manual_editor(payload["text"], payload["kind"]))
+            print(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
         else:
             _single(args.kind, args.source, args.target)
         return 0
+    except FoundEditorPolicyError as error:
+        print(json.dumps({"schema_version": 1, "result": "failed",
+                          "error": error.evidence()}))
+        return 2
     except AutoDomainPolicyError as error:
         print(json.dumps({"schema_version": 1, "result": "unprocessed", "code": error.code}))
         return 2
