@@ -63,6 +63,9 @@ def native_running_reinstall(archive, target, candidate_sha):
     g03 = original_fixture("stage2-opnsense-g03-first-install.py",
                            "protected_native_upstream_setup")
     witness.set_guest_lo0()
+    # The Model defaults HOSTLIST mode to "all". Explicitly select real
+    # manual List through the established native OPNsense Config Model.
+    old_bridge.set_guest_list_mode()
     setup = g03.dispatch_and_poll()
     need(setup["installed"] == "1" and setup["service"] == "stopped",
          "UPSTREAM_RUNTIME_NOT_READY_STOPPED")
@@ -85,6 +88,8 @@ def native_running_reinstall(archive, target, candidate_sha):
         old_epoch_present = (EPOCHS / old_id / "epoch.json").is_file()
         if observer_required:
             need(old_epoch_present, "AUTO_PREDECESSOR_EPOCH_MISSING")
+        else:
+            need(not old_epoch_present, "LIST_UNEXPECTED_OBSERVER_EPOCH")
         config_before = sha(CONFIG)
         replaced = run([str(SERVICE), "pkg-update", str(archive)], timeout=320)
         status_after = run([str(SERVICE), "status"], timeout=30)
@@ -105,8 +110,13 @@ def native_running_reinstall(archive, target, candidate_sha):
             "after_status_rc": status_after.returncode,
             "old_epoch_retired":
                 (EPOCHS / old_id / "retired.json").is_file(),
-            "distinct_committed_generation":
-                successor.get("phase") == "committed" and new_id != old_id,
+            "journal_committed": successor.get("phase") == "committed",
+            "generation_changed": new_id != old_id,
+            # Ordinary common boot reuses the committed ID. Only a stopped
+            # observer is retired and rebuilt under a NEW operation ID.
+            "generation_semantics_verified":
+                successor.get("phase") == "committed" and
+                (new_id != old_id if observer_required else new_id == old_id),
             "successor_epoch_exists":
                 (EPOCHS / new_id / "epoch.json").is_file(),
             "new_engine_pid_distinct":
@@ -124,7 +134,7 @@ def native_running_reinstall(archive, target, candidate_sha):
         checks = (
             evidence["protected_running_replacement_rc"] == 0 and
             evidence["verified_receipt"] and evidence["after_status_rc"] == 0 and
-            evidence["distinct_committed_generation"] and
+            evidence["generation_semantics_verified"] and
             evidence["new_engine_pid_distinct"] and evidence["config_unchanged"] and
             evidence["pkgdb_current_version"] and
             evidence["same_pkg_sha256"] and evidence["no_guard_record"] and
@@ -133,8 +143,8 @@ def native_running_reinstall(archive, target, candidate_sha):
             checks = (checks and evidence["old_epoch_retired"] and
                       evidence["successor_epoch_exists"])
         else:
-            # LIST may use no observer; if it has one, it cannot be lost.
-            checks = checks and (not old_epoch_present or evidence["old_epoch_retired"])
+            # LIST has no observer and therefore cannot fabricate an epoch.
+            checks = checks and not evidence["successor_epoch_exists"]
         need(checks, "PROTECTED_NATIVE_" + label + "_REINSTALL_NOT_CONFIRMED")
         print("NATIVE_PROTECTED_" + label + "=PASS_COMMON_STOP_PKG_BOOT",
               flush=True)
