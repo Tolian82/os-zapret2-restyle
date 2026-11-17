@@ -6,7 +6,11 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
-**Current source identity (17 November 2026):** `v0.6.5_93` (`VERSION=0.6.5`, `PLUGIN_REVISION=93`), `os-zapret2-restyle-0.6.5_93.pkg` **NOT PUBLISHED**. Source-only cross-source STEP 5 candidate from merged `_92`; owner installed appliance unchanged.
+**Current source identity (17 November 2026):** product main **v0.6.5_93** (`0d1cc69d`), `_94` (`VERSION=0.6.5`, `PLUGIN_REVISION=94`) GUI draft NOT MERGED/PUBLISHED; `os-zapret2-restyle-0.6.5_94.pkg` **NOT PUBLISHED**. Owner installed OPNsense unchanged.
+
+**Merged `_93` P1 five-source semantics:** [PR #1187](https://github.com/Tolian82/os-zapret2-restyle/pull/1187) main `0d1cc69d2fb1b78cead34dcf84ccfcb67f025a00` (16 true PSL cross-source tests, [CI #44148244746](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44148244746) PASS). Backend unified FD9 Config+file commit and actual five GUI editors in main OPEN.
+
+**New `_94` GUI-only DRAFT (not user-ready):** original manual YouTube/User controls untouched; two collapsible found-only panels, one shared native-width source editor; all use original root-locked `hostlistEditorsRead`. Distinguish `uninitialized` from empty, preserve drafts, RU/EN Help. Old separate Save/Reload removed from draft. Edited found-list drafts MUST block old bottom Apply/Preview before native dispatch until the same original FD9 journal handles Config + 3 source files with reversible changes; this is not a saved-state receipt. Existing backend P2k5 Save remains for compatibility but is no longer called by draft GUI. Production no merge/release until this veto replaced and full native tests PASS.
 
 **Merged `_92` STEP 5 three-way single-source basis:** [PR #1186](https://github.com/Tolian82/os-zapret2-restyle/pull/1186), main `89246a12fed57162296369c6c1e4d1461109c822`. Seven real pinned-PSL user-intent tests, full [PR CI #44142975270](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44142975270) and FreeBSD source gate PASS. No original Apply writer or five rendered GUI yet.
 

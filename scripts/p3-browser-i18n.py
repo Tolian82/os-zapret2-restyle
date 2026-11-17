@@ -351,182 +351,107 @@ def check_p4_native_gui(page, mode: str) -> str:
          "P4_RESHOW_ADVANCED_LOST_RESTART")
     selection.select_option(value=saved)
 
-    editor_row = page.locator("#zapretAutoHostlistRow")
-    editor_row.wait_for(state="attached", timeout=12000)
-    after_user = control(page, "zapret.hostlist.userdomains").locator(
-        "xpath=ancestor::tr[1]/following-sibling::tr[1]")
-    need(after_user.get_attribute("id") == "zapretAutoHostlistRow",
-         "P4_AUTO_HOSTLIST_NOT_AFTER_USER_DOMAINS")
-    need(editor_row.locator("label").inner_text().strip() ==
-         ("Найденные домены" if mode == "ru" else "Auto Hostlist"),
-         "P4_AUTO_HOSTLIST_LABEL_WRONG_" + mode)
-    need(editor_row.locator("button#zapretAutoHostlistSave").count() == 1 and
-         editor_row.locator("button#zapretAutoHostlistReload").count() == 1,
-         "P4_AUTO_HOSTLIST_ACTIONS_MISSING")
+    # TZ6v2: three discovered-only read-backed inputs. Manual native
+    # textarea fields have not moved and all three found fields are NOT
+    # part of getFormData()/Config XML.
+    snap = check_tz6v2_five_source_read(page)
+    specs = (
+        ("youtube_found", "zapretYoutubeFound",
+         "Найденные домены YouTube" if mode == "ru" else "YouTube Found Domains"),
+        ("user_found", "zapretUserFound",
+         "Найденные домены пользователя" if mode == "ru" else "User Found Domains"),
+        ("shared_found", "zapretSharedFound",
+         "Общий список найденных доменов" if mode == "ru" else "Shared Found Domains"),
+    )
+    for name, input_id, label_text in specs:
+        row = page.locator("#" + input_id + "Row")
+        row.wait_for(state="attached", timeout=12000)
+        need(row.locator("label").inner_text().strip() == label_text,
+             "TZ6V2_FIVE_EDITOR_LABEL_WRONG_" + mode + "_" + name)
+        source = snap["editors"][name]
+        field = page.locator("#" + input_id)
+        need(field.count() == 1 and field.input_value() == source["content"],
+             "TZ6V2_BROWSER_FOUND_SOURCE_NOT_LOADED_" + mode + "_" + name)
+        need(field.is_enabled() == (source["status"] != "uninitialized"),
+             "TZ6V2_BROWSER_UNINITIALIZED_SOURCE_WRONG_" + name)
+        help_block = row.locator('[data-for="help_for_' + input_id + '"]')
+        need(help_block.count() == 1 and
+             help_block.evaluate("(el) => el.parentElement.contains("
+                                 "document.getElementById('" + input_id + "'))"),
+             "TZ6V2_HELP_NOT_UNDER_TEXTAREA_" + name)
+        need("! and ^ are forbidden" in (help_block.text_content() or "") if mode == "en"
+             else "! и ^ запрещены" in (help_block.text_content() or ""),
+             "TZ6V2_DISCOVERED_FLAGS_HELP_MISSING_" + mode)
+        need(page.evaluate("""id => {
+            const field = document.getElementById(id);
+            return !field.hasAttribute('name') &&
+                !field.id.startsWith('zapret.');
+        }""", input_id), "TZ6V2_FOUND_FIELD_NOT_SEPARATED_FROM_CONFIG")
+    for input_id, manual in (("zapretYoutubeFound", "youtubedomains"),
+                             ("zapretUserFound", "userdomains")):
+        disclosure = page.locator("#" + input_id + "Toggle")
+        found_row = page.locator("#" + input_id + "Row")
+        need(not found_row.is_visible() and
+             disclosure.get_attribute("aria-expanded") == "false",
+             "TZ6V2_FOUND_ROW_NOT_COLLAPSED_" + input_id)
+        disclosure.click()
+        found_row.wait_for(state="visible", timeout=12000)
+        need(disclosure.get_attribute("aria-expanded") == "true",
+             "TZ6V2_FOUND_DISCLOSURE_NOT_OPENED_" + input_id)
+        disclosure.click()
+        found_row.wait_for(state="hidden", timeout=12000)
+        need(disclosure.get_attribute("aria-expanded") == "false",
+             "TZ6V2_FOUND_DISCLOSURE_NOT_CLOSED_" + input_id)
+    need(page.locator("#zapretSharedFoundRow").is_visible(),
+         "TZ6V2_SHARED_EDITOR_NOT_VISIBLE")
+    need(page.locator("#zapretAutoHostlistSave").count() == 0 and
+         page.locator("#zapretAutoHostlistReload").count() == 0 and
+         page.locator("#zapretAutoHostlistField").count() == 0 and
+         page.locator("#reconfigureAct").count() == 1,
+         "TZ6V2_LEGACY_SAVE_RELOAD_OR_SECOND_APPLY_PRESENT")
     widths = page.evaluate("""() => [
-        document.getElementById('zapretAutoHostlistField').getBoundingClientRect().width,
+        document.getElementById('zapretSharedFound').getBoundingClientRect().width,
         document.getElementById('zapret.hostlist.userdomains').getBoundingClientRect().width
     ]""")
-    need(0.8 <= widths[0] / widths[1] <= 1.2,
-         "P4_AUTO_HOSTLIST_EDITOR_NARROW_OR_OVERSIZED_" + mode)
-    auto_help = editor_row.locator('[data-for="help_for_zapretAutoHostlistField"]')
-    need(auto_help.count() == 1, "P4_AUTO_HOSTLIST_NATIVE_HELP_MISSING")
-    need(auto_help.evaluate(
-        "(el) => el.parentElement === document.getElementById("
-        "'zapretAutoHostlistField').parentElement"),
-        "P4_AUTO_HOSTLIST_HELP_NOT_INLINE")
+    need(widths[1] > 0 and 0.8 <= widths[0] / widths[1] <= 1.2,
+         "TZ6V2_SHARED_EDITOR_NOT_NATIVE_WIDTH_" + mode)
+    # Global OPNsense Help toggle must affect *new* inline blocks too.
     full_help_toggle = native_form_toggle(page, form_id, "show_all_help")
-    help_enabled = "fa-toggle-on" in (full_help_toggle.get_attribute("class") or "")
-    need(auto_help.is_visible() == help_enabled,
-         "P4_AUTO_HOSTLIST_HELP_IGNORES_NATIVE_INITIAL_STATE_" + mode)
     full_help_toggle.click()
-    need(auto_help.is_visible() != help_enabled,
-         "P4_AUTO_HOSTLIST_HELP_IGNORES_NATIVE_TOGGLE_" + mode)
+    page.wait_for_timeout(130)
+    state_one = page.locator("#zapretSharedFoundRow .zapret-found-help").is_visible()
     full_help_toggle.click()
-    need(auto_help.is_visible() == help_enabled,
-         "P4_AUTO_HOSTLIST_HELP_NOT_RESTORED_" + mode)
-    help_cell = control(page, "zapret.hostlist.excludeipset").locator(
-        "xpath=ancestor::tr[1]/td[3]")
-    need(help_cell.evaluate("el => getComputedStyle(el).visibility") == "visible",
-         "P4_EXCLUDE_IPSET_STRIPED_CELL_HIDDEN_" + mode)
-    # P3 installs only the .pkg, not the separate upstream runtime.
-    # Refuse on absent/unsafe native storage; do not seed directories, save
-    # settings, or claim an unexecuted editor/save scenario has passed.
-    states = (
-        ("Файл отсутствует", "Список пуст", "Список загружен",
-         "Невозможно прочитать список. Сохранение недоступно.",
-         "Ошибка чтения списка. Сохранение недоступно.")
-        if mode == "ru" else
-        ("File missing", "List is empty", "List loaded",
-         "Cannot read list. Saving is unavailable.",
-         "List read failed. Saving is unavailable.")
-    )
-    page.wait_for_function(
-        "allowed => allowed.includes(document.getElementById("
-        "'zapretAutoHostlistState')?.textContent?.trim())",
-        arg=states, timeout=45000)
-    status = page.locator("#zapretAutoHostlistState").inner_text().strip()
-    if status in states[3:]:
-        editor = page.locator("#zapretAutoHostlistField")
-        need(not editor.is_enabled() and
-             not editor_row.locator("#zapretAutoHostlistSave").is_enabled() and
-             page.locator("#zapretAutoHostlistState").evaluate(
-                 "el => el.classList.contains('text-danger')"),
-             "P4_UNAVAILABLE_EDITOR_DID_NOT_FAIL_CLOSED_" + mode)
-        f5_and_wait(page, "/api/zapret/settings/get")
-        page.wait_for_function(
-            "allowed => allowed.includes(document.getElementById("
-            "'zapretAutoHostlistState')?.textContent?.trim())",
-            arg=states[3:], timeout=45000)
-        need(not page.locator("#zapretAutoHostlistField").is_enabled() and
-             control(page, "zapret.general.autorestart").input_value() == saved,
-             "P4_UNAVAILABLE_EDITOR_F5_CHANGED_STATE")
-        return "unavailable-package-only"
-    page.wait_for_function(
-        "() => { const e = document.getElementById('zapretAutoHostlistField');"
-        " return !!e && !e.disabled; }", timeout=45000)
-    need(editor_row.locator("#zapretAutoHostlistSave").is_enabled(),
-         "P4_AUTO_HOSTLIST_NOT_READABLE")
-    state = page.locator("#zapretAutoHostlistState").inner_text().strip()
-    allowed = (
-        ("Файл отсутствует", "Список пуст", "Список загружен")
-        if mode == "ru" else ("File missing", "List is empty", "List loaded")
-    )
-    need(state in allowed, "P4_AUTO_HOSTLIST_STATUS_WRONG_" + mode)
-    editor = page.locator("#zapretAutoHostlistField")
-    current = editor.input_value()
-    editor.fill(current + "\np4-unsaved.example.test\n")
-    need(editor.input_value().endswith("p4-unsaved.example.test\n"),
-         "P4_AUTO_HOSTLIST_EDITOR_NOT_EDITABLE")
-    editor.fill(current)
-    f5_and_wait(page, "/api/zapret/settings/get")
-    page.wait_for_function(
-        "() => { const e = document.getElementById('zapretAutoHostlistField');"
-        " return !!e && !e.disabled; }", timeout=45000)
-    need(page.locator("#zapretAutoHostlistField").input_value() == current and
-         control(page, "zapret.general.autorestart").input_value() == saved,
-         "P4_UNSAVED_EDIT_LEAKED_ACROSS_F5")
-    return "readable-unsaved-edit"
+    page.wait_for_timeout(130)
+    need(page.locator("#zapretSharedFoundRow .zapret-found-help").is_visible() != state_one,
+         "TZ6V2_NATIVE_HELP_NOT_TOGGLING_FOUND_FIELD")
+    # Prove dirty found drafts cannot trigger old original Apply while
+    # protected Config + 3-file transaction is unfinished. This is a
+    # temporary *safety gate* on this unmerged integration branch.
+    shared = page.locator("#zapretSharedFound")
+    previous = shared.input_value()
+    requests = []
+    def observe(request):
+        if request.method == "POST" and request.url.split("?")[0].endswith(
+                "/api/zapret/settings/apply"):
+            requests.append("unsafe-apply")
+    page.on("request", observe)
+    shared.fill(previous + "\nfixture-unsaved.example.org\n")
+    page.locator("#reconfigureAct").click()
+    dialog = page.locator(".bootstrap-dialog .modal-dialog")
+    dialog.last.wait_for(state="visible", timeout=12000)
+    need(shared.input_value().endswith("fixture-unsaved.example.org\n") and
+         not requests, "TZ6V2_PREMATURE_FOUND_APPLY_WAS_DISPATCHED")
+    dialog.last.locator(".modal-footer button").last.click()
+    shared.fill(previous)
+    return "five-native-read-and-guarded-apply"
 
 
 def check_p4_actual_browser_save(context, primary) -> bool:
-    """Real two-tab, revisioned GUI Save in an explicitly disposable guest fixture."""
-    if os.environ.get("ZAPRET2_P4_DISPOSABLE_GUI_SAVE") != "1":
-        return False
-    field = primary.locator("#zapretAutoHostlistField")
-    need(field.is_enabled() and field.input_value() == "",
-         "P4_GUI_SAVE_CLEAN_EDITABLE_FIXTURE_REQUIRED")
-    second = context.new_page()
-    wait_native_load(second, "/api/zapret/settings/get", "/ui/zapret", "frm_GeneralSettings")
-    wait_locale(second, "en")
-    second.wait_for_function(
-        "() => !!document.querySelector('#zapretAutoHostlistField') && "
-        "!document.querySelector('#zapretAutoHostlistField').disabled",
-        timeout=45000)
-    stale = second.locator("#zapretAutoHostlistField")
-    need(stale.input_value() == "", "P4_SECOND_TAB_NOT_SAME_INITIAL_REVISION")
-
-    expected = "p4-gui-save.example.com\n!^p4-gui-exclude.example.net\n"
-    field.fill(expected)
-    with primary.expect_response(
-        lambda r: r.request.method == "POST" and
-        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
-        timeout=50000) as response:
-        primary.locator("#zapretAutoHostlistSave").click()
-    result = response.value.json()
-    need(response.value.status == 200 and result.get("result") == "saved" and
-         result.get("content") == expected, "P4_BROWSER_FIRST_SAVE_NOT_COMMITTED")
-    primary.wait_for_function(
-        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
-        timeout=15000)
-
-    # The second tab intentionally retained the pre-save revision.
-    stale_text = "p4-stale-save.example.org\n"
-    stale.fill(stale_text)
-    with second.expect_response(
-        lambda r: r.request.method == "POST" and
-        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
-        timeout=50000) as response:
-        second.locator("#zapretAutoHostlistSave").click()
-    refused = response.value.json()
-    need(refused.get("result") == "conflict" and stale.input_value() == stale_text,
-         "P4_BROWSER_STALE_TAB_OVERWROTE_OR_LOST_DRAFT")
-    second.wait_for_function(
-        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.includes('List changed since opening')",
-        timeout=15000)
-    need(not second.locator("#zapretAutoHostlistSave").is_enabled(),
-         "P4_BROWSER_STALE_TAB_SAVE_NOT_BLOCKED")
-    with second.expect_response(
-        lambda r: r.request.method == "POST" and
-        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistRead"),
-        timeout=50000):
-        second.locator("#zapretAutoHostlistReload").click()
-    second.wait_for_function(
-        "v => document.querySelector('#zapretAutoHostlistField')?.value === v",
-        arg=expected, timeout=15000)
-
-    # Restore pre-test empty final file through normal native GUI Save.
-    field.fill("")
-    with primary.expect_response(
-        lambda r: r.request.method == "POST" and
-        r.url.split("?")[0].endswith("/api/zapret/settings/autoHostlistSave"),
-        timeout=50000) as response:
-        primary.locator("#zapretAutoHostlistSave").click()
-    restored = response.value.json()
-    need(restored.get("result") == "saved" and restored.get("content") == "",
-         "P4_BROWSER_EMPTY_RESTORE_NOT_COMMITTED")
-    primary.wait_for_function(
-        "() => document.querySelector('#zapretAutoHostlistState')?.textContent?.trim() === 'Saved without restart'",
-        timeout=15000)
-    f5_and_wait(primary, "/api/zapret/settings/get")
-    primary.wait_for_function(
-        "() => !!document.querySelector('#zapretAutoHostlistField') && "
-        "!document.querySelector('#zapretAutoHostlistField').disabled",
-        timeout=45000)
-    need(primary.locator("#zapretAutoHostlistField").input_value() == "",
-         "P4_BROWSER_RESTORED_FINAL_LIST_CHANGED_AFTER_F5")
-    second.close()
-    return True
+    """Superseded separate GUI Save/Reload must NOT exist in TZ6v2 UI."""
+    need(primary.locator("#zapretAutoHostlistSave").count() == 0 and
+         primary.locator("#zapretAutoHostlistReload").count() == 0,
+         "TZ6V2_SECOND_SAVE_REINTRODUCED")
+    return False
 
 
 def check_tz6v2_five_source_read(page) -> dict:
@@ -870,9 +795,9 @@ def browser_run(mode: str) -> None:
         "readonly_voice_error_checked": validated,
         "strategy_lab_p4_guidance_checked": lab_guidance,
         "strategies_p4_native_full_help_checked": True,
-        "p4_native_advanced_and_auto_hostlist_readonly_checked": True,
-        "p4_native_hostlist_editor_status": p4_editor_status,
-        "p4_native_hostlist_save_verified": False,
+        "tz6v2_five_editors_read_only_gui_checked": True,
+        "tz6v2_five_editor_status": p4_editor_status,
+        "tz6v2_single_apply_found_edits_guarded": True,
         "p4_browser_save_and_conflict_verified": p4_browser_save_verified,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,

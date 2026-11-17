@@ -371,178 +371,238 @@
         // TZ6v2: base_form owns the Advanced-only Auto Restart row/width/help.
         // Keep the native select in its original row, not beside Enabled.
 
-        // P2k5: native root-owned Auto Hostlist editor, separate from the
-        // OPNsense Config form model and original shared Apply. This row has
-        // NO zapret.* field name: getFormData() must never transmit it to
-        // Config XML. The same checked native flock protects P2k4's writer.
-        let autoHostlistRevision = '';
-        let autoHostlistBusy = false;
-        let autoHostlistReady = false;
-        function autoHostlistState(text, bad) {
-            $('#zapretAutoHostlistState').text(text).toggleClass('text-danger', !!bad);
-        }
-        function autoHostlistButtons() {
-            $('#zapretAutoHostlistSave').prop('disabled',
-                autoHostlistBusy || !autoHostlistReady);
-            $('#zapretAutoHostlistReload').prop('disabled', autoHostlistBusy);
-        }
-        function mountAutoHostlistEditor() {
-            const original = document.getElementById('zapret.hostlist.userdomains');
-            const row = original ? $(original).closest('tr') : $();
-            if (!row.length) return;
-            const next = $('<tr/>', {id: 'zapretAutoHostlistRow'});
-            const helpId = 'help_for_zapretAutoHostlistField';
-            const helpText = isRussian
-                ? 'Общий редактируемый список. По одному домену в строке, допускаются ! и ^. '
-                  + 'Сохранение не запускает службу и не изменяет настройки. '
-                  + 'Список используется только профилями с явным <HOSTLIST:auto>.'
-                : 'Shared editable domains, one per line; ! and ^ are supported. '
-                  + 'Saving does not Apply or restart the service. Only a profile '
-                  + 'with explicit <HOSTLIST:auto> uses this list.';
-            const name = $('<td/>').append(
-                $('<div/>', {'class': 'control-label'}).append(
-                    $('<a/>', {href: '#', id: helpId}).append(
-                        $('<i/>', {'class': 'fa fa-info-circle fa-fw'})
-                    ),
-                    $('<label/>', {for: 'zapretAutoHostlistField'})
-                        .text(isRussian ? 'Найденные домены' : 'Auto Hostlist')
-                        .css('margin-bottom', '0')
-                )
-            );
-            const input = $('<td/>').append(
-                $('<textarea/>', {
-                    id: 'zapretAutoHostlistField', 'class': 'form-control',
-                    rows: 6, spellcheck: 'false', autocomplete: 'off',
-                    disabled: true
-                }).css({'min-height': '9em', 'width': '100%',
-                        'max-width': '346px', 'box-sizing': 'border-box'}),
-                $('<div/>').css({'margin-top': '7px', 'display': 'flex',
-                                 'align-items': 'center', 'gap': '8px',
-                                 'flex-wrap': 'wrap'}).append(
-                    $('<button/>', {
-                        id: 'zapretAutoHostlistSave', type: 'button',
-                        'class': 'btn btn-primary', disabled: true
-                    }).text(isRussian ? 'Сохранить список' : 'Save List'),
-                    $('<button/>', {
-                        id: 'zapretAutoHostlistReload', type: 'button',
-                        'class': 'btn btn-default'
-                    }).text(isRussian ? 'Обновить список' : 'Reload List'),
-                    $('<span/>', {id: 'zapretAutoHostlistState', role: 'status',
-                                   'aria-live': 'polite'})
-                ),
-                $('<div/>', {'class': 'hidden', 'data-for': helpId}).append(
-                    $('<small/>').text(helpText)
-                )
-            );
-            const help = $('<td/>').append(
-                $('<span/>', {'class': 'help-block',
-                              id: 'help_block_zapretAutoHostlistField'})
-            );
-            next.append(name, input, help);
-            row.after(next);
-            const helpSource = next.find('[data-for="' + helpId + '"]');
-            $('#' + helpId).on('click', function(event) {
-                event.preventDefault();
-                helpSource.toggleClass('hidden show');
+        // TZ6v2 STEP 6/7: five read-backed HOSTLIST controls. The original
+        // native manual inputs remain owned by config.xml. The three new
+        // found-only drafts have NO zapret.* form name and CANNOT be saved
+        // until the existing original-FD9 single Apply transaction accepts
+        // source revisions + the entire cross-list candidate. Never use the
+        // superseded independent Save List / Reload List API.
+        const foundHostlistFields = [
+            {key: 'youtube_found', id: 'zapretYoutubeFound', manual: 'youtubedomains',
+             label: isRussian ? 'Найденные домены YouTube' : 'YouTube Found Domains',
+             disclosure: true},
+            {key: 'user_found', id: 'zapretUserFound', manual: 'userdomains',
+             label: isRussian ? 'Найденные домены пользователя' : 'User Found Domains',
+             disclosure: true},
+            {key: 'shared_found', id: 'zapretSharedFound', manual: 'userdomains',
+             label: isRussian ? 'Общий список найденных доменов' : 'Shared Found Domains',
+             disclosure: false}
+        ];
+        let fiveHostlistBase = null;
+        let fiveHostlistBusy = false;
+        let fiveHostlistReady = false;
+        function foundHostlistDirty() {
+            if (!fiveHostlistBase || !fiveHostlistBase.editors) return false;
+            return foundHostlistFields.some(function(spec) {
+                const original = fiveHostlistBase.editors[spec.key];
+                return original && $('#' + spec.id).val() !== original.content;
             });
-            if ($('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on')) {
-                helpSource.removeClass('hidden').addClass('show');
+        }
+        function fiveHostlistStatus(text, bad) {
+            $('#zapretFiveHostlistStatus').text(text || '')
+                .toggleClass('text-danger', !!bad);
+        }
+        function fiveHostlistHelpText(spec) {
+            if (spec.key === 'shared_found') {
+                return isRussian
+                    ? 'Общий список автоматически обнаруженных доменов: один обычный '
+                      + 'регистрируемый домен на строку; ! и ^ запрещены. '
+                      + 'Используется только профилями с явным <HOSTLIST:auto>. '
+                      + 'Сохранение выполняется единственной нижней кнопкой '
+                      + '«Применить» со штатным перезапуском. Фоновое обнаружение '
+                      + 'не перезапускает службу.'
+                    : 'Shared discovered domains: one plain registrable domain '
+                      + 'per line; ! and ^ are forbidden. Only profiles with '
+                      + 'explicit <HOSTLIST:auto> use this list. Changes use '
+                      + 'the single bottom Apply with ordinary native restart; '
+                      + 'unattended discovery never restarts the service.';
             }
-            $('#zapretAutoHostlistReload').on('click', function(e) {
-                e.preventDefault();
-                if (autoHostlistReady &&
-                    $('#zapretAutoHostlistField').val() !==
-                        $('#zapretAutoHostlistField').data('loadedText')) {
-                    const message = isRussian
-                        ? 'Несохранённые изменения будут заменены. Обновить список?'
-                        : 'Reloading discards unsaved edits. Continue?';
-                    if (!window.confirm(message)) return;
+            return isRussian
+                ? 'Автоматически найденные домены ' +
+                  (spec.key === 'youtube_found' ? 'YouTube' : 'пользовательских профилей') +
+                  '. Один обычный регистрируемый домен в строке; ! и ^ запрещены. '
+                  + 'Постоянный запрет повторного добавления указывайте в основном '
+                  + 'ручном списке с !example.com или !^example.com. '
+                  + 'Изменения сохраняет только нижняя кнопка «Применить».'
+                : 'Automatically discovered domains for the matching known HOSTLIST. '
+                  + 'One plain registrable domain per line; ! and ^ are forbidden. '
+                  + 'To prevent rediscovery, add !example.com or !^example.com '
+                  + 'to the corresponding manual list. The single bottom Apply saves edits.';
+        }
+        function mountFoundHostlists() {
+            const manualRows = {
+                youtubedomains: $(document.getElementById('zapret.hostlist.youtubedomains')).closest('tr'),
+                userdomains: $(document.getElementById('zapret.hostlist.userdomains')).closest('tr')
+            };
+            if (!manualRows.youtubedomains.length || !manualRows.userdomains.length) return;
+            foundHostlistFields.forEach(function(spec) {
+                const infoId = 'help_for_' + spec.id;
+                const label = $('<td/>').append(
+                    $('<div/>', {'class': 'control-label'}).append(
+                        $('<a/>', {href: '#', id: infoId, 'aria-label': isRussian
+                            ? 'Показать справку' : 'Show help'}).append(
+                            $('<i/>', {'class': 'fa fa-info-circle fa-fw'})
+                        ),
+                        $('<label/>', {for: spec.id}).text(spec.label)
+                    )
+                );
+                const input = $('<td/>').append(
+                    $('<textarea/>', {id: spec.id, rows: 6,
+                        'class': 'form-control', spellcheck: 'false',
+                        autocomplete: 'off', disabled: true
+                    }).css({'width': '100%', 'max-width': '346px', 'box-sizing': 'border-box'}),
+                    $('<span/>', {id: spec.id + 'State', role: 'status',
+                        'aria-live': 'polite'}).addClass('text-muted'),
+                    $('<div/>', {'class': 'hidden zapret-found-help',
+                        'data-for': infoId}).append(
+                        $('<small/>').text(fiveHostlistHelpText(spec))
+                    )
+                );
+                const editorRow = $('<tr/>', {id: spec.id + 'Row'})
+                    .append(label, input, $('<td/>'));
+                if (spec.disclosure) {
+                    const toggle = $('<button/>', {type: 'button',
+                        id: spec.id + 'Toggle', 'class': 'btn btn-default',
+                        'aria-controls': spec.id + 'Row',
+                        'aria-expanded': 'false'}).text(
+                        isRussian ? 'Найденные домены' : 'Found Domains'
+                    );
+                    const toggleRow = $('<tr/>', {id: spec.id + 'ToggleRow'})
+                        .append($('<td/>'), $('<td/>').append(toggle), $('<td/>'));
+                    manualRows[spec.manual].after(toggleRow, editorRow);
+                    editorRow.hide();
+                    toggle.on('click', function(event) {
+                        event.preventDefault();
+                        const shown = editorRow.is(':visible');
+                        editorRow.toggle(!shown);
+                        toggle.attr('aria-expanded', String(!shown));
+                    });
+                } else {
+                    // Shared remains separate from both known-list collapsibles.
+                    $('#zapretUserFoundRow').after(editorRow);
                 }
-                loadAutoHostlist();
-            });
-            $('#zapretAutoHostlistSave').on('click', function(e) {
-                e.preventDefault();
-                if (!autoHostlistReady || autoHostlistBusy) return;
-                autoHostlistBusy = true;
-                autoHostlistButtons();
-                const text = $('#zapretAutoHostlistField').val();
-                $.ajax({
-                    type: 'POST', url: '/api/zapret/settings/autoHostlistSave',
-                    data: {auto_hostlist: {revision: autoHostlistRevision, content: text}},
-                    dataType: 'json', timeout: 45000
-                }).done(function(data) {
-                    if (data && data.result === 'saved' &&
-                        typeof data.revision === 'string' &&
-                        typeof data.content === 'string') {
-                        autoHostlistRevision = data.revision;
-                        $('#zapretAutoHostlistField').val(data.content)
-                            .data('loadedText', data.content);
-                        autoHostlistState(isRussian
-                            ? 'Сохранено без перезапуска'
-                            : 'Saved without restart', false);
-                    } else if (data && data.result === 'conflict') {
-                        // Never replace the user's unsaved text on conflict.
-                        autoHostlistReady = false;
-                        autoHostlistState(isRussian
-                            ? 'Список изменился после открытия страницы. '
-                              + 'Скопируйте ваши правки и обновите список.'
-                            : 'List changed since opening this page. '
-                              + 'Copy your edits and reload the list.', true);
-                    } else {
-                        autoHostlistReady = false;
-                        autoHostlistState(isRussian
-                            ? 'Сохранение не подтверждено. Обновите список.'
-                            : 'Save unconfirmed. Reload before retrying.', true);
-                    }
-                }).fail(function() {
-                    autoHostlistReady = false;
-                    autoHostlistState(isRussian
-                        ? 'Результат сохранения неизвестен. Обновите список.'
-                        : 'Save outcome unknown. Reload before retrying.', true);
-                }).always(function() {
-                    autoHostlistBusy = false;
-                    autoHostlistButtons();
+                $('#' + infoId).on('click', function(event) {
+                    event.preventDefault();
+                    editorRow.find('[data-for="' + infoId + '"]')
+                        .toggleClass('hidden show');
                 });
             });
-        }
-        function loadAutoHostlist() {
-            if (autoHostlistBusy || !$('#zapretAutoHostlistRow').length) return;
-            autoHostlistBusy = true;
-            autoHostlistReady = false;
-            autoHostlistButtons();
-            autoHostlistState(isRussian ? 'Загрузка…' : 'Loading…', false);
-            $.ajax({
-                type: 'POST', url: '/api/zapret/settings/autoHostlistRead',
-                dataType: 'json', timeout: 45000
-            }).done(function(data) {
-                if (data && data.result === 'ok' &&
-                    typeof data.revision === 'string' &&
-                    typeof data.content === 'string' &&
-                    ['missing', 'empty', 'populated'].indexOf(data.status) >= 0) {
-                    autoHostlistRevision = data.revision;
-                    $('#zapretAutoHostlistField').val(data.content)
-                        .data('loadedText', data.content)
-                        .prop('disabled', false);
-                    autoHostlistReady = true;
-                    const labels = isRussian
-                        ? {missing: 'Файл отсутствует', empty: 'Список пуст',
-                           populated: 'Список загружен'}
-                        : {missing: 'File missing', empty: 'List is empty',
-                           populated: 'List loaded'};
-                    autoHostlistState(labels[data.status], false);
-                } else {
-                    autoHostlistState(isRussian
-                        ? 'Невозможно прочитать список. Сохранение недоступно.'
-                        : 'Cannot read list. Saving is unavailable.', true);
-                }
-            }).fail(function() {
-                autoHostlistState(isRussian
-                    ? 'Ошибка чтения списка. Сохранение недоступно.'
-                    : 'List read failed. Saving is unavailable.', true);
-            }).always(function() {
-                autoHostlistBusy = false;
-                autoHostlistButtons();
+            const presetHelp =
+                $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on');
+            $('.zapret-found-help').toggleClass('hidden', !presetHelp)
+                .toggleClass('show', presetHelp);
+            const stateRow = $('<tr/>', {id: 'zapretFiveHostlistStatusRow'})
+                .append($('<td/>'), $('<td/>').append(
+                    $('<span/>', {id: 'zapretFiveHostlistStatus',
+                        role: 'status', 'aria-live': 'polite'})
+                ), $('<td/>'));
+            $('#zapretSharedFoundRow').after(stateRow);
+            $('#show_all_help_frm_GeneralSettings').on('click.zapretFoundHelp', function() {
+                window.setTimeout(function() {
+                    const helpVisible =
+                        $('#show_all_help_frm_GeneralSettings').hasClass('fa-toggle-on');
+                    $('.zapret-found-help').toggleClass('hidden', !helpVisible)
+                        .toggleClass('show', helpVisible);
+                }, 0);
             });
+        }
+        function loadFiveHostlists() {
+            if (fiveHostlistBusy || !$('#zapretSharedFoundRow').length) return;
+            fiveHostlistBusy = true;
+            fiveHostlistStatus(isRussian ? 'Чтение пяти списков…' : 'Reading five sources…', false);
+            $.ajax({
+                type: 'POST', url: '/api/zapret/settings/hostlistEditorsRead',
+                dataType: 'json', timeout: 30000
+            }).done(function(data) {
+                const exact = ['youtube_manual', 'youtube_found', 'user_manual',
+                    'user_found', 'shared_found'];
+                const valid = data && data.result === 'ok' &&
+                    data.kind === 'tz6v2-five-hostlist-snapshot' &&
+                    data.schema_version === 2 && data.commit_authorized === false &&
+                    data.editors && typeof data.editors === 'object' &&
+                    !Array.isArray(data.editors) &&
+                    Object.keys(data.editors).join('|') === exact.join('|') &&
+                    /^[a-f0-9]{64}$/.test(data.config_revision || '');
+                if (!valid) {
+                    fiveHostlistReady = false;
+                    fiveHostlistStatus(isRussian
+                        ? 'Не удалось подтвердить согласованный снимок пяти списков.'
+                        : 'Coherent five-source snapshot unavailable.', true);
+                    return;
+                }
+                const manualValid = ['youtube', 'user'].every(function(name) {
+                    const manual = data.editors[name + '_manual'];
+                    const nativeField = document.getElementById(
+                        'zapret.hostlist.' + (name === 'youtube' ?
+                            'youtubedomains' : 'userdomains'));
+                    return manual && nativeField &&
+                        typeof manual.content === 'string' &&
+                        nativeField.value === manual.content;
+                });
+                if (!manualValid) {
+                    fiveHostlistReady = false;
+                    fiveHostlistStatus(isRussian
+                        ? 'Конфигурация изменилась во время чтения. Перезагрузите страницу.'
+                        : 'Configuration changed while reading; reload the page.', true);
+                    return;
+                }
+                for (const spec of foundHostlistFields) {
+                    const entry = data.editors[spec.key];
+                    const possible = spec.key === 'shared_found'
+                        ? ['missing', 'empty', 'populated']
+                        : ['uninitialized', 'empty', 'populated'];
+                    if (!entry || typeof entry.content !== 'string' ||
+                        possible.indexOf(entry.status) < 0 ||
+                        !(entry.revision === null && entry.status === 'uninitialized' ||
+                          /^[a-f0-9]{64}$/.test(entry.revision || ''))) {
+                        fiveHostlistReady = false;
+                        fiveHostlistStatus(isRussian
+                            ? 'Недостоверное состояние автоматического списка.'
+                            : 'Untrusted discovered source state.', true);
+                        return;
+                    }
+                }
+                // Preserve a typed unsaved draft: never replace baseline or
+                // text with an asynchronously updated minute-worker snapshot.
+                if (foundHostlistDirty()) {
+                    fiveHostlistStatus(isRussian
+                        ? 'Есть несохранённые изменения; они сохранены в редакторах.'
+                        : 'Unsaved edits retained; no background overwrite.', false);
+                    return;
+                }
+                fiveHostlistBase = data;
+                fiveHostlistReady = true;
+                foundHostlistFields.forEach(function(spec) {
+                    const item = data.editors[spec.key];
+                    $('#' + spec.id).val(item.content)
+                        .prop('disabled', item.status === 'uninitialized');
+                    $('#' + spec.id + 'State').text(item.status === 'uninitialized'
+                        ? (isRussian ? 'Не инициализирован' : 'Not initialized')
+                        : '');
+                });
+                fiveHostlistStatus('', false); // A safe empty list is not an error.
+            }).fail(function() {
+                fiveHostlistReady = false;
+                fiveHostlistStatus(isRussian
+                    ? 'Ошибка чтения пяти списков. Изменения не сохранены.'
+                    : 'Five-source read failed. No changes were saved.', true);
+            }).always(function() {
+                fiveHostlistBusy = false;
+            });
+        }
+        function blockUncommittedFoundEdits() {
+            if (!foundHostlistDirty()) return false;
+            showRuntimeError(
+                isRussian ? 'Применение найденных доменов' : 'Found Domains Apply',
+                isRussian
+                    ? 'Найденные домены изменены, но единая защищённая транзакция '
+                      + 'Config/Auto-detect ещё не подключена. Ваши правки сохранены '
+                      + 'в редакторах; ничего не отправлено и служба не перезапускалась.'
+                    : 'Found-list edits have not yet been connected to the original '
+                      + 'protected Config/Auto-detect transaction. Your drafts are '
+                      + 'preserved; no Apply was dispatched and no service restarted.'
+            );
+            return true;
         }
 
         // Localize ONLY known validation outputs from the Python-backed
@@ -1549,9 +1609,8 @@
             });
         });
 
-        mountAutoHostlistEditor();
-        loadAutoHostlist();
-        reloadSettings();
+        mountFoundHostlists();
+        reloadSettings().done(loadFiveHostlists);
         refreshRuntime();
         refreshReleases();
         refreshExtrasStatus();
@@ -1561,6 +1620,7 @@
         // P5c: use UNSAVED form data; never submit an Apply transaction.
         $('#zapretPreviewAct').off('click').on('click', function(event) {
             event.preventDefault();
+            if (blockUncommittedFoundEdits()) return;
             if (previewPending || strategiesApplyPending || strategiesApplyNeedsReview ||
                 runtimeWasBusy || releaseApplyPending || releaseNeedsReview ||
                 extraBusy || extraInstallPending || extraRemovePending || extraNeedsReview) return;
@@ -1648,6 +1708,7 @@
         // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
+            if (blockUncommittedFoundEdits()) return;
             if (strategiesApplyPending || strategiesApplyNeedsReview || previewPending ||
                 extraBusy || extraInstallPending || extraNeedsReview || runtimeWasBusy ||
                 releaseApplyPending) return;
@@ -1678,6 +1739,7 @@
                     localizeStrategiesFieldErrors((data && data.validations) || {}));
                 if (data && data.result === 'saved' && data.status === 'ok') {
                     reloadSettings().done(function() {
+                        loadFiveHostlists();
                         if (data.normalized && Array.isArray(data.normalization)) {
                             BootstrapDialog.show({
                                 type: BootstrapDialog.TYPE_INFO,

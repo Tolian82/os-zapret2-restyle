@@ -201,4 +201,38 @@ if shutil.which("node"):
         text=True, capture_output=True, check=False,
     )
     assert run.returncode == 0, run.stderr
+# TZ6v2: five registered editor sources, old Model fields stay native,
+# no standalone Auto Hostlist Save/Reload and no premature lossy Apply.
+for marker in (
+    "function mountFoundHostlists()",
+    "function loadFiveHostlists()",
+    "function foundHostlistDirty()",
+    "function blockUncommittedFoundEdits()",
+    "'youtube_found', id: 'zapretYoutubeFound'",
+    "'user_found', id: 'zapretUserFound'",
+    "'shared_found', id: 'zapretSharedFound'",
+    "/api/zapret/settings/hostlistEditorsRead",
+    "reloadSettings().done(loadFiveHostlists)",
+    "if (blockUncommittedFoundEdits()) return;",
+    "const exact = ['youtube_manual', 'youtube_found', 'user_manual',",
+    "data.commit_authorized === false",
+    "data.config_revision",
+    "fiveHostlistBase = data;",
+    "foundHostlistDirty()",
+    "toggle.attr('aria-expanded', String(!shown));",
+):
+    assert marker in view, ("TZ6v2 five-UI integration missing", marker)
+for obsolete in (
+    "mountAutoHostlistEditor",
+    "zapretAutoHostlistSave",
+    "zapretAutoHostlistReload",
+    "/api/zapret/settings/autoHostlistSave",
+    "/api/zapret/settings/autoHostlistRead",
+    "Saving does not Apply or restart the service",
+):
+    assert obsolete not in view, ("TZ6v2 legacy independent GUI save", obsolete)
+assert "name: 'zapretSharedFound'" not in view
+assert "commit_authorized=true" not in view
+assert "One original-FD9 Apply" in view
+
 print("PASS: 11 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")

@@ -215,11 +215,10 @@ jobs:
       - name: P3 real Chromium English Strategies and Voice native forms / F5 / validation
         env:
           ZAPRET2_P3_NATIVE_LOCALE: '1'
-          ZAPRET2_P4_DISPOSABLE_GUI_SAVE: '1'
         run: |
           set -eu
           python3.13 scripts/p3-browser-i18n.py --en-browser
-      - name: P4 verify actual GUI Save/restore and unchanged native Config
+      - name: TZ6v2 verify found-only GUI did NOT write native Config or automatic file
         shell: opnsense {0}
         run: |
           set -eu
@@ -234,12 +233,12 @@ jobs:
           if not baseline.is_file() or baseline.is_symlink():
               raise SystemExit('P4_BASELINE_MISSING')
           if baseline.read_text().strip() != hashlib.sha256(Path('/conf/config.xml').read_bytes()).hexdigest():
-              raise SystemExit('P4_GUI_BROWSER_CHANGED_CONFIG_XML')
+              raise SystemExit('TZ6V2_DRAFT_GUI_MUTATED_CONFIG_XML')
           target = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
           state = target.lstat()
           if not stat.S_ISREG(state.st_mode) or state.st_uid != 0 or state.st_nlink != 1 or state.st_mode & 0o022 or target.read_bytes() != b'':
-              raise SystemExit('P4_GUI_BROWSER_DID_NOT_RESTORE_EMPTY_FILE')
-          print('P4_BROWSER_SAVE_CAS_CONFIG_CLEANUP=PASS')
+              raise SystemExit('TZ6V2_DRAFT_GUI_MUTATED_AUTO_HOSTLIST')
+          print('TZ6V2_FIVE_EDITOR_NO_APPLY_CLEANUP=PASS')
           PY
       - name: P3 set same logged-in root user profile to Russian using native Config (disposable guest ONLY)
         shell: opnsense {0}
