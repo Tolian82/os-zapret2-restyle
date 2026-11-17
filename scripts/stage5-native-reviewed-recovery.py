@@ -54,10 +54,19 @@ def isolation(command):
 def absent_pkgdb():
     query = cmd(["/usr/sbin/pkg", "query", "%v", NAME])
     info = cmd(["/usr/sbin/pkg", "info", "-e", NAME])
+    errors = (query.stderr + info.stderr).lower()
+    bad_db = any(word in errors for word in
+                 ("database is locked", "malformed", "corrupt", "sql error", "io error"))
+    # Diagnostic only: never print stderr/stdout or silently override a
+    # disagreement between the two independent native pkg observations.
+    print("NATIVE_REVIEWED_RECOVERY_PKGDB_READONLY=" + json.dumps({
+        "query_rc": query.returncode, "info_exists_rc": info.returncode,
+        "query_stdout_nonempty": bool(query.stdout.strip()),
+        "info_stdout_nonempty": bool(info.stdout.strip()),
+        "possible_db_error": bad_db, "no_write": True,
+    }, sort_keys=True), flush=True)
     need(query.returncode == 1 and not query.stdout.strip() and
-         info.returncode == 1 and not info.stdout.strip() and
-         not any(word in (query.stderr + info.stderr).lower() for word in
-                 ("database is locked", "malformed", "corrupt", "sql error", "io error")),
+         info.returncode == 1 and not info.stdout.strip() and not bad_db,
          "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT")
     return True
 
