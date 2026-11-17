@@ -25,34 +25,39 @@ class ReviewedRecoveryContracts(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "UNSUPPORTED_REVIEWED"):
                 fixture.main()
 
-    def test_dual_pkgdb_must_be_unambiguously_absent(self):
-        good = mock.Mock(returncode=1, stdout="", stderr="No packages matching")
-        with mock.patch.object(fixture, "cmd", return_value=good) as run:
-            self.assertTrue(fixture.absent_pkgdb())
-            self.assertEqual(run.call_count, 2)
+    def test_registered_prior_version_requires_real_native_dual_probes(self):
+        prior = mock.Mock(returncode=0, stdout="0.6.5_88\n", stderr="")
+        info = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(fixture, "cmd", side_effect=[prior, info]) as calls:
+            self.assertEqual(fixture.reviewed_pkgdb("0.6.5_88"),
+                             "registered-prior")
+            self.assertEqual(calls.call_count, 2)
+        missing = mock.Mock(returncode=1, stdout="", stderr="No packages matching")
+        with mock.patch.object(fixture, "cmd", return_value=missing):
+            self.assertEqual(fixture.reviewed_pkgdb("0.6.5_88"), "absent")
         bad = mock.Mock(returncode=1, stdout="", stderr="database is malformed")
         with mock.patch.object(fixture, "cmd", return_value=bad):
-            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
-                fixture.absent_pkgdb()
-        installed = mock.Mock(returncode=0, stdout="0.6.5_89", stderr="")
-        with mock.patch.object(fixture, "cmd", return_value=installed):
-            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
-                fixture.absent_pkgdb()
+            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_ELIGIBLE_ABSENT_OR_TRUSTED_PRIOR"):
+                fixture.reviewed_pkgdb("0.6.5_88")
+        wrong = mock.Mock(returncode=0, stdout="0.6.5_89", stderr="")
+        with mock.patch.object(fixture, "cmd", return_value=wrong):
+            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_ELIGIBLE_ABSENT_OR_TRUSTED_PRIOR"):
+                fixture.reviewed_pkgdb("0.6.5_88")
 
-    def test_pkgdb_failure_categories_are_bounded_and_never_override_refusal(self):
-        self.assertEqual(fixture.pkgdb_error_categories("No packages matching"), [])
-        self.assertEqual(
-            fixture.pkgdb_error_categories("pkg: SQL Error; IO ERROR: user-secret"),
-            ["sql_error", "io_error"])
-        self.assertNotIn("user-secret", str(
-            fixture.pkgdb_error_categories("IO ERROR: user-secret")))
-        query = mock.Mock(returncode=1, stdout="", stderr="No packages matching")
-        info = mock.Mock(returncode=1, stdout="", stderr="database is LOCKED")
-        with mock.patch.object(fixture, "cmd", side_effect=[query, info]):
-            with self.assertRaisesRegex(RuntimeError, "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT"):
-                fixture.absent_pkgdb()
-        # A true ambiguity is still a hard refusal, not permission to reinstall.
-        self.assertIn("need(query.returncode == 1", SOURCE.read_text())
+    def test_reinstall_checks_guarded_prior_and_physical_torn_payload_first(self):
+        source = SOURCE.read_text()
+        scope = source.split("def reinstall():", 1)[1].split("def finish():", 1)[0]
+        self.assertLess(scope.index('original_journal('),
+                        scope.index('reviewed_pkgdb(prior_version)'))
+        self.assertLess(scope.index('fixture.witness_inventory()'),
+                        scope.index('reviewed_pkgdb(prior_version)'))
+        self.assertLess(scope.index('reviewed_pkgdb(prior_version)'),
+                        scope.index('"add", "-f", str(stage)'))
+        self.assertIn('protected.VERSION_PATTERN.fullmatch(prior_version)', scope)
+        self.assertIn('receipt["witnesses_before"]["restored"] > 0', scope)
+        self.assertIn('"REVIEWED_RECOVERY_REQUIRES_REAL_TORN_PAYLOAD"', scope)
+        self.assertNotIn('pkg delete', scope)
+        self.assertNotIn('sqlite3', scope)
 
     def test_postkill_partial_payload_proof_never_calls_installed_service(self):
         contents = SOURCE.read_text()

@@ -51,44 +51,23 @@ def isolation(command):
          "NOT_EXPLICITLY_REVIEWED_DISPOSABLE_FREEBSD")
 
 
-# Keep the pre-existing error vocabulary exactly unchanged; only split its
-# read-only per-probe diagnosis into finite categories without leaking stderr.
-PKGDB_ERROR_SIGNATURES = (
-    ("locked", "database is locked"),
-    ("malformed", "malformed"),
-    ("corrupt", "corrupt"),
-    ("sql_error", "sql error"),
-    ("io_error", "io error"),
-)
+def reviewed_pkgdb(prior_version):
+    """Read-only two-command verdict against the original FD9 prior version.
 
-
-def pkgdb_error_categories(stderr):
-    low = stderr.lower()
-    return [label for label, pattern in PKGDB_ERROR_SIGNATURES
-            if pattern in low]
-
-
-def absent_pkgdb():
+    Only a genuinely ABSENT record or an exactly REGISTERED original version
+    is eligible. Native pkg remains the sole database reader. No SQLite
+    access, repair, foreign-installed-service execution or inferred version.
+    """
+    policy = load_file("reviewed_pkgdb_policy",
+                       ROOT / "scripts/stage5-native-reviewed-pkgdb.py")
     query = cmd(["/usr/sbin/pkg", "query", "%v", NAME])
     info = cmd(["/usr/sbin/pkg", "info", "-e", NAME])
-    query_db_errors = pkgdb_error_categories(query.stderr)
-    info_db_errors = pkgdb_error_categories(info.stderr)
-    bad_db = bool(query_db_errors or info_db_errors)
-    # Diagnostic only: never print stderr/stdout or silently override a
-    # disagreement between the two independent native pkg observations.
-    print("NATIVE_REVIEWED_RECOVERY_PKGDB_READONLY=" + json.dumps({
-        "query_rc": query.returncode, "info_exists_rc": info.returncode,
-        "query_stdout_nonempty": bool(query.stdout.strip()),
-        "info_stdout_nonempty": bool(info.stdout.strip()),
-        "possible_db_error": bad_db,
-        "query_db_error_categories": query_db_errors,
-        "info_db_error_categories": info_db_errors,
-        "no_write": True,
-    }, sort_keys=True), flush=True)
-    need(query.returncode == 1 and not query.stdout.strip() and
-         info.returncode == 1 and not info.stdout.strip() and not bad_db,
-         "PKGDB_NOT_UNAMBIGUOUSLY_ABSENT")
-    return True
+    verdict, evidence = policy.classify_pkgdb(query, info, prior_version)
+    print("NATIVE_REVIEWED_RECOVERY_PKGDB_READONLY=" +
+          json.dumps(evidence, sort_keys=True), flush=True)
+    need(verdict in ("absent", "registered-prior"),
+         "PKGDB_NOT_ELIGIBLE_ABSENT_OR_TRUSTED_PRIOR")
+    return verdict
 
 
 def original_journal(fixture, protected, receipt, phase):
@@ -204,19 +183,34 @@ def reinstall():
     protected = load_file("review_original_source", ORIGINAL)
     receipt, state, config_before = read_only_baseline(fixture, prepared=True)
     assert_no_engine(fixture)
-    # Existing service may be missing/untrusted or exact source trusted.
-    # Never execute it here; pkgdb must independently report ABSENT.
-    absent_pkgdb()  # intentionally restrict scope; never run old untrusted hooks
+    # Original guard already contains the pre-tear installed package version.
+    # Check its exact protected bytes, identity and physical torn files BEFORE
+    # even considering native pkg. Do not execute any torn installed service.
     before, stage = original_journal(fixture, protected, receipt, "prepared")
     need(fixture.digest(fixture.GUARD) == receipt["guard_sha256"],
          "PENDING_RECORD_CHANGED")
+    prior_version = before.get("from_version")
+    need(isinstance(prior_version, str) and
+         protected.VERSION_PATTERN.fullmatch(prior_version) is not None,
+         "PRIOR_VERSION_NOT_VERIFIED_BY_ORIGINAL_FD9")
+    witnesses = fixture.witness_inventory()
+    need(witnesses["foreign"] == 0 and
+         witnesses["marked"] + witnesses["missing"] > 0 and
+         sum(witnesses.values()) == len(fixture.load_witnesses()) and
+         receipt["witnesses_before"]["restored"] > 0 and
+         receipt["witnesses_before"]["marked"] +
+            receipt["witnesses_before"]["missing"] > 0,
+         "REVIEWED_RECOVERY_REQUIRES_REAL_TORN_PAYLOAD")
+    pkgdb_state = reviewed_pkgdb(prior_version)
     print("NATIVE_REVIEWED_RECOVERY_REINSTALL_PRECHECK=" + json.dumps({
         "explicit_disposable_review": True,
-        "phase": "prepared", "pkgdb_absent": True,
+        "phase": "prepared", "pkgdb_state": pkgdb_state,
+        "prior_pkgdb_version_matches_original_fd9": pkgdb_state == "registered-prior",
         "installed_service_source_trusted_before":
             state["installed_service_source_trusted"],
         "original_auto_retired": True,
         "saved_settings_preserved": True, "protected_archive_validated": True,
+        "postreset_torn_package_files": witnesses["marked"] + witnesses["missing"],
         "dvtws2_absent": True, "manual_reinstall_only": True,
     }, sort_keys=True), flush=True)
     # Only this ONE call may modify installed package files and pkgdb; its
