@@ -10,6 +10,8 @@ on:
       - pkg/+POST_INSTALL
       - scripts/test-protected-pkg-update.py
       - scripts/stage5-native-protected-update.py
+      - scripts/stage5-native-pkg-midextract.py
+      - scripts/test-stage5-native-pkg-midextract.py
       - .github/workflows/protected-native-pkg-update.yml
   workflow_dispatch:
 
@@ -35,14 +37,15 @@ jobs:
       - name: Real Python parser and negative staging/pkg hook cases
         run: |
           set -eu
-          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py scripts/test-protected-pkg-update.py scripts/stage5-native-protected-update.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/protected_pkg_update.py scripts/test-protected-pkg-update.py scripts/stage5-native-protected-update.py scripts/stage5-native-pkg-midextract.py scripts/test-stage5-native-pkg-midextract.py
           python3.13 scripts/test-protected-pkg-update.py -v
+          python3.13 scripts/test-stage5-native-pkg-midextract.py -v
           sh -n src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
           for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL pkg/+POST_DEINSTALL; do sh -n "$hook"; done
 
   native:
     needs: fast
-    name: Real same-pkg STOPPED/RUNNING replacement and pending guard
+    name: Real same-pkg STOPPED/RUNNING and partial extraction SIGKILL guard
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

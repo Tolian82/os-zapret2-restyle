@@ -405,6 +405,79 @@ def native_interrupt_during_postinstall(archive, version, digest):
     print("NATIVE_PROTECTED_KILLED_IN_POSTINSTALL=PASS_FAIL_CLOSED", flush=True)
 
 
+
+def native_partial_payload_interruption(archive, target, digest):
+    """Genuine partial file extraction (test guest only), never a restore path."""
+    fixture = original_fixture("stage5-native-pkg-midextract.py", "real_pkg_extraction")
+    spec = importlib.util.spec_from_file_location(
+        "installed_pkg_midextract_protection", SERVICE.parent / "protected_pkg_update.py")
+    product = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(product)
+    before = json.loads(JOURNAL.read_text())
+    old_id = before.get("detail", {}).get("id", "")
+    need(before.get("phase") == "committed" and
+         (EPOCHS / old_id / "epoch.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "MIDEXTRACT_REQUIRES_REAL_RUNNING_AUTO")
+    saved_config = sha(CONFIG)
+    stage, stage_sha, stage_ver = product.stage_archive(archive)
+    need(stage_sha == digest and stage_ver == target,
+         "MIDEXTRACT_STAGED_ARCHIVE_DRIFT")
+    prepared = run([str(SERVICE), "pkg-update-prepare", str(stage),
+                    stage_sha, stage_ver], timeout=150)
+    need(prepared.returncode == 0 and
+         "zapret-pkg-update-prepared=1" in prepared.stdout and
+         ACTIVE.is_file() and MARKER.is_file() and
+         (EPOCHS / old_id / "retired.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "MIDEXTRACT_PREPARE_DID_NOT_STOP_OWNER")
+    record_before = sha(ACTIVE)
+    need(json.loads(ACTIVE.read_text()).get("phase") == "prepared",
+         "MIDEXTRACT_RECORD_NOT_PREPARED")
+    witnesses = fixture.select_native_witnesses(ROOT, stage, run, need)
+    restored, still_marked, foreign = fixture.interrupt_real_native_pkg_midextract(
+        stage, witnesses, need)
+    # The STOP/guard receipts exist independent of pkgdb's possibly torn state.
+    need(restored > 0 and still_marked > 0 and foreign == 0 and
+         ACTIVE.is_file() and sha(ACTIVE) == record_before and
+         MARKER.is_file() and sha(CONFIG) == saved_config and
+         (EPOCHS / old_id / "retired.json").is_file() and
+         sha(stage) == digest,
+         "MIDEXTRACT_GUARD_OR_PRESERVATION_LOST")
+    # Before executing an installed command, independently require its source
+    # bytes match the qualified package, not untrusted partly extracted code.
+    need(SERVICE.is_file() and not SERVICE.is_symlink() and
+         sha(SERVICE) == sha(ROOT / "src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh"),
+         "MIDEXTRACT_INSTALLED_SERVICE_UNTRUSTED")
+    status = run([str(SERVICE), "status"], timeout=45)
+    denied = {
+        "start": run([str(SERVICE), "start"], timeout=45).returncode,
+        "apply": run([str(SERVICE), "shared-apply-run"], timeout=45).returncode,
+        "repeat": run([str(SERVICE), "pkg-update", str(archive)], timeout=45).returncode,
+        "finish": run([str(SERVICE), "pkg-update-finish",
+                       stage_sha, stage_ver], timeout=45).returncode,
+    }
+    need(status.returncode == 1 and all(x == 69 for x in denied.values()) and
+         sha(ACTIVE) == record_before and sha(CONFIG) == saved_config,
+         "MIDEXTRACT_UNAUTHORIZED_LIFECYCLE_AFTER_KILL")
+    print("NATIVE_PROTECTED_MIDEXTRACT=" + json.dumps({
+        "schema": 1, "actual_pkg_killed": True,
+        "partial_restored_files": restored,
+        "partial_unrestored_files": still_marked,
+        "postinstall_unreached": True,
+        "journal_still_prepared": True,
+        "original_auto_retired": True,
+        "config_unchanged": True,
+        "service_guarded_stopped": True,
+        "start_apply_pkg_finish_refused": True,
+        "guest_disposable": True,
+        "reboot_or_powercut_tested": False,
+        "owner_appliance_modified": False,
+    }, sort_keys=True), flush=True)
+    print("NATIVE_PROTECTED_MIDEXTRACT=PASS_FAIL_CLOSED_REAL_PARTIAL_PAYLOAD",
+          flush=True)
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
@@ -488,9 +561,10 @@ def main():
     print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_AND_PENDING_REFUSAL")
     native_running_reinstall(archive, target, candidate_sha)
     native_interrupted_handoff(archive, target, candidate_sha)
-    # Intentionally end the disposable guest with a blocked, incomplete pkg.
-    native_interrupt_during_postinstall(archive, target, candidate_sha)
-    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_RUNNING_AND_KILLED_POSTINSTALL")
+    # _86 proved in-hook SIGKILL. This exact guest instead tests the earlier,
+    # physically observed partial-payload window and ends blocked/STOPPED.
+    native_partial_payload_interruption(archive, target, candidate_sha)
+    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_RUNNING_AND_MIDEXTRACT")
 
 
 if __name__ == "__main__":
