@@ -197,13 +197,20 @@ def recovered_status(stage, action, *, optin=False, timeout=180):
 
 def set_guest_list_mode():
     """Disposable ONLY: normal native Config/Model setup before any Apply."""
+    # Use the original installed _70 strategy and the stock native Model.
+    # Replicate complete normal protocol profiles only on disposable OPNsense
+    # to trigger old FreeBSD ps -ww truncation through real dvtws2 launch.
     php = r'''require_once("script/load_phalcon.php");
+require_once("/usr/local/opnsense/scripts/OPNsense/Zapret/initialize_config.php");
+$seed=\OPNsense\Zapret\Native\InitialConfig::TRAFFIC_STRATEGY;
+$long=implode("\n--new\n",array_fill(0,7,$seed));
 $c=\OPNsense\Core\Config::getInstance();$c->lock();try{
 $m=new \OPNsense\Zapret\Zapret();
 if(!$m->setNodeByReference("hostlist.mode","list") ||
+ !$m->setNodeByReference("strategy.trafficargs",$long) ||
  count($m->performValidation(false)) || !$m->serializeToConfig(false,true))
- throw new \RuntimeException("disposable-list-model-invalid");
-$c->save(["description"=>"OWN70 disposable initial List mode"]);
+ throw new \RuntimeException("disposable-long-argv-list-model-invalid");
+$c->save(["description"=>"OWN70 disposable long-argv List mode"]);
 }finally{$c->unlock();}'''
     require(["/usr/local/bin/php", "-r", php],
             "disposable_native_list_mode_setup_failed", timeout=35)
@@ -289,6 +296,14 @@ def native():
          run([str(SERVICE), "status"], timeout=20).returncode == 0,
          "old_list_not_running_committed")
     base_id = baseline["detail"]["id"]
+    old_list_bytes = (ACTIVE / "dvtws.args").stat().st_size
+    print("OWN70_LONG_ARGV_BASELINE=" + json.dumps({
+        "original_list_argfile_bytes": old_list_bytes,
+        "exceeds_old_ps_ww_truncation_boundary": old_list_bytes > 2300,
+        "first_list_committed": True,
+    }, sort_keys=True), flush=True)
+    need(old_list_bytes > 2300,
+         "old_native_long_argv_fixture_did_not_exceed_ps_ww")
 
     # This is the owner's actual GUI/configd entrypoint and published _70
     # code; never fabricate journal/epoch or forcibly kill a real process.
@@ -321,6 +336,9 @@ def native():
         "original_pretraffic_present": (EPOCHS / generation / "pretraffic.json").is_file(),
         "original_epoch_present": (EPOCHS / generation / "epoch.json").is_file(),
     }, sort_keys=True), flush=True)
+    # This follow-up must reproduce true old _70 requires-review via
+    # original configd and argv; healthy short-argv upgrade is already proven.
+    need(reproduced, "old_original_long_argv_requires_review_not_reproduced")
     before_config = sha(Path("/conf/config.xml"))
     engine_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
     need(engine_pid.isdecimal() and
