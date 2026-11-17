@@ -126,6 +126,112 @@ check(Snapshot::nativeRootAllowed()===false,
       'off-FreeBSD even root PHP CLI must refuse native authority');++$count;
 check(Snapshot::main(['script','read'])===64,'Linux CLI must refuse native authority');++$count;
 
+// TZ6v2 STEP 4: the real capture() owns one Config+destination snapshot.
+// The pure projection MUST NOT take a second lock, read a new file, save or
+// invent a baseline for an unsealed known-source root.
+$captured = correctFile("shared.example\n");
+$captured['auto_owned_components'] = [
+    'youtube' => "youtube-found.example\n",
+    'user' => "user-found.example\n",
+];
+$captured['auto_owned_complete'] = true;
+$cFive = new TestConfig;
+$callReader = 0;
+$fOne = Snapshot::capture(
+    $cFive,
+    function () use ($cFive): TestModel {
+        check($cFive->held, 'five editors: Config must be locked before model');
+        return new TestModel(nativeModel());
+    },
+    function () use ($cFive, $captured, &$callReader): array {
+        check($cFive->held, 'five editors: protected source read under Config');
+        ++$callReader;
+        return $captured;
+    }
+);
+$five = Snapshot::fiveEditorsFromCapture($fOne);
+check($cFive->locks === 1 && $cFive->unlocks === 1 && $cFive->writes === 0 &&
+    $callReader === 1 && !$cFive->held, 'five-editor read must not write or reread');
+check($five['schema_version'] === 2 &&
+    $five['kind'] === 'tz6v2-five-hostlist-snapshot' &&
+    $five['result'] === 'ok' && $five['commit_authorized'] === false &&
+    $five['auto_owned_complete'] === true, 'five-source contract');
+check(array_keys($five['editors']) === [
+    'youtube_manual', 'youtube_found', 'user_manual',
+    'user_found', 'shared_found'
+], 'exact ordered five sources');
+check($five['editors']['youtube_manual']['content'] === "youtube.com\n!^test.invalid\n" &&
+    $five['editors']['user_manual']['content'] === "example.org\n^t.me\n",
+    'native manual bytes and exclusions not modified');
+check($five['editors']['youtube_found']['content'] === "youtube-found.example\n" &&
+    $five['editors']['user_found']['content'] === "user-found.example\n" &&
+    $five['editors']['shared_found']['content'] === "shared.example\n",
+    'all three physical automatically discovered sources must remain distinct');
+check($five['editors']['youtube_manual']['owner'] === 'config' &&
+    $five['editors']['youtube_found']['owner'] === 'auto-owned' &&
+    $five['editors']['shared_found']['owner'] === 'shared-auto',
+    'no automatic sources reclassified as manual');
+foreach ($five['editors'] as $name => $entry) {
+    check($entry['status'] === 'populated' &&
+        $entry['revision'] === hash('sha256', "present\0" . $entry['content']),
+        "five source content/revision mismatch: $name");
+}
+check($five['config_revision'] === $fOne['config_snapshot_sha256'],
+    'full original native model revision retained');
+++$count;
+
+$cMissing = new TestConfig;
+$missing = Snapshot::fiveEditorsFromCapture(Snapshot::capture(
+    $cMissing, fn() => new TestModel(nativeModel()),
+    fn() => correctFile(null)
+));
+check($missing['editors']['youtube_found']['status'] === 'uninitialized' &&
+    $missing['editors']['user_found']['status'] === 'uninitialized' &&
+    $missing['editors']['youtube_found']['content'] === '' &&
+    $missing['editors']['youtube_found']['revision'] === null &&
+    $missing['editors']['user_found']['revision'] === null &&
+    !$missing['auto_owned_complete'] &&
+    $missing['editors']['shared_found']['status'] === 'missing' &&
+    $missing['editors']['shared_found']['revision'] === hash('sha256', "missing\0") &&
+    !$missing['commit_authorized'] && $cMissing->writes === 0,
+    'never silently treat unsealed owned roots as verified empty or initialize files');
+++$count;
+
+$emptyKnown = correctFile('');
+$emptyKnown['auto_owned_complete'] = true;
+$emptyKnown['auto_owned_components'] = ['youtube' => '', 'user' => ''];
+$cEmpty = new TestConfig;
+$empty = Snapshot::fiveEditorsFromCapture(Snapshot::capture(
+    $cEmpty, fn() => new TestModel(nativeModel()), fn() => $emptyKnown
+));
+check($empty['editors']['youtube_found']['status'] === 'empty' &&
+    $empty['editors']['youtube_found']['revision'] === hash('sha256', "present\0") &&
+    $empty['editors']['shared_found']['status'] === 'empty' &&
+    $empty['editors']['shared_found']['revision'] === hash('sha256', "present\0"),
+    'verified empty exists must differ from absent/uninitialized');
+++$count;
+
+foreach ([
+    ['auto_owned_complete' => true, 'auto_owned_components' => null],
+    ['auto_owned_complete' => false, 'auto_owned_components' => ['youtube' => '', 'user' => '']],
+    ['shared_auto_revision' => str_repeat('f', 64)],
+    ['commit_authorized' => true],
+] as $tamper) {
+    expectFailure(fn() => Snapshot::fiveEditorsFromCapture(array_replace(
+        $fOne, $tamper)), 'forged read-only five-source payload');
+    ++$count;
+}
+
+$actions = file_get_contents(__DIR__ . '/../src/opnsense/service/conf/actions.d/actions_zapret.conf');
+$controller = file_get_contents(__DIR__ . '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
+check(is_string($actions) && str_contains($actions, '[hostlist_editors_read]') &&
+    str_contains($actions, 'auto_detect_config_snapshot.php read-editors') &&
+    is_string($controller) &&
+    str_contains($controller, 'function hostlistEditorsReadAction(): array') &&
+    str_contains($controller, "'zapret hostlist_editors_read'"),
+    'five-source GUI API must call original root Config-locked CLI');
+++$count;
+
 // P2k8e: queue owner is established by the upstream worker BEFORE this
 // method. The native Config owner then spans the *whole* synchronous
 // policy->physical commit callback, not a detached read-only snapshot.

@@ -395,6 +395,89 @@ class SettingsController extends ApiMutableModelControllerBase
     }
 
     /**
+     * TZ6v2 STEP 4: authenticated GUI read of one root/Config-locked
+     * five-source snapshot. This endpoint MUST NOT save or reinitialize.
+     * The future bottom Apply will validate these baselines again under
+     * original Config + destination locks; this read is NOT authorization.
+     */
+    public function hostlistEditorsReadAction(): array
+    {
+        if (!$this->request->isPost()) {
+            return ['result' => 'error', 'reason' => 'post_required'];
+        }
+        try {
+            $output = (string)(new Backend())->configdRun(
+                'zapret hostlist_editors_read', false, 30
+            );
+            if ($output === '' || strlen($output) > 7500000) {
+                throw new \RuntimeException('Five-source HOSTLIST reply unavailable');
+            }
+            $data = json_decode(trim($output), true, 10, JSON_THROW_ON_ERROR);
+            if (!is_array($data) || ($data['result'] ?? null) !== 'ok' ||
+                ($data['schema_version'] ?? null) !== 2 ||
+                ($data['kind'] ?? null) !== 'tz6v2-five-hostlist-snapshot' ||
+                ($data['commit_authorized'] ?? null) !== false ||
+                !is_bool($data['auto_owned_complete'] ?? null) ||
+                !is_string($data['config_revision'] ?? null) ||
+                preg_match('/^[a-f0-9]{64}$/D', $data['config_revision']) !== 1 ||
+                !is_array($data['editors'] ?? null) ||
+                array_keys($data['editors']) !== [
+                    'youtube_manual', 'youtube_found', 'user_manual',
+                    'user_found', 'shared_found'
+                ]) {
+                throw new \RuntimeException('Untrusted five-source HOSTLIST reply');
+            }
+            foreach ($data['editors'] as $name => $entry) {
+                $owner = str_ends_with($name, '_manual') ? 'config' :
+                    ($name === 'shared_found' ? 'shared-auto' : 'auto-owned');
+                if (!is_array($entry) || ($entry['owner'] ?? null) !== $owner ||
+                    !is_string($entry['content'] ?? null) ||
+                    strlen($entry['content']) > ($owner === 'config' ? 1048576 : 40960) ||
+                    !in_array($entry['status'] ?? null,
+                        $owner === 'auto-owned'
+                            ? ['uninitialized', 'empty', 'populated']
+                            : ($owner === 'shared-auto'
+                                ? ['missing', 'empty', 'populated']
+                                : ['empty', 'populated']), true)) {
+                    throw new \RuntimeException('Invalid five-source HOSTLIST editor');
+                }
+                // A stale/malformed native result may not relabel a
+                // missing or nonempty file as a different trusted state.
+                if (($entry['status'] === 'missing' && $entry['content'] !== '') ||
+                    ($entry['status'] === 'empty' && $entry['content'] !== '') ||
+                    ($entry['status'] === 'populated' && $entry['content'] === '')) {
+                    throw new \RuntimeException('Inconsistent five-source HOSTLIST state');
+                }
+                $revision = $entry['revision'] ?? null;
+                $uninitialized = $entry['status'] === 'uninitialized';
+                if (($uninitialized && ($revision !== null || $entry['content'] !== '')) ||
+                    (!$uninitialized && (!is_string($revision) ||
+                        preg_match('/^[a-f0-9]{64}$/D', $revision) !== 1 ||
+                        !hash_equals(hash('sha256',
+                            $entry['status'] === 'missing'
+                                ? "missing\0" : "present\0" . $entry['content']),
+                            $revision)))) {
+                    throw new \RuntimeException('Invalid five-source HOSTLIST revision');
+                }
+            }
+            if (!$data['auto_owned_complete'] &&
+                ($data['editors']['youtube_found']['status'] !== 'uninitialized' ||
+                 $data['editors']['user_found']['status'] !== 'uninitialized')) {
+                throw new \RuntimeException('Uninitialized ownership misrepresented');
+            }
+            if ($data['auto_owned_complete'] &&
+                ($data['editors']['youtube_found']['status'] === 'uninitialized' ||
+                 $data['editors']['user_found']['status'] === 'uninitialized')) {
+                throw new \RuntimeException('Owned snapshot missing');
+            }
+            return $data;
+        } catch (\Throwable $error) {
+            error_log('Zapret five-source read unavailable: ' . get_class($error));
+            return ['result' => 'error', 'reason' => 'unavailable'];
+        }
+    }
+
+    /**
      * P2k5: the Auto Hostlist belongs to a root-owned final file, never
      * the mutable Config model or the full shared Apply. The root configd
      * action holds the same checked flock as P2k4 destination commits.

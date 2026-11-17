@@ -134,6 +134,112 @@ final class AutoDetectConfigSnapshot
         }
     }
 
+
+    /**
+     * TZ6v2 STEP 4 read-only projection of ONE original Config+destination
+     * snapshot. Never read a second, unlocked source or grant Apply authority.
+     * Per-source SHA covers exact original bytes, including unchanged manual
+     * order/flags. Uninitialized owned sources remain explicitly UNKNOWN.
+     */
+    public static function fiveEditorsFromCapture(array $snapshot): array
+    {
+        if (($snapshot['schema_version'] ?? null) !== 1 ||
+            ($snapshot['status'] ?? null) !== 'read_only_unqualified' ||
+            ($snapshot['commit_authorized'] ?? null) !== false ||
+            !is_array($snapshot['manual_hostlists'] ?? null) ||
+            array_keys($snapshot['manual_hostlists']) !== ['youtube', 'user'] ||
+            !is_string($snapshot['config_snapshot_sha256'] ?? null) ||
+            preg_match('/^[a-f0-9]{64}$/D', $snapshot['config_snapshot_sha256']) !== 1 ||
+            !is_bool($snapshot['auto_owned_complete'] ?? null) ||
+            !is_string($snapshot['shared_auto'] ?? null) ||
+            !is_string($snapshot['shared_auto_revision'] ?? null) ||
+            preg_match('/^[a-f0-9]{64}$/D', $snapshot['shared_auto_revision']) !== 1 ||
+            !in_array($snapshot['shared_auto_status'] ?? null,
+                ['missing', 'empty', 'populated'], true)) {
+            throw new \RuntimeException('Incomplete original five-source snapshot');
+        }
+
+        $manualRows = [];
+        foreach (['youtube', 'user'] as $name) {
+            $contents = $snapshot['manual_hostlists'][$name];
+            if (!is_string($contents) || strlen($contents) > self::MAX_MODEL_TEXT) {
+                throw new \RuntimeException('Unsafe original manual Hostlist');
+            }
+            $manualRows[$name] = [
+                'owner' => 'config',
+                'status' => $contents === '' ? 'empty' : 'populated',
+                'content' => $contents,
+                'revision' => hash('sha256', "present\0" . $contents),
+            ];
+        }
+
+        $known = $snapshot['auto_owned_components'] ?? null;
+        $complete = $snapshot['auto_owned_complete'];
+        if (($complete && (!is_array($known) ||
+                array_keys($known) !== ['youtube', 'user'])) ||
+            (!$complete && $known !== null)) {
+            throw new \RuntimeException('Unqualified original automatic ownership');
+        }
+        $ownedRows = [];
+        foreach (['youtube', 'user'] as $name) {
+            if (!$complete) {
+                $ownedRows[$name] = [
+                    'owner' => 'auto-owned',
+                    'status' => 'uninitialized',
+                    'content' => '',
+                    'revision' => null,
+                ];
+                continue;
+            }
+            $contents = $known[$name];
+            if (!is_string($contents) || strlen($contents) > 40960 ||
+                preg_match('/(?:^|\n)[!^]/', $contents) === 1 ||
+                str_contains($contents, "\r")) {
+                throw new \RuntimeException('Unsafe original automatic Hostlist');
+            }
+            $ownedRows[$name] = [
+                'owner' => 'auto-owned',
+                'status' => $contents === '' ? 'empty' : 'populated',
+                'content' => $contents,
+                'revision' => hash('sha256', "present\0" . $contents),
+            ];
+        }
+
+        $shared = $snapshot['shared_auto'];
+        $sharedStatus = $snapshot['shared_auto_status'];
+        $expected = hash('sha256', $sharedStatus === 'missing'
+            ? "missing\0" : "present\0" . $shared);
+        if (!hash_equals($expected, $snapshot['shared_auto_revision']) ||
+            ($sharedStatus === 'missing' && $shared !== '') ||
+            ($sharedStatus === 'empty' && $shared !== '') ||
+            ($sharedStatus === 'populated' && $shared === '') ||
+            strlen($shared) > 40960) {
+            throw new \RuntimeException('Unsafe original shared Hostlist');
+        }
+        return [
+            'schema_version' => 2,
+            'result' => 'ok',
+            'kind' => 'tz6v2-five-hostlist-snapshot',
+            'config_revision' => $snapshot['config_snapshot_sha256'],
+            'editors' => [
+                'youtube_manual' => $manualRows['youtube'],
+                'youtube_found' => $ownedRows['youtube'],
+                'user_manual' => $manualRows['user'],
+                'user_found' => $ownedRows['user'],
+                'shared_found' => [
+                    'owner' => 'shared-auto',
+                    'status' => $sharedStatus,
+                    'content' => $shared,
+                    'revision' => $snapshot['shared_auto_revision'],
+                ],
+            ],
+            'auto_owned_complete' => $complete,
+            // A reader cannot authorize the future combined Config/files
+            // transaction after its original locks are released.
+            'commit_authorized' => false,
+        ];
+    }
+
     /**
      * P2k8e: the original OPNsense Config owner remains locked across the
      * complete synchronous P1 -> P2k2b operation. The native queue lock must
@@ -553,7 +659,12 @@ final class AutoDetectConfigSnapshot
         try {
             require_once('script/load_phalcon.php');
             $config = \OPNsense\Core\Config::getInstance();
-            if (count($argv) === 2 && $argv[1] === 'read') {
+            if (count($argv) === 2 && $argv[1] === 'read-editors') {
+                $result = self::fiveEditorsFromCapture(self::capture(
+                    $config, static fn() => new \OPNsense\Zapret\Zapret(),
+                    static fn() => self::nativeFinalRead()
+                ));
+            } elseif (count($argv) === 2 && $argv[1] === 'read') {
                 $result = self::capture(
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
                     static fn() => self::nativeFinalRead()
