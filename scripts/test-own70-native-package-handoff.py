@@ -519,12 +519,41 @@ def native():
              "native_old_hook_handoff_refused:" + str(update.returncode))
     version = require(["pkg", "query", "%v", PKG_NAME],
                       "installed_successor_version")
-    need(version == manifest(pkg)["version"] and
-         sha(Path("/conf/config.xml")) == before_config and
-         run([str(SERVICE), "status"], timeout=30).returncode == 0 and
-         not Path("/var/run/zapret2-restyle/pkg-replacement.restart").exists(),
+    native_status = run([str(SERVICE), "status"], timeout=30)
+    saved_config_preserved = sha(Path("/conf/config.xml")) == before_config
+    marker_present = Path(
+        "/var/run/zapret2-restyle/pkg-replacement.restart").exists()
+    old_retired_before_assert = (EPOCHS / generation / "retired.json").is_file()
+    current_record = json.loads(JOURNAL.read_bytes())
+    current_id = current_record.get("detail", {}).get("id", "")
+    post_output = update.stdout + "\n" + update.stderr
+    diag = {
+        "successor_pkg_version_qualified": version == manifest(pkg)["version"],
+        "saved_config_unchanged": saved_config_preserved,
+        "status_rc_after_postinstall": native_status.returncode,
+        "status_exact_running_after_postinstall":
+            native_status.stdout.strip() == "zapret is running",
+        "replacement_restart_marker_present": marker_present,
+        "old_retired_epoch_present": old_retired_before_assert,
+        "new_operation_id_differs_from_old": current_id != generation,
+        "current_journal_phase": current_record.get("phase", "invalid"),
+        "postinstall_reports_start_failure":
+            "zapret service could not be started after package replacement" in post_output,
+        "postinstall_reports_status_failure":
+            "zapret service did not reach running state after package replacement" in post_output,
+        "postinstall_reports_template_failure":
+            "OPNsense Zapret template could not be rendered after plugin installation" in post_output,
+        "postinstall_reports_registration_failure":
+            "os-zapret2-restyle could not be registered" in post_output,
+        "pkg_reports_execute_error": "Execute error" in post_output,
+    }
+    print("OWN70_NATIVE_POSTINSTALL_STATUS=" + json.dumps(diag, sort_keys=True),
+          flush=True)
+    need(diag["successor_pkg_version_qualified"] and
+         saved_config_preserved and native_status.returncode == 0 and
+         not marker_present,
          "native_pkg_successor_did_not_resume")
-    new = json.loads(JOURNAL.read_bytes())
+    new = current_record
     new_id = new.get("detail", {}).get("id", "")
     replacement_pid = Path("/var/run/dvtws2.pid")
     after_pid = (replacement_pid.read_text().strip().split()[0]
