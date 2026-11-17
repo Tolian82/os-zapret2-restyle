@@ -126,6 +126,43 @@ class ProtectedPkgUpdate(unittest.TestCase):
             self.assertEqual([x[1] for x in calls if x[0] == str(m.SERVICE)],
                              ["pkg-update-prepare", "pkg-update-finish"])
 
+    def test_same_version_finish_without_real_postinstall_is_refused(self):
+        # Matching pkgdb version does not establish that native pkg ran.
+        with mock.patch.object(m, "fd9_is_original_owner"), \
+             mock.patch.object(m, "root_and_private_base"), \
+             mock.patch.object(m, "validate_record",
+                 return_value={"phase":"prepared","was_running":True}), \
+             mock.patch.object(m, "installed_version") as installed:
+            with self.assertRaisesRegex(m.Refused, "NATIVE_POSTINSTALL_NOT_ATTESTED"):
+                m.inspect("a" * 64, "0.6.5_84")
+            installed.assert_not_called()
+
+    def test_single_private_record_postinstall_transition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            import json
+            base = Path(tmp)
+            record = base / "operation.json"
+            prior = {"schema": 1, "phase": "prepared",
+                     "stage": str(base / "incoming-1.pkg"), "sha256": "a" * 64,
+                     "to_version": "0.6.5_84", "from_version": "0.6.5_84",
+                     "was_running": True}
+            record.write_text(json.dumps(prior))
+            record.chmod(0o600)
+            with mock.patch.object(m, "BASE", base), \
+                 mock.patch.object(m, "ACTIVE", record), \
+                 mock.patch.object(m, "fd9_is_original_owner"), \
+                 mock.patch.object(m, "root_and_private_base"), \
+                 mock.patch.object(m, "validated_stage"):
+                m.postinstall_attest()
+                done = json.loads(record.read_text())
+                self.assertEqual(done["phase"], "postinstall-attested")
+                self.assertEqual(
+                    {k:v for k,v in done.items() if k != "phase"},
+                    {k:v for k,v in prior.items() if k != "phase"})
+                self.assertEqual(record.stat().st_mode & 0o777, 0o600)
+                with self.assertRaisesRegex(m.Refused, "POSTINSTALL_PHASE_REFUSED"):
+                    m.postinstall_attest()
+
     def test_single_fd9_owner_and_deferred_postinstall(self):
         service = SERVICE.read_text()
         post = POST.read_text()
@@ -134,6 +171,9 @@ class ProtectedPkgUpdate(unittest.TestCase):
         self.assertIn('if [ -e "${PKG_UPDATE_RECORD}" ]', service)
         self.assertIn("status|stop|pkg-update-finish", service)
         self.assertIn("zapret-pkg-postinstall-guarded=1", post)
+        self.assertIn("pkg-update-postinstall", post)
+        self.assertIn("pkg_update_postinstall_service()", service)
+        self.assertIn("NATIVE_POSTINSTALL_NOT_ATTESTED", SCRIPT.read_text())
         self.assertIn('elif [ "${restore_running_state}" -eq 1 ]; then', post)
         self.assertNotIn("SIGSTOP", SCRIPT.read_text())
 

@@ -172,7 +172,7 @@ def read_active() -> dict:
         need(len(raw) <= 4096, "ACTIVE_RECORD_TOO_LARGE")
         data = json.loads(raw)
         need(isinstance(data, dict) and data.get("schema") == 1 and
-             data.get("phase") == "prepared" and
+             data.get("phase") in ("prepared", "postinstall-attested") and
              data.get("was_running") in (True, False),
              "ACTIVE_RECORD_INVALID")
         return data
@@ -222,10 +222,39 @@ def record(raw: str, digest: str, version: str, running: str) -> None:
     print("pkg-update-recorded=1")
 
 
+def postinstall_attest() -> None:
+    # Called only by the installed package's *actual* native POST_INSTALL
+    # hook, AFTER all its mandatory registration/template/configd work.
+    # The FD9 owner remains the sole writer of the existing operation.json.
+    fd9_is_original_owner()
+    root_and_private_base()
+    data = read_active()
+    need(data.get("phase") == "prepared", "POSTINSTALL_PHASE_REFUSED")
+    validated_stage(data["stage"], data["sha256"], data["to_version"])
+    data["phase"] = "postinstall-attested"
+    body = (json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    need(len(body) <= 4096, "POSTINSTALL_RECORD_TOO_LARGE")
+    fd, tmp = tempfile.mkstemp(prefix=".postinstall-", dir=BASE)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "wb") as output:
+            output.write(body)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(tmp, ACTIVE)
+        durable_directory()
+    finally:
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+    print("pkg-update-postinstall-attested=1")
+
+
 def inspect(digest: str, version: str) -> dict:
     fd9_is_original_owner()
     root_and_private_base()
     data = validate_record(digest, version)
+    need(data.get("phase") == "postinstall-attested",
+         "NATIVE_POSTINSTALL_NOT_ATTESTED")
     need(installed_version() == version, "SUCCESSOR_NOT_INSTALLED")
     return data
 
@@ -312,6 +341,9 @@ def main(argv: list[str]) -> int:
         elif argv[1] == "record":
             need(len(argv) == 6, "RECORD_ARGUMENTS_REQUIRED")
             record(argv[2], argv[3], argv[4], argv[5])
+        elif argv[1] == "postinstall-attest":
+            need(len(argv) == 2, "POSTINSTALL_ARGUMENTS_REFUSED")
+            postinstall_attest()
         elif argv[1] in ("verify", "previous", "complete"):
             need(len(argv) == 4, "RECORD_ID_REQUIRED")
             if argv[1] == "complete":

@@ -210,6 +210,17 @@ def native_interrupted_handoff(archive, version, digest):
          "INTERRUPT_PRE_PKG_PREPARE_FAILED")
     record_before = sha(ACTIVE)
     pkg_before = installed_version()
+    # Crucial SAME-VERSION ambiguity: the preceding installed version is
+    # already equal to the candidate, yet native pkg has NOT run. Finishing
+    # now must be refused even with a valid prepared record and stopped FD9.
+    premature = run([str(SERVICE), "pkg-update-finish",
+                     staged_sha, stage_version], timeout=50)
+    need(premature.returncode == 69 and
+         json.loads(ACTIVE.read_text()).get("phase") == "prepared" and
+         sha(ACTIVE) == record_before and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "PREMATURE_FINISH_FALSELY_RESTORED_BEFORE_NATIVE_PKG")
+    print("NATIVE_PROTECTED_PREMATURE_FINISH=PASS_REFUSED", flush=True)
     attempted_start = run([str(SERVICE), "start"], timeout=40)
     attempted_apply = run([str(SERVICE), "shared-apply-run"], timeout=40)
     attempted_again = run([str(SERVICE), "pkg-update", str(archive)], timeout=40)
@@ -232,13 +243,16 @@ def native_interrupted_handoff(archive, version, digest):
          "script failed" not in combined and
          installed_version() == version and sha(CONFIG) == before_config,
          "INTERRUPT_REAL_NATIVE_PKG_FAILED")
-    need(ACTIVE.is_file() and sha(ACTIVE) == record_before and
+    need(ACTIVE.is_file() and
+         json.loads(ACTIVE.read_text()).get("phase") == "postinstall-attested" and
+         sha(ACTIVE) != record_before and
          MARKER.is_file() and run([str(SERVICE), "status"]).returncode == 1,
-         "INTERRUPT_POST_PKG_GUARD_LOST")
+         "INTERRUPT_POST_PKG_ATTESTED_GUARD_LOST")
     start_after = run([str(SERVICE), "start"], timeout=40)
     again_after = run([str(SERVICE), "pkg-update", str(archive)], timeout=40)
     need(start_after.returncode == 69 and again_after.returncode == 69 and
-         ACTIVE.is_file() and sha(ACTIVE) == record_before and
+         ACTIVE.is_file() and
+         json.loads(ACTIVE.read_text()).get("phase") == "postinstall-attested" and
          run([str(SERVICE), "status"]).returncode == 1,
          "INTERRUPT_POST_PKG_UNAUTHORISED_START_OR_PKG")
     print("NATIVE_PROTECTED_INTERRUPTED_AFTER_PKG=PASS_GUARDED_STOPPED",

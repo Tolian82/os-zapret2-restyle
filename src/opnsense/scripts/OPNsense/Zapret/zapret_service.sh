@@ -2779,6 +2779,15 @@ pkg_update_prepare_service()
     return 0
 }
 
+pkg_update_postinstall_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    # The real native POST_INSTALL hook runs outside FD9, then re-enters
+    # the ONE installed service owner. No separate witness or pkg interceptor.
+    "${PYTHON_RUNTIME}" "${SCRIPT_DIR}/protected_pkg_update.py"         postinstall-attest || return 69
+    printf 'zapret-pkg-postinstall-attested=1\n'
+}
+
 pkg_update_finish_service()
 {
     [ "$#" -eq 3 ] || return 64
@@ -2843,6 +2852,9 @@ service_dispatch()
             ;;
         pkg-update-prepare)
             pkg_update_prepare_service "$@"
+            ;;
+        pkg-update-postinstall)
+            pkg_update_postinstall_service "$@"
             ;;
         pkg-update-finish)
             pkg_update_finish_service "$@"
@@ -3111,7 +3123,7 @@ service_with_lifecycle_lock()
         # The original FD9 owns the durable guarded-package state.
         if [ -e "${PKG_UPDATE_RECORD}" ] || [ -L "${PKG_UPDATE_RECORD}" ]; then
             case "${1:-}" in
-                status|stop|pkg-update-finish) ;;
+                status|stop|pkg-update-finish|pkg-update-postinstall) ;;
                 *) echo "ERROR: protected package update requires review" >&2
                    return 69 ;;
             esac
@@ -3129,7 +3141,7 @@ service_with_lifecycle_lock()
         # mutation. Status, Stop and runtime-failure retain native access
         # even when the generic interpreter link is unavailable.
         case "${1:-}" in
-            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install|pkg-update-prepare|pkg-update-finish)
+            start|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-enable|telegram-voice-disable|strategy-preview|shared-apply-*|strategy-lab|strategy-lab-circular|strategy-lab-recover|extra-resources-*|upstream-install|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish)
                 "${PYTHON_RUNTIME}" --check || return 69
                 ;;
         esac
@@ -3343,7 +3355,7 @@ case "${1:-}" in
         [ "${_service_status}" -ne 75 ] || exit 0
         exit "${_service_status}"
         ;;
-    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-finish|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
+    start|stop|restart|reconfigure|auto-detect-minute|auto-restart-tick|telegram-voice-status|native-voice-lifecycle-inspect|native-voice-candidate-preflight|native-voice-preview-draft|strategy-preview|telegram-voice-enable|telegram-voice-disable|shared-apply-record|shared-apply-prepare|shared-apply-build|shared-apply-execute|shared-apply-run|shared-apply-wan|shared-apply-recover-reviewed-legacy|shared-apply-recover-reviewed-native|pkg-update-prepare|pkg-update-postinstall|pkg-update-finish|extra-resources-install|extra-resources-recover|extra-resources-remove|extra-resources-remove-plan|extra-resources-native-audit|remove-test|remove-test-fail|remove-test-interrupt|remove-test-commit-interrupt|extra-resources-recover-test|upstream-recover-mutating|upstream-install)
         service_with_lifecycle_lock "${LIFECYCLE_LOCK_TIMEOUT}" "$@"
         _service_status=$?
         if [ "${_service_status}" -eq 75 ]; then
