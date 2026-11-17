@@ -6,6 +6,9 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 17 November 2026
 
+**Native `_85` bounded blocker (17 November):** Initial [real old-package CI #44047862686](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44047862686) and diagnostic [#44052497669](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44052497669) failed BEFORE pkg handoff because the disposable OPNsense GitHub releases API fetch returned HTTP `Forbidden`, no valid pre-existing release cache. Official upstream GitHub release tag `v1.0.7` was independently confirmed non-draft/non-prerelease (published 2026-11-05); `_85` native fixture now seeds ONLY the existing stock `releases.cache` with this verified stable tag inside the disposable test guest. The installed `_79` setup still must retrieve actual upstream Git, compile runtime and prove real tag, so this does NOT qualify live GitHub API discovery, bypass genuine runtime compilation or change product setup. Exact-head recheck and actual old→new package PASS remain required. No owner package installation permitted.
+
+
 **Current source identity:** `v0.6.5_85` (`VERSION=0.6.5`, `PLUGIN_REVISION=85`) is a draft, source-only native acceptance candidate; `os-zapret2-restyle-0.6.5_85.pkg` is not published. The last merged protected updater is `_84`, and the owner's installed `_79` remains unchanged.
 
 
