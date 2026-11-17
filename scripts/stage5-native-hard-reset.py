@@ -373,19 +373,43 @@ def guest_setup():
          run([str(SERVICE), "status"]).returncode == 0,
          "NATIVE_AUTO_OWNER_NOT_RUNNING")
     print("NATIVE_HARDRESET_AUTO_OWNER=PASS_REAL_NATIVE_RUNNING", flush=True)
+    config_before_partial = digest(CONFIG)
+    call_rc = {}
+    original_native_run = native.run
+    def observing_run(argv, **kwargs):
+        result = original_native_run(argv, **kwargs)
+        if (len(argv) >= 2 and argv[0] == str(SERVICE) and
+                argv[1] in ("status", "start", "shared-apply-run",
+                            "pkg-update", "pkg-update-finish")):
+            # Same native call, same arguments and result; no extra command.
+            call_rc[argv[1]] = result.returncode
+        return result
+    native.run = observing_run
     try:
         native.native_partial_payload_interruption(
             archive, version, digest(archive))
     except RuntimeError:
-        # No raw service logs, Config contents or user hostlist data.
+        # No raw service logs, Config contents, domains or user hostlists.
         pending = GUARD.is_file() and not GUARD.is_symlink()
+        phase = "absent"
+        if pending:
+            try:
+                phase = str(json.loads(GUARD.read_text()).get("phase", "unknown"))
+            except (OSError, ValueError):
+                phase = "unknown"
         print("NATIVE_HARDRESET_PRE_RESET_REFUSAL=" + json.dumps({
+            "guard_phase": phase,
             "prepared_record_present": pending,
             "auto_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
-            "service_status_rc": run([str(SERVICE), "status"]).returncode,
+            "config_unchanged": digest(CONFIG) == config_before_partial,
+            "native_service_rcs": call_rc,
+            "service_status_rc": original_native_run(
+                [str(SERVICE), "status"]).returncode,
             "owner_appliance_modified": False,
         }, sort_keys=True), flush=True)
         raise
+    finally:
+        native.run = original_native_run
 
 
 def load_test_only(filename, module_name):

@@ -165,6 +165,17 @@ class HardResetContracts(unittest.TestCase):
         self.assertNotIn("native.native_running_reinstall(", source)
         self.assertNotIn("native.native_interrupted_handoff(", source)
 
+    def test_pre_reset_diagnostic_only_observes_original_native_calls(self):
+        contents = SOURCE.read_text()
+        observer = contents.split("def observing_run(argv, **kwargs):", 1)[1]
+        observer = observer.split("native.run = observing_run", 1)[0]
+        self.assertIn("original_native_run(argv, **kwargs)", observer)
+        self.assertIn("return result", observer)
+        self.assertIn('call_rc[argv[1]] = result.returncode', observer)
+        self.assertIn('"config_unchanged": digest(CONFIG) == config_before_partial',
+                      contents)
+        self.assertIn("native.run = original_native_run", contents)
+
     def test_reboot_is_not_host_power_loss_or_pkgdb_repair(self):
         source = SOURCE.read_text()
         self.assertIn('monitor_command(port, "system_reset")', source)
