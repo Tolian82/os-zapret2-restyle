@@ -107,6 +107,11 @@ rejects(fn()=>Intent::uploadedMetadata(['found_intent'=>$nativeUpload]),
     'fabricated CLI file is not genuine PHP HTTP uploaded file');
 $controller = file_get_contents(__DIR__ .
     '/../src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/SettingsController.php');
+$mvcControllerDir = dirname(__DIR__) .
+    '/src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api';
+must(is_file($mvcControllerDir .
+    '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php'),
+    'MVC upload helper resolution points outside installed OPNsense scripts');
 must(str_contains($controller, 'SharedApplyFoundIntent::uploadedMetadata(') &&
      str_contains($controller, "\$sync['found_upload'] = \$foundUpload;") &&
      str_contains($controller, "\$wanOnlyCandidate = \$foundUpload === null") &&

@@ -17,7 +17,7 @@ require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
 require_once __DIR__ . '/DomainSetPolicyBridge.php';
-require_once __DIR__ . '/../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
+require_once __DIR__ . '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
