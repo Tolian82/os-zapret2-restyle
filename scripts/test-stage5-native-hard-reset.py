@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Portable S0 regression for the disposable QEMU hard-reset acceptance."""
 import importlib.util
+import xml.etree.ElementTree as ET
 from pathlib import Path
 import tempfile
 import unittest
