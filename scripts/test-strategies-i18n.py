@@ -45,14 +45,19 @@ assert "closest('table').children('thead').find('th b').first().text(entry[1]);"
 assert "formatTokenizersUI();\n                localizeStrategiesForm();" in view
 assert "localizeExcludeIPSet();" in view
 assert "const isRussian = ((document.documentElement.lang || '')" in view
-assert "row.find('div[data-for^=\"help_for_\"] small').html(help);" in view
-assert "const visible = row.find('.help-block').first();" in view
-assert "row.find('div.control-label > b').first().text(strategiesLabelsRU[id]);" in view
+assert "row.find('[data-for=\"help_for_' + id + '\"] small').html(help);" in view
+assert "const visible = document.getElementById('help_block_' + id);" in view
+assert "const nativeLabel = document.getElementById('control_label_' + id);" in view
+assert "$(nativeLabel).children('b').first().text(strategiesLabelsRU[id]);" in view
+assert "row.find('div.control-label > b').first().text(strategiesLabelsRU[id]);" not in view
 assert "$(input).attr('aria-label', strategiesLabelsRU[id]);" in view
 assert "row.find('div.control-label > b').first().text('Исключить IPSet');" in view
 assert "row.find('label')" not in view, "OPNsense 26.7 has no HTML label for form captions"
 assert "row.addClass('zapret-exclude-ipset-inline-help-only')" in view
-assert "visibility: hidden !important;" in view
+assert "showRuntimeError(runtimeText.applyError, runtimeText.strategiesReview);" in view
+assert "apply: isRussian ? 'Установить версию' : 'Install Version'" in view
+assert "#frm_GeneralSettings tr.zapret-exclude-ipset-inline-help-only > td:nth-child(3) > .help-block {" in view
+assert "visibility: hidden !important;" not in view
 segment = view.split("function localizeStrategiesForm()", 1)[1].split("function localizeExcludeIPSet()", 1)[0]
 assert ".val(" not in segment and ".value =" not in segment, "UI i18n must not write user data"
 for name in ("strategiesLabelsRU", "strategiesHelpRU"):
@@ -153,8 +158,8 @@ for phrase in (
     "Локальное", "запрещены", "конфликтующие правила",
 ):
     assert phrase in help_ru.group(1), "RU help coverage: " + phrase
-assert "row.find('div[data-for^=\"help_for_\"] small').html(help);" in view
-assert "const visible = row.find('.help-block').first();" in view
+assert "row.find('[data-for=\"help_for_' + id + '\"] small').html(help);" in view
+assert "const visible = document.getElementById('help_block_' + id);" in view
 # Neither help path may ever write model, inputs, Config or process state.
 help_segment = view.split("const strategiesHelpRU = {", 1)[1].split(
     "function localizeExcludeIPSet()", 1

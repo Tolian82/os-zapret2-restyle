@@ -279,6 +279,9 @@ def check_p4_native_gui(page, mode: str) -> str:
     expected_label = "Автоперезагрузка" if mode == "ru" else "Auto Restart"
     need(row.locator("label").inner_text().strip() == expected_label,
          "P4_RESTART_LABEL_WRONG_" + mode)
+    need(caption(page, "zapret.general.enabled") ==
+         ("Включить" if mode == "ru" else "Enable"),
+         "P4_ENABLED_MISLABELLED_AS_AUTORESTART_" + mode)
     options = selection.evaluate(
         "s => Array.from(s.options).map(o => [o.value, o.textContent.trim()])")
     wanted = (
@@ -359,6 +362,32 @@ def check_p4_native_gui(page, mode: str) -> str:
     need(editor_row.locator("button#zapretAutoHostlistSave").count() == 1 and
          editor_row.locator("button#zapretAutoHostlistReload").count() == 1,
          "P4_AUTO_HOSTLIST_ACTIONS_MISSING")
+    widths = page.evaluate("""() => [
+        document.getElementById('zapretAutoHostlistField').getBoundingClientRect().width,
+        document.getElementById('zapret.hostlist.userdomains').getBoundingClientRect().width
+    ]""")
+    need(0.8 <= widths[0] / widths[1] <= 1.2,
+         "P4_AUTO_HOSTLIST_EDITOR_NARROW_OR_OVERSIZED_" + mode)
+    auto_help = editor_row.locator('[data-for="help_for_zapretAutoHostlistField"]')
+    need(auto_help.count() == 1, "P4_AUTO_HOSTLIST_NATIVE_HELP_MISSING")
+    need(auto_help.evaluate(
+        "(el) => el.parentElement === document.getElementById("
+        "'zapretAutoHostlistField').parentElement"),
+        "P4_AUTO_HOSTLIST_HELP_NOT_INLINE")
+    full_help_toggle = native_form_toggle(page, form_id, "show_all_help")
+    help_enabled = "fa-toggle-on" in (full_help_toggle.get_attribute("class") or "")
+    need(auto_help.is_visible() == help_enabled,
+         "P4_AUTO_HOSTLIST_HELP_IGNORES_NATIVE_INITIAL_STATE_" + mode)
+    full_help_toggle.click()
+    need(auto_help.is_visible() != help_enabled,
+         "P4_AUTO_HOSTLIST_HELP_IGNORES_NATIVE_TOGGLE_" + mode)
+    full_help_toggle.click()
+    need(auto_help.is_visible() == help_enabled,
+         "P4_AUTO_HOSTLIST_HELP_NOT_RESTORED_" + mode)
+    help_cell = control(page, "zapret.hostlist.excludeipset").locator(
+        "xpath=ancestor::tr[1]/td[3]")
+    need(help_cell.evaluate("el => getComputedStyle(el).visibility") == "visible",
+         "P4_EXCLUDE_IPSET_STRIPED_CELL_HIDDEN_" + mode)
     # P3 installs only the .pkg, not the separate upstream runtime.
     # Refuse on absent/unsafe native storage; do not seed directories, save
     # settings, or claim an unexecuted editor/save scenario has passed.
@@ -508,6 +537,9 @@ def check_strategies(page, mode: str) -> tuple[dict[str, str], str]:
         ("Traffic Strategy", "Target Mode", "How to find your strategy")
     )
     need(caption(page, "zapret.strategy.trafficargs") == expected[0], "STRATEGY_LABEL_WRONG_" + mode)
+    need(page.locator("#zapretReleaseApplyText").inner_text().strip() ==
+         ("Установить версию" if mode == "ru" else "Install Version"),
+         "P4_UPSTREAM_ACTION_AMBIGUOUS_" + mode)
     need(caption(page, "zapret.hostlist.mode") == expected[1], "TARGET_MODE_LABEL_WRONG_" + mode)
     need(caption(page, "zapretStrategiesInfoSource") == expected[2], "STRATEGY_INFO_LABEL_WRONG_" + mode)
     need(page.locator('[id="zapretStrategiesInfoSource"]').count() == 1, "STRATEGY_INFO_SPAN_MISSING")
