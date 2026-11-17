@@ -503,6 +503,15 @@ def native():
                  else "false" if
                  "zapret-pkg-postinstall-restart-intent=0" in debug
                  else "missing"),
+            "new_postinstall_start_rc":
+                (int(re.search(r"zapret-pkg-postinstall-start-rc=(\d+)", debug).group(1))
+                 if re.search(r"zapret-pkg-postinstall-start-rc=(\d+)", debug)
+                 else "missing"),
+            "new_postinstall_start_reply":
+                (re.search(r"zapret-pkg-postinstall-start-reply=([a-z-]+)",
+                           debug).group(1) if re.search(
+                               r"zapret-pkg-postinstall-start-reply=([a-z-]+)",
+                               debug) else "missing"),
         }
         print("OWN70_NATIVE_PKG_DIAGNOSTIC=" + json.dumps({
             "native_pkg_rc": update.returncode,
