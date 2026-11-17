@@ -454,17 +454,19 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     hold the original Config/P2 lock ordering across plan qualification.
     """
     import sys
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation_id) or
+            type(config_fd) is not int or config_fd < 3):
+        raise DestinationRefused("original_native_fd9_required")
     from shared_apply_seal import WORK, verify_seal
-    from shared_apply_operation import SharedApplyOperation, OP_ID
+    from shared_apply_operation import SharedApplyOperation
     from auto_detect_owned_sources import OWNED_ROOT, read_owned
     from auto_detect_original_lock_handoff import (
         CONFIG_PATH, assert_inherited_config_fd)
     from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
     from voice_ipfw_adapter import require_lifecycle_lock
 
-    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
-            not isinstance(operation_id, str) or not OP_ID.fullmatch(operation_id)):
-        raise DestinationRefused("original_native_fd9_required")
     require_lifecycle_lock()
     # The original OPNsense Config lock is an inherited real open file
     # description; a JSON token or fresh guessed lock is insufficient.
@@ -499,6 +501,8 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     except (UnicodeError, ValueError) as exc:
         raise DestinationRefused("shared_found_original_plan_invalid") from exc
     if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            plan.get("dependencies") != record["detail"]["base"] or
             not isinstance(plan.get("found_batch"), dict)):
         raise DestinationRefused("shared_found_plan_not_original_owner")
     targets = {"youtube": OWNED_ROOT / "youtube.txt",

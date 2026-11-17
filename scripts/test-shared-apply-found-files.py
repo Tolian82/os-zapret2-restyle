@@ -186,7 +186,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
     def test_public_original_fd9_entry_refuses_non_native(self):
         with self.assertRaisesRegex(DestinationRefused,
                                     "original_native_fd9_required"):
-            shared_apply_found_files_original_fd9("a" * 32)
+            shared_apply_found_files_original_fd9("a" * 32, -1)
 
 
 if __name__ == "__main__":
