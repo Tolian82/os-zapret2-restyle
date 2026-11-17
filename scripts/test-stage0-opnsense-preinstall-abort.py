@@ -88,6 +88,25 @@ class NativeIncomingRefusal(unittest.TestCase):
                     s.native_case(Path(tmp), "developer", False)
                 process.assert_not_called()
 
+    def test_lua_case_is_distinct_from_developer_mode(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(s, "invoke") as process:
+                with self.assertRaisesRegex(s.Refusal, "INVALID_NATIVE_CASE"):
+                    s.native_case(Path(tmp), "lua", True)
+                process.assert_not_called()
+
+    def test_lua_fixture_only_new_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(s.Refusal, "LUA_ONLY_FOR_NEW_FIXTURE"):
+                s.fixture(Path(tmp), "old", s.OLD_VERSION,
+                          Path(tmp) / "trace", lua_refusal=True)
+
+    def test_lua_refusal_is_not_assumed_success_without_native_proof(self):
+        source = path.read_text(encoding="utf-8")
+        self.assertIn("'lua_scripts'", source)
+        self.assertIn("'return 1'", source)
+        self.assertIn('"product_safety_acceptance_passed": False', source)
+
     def test_guest_refuses_missing_disposable_optin_before_any_pkg(self):
         class FreeBSD:
             sysname = "FreeBSD"

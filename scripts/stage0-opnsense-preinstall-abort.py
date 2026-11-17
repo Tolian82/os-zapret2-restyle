@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Characterize default/developer pkg add -f with a refusing pre-install.
+"""Characterize default, developer-mode and Lua PRE_INSTALL pkg refusal.
 
-Only a disposable OPNsense 26.7 KVM guest. Both packages are synthetic and
+Only a disposable OPNsense 26.7 KVM guest. All packages are synthetic and
 use a private pkg database and files underneath a new temporary directory.
 An observed transaction outcome is not approval to upgrade Zapret2.
 """
@@ -52,7 +52,8 @@ def phase_hook(trace, role, phase):
     return script + ("exit 73\n" if line == REFUSAL_LINE else "exit 0\n")
 
 
-def fixture(work, role, version, trace):
+def fixture(work, role, version, trace, lua_refusal=False):
+    require(role == 'new' or not lua_refusal, 'LUA_ONLY_FOR_NEW_FIXTURE')
     base = work / ("stage-" + role)
     installed = work / "installed"
     marker = installed / "fixture-data"
@@ -72,6 +73,8 @@ def fixture(work, role, version, trace):
         "files": {str(marker): hashlib.sha256(payload).hexdigest()},
         "scripts": scripts,
     }
+    if lua_refusal:
+        manifest['lua_scripts'] = {'pre-install': ['return 1']}
     source = work / (role + ".json")
     source.write_text(json.dumps(manifest), encoding="utf-8")
     output = work / ("package-" + role)
@@ -96,7 +99,7 @@ def classify(exit_code, installed, payload, trace):
 
 def native_case(work, label, developer_mode):
     # No shared DB, package files or trace between independent variants.
-    require(label in ("default", "developer") and
+    require(label in ("default", "developer", "lua") and
             developer_mode == (label == "developer"), "INVALID_NATIVE_CASE")
     case = work / label
     case.mkdir(mode=0o700)
@@ -105,7 +108,8 @@ def native_case(work, label, developer_mode):
     cache.mkdir(mode=0o700)
     trace = case / "trace.txt"
     old, marker = fixture(case, "old", OLD_VERSION, trace)
-    new, other_marker = fixture(case, "new", NEW_VERSION, trace)
+    new, other_marker = fixture(case, "new", NEW_VERSION, trace,
+                                lua_refusal=(label == "lua"))
     require(marker == other_marker, "FIXTURE_PAYLOAD_PATH_DIFFERENT")
     env = dict(os.environ, PKG_DBDIR=str(db), PKG_CACHEDIR=str(cache),
                ASSUME_ALWAYS_YES="yes")
@@ -131,6 +135,7 @@ def native_case(work, label, developer_mode):
         "outcome": outcome, "installed_after": installed,
         "payload_after": payload.decode("ascii") if payload is not None else None,
         "hook_trace": lines, "preinstall_refusal_observed": REFUSAL_LINE in lines,
+        "lua_preinstall_refusal_declared": label == "lua",
         "old_payload_and_db_and_hooks_preserved": preserved,
     }
     print("STAGE0_PREINSTALL_NATIVE_OBSERVATION=" +
@@ -152,9 +157,13 @@ def run_vm():
         work = Path(path)
         ordinary = native_case(work, "default", False)
         developer = native_case(work, "developer", True)
+        lua = native_case(work, "lua", False)
     return {
-        "schema": 2, "status": "OBSERVED_PKG_REFUSAL_DEFAULT_AND_DEVELOPER",
-        "ordinary": ordinary, "developer_mode": developer,
+        "schema": 3, "status": "OBSERVED_PKG_REFUSAL_DEFAULT_DEVELOPER_AND_LUA",
+        "ordinary": ordinary, "developer_mode": developer, "lua_preinstall": lua,
+        "lua_preinstall_veto_observed": (
+            lua["old_payload_and_db_and_hooks_preserved"] and
+            lua["pkg_add_exit_code"] != 0),
         "developer_mode_qualified_pretransaction_barrier": (
             developer["old_payload_and_db_and_hooks_preserved"] and
             developer["pkg_add_exit_code"] != 0),
