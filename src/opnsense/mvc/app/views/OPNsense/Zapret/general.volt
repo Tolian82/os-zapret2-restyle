@@ -368,62 +368,8 @@
         }
 
 
-        // The approved Advanced-only Auto Restart belongs on the SAME
-        // visible row, to the right of the Enabled switch. Move the actual
-        // native OPNsense SELECT, never clone a second model control.
-        function mountAdvancedAutoRestart() {
-            const enabled = document.getElementById('zapret.general.enabled');
-            const restart = document.getElementById('zapret.general.autorestart');
-            if (!enabled || !restart) return;
-            const from = $(restart).closest('tr');
-            const to = $(enabled).closest('tr').children('td').eq(1);
-            if (!from.length || !to.length || from[0] === to.closest('tr')[0]) return;
-            const select = $(restart);
-            const widget = select.closest('.bootstrap-select');
-            const actual = widget.length ? widget : select;
-            const label = $('<label/>', {
-                'for': 'zapret.general.autorestart',
-                'class': 'control-label'
-            }).text(isRussian ? 'Автоперезагрузка' : 'Auto Restart')
-              .css({'margin': '0', 'white-space': 'nowrap'});
-            const controls = $('<span/>', {id: 'zapretAutoRestartInline'})
-                .css({'display':'inline-flex','gap':'8px','align-items':'center',
-                      'margin-left':'20px','flex-wrap':'wrap'})
-                .append(label, actual.detach());
-            to.append(controls);
-            from.remove();
-            function syncAdvanced() {
-                // The stock OPNsense handler owns native Advanced visibility.
-                // Observe its actual expanded form row, not just an icon class
-                // that may disagree with the row during restoration/toggling.
-                const reference = document.getElementById('row_zapret.strategy.extraargs');
-                if (reference) {
-                    controls.toggle($(reference).is(':visible'));
-                } else {
-                    // Never expose an advanced-only control without the native
-                    // reference; a missing stock form row remains fail-closed.
-                    controls.hide();
-                }
-            }
-            // Stock OPNsense 26.7 uses a form-local Advanced toggle ID
-            // that is not guaranteed to equal show_advanced_frm_GeneralSettings.
-            // Require the one real native toggle, never fabricate a new one.
-            const switches = $('#frm_GeneralSettings').find('[id^="show_advanced_"]');
-            if (switches.length !== 1) {
-                controls.hide();
-                return;
-            }
-            const toggle = switches[0];
-            if (window.MutationObserver) {
-                new MutationObserver(syncAdvanced).observe(
-                    toggle, {attributes:true, attributeFilter:['class']});
-            }
-            // Run after the stock handler has changed native row visibility.
-            $(toggle).on('click', function() {
-                window.setTimeout(syncAdvanced, 0);
-            });
-            syncAdvanced();
-        }
+        // TZ6v2: base_form owns the Advanced-only Auto Restart row/width/help.
+        // Keep the native select in its original row, not beside Enabled.
 
         // P2k5: native root-owned Auto Hostlist editor, separate from the
         // OPNsense Config form model and original shared Apply. This row has
@@ -1603,7 +1549,6 @@
             });
         });
 
-        mountAdvancedAutoRestart();
         mountAutoHostlistEditor();
         loadAutoHostlist();
         reloadSettings();

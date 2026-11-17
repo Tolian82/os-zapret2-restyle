@@ -270,14 +270,17 @@ def check_p4_native_gui(page, mode: str) -> str:
     form_id = "frm_GeneralSettings"
     selection = control(page, "zapret.general.autorestart")
     toggle = native_form_toggle(page, form_id, "show_advanced")
-    row = page.locator("#zapretAutoRestartInline")
+    # TZ6v2: original native form owns a separate Advanced-only schedule row;
+    # the old inline-right-of-Enabled layout is explicitly superseded.
+    row = page.locator('[id="row_zapret.general.autorestart"]')
     row.wait_for(state="attached", timeout=12000)
     need(row.evaluate(
-        "(el) => el.closest('tr') === "
-        "document.getElementById('zapret.general.enabled').closest('tr')"),
-        "P4_RESTART_NOT_INLINE_RIGHT_OF_ENABLED")
+        "(el) => el !== "
+        "document.getElementById('zapret.general.enabled').closest('tr') "
+        "&& el.contains(document.getElementById('zapret.general.autorestart'))"),
+        "P4_RESTART_NOT_SEPARATE_NATIVE_ROW")
     expected_label = "Автоперезагрузка" if mode == "ru" else "Auto Restart"
-    need(row.locator("label").inner_text().strip() == expected_label,
+    need(caption(page, "zapret.general.autorestart") == expected_label,
          "P4_RESTART_LABEL_WRONG_" + mode)
     need(caption(page, "zapret.general.enabled") ==
          ("Включить" if mode == "ru" else "Enable"),
@@ -300,8 +303,6 @@ def check_p4_native_gui(page, mode: str) -> str:
     if "fa-toggle-on" in (toggle.get_attribute("class") or ""):
         toggle.click()
     row.wait_for(state="hidden", timeout=12000)
-    need(not row.locator("label").is_visible(),
-         "P4_RESTART_LABEL_VISIBLE_WITH_ADVANCED_OFF")
     # Native form initialization and its Advanced event handler own the
     # state change; verify that real advanced fields opened before our row.
     page.wait_for_timeout(250)
@@ -314,7 +315,7 @@ def check_p4_native_gui(page, mode: str) -> str:
         # Non-sensitive visibility evidence only: no domains, values, cookies,
         # settings, or Config content from the disposable guest.
         state = page.evaluate("""() => {
-            const el = document.getElementById('zapretAutoRestartInline');
+            const el = document.getElementById('row_zapret.general.autorestart');
             const icon = document.getElementById('show_advanced_frm_GeneralSettings');
             const native = document.getElementById('row_zapret.strategy.extraargs');
             const label = el?.querySelector('label');
@@ -333,7 +334,7 @@ def check_p4_native_gui(page, mode: str) -> str:
                     '[id="show_advanced_frm_GeneralSettings"]').length
             };
         }""")
-        raise Refusal("P4_RESTART_NATIVE_ADVANCED_VISIBLE_BUT_INLINE_HIDDEN:" +
+        raise Refusal("P4_RESTART_NATIVE_ADVANCED_ROW_HIDDEN:" +
                       json.dumps(state, sort_keys=True)) from exc
     need(selection.input_value() == saved,
          "P4_SHOW_ADVANCED_RESET_RESTART")

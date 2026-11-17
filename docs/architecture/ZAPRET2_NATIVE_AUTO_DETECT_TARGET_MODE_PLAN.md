@@ -2,6 +2,9 @@
 
 ## ACTIVE — transition from integrated _70 to ТЗ_6v2 (16 November 2026)
 
+**Owner priority correction, 17 Nov:** separate Draft #1182 damaged pkgdb/SQLite investigation no longer blocks approved TZ6v2 GUI and testing .pkg. New source-only _89 from merged _88 first fixes directly observed native Advanced Auto Restart mislayout (a bounded piece of STEP 8). Proceed with STEP 2–7 and then remaining STEP 8–10; no claim of a completed five-editor GUI or native acceptance.
+
+
 **`_88` real native bounded PASS — 17 November 2026:** [one OPNsense 26.7 VM #44087872134](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44087872134) (test-code head `cdd1f1d2a5c0d84e6b6df5382a60942882c7c85b`) physically interrupted native `pkg` extraction at **4 restored / 7 unrestored** files, issued QEMU `system_reset` and proved new FreeBSD boot on the same VM. After restart original protected `prepared` record SHA and root-private candidate archive survived, previous Auto epoch stayed retired, saved Zapret2 and WAN semantic settings were unchanged and `dvtws2` was absent. Installed service was **untrusted** and `pkgdb` package query failed (rc=1); no postboot Start/Apply/repair was attempted: **PASS_FAIL_CLOSED_NO_SERVICE, manual review required**. Before interruption the disposable test **fsynced the already saved system Config inode without changing bytes**. Therefore this is NOT proof of full host power loss, unsynced Config durability, safe package recovery or an operational updated product. No `_88.pkg` published and owner installed `_79` untouched.
 
 **STEP 1 actual progress:** QEMU guest hard-reset fail-closed classification DONE, not operational recovery. NEXT reviewed recovery of torn installed service/pkgdb and protection of original `prepared` without running untrusted code; no second owner or auto-repair. Then TZ6v2 STEP 2–10 and owner functional testing. Full power-cut/unsynced-Config acceptance remains OPEN.
@@ -100,7 +103,7 @@ Every step has the **existing input → minimum actual change → observable exi
 - **Minimum change:** add YouTube/User expandable found editors beneath respective main lists, maintain full-width shared editor; disclosure buttons toggle **visibility only**; same native width/height/mobile/resize; existing Help OFF/ON with orange icon left of labels, text below editor, RU/EN; no obsolete Save/Reload, ordinary List Empty caption, competing right help column or second Apply. Correct help: auto is plain-only; manual `!` suppresses future re-add, `!^` exact only; shared file is active **only with explicit `<HOSTLIST:auto>`**.
 - **Exit:** native rendered OPNsense RU/EN/Advanced layout, disclosure and F5, validation messages and one Apply. The old `OWN70-04…06` observations remain as evidence; **their legacy proposed fixes are superseded** by [ТЗ_6v2](TZ_6v2.md).
 
-**STEP 8 — Correct native Auto Restart layout and persisted schedule. STATUS: FUTURE (REWORK).**
+**STEP 8 — Correct native Auto Restart layout and persisted schedule. STATUS: SOURCE PARTIAL (native row correction; rendered GUI and scheduler acceptance OPEN).**
 - **Input:** current Enabled model and original five-choice schedule.
 - **Minimum change:** preserve the single Enabled checkbox with accurate label; separate native full-width Off/hour/day/week/month select shown only in standard Advanced ON, hidden without resetting interval or disabling scheduler, Off default on new installation; no redundant schedule Boolean or timer. Selected schedule uses original Shared Restart for RUNNING even with no list changes, never starts deliberately STOPPED/Disabled.
 - **Exit:** RU/EN actual DOM, F5/hidden-field/unrelated Apply persistence and scoped real scheduled RUNNING/STOPPED evidence. No claim from appearance alone.
