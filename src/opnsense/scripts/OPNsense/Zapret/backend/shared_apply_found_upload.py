@@ -34,7 +34,7 @@ def read_qualified(path: Path, length: int, digest: str, owner_uid: int,
         raise UploadRefused("upload_metadata_invalid")
     path = Path(path)
     if test_parent is None:
-        if (str(path.parent) not in ('/tmp', '/var/tmp') or
+        if (str(path.parent) != '/var/lib/php/tmp' or
                 not NAME.fullmatch(path.name)):
             raise UploadRefused("upload_path_untrusted")
     elif path.parent != test_parent:

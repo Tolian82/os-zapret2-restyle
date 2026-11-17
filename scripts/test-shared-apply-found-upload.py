@@ -61,6 +61,11 @@ class MultipartUploadTests(unittest.TestCase):
         with self.assertRaises(UploadRefused):
             self.read()
 
+    def test_default_tmp_upload_refused(self):
+        with self.assertRaises(UploadRefused):
+            read_qualified(Path('/tmp/phpAaBbCc'), len(self.body),
+                hashlib.sha256(self.body).hexdigest(), self.uid)
+
     def test_unqualified_parent_refused(self):
         with self.assertRaises(UploadRefused):
             read_qualified(self.name, len(self.body),

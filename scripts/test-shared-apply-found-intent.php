@@ -35,7 +35,7 @@ $plan = Intent::validateJson($json, $digest);
 must($plan['sources'] === $payload['sources'] &&
      $plan['commit_authorized'] === false &&
      $plan['cross_source_validated'] === false, 'transport granted file authority');
-$metadata = ['path' => '/tmp/phpAbCd56', 'size' => strlen($json),
+$metadata = ['path' => '/var/lib/php/tmp/phpAbCd56', 'size' => strlen($json),
     'sha256' => hash('sha256', $json), 'owner_uid' => 100];
 $token = Envelope::encode('strategies', [],
     ['telegramips_baseline' => '', 'found_upload' => $metadata]);
@@ -73,6 +73,8 @@ $bad['sources']['evil'] = $source('', '', 'empty');
 rejects(fn() => Intent::validateJson(json_encode($bad), $digest), 'extra source');
 $bad = $metadata; $bad['path'] = '/tmp/../etc/passwd';
 rejects(fn() => Intent::metadata($bad), 'path traversal');
+$bad = $metadata; $bad['path'] = '/tmp/phpAbCd56';
+rejects(fn() => Intent::metadata($bad), 'non-native PHP upload dir');
 $bad = $metadata; $bad['size'] = 999999;
 rejects(fn() => Intent::metadata($bad), 'oversized body');
 $bad = $metadata; $bad['owner_uid'] = -1;

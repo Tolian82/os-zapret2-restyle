@@ -71,7 +71,7 @@ final class SharedApplyFoundIntent
     {
         if (array_keys($data) !== ['path', 'size', 'sha256', 'owner_uid'] ||
             !is_string($data['path']) ||
-            preg_match('#^/(?:tmp|var/tmp)/php[A-Za-z0-9]{6,16}$#D', $data['path']) !== 1 ||
+            preg_match('#^/var/lib/php/tmp/php[A-Za-z0-9]{6,16}$#D', $data['path']) !== 1 ||
             !is_int($data['size']) || $data['size'] < 1 ||
             $data['size'] > self::MAX_JSON ||
             !is_string($data['sha256']) ||
