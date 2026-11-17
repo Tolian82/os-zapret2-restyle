@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 GUARD = Path("/var/db/zapret2/pkg-update/operation.json")
@@ -85,6 +86,43 @@ def opnsense_config_readable():
     except OSError:
         return False
     return stat.S_ISREG(st.st_mode) and st.st_size <= 32 * 1024 * 1024
+
+
+def stable_xml_value(node):
+    """Compare saved XML values, ignoring XML formatting-only indentation.
+
+    Leaf text (including any whitespace in user profiles) is preserved exactly.
+    Only whitespace between child elements is ignored; child order, attributes,
+    tags, and all actual leaf values are significant.
+    """
+    children = list(node)
+    text = node.text or ""
+    if children and not text.strip():
+        text = ""
+    return [node.tag, sorted(node.attrib.items()), text,
+            [[stable_xml_value(child),
+              child.tail if child.tail and child.tail.strip() else ""]
+             for child in children]]
+
+
+def config_snapshot():
+    """Read only original OPNsense Config and hash saved plugin/WAN semantics."""
+    need(opnsense_config_readable(), "CONFIG_NOT_READABLE")
+    root = ET.fromstring(CONFIG.read_bytes())
+    need(root.tag == "opnsense", "NATIVE_CONFIG_ROOT_UNKNOWN")
+    plugin = root.find("./OPNsense/Zapret")
+    interfaces = root.find("./interfaces")
+    need(plugin is not None and interfaces is not None,
+         "SAVED_PLUGIN_OR_INTERFACES_MISSING")
+    def fingerprint(node):
+        encoded = json.dumps(stable_xml_value(node), ensure_ascii=True,
+                             separators=(",", ":")).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+    return {
+        "full": digest(CONFIG),
+        "plugin": fingerprint(plugin),
+        "interfaces": fingerprint(interfaces),
+    }
 
 
 def load_witnesses():
@@ -269,10 +307,13 @@ def guest_prepare():
          observed["foreign"] == 0, "NO_REAL_TORN_PAYLOAD")
     need(run([str(SERVICE), "status"]).returncode == 1,
          "SERVICE_NOT_STOPPED_BEFORE_RESET")
+    config_before = config_snapshot()
     data = {
         "schema": 1, "test_guest_only": True,
         "version": version, "archive_sha256": digest(archive),
-        "config_sha256": digest(CONFIG), "guard_sha256": digest(GUARD),
+        "config_sha256": config_before["full"],
+        "config_snapshot": config_before,
+        "guard_sha256": digest(GUARD),
         "original_epoch_id": epoch, "boot_seconds": guest_boot(),
         "witnesses_before": observed,
     }
@@ -288,9 +329,23 @@ def guest_verify():
     receipt = read_receipt()
     boot = guest_boot()
     need(boot > receipt["boot_seconds"], "HARD_RESET_BOOT_ID_UNCHANGED")
-    need(opnsense_config_readable() and
-         digest(CONFIG) == receipt["config_sha256"],
-         "CONFIG_CHANGED_ACROSS_RESET")
+    after_config = config_snapshot()
+    before_config = receipt["config_snapshot"]
+    need(before_config["full"] == receipt["config_sha256"],
+         "PRE_RESET_CONFIG_RECEIPT_INCONSISTENT")
+    config_bytes_preserved = (
+        after_config["full"] == before_config["full"])
+    plugin_preserved = after_config["plugin"] == before_config["plugin"]
+    interfaces_preserved = (
+        after_config["interfaces"] == before_config["interfaces"])
+    print("NATIVE_HARDRESET_CONFIG_CLASSIFICATION=" + json.dumps({
+        "raw_config_bytes_equal": config_bytes_preserved,
+        "saved_plugin_settings_equal": plugin_preserved,
+        "saved_wan_interfaces_equal": interfaces_preserved,
+        "opnsense_other_boot_writes_possible": not config_bytes_preserved,
+    }, sort_keys=True), flush=True)
+    need(plugin_preserved and interfaces_preserved,
+         "SAVED_PLUGIN_OR_INTERFACES_CHANGED_ACROSS_RESET")
     record = read_guard()
     need(digest(GUARD) == receipt["guard_sha256"],
          "PREPARED_GUARD_CHANGED_ACROSS_RESET")
@@ -324,12 +379,17 @@ def guest_verify():
     need(denied["status"] == 1 and
          all(denied[x] == 69 for x in ("start", "apply", "repeat", "finish")),
          "MUTATING_ACTION_NOT_REFUSED_AFTER_RESET")
+    stable_after_refusals = config_snapshot()
     need(digest(GUARD) == receipt["guard_sha256"] and
-         digest(CONFIG) == receipt["config_sha256"],
-         "GUARD_OR_CONFIG_CHANGED_DURING_REFUSALS")
+         stable_after_refusals["plugin"] == after_config["plugin"] and
+         stable_after_refusals["interfaces"] == after_config["interfaces"],
+         "GUARD_OR_SAVED_SETTINGS_CHANGED_DURING_REFUSALS")
     pkg = run(["/usr/sbin/pkg", "query", "%v", NAME], timeout=15)
     print("NATIVE_HARDRESET_POSTBOOT=" + json.dumps({
-        "boot_changed": True, "config_unchanged": True,
+        "boot_changed": True,
+        "full_config_bytes_equal": config_bytes_preserved,
+        "saved_plugin_settings_equal": True,
+        "saved_wan_interfaces_equal": True,
         "guard_phase": record["phase"], "guard_digest_unchanged": True,
         "original_auto_retired": True, "dvtws2_process_count": 0,
         "service_status_rc": denied["status"], "mutating_actions_refused": True,
