@@ -21,10 +21,13 @@ WITNESS_RELATIVE = (
 
 def witness_state(witnesses):
     """Physical two-sided proof; an unrelated/half-written file is never PASS."""
-    restored = dirty = foreign = 0
+    restored = dirty = missing = foreign = 0
     for path, original, marked in witnesses:
         try:
             data = path.read_bytes()
+        except FileNotFoundError:
+            missing += 1
+            continue
         except OSError:
             foreign += 1
             continue
@@ -34,7 +37,7 @@ def witness_state(witnesses):
             dirty += 1
         else:
             foreign += 1
-    return restored, dirty, foreign
+    return restored, dirty, missing, foreign
 
 
 def select_native_witnesses(root, stage, run, need):
@@ -91,7 +94,7 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
     for path, original, marked in witnesses:
         need(path.read_bytes() == original, "MIDEXTRACT_CHANGED_BEFORE_MARKING")
         path.write_bytes(marked)
-    need(witness_state(witnesses) == (0, len(witnesses), 0),
+    need(witness_state(witnesses) == (0, len(witnesses), 0, 0),
          "MIDEXTRACT_WITNESSES_NOT_READY")
     with tempfile.TemporaryDirectory(prefix="native-midextract-", dir="/root") as tmp:
         folder = Path(tmp)
@@ -118,19 +121,27 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
             try:
                 deadline = time.monotonic() + 120
                 while time.monotonic() < deadline:
-                    need(not postinstall.exists(), "MIDEXTRACT_REACHED_POSTINSTALL")
-                    need(proc.poll() is None, "MIDEXTRACT_PKG_EXITED_WITHOUT_WINDOW")
                     observation = witness_state(witnesses)
-                    if observation[0] > 0 and observation[1] > 0 and observation[2] == 0:
+                    if postinstall.exists() or proc.poll() is not None:
+                        # Bounded source-file census ONLY. No raw pkg/truss log,
+                        # Config, hostlist, command argv or secret-bearing text.
+                        print("NATIVE_MIDEXTRACT_WINDOW_REFUSAL=" + json.dumps({
+                            "phase": "postinstall" if postinstall.exists() else "pkg-exited",
+                            "restored": observation[0], "marked": observation[1],
+                            "missing": observation[2], "foreign": observation[3],
+                        }, sort_keys=True), flush=True)
+                        need(False, "MIDEXTRACT_REACHED_POSTINSTALL" if postinstall.exists()
+                             else "MIDEXTRACT_PKG_EXITED_WITHOUT_WINDOW")
+                    if observation[0] > 0 and observation[1] + observation[2] > 0 and observation[3] == 0:
                         os.killpg(proc.pid, signal.SIGSTOP)
                         time.sleep(0.05)
                         captured = witness_state(witnesses)
-                        need(captured[0] > 0 and captured[1] > 0 and
-                             captured[2] == 0 and not postinstall.exists(),
+                        need(captured[0] > 0 and captured[1] + captured[2] > 0 and
+                             captured[3] == 0 and not postinstall.exists(),
                              "MIDEXTRACT_MIXED_WINDOW_NOT_STABLE")
                         break
                     # Mid-write transient bytes are expected while pkg extracts.
-                    # Qualify only an exact restored/marked mixed window.
+                    # Qualify only exact restored/marked/missing mixed states.
                     time.sleep(0.001)
                 need(captured is not None, "MIDEXTRACT_NO_PHYSICAL_PARTIAL_WINDOW")
             finally:

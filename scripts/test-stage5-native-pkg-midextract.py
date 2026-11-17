@@ -15,14 +15,16 @@ class WitnessTests(unittest.TestCase):
             x.write_bytes(b"one")
             y.write_bytes(b"altered two")
             w=[(x,b"one",b"altered one"),(y,b"two",b"altered two")]
-            self.assertEqual(module.witness_state(w),(1,1,0))
+            self.assertEqual(module.witness_state(w),(1,1,0,0))
             y.write_bytes(b"half")
-            self.assertEqual(module.witness_state(w),(1,0,1))
+            self.assertEqual(module.witness_state(w),(1,0,0,1))
             x.write_bytes(b"altered one")
             y.write_bytes(b"altered two")
-            self.assertEqual(module.witness_state(w),(0,2,0))
+            self.assertEqual(module.witness_state(w),(0,2,0,0))
             y.unlink()
-            self.assertEqual(module.witness_state(w),(0,1,1))
+            self.assertEqual(module.witness_state(w),(0,1,1,0))
+            x.write_bytes(b"one")
+            self.assertEqual(module.witness_state(w),(1,0,1,0))
 
     def test_truss_invocation_uses_supported_freebsd_15_arguments(self):
         command = module.trace_pkg_command(Path("/root/trace"), Path("/root/candidate.pkg"))

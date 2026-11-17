@@ -435,10 +435,10 @@ def native_partial_payload_interruption(archive, target, digest):
     need(json.loads(ACTIVE.read_text()).get("phase") == "prepared",
          "MIDEXTRACT_RECORD_NOT_PREPARED")
     witnesses = fixture.select_native_witnesses(ROOT, stage, run, need)
-    restored, still_marked, foreign = fixture.interrupt_real_native_pkg_midextract(
+    restored, still_marked, missing, foreign = fixture.interrupt_real_native_pkg_midextract(
         stage, witnesses, need)
     # The STOP/guard receipts exist independent of pkgdb's possibly torn state.
-    need(restored > 0 and still_marked > 0 and foreign == 0 and
+    need(restored > 0 and still_marked + missing > 0 and foreign == 0 and
          ACTIVE.is_file() and sha(ACTIVE) == record_before and
          MARKER.is_file() and sha(CONFIG) == saved_config and
          (EPOCHS / old_id / "retired.json").is_file() and
@@ -463,7 +463,8 @@ def native_partial_payload_interruption(archive, target, digest):
     print("NATIVE_PROTECTED_MIDEXTRACT=" + json.dumps({
         "schema": 1, "actual_pkg_killed": True,
         "partial_restored_files": restored,
-        "partial_unrestored_files": still_marked,
+        "partial_unrestored_files": still_marked + missing,
+        "partial_missing_files": missing,
         "postinstall_unreached": True,
         "journal_still_prepared": True,
         "original_auto_retired": True,
