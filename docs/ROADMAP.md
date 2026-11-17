@@ -2,6 +2,8 @@
 
 ## Current priority
 
+**Same-scope `_87` repeatability check:** prior actual mid-extraction PASS #44073157187 remains valid evidence for its 4/3 byte state. A subsequent native run #44074379606 with the original seven clustered GUI witnesses missed that transient window (all seven already restored by POST_INSTALL). The revised test witnesses span MVC/service/share, **without changing product or package payload**. Check PR #1180 exact-head native S2 outcome before merge. The next independent safety gate after this remains abrupt VM power loss/reboot and torn pkgdb recovery.
+
 **Protected upgrade — exact qualified predecessor milestone:** PR [#1178](https://github.com/Tolian82/os-zapret2-restyle/pull/1178) merged into `main` at `1affc6f`. A disposable OPNsense 26.7 really installed the immutable published `_79.pkg`, verified original Auto RUNNING, retired it under original FD9, replaced the package only from independently verified STOPPED, and started the `_85` successor with a new committed Auto epoch and unchanged Config. [Native PASS #44053453048](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44053453048) and [evidence](verification/evidence/2026-11-17-v0.6.5_85-published79-native-bootstrap.md). This is **not** unrestricted direct `pkg add -f` from RUNNING and not a `_85.pkg` publication. The owner's `_79` stays installed and its earlier original-FD9 reviewed recovery is distinct.
 
 **Completed `_86` milestone:** original-FD9 staged Auto Stop followed by SIGKILL of genuine pkg inside POST_INSTALL; exact native [#44060777345](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44060777345) PASS, PR #1179 merged as `25bfd2d`. Source-only, no owner publication.

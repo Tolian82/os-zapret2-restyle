@@ -36,7 +36,11 @@ class WitnessTests(unittest.TestCase):
     def test_witness_declares_only_verifiable_installed_files(self):
         self.assertEqual(len(set(module.WITNESS_RELATIVE)),len(module.WITNESS_RELATIVE))
         self.assertGreaterEqual(len(module.WITNESS_RELATIVE),5)
-        self.assertTrue(all(p.endswith((".volt",".xml")) for p in module.WITNESS_RELATIVE))
+        self.assertTrue(all(p.endswith((".volt", ".xml", ".conf", ".txt", ".sh"))
+                            for p in module.WITNESS_RELATIVE))
+        self.assertTrue(any(p.startswith("mvc/") for p in module.WITNESS_RELATIVE))
+        self.assertTrue(any(p.startswith("service/") for p in module.WITNESS_RELATIVE))
+        self.assertTrue(any(p.startswith("share/") for p in module.WITNESS_RELATIVE))
 
 if __name__ == "__main__":
     unittest.main()

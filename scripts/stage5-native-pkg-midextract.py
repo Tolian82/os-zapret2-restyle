@@ -16,6 +16,12 @@ WITNESS_RELATIVE = (
     "mvc/app/controllers/OPNsense/Zapret/forms/voice.xml",
     "mvc/app/models/OPNsense/Zapret/Menu/Menu.xml",
     "mvc/app/models/OPNsense/Zapret/ACL/ACL.xml",
+    # Deliberately span early MVC and late package-owned support files.
+    # These are never executed by the stopped engine in the disposable guest.
+    "service/conf/actions.d/actions_zapret.conf",
+    "service/templates/OPNsense/Zapret/hostlist.txt",
+    "service/templates/OPNsense/Zapret/zapret.conf",
+    "share/zapret2-restyle/purge-os-zapret2-restyle.sh",
 )
 
 
