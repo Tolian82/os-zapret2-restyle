@@ -24,7 +24,22 @@ BACKUP_ROOT="${ZAPRET_DIR}/runtime-v2-backups"
 CHILD_PIDFILE="/var/run/dvtws2.pid"
 SUPERVISOR_DAEMON_PIDFILE="/var/run/zapret2-supervisor-daemon.pid"
 SUPERVISOR_MONITOR_PIDFILE="/var/run/zapret2-supervisor-monitor.pid"
-SUPERVISOR_LOOP="${SCRIPT_DIR}/supervisor_loop.sh"
+# SCRIPT_DIR selects the verified code bundle; it is not necessarily the
+# original LIVE supervisor executable when root intentionally runs the SAME
+# new .pkg from protected staging to repair an older installed owner.
+# An explicit override can name ONLY the canonical installed OPNsense path,
+# never a caller-defined foreign process or arbitrary supervisor. All actual
+# PID/argv/FD9 and sealed runtime checks remain mandatory.
+if [ -n "${ZAPRET_INSTALLED_SUPERVISOR_LOOP:-}" ]; then
+    _zapret_expected_live_loop=/usr/local/opnsense/scripts/OPNsense/Zapret/supervisor_loop.sh
+    [ "${ZAPRET_INSTALLED_SUPERVISOR_LOOP}" = "${_zapret_expected_live_loop}" ] || {
+        echo "ERROR: unqualified native supervisor identity path" >&2
+        exit 69
+    }
+    SUPERVISOR_LOOP="${ZAPRET_INSTALLED_SUPERVISOR_LOOP}"
+else
+    SUPERVISOR_LOOP="${SCRIPT_DIR}/supervisor_loop.sh"
+fi
 # Shared native Apply and recovery call supervisor_start() from apply_runtime.sh
 # and require the absolute executable service callback. Ordinary Strategies
 # passed "$0" via orchestrator, but the common path otherwise inherited an

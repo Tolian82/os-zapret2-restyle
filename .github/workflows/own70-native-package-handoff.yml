@@ -1,0 +1,79 @@
+name: OWN70 real old-package reviewed rescue and native pkg hook handoff
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/test-own70-native-package-handoff.py
+      - .github/workflows/own70-native-package-handoff.yml
+  workflow_dispatch:
+
+concurrency:
+  group: own70-handoff-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  fast:
+    name: Fast exact old/new package bridge syntax and safety contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Real portable archive path negative tests and native hook contracts
+        run: |
+          set -eu
+          python3.13 -m py_compile scripts/test-own70-native-package-handoff.py
+          python3.13 scripts/test-own70-native-package-handoff.py --self-test
+          for hook in pkg/+PRE_INSTALL pkg/+PRE_DEINSTALL pkg/+POST_INSTALL pkg/+POST_DEINSTALL; do sh -n "$hook"; done
+          sh scripts/test-package-lifecycle-restart.sh
+
+  native:
+    needs: fast
+    name: Genuine _70 requires-review (when reproducible), exact staged native rescue and hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Bound QEMU/DNS readiness before VM allocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::Native bridge NOT TESTED: host QEMU/DNS unavailable'
+            exit 1
+          fi
+          echo 'Acquire::Retries "0"; Acquire::http::Timeout "15"; Acquire::https::Timeout "15";' |
+            sudo tee /etc/apt/apt.conf.d/99own70-bounded-network >/dev/null
+      - name: One disposable real _70 package and exact new package transition
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_OWN70_NATIVE_BRIDGE=1
+            export ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+            /usr/local/bin/python3 scripts/test-own70-native-package-handoff.py --native

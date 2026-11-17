@@ -223,6 +223,10 @@ elif [ -n "${PKG_UPGRADE:-}" ] && [ -f "${UPGRADE_RESTART_MARKER}" ]; then
     restore_running_state=1
 fi
 
+# Distinguish a genuine restart intent from an old engine that happened to
+# survive package replacement; no marker creation, signals or extra writers.
+printf 'zapret-pkg-postinstall-restart-intent=%s\n' "${restore_running_state}"
+
 if [ "${restore_running_state}" -eq 1 ]; then
     [ -x "${SERVICE_SCRIPT}" ] || {
         echo "ERROR: zapret service control is unavailable after package replacement" >&2
@@ -231,8 +235,22 @@ if [ "${restore_running_state}" -eq 1 ]; then
 
     service_output=$("${CONFIGCTL}" zapret start 2>&1)
     service_result=$?
-    if [ "${service_result}" -ne 0 ] || [ "${service_output}" != "OK" ]; then
-        printf '%s\n' "${service_output}" >&2
+    # Bounded proof of the exact original configd reply contract. Never
+    # print native argument vectors, Config, hostlists or arbitrary output.
+    _pkg_start_reply=other
+    case "${service_output}" in
+        OK) _pkg_start_reply=exact-ok ;;
+        *"Execute error"*) _pkg_start_reply=execute-error ;;
+        *"applied-id="*) _pkg_start_reply=applied-id ;;
+        *"native-common-boot="*) _pkg_start_reply=native-common-boot ;;
+        *"preflight-rejected="*) _pkg_start_reply=preflight-rejected ;;
+    esac
+    printf 'zapret-pkg-postinstall-start-rc=%s\n' "${service_result}"
+    printf 'zapret-pkg-postinstall-start-reply=%s\n' "${_pkg_start_reply}"
+    # Configd type:script can return non-OK human-readable output on success.
+    # Text is not runtime proof. Only command rc=0 AND the independent,
+    # existing native status attestation permit restart intent consumption.
+    if [ "${service_result}" -ne 0 ]; then
         echo "ERROR: zapret service could not be started after package replacement" >&2
         exit 1
     fi
