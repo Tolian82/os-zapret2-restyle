@@ -12,7 +12,7 @@ sh -n "$ROOT/executor.sh" || fail "shell syntax"
 . "$ROOT/executor.sh"
 ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 mkdir -p "$ROOT/work/release"
-: > "$ROOT/work/plan.json"
+printf '%s\n' '{"page":"voice"}' > "$ROOT/work/plan.json"
 : > "$ROOT/work/candidate.xml"
 LOG="$ROOT/steps.log"
 # The production FD9 executor uses fixed PID paths. This isolated mock
@@ -47,6 +47,15 @@ shared_apply_native_config() {
 }
 shared_apply_json_field() {
     case "$1" in
+        *'has("found_intent")'*)
+            # Mirror the real jq predicate using ONLY this fixture plan.
+            # No successful old Apply may ignore a pending found-file edit.
+            plan_content=$(cat)
+            case "$plan_content" in
+                *'"found_intent"'*) printf '%s\n' pending ;;
+                *'"page"'*) printf '%s\n' ordinary ;;
+                *) return 1 ;;
+            esac ;;
         *".enabled"*)
             # The saved worker runs inside $(...), so side effects cannot
             # change a parent-shell flag. Inspect this exact readback input.
@@ -119,6 +128,20 @@ expect_status() {
 reset
 expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+# A sealed but uncommitted form intent must refuse BEFORE the original
+# Prepared journal, Config::save, runtime transition and IPFW. The same
+# legacy Voice Apply fixture must remain operational with no found intent.
+printf '%s\n' '{"page":"voice","found_intent":{}}' > "$ROOT/work/plan.json"
+reset
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=found-transaction-pending' "$ROOT/response.txt" ||
+    fail "found intent crossed pre-journal gate"
+printf '%s\n' '{"invalid":' > "$ROOT/work/plan.json"
+reset
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=found-transaction-pending' "$ROOT/response.txt" ||
+    fail "corrupt found candidate crossed pre-journal gate"
+printf '%s\n' '{"page":"voice"}' > "$ROOT/work/plan.json"
 # The final proof is AFTER native Config + IPFW commit: neither an
 # altered installed traffic/IPSET tree, nor dead engine, nor a changed
 # committed rule set may produce the GUI's applied-id receipt.

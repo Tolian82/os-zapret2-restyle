@@ -1264,9 +1264,9 @@ shared_apply_execute_service()
     # A sealed *intent* without original Config+3-file durable transaction
     # is NOT a successful Apply. This refuses before kernel, Config, journal,
     # process or IPFW mutations. Do not silently ignore found_intent.
-    _shared_found_scope=$(/usr/local/bin/jq -er \
+    _shared_found_scope=$(shared_apply_json_field \
         'if has("found_intent") then "pending" else "ordinary" end' \
-        "$_shared_apply_root/plan.json") || {
+        < "$_shared_apply_root/plan.json") || {
         printf '%s\n' preflight-rejected=found-transaction-pending
         return 0
     }
