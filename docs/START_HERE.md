@@ -2,7 +2,7 @@
 
 [PROJECT_STATE](PROJECT_STATE.md) · [DOCUMENTATION_RULES](DOCUMENTATION_RULES.md) · [PROJECT_PRINCIPLES](PROJECT_PRINCIPLES.md) · [CHAT_RULES](CHAT_RULES.md) · [GITHUB_PUBLICATION](GITHUB_PUBLICATION.md) · [ROADMAP](ROADMAP.md) · [INDEX](INDEX.md).
 
-**Current source identity (17 November 2026):** `v0.6.5_88` (`VERSION=0.6.5`, `PLUGIN_REVISION=88`), `os-zapret2-restyle-0.6.5_88.pkg` **not published**. Native QEMU guest-reset fail-closed milestone PASS at [#44087872134](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44087872134) with a prior test-only fsync of native saved Config. No production source or package hook change, no owner appliance mutation. Manual reviewed torn-service/pkgdb recovery and TZ6v2 functional acceptance are next.
+**Current source identity (17 November 2026):** new source-only candidate `v0.6.5_89` (`VERSION=0.6.5`, `PLUGIN_REVISION=89`) on merged `_88` main; `os-zapret2-restyle-0.6.5_89.pkg` **NOT PUBLISHED**. Native QEMU guest-reset fail-closed milestone PASS at [#44087872134](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44087872134) with a prior test-only fsync of native saved Config. No production source or package hook change, no owner appliance mutation. Manual reviewed torn-service/pkgdb recovery and TZ6v2 functional acceptance are next.
 
 **Merged predecessor `_86`:** [PR #1179](https://github.com/Tolian82/os-zapret2-restyle/pull/1179), final native [PASS #44060777345](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44060777345), exact built archive SHA-256 `d925c35ca912c4bc82a8d089c4f04a64d3581d29dce9102e39697b360d2c3ecf`, main commit `25bfd2d` and [main CI PASS #44061475723](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44061475723). That was **inside native POST_INSTALL after extraction**, never mid-extraction; no test package published.
 
@@ -132,9 +132,11 @@ This is **not** an implemented or accepted live observer, changed release argv, 
 
 ## One next action
 
-**Next STEP 1 remainder: reviewed native recovery from a protected, torn installation.** The real `_88` VM reboot left private original FD9 `prepared`, preserved private staged archive and settings, no `dvtws2`, yet an **untrusted installed service** and an incomplete `pkgdb`. Define a single bounded operator-reviewed recovery using native pkg and original trusted owner; never execute untrusted scripts, silently run `pkg add -f`, clear protected records without attestation, add external interceptors, second FD9 or second Config writer, or restart automatically. Verify a trustworthy successor and Config before any explicit finish/Boot.
+**Owner direction, 17 Nov 2026:** return from sqlite/pkgdb research to working TZ6v2 GUI and a qualified OPNsense .pkg. Separate PR #1182 stays Draft and blocked by the malformed native pkgdb; do not use it as a package prerequisite.
 
-**Separate excluded scope:** full host power cut, reboot with unsynced Config (the `_88` disposable fixture fsynced native saved Config), damaged storage recovery and owner-live Voice/forwarding/GUI/Apply/purge are NOT passed. After reviewed recovery boundary continue [ТЗ_6v2](architecture/TZ_6v2.md) [STEP 2–10](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). No testing package publication by default.
+**New _89 GUI candidate from merged _88:** correct the proven native Auto Restart layout regression. Existing Form XML already has separate Enabled and Advanced-only Auto Restart, with five choices/default Off in the model. The old general.volt moves its SELECT into Enabled and removes the native row. Remove that relocation and preserve the stock Advanced/help behavior and RU labels. Source red-to-green is not installed browser acceptance.
+
+**Next:** follow TZ6v2 STEP 2-7 (source ownership, canonical five-list policy, coherent three-source protected read, three-way merge, single bottom Apply and five editors); then complete STEP 8 native schedule, STEP 9 same-running-engine reload and STEP 10 scoped package/build/owner acceptance. Do not publish an incomplete GUI as TZ6v2-ready or introduce another writer, service owner, SQLite or installer.
 
 ## Minimum specialist reading
 

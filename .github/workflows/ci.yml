@@ -654,6 +654,7 @@ jobs:
           php scripts/test-shared-apply-envelope.php
           python3.13 scripts/test-owner-p6-list-ui.py
           python3.13 scripts/test-strategies-i18n.py
+          python3.13 scripts/test-tz6v2-native-autorestart-layout.py
           python3.13 scripts/test-voice-gui-contract.py
           sh scripts/test-diagnostics-guidance-localization.sh
 
