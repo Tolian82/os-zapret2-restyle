@@ -6,6 +6,8 @@ on:
     paths:
       - scripts/stage5-native-hard-reset.py
       - scripts/test-stage5-native-hard-reset.py
+      - scripts/stage5-native-reviewed-recovery.py
+      - scripts/test-stage5-native-reviewed-recovery.py
   workflow_dispatch:
 
 concurrency:
@@ -30,8 +32,9 @@ jobs:
       - name: Python parser and strict isolation gates
         run: |
           set -eu
-          python3.13 -m py_compile scripts/stage5-native-hard-reset.py scripts/test-stage5-native-hard-reset.py
+          python3.13 -m py_compile scripts/stage5-native-hard-reset.py scripts/test-stage5-native-hard-reset.py scripts/stage5-native-reviewed-recovery.py scripts/test-stage5-native-reviewed-recovery.py
           python3.13 scripts/test-stage5-native-hard-reset.py -v
+          python3.13 scripts/test-stage5-native-reviewed-recovery.py -v
 
   native:
     name: Original FD9 torn pkg then QEMU hardware reset, postboot refusal
@@ -89,3 +92,19 @@ jobs:
           export GITHUB_ACTIONS=true
           export ZAPRET2_NATIVE_HARDRESET_TEST=1
           /usr/local/bin/python3 scripts/stage5-native-hard-reset.py verify
+      - name: Reviewed native reinstall from exact protected stage, STOPPED only
+        shell: opnsense {0}
+        run: |
+          set -eu
+          export GITHUB_ACTIONS=true
+          export ZAPRET2_NATIVE_HARDRESET_TEST=1
+          export ZAPRET2_NATIVE_REVIEWED_RECOVERY_TEST=disposable-guest-reviewed-reinstall
+          /usr/local/bin/python3 scripts/stage5-native-reviewed-recovery.py reinstall
+      - name: Separately reviewed original FD9 finish and distinct new Auto epoch
+        shell: opnsense {0}
+        run: |
+          set -eu
+          export GITHUB_ACTIONS=true
+          export ZAPRET2_NATIVE_HARDRESET_TEST=1
+          export ZAPRET2_NATIVE_REVIEWED_RECOVERY_TEST=disposable-guest-reviewed-finish
+          /usr/local/bin/python3 scripts/stage5-native-reviewed-recovery.py finish
