@@ -13,6 +13,9 @@ import subprocess
 ACTIONS = 'src/opnsense/service/conf/actions.d/actions_zapret.conf'
 CONTROLLERS = 'src/opnsense/mvc/app/controllers/OPNsense/Zapret/Api/'
 PREFIX = '/usr/local/'
+PHP_READ_ACTION = 'hostlist_editors_read'
+PHP_READ_INTERPRETER = '/usr/local/bin/php'
+PHP_READ_SCRIPT = '/usr/local/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php'
 REQUIRED = {'start', 'stop', 'status', 'voice_inspect', 'strategy_lab_start',
             'setup_install', 'extra_resources_install', 'shared_apply'}
 
@@ -92,8 +95,21 @@ def audit(root, expected_head=None):
         if not first.startswith(PREFIX):
             issues.append(f'{name}: command executable is not an absolute /usr/local/ path')
             continue
-        interpreter = first.startswith('/usr/local/bin/python3')
-        if interpreter:
+        python = first.startswith('/usr/local/bin/python3')
+        php = first == PHP_READ_INTERPRETER
+        if php:
+            # Exact package-owned root read: no arbitrary system PHP execution.
+            if (name != PHP_READ_ACTION or
+                    parts != [PHP_READ_INTERPRETER, PHP_READ_SCRIPT, 'read-editors'] or
+                    obj['type'] != 'script_output'):
+                issues.append(f'{name}: unapproved native PHP configd read')
+                continue
+            installed = PHP_READ_SCRIPT
+            kind = 'explicit-php'
+        elif first.startswith('/usr/local/bin/php'):
+            issues.append(f'{name}: unsupported PHP command')
+            continue
+        elif python:
             sources = [p.rstrip(';') for p in parts[1:] if p.startswith(PREFIX)]
             if not sources:
                 issues.append(f'{name}: direct Python invocation has no absolute script path')
@@ -103,6 +119,7 @@ def audit(root, expected_head=None):
         else:
             installed = first.rstrip(';')
             kind = 'direct-script'
+        interpreter = python or php
         if not installed.startswith(PREFIX):
             issues.append(f'{name}: unsupported entrypoint: {installed}')
             continue
@@ -126,6 +143,7 @@ def audit(root, expected_head=None):
             'head': head, 'registered_actions': len(records),
             'direct_actions': direct, 'controller_refs': controls,
             'explicit_python_actions': sorted(x['action'] for x in direct if x['kind']=='explicit-python'),
+             'explicit_php_actions': sorted(x['action'] for x in direct if x['kind']=='explicit-php'),
             'source_mode_review': sorted(x['action'] for x in direct if x['requires_native_mode_review']),
             'unresolved_controller_refs': sum(x['action'] is None for x in controls),
             'errors': sorted(issues), 'owner_target_qualified': False}
