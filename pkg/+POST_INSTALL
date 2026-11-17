@@ -18,6 +18,7 @@ SLEEP_BIN="${SLEEP_BIN:-/bin/sleep}"
 UPGRADE_STATE_DIR="${UPGRADE_STATE_DIR:-/var/run/zapret2-restyle}"
 UPGRADE_RESTART_MARKER="${UPGRADE_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-upgrade.restart}"
 REPLACEMENT_RESTART_MARKER="${REPLACEMENT_RESTART_MARKER:-${UPGRADE_STATE_DIR}/pkg-replacement.restart}"
+PROTECTED_UPDATE_JOURNAL="/var/db/zapret2/pkg-update/operation.json"
 EXTRA_INVENTORY_CACHE="${EXTRA_INVENTORY_CACHE:-/usr/local/opnsense/scripts/OPNsense/Zapret/extra_resources_inventory_cache.py}"
 EXTRA_PYTHON="${EXTRA_PYTHON:-/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh}"
 PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
@@ -227,7 +228,12 @@ fi
 # survive package replacement; no marker creation, signals or extra writers.
 printf 'zapret-pkg-postinstall-restart-intent=%s\n' "${restore_running_state}"
 
-if [ "${restore_running_state}" -eq 1 ]; then
+if [ -e "${PROTECTED_UPDATE_JOURNAL}" ] || [ -L "${PROTECTED_UPDATE_JOURNAL}" ]; then
+    # The plugin-owned protected updater already stopped the old engine
+    # under original FD9. Let it recheck installed identity and restore
+    # under FD9 AFTER pkg finishes: no nested configd Start here.
+    : # Final native guarded receipt is emitted only after all hooks succeed.
+elif [ "${restore_running_state}" -eq 1 ]; then
     [ -x "${SERVICE_SCRIPT}" ] || {
         echo "ERROR: zapret service control is unavailable after package replacement" >&2
         exit 1
@@ -271,6 +277,22 @@ if [ -f "${EXTRA_INVENTORY_CACHE}" ] &&
     if ! "${EXTRA_PYTHON}" "${EXTRA_INVENTORY_CACHE}" refresh >/dev/null; then
         echo "WARNING: Strategies resource inventory help is unavailable" >&2
     fi
+fi
+
+# The successful native POST_INSTALL completion is durably recorded in the
+# SAME private operation.json by the original inherited FD9 service owner.
+# A same-version reinstall cannot otherwise distinguish pkg actually running
+# from a premature manual pkg-update-finish. Failed hooks never create receipt.
+if [ -e "${PROTECTED_UPDATE_JOURNAL}" ] || [ -L "${PROTECTED_UPDATE_JOURNAL}" ]; then
+    [ -x "${SERVICE_SCRIPT}" ] || {
+        echo "ERROR: protected update service unavailable at POST_INSTALL" >&2
+        exit 1
+    }
+    if ! "${SERVICE_SCRIPT}" pkg-update-postinstall; then
+        echo "ERROR: cannot attest native POST_INSTALL for guarded package" >&2
+        exit 1
+    fi
+    printf 'zapret-pkg-postinstall-guarded=1\n'
 fi
 
 cat <<'MESSAGE'
