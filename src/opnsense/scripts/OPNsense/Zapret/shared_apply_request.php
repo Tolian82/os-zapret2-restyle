@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/Settin
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/WanRequirement.php';
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
 require_once __DIR__ . '/shared_apply_lock.php';
+require_once __DIR__ . '/shared_apply_found_intent.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\WanRequirement;
@@ -48,8 +49,21 @@ final class SharedApplyRequest
             if (array_keys($data['sync']) !== ['snapshot']) {
                 throw new \InvalidArgumentException('Voice snapshot required');
             }
-        } elseif (array_keys($data['sync']) !== ['telegramips_baseline']) {
-            throw new \InvalidArgumentException('Strategies Telegram baseline required');
+        } else {
+            $keys = array_keys($data['sync']);
+            if (!in_array($keys, [
+                ['telegramips_baseline'],
+                ['telegramips_baseline', 'found_upload'],
+            ], true) ||
+                !is_string($data['sync']['telegramips_baseline'] ?? null)) {
+                throw new \InvalidArgumentException('Strategies baseline required');
+            }
+            if (isset($data['sync']['found_upload'])) {
+                if (!is_array($data['sync']['found_upload'])) {
+                    throw new \InvalidArgumentException('Invalid found upload');
+                }
+                SharedApplyFoundIntent::metadata($data['sync']['found_upload']);
+            }
         }
         return $data;
     }
@@ -91,6 +105,15 @@ final class SharedApplyRequest
         // Bind the form's page to the native plan itself. A configd caller
         // cannot replay a Voice candidate as a Strategies transaction.
         $plan['page'] = $request['page'];
+        if ($request['page'] === 'strategies' &&
+            isset($request['sync']['found_upload'])) {
+            // The one original root FD9 stage reads the existing PHP upload,
+            // and retains EXACT typed baselines/drafts only in its private
+            // candidate plan. Later P1 locked comparison is still mandatory.
+            $phase = 'found-intent';
+            $plan['found_intent'] = SharedApplyFoundIntent::consume(
+                $request['sync']['found_upload'], $plan['dependencies']);
+        }
         return ['plan' => $plan, 'xml' => $xml];
     }
 

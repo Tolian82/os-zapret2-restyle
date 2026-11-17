@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Read ONLY the PHP multipart upload for one original native FD9 Apply.
+
+No target writes, additional Config writer, registered configd action, daemon,
+or durable transport files. The upload exists for the current HTTP request.
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+
+MAX_BYTES = 320 * 1024
+HASH = re.compile(r"[a-f0-9]{64}\Z", re.ASCII)
+NAME = re.compile(r"php[A-Za-z0-9]{6,16}\Z", re.ASCII)
+
+
+class UploadRefused(ValueError):
+    pass
+
+
+def read_qualified(path: Path, length: int, digest: str, owner_uid: int,
+                   *, test_parent: Path | None = None) -> bytes:
+    """Read one pinned inode via O_NOFOLLOW/O_NONBLOCK, never a symlink/FIFO.
+
+    The disposable test_parent override is not reachable from the CLI.
+    """
+    if (type(length) is not int or length < 1 or length > MAX_BYTES or
+            type(owner_uid) is not int or owner_uid < 0 or
+            not isinstance(digest, str) or not HASH.fullmatch(digest)):
+        raise UploadRefused("upload_metadata_invalid")
+    path = Path(path)
+    if test_parent is None:
+        if (str(path.parent) not in ('/tmp', '/var/tmp') or
+                not NAME.fullmatch(path.name)):
+            raise UploadRefused("upload_path_untrusted")
+    elif path.parent != test_parent:
+        raise UploadRefused("upload_path_untrusted")
+    try:
+        parent = path.parent.lstat()
+        named = path.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or
+                (test_parent is None and
+                 (parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) != 0o1777)) or
+                (test_parent is not None and
+                 (parent.st_uid != os.geteuid() or
+                  stat.S_IMODE(parent.st_mode) != 0o700)) or
+                not stat.S_ISREG(named.st_mode) or named.st_uid != owner_uid or
+                named.st_nlink != 1 or stat.S_IMODE(named.st_mode) != 0o600 or
+                named.st_size != length):
+            raise UploadRefused("upload_inode_untrusted")
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+        try:
+            pinned = os.fstat(fd)
+            payload = os.read(fd, MAX_BYTES + 1)
+            after = os.fstat(fd)
+        finally:
+            os.close(fd)
+        listed = path.lstat()
+    except (OSError, ValueError) as exc:
+        raise UploadRefused("upload_read_refused") from exc
+    identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_uid,
+                           st.st_mode, st.st_mtime_ns, st.st_ctime_ns)
+    if (identity(named) != identity(pinned) or
+            identity(named) != identity(after) or
+            identity(named) != identity(listed) or
+            len(payload) != length or
+            hashlib.sha256(payload).hexdigest() != digest):
+        raise UploadRefused("upload_changed_or_hash_mismatch")
+    return payload
+
+
+def main(argv: list[str]) -> int:
+    if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
+            len(argv) != 4):
+        return 69
+    try:
+        path, size, digest, uid = argv
+        if (not size.isascii() or not size.isdecimal() or
+                not uid.isascii() or not uid.isdecimal()):
+            raise UploadRefused('upload_numeric_metadata_invalid')
+        data = read_qualified(Path(path), int(size), digest, int(uid))
+    except (ValueError, OSError, UploadRefused):
+        print('found-upload-refused', file=sys.stderr)
+        return 69
+    sys.stdout.buffer.write(data)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main(sys.argv[1:]))
