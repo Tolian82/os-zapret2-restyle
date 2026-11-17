@@ -173,6 +173,115 @@ def native_running_reinstall(archive, target, candidate_sha):
     check_running_replacement("AUTO", observer_required=True)
 
 
+def native_interrupted_handoff(archive, version, digest):
+    """A real *inter-process* incomplete handoff, never owner recovery.
+
+    Stop and record under FD9 using the installed service. Return to the
+    caller with NO FD9 owner while native pkg runs. Stop the test process
+    between installed pkg and protected finish; verify fail-closed guards
+    after the installed successor reload, then explicitly finish under
+    successor FD9 on this disposable OPNsense only. This does not model
+    arbitrary power loss or corrupt package files.
+    """
+    module_path = SERVICE.parent / "protected_pkg_update.py"
+    spec = importlib.util.spec_from_file_location("installed_protected_pkg_update", module_path)
+    product = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(product)
+    before = json.loads(JOURNAL.read_text())
+    old_id = before["detail"]["id"]
+    need(before.get("phase") == "committed" and
+         (EPOCHS / old_id / "epoch.json").is_file() and
+         run([str(SERVICE), "status"]).returncode == 0,
+         "INTERRUPT_PREDECESSOR_AUTO_NOT_RUNNING")
+    before_config = sha(CONFIG)
+    old_pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
+    need(old_pid.isdecimal(), "INTERRUPT_PREDECESSOR_PID_INVALID")
+    stage, staged_sha, stage_version = product.stage_archive(archive)
+    need(staged_sha == digest and stage_version == version and
+         stage.parent == ACTIVE.parent, "INTERRUPT_STAGED_ARCHIVE_DRIFT")
+
+    prepare = run([str(SERVICE), "pkg-update-prepare",
+                   str(stage), staged_sha, stage_version], timeout=90)
+    need(prepare.returncode == 0 and
+         "zapret-pkg-update-prepared=1" in prepare.stdout and
+         ACTIVE.is_file() and not ACTIVE.is_symlink() and
+         MARKER.is_file() and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "INTERRUPT_PRE_PKG_PREPARE_FAILED")
+    record_before = sha(ACTIVE)
+    pkg_before = installed_version()
+    attempted_start = run([str(SERVICE), "start"], timeout=40)
+    attempted_apply = run([str(SERVICE), "shared-apply-run"], timeout=40)
+    attempted_again = run([str(SERVICE), "pkg-update", str(archive)], timeout=40)
+    need(all(x.returncode == 69 for x in (
+             attempted_start, attempted_apply, attempted_again)) and
+         installed_version() == pkg_before and
+         sha(CONFIG) == before_config and sha(ACTIVE) == record_before and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "INTERRUPT_PRE_PKG_DID_NOT_FAIL_CLOSED")
+    print("NATIVE_PROTECTED_INTERRUPTED_BEFORE_PKG=PASS_RECORD_GUARD_FD9",
+          flush=True)
+
+    # Run the genuine same-byte OPNsense package; deliberately OMIT finish.
+    # No external process is permitted to silently complete restoration.
+    replace = run(["/usr/sbin/pkg", "-o", "REPO_AUTOUPDATE=false",
+                   "add", "-f", str(stage)], timeout=240)
+    combined = replace.stdout + "\n" + replace.stderr
+    need(replace.returncode == 0 and
+         "zapret-pkg-postinstall-guarded=1" in combined and
+         "script failed" not in combined and
+         installed_version() == version and sha(CONFIG) == before_config,
+         "INTERRUPT_REAL_NATIVE_PKG_FAILED")
+    need(ACTIVE.is_file() and sha(ACTIVE) == record_before and
+         MARKER.is_file() and run([str(SERVICE), "status"]).returncode == 1,
+         "INTERRUPT_POST_PKG_GUARD_LOST")
+    start_after = run([str(SERVICE), "start"], timeout=40)
+    again_after = run([str(SERVICE), "pkg-update", str(archive)], timeout=40)
+    need(start_after.returncode == 69 and again_after.returncode == 69 and
+         ACTIVE.is_file() and sha(ACTIVE) == record_before and
+         run([str(SERVICE), "status"]).returncode == 1,
+         "INTERRUPT_POST_PKG_UNAUTHORISED_START_OR_PKG")
+    print("NATIVE_PROTECTED_INTERRUPTED_AFTER_PKG=PASS_GUARDED_STOPPED",
+          flush=True)
+
+    finish = run([str(SERVICE), "pkg-update-finish", staged_sha, stage_version],
+                 timeout=150)
+    now = json.loads(JOURNAL.read_text())
+    new_id = now.get("detail", {}).get("id", "")
+    pid = Path("/var/run/dvtws2.pid").read_text().strip().split()[0]
+    result = {
+        "schema": 1,
+        "exact_native_pkg": replace.returncode == 0,
+        "finish_rc": finish.returncode,
+        "final_receipt": "zapret-pkg-update-committed=1" in finish.stdout,
+        "original_epoch_retired": (EPOCHS / old_id / "retired.json").is_file(),
+        "successor_epoch_committed":
+            now.get("phase") == "committed" and new_id != old_id and
+            (EPOCHS / new_id / "epoch.json").is_file(),
+        "different_running_pid": pid.isdecimal() and pid != old_pid,
+        "native_running_rc": run([str(SERVICE), "status"]).returncode,
+        "config_unchanged": before_config == sha(CONFIG),
+        "package_identity_verified": installed_version() == version,
+        "record_removed": not ACTIVE.exists() and not ACTIVE.is_symlink(),
+        "marker_removed": not MARKER.exists(),
+        "candidate_sha256_verified": sha(stage) == digest,
+        "owner_appliance_modified": False,
+    }
+    print("NATIVE_PROTECTED_INTERRUPT_HANDOFF=" +
+          json.dumps(result, sort_keys=True), flush=True)
+    need(result["finish_rc"] == 0 and result["final_receipt"] and
+         result["original_epoch_retired"] and
+         result["successor_epoch_committed"] and
+         result["different_running_pid"] and result["native_running_rc"] == 0 and
+         result["config_unchanged"] and result["package_identity_verified"] and
+         result["record_removed"] and result["marker_removed"] and
+         result["candidate_sha256_verified"],
+         "INTERRUPT_NATIVE_RECOVERY_NOT_VERIFIED")
+    stage.unlink()
+    print("NATIVE_PROTECTED_INTERRUPT_HANDOFF=PASS_REAL_NATIVE_PKG",
+          flush=True)
+
+
 def main():
     need(os.environ.get("GITHUB_ACTIONS") == "true" and
          os.environ.get("ZAPRET2_PROTECTED_PKG_NATIVE_TEST") == "1" and
@@ -255,7 +364,8 @@ def main():
     need(not ACTIVE.exists(), "PENDING_TEST_CLEANUP_FAILED")
     print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_AND_PENDING_REFUSAL")
     native_running_reinstall(archive, target, candidate_sha)
-    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_PENDING_AND_RUNNING")
+    native_interrupted_handoff(archive, target, candidate_sha)
+    print("NATIVE_PROTECTED_UPDATE=PASS_STOPPED_PENDING_RUNNING_AND_INTERRUPTED")
 
 
 if __name__ == "__main__":
