@@ -63,6 +63,11 @@ def reviewed_pkgdb(prior_version):
     query = cmd(["/usr/sbin/pkg", "query", "%v", NAME])
     info = cmd(["/usr/sbin/pkg", "info", "-e", NAME])
     verdict, evidence = policy.classify_pkgdb(query, info, prior_version)
+    # Diagnostic AFTER both native SQLite readers: never use file metadata
+    # to authorize recovery or repair any live package DB/journal.
+    forensic = load_file("native_pkgdb_metadata_post_probes",
+                         ROOT / "scripts/stage5-native-pkgdb-file-observer.py")
+    forensic.report("post-reviewed-dual-probe")
     print("NATIVE_REVIEWED_RECOVERY_PKGDB_READONLY=" +
           json.dumps(evidence, sort_keys=True), flush=True)
     need(verdict in ("absent", "registered-prior"),
@@ -153,8 +158,16 @@ def interrupt_for_reset(native, archive, target, expected_digest):
          "ORIGINAL_PREPARED_RECORD_MISSING")
     paths = witness.select_native_witnesses(native.ROOT, stage,
                                             native.run, native.need)
+    forensic = load_file("native_pkgdb_metadata_physically_torn",
+                         ROOT / "scripts/stage5-native-pkgdb-file-observer.py")
+    # Pure O_RDONLY SQLite/header and sidecar metadata, no DB connection.
+    # Before SIGKILL, real old pkg registration was already verified by FD9.
+    forensic.report("pre-extract")
     restored, marked, missing, foreign = witness.interrupt_real_native_pkg_midextract(
         stage, paths, native.need)
+    # FIRST forensic action after SIGKILL. Do not call SQLite / pkg or the
+    # possibly torn installed service before the hard-reset boundary.
+    forensic.report("post-sigkill")
     need(restored > 0 and marked + missing > 0 and foreign == 0 and
          native.ACTIVE.is_file() and native.sha(native.ACTIVE) == record_digest and
          native.MARKER.is_file() and native.sha(native.CONFIG) == before_config and

@@ -68,6 +68,10 @@ class ReviewedRecoveryContracts(unittest.TestCase):
         self.assertNotIn('native.SERVICE)', tail)
         self.assertNotIn('"start"', tail)
         self.assertNotIn('"pkg-update-finish"', tail)
+        self.assertIn('forensic.report("post-sigkill")', tail)
+        self.assertIn('forensic.report("pre-extract")',
+                      SOURCE.read_text().split("def interrupt_for_reset(", 1)[1])
+        self.assertNotIn('cmd(["/usr/sbin/pkg"', tail.split('forensic.report("post-sigkill")', 1)[1])
 
     def test_only_one_reviewed_native_pkg_call_and_no_other_writer(self):
         s = SOURCE.read_text()

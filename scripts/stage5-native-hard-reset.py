@@ -549,7 +549,13 @@ def guest_verify():
     receipt = read_receipt()
     boot = guest_boot()
     need(boot > receipt["boot_seconds"], "HARD_RESET_BOOT_ID_UNCHANGED")
+    forensic = load_test_only("stage5-native-pkgdb-file-observer.py",
+                              "native_postreset_pkgdb_file_metadata")
+    # Precedes this fixture's first explicit native pkg query in the
+    # postboot classification; automatic guest boot readers are unobserved.
+    forensic.report("post-reset-before-explicit-pkg-query")
     postboot = postboot_readonly_classification(receipt)
+    forensic.report("post-reset-after-explicit-pkg-query")
     need(postboot["prepared_guard_present_unchanged"],
          "POSTBOOT_PREPARED_GUARD_NOT_DURABLE")
     need(postboot["old_auto_retired"],

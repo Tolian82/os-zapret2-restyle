@@ -219,6 +219,13 @@ class HardResetContracts(unittest.TestCase):
         self.assertIn('"power_loss_tested": False', source)
         self.assertIn('"automatic_repair_attempted": False', source)
 
+    def test_guest_checks_pkgdb_metadata_before_explicit_postboot_pkg_query(self):
+        verify = SOURCE.read_text().split("def guest_verify():", 1)[1]
+        self.assertLess(verify.index('forensic.report("post-reset-before-explicit-pkg-query")'),
+                        verify.index('postboot_readonly_classification(receipt)'))
+        self.assertLess(verify.index('postboot_readonly_classification(receipt)'),
+                        verify.index('forensic.report("post-reset-after-explicit-pkg-query")'))
+
     def test_host_observer_does_not_bypass_strict_boot_id_gate(self):
         source = SOURCE.read_text()
         reset = source.split("def host_hard_reset():", 1)[1]
