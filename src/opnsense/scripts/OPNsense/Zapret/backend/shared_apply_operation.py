@@ -147,7 +147,9 @@ def _validate_found_post(post: object) -> dict:
     changed sources. A correct byte hash without the original inode/time
     identity must never authorize cold restore/forward completion.
     """
-    if not isinstance(post, dict) or list(post) != list(FOUND_NAMES):
+    # The ONE journal uses sort_keys=True; decoded object key order is not
+    # causal source order. Require exact membership, not insertion order.
+    if not isinstance(post, dict) or set(post) != set(FOUND_NAMES):
         raise SharedOperationError("invalid original found post-image pins")
     fields = {"status", "device", "inode", "ctime_ns", "mtime_ns", "size", "sha256"}
     for name in FOUND_NAMES:
