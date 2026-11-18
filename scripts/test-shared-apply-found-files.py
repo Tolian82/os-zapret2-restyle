@@ -108,7 +108,8 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertFalse(receipt["commit_authorized"])
         self.assertEqual(journal.read()["phase"], "found-files-written")
         pins = journal.read()["found"]["post"]
-        self.assertEqual(list(pins), list(SHARED_FOUND_NAMES))
+        # The original FD9 journal canonicalizes JSON dict keys alphabetically.
+        self.assertEqual(set(pins), set(SHARED_FOUND_NAMES))
         for name, path in self.targets.items():
             st = path.lstat()
             self.assertEqual((pins[name]["device"], pins[name]["inode"],
