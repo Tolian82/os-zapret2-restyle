@@ -299,8 +299,15 @@ try {
         }
     }
 } catch (\Throwable $error) {
+    // In this disposable-only witness a wrapped save exception otherwise
+    // hides the root phase failure (and forces another complete native VM).
+    // Emit only its bounded A-Z0-9 diagnostic code; never print XML/domains.
+    $cause = $error;
+    while ($cause->getPrevious() instanceof \Throwable) {
+        $cause = $cause->getPrevious();
+    }
     fwrite(STDERR, "G03_COLD_PREPARED=REFUSED:" .
-        preg_replace('/[^A-Z0-9_]/','',strtoupper(substr($error->getMessage(),0,85))) .
+        preg_replace('/[^A-Z0-9_]/','',strtoupper(substr($cause->getMessage(),0,85))) .
         "\n");
     exit(69);
 }
