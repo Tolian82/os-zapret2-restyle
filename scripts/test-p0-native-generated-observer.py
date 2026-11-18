@@ -31,6 +31,7 @@ PORT, MIXED_PORT, IMPORT_PORT, DEFAULT_PORT, VOICE_PORT = range(6545, 6550)
 DIVERT = 19899
 RULES = (19351, 19352, 19353, 19354)
 UNKNOWN = "unknown.generated.p0.invalid"
+HOT_KNOWN = "newly-generated.p0.invalid"
 IP_ONLY = "ipset.generated.p0.invalid"
 
 
@@ -185,6 +186,10 @@ def self_test() -> None:
     need(selections(sample + "desync profile 2 (known) matches\n")
          == {(PORT, "http", "youtube.com"): {2}}, "NATIVE_LOG_PARSER_INVALID")
     need(not selections("desync profile 2 (known) matches\n"), "STARTUP_BANNER_FALSE_POSITIVE")
+    # The native hot-reload witness requires a genuinely different host from
+    # the existing list and the observer's positive raw event.
+    need(HOT_KNOWN not in ("youtube.com", UNKNOWN, IP_ONLY) and
+         HOT_KNOWN.endswith(".invalid"), "HOT_RELOAD_TEST_HOST_NOT_ISOLATED")
     print(MARK + "_SELF_TEST=PASS_ACTUAL_GENERATOR_ONLY", flush=True)
 
 
@@ -243,6 +248,41 @@ def native(checkout: Path) -> None:
                 need(inbox.read_text().splitlines() == [UNKNOWN], "GENERATED_RAW_APPEND_NOT_CONFIRMED")
                 need(original.exchange(UNKNOWN, port=PORT, force_rst=False) == original.request(UNKNOWN),
                      "UNKNOWN_HTTP_CHANGED_AFTER_APPEND")
+                # Native engine-only proof of hot-reloading an original
+                # generator managed HOSTLIST. This is intentionally a
+                # disposable guest fixture, NOT forged P1 attribution,
+                # synthetic production pending or an owner-installed P2 ACK.
+                # The real original P2 `_replace` is used, not a competing
+                # hostlist writer or SIGHUP/stop/pause/restart.
+                known_path = case / "active/managed/hostlist-youtube.txt"
+                args = data["final"].decode().split()
+                need("--hostlist=" + str(known_path) in args,
+                     "HOT_RELOAD_NOT_ENGINE_REFERENCED_MANAGED_PATH")
+                from auto_detect_destination_commit import (
+                    _file_identity, _native_list_modification_visible,
+                    _replace, _target)
+                native_before, native_st = _target(known_path, os.geteuid())
+                new_row = (HOT_KNOWN + "\n").encode("ascii")
+                need(new_row not in native_before and
+                     native_before.endswith(b"\n"),
+                     "HOT_RELOAD_START_NOT_QUALIFIED")
+                need(original.exchange(HOT_KNOWN, port=PORT, force_rst=False)
+                     == original.request(HOT_KNOWN),
+                     "HOT_RELOAD_BEFORE_HTTP_NOT_FORWARDED")
+                need(inbox.read_text().splitlines() == [UNKNOWN],
+                     "HOT_RELOAD_TEST_INVENTED_NATIVE_POSITIVE")
+                _replace(known_path, native_before, native_before + new_row,
+                         os.geteuid(), expected_identity=_file_identity(native_st))
+                native_after, new_st = _target(known_path, os.geteuid())
+                need(native_after == native_before + new_row and
+                     new_st.st_ino != native_st.st_ino and
+                     _native_list_modification_visible(native_st, new_st),
+                     "HOT_RELOAD_ATOMIC_FILE_OR_SIGNATURE_UNVERIFIED")
+                need(original.exchange(HOT_KNOWN, port=PORT, force_rst=False)
+                     == original.request(HOT_KNOWN),
+                     "HOT_RELOAD_AFTER_HTTP_NOT_FORWARDED")
+                need(inbox.read_text().splitlines() == [UNKNOWN],
+                     "HOT_RELOAD_KNOWN_HOST_ADDED_TO_UNKNOWN_RAW")
                 current = guard.cmd("ps", "-p", str(process.pid), "-o", "lstart=")
                 need(process.poll() is None and current.returncode == 0 and current.stdout == identity.stdout,
                      "GENERATION_PROCESS_CHANGED")
@@ -273,6 +313,12 @@ def native(checkout: Path) -> None:
 
         content = log.read_text(errors="replace")
         attest_selections(content)
+        # First unmatched traffic selects the no-action observer 6, then
+        # the same hostname selects original known profile 2 after the
+        # atomic file update. Both are observed via REAL desync profile
+        # search/match logs; startup banner text is insufficient evidence.
+        need(selections(content).get((PORT, "http", HOT_KNOWN)) == {2, 6},
+             "NATIVE_HOT_RELOAD_NO_OBSERVER_TO_KNOWN_TRANSITION")
         need("* lua 'multisplit" in content, "AUTHORIZED_LUA_NOT_EXERCISED")
         need((inbox.stat().st_dev, inbox.stat().st_ino) == raw_identity and
              (debug.stat().st_dev, debug.stat().st_ino) == debug_identity,
@@ -291,8 +337,10 @@ def native(checkout: Path) -> None:
               native_profile_numbers=[1, 2, 3, 4, 5, 6, 0], observer=6,
               known_hostlist_source=3, mixed_source=4, raw_events=1,
               raw_debug_same_generation=True, unknown_http_unchanged=True,
+              native_managed_hostlist_hot_reload=True, same_pid_birth=True,
+              no_signal_no_service_restart=True, engine_only_not_original_p2_ack=True,
               ipfw_restored=True, engine_stopped=True)), flush=True)
-        print(MARK + "=PASS_NATIVE_GENERATED_AUTO_MAP_LOOPBACK_ONLY", flush=True)
+        print(MARK + "=PASS_NATIVE_GENERATED_AUTO_MAP_AND_ENGINE_HOT_RELOAD_LOOPBACK_ONLY", flush=True)
     except BaseException:
         if log.exists():
             print("P0_GENERATED_ENGINE_DIAGNOSTIC_TAIL\n" + log.read_text(errors="replace")[-14000:],
