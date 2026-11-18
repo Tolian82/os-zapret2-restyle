@@ -616,7 +616,10 @@ def recover_native_found_prepared_pristine(
             assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
             if store.read() != pending:
                 return False
-            verify_seal(work, owner=0)
+            # Another self-consistent seal is NOT the original sealed
+            # transaction: refuse before the journal becomes RESTORED.
+            if verify_seal(work, owner=0) != seal:
+                return False
             _verify_planned_preimages_locked(
                 verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
             prior_again = examine_pending_found_previous(pending)

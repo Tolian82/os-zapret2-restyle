@@ -621,7 +621,7 @@ class EffectiveKnownTests(unittest.TestCase):
              patch.object(opmodule, "SharedApplyOperation", return_value=journal), \
              patch.object(sealing, "WORK", plan_path.parent.parent), \
              patch.object(sealing, "_stat"), \
-             patch.object(sealing, "verify_seal", return_value=seal), \
+             patch.object(sealing, "verify_seal", return_value=seal) as seal_reader, \
              patch.object(ipfw, "require_lifecycle_lock"), \
              patch.object(inherited, "assert_inherited_config_fd"), \
              patch.object(voice, "examine_pending_found_previous",
@@ -644,7 +644,24 @@ class EffectiveKnownTests(unittest.TestCase):
                     current["id"], config_fd=4, config_digest="f" * 64)
             self.assertEqual(journal.read(), original_journal)
 
+            # A separately valid but different bundle seal cannot
+            # close the old PREPARED transaction even under held P2.
             refuse_second[0] = False
+            witness_calls[0] = 0
+            seal_reader.side_effect = [
+                seal, {"sha256": {**seal["sha256"], "release": "f" * 64}}
+            ]
+            with self.assertRaisesRegex(
+                    opmodule.SharedOperationError,
+                    "original found pristine Config/P2/runtime refused"):
+                recover_native_found_prepared_pristine(
+                    current["id"], config_fd=4, config_digest=current["base"])
+            self.assertFalse(held[0])
+            self.assertEqual(witness_calls[0], 1)
+            self.assertEqual(journal.read(), original_journal)
+
+            seal_reader.side_effect = None
+            seal_reader.return_value = seal
             witness_calls[0] = 0
             receipt = recover_native_found_prepared_pristine(
                 current["id"], config_fd=4, config_digest=current["base"])
