@@ -413,12 +413,18 @@ api_call()
 wait_terminal()
 {
     job="$1"
+    # This fixture owns the mock job directory. Reading the worker's atomic
+    # status file is a passive wait; the public status API can trigger
+    # stale-worker recovery while the simulated daemon is still running.
+    # Call the real public status/result API only AFTER terminal state below.
+    status_file="${RUN_DIR}/jobs/${job}/status.json"
     attempt=0
     while [ "${attempt}" -lt 40 ]
     do
-        status=$(api_call strategy_lab_status "${job}")
-        state=$(printf '%s\n' "${status}" | jq -r '.state // ""')
-        case "${state}" in completed|error) return 0 ;; esac
+        if [ -r "${status_file}" ]; then
+            state=$(jq -r '.state // ""' "${status_file}" 2>/dev/null || true)
+            case "${state}" in completed|error) return 0 ;; esac
+        fi
         sleep 1
         attempt=$((attempt + 1))
     done
