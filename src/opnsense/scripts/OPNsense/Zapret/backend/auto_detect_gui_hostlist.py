@@ -71,7 +71,7 @@ def read_current(path: Path = AUTO_HOSTLIST, lock: Path = AUTO_LOCK, *,
         }
 
 
-def _create(path: Path, data: bytes, uid: int) -> None:
+def _create(path: Path, data: bytes, uid: int, *, stage_fn=None) -> None:
     """Write a complete temporary inode, then link-once an absent name."""
     temp = path.parent / ('.auto-hostlist-' + secrets.token_hex(16) + '.tmp')
     fd = None
@@ -88,6 +88,8 @@ def _create(path: Path, data: bytes, uid: int) -> None:
         os.fsync(fd)
         os.close(fd)
         fd = None
+        if stage_fn is not None:
+            stage_fn("ready", temp, data)
         os.link(temp, path, follow_symlinks=False)
         _sync(path.parent)
     finally:
@@ -96,6 +98,10 @@ def _create(path: Path, data: bytes, uid: int) -> None:
         if temp.exists():
             temp.unlink()
             _sync(path.parent)
+    # A temporary link has been removed, so _target() can now validate
+    # the single-link final inode and the same WAL pin.
+    if stage_fn is not None:
+        stage_fn("installed", path, data)
 
 
 def save_current(revision: str, content: str, path: Path = AUTO_HOSTLIST,

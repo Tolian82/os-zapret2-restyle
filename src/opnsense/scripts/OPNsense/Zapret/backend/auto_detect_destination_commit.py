@@ -85,7 +85,7 @@ def _edit(before: bytes, add: list[str], remove: list[str]) -> bytes:
     return result
 
 
-def _replace(path: Path, current: bytes, expected: bytes, uid: int) -> None:
+def _replace(path: Path, current: bytes, expected: bytes, uid: int, *, stage_fn=None) -> None:
     """One protected same-directory replace after read-side CAS under GUI lock."""
     now, st = _target(path, uid)
     if now != current:
@@ -104,6 +104,10 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int) -> None:
         os.fsync(fd)
     finally:
         os.close(fd)
+    # The original FD9 WAL can persist the just-fsynced private inode
+    # BEFORE the first rename. Ordinary GUI/P2 writers pass no stage_fn.
+    if stage_fn is not None:
+        stage_fn("ready", temp, expected)
     # Writers that ignore the shared GUI lock are not trusted. Recheck before
     # replace; the next GUI implementation MUST acquire this same lock.
     try:
@@ -117,8 +121,14 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int) -> None:
             # in place by a foreign writer during temporary inode creation.
             # Never replace such a file or discard a new minute finding.
             raise DestinationRefused("destination_conflict_with_gui")
+        if stage_fn is not None:
+            staged, _ = _target(temp, uid)
+            if staged != expected:
+                raise DestinationRefused("original_staged_temp_changed")
         os.replace(temp, path)
         _sync(path.parent)
+        if stage_fn is not None:
+            stage_fn("installed", path, expected)
     finally:
         if temp.exists():
             temp.unlink()
@@ -487,7 +497,8 @@ def _plan_shared_found_under_original_locks(
 
 
 def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
-                                 replace_fn=None, create_fn=None) -> dict:
+                                 replace_fn=None, create_fn=None,
+                                 stage_fn=None) -> dict:
     """All-target CAS before any write, with bounded synchronous compensation.
 
     Caller MUST hold original FD9 and Config->P2 destination lock. A missing
@@ -524,6 +535,28 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
     modified = []
     created_pins = {}
     own_written_inodes = {}
+    ready_pins = {}
+
+    def file_stage(name: str, phase: str, target: Path, contents: bytes) -> None:
+        if stage_fn is None:
+            return
+        observed, st = _target(target, uid)
+        if observed != contents:
+            raise DestinationRefused("original_staged_inode_content_changed")
+        pin = {"device": st.st_dev, "inode": st.st_ino,
+               "mtime_ns": st.st_mtime_ns, "size": st.st_size,
+               "sha256": _sha(contents)}
+        if phase == "ready":
+            if name in ready_pins:
+                raise DestinationRefused("duplicate_original_staged_inode")
+            ready_pins[name] = pin
+        elif phase == "installed":
+            if name not in ready_pins or pin != ready_pins[name]:
+                raise DestinationRefused("original_staged_inode_changed_at_rename")
+        else:
+            raise DestinationRefused("invalid_original_staged_inode_phase")
+        stage_fn(name, phase, pin)
+
     try:
         for name in SHARED_FOUND_NAMES:
             path, before, after, status = original[name]
@@ -546,9 +579,19 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
             # returning. Never blindly unlink an unpinned ambiguous create.
             modified.append(name)
             if status == "missing":
-                create(path, after, uid)
+                if stage_fn is not None and create_fn is None:
+                    create(path, after, uid,
+                           stage_fn=lambda phase, item, contents, n=name:
+                               file_stage(n, phase, item, contents))
+                else:
+                    create(path, after, uid)
             else:
-                replace(path, before, after, uid)
+                if stage_fn is not None and replace_fn is None:
+                    replace(path, before, after, uid,
+                            stage_fn=lambda phase, item, contents, n=name:
+                                file_stage(n, phase, item, contents))
+                else:
+                    replace(path, before, after, uid)
             actual, st = _target(path, uid)
             if status == "missing":
                 created_pins[name] = (st.st_dev, st.st_ino, st.st_ctime_ns,
@@ -702,8 +745,16 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
     store.advance_found_files("found-files-writing", detail, plan_bytes, attest)
     # Original Config/P2 locks forbid any minute write interleaving.
     # A SIGKILL between renames leaves the journal in files-writing.
+    def durable_file_stage(name: str, phase: str, pin: dict) -> None:
+        store.advance_found_stage(
+            detail, plan_bytes, name, phase, pin,
+            lambda stage, content, staged_name, staged_pin:
+                staged_name == name and staged_pin == pin and
+                attest("found-stage-" + stage, content) is True)
+
     result = _locked_shared_found_replace(
-        rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn)
+        rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn,
+        stage_fn=durable_file_stage)
     post = result["post_images"]
     qualified = _qualified_shared_found_batch(rows)
     for name in SHARED_FOUND_NAMES:
@@ -817,6 +868,10 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
             if phase == "found-files-writing":
                 _verify_planned_preimages_locked(
                     verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            elif phase in ("found-stage-ready", "found-stage-installed"):
+                # The stage callback's physical source reads establish
+                # the temp/destination inode under this inherited P2 lock.
+                pass
             elif phase == "found-files-written":
                 for name in SHARED_FOUND_NAMES:
                     before_data, after_data, _, initial = verified[name]

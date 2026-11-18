@@ -100,6 +100,70 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             rows, self.targets, store=journal, detail=d,
             plan_bytes=body, uid=self.uid, attest=callback, **kwargs)
 
+
+    def test_each_changed_file_is_durable_ready_before_rename(self):
+        journal, _, _, apply = self.journaled()
+        import auto_detect_destination_commit as destination
+        from unittest.mock import patch
+        rename = destination.os.replace
+        seen = []
+
+        def guarded_rename(source, target):
+            if Path(target) in self.targets.values():
+                name = next(n for n, p in self.targets.items() if p == Path(target))
+                staged = journal.read()["found"]["stages"].get(name)
+                self.assertIsNotNone(staged)
+                self.assertEqual(staged["state"], "ready")
+                tmp_stat = Path(source).lstat()
+                self.assertEqual((staged["pin"]["device"], staged["pin"]["inode"]),
+                                 (tmp_stat.st_dev, tmp_stat.st_ino))
+                seen.append(name)
+            return rename(source, target)
+
+        with patch.object(destination.os, "replace", side_effect=guarded_rename):
+            receipt = apply()
+        self.assertEqual(receipt["journal_phase"], "found-files-written")
+        self.assertEqual(seen, ["youtube", "user", "auto"])
+        staged = journal.read()["found"]["stages"]
+        self.assertEqual(set(staged), set(seen))
+        self.assertTrue(all(row["state"] == "installed" for row in staged.values()))
+
+    def test_stage_ready_durable_failure_protects_first_destination(self):
+        journal, _, _, apply = self.journaled()
+        original_advance = journal.advance_found_stage
+        seen = []
+
+        def fail_after_file_stage(detail, raw, name, phase, pin, attest):
+            seen.append((name, phase))
+            if phase == "ready":
+                raise OSError("simulated stage WAL fsync")
+            return original_advance(detail, raw, name, phase, pin, attest)
+
+        journal.advance_found_stage = fail_after_file_stage
+        with self.assertRaisesRegex(
+                DestinationRefused, "shared_found_restored_after_failure"):
+            apply()
+        self.assertEqual(seen, [("youtube", "ready")])
+        self.assert_old()
+        self.assertEqual(journal.read()["phase"], "found-files-writing")
+
+    def test_stage_installed_fsync_failure_keeps_ambiguous_wal(self):
+        journal, _, _, apply = self.journaled()
+        original_advance = journal.advance_found_stage
+
+        def fail_post_rename(detail, raw, name, phase, pin, attest):
+            if name == "youtube" and phase == "installed":
+                raise OSError("simulated postrename WAL fsync")
+            return original_advance(detail, raw, name, phase, pin, attest)
+
+        journal.advance_found_stage = fail_post_rename
+        with self.assertRaisesRegex(DestinationRefused, "shared_found_requires_review"):
+            apply()
+        # Physical rename has happened, but WRITTEN is never asserted.
+        self.assertEqual(journal.read()["phase"], "found-files-writing")
+        self.assertEqual(journal.read()["found"]["stages"]["youtube"]["state"], "ready")
+        self.assertEqual(self.targets["youtube"].read_text(), self.new["youtube"])
+
     def test_journal_original_wal_before_first_three_file_write(self):
         journal, detail, raw, apply = self.journaled()
         receipt = apply()
@@ -174,7 +238,8 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
 
     def test_journal_postwrite_witness_refusal_leaves_nonterminal_physical_after(self):
         journal, _, _, apply = self.journaled(
-            witness=lambda phase, raw: phase == "found-files-writing")
+            witness=lambda phase, raw:
+                phase == "found-files-writing" or phase.startswith("found-stage-"))
         with self.assertRaisesRegex(SharedOperationError, "witness refused"):
             apply()
         self.assertEqual(journal.read()["phase"], "found-files-writing")
