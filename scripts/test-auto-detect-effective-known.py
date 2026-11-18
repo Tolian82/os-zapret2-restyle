@@ -249,6 +249,7 @@ class EffectiveKnownTests(unittest.TestCase):
         rows, targets = self.planned_rows()
         targets["youtube"].unlink()
         targets["youtube"].write_text(rows["youtube"]["after"])
+        targets["youtube"].chmod(0o600)
         result = self.cold_image(rows, targets)
         self.assertEqual(result["image"], "contains-unattributed-after")
         self.assertEqual(result["states"], {
@@ -271,10 +272,12 @@ class EffectiveKnownTests(unittest.TestCase):
         old = target.read_bytes()
         target.unlink()
         target.write_bytes(old)
+        target.chmod(0o600)
         with self.assertRaisesRegex(EffectiveKnownRefused, "cold_found_unknown_image"):
             self.cold_image(rows, targets)
         target.unlink()
         target.write_text("foreign.net\n")
+        target.chmod(0o600)
         with self.assertRaisesRegex(EffectiveKnownRefused, "cold_found_unknown_image"):
             self.cold_image(rows, targets)
 
