@@ -31,6 +31,107 @@ class TestJournal(unittest.TestCase):
 
 
 
+    def test_found_prepared_pristine_recovery_reuses_one_journal_and_old_owner(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            previous = detail("a" * 32)
+            for phase in ("prepared", "activating", "activated",
+                          "config-saved", "committed"):
+                journal.advance(phase, previous)
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": previous["candidate"], "candidate": "c" * 64,
+                 "changed_fields": ["hostlist.youtubedomains"]}
+            plan = json.dumps({
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"],
+                "changed_fields": d["changed_fields"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            before = (journal.root / "operation.json").read_bytes()
+            calls = []
+            with self.assertRaisesRegex(SharedOperationError, "runtime refused"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan,
+                    lambda raw, old: calls.append((raw, old)) or False)
+            self.assertEqual(calls, [(plan, previous)])
+            self.assertEqual(before, (journal.root / "operation.json").read_bytes())
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan + b" ", lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    "f" * 32, plan, lambda *_: True)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+            result = journal.finish_found_prepared_pristine(
+                d["id"], plan, lambda raw, old: raw == plan and old == previous)
+            self.assertEqual(result["phase"], "restored")
+            self.assertEqual(result["previous"], previous)
+            self.assertNotIn("found", result)
+            self.assertEqual(journal.read(), result)
+            self.assertEqual(committed_owner(result), previous)
+            self.assertTrue(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+            self.assertEqual((journal.root / "operation.json").stat().st_mode & 0o777, 0o600)
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan, lambda *_: True)
+            self.assertEqual(journal.read(), result)
+
+    def test_found_prepared_pristine_refuses_later_phases_and_modified_plan(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "c" * 64, "changed_fields": []}
+            original = {
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"], "changed_fields": [],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }
+            plan = json.dumps(original).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            invalid = dict(original, changed_fields=["hostlist.userdomains"])
+            with self.assertRaisesRegex(SharedOperationError, "plan mismatches journal"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], json.dumps(invalid).encode(),
+                    lambda *_: True)
+            # Source remains untouched in the journal after refusal.
+            self.assertEqual(journal.read()["phase"], "prepared")
+            journal.advance_found_files(
+                "found-files-writing", d, plan, lambda *_: True)
+            before = (journal.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan, lambda *_: True)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+
+    def test_found_prepared_pristine_first_install_retains_no_previous_owner(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "c" * 64, "changed_fields": []}
+            plan = json.dumps({
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"], "changed_fields": [],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            witnessed = []
+            completed = journal.finish_found_prepared_pristine(
+                d["id"], plan, lambda raw, previous:
+                    witnessed.append(previous) is None and previous is None)
+            self.assertEqual(witnessed, [None])
+            self.assertEqual(completed["phase"], "restored")
+            self.assertNotIn("previous", completed)
+            self.assertIsNone(committed_owner(completed))
+
     def test_found_config_wal_pre_save_and_post_save_is_strictly_nonterminal(self):
         import hashlib
         with tempfile.TemporaryDirectory() as temporary:

@@ -490,6 +490,62 @@ class SharedApplyOperation:
             os.close(dirfd)
         return record
 
+    def finish_found_prepared_pristine(
+        self, identity: str, sealed_plan: bytes, attest
+    ) -> dict:
+        """Close ONLY an attested original found PREPARED no-mutation crash.
+
+        The trusted original FD9 owner must keep the native Config→P2
+        critical section and independently verify: the original seal,
+        exact *current* Config base, all three unchanged physical before
+        inodes and known-source provenance, plus the actual previous
+        runtime/process/IPFW owner (or proven initial no-owner state).
+        This journal helper cannot itself supply or weaken that proof.
+        It deliberately has NO CLI, GUI route or automatic boot caller.
+        Found FILES-WRITING and every later phase remain nonterminal.
+        """
+        if (not isinstance(identity, str) or not OP_ID.fullmatch(identity) or
+                type(sealed_plan) is not bytes or
+                not 0 < len(sealed_plan) <= MAX_FOUND_PLAN):
+            raise SharedOperationError("invalid original found pristine recovery")
+        record = self.read()
+        if (record is None or record["phase"] != "prepared" or
+                "found" not in record or record["detail"]["id"] != identity or
+                record["found"]["plan_sha256"] !=
+                hashlib.sha256(sealed_plan).hexdigest()):
+            raise SharedOperationError("found pristine recovery phase/plan mismatch")
+        detail = record["detail"]
+        prior = record.get("previous")
+        if prior is not None and prior["candidate"] != detail["base"]:
+            raise SharedOperationError("found pristine predecessor not Config base")
+        try:
+            plan = json.loads(sealed_plan)
+            found_intent = plan["found_intent"]
+            batch = plan["found_batch"]
+        except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+            raise SharedOperationError("found pristine sealed plan unreadable") from exc
+        if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+                plan.get("result") != "prepared" or
+                plan.get("dependencies") != detail["base"] or
+                plan.get("changed_fields") != detail["changed_fields"] or
+                not isinstance(found_intent, dict) or
+                found_intent.get("config_revision") != detail["base"] or
+                found_intent.get("commit_authorized") is not False or
+                not isinstance(batch, dict) or
+                list(batch) != list(FOUND_NAMES) or
+                any(not isinstance(batch[name], dict) for name in FOUND_NAMES)):
+            raise SharedOperationError("found pristine sealed plan mismatches journal")
+        if not callable(attest) or attest(sealed_plan, prior) is not True:
+            raise SharedOperationError("original found pristine Config/P2/runtime refused")
+        if self.read() != record:
+            raise SharedOperationError("found pristine journal changed under original locks")
+        # Drop the uncommitted found intent ONLY after all original no-write
+        # attestations have succeeded; generic restored cannot carry it.
+        completed = {"schema": SCHEMA, "phase": "restored", "detail": detail}
+        if prior is not None:
+            completed["previous"] = prior
+        return self._persist_record(completed)
+
     def recover_prepared(self, identity: str, attest) -> dict:
         """Only PREPARED can be closed without touching runtime/Config/IPFW.
 
