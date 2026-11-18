@@ -200,6 +200,136 @@ namespace {
     verify($forbidden->saves === 0 && $forbidden->locks === 0,
            'mixed found intent changed Config before three-file transaction');
 
+    // Internal original owner: same Config::save writer, with P2 held
+    // over the native save, but released BEFORE the second Config lock.
+    $nativeFound = SettingsApply::prepareStrategies(
+        $config->disk,
+        ['strategy'=>['trafficargs'=>'--filter-tcp=443']],
+        $config->disk['hostlist']['telegramips']
+    );
+    $nativeFound['found_intent'] = ['commit_authorized'=>false];
+    $nativeFound['found_batch'] = ['youtube'=>[], 'user'=>[], 'auto'=>[]];
+    $orig = new FakeConfig($config->disk);
+    $sequence = [];
+    $p2Held = false;
+    $withP2 = static function (callable $scope) use (&$sequence, &$p2Held, $orig): string {
+        verify($orig->locks === 1 && !$p2Held,
+               'P2 attempted before Config lock or still held at relock');
+        $p2Held = true;
+        $sequence[] = 'p2-lock';
+        try { return $scope(); }
+        finally { $p2Held = false; $sequence[] = 'p2-unlock'; }
+    };
+    $attest = static function (string $stage, string $digest) use (
+        &$sequence, &$p2Held, $orig
+    ): bool {
+        verify($orig->locks === 1 && $p2Held && strlen($digest) === 64,
+               'native file witness did not hold original Config->P2');
+        $sequence[] = $stage;
+        return true;
+    };
+    $journal = static function (string $phase) use (
+        &$sequence, &$p2Held
+    ): bool {
+        verify($p2Held, 'found Config phase not under P2 lock');
+        $sequence[] = $phase;
+        return true;
+    };
+    $foundResult = SharedConfigCommit::persistFoundUnderOriginalOwner(
+        $nativeFound, 'strategies', $orig, static fn()=>new FakeModel(),
+        $withP2, $attest, $journal
+    );
+    verify($foundResult['result'] === 'found-config-saved-nonterminal' &&
+        $foundResult['saved'] && !$foundResult['applied'] &&
+        !$foundResult['commit_authorized'] &&
+        $orig->saves === 1 && $orig->locks === 0 &&
+        $orig->disk['strategy']['trafficargs'] === '--filter-tcp=443',
+        'original found Config writer failed to persist or falsely applied');
+    verify($sequence === [
+        'p2-lock','before-config-save','found-config-saving','p2-unlock',
+        'p2-lock','after-config-save','found-config-saved','p2-unlock'
+    ], 'original Config->P2 lock order or durable phase order changed');
+
+    // Found-only edit must still pass through one sealed nonterminal WAL,
+    // but it must not manufacture a new native XML revision.
+    $unchangedFound = SettingsApply::prepareStrategies(
+        $orig->disk, [], $orig->disk['hostlist']['telegramips']
+    );
+    $unchangedFound['found_intent'] = ['commit_authorized'=>false];
+    $unchangedFound['found_batch'] = ['youtube'=>[], 'user'=>[], 'auto'=>[]];
+    $noop = new FakeConfig($orig->disk);
+    $noopSteps = [];
+    $resultNoop = SharedConfigCommit::persistFoundUnderOriginalOwner(
+        $unchangedFound, 'strategies', $noop, static fn()=>new FakeModel(),
+        static function (callable $run) use ($noop): string {
+            verify($noop->locks === 1, 'found-only original Config lock lost');
+            return $run();
+        },
+        static fn(string $stage, string $digest): bool => strlen($digest) === 64,
+        static function (string $phase) use (&$noopSteps): bool {
+            $noopSteps[] = $phase;
+            return true;
+        }
+    );
+    verify($resultNoop['saved'] === false && $noop->saves === 0 &&
+        $noopSteps === ['found-config-saving', 'found-config-saved'],
+        'found-only Apply incorrectly created a Config revision');
+
+    // Durable phase recording failure MUST prevent the first save call.
+    $refused = new FakeConfig($config->disk);
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $refused, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static fn(string $phase): bool => false
+        );
+        verify(false, 'undurable Config intent crossed save');
+    } catch (\RuntimeException $expected) {}
+    verify($refused->saves === 0 && $refused->locks === 0,
+           'Config changed despite absent found-save WAL');
+
+    // Native IO error after the durable intent: no automatic rollback or
+    // invented restored. The saved outcome is uncertain.
+    $uncertain = new FakeConfig($config->disk);
+    $uncertain->saveFails = true;
+    $savedPhases = [];
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $uncertain, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static function (string $phase) use (&$savedPhases): bool {
+                $savedPhases[] = $phase;
+                return true;
+            }
+        );
+        verify(false, 'native Config failure was marked saved');
+    } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $expected) {}
+    verify($uncertain->saves === 1 && $uncertain->locks === 0 &&
+           $savedPhases === ['found-config-saving'],
+           'native Config failure erased unresolved original WAL');
+
+    // Config::save unlocks; a foreign edit between save and relock
+    // must remain uncertain before the post-save found journal.
+    $raced = new FakeConfig($config->disk);
+    $raced->raceAfterSave = true;
+    $racePhases = [];
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $raced, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static function (string $phase) use (&$racePhases): bool {
+                $racePhases[] = $phase;
+                return true;
+            }
+        );
+        verify(false, 'raced saved Config accepted as original owner');
+    } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $expected) {}
+    verify($racePhases === ['found-config-saving'] &&
+           $raced->locks === 0, 'saved Config race was not isolated');
+
     $stale=SettingsApply::prepareStrategies(
         $config->disk,['strategy'=>['trafficargs'=>'--filter-tcp=443']],
         $config->disk['hostlist']['telegramips']

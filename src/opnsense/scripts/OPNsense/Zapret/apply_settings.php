@@ -170,11 +170,7 @@ final class SharedConfigCommit
             }
             $saveAttempted = true;
             // Use native Config revision, audit and backup notifications.
-            $config->save([
-                'description' => $page === 'voice'
-                    ? 'Applied shared Zapret Voice settings'
-                    : 'Applied shared Zapret Strategies settings',
-            ]);
+            self::saveNativeModel($config, $page);
         } catch (\Throwable $error) {
             if ($saveAttempted) {
                 // Config::save may have partly written the target, and
@@ -226,6 +222,156 @@ final class SharedConfigCommit
             'change_count' => $changeCount,
         ];
     }
+
+    /**
+     * Original single-Config-writer INTERNAL cutover for an already durable
+     * three-file found WAL. NO native worker/configd/GUI route calls this yet.
+     *
+     * $withOriginalP2 is the FUTURE original native Config->P2 lock scope;
+     * it must execute its callback exactly once, releasing P2 before return.
+     * $attestOriginal must prove FD9, original locked Config FD4, exact
+     * sealed release/plan, found-files-written journal and three physical
+     * after-images while P2 is held. $recordFoundPhase must fsync the SAME
+     * FD9 operation.json from the original Config/P2 owner.
+     *
+     * CRITICAL: Config::save() releases the Config flock on OPNsense 26.7.
+     * The P2 scope remains held through save() but MUST EXIT before a fresh
+     * Config::lock(); reacquire Config THEN P2 for readback and saved-phase
+     * journal fsync. Unknown outcomes are never safe to mark restored.
+     */
+    public static function persistFoundUnderOriginalOwner(
+        array $plan,
+        string $page,
+        object $config,
+        callable $modelFactory,
+        callable $withOriginalP2,
+        callable $attestOriginal,
+        callable $recordFoundPhase
+    ): array {
+        $intent = $plan['found_intent'] ?? null;
+        if ($page !== 'strategies' ||
+            !is_array($intent) ||
+            ($intent['commit_authorized'] ?? null) !== false ||
+            !isset($plan['found_batch']) || !is_array($plan['found_batch']) ||
+            array_keys($plan['found_batch']) !== ['youtube', 'user', 'auto'] ||
+            !isset($plan['changed_fields']) || !is_array($plan['changed_fields'])) {
+            throw new \InvalidArgumentException(
+                'Original sealed three-source Config owner required'
+            );
+        }
+        $attemptRecorded = false;
+        $saveAttempted = false;
+        $changeCount = count($plan['changed_fields']);
+        $targetDigest = null;
+        $config->lock();
+        try {
+            $model = $modelFactory();
+            $live = $model->getNodes();
+            $target = SettingsApply::mergeForCommit($live, $plan, $page);
+            $targetDigest = VoiceSettingsSnapshot::digest($target);
+            if ($changeCount > 0) {
+                self::validateOwnedModelFields($model, $target, $plan['changed_fields']);
+                if (!$model->serializeToConfig(false, true)) {
+                    throw new \RuntimeException('Native found Config model serialization refused');
+                }
+            }
+            $p2Invocations = 0;
+            $status = $withOriginalP2(static function () use (
+                &$p2Invocations, &$attemptRecorded, &$saveAttempted,
+                $attestOriginal, $recordFoundPhase, $targetDigest,
+                $config, $changeCount
+            ): string {
+                if (++$p2Invocations !== 1 ||
+                    $attestOriginal('before-config-save', $targetDigest) !== true) {
+                    throw new \RuntimeException('Original Config/P2 witness refused before save');
+                }
+                // A native Config::save exception may mean it wrote part of
+                // the XML. WAL must be durable BEFORE the first save call.
+                if ($recordFoundPhase('found-config-saving') !== true) {
+                    throw new \RuntimeException('Original Config-save intent not durable');
+                }
+                $attemptRecorded = true;
+                if ($changeCount > 0) {
+                    $saveAttempted = true;
+                    self::saveNativeModel($config, 'strategies');
+                }
+                return 'original-config-save-scope-exited';
+            });
+            if ($p2Invocations !== 1 || $status !== 'original-config-save-scope-exited') {
+                throw new \RuntimeException('Original Config/P2 owner did not release scope');
+            }
+        } catch (\Throwable $error) {
+            if ($saveAttempted || $attemptRecorded) {
+                throw new SharedConfigSaveUncertain(
+                    'Original Config save/intent outcome requires review', 0, $error
+                );
+            }
+            throw $error;
+        } finally {
+            $config->unlock();
+        }
+
+        // FIRST P2 scope has ended. Acquire original Config, THEN new P2:
+        // never invert the order with the minute queue's Config->P2 path.
+        try {
+            $config->lock();
+            try {
+                $saved = $modelFactory()->getNodes();
+                if (!hash_equals($targetDigest, VoiceSettingsSnapshot::digest($saved))) {
+                    throw new SharedConfigSaveUncertain(
+                        'Original native Config changed during save/readback'
+                    );
+                }
+                $postInvocations = 0;
+                $status = $withOriginalP2(static function () use (
+                    &$postInvocations, $attestOriginal, $recordFoundPhase,
+                    $targetDigest
+                ): string {
+                    if (++$postInvocations !== 1 ||
+                        $attestOriginal('after-config-save', $targetDigest) !== true) {
+                        throw new \RuntimeException('Original saved Config/P2 proof refused');
+                    }
+                    if ($recordFoundPhase('found-config-saved') !== true) {
+                        throw new \RuntimeException('Original saved Config WAL not durable');
+                    }
+                    return 'original-config-readback-attested';
+                });
+                if ($postInvocations !== 1 ||
+                    $status !== 'original-config-readback-attested') {
+                    throw new \RuntimeException('Original saved Config/P2 handoff refused');
+                }
+            } finally {
+                $config->unlock();
+            }
+        } catch (SharedConfigSaveUncertain $error) {
+            throw $error;
+        } catch (\Throwable $error) {
+            throw new SharedConfigSaveUncertain(
+                'Original found Config readback or WAL uncertain', 0, $error
+            );
+        }
+        return [
+            'result' => 'found-config-saved-nonterminal',
+            'saved' => $saveAttempted,
+            'applied' => false,
+            'snapshot' => $targetDigest,
+            'change_count' => $changeCount,
+            'requires_review' => false,
+            // There is still NO public final runtime/IPFW/epoch commit.
+            'commit_authorized' => false,
+        ];
+    }
+
+    /** The existing native singleton performs every Config::save call. */
+    private static function saveNativeModel(object $config, string $page): void
+    {
+        $config->save([
+            'description' => $page === 'voice'
+                ? 'Applied shared Zapret Voice settings'
+                : 'Applied shared Zapret Strategies settings',
+        ]);
+    }
+
     /**
      * The one cross-resource FD9 transaction boundary.
      *
