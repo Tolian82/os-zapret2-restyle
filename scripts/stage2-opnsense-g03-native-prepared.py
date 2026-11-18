@@ -32,7 +32,22 @@ def call(argv, *, locked=False, timeout=180, expected_rc=0):
     p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
                        env={**os.environ, "GITHUB_ACTIONS":"true",
                             "ZAPRET2_G03_COLD_PREPARED":"1"})
-    need(p.returncode == expected_rc, "G03_COLD_COMMAND_REFUSED_" + str(p.returncode))
+    if p.returncode != expected_rc:
+        # Diagnostic is strictly test-only and does not print private XML,
+        # HOSTLIST text or subprocess stdout/command line arguments.
+        action = (argv[2] if argv[0] == PHP and len(argv) > 2 else
+                  argv[1] if len(argv) > 1 and argv[0] == SERVICE else
+                  "unknown")
+        allowed = {"stage", "stage-partial", "stage-config", "durable",
+                   "crash-partial", "crash-config-save", "shared-apply-prepare",
+                   "found-cold", "found-recover", "found-recover-prepared"}
+        if action not in allowed:
+            action = "unknown"
+        reason = re.search(r"G03_[A-Z0-9_]+(?:=REFUSED:[A-Z0-9_]+)?",
+                           p.stderr or "")
+        reason = reason.group(0) if reason else "NO_TEST_REASON"
+        raise RuntimeError("G03_COLD_COMMAND_REFUSED_" + action + "_" +
+                           str(p.returncode) + "_" + reason)
     return p.stdout.strip()
 
 def image(path):
