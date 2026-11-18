@@ -421,12 +421,14 @@ def classify_native_planned(operation: str) -> dict:
         raise EffectiveKnownRefused("native_original_fd9_required")
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK, _stat, verify_seal
-    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_operation import SharedApplyOperation, FOUND_FILE_PHASES
+    import hashlib
 
     require_lifecycle_lock()
     record = SharedApplyOperation(owner=0).read()
     if (record is None or record["phase"] not in (
-            "activating", "activated", "config-saved", "requires-review") or
+            "prepared", *FOUND_FILE_PHASES) or
+            "found" not in record or
             record["detail"]["id"] != operation or
             record["detail"]["page"] != "strategies"):
         raise EffectiveKnownRefused("cold_found_not_original_pending_operation")
@@ -435,8 +437,9 @@ def classify_native_planned(operation: str) -> dict:
     _stat(work, 0, directory=True)
     verify_seal(work, owner=0)
     raw, _ = _target(work / "plan.json", 0)
-    if len(raw) > 4 * 1024 * 1024:
-        raise EffectiveKnownRefused("oversized_cold_found_plan")
+    if (len(raw) > 4 * 1024 * 1024 or
+            hashlib.sha256(raw).hexdigest() != record["found"]["plan_sha256"]):
+        raise EffectiveKnownRefused("cold_found_original_plan_changed")
     try:
         plan = json.loads(raw)
     except (ValueError, UnicodeError) as exc:

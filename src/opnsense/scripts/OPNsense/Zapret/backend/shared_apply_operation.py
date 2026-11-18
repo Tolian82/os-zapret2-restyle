@@ -308,14 +308,13 @@ class SharedApplyOperation:
         else:
             if before is None or before["detail"] != detail:
                 raise SharedOperationError("common Apply transaction identity changed")
-            if phase not in NEXT[before["phase"]]:
-                raise SharedOperationError("illegal common Apply phase transition")
-            # A recorded found intent is a one-way crash-recovery obligation.
-            # Until the original Config/P2 writer AND cold recovery exist,
-            # even generic 'restored' is forbidden: it could mask partially
-            # written file data without attesting their actual identities.
+            # Found-file physical WAL phases intentionally have no generic
+            # NEXT table. Refuse them BEFORE any ordinary phase lookup: a
+            # KeyError traceback must never substitute for the FD9 refusal.
             if "found" in before:
                 raise SharedOperationError("found files require original durable transaction")
+            if phase not in NEXT.get(before["phase"], frozenset()):
+                raise SharedOperationError("illegal common Apply phase transition")
             previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
