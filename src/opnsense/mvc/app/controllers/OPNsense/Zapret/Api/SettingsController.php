@@ -157,9 +157,16 @@ class SettingsController extends ApiMutableModelControllerBase
                 // This request's actual PHP upload only. Do not accept a
                 // client-specified file path, and never create a second writer.
                 $preflightStage = 'found-upload';
+                $expectsFoundUpload = $_POST['found_intent_expected'] ?? null;
                 $foundUpload = \OPNsense\Zapret\Native\SharedApplyFoundIntent::uploadedMetadata(
                     $_FILES
                 );
+                if ($expectsFoundUpload !== null &&
+                    ($expectsFoundUpload !== '1' || $foundUpload === null)) {
+                    throw new \InvalidArgumentException(
+                        'The discovered lists upload was not received. Apply was stopped.'
+                    );
+                }
                 // Native missing-upstream diagnosis must precede seeded
                 // candidate overlay/normalization; WAN-first already ran.
                 if (SettingsApply::isPassiveStrategiesRequest($current, $post)) {
@@ -395,7 +402,12 @@ class SettingsController extends ApiMutableModelControllerBase
                     ),
                 ];
             }
-            return ['result' => 'failed', 'message' => $error->getMessage()];
+            return [
+                'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                'reason' => $preflightStage === 'found-upload' ? 'strategies-found-upload-refused'
+                    : 'strategies-preflight-' . $preflightStage,
+                'message' => $error->getMessage(),
+            ];
         } catch (\Throwable $error) {
             if (!$nativeApplyDispatched) {
                 // All failures before configdpRun are known non-mutating.

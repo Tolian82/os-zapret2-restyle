@@ -689,6 +689,10 @@
         // Keep known pre-dispatch errors localized like the rest of the UI.
         // Other PHP exception strings are not suitable as UI translations.
         function localizeStrategiesApplyError(message, reason) {
+            if (reason === 'strategies-found-upload-refused') {
+                return isRussian ? 'Не удалось принять правки найденных доменов. Текст остался в редакторах.'
+                    : 'The found-list upload was rejected. The editors still contain your drafts.';
+            }
             if (reason === 'found-restored') {
                 return isRussian ? 'Сохранение прервалось. Исходные настройки восстановлены.'
                     : 'Apply failed and the original settings were restored.';
@@ -1759,6 +1763,7 @@
                 new URLSearchParams($.param(form)).forEach(function(value, key) {
                     multipart.append(key, value);
                 });
+                multipart.append('found_intent_expected', '1');
                 multipart.append('found_intent', new Blob([JSON.stringify(intent)],
                     {type: 'application/json'}), 'found-intent.json');
                 form = multipart;

@@ -293,6 +293,7 @@ assert.equal(request.type, 'POST');
 assert.equal(request.processData, false);
 assert.equal(request.contentType, false);
 assert.equal(request.data.get('zapret[sync][telegramips_baseline]'), '');
+assert.equal(request.data.get('found_intent_expected'), '1');
 const upload = request.data.get('found_intent');
 assert.equal(upload.name, 'found-intent.json');
 upload.text().then(value => {

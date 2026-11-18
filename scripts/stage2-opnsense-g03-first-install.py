@@ -121,6 +121,7 @@ def five_hostlist_native_apply(config_path: Path):
             parts.extend([("--" + boundary).encode(), *(h.encode() for h in headers), b"", value])
 
         part("zapret[sync][telegramips_baseline]", baseline.encode())
+        part("found_intent_expected", b"1")
         for group, values in fields.items():
             for field, value in values.items():
                 part(f"zapret[{group}][{field}]", value.encode())
@@ -139,11 +140,22 @@ def five_hostlist_native_apply(config_path: Path):
         need(isinstance(reply, dict), "FIVE_HOSTLIST_HTTPS_APPLY_NOT_OBJECT")
         phase = json.loads(journal.read_bytes()).get("phase")
         reason = str(reply.get("reason", ""))
+        message = str(reply.get("message", ""))
+        fixed_messages = (
+            "Missing or invalid Strategies baseline", "Select a WAN interface",
+            "Untrusted found upload", "Untrusted native PHP upload", "Invalid native PHP upload",
+            "Native PHP upload", "Not a native PHP upload", "Unqualified native PHP upload",
+            "The discovered lists upload was not received",
+            "Shared Strategies request", "Voice or shared Strategies settings changed",
+        )
         print("FIVE_HOSTLIST_HTTPS=" + json.dumps({
             "result": reply.get("result") if reply.get("result") in ("saved", "failed") else "unknown",
             "reason": reason if re.fullmatch(r"[a-z0-9-]{1,100}", reason) else "unspecified",
             "phase": phase, "requires_review": reply.get("requires_review") is True,
-            "field_error": reply.get("found_error") == {"source": "auto", "line": 1}
+            "field_error": reply.get("found_error") == {"source": "auto", "line": 1},
+            "message_code": next((prefix for prefix in fixed_messages if message.startswith(prefix)),
+                                 "other" if message else "none"),
+            "validation_fields": sorted((reply.get("validations") or {}).keys()),
         }), flush=True)
         return reply
 
