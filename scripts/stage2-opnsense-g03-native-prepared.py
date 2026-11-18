@@ -133,11 +133,84 @@ def main():
     print("G03_COLD_PREPARED=PASS_ORIGINAL_FD9_CONFIG_FD4_P2_NO_WRITES",
           flush=True)
 
+def partial_main():
+    """Exercise real first-file crash, NOT a mock journal or second writer."""
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0 and
+         Path(NATIVE).is_file() and Path(SERVICE).is_file(),
+         "G03_PARTIAL_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    prior = previous.get("previous")
+    need(previous.get("phase") == "restored" and isinstance(prior, dict) and
+         prior.get("page") == "strategies" and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_PARTIAL_COMMITTED_PREDECESSOR_MISSING")
+    original = snapshot()
+    staged = call([PHP, NATIVE, "stage-partial"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_PARTIAL_STAGING_TOUCHED_ORIGINAL")
+    op = staged.split("=", 1)[1]
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    need(not prepared.startswith("preflight-rejected=") and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_PARTIAL_DETACHED_BUILD_DRIFT")
+    call([PHP, NATIVE, "durable", op], locked=True)
+    pending = json.loads(WAL.read_bytes())
+    need(pending.get("phase") == "prepared" and
+         pending.get("previous") == prior and
+         pending.get("detail", {}).get("id") == op and
+         snapshot() == original, "G03_PARTIAL_PREPARED_NOT_DURABLE")
+    # A separate FreeBSD/PHP process retains the genuine FD4 and FD9,
+    # calls the ORIGINAL three-file P2 writer, then exits(73) immediately
+    # after its FIRST atomically installed and WAL-pinned YouTube source.
+    call([PHP, NATIVE, "crash-partial", op], locked=True)
+    crashed = json.loads(WAL.read_bytes())
+    broken = snapshot()
+    stages = crashed.get("found", {}).get("stages", {})
+    need(crashed.get("phase") == "found-files-writing" and
+         crashed.get("previous") == prior and
+         stages.get("youtube", {}).get("state") == "installed" and
+         "user" not in stages and "auto" not in stages and
+         broken[0:2] == original[0:2] and broken[3] == original[3] and
+         broken[2][0][-1] != original[2][0][-1] and
+         broken[2][1:] == original[2][1:] and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode != 0,
+         "G03_PARTIAL_INDETERMINATE_OWNER_OR_FILE_PHASE")
+    # A nonterminal shared journal must refuse ordinary lifecycle mutation.
+    # The service status in this phase is expected to refuse (not stop it).
+    recovered = json.loads(call([
+        PHP, "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
+        "found-recover", op, "strategies"], locked=True))
+    final = json.loads(WAL.read_bytes())
+    restored = snapshot()
+    need(recovered == {"result": "restored"} and
+         final.get("phase") == "restored" and final.get("previous") == prior and
+         "found" not in final and
+         restored[0:2] == original[0:2] and restored[3] == original[3] and
+         restored[2][0][0] == "file" and
+         restored[2][0][-1] == original[2][0][-1] and
+         restored[2][1:] == original[2][1:] and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_PARTIAL_RESTORE_CONFIG_IPFW_OWNER_OR_HOSTLIST_MISMATCH")
+    print("G03_COLD_PARTIAL=PASS_ONE_REAL_STAGED_RENAME_RESTORED_ORIGINAL_FD9_CONFIG_P2",
+          flush=True)
+
+
 if __name__ == "__main__":
     try:
-        main()
+        if sys.argv[1:] == ["partial"]:
+            partial_main()
+        else:
+            need(sys.argv[1:] == [], "G03_COLD_UNEXPECTED_ARGUMENTS")
+            main()
     except (RuntimeError, OSError, ValueError, KeyError,
             subprocess.TimeoutExpired) as exc:
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-        print("G03_COLD_PREPARED=REFUSED:" + label, file=sys.stderr)
+        prefix = "G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else "G03_COLD_PREPARED"
+        print(prefix + "=REFUSED:" + label, file=sys.stderr)
         raise SystemExit(1)
