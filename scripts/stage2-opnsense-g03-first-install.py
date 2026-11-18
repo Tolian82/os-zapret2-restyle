@@ -169,6 +169,12 @@ def five_hostlist_native_apply(config_path: Path):
         match = re.fullmatch(r"applied-id=([0-9a-f]{32})", receipt)
         record = json.loads(journal.read_bytes())
         reason = receipt if re.fullmatch(r"preflight-rejected=[a-z0-9-]+", receipt) else "unconfirmed"
+        if not match:
+            print("FIVE_HOSTLIST_LIST_BASELINE=" + json.dumps({
+                "phase": record.get("phase"),
+                "config_saved_receipt": "result\"" in receipt,
+                "service": status()["service"],
+            }), flush=True)
         need(match is not None and record.get("phase") == "committed" and
              record["detail"]["id"] == match[1], "FIVE_HOSTLIST_" + label + "_" + reason)
 
@@ -216,11 +222,21 @@ def five_hostlist_native_apply(config_path: Path):
          hashlib.sha256(config_path.read_bytes()).hexdigest() == same_config,
          "FIVE_HOSTLIST_STOPPED_APPLY_STARTED_SERVICE_OR_CHANGED_CONFIG")
     need(invalid_confirmed, "FIVE_HOSTLIST_INVALID_DRAFT_LACKS_FIELD_ERROR")
-    need(run([str(service), "start"], timeout=120).returncode == 0 and
-         status()["service"] == "running", "FIVE_HOSTLIST_START_AFTER_STOPPED_APPLY_FAILED")
+    def lifecycle(action):
+        completed = run([str(service), action], timeout=120)
+        setup_state = status()["service"]
+        native_status = run([str(service), "status"]).returncode
+        receipt = bool(re.search(r"^native-common-boot=[0-9a-f]{32}$", completed.stdout,
+                                 re.MULTILINE))
+        print("FIVE_HOSTLIST_LIFECYCLE=" + json.dumps({
+            "action": action, "returncode": completed.returncode,
+            "service": setup_state, "native_status": native_status, "boot_receipt": receipt,
+        }), flush=True)
+        return completed.returncode == 0 and setup_state == "started" and native_status == 0
+
+    need(lifecycle("start"), "FIVE_HOSTLIST_START_AFTER_STOPPED_APPLY_FAILED")
     start_pid = pidfile.read_text().split()[0]
-    need(run([str(service), "restart"], timeout=120).returncode == 0 and
-         status()["service"] == "running" and pidfile.read_text().split()[0] != start_pid and
+    need(lifecycle("restart") and pidfile.read_text().split()[0] != start_pid and
          read()["editors"]["shared_found"]["content"] == "",
          "FIVE_HOSTLIST_EXPLICIT_RESTART_OR_PERSISTENCE_UNVERIFIED")
     print("FIVE_HOSTLIST_NATIVE=PASS_HTTPS_RUNNING_STOPPED_APPLY_START_RESTART", flush=True)

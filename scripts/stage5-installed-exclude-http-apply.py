@@ -13,6 +13,7 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import re
 import sys
 import xml.etree.ElementTree as ET
 
@@ -183,6 +184,13 @@ def execute():
 
     applied = web.api("POST", "/api/zapret/settings/apply",
                       form(before, domains=TEST_DOMAIN, ipset=TEST_IPSET))
+    if applied.get("result") != "saved":
+        reason = str(applied.get("reason", ""))
+        print("EXCLUDE_HTTPS_RESULT=" + json.dumps({
+            "reason": reason if re.fullmatch(r"[a-z0-9-]{1,100}", reason) else "unspecified",
+            "requires_review": applied.get("requires_review") is True,
+            "validation_fields": sorted((applied.get("validations") or {}).keys()),
+        }), flush=True)
     need(applied.get("result") == "saved" and applied.get("status") == "ok",
          "EXCLUDE_HTTPS_POSITIVE_NATIVE_APPLY_NOT_COMMITTED")
     changed = read_model(web)
