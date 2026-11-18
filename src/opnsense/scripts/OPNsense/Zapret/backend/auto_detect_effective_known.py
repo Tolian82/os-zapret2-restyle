@@ -8,13 +8,18 @@ No native observer, writer, Config mutation, hot reload, or ACK is enabled.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+import re
 import sys
 
-from auto_detect_destination_commit import (DestinationRefused, _target, _replace,
-                                            exclusive_destination_lock)
-from auto_detect_gui_hostlist import AUTO_LOCK
+from auto_detect_destination_commit import (
+    DestinationRefused, SHARED_FOUND_NAMES, _qualified_shared_found_batch,
+    _shared_found_assert_missing, _target, _replace,
+    exclusive_destination_lock,
+)
+from auto_detect_gui_hostlist import AUTO_LOCK, AUTO_HOSTLIST
 from auto_detect_owned_sources import (KNOWN_HOSTLISTS, OWNED_ROOT, read_owned,
                                        OwnedSourcesRefused)
 from domain_policy import (normalize, _list_entries, _covers, DomainPolicyError,
@@ -96,8 +101,121 @@ def compose_stage(youtube: Path, user: Path, *,
         return {'status': 'composed', 'changed': changed}
 
 
+
+def compose_stage_planned(
+    youtube: Path, user: Path, rows: dict, *, targets: dict,
+    owned_root: Path = OWNED_ROOT, lock: Path = AUTO_LOCK,
+    owner_uid: int = 0,
+) -> dict:
+    """Bind one original FD9 P1 after-image to the DETACHED runtime only.
+
+    The minute writer and this operation share the existing P2 destination
+    lock. A change after the earlier Config/P1 stage means REFUSE and rebuild
+    a fresh request, never use old positives or overwrite a new discovery.
+    Nothing in the live owner, native Config, IPFW or original journal moves.
+    This is not the later all-resource commit or a successful Apply.
+    """
+    paths = {"youtube": Path(youtube), "user": Path(user)}
+    if (list(targets) != list(SHARED_FOUND_NAMES) or
+            any(not isinstance(targets[name], Path) or
+                not targets[name].is_absolute() for name in SHARED_FOUND_NAMES) or
+            any(not p.is_absolute() for p in paths.values()) or
+            len(set(paths.values())) != 2 or
+            targets["youtube"] != Path(owned_root) / "youtube.txt" or
+            targets["user"] != Path(owned_root) / "user.txt"):
+        raise EffectiveKnownRefused("unsafe_planned_known_root")
+    verified = _qualified_shared_found_batch(rows)
+    with exclusive_destination_lock(Path(lock), owner_uid):
+        current = read_owned(Path(owned_root), owner_uid=owner_uid)
+        if current is None:
+            raise EffectiveKnownRefused("planned_known_owner_uninitialized")
+        for name in SHARED_FOUND_NAMES:
+            before, after, identity, status = verified[name]
+            path = targets[name]
+            if status == "missing":
+                if name != "auto":
+                    raise EffectiveKnownRefused("planned_known_missing")
+                _shared_found_assert_missing(path, owner_uid)
+            else:
+                content, st = _target(path, owner_uid)
+                observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                            st.st_mtime_ns, st.st_size)
+                if content != before or observed != identity:
+                    raise EffectiveKnownRefused("planned_preimage_drift")
+            if name in KNOWN_HOSTLISTS and current[name].encode() != before:
+                raise EffectiveKnownRefused("planned_known_owner_drift")
+        staged = {name: _target(path, owner_uid)[0] for name, path in paths.items()}
+        try:
+            manual = {name: staged[name].decode("utf-8") for name in paths}
+        except UnicodeError as exc:
+            raise EffectiveKnownRefused("invalid_planned_managed_encoding") from exc
+        prospective = {
+            name: verified[name][1].decode("utf-8")
+            for name in KNOWN_HOSTLISTS
+        }
+        merged = compose_known(manual, prospective)
+        changed = []
+        for name in KNOWN_HOSTLISTS:
+            data = merged[name].encode("utf-8")
+            if staged[name] != data:
+                _replace(paths[name], staged[name], data, owner_uid)
+                changed.append(name)
+        # "auto" after is authenticated in rows but cannot become the live
+        # shared destination until the ORIGINAL joint Config/file transaction.
+        return {"status": "planned-detached", "changed": changed,
+                "auto_live_committed": False, "config_committed": False}
+
+
+def compose_native_planned(youtube: Path, user: Path, operation: str) -> dict:
+    """Only the original FD9 native shared candidate may request this mode."""
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation)):
+        raise EffectiveKnownRefused("native_original_fd9_required")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from shared_apply_seal import WORK, _stat
+
+    require_lifecycle_lock()
+    work = WORK / operation
+    _stat(WORK, 0, directory=True)
+    _stat(work, 0, directory=True)
+    expected = work / "release" / "managed" / ".input"
+    if (Path(youtube) != expected / "hostlist-youtube.out" or
+            Path(user) != expected / "hostlist-user.out"):
+        raise EffectiveKnownRefused("foreign_detached_stage")
+    raw, _ = _target(work / "plan.json", 0)
+    if len(raw) > 4 * 1024 * 1024:
+        raise EffectiveKnownRefused("oversized_planned_bundle")
+    try:
+        plan = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise EffectiveKnownRefused("invalid_planned_bundle") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("commit_authorized") is not False or
+            not isinstance(plan.get("found_batch"), dict)):
+        raise EffectiveKnownRefused("unqualified_planned_bundle")
+    return compose_stage_planned(
+        Path(youtube), Path(user), plan["found_batch"],
+        targets={"youtube": OWNED_ROOT / "youtube.txt",
+                 "user": OWNED_ROOT / "user.txt",
+                 "auto": AUTO_HOSTLIST},
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 4 and argv[0] == 'compose-planned':
+        try:
+            compose_native_planned(Path(argv[1]), Path(argv[2]), argv[3])
+            return 0
+        except (EffectiveKnownRefused, OwnedSourcesRefused, DestinationRefused,
+                DomainPolicyError, AutoDomainPolicyError,
+                ValueError, RuntimeError, OSError, UnicodeError):
+            print('ERROR: original FD9 prospective HOSTLIST mismatch',
+                  file=sys.stderr)
+            return 2
     if len(argv) != 3 or argv[0] != 'compose':
         print('ERROR: native effective HOSTLIST invocation refused', file=sys.stderr)
         return 2

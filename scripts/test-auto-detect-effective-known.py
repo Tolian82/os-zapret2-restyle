@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """#1052: real staged YouTube/User hostlist + protected known auto-owned rows."""
 import fcntl
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -10,7 +11,8 @@ import unittest
 
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
-from auto_detect_effective_known import compose_stage, EffectiveKnownRefused
+from auto_detect_effective_known import (compose_stage, compose_stage_planned,
+                                         compose_native_planned, EffectiveKnownRefused)
 from auto_detect_owned_sources import bootstrap_empty, OwnedSourcesRefused
 from auto_detect_destination_commit import DestinationRefused
 
@@ -95,11 +97,103 @@ class EffectiveKnownTests(unittest.TestCase):
         with self.assertRaises(DestinationRefused):
             self.compose()
 
+    def planned_rows(self):
+        names = ("youtube", "user", "auto")
+        after = {"youtube": "fresh.example.com\n",
+                 "user": "login.example.com\n",
+                 "auto": "fallback.example.com\n"}
+        targets = {name: self.root / (name + ".txt") for name in ("youtube", "user")}
+        targets["auto"] = self.base / "auto-domains.txt"
+        rows = {}
+        for name in names:
+            target = targets[name]
+            if name == "auto":
+                raw = b""
+                identity = [0, 0, 0, 0, 0]
+                status = "missing"
+                revision = hashlib.sha256(b"missing\0").hexdigest()
+            else:
+                raw = target.read_bytes()
+                st = target.lstat()
+                identity = [st.st_dev, st.st_ino, st.st_ctime_ns,
+                            st.st_mtime_ns, st.st_size]
+                status = "present"
+                revision = hashlib.sha256(b"present\0" + raw).hexdigest()
+            rows[name] = {
+                "before": raw.decode(), "after": after[name],
+                "before_status": status, "before_revision": revision,
+                **dict(zip(("before_device", "before_inode",
+                            "before_ctime_ns", "before_mtime_ns",
+                            "before_size"), identity)),
+            }
+        return rows, targets
+
+    def test_planned_composer_uses_sealed_after_not_live_owned(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        before = {name: targets[name].read_bytes() for name in ("youtube", "user")}
+        result = compose_stage_planned(
+            self.youtube, self.user, rows, targets=targets,
+            owned_root=self.root, lock=self.lock, owner_uid=self.uid)
+        self.assertEqual(result["status"], "planned-detached")
+        self.assertFalse(result["auto_live_committed"])
+        self.assertFalse(result["config_committed"])
+        self.assertEqual(result["changed"], ["youtube", "user"])
+        self.assertEqual(self.youtube.read_text(),
+                         "!blocked.example\n^exact.example\nmanual.example\nfresh.example.com\n")
+        self.assertEqual(self.user.read_text(),
+                         "user.example\nlogin.example.com\n")
+        self.assertEqual(before, {
+            name: targets[name].read_bytes() for name in ("youtube", "user")
+        })
+        self.assertFalse(targets["auto"].exists())
+
+    def test_planned_composer_refuses_poststage_minute_find(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        (self.root / "youtube.txt").write_text("newer.example.com\n")
+        before = (self.youtube.read_bytes(), self.user.read_bytes())
+        with self.assertRaisesRegex(EffectiveKnownRefused, "planned_preimage_drift"):
+            compose_stage_planned(self.youtube, self.user, rows, targets=targets,
+                                  owned_root=self.root, lock=self.lock,
+                                  owner_uid=self.uid)
+        self.assertEqual(before, (self.youtube.read_bytes(), self.user.read_bytes()))
+        self.assertEqual((self.root / "youtube.txt").read_text(),
+                         "newer.example.com\n")
+
+    def test_planned_composer_rejects_replaced_auto_and_tampered_after(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        targets["auto"].write_text("later.example.com\n")
+        with self.assertRaises(DestinationRefused):
+            compose_stage_planned(self.youtube, self.user, rows, targets=targets,
+                                  owned_root=self.root, lock=self.lock,
+                                  owner_uid=self.uid)
+        targets["auto"].unlink()
+        rows["youtube"]["after"] = "!malicious.example.com\n"
+        with self.assertRaises(DestinationRefused):
+            compose_stage_planned(self.youtube, self.user, rows, targets=targets,
+                                  owned_root=self.root, lock=self.lock,
+                                  owner_uid=self.uid)
+        self.assertEqual(self.youtube.read_text(),
+                         "!blocked.example\n^exact.example\nmanual.example\n")
+
+    def test_planned_native_entry_refuses_without_original_fd9(self):
+        with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
+            compose_native_planned(self.youtube, self.user, "a" * 32)
+
     def test_original_builder_is_wired_before_staging_publication(self):
         shell = (BACKEND / 'targets.sh').read_text()
         self.assertIn('auto_detect_effective_known.py" compose', shell)
         self.assertLess(shell.index('auto_detect_effective_known.py" compose'),
                         shell.index('mv -f "' + chr(36) + '{input_root}/hostlist-youtube.out"'))
+        orchestrator = (BACKEND / 'orchestrator.sh').read_text()
+        service = (BACKEND.parent / 'zapret_service.sh').read_text()
+        self.assertIn('compose-planned', shell)
+        self.assertIn('"${_orchestrator_build_found_id}"', orchestrator)
+        self.assertIn('has("found_intent") and has("found_batch")', service)
+        self.assertIn('preflight-rejected=found-transaction-pending', service)
+        self.assertIn('if [ "$_shared_found_scope" != ordinary ]; then', service)
 
 
 if __name__ == '__main__':

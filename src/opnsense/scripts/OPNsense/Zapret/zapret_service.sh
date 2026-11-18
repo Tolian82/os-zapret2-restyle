@@ -1787,10 +1787,29 @@ shared_apply_prepare_service()
     }
     _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
     [ -f "$_shared_template" ] && [ ! -L "$_shared_template" ] || return 69
+    # A discovered-source candidate MUST use its original P1-rebased
+    # after-image for the detached managed runtime. Never snapshot currently
+    # live known files a second time and silently lose the user deletion.
+    # Unsealed plan is root-private; Python revalidates all three original
+    # physical preimages under the existing P2 destination lock.
+    _shared_found_build_scope=$(/usr/local/bin/jq -er '
+        if has("found_intent") and has("found_batch") then "planned"
+        elif has("found_intent") or has("found_batch") then "invalid"
+        else "ordinary" end
+    ' "$_shared_work/plan.json") || {
+        printf '%s\n' preflight-rejected=runtime-build
+        return 0
+    }
+    _shared_found_build_id=
+    case "$_shared_found_build_scope" in
+        planned) _shared_found_build_id="$1" ;;
+        ordinary) ;;
+        *) printf '%s\n' preflight-rejected=runtime-build; return 0 ;;
+    esac
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
-        shared-candidate "$_shared_work/candidate.xml" || {
+        shared-candidate "$_shared_work/candidate.xml" "$_shared_found_build_id" || {
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }

@@ -81,6 +81,7 @@ targets_prepare_managed()
     local sip_text="${7-}"
     local custom_text="${8-}"
     local exclude_text="${9-}"
+    local found_operation_id="${10-}"
     local input_root python_bin compiler composer_dir manifest_root target_name target_text
 
     [ -n "${build_root}" ] || {
@@ -125,9 +126,17 @@ targets_prepare_managed()
         common_error "effective known HOSTLIST composer is unavailable"
         return 1
     }
-    "${python_bin}" "${composer_dir}/auto_detect_effective_known.py" compose \
-        "${input_root}/hostlist-youtube.out" \
-        "${input_root}/hostlist-user.out" || return 1
+    if [ -n "${found_operation_id}" ]; then
+        # The original Shared Apply sends ONLY its exact sealed-candidate ID.
+        # An independent live Auto source is never overwritten by the build.
+        "${python_bin}" "${composer_dir}/auto_detect_effective_known.py" \
+            compose-planned "${input_root}/hostlist-youtube.out" \
+            "${input_root}/hostlist-user.out" "${found_operation_id}" || return 1
+    else
+        "${python_bin}" "${composer_dir}/auto_detect_effective_known.py" compose \
+            "${input_root}/hostlist-youtube.out" \
+            "${input_root}/hostlist-user.out" || return 1
+    fi
     compiler=$(targets_ipset_compiler) || return 1
     manifest_root=$(dirname -- "${build_root}") || return 1
     "${python_bin}" "${compiler}" batch \
