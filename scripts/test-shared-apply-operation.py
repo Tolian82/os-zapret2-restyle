@@ -2,6 +2,7 @@
 """Common Apply durable phases and existing lifecycle guard, without kernel changes."""
 import sys
 import json
+import hashlib
 from contextlib import ExitStack
 import subprocess
 from unittest.mock import patch
