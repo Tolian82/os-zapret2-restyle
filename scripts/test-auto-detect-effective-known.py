@@ -278,7 +278,10 @@ class EffectiveKnownTests(unittest.TestCase):
         receipt = self.cold_image(rows, targets, "found-files-writing", staged=stages)
         self.assertEqual(receipt["stage_evidence"]["youtube"], "installed-after")
         self.assertEqual(receipt["stage_evidence"]["user"], "not-started")
-        forged = {"auto": {"state": "ready", "pin": pin_y}}
+        # Keep the first changed source legitimately installed so the
+        # later Auto stage is rejected *specifically* for skipping User.
+        forged = {"youtube": {"state": "installed", "pin": pin_y},
+                  "auto": {"state": "ready", "pin": pin_y}}
         with self.assertRaisesRegex(EffectiveKnownRefused, "out_of_order"):
             self.cold_image(rows, targets, "found-files-writing", staged=forged)
         pin_u = self.cold_install_after(rows, targets, "user")
