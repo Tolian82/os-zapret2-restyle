@@ -212,7 +212,9 @@ class EffectiveKnownTests(unittest.TestCase):
         original = target.read_bytes()
         target.unlink()
         target.write_bytes(original)
-        with self.assertRaisesRegex(EffectiveKnownRefused, "planned_preimage_drift"):
+        # Known-owned provenance rejects an inode swap before the P2 byte
+        # witness itself. This is stricter than the downstream drift gate.
+        with self.assertRaises(OwnedSourcesRefused):
             verify_planned_preimages(rows, targets=targets,
                                      owned_root=self.root, lock=self.lock,
                                      owner_uid=self.uid)
