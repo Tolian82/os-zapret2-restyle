@@ -527,6 +527,23 @@ class EffectiveKnownTests(unittest.TestCase):
                                     "native_original_config_fd9_required"):
             prepare_native_found_intent("a" * 32, 1, "b" * 64)
 
+    def test_found_pristine_recovery_has_no_portable_or_cli_entry(self):
+        # The first true cold terminal writer must remain import-only until
+        # the original PHP Config model/FD9/P2 handoff has native acceptance.
+        from auto_detect_effective_known import recover_native_found_prepared_pristine
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "native_found_pristine_original_owner_required"):
+            recover_native_found_prepared_pristine(
+                "a" * 32, config_fd=4, config_digest="b" * 64)
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "native_found_pristine_original_owner_required"):
+            recover_native_found_prepared_pristine(
+                "foreign", config_fd=4, config_digest="b" * 64)
+        source = (BACKEND / "auto_detect_effective_known.py").read_text()
+        self.assertIn("store.finish_found_prepared_pristine(", source)
+        self.assertIn("with exclusive_destination_lock(AUTO_LOCK, 0):", source)
+        self.assertNotIn("'recover-prepared-found'", source)
+
     def test_native_cold_classification_requires_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             classify_native_planned("a" * 32)

@@ -528,6 +528,108 @@ def classify_planned_file_images(
     return receipt
 
 
+
+def recover_native_found_prepared_pristine(
+        operation: str, *, config_fd: int, config_digest: str) -> dict:
+    """Original FD9/Config/P2 cold PREPARED closure for a proven predecessor.
+
+    IMPORT ONLY: the future existing PHP Config::lock owner must supply the
+    fresh WHOLE native Model digest while it holds the exact inherited fd4.
+    This function is deliberately NOT a CLI, configd or GUI action. It
+    performs one existing-journal fsync and NO Config/file/runtime/IPFW write.
+    First-install without a physically proven previous owner stays pending.
+    A later WAL phase is never recoverable via this pristine-only path.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation) or
+            type(config_fd) is not int or config_fd < 3 or
+            not isinstance(config_digest, str) or
+            not re.fullmatch(r"[a-f0-9]{64}", config_digest)):
+        raise EffectiveKnownRefused("native_found_pristine_original_owner_required")
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd)
+    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_seal import WORK, _stat, verify_seal
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from voice_live_inspect import examine_pending_found_previous
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    store = SharedApplyOperation(owner=0)
+    pending = store.read()
+    if (pending is None or pending["phase"] != "prepared" or
+            "found" not in pending or pending["detail"]["id"] != operation or
+            pending["detail"]["page"] != "strategies" or
+            pending["detail"]["base"] != config_digest):
+        raise EffectiveKnownRefused("native_found_pristine_phase_or_config_drift")
+    predecessor = pending.get("previous")
+    if predecessor is None or predecessor["candidate"] != config_digest:
+        # No predecessor is NOT proof that no foreign process/IPFW exists.
+        raise EffectiveKnownRefused("native_found_pristine_predecessor_unproven")
+    _stat(WORK, 0, directory=True)
+    work = WORK / operation
+    _stat(work, 0, directory=True)
+    seal = verify_seal(work, owner=0)
+    raw, _ = _target(work / "plan.json", 0)
+    if (len(raw) > 4 * 1024 * 1024 or
+            hashlib.sha256(raw).hexdigest() !=
+            pending["found"]["plan_sha256"] or
+            hashlib.sha256(raw).hexdigest() !=
+            seal.get("sha256", {}).get("plan.json")):
+        raise EffectiveKnownRefused("native_found_pristine_seal_changed")
+    try:
+        plan = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise EffectiveKnownRefused("native_found_pristine_plan_invalid") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            plan.get("dependencies") != config_digest or
+            plan.get("changed_fields") != pending["detail"]["changed_fields"] or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("config_revision") != config_digest or
+            plan["found_intent"].get("commit_authorized") is not False):
+        raise EffectiveKnownRefused("native_found_pristine_plan_not_qualified")
+    verified = _qualified_shared_found_batch(plan.get("found_batch"))
+    targets = {"youtube": OWNED_ROOT / "youtube.txt",
+               "user": OWNED_ROOT / "user.txt", "auto": AUTO_HOSTLIST}
+
+    # The parent already owns FD9 -> native Config::lock. Acquire P2 only
+    # AFTER Config, and keep it continuously held across physical evidence,
+    # both runtime/IPFW observations and the existing operation.json fsync.
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        def attest_original(unchanged_plan: bytes, old: dict | None) -> bool:
+            if unchanged_plan != raw or old != predecessor:
+                return False
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if store.read() != pending:
+                return False
+            verify_seal(work, owner=0)
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            prior_again = examine_pending_found_previous(pending)
+            return (prior_again["id"] == predecessor["id"] and
+                    prior_again["state"] in ("ready", "stopped") and
+                    prior_again == observed)
+
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        observed = examine_pending_found_previous(pending)
+        if (observed["id"] != predecessor["id"] or
+                observed["state"] not in ("ready", "stopped")):
+            raise EffectiveKnownRefused("native_found_pristine_runtime_unproven")
+        completed = store.finish_found_prepared_pristine(
+            operation, raw, attest_original)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return {"result": "original-found-prepared-pristine-restored",
+            "phase": completed["phase"],
+            "previous_id": predecessor["id"], "runtime_state": observed["state"],
+            "config_saved": False, "files_written": False,
+            "service_restarted": False}
+
+
+
 def classify_native_planned(operation: str, *, config_fd: int | None = None) -> dict:
     """No new Config owner: original FD9, original journal and sealed plan."""
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
