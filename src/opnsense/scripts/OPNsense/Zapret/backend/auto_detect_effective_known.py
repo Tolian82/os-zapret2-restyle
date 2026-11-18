@@ -528,7 +528,7 @@ def classify_planned_file_images(
     return receipt
 
 
-def classify_native_planned(operation: str) -> dict:
+def classify_native_planned(operation: str, *, config_fd: int | None = None) -> dict:
     """No new Config owner: original FD9, original journal and sealed plan."""
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not isinstance(operation, str) or
@@ -541,6 +541,10 @@ def classify_native_planned(operation: str) -> dict:
     import hashlib
 
     require_lifecycle_lock()
+    if config_fd is not None:
+        from auto_detect_original_lock_handoff import (
+            CONFIG_PATH, assert_inherited_config_fd)
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     record = SharedApplyOperation(owner=0).read()
     if (record is None or record["phase"] not in (
             "prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES) or
@@ -569,7 +573,7 @@ def classify_native_planned(operation: str) -> dict:
             plan["found_intent"].get("commit_authorized") is not False or
             not isinstance(plan.get("found_batch"), dict)):
         raise EffectiveKnownRefused("unqualified_cold_found_plan")
-    return classify_planned_file_images(
+    evidence = classify_planned_file_images(
         plan["found_batch"],
         targets={"youtube": OWNED_ROOT / "youtube.txt",
                  "user": OWNED_ROOT / "user.txt",
@@ -578,10 +582,35 @@ def classify_native_planned(operation: str) -> dict:
         post_images=record["found"].get("post"),
         staged_images=record["found"].get("stages"),
     )
+    if config_fd is not None:
+        # The one original native Config remains locked while the existing
+        # P2 destination flock is taken and released by the classifier.
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return {**evidence, "journal_phase": record["phase"]}
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == 'classify-locked':
+        try:
+            # fd4 is the original OPNsense Config::lock open description
+            # explicitly inherited from the existing PHP Config owner;
+            # fd9 is the SAME lifecycle lock, never a guessed new owner.
+            evidence = classify_native_planned(argv[1], config_fd=4)
+            print(json.dumps({
+                "schema": 1, "result": evidence["result"],
+                "journal_phase": evidence["journal_phase"],
+                "image": evidence["image"], "states": evidence["states"],
+                "stage_evidence": evidence.get("stage_evidence"),
+                "commit_authorized": False, "restore_authorized": False,
+            }, sort_keys=True, separators=(",", ":")))
+            return 0
+        except (EffectiveKnownRefused, OwnedSourcesRefused, DestinationRefused,
+                DomainPolicyError, AutoDomainPolicyError,
+                ValueError, RuntimeError, OSError, UnicodeError):
+            print('ERROR: original locked Config+FD9+P2 cold image unavailable',
+                  file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == 'classify-planned':
         try:
             receipt = classify_native_planned(argv[1])

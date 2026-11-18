@@ -351,6 +351,68 @@ namespace {
         $config->disk === $coldBase,
         'read-only cold Config classifier performed a write or held a lock');
 
+
+    // The *same* native Config snapshot and original physically locked
+    // P2 reader may be projected together, but never become an Apply
+    // or permission to restore based solely on image equivalence.
+    $coldFileBase = [
+        'schema' => 1, 'result' => 'read-only-cold-image-classification',
+        'journal_phase' => 'prepared', 'image' => 'all-before',
+        'states' => ['youtube'=>'before','user'=>'before','auto'=>'before'],
+        'stage_evidence' => null,
+        'commit_authorized' => false, 'restore_authorized' => false,
+    ];
+    $joint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($coldPlan, $coldBase, $coldFileBase);
+    verify($joint['config_image'] === 'base-image' &&
+        $joint['file_image'] === 'all-before' &&
+        !$joint['commit_authorized'] && !$joint['restore_authorized'] &&
+        !$joint['save_attested'] && !$joint['runtime_attested'],
+        'cold pristine Config+file pair fabricated terminal Apply');
+    $coldFilesWriting = $coldFileBase;
+    $coldFilesWriting['journal_phase'] = 'found-files-writing';
+    $coldFilesWriting['stage_evidence'] = [
+        'youtube'=>'ready-but-before', 'user'=>'not-started',
+        'auto'=>'not-started',
+    ];
+    $jointWriting = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($coldPlan, $coldBase, $coldFilesWriting);
+    verify($jointWriting['journal_phase'] === 'found-files-writing' &&
+        !$jointWriting['restore_authorized'],
+        'found-files-writing was treated as terminal recovery');
+    $coldFilesSaving = $coldFilesWriting;
+    $coldFilesSaving['journal_phase'] = 'found-config-saving';
+    $coldFilesSaving['image'] = 'contains-unattributed-after';
+    $coldFilesSaving['states']['youtube'] = 'after-image';
+    $coldFilesSaving['stage_evidence']['youtube'] = 'installed-after';
+    $jointSaving = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($coldPlan, $coldCandidate, $coldFilesSaving);
+    verify($jointSaving['config_image'] === 'candidate-image' &&
+        !$jointSaving['save_attested'] && !$jointSaving['commit_authorized'],
+        'matching candidate during uncertain save falsely authorized Apply');
+    foreach ([
+        ['schema'=>2],
+        ['commit_authorized'=>true],
+        ['states'=>['youtube'=>'before']],
+        ['stage_evidence'=>['youtube'=>'installed-after']],
+        ['journal_phase'=>'unexpected'],
+    ] as $tamper) {
+        try {
+            \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+                classifyFoundJointImages($coldPlan, $coldBase,
+                    array_replace($coldFilesWriting, $tamper));
+            verify(false, 'malformed original physical cold proof accepted');
+        } catch (\RuntimeException $expected) {}
+    }
+    try {
+        \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+            classifyFoundJointImages($coldPlan, $coldCandidate, $coldFileBase);
+        verify(false, 'prepared files with candidate XML accepted');
+    } catch (\RuntimeException $expected) {}
+    verify($config->saves === 1 && $config->locks === 0 &&
+        $config->disk === $coldBase,
+        'joint cold classification attempted an extra native Config save');
+
     // Durable phase recording failure MUST prevent the first save call.
     $refused = new FakeConfig($config->disk);
     try {

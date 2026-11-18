@@ -131,7 +131,8 @@ final class SharedApplyConfigWorker
         array $plan, array $current, string $phase
     ): array {
         if (!in_array($phase, [
-            'found-files-written', 'found-config-saving', 'found-config-saved'
+            'prepared', 'found-files-writing', 'found-files-written',
+            'found-config-saving', 'found-config-saved'
         ], true) ||
             ($plan['page'] ?? null) !== 'strategies' ||
             ($plan['result'] ?? null) !== 'prepared' ||
@@ -156,7 +157,8 @@ final class SharedApplyConfigWorker
         if (!$isBase && !$isCandidate) {
             throw new \RuntimeException('Foreign native Config image during found recovery');
         }
-        if ($phase === 'found-files-written' && !$isBase) {
+        if (in_array($phase, ['prepared', 'found-files-writing',
+                'found-files-written'], true) && !$isBase) {
             throw new \RuntimeException('Found files-only phase already changed Config');
         }
         if ($phase === 'found-config-saved' && !$isCandidate) {
@@ -177,6 +179,193 @@ final class SharedApplyConfigWorker
             'save_attested' => false,
             'runtime_attested' => false,
         ];
+    }
+
+    /**
+     * Compose an explicitly NON-authorizing witness from the original
+     * FD9→native Config→P2 read-only inspection. This helper is also used
+     * by fake-native tests: only inspectFoundColdNative() may obtain its
+     * real file evidence, under the ORIGINAL inherited descriptor.
+     */
+    public static function classifyFoundJointImages(
+        array $plan, array $current, array $files
+    ): array {
+        if (array_keys($files) !== [
+                'schema', 'result', 'journal_phase', 'image', 'states',
+                'stage_evidence', 'commit_authorized', 'restore_authorized'
+            ] && array_keys($files) !== [
+                'result', 'journal_phase', 'image', 'states',
+                'stage_evidence', 'commit_authorized', 'restore_authorized',
+                'schema'
+            ]) {
+            // The native Python JSON encoder uses alphabetical keys:
+            // neither extra data nor missing proof is silently accepted.
+            $expected = ['schema', 'result', 'journal_phase', 'image',
+                'states', 'stage_evidence', 'commit_authorized',
+                'restore_authorized'];
+            $keys = array_keys($files);
+            sort($keys);
+            sort($expected);
+            if ($keys !== $expected) {
+                throw new \RuntimeException('Unqualified original cold file evidence');
+            }
+        }
+        if (($files['schema'] ?? null) !== 1 ||
+            ($files['result'] ?? null) !== 'read-only-cold-image-classification' ||
+            !in_array($files['image'] ?? null,
+                ['all-before', 'contains-unattributed-after'], true) ||
+            ($files['commit_authorized'] ?? null) !== false ||
+            ($files['restore_authorized'] ?? null) !== false ||
+            !is_array($files['states'] ?? null) ||
+            array_keys($files['states']) !== ['youtube', 'user', 'auto'] ||
+            array_diff($files['states'], ['before', 'after-image']) ||
+            (!is_array($files['stage_evidence'] ?? null) &&
+                ($files['journal_phase'] ?? null) !== 'prepared')) {
+            throw new \RuntimeException('Original cold files cannot be attributed');
+        }
+        $phase = $files['journal_phase'];
+        if ($phase !== 'prepared') {
+            $stages = $files['stage_evidence'];
+            if (array_keys($stages) !== ['youtube', 'user', 'auto'] ||
+                array_diff($stages, [
+                    'ready-but-before', 'ready-but-after', 'installed-after',
+                    'not-started', 'unchanged-before'
+                ])) {
+                throw new \RuntimeException('Original staged file proof incomplete');
+            }
+        } elseif ($files['stage_evidence'] !== null) {
+            throw new \RuntimeException('Prepared Config has no staged file writes');
+        }
+        $config = self::classifyFoundConfigImage($plan, $current, $phase);
+        return [
+            'result' => 'read-only-original-joint-classification',
+            'journal_phase' => $phase,
+            'config_image' => $config['image'],
+            'file_image' => $files['image'],
+            'file_states' => $files['states'],
+            'stage_evidence' => $files['stage_evidence'],
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
+    /**
+     * Real cold inspection uses the ONE original PHP Config::lock and the
+     * child inherited descriptors 4 + 9. No new lock owner and NO mutation.
+     * It remains an unregistered internal FD9-only CLI, not a GUI Apply.
+     */
+    private static function originalFoundLockedFileEvidence(
+        object $config, string $id
+    ): array {
+        SharedApplyLifecycleLock::assertHeld();
+        $reflection = new \ReflectionObject($config);
+        if (!$reflection->hasProperty('config_file_handle') ||
+            !$reflection->hasProperty('config_file')) {
+            throw new \RuntimeException('Native Config locked descriptor missing');
+        }
+        $handle = $reflection->getProperty('config_file_handle')->getValue($config);
+        $path = $reflection->getProperty('config_file')->getValue($config);
+        $named = @lstat('/conf/config.xml');
+        $opened = is_resource($handle) ? @fstat($handle) : false;
+        if ($path !== '/conf/config.xml' || !is_array($named) ||
+            !is_array($opened) || $opened['dev'] !== $named['dev'] ||
+            $opened['ino'] !== $named['ino']) {
+            throw new \RuntimeException('Original native Config lock inode changed');
+        }
+        $fd9 = @fopen('php://fd/9', 'r+b');
+        if (!is_resource($fd9)) {
+            throw new \RuntimeException('Original FD9 descriptor missing');
+        }
+        try {
+            $pipes = [];
+            $proc = @proc_open(
+                ['/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                 '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py',
+                 'classify-locked', $id],
+                [0 => ['file', '/dev/null', 'r'],
+                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
+                 4 => $handle, 9 => $fd9],
+                $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
+            );
+            if (!is_resource($proc)) {
+                throw new \RuntimeException('Original cold native child unavailable');
+            }
+            try {
+                stream_set_blocking($pipes[1], false);
+                $output = '';
+                $deadline = microtime(true) + 40;
+                while (!feof($pipes[1])) {
+                    if (microtime(true) >= $deadline || strlen($output) > 16384) {
+                        throw new \RuntimeException('Original cold native child timeout');
+                    }
+                    $read = [$pipes[1]];
+                    $write = [];
+                    $except = [];
+                    $ready = @stream_select($read, $write, $except, 1);
+                    if ($ready === false) {
+                        throw new \RuntimeException('Original cold native child read failed');
+                    }
+                    if ($ready > 0) {
+                        $piece = @fread($pipes[1], 16385 - strlen($output));
+                        if ($piece === false) {
+                            throw new \RuntimeException('Original cold native child interrupted');
+                        }
+                        $output .= $piece;
+                    }
+                }
+                fclose($pipes[1]);
+                unset($pipes[1]);
+                $code = proc_close($proc);
+                $proc = null;
+                if ($code !== 0 || strlen($output) > 16384 || $output === '') {
+                    throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                }
+                $reply = json_decode($output, true, 12, JSON_THROW_ON_ERROR);
+                if (!is_array($reply)) {
+                    throw new \RuntimeException('Original native cold image malformed');
+                }
+                SharedApplyLifecycleLock::assertHeld();
+                return $reply;
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) { fclose($pipe); }
+                }
+                if (is_resource($proc)) {
+                    @proc_terminate($proc);
+                    @proc_close($proc);
+                }
+            }
+        } finally {
+            fclose($fd9);
+        }
+    }
+
+    private static function inspectFoundColdNative(
+        array $plan, string $id, object $config, callable $factory
+    ): array {
+        SharedApplyLifecycleLock::assertHeld();
+        $config->lock();
+        try {
+            $before = $factory()->getNodes();
+            $files = self::originalFoundLockedFileEvidence($config, $id);
+            $after = $factory()->getNodes();
+            if (!is_array($before) || !is_array($after) ||
+                VoiceSettingsSnapshot::digest($before) !==
+                    VoiceSettingsSnapshot::digest($after)) {
+                throw new \RuntimeException('Native Config changed during cold inspection');
+            }
+            $joint = self::classifyFoundJointImages($plan, $after, $files);
+            // Re-attest the named original plan before allowing ANY receipt
+            // out of the protected scope (not an Apply/restore receipt).
+            if (self::readPlan($id, self::ROOT, 0) !== $plan) {
+                throw new \RuntimeException('Original cold sealed plan changed');
+            }
+            return $joint;
+        } finally {
+            $config->unlock();
+        }
     }
 
     public static function saved(array $plan, array $current): array
@@ -255,8 +444,10 @@ final class SharedApplyConfigWorker
                 return 69;
             }
         }
-        if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save','saved'], true) ||
-            !in_array($argv[3], ['voice','strategies'], true)) {
+        if (count($argv) !== 4 || !in_array($argv[1],
+                ['preflight', 'save', 'saved', 'found-cold'], true) ||
+            !in_array($argv[3], ['voice','strategies'], true) ||
+            ($argv[1] === 'found-cold' && $argv[3] !== 'strategies')) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -272,6 +463,12 @@ final class SharedApplyConfigWorker
             }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
+            if ($argv[1] === 'found-cold') {
+                $joint = self::inspectFoundColdNative(
+                    $plan, $argv[2], $config, $factory);
+                echo json_encode($joint, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
                 $config->lock();
                 try {
