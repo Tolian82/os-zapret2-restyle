@@ -267,7 +267,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assert_old()
         self.assertEqual(counter[0], 3)
 
-    def test_after_second_physical_write_failure_is_compensated(self):
+    def test_after_second_physical_write_without_pin_requires_review(self):
         counter = [0]
         def abort_after_second(path, before, after, uid):
             counter[0] += 1
@@ -275,10 +275,33 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             if counter[0] == 2:
                 raise OSError("test-only after durable replace")
 
+        # The second writer returned no inode witness after its rename.
+        # Even though bytes match AFTER, compensation must not overwrite
+        # a potentially foreign inode or claim safely restored.
         with self.assertRaisesRegex(DestinationRefused,
-                                    "shared_found_restored_after_failure"):
+                                    "shared_found_requires_review"):
             self.apply(replace_fn=abort_after_second)
-        self.assert_old()
+        self.assertEqual(self.targets["youtube"].read_text(), self.new["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), self.new["user"])
+        self.assertEqual(self.targets["auto"].read_text(), self.old["auto"])
+
+    def test_rollback_refuses_same_byte_foreign_inode(self):
+        calls = [0]
+        youtube = self.targets["youtube"]
+        def swap_then_fail(path, before, after, uid):
+            calls[0] += 1
+            if calls[0] == 2:
+                temp = self.root / "foreign-twin.tmp"
+                temp.write_bytes(youtube.read_bytes())
+                temp.chmod(0o600)
+                os.replace(temp, youtube)
+                raise OSError("second writer not started")
+            return _replace(path, before, after, uid)
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_requires_review"):
+            self.apply(replace_fn=swap_then_fail)
+        self.assertEqual(youtube.read_text(), self.new["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), self.old["user"])
 
     def test_compensation_failure_requires_review_and_never_claims_success(self):
         counter = [0]

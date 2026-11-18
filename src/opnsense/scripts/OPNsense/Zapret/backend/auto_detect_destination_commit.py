@@ -587,10 +587,26 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                     _sync(path.parent)
                     _shared_found_assert_missing(path, uid)
                     continue
-                current, _ = _target(path, uid)
+                current, st = _target(path, uid)
                 if current == after:
+                    # Never compensate a same-byte foreign inode. A durable
+                    # rename can raise AFTER replacing the name: without a
+                    # captured writer-owned inode, the outcome is ambiguous.
+                    writer_pin = own_written_inodes.get(name)
+                    if (writer_pin is None or
+                            (st.st_dev, st.st_ino) != writer_pin):
+                        raise DestinationRefused("shared_found_restore_unpinned_after")
                     replace(path, after, before, uid)
-                elif current != before:
+                elif current == before:
+                    # If no own post-image was recorded, ONLY the exact
+                    # original preimage may be left alone. A foreign inode
+                    # with restored-looking bytes is not proof of rollback.
+                    pinned_before = batch[name][2]
+                    observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                                st.st_mtime_ns, st.st_size)
+                    if observed != pinned_before:
+                        raise DestinationRefused("shared_found_restore_foreign_before")
+                else:
                     raise DestinationRefused("shared_found_restore_foreign_state")
             for name in SHARED_FOUND_NAMES:
                 path, before, _, status = original[name]
