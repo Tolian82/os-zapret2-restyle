@@ -36,13 +36,47 @@ def call(argv, *, locked=False, timeout=180):
     return p.stdout.strip()
 
 def image(path):
+    # This function is ONLY an independent no-mutation observation. Native
+    # source provenance is enforced separately by the original Python P2
+    # under FD9 + Config fd4, not by assuming native PID/config.xml are
+    # root-owned single-link HOSTLIST source files.
+    name = ({CONFIG: "config", PIDFILE: "pid", **{
+        target: ("youtube", "user", "auto")[i]
+        for i, target in enumerate(TARGETS)}}).get(path, "foreign")
+    need(name != "foreign", "G03_COLD_FOREIGN_SNAPSHOT_PATH")
     if not path.exists() and not path.is_symlink():
         return ("missing",)
     st = path.lstat()
-    need(st.st_uid == 0 and st.st_nlink == 1 and not path.is_symlink(),
-         "G03_COLD_FOREIGN_SOURCE")
-    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns,
-            hashlib.sha256(path.read_bytes()).hexdigest())
+    if path in TARGETS:
+        need(st.st_uid == 0 and st.st_nlink == 1 and not path.is_symlink(),
+             "G03_COLD_FOREIGN_PROTECTED_" + name)
+    if path.is_symlink():
+        return ("link", st.st_dev, st.st_ino, st.st_uid, st.st_nlink,
+                st.st_mtime_ns, st.st_ctime_ns, os.readlink(path))
+    import stat
+    need(stat.S_ISREG(st.st_mode), "G03_COLD_NONREGULAR_" + name)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        opened = os.fstat(fd)
+        data = b""
+        while True:
+            block = os.read(fd, 65536)
+            if not block:
+                break
+            data += block
+        end = os.fstat(fd)
+    finally:
+        os.close(fd)
+    named = path.lstat()
+    identity = lambda x: (x.st_dev, x.st_ino, x.st_size,
+                          x.st_mtime_ns, x.st_ctime_ns)
+    need(identity(st) == identity(opened) ==
+         identity(end) == identity(named),
+         "G03_COLD_SNAPSHOT_RACE_" + name)
+    return ("file", st.st_dev, st.st_ino, st.st_uid, st.st_nlink,
+            st.st_mode, st.st_size, st.st_mtime_ns, st.st_ctime_ns,
+            hashlib.sha256(data).hexdigest())
 
 def snapshot():
     return (image(CONFIG), image(PIDFILE), tuple(image(x) for x in TARGETS),
