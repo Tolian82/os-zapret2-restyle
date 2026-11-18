@@ -109,13 +109,14 @@ class OriginalConfigV2Tests(unittest.TestCase):
         return prepare_original_v2_locked(
             self.queue, self.receipts, attest=self.attest, inspect=self.inspect)
 
-    def commit(self, pending, *, manual=None, excluded=None, attest=None):
+    def commit(self, pending, *, manual=None, excluded=None, attest=None,
+               running_live=False):
         return commit_with_original_v2_model(
             self.writer, pending, owned_root=self.owned,
             manual_hostlists=self.manual if manual is None else manual,
             global_exclude=self.excluded if excluded is None else excluded,
             attest=self.attest if attest is None else attest,
-            inspect=self.inspect, psl=self.psl)
+            inspect=self.inspect, psl=self.psl, running_live=running_live)
 
     def ack(self, pending, result):
         return self.chain.acknowledge(
@@ -707,6 +708,103 @@ class OriginalConfigV2Tests(unittest.TestCase):
             self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
             self.assertFalse((tip.open_folder / "destination" /
                               "checkpoint.json").exists())
+
+    def _running_live_original_fixture(self):
+        # Genuine original P2 Model/P1/queue/epoch, with only the independently
+        # tested full FreeBSD kernel argv/read-only process witness injected.
+        active = self.base / "runtime-v2"
+        managed = active / "managed"
+        managed.mkdir(parents=True)
+        path = managed / "hostlist-youtube.txt"
+        path.write_text("youtube.com\nexample.co.uk\n")
+        path.chmod(0o644)
+        expected = b"youtube.com\n"
+        return active, path, {
+            "status": "read-only-live-after-images",
+            "generation": self.proof.generation,
+            "operation": self.proof.operation_id,
+            "pid": self.proof.owner.pid,
+            "started": self.proof.owner.started,
+            "changed": ["youtube"],
+            "files": {
+                "youtube": {
+                    "path": str(path),
+                    "before_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    "after_sha256": hashlib.sha256(expected).hexdigest(),
+                },
+            },
+            "commit_authorized": False,
+            "ack_authorized": False,
+        }
+
+    def test_real_original_p2_live_known_relocation_same_slot_and_ack(self):
+        import json
+        import auto_detect_original_v2_model as model
+        self.youtube.write_text("example.co.uk\n")
+        active, path, receipt = self._running_live_original_fixture()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "COMMON_ACTIVE", active), patch.object(
+                    model, "preview_live_known_after_readonly",
+                    return_value=receipt) as checked:
+                result = self.commit(pending, running_live=True)
+                self.assertEqual(checked.call_count, 1)
+            self.assertEqual(path.read_text(), "youtube.com\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            plan = json.loads((self.chain.tip(self.proof).open_folder /
+                               "destination" / "plan.json").read_bytes())
+            self.assertEqual(set(plan["live"]), {"youtube"})
+            self.assertEqual(plan["live"]["youtube"]["path"], str(path))
+            self.assertFalse(result["ack_authorized"])
+            self.assertTrue(self.ack(pending, result))
+            self.assertFalse(pending.exists())
+
+    def test_real_original_p2_live_known_replay_after_partial_source(self):
+        import auto_detect_destination_commit as dest
+        import auto_detect_original_v2_model as model
+        self.youtube.write_text("example.co.uk\n")
+        active, path, receipt = self._running_live_original_fixture()
+        self.emit("video.example.co.uk")
+        ordinary_replace = dest._replace
+        def interrupt_managed(target, *args, **kwargs):
+            if target == path:
+                raise OSError("simulate-kill-before-live-managed")
+            return ordinary_replace(target, *args, **kwargs)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "COMMON_ACTIVE", active), patch.object(
+                    model, "preview_live_known_after_readonly",
+                    return_value=receipt):
+                with patch.object(dest, "_replace", side_effect=interrupt_managed):
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        self.commit(pending, running_live=True)
+                folder = self.chain.tip(self.proof).open_folder
+                self.assertTrue(pending.exists())
+                self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+                self.assertEqual(path.read_text(), "youtube.com\nexample.co.uk\n")
+                self.assertEqual(self.youtube.read_text(), "")
+                # The earlier authenticated plan, not a new stale source
+                # preview, supplies the unchanged after-image on replay.
+                with patch.object(model, "preview_live_known_after_readonly",
+                                  side_effect=AssertionError("unexpected fresh preview")):
+                    result = self.commit(pending, running_live=True)
+            self.assertEqual(path.read_text(), "youtube.com\n")
+            self.assertTrue(self.ack(pending, result))
+
+    def test_running_shared_fallback_uses_original_p2_without_live_rewrite(self):
+        import auto_detect_original_v2_model as model
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "preview_live_known_after_readonly",
+                              side_effect=AssertionError("unnecessary live update")):
+                result = self.commit(pending, running_live=True)
+            self.assertTrue(self.ack(pending, result))
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
 
     def test_gui_destination_lock_contention_denied(self):
         self.emit("video.example.co.uk")

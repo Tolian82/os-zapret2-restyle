@@ -21,7 +21,7 @@ from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       _completed_debug_evidence_unchanged)
 from auto_detect_debug_window import ADD, _raw_hosts, _read_exact, _hostname
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
-                                            _target, qualified_destination_plan)
+                                            _edit, _target, qualified_destination_plan)
 from auto_detect_epoch_receipts import ReceiptRefused, _read
 from auto_detect_fd import FDState, probe_pending_fd
 from auto_detect_original_v2_source import (qualified_current_source,
@@ -29,7 +29,11 @@ from auto_detect_original_v2_source import (qualified_current_source,
 from auto_detect_owner import GenerationProof, attest_running_generation
 from auto_detect_owned_sources import (KNOWN_HOSTLISTS, OwnedSourcesRefused,
                                        read_owned)
-from domain_policy import AutoDomainPolicyError, PublicSuffixList, plan_auto_additions
+from domain_policy import (AutoDomainPolicyError, DomainPolicyError,
+                           PublicSuffixList, normalize, plan_auto_additions)
+from auto_detect_effective_known import (EffectiveKnownRefused, compose_known,
+                                         preview_live_known_after_readonly)
+from voice_live_inspect import COMMON_ACTIVE
 
 MAX_MODEL_TEXT = 1 << 20
 
@@ -145,12 +149,109 @@ def _validate_partial_plan(folder: Path, writer: DestinationCommit,
             raise V2OriginalConfigRefused("old_known_removal_no_longer_allowed")
 
 
+def _original_live_known_after_locked(
+    folder: Path, intent: dict, writer: DestinationCommit,
+    manual: dict[str, str], owned: dict[str, str],
+    effects: dict, proof: GenerationProof, attest: Callable,
+) -> dict | None:
+    """Original RUNNING P2 → same slot's managed CAS; no second writer.
+
+    Called ONLY under original queue -> Config -> GUI destination locks.
+    At first preparation the existing read-only PID/birth/argv witness proves
+    the active files match current Config + protected owned before-images.
+    After a partial source/managed crash, replay instead reads the immutable
+    original slot WAL; never infer a prior managed inode from a changed source.
+    """
+    if not writer.queue._held or not writer._gui_held or attest() != proof:
+        raise V2OriginalConfigRefused("original_live_owner_locks_required")
+    registered = ("youtube", "user")
+    canonical = {}
+    for name in registered:
+        normalized = normalize(manual[name], name)["normalized"]
+        canonical[name] = normalized + (chr(10) if normalized else "")
+
+    plan_path = folder / "destination" / "plan.json"
+    old_plan = None
+    if plan_path.exists() or plan_path.is_symlink():
+        old_plan, _ = qualified_destination_plan(
+            folder, intent, writer.receipts.uid, targets=writer.targets)
+        # Never silently "upgrade" an already physically partial old source
+        # WAL into unpinned live writes. Source-only AUTO slots remain valid.
+        if "live" not in old_plan:
+            if set(old_plan["writes"]) & set(registered):
+                raise V2OriginalConfigRefused("unsealed_original_live_preimage")
+            return None
+        decisions = {
+            name: old_plan["writes"].get(name, {"add": [], "remove": []})
+            for name in registered
+        }
+    else:
+        if not set(effects) & set(registered):
+            return None
+        decisions = {
+            name: effects.get(name, {"add": [], "remove": []})
+            for name in registered
+        }
+
+    # The P1-owned source may already be AFTER following a partial crash.
+    # _edit is idempotent for its original add/remove effects; a foreign
+    # rewrite is separately rejected by the old destination plan's CAS.
+    after_owned = {
+        name: _edit(owned[name].encode("utf-8"),
+                    decisions[name]["add"], decisions[name]["remove"]).decode("utf-8")
+        for name in registered
+    }
+    expected = compose_known(canonical, after_owned)
+    if old_plan is None:
+        preview = preview_live_known_after_readonly(
+            canonical, effects, active=COMMON_ACTIVE,
+            owned_root=writer.targets["youtube"].parent,
+            owner_uid=writer.receipts.uid, attest=attest)
+        if (preview["status"] != "read-only-live-after-images" or
+                preview["operation"] != proof.operation_id or
+                preview["generation"] != proof.generation or
+                preview["pid"] != proof.owner.pid or
+                preview["started"] != proof.owner.started or
+                preview["commit_authorized"] is not False or
+                preview["ack_authorized"] is not False):
+            raise V2OriginalConfigRefused("live_original_preview_owner_mismatch")
+        live = {}
+        for name in preview["changed"]:
+            row = preview["files"][name]
+            path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+            if (row["path"] != str(path) or
+                    row["after_sha256"] != hashlib.sha256(
+                        expected[name].encode("utf-8")).hexdigest()):
+                raise V2OriginalConfigRefused("live_original_expected_after_drift")
+            live[name] = {
+                "path": path,
+                "before_sha256": row["before_sha256"],
+                "after": expected[name].encode("utf-8"),
+            }
+    else:
+        live = {}
+        for name, row in old_plan["live"].items():
+            path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+            new_bytes = expected[name].encode("utf-8")
+            if (row["path"] != str(path) or
+                    row["after"] != hashlib.sha256(new_bytes).hexdigest()):
+                raise V2OriginalConfigRefused("live_original_replay_conflict")
+            live[name] = {
+                "path": path, "before_sha256": row["before"],
+                "after": new_bytes,
+            }
+    if attest() != proof:
+        raise V2OriginalConfigRefused("live_original_owner_changed_before_cas")
+    return live
+
+
 def commit_with_original_v2_model(
     writer: DestinationCommit, pending: Path, *,
     owned_root: Path, manual_hostlists: dict[str, str], global_exclude: str,
     attest: Callable = attest_running_generation,
     inspect: Callable = probe_pending_fd,
     psl: PublicSuffixList | None = None,
+    running_live: bool = False,
 ) -> dict:
     """Only the original PHP Config-locked child may call this in product.
 
@@ -169,7 +270,8 @@ def commit_with_original_v2_model(
             any(type(value) is not str or
                 len(value.encode("utf-8")) > MAX_MODEL_TEXT
                 for value in manual_hostlists.values()) or
-            not callable(attest) or not callable(inspect)):
+            not callable(attest) or not callable(inspect) or
+            type(running_live) is not bool):
         raise V2OriginalConfigRefused("original_config_model_and_queue_required")
     try:
         root = Path(owned_root)
@@ -277,7 +379,11 @@ def commit_with_original_v2_model(
                         proof, intent, writer.receipts.uid,
                         writer.receipts.writer_gid)):
                 raise V2OriginalConfigRefused("original_generation_or_fd_changed_before_write")
-            result = writer._locked_commit(folder, intent, raw, effects)
+            live = (_original_live_known_after_locked(
+                folder, intent, writer, manual_hostlists, owned, effects,
+                proof, attest) if running_live else None)
+            result = writer._locked_commit(
+                folder, intent, raw, effects, live=live)
             if (read_owned(root, owner_uid=writer.receipts.uid) is None or
                     _checkpoint(folder, intent, writer.receipts.uid,
                                 targets=writer.targets) is None or
@@ -286,5 +392,6 @@ def commit_with_original_v2_model(
             return result
     except (OSError, TypeError, ValueError, KeyError, AttributeError,
             UnicodeError, ReceiptRefused, OriginalSourceRefused, CursorChainRefused,
-            DestinationRefused, OwnedSourcesRefused, AutoDomainPolicyError) as exc:
+            DestinationRefused, OwnedSourcesRefused, AutoDomainPolicyError,
+            DomainPolicyError, EffectiveKnownRefused) as exc:
         raise V2OriginalConfigRefused("original_config_v2_commit_refused") from exc
