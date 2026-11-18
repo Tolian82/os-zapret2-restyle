@@ -409,6 +409,25 @@ jobs:
             /usr/local/bin/php -l scripts/stage2-opnsense-g03-native-prepared.php
             install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
             install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
+            # Borrow the existing P5c disposable release-discovery fixture;
+            # never claim GitHub Releases API success, and never touch the
+            # owner's system or the packaged setup.sh code path.
+            upstream_tag=$(/usr/local/bin/git ls-remote --refs \
+              https://github.com/bol-van/zapret2.git refs/tags/v1.0.7)
+            expected_tag=$(printf '038c97e5819df10f8e8c22a2f1fffe57f2f7379b\trefs/tags/v1.0.7')
+            [ "$upstream_tag" = "$expected_tag" ] || {
+              echo G03_COLD_PINNED_UPSTREAM_TAG_REFUSED >&2
+              exit 69
+            }
+            cache=/var/db/zapret2-restyle/releases.cache
+            [ ! -e "$cache" ] && [ ! -L "$cache" ] || {
+              echo G03_COLD_RELEASE_CACHE_UNEXPECTED >&2
+              exit 69
+            }
+            /bin/mkdir -p /var/db/zapret2-restyle
+            ( umask 077; printf 'v1.0.7\n' > "$cache" )
+            /bin/chmod 0644 "$cache"
+            echo G03_COLD_RELEASE_DISCOVERY=DISPOSABLE_PINNED_TAG_CACHE_NOT_API_SUCCESS
             GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 \
               /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
