@@ -24,7 +24,7 @@ final class VoiceCandidateXml
             // Exactly the Strategies form whitelist; Voice IPSETs other than
             // shared Telegram and all native Voice fields are foreign here.
             $mapping = [
-                'general' => ['enabled', 'waninterface', 'divertport'],
+                'general' => ['enabled', 'waninterface', 'divertport', 'autorestart'],
                 'strategy' => ['trafficargs', 'extraargs'],
                 'hostlist' => [
                     'mode', 'youtubedomains', 'telegramips',
@@ -83,6 +83,12 @@ final class VoiceCandidateXml
                 // is the only backward-compatible implicit value.
                 if ($path === ['hostlist', 'excludeipset']) {
                     return '';
+                }
+                // Older native Configs may not contain this newer field.
+                // In that case the documented default is Off, never an
+                // implicit scheduled restart or a fabricated XML change.
+                if ($path === ['general', 'autorestart']) {
+                    return 'off';
                 }
                 throw new \InvalidArgumentException('Shared model candidate is incomplete');
             }
