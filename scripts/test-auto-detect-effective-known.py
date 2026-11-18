@@ -225,11 +225,126 @@ class EffectiveKnownTests(unittest.TestCase):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             verify_native_planned("a" * 32)
 
-    def cold_image(self, rows, targets, phase=None, post=None):
+    def cold_image(self, rows, targets, phase=None, post=None, staged=None):
         return classify_planned_file_images(
             rows, targets=targets, owned_root=self.root,
             lock=self.lock, owner_uid=self.uid, journal_phase=phase,
-            post_images=post)
+            post_images=post, staged_images=staged)
+
+    def cold_pin(self, path):
+        st = path.lstat()
+        raw = path.read_bytes()
+        return {"device": st.st_dev, "inode": st.st_ino,
+                "mtime_ns": st.st_mtime_ns, "size": st.st_size,
+                "sha256": hashlib.sha256(raw).hexdigest()}
+
+    def cold_install_after(self, rows, targets, name):
+        path = targets[name]
+        if path.exists():
+            path.unlink()
+        path.write_text(rows[name]["after"])
+        path.chmod(0o600)
+        return self.cold_pin(path)
+
+    def test_cold_staged_ready_before_and_ready_after_are_read_only(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        # Fsynced temporary inode, but the destination still holds BEFORE.
+        pin = {"device": 10, "inode": 11, "mtime_ns": 12,
+               "size": len(rows["youtube"]["after"].encode()),
+               "sha256": hashlib.sha256(rows["youtube"]["after"].encode()).hexdigest()}
+        stages = {"youtube": {"state": "ready", "pin": pin}}
+        first = self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        self.assertEqual(first["stage_evidence"]["youtube"], "ready-but-before")
+        self.assertEqual(first["stage_evidence"]["user"], "not-started")
+        self.assertFalse(first["restore_authorized"])
+        # An identical-byte replacement that did NOT come from pinned inode
+        # must not be incorrectly classified as our post-rename image.
+        self.cold_install_after(rows, targets, "youtube")
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_staged_inode_changed"):
+            self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        stages["youtube"]["pin"] = self.cold_pin(targets["youtube"])
+        second = self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        self.assertEqual(second["stage_evidence"]["youtube"], "ready-but-after")
+        self.assertFalse(second["commit_authorized"])
+        self.assertFalse(second["restore_authorized"])
+
+    def test_cold_staged_installed_requires_original_inode_and_order(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        pin_y = self.cold_install_after(rows, targets, "youtube")
+        stages = {"youtube": {"state": "installed", "pin": pin_y}}
+        receipt = self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        self.assertEqual(receipt["stage_evidence"]["youtube"], "installed-after")
+        self.assertEqual(receipt["stage_evidence"]["user"], "not-started")
+        forged = {"auto": {"state": "ready", "pin": pin_y}}
+        with self.assertRaisesRegex(EffectiveKnownRefused, "out_of_order"):
+            self.cold_image(rows, targets, "found-files-writing", staged=forged)
+        pin_u = self.cold_install_after(rows, targets, "user")
+        stages["user"] = {"state": "ready", "pin": pin_u}
+        receipt = self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        self.assertEqual(receipt["stage_evidence"]["user"], "ready-but-after")
+        # Same byte content but a foreign *inode* is not owned by this WAL.
+        other = self.base / "foreign-user.tmp"
+        other.write_bytes(targets["user"].read_bytes())
+        other.chmod(0o600)
+        os.replace(other, targets["user"])
+        with self.assertRaisesRegex(EffectiveKnownRefused, "staged_inode_changed"):
+            self.cold_image(rows, targets, "found-files-writing", staged=stages)
+
+    def test_cold_staged_missing_auto_and_post_config_require_every_installed(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        pin_y = self.cold_install_after(rows, targets, "youtube")
+        pin_u = self.cold_install_after(rows, targets, "user")
+        stages = {"youtube": {"state": "installed", "pin": pin_y},
+                  "user": {"state": "installed", "pin": pin_u}}
+        pin_a = {"device": 15, "inode": 16, "mtime_ns": 17,
+                 "size": len(rows["auto"]["after"].encode()),
+                 "sha256": hashlib.sha256(rows["auto"]["after"].encode()).hexdigest()}
+        stages["auto"] = {"state": "ready", "pin": pin_a}
+        before = self.cold_image(rows, targets, "found-files-writing", staged=stages)
+        self.assertEqual(before["stage_evidence"]["auto"], "ready-but-before")
+        with self.assertRaisesRegex(EffectiveKnownRefused, "complete_staged_proof_required"):
+            self.cold_image(rows, targets, "found-config-saving", staged=stages)
+        stages["auto"] = {"state": "installed",
+                           "pin": self.cold_install_after(rows, targets, "auto")}
+        with self.assertRaisesRegex(EffectiveKnownRefused, "complete_staged_proof_required"):
+            self.cold_image(rows, targets, "found-config-saving", staged=stages)
+        post = {}
+        for name, path in targets.items():
+            st = path.lstat()
+            post[name] = {"status": "present", "device": st.st_dev,
+                          "inode": st.st_ino, "ctime_ns": st.st_ctime_ns,
+                          "mtime_ns": st.st_mtime_ns, "size": st.st_size,
+                          "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        receipt = self.cold_image(rows, targets, "found-config-saving", post, stages)
+        self.assertEqual(receipt["stage_evidence"]["auto"], "installed-after")
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertFalse(receipt["restore_authorized"])
+
+    def test_cold_staged_rejects_tampered_hash_and_unchanged_and_missing_record(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        pin = {"device": 13, "inode": 14, "mtime_ns": 15,
+               "size": len(rows["youtube"]["after"].encode()),
+               "sha256": hashlib.sha256(b"foreign").hexdigest()}
+        with self.assertRaisesRegex(EffectiveKnownRefused, "staged_plan_mismatch"):
+            self.cold_image(rows, targets, "found-files-writing",
+                            staged={"youtube": {"state": "ready", "pin": pin}})
+        with self.assertRaisesRegex(EffectiveKnownRefused, "stage_outside_writing"):
+            self.cold_image(rows, targets, "prepared", staged={})
+        # No staged evidence means no post-rename provenance; the full native
+        # caller always supplies stages, but legacy file-only fixtures can omit.
+        self.cold_install_after(rows, targets, "youtube")
+        with self.assertRaisesRegex(EffectiveKnownRefused, "unstaged_after_image"):
+            self.cold_image(rows, targets, "found-files-writing", staged={})
+        rows2, targets2 = self.planned_rows()
+        rows2["auto"]["after"] = ""
+        with self.assertRaisesRegex(EffectiveKnownRefused, "stage_unchanged_source"):
+            self.cold_image(rows2, targets2, "found-files-writing",
+                            staged={"auto": {"state": "ready", "pin": pin}})
 
     def test_cold_pin_rejects_identical_byte_foreign_inode(self):
         self.seed()

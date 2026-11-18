@@ -361,12 +361,14 @@ def classify_planned_file_images(
     lock: Path = AUTO_LOCK, owner_uid: int = 0,
     journal_phase: str | None = None,
     post_images: dict | None = None,
+    staged_images: dict | None = None,
 ) -> dict:
     """READ ONLY image evidence from the original sealed three-source plan.
 
-    An 'after-image' proves matching bytes, NEVER which writer produced them.
-    It cannot authorize Config/target changes, restore, lifecycle or journal
-    advancement. Cold recovery needs a future original durable write receipt.
+    The optional original FD9 ready/installed staged inode witnesses can
+    attribute a physical after-image, not authorize rollback/replay.
+    Merely identical bytes never prove writer ownership; Config, runtime,
+    lifecycle and journal remain untouched.
     """
     if (not isinstance(targets, dict) or
             list(targets) != list(SHARED_FOUND_NAMES) or
@@ -406,6 +408,76 @@ def classify_planned_file_images(
                 # Same-byte inode replacements and foreign content are NOT
                 # evidence of the original writer or a valid rollback.
                 raise EffectiveKnownRefused("cold_found_unknown_image")
+        # Source-only cold proof of the SAME original per-file FD9 ready /
+        # installed WAL. Validate actual file inode + mtime + SHA while the
+        # original P2 lock remains held. A ready temp may have disappeared
+        # after a crash; absence is NOT permission to re-create/rollback it.
+        stage_evidence = None
+        if staged_images is not None:
+            from shared_apply_operation import (
+                _validate_found_stages, SharedOperationError)
+            try:
+                _validate_found_stages(staged_images)
+            except SharedOperationError as exc:
+                raise EffectiveKnownRefused("cold_found_invalid_staged_wal") from exc
+            if journal_phase not in (
+                    "found-files-writing", "found-files-written",
+                    "found-config-saving", "found-config-saved"):
+                raise EffectiveKnownRefused("cold_found_stage_outside_writing")
+            changed = [
+                name for name in SHARED_FOUND_NAMES
+                if verified[name][0] != verified[name][1]]
+            if any(name not in changed for name in staged_images):
+                raise EffectiveKnownRefused("cold_found_stage_unchanged_source")
+            stage_evidence = {}
+            # The original writer changes sources in fixed canonical order.
+            # No later stage can exist without all earlier ones installed.
+            for index, name in enumerate(changed):
+                stage = staged_images.get(name)
+                if stage is None:
+                    if name in staged_images:
+                        raise EffectiveKnownRefused("cold_found_staged_null")
+                    if journal_phase != "found-files-writing":
+                        raise EffectiveKnownRefused("cold_found_incomplete_staged_wal")
+                    if states[name] != "before":
+                        raise EffectiveKnownRefused("cold_found_unstaged_after_image")
+                    stage_evidence[name] = "not-started"
+                    continue
+                if any(staged_images.get(previous, {}).get("state") != "installed"
+                       for previous in changed[:index]):
+                    raise EffectiveKnownRefused("cold_found_staged_out_of_order")
+                pin = stage["pin"]
+                expected_bytes = verified[name][1]
+                if (pin["size"] != len(expected_bytes) or
+                        pin["sha256"] != hashlib.sha256(expected_bytes).hexdigest()):
+                    raise EffectiveKnownRefused("cold_found_staged_plan_mismatch")
+                if stage["state"] == "installed" or states[name] == "after-image":
+                    if states[name] != "after-image":
+                        raise EffectiveKnownRefused("cold_found_installed_not_present")
+                    observed, st = _target(targets[name], owner_uid)
+                    identity = (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
+                    pinned = tuple(pin[key] for key in
+                                   ("device", "inode", "mtime_ns", "size"))
+                    if identity != pinned or hashlib.sha256(observed).hexdigest() != pin["sha256"]:
+                        raise EffectiveKnownRefused("cold_found_staged_inode_changed")
+                    stage_evidence[name] = ("installed-after" if stage["state"] == "installed"
+                                            else "ready-but-after")
+                elif stage["state"] == "ready" and states[name] == "before":
+                    stage_evidence[name] = "ready-but-before"
+                else:
+                    raise EffectiveKnownRefused("cold_found_unqualified_staged_state")
+            for name in SHARED_FOUND_NAMES:
+                if name not in changed:
+                    stage_evidence[name] = "unchanged-before"
+                    if states[name] != "before":
+                        raise EffectiveKnownRefused("cold_found_untouched_source_drift")
+            if journal_phase in (
+                    "found-files-written", "found-config-saving", "found-config-saved"):
+                if (set(staged_images) != set(changed) or
+                        any(stage["state"] != "installed"
+                            for stage in staged_images.values()) or
+                        post_images is None):
+                    raise EffectiveKnownRefused("cold_found_complete_staged_proof_required")
         # The physical inode/time attestation is distinct from a byte match.
         # A cold foreign writer with identical content must be refused.
         if post_images is not None:
@@ -443,7 +515,7 @@ def classify_planned_file_images(
                     old, new, _, _ = verified[name]
                     if states[name] != ("after-image" if new != old else "before"):
                         raise EffectiveKnownRefused("cold_found_written_phase_diverged")
-    return {
+    receipt = {
         "result": "read-only-cold-image-classification",
         "image": ("all-before" if all(s == "before" for s in states.values())
                   else "contains-unattributed-after"),
@@ -451,6 +523,9 @@ def classify_planned_file_images(
         "commit_authorized": False,
         "restore_authorized": False,
     }
+    if stage_evidence is not None:
+        receipt["stage_evidence"] = stage_evidence
+    return receipt
 
 
 def classify_native_planned(operation: str) -> dict:
@@ -501,6 +576,7 @@ def classify_native_planned(operation: str) -> dict:
                  "auto": AUTO_HOSTLIST},
         journal_phase=record["phase"],
         post_images=record["found"].get("post"),
+        staged_images=record["found"].get("stages"),
     )
 
 
