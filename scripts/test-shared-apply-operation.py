@@ -21,6 +21,85 @@ def detail(ident="1"*32):
 class TestJournal(unittest.TestCase):
 
 
+
+    def test_found_config_wal_pre_save_and_post_save_is_strictly_nonterminal(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            store = SharedApplyOperation(Path(temporary) / "shared-apply")
+            detail_found = {"id": "e" * 32, "page": "strategies",
+                            "base": "a" * 64, "candidate": "b" * 64,
+                            "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": detail_found["base"],
+                "found_intent": {"config_revision": detail_found["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }, separators=(",", ":")).encode()
+            store.prepare_found(detail_found, plan, lambda _: True)
+            store.advance_found_files("found-files-writing", detail_found,
+                                      plan, lambda *_: True)
+            store.advance_found_files("found-files-written", detail_found,
+                                      plan, lambda *_: True)
+            sequence = []
+            for phase in ("found-config-saving", "found-config-saved"):
+                record_before = (store.root / "operation.json").read_bytes()
+                with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                    store.advance_found_config(phase, detail_found, plan,
+                                               lambda *_: False)
+                self.assertEqual((store.root / "operation.json").read_bytes(),
+                                 record_before)
+                with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                    store.advance_found_config(phase, detail_found, plan + b" ",
+                                               lambda *_: True)
+                persisted = store.advance_found_config(
+                    phase, detail_found, plan,
+                    lambda p, raw: (sequence.append(p) or raw == plan))
+                self.assertEqual(store.read(), persisted)
+                self.assertEqual(persisted["phase"], phase)
+                self.assertEqual(persisted["found"]["plan_sha256"],
+                                 hashlib.sha256(plan).hexdigest())
+                self.assertEqual((store.root / "operation.json").stat().st_mode & 0o777, 0o600)
+                self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+                for illegal in ("committed", "restored", "requires-review",
+                                "config-saved", "activated"):
+                    with self.assertRaisesRegex(
+                            SharedOperationError, "found files require original durable"):
+                        store.advance(illegal, detail_found)
+            self.assertEqual(sequence, ["found-config-saving", "found-config-saved"])
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                store.advance_found_config(
+                    "found-config-saving", detail_found, plan, lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                store.recover_prepared(detail_found["id"], lambda: True)
+            self.assertEqual(store.read()["phase"], "found-config-saved")
+
+    def test_found_config_attempt_refused_before_files_written(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = SharedApplyOperation(Path(temporary) / "shared-apply")
+            d = {"id": "d" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "b" * 64,
+                 "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": d["base"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            store.prepare_found(d, plan, lambda _: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                store.advance_found_config("found-config-saving", d, plan,
+                                           lambda *_: True)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            with self.assertRaisesRegex(SharedOperationError, "missing original intent"):
+                store._persist_record(
+                    {"schema": 1, "phase": "found-config-saving", "detail": d})
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            with self.assertRaisesRegex(SharedOperationError, "invalid original found Config"):
+                store.advance_found_config("committed", d, plan, lambda *_: True)
+
     def test_found_physical_write_intent_is_fsynced_before_any_file_checkpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
             journal = SharedApplyOperation(Path(tmp) / "shared-apply")

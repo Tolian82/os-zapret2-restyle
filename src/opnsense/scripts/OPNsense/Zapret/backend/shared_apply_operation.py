@@ -30,8 +30,15 @@ FOUND_KIND = "sealed-five-editor-three-file-intent"
 # The original journal, not a second file ledger, persists the all-three
 # physical write intent BEFORE the first P2-owned rename/link.
 FOUND_FILE_PHASES = frozenset(("found-files-writing", "found-files-written"))
+# Config::save on OPNsense releases its native flock. The original PHP
+# owner must hold Config->P2 until save returns, RELEASE P2, then reacquire
+# Config->P2 for independent post-save proof. Holding P2 while attempting
+# a fresh Config lock reverses lock order and risks deadlocking P2a.
+FOUND_CONFIG_PHASES = frozenset(("found-config-saving", "found-config-saved"))
 FOUND_NEXT = {"prepared": "found-files-writing",
-              "found-files-writing": "found-files-written"}
+              "found-files-writing": "found-files-written",
+              "found-files-written": "found-config-saving",
+              "found-config-saving": "found-config-saved"}
 DIGEST = re.compile(r"^[a-f0-9]{64}$")
 OP_ID = re.compile(r"^[a-f0-9]{32}$")
 FIELD = re.compile(r"^[a-z]+(?:\.[a-z]+){1,2}$")
@@ -40,6 +47,7 @@ PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
     "found-files-writing", "found-files-written",
+    "found-config-saving", "found-config-saved",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -122,7 +130,7 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
             not DIGEST.fullmatch(found["plan_sha256"]) or
             found["sources"] != list(FOUND_NAMES) or
             detail["page"] != "strategies" or
-            phase not in ("prepared", *FOUND_FILE_PHASES)):
+            phase not in ("prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES)):
         raise SharedOperationError("invalid sealed found intent in original journal")
     return found
 
@@ -140,9 +148,10 @@ def _validate_record(record: object) -> dict:
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
-    # No old Voice/Strategies journal may fake a found-file physical phase.
-    if record["phase"] in FOUND_FILE_PHASES and "found" not in record:
-        raise SharedOperationError("found-file checkpoint missing original intent")
+    # No old Voice/Strategies record may invent protected physical or
+    # Config-save uncertainty checkpoints without this exact found intent.
+    if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES and "found" not in record:
+        raise SharedOperationError("found checkpoint missing original intent")
     if "found" in record:
         _validate_found_intent(record["found"], record["detail"], record["phase"])
     if "previous" in record:
@@ -291,6 +300,38 @@ class SharedApplyOperation:
         advanced = dict(record)
         advanced["phase"] = phase
         return self._persist_record(advanced)
+
+    def advance_found_config(self, phase: str, detail: dict,
+                             sealed_plan: bytes, attest) -> dict:
+        """Two durable original FD9 Config checkpoints, import-only.
+
+        'found-config-saving' MUST fsync before the first native
+        Config::save attempt; 'found-config-saved' requires a fresh native
+        Config readback AND all-three-file proof under Config->P2 locks.
+        The caller alone owns the original Config singleton, FD9 and P2.
+        Config::save drops Config flock: release P2 BEFORE a new Config
+        lock, then reacquire P2 after Config; never hold P2 while waiting
+        for Config. Neither phase authorizes an engine or terminal state.
+        """
+        _validate_detail(detail)
+        if (phase not in FOUND_CONFIG_PHASES or
+                type(sealed_plan) is not bytes or
+                not 0 < len(sealed_plan) <= MAX_FOUND_PLAN):
+            raise SharedOperationError("invalid original found Config checkpoint")
+        before = self.read()
+        if (before is None or before["detail"] != detail or
+                "found" not in before or
+                FOUND_NEXT.get(before["phase"]) != phase or
+                before["found"]["plan_sha256"] !=
+                hashlib.sha256(sealed_plan).hexdigest()):
+            raise SharedOperationError("found Config original state/plan mismatch")
+        if not callable(attest) or attest(phase, sealed_plan) is not True:
+            raise SharedOperationError("original Config/P2 save witness refused")
+        if self.read() != before:
+            raise SharedOperationError("original Config journal changed under locks")
+        record = dict(before)
+        record["phase"] = phase
+        return self._persist_record(record)
 
     def advance(self, phase: str, detail: dict) -> dict:
         if phase not in PHASES:

@@ -230,6 +230,26 @@ class EffectiveKnownTests(unittest.TestCase):
             rows, targets=targets, owned_root=self.root,
             lock=self.lock, owner_uid=self.uid, journal_phase=phase)
 
+    def test_cold_config_attempt_phases_still_require_all_file_after_images(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        for phase in ("found-config-saving", "found-config-saved"):
+            with self.assertRaisesRegex(
+                    EffectiveKnownRefused, "cold_found_written_phase_diverged"):
+                self.cold_image(rows, targets, phase)
+        for name in ("youtube", "user"):
+            target = targets[name]
+            target.unlink()
+            target.write_text(rows[name]["after"])
+            target.chmod(0o600)
+        targets["auto"].write_text(rows["auto"]["after"])
+        targets["auto"].chmod(0o600)
+        for phase in ("found-config-saving", "found-config-saved"):
+            receipt = self.cold_image(rows, targets, phase)
+            self.assertEqual(receipt["image"], "contains-unattributed-after")
+            self.assertFalse(receipt["commit_authorized"])
+            self.assertFalse(receipt["restore_authorized"])
+
     def test_cold_prepared_phase_refuses_any_after_image(self):
         self.seed()
         rows, targets = self.planned_rows()

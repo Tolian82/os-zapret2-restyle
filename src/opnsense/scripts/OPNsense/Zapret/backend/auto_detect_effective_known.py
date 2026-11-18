@@ -408,12 +408,14 @@ def classify_planned_file_images(
         # lock. No matching bytes prove which writer made them.
         if journal_phase is not None:
             if journal_phase not in (
-                    "prepared", "found-files-writing", "found-files-written"):
+                    "prepared", "found-files-writing", "found-files-written",
+                    "found-config-saving", "found-config-saved"):
                 raise EffectiveKnownRefused("cold_found_unknown_journal_phase")
             if journal_phase == "prepared" and any(
                     state != "before" for state in states.values()):
                 raise EffectiveKnownRefused("cold_found_unexpected_prepared_image")
-            if journal_phase == "found-files-written":
+            if journal_phase in ("found-files-written", "found-config-saving",
+                                 "found-config-saved"):
                 for name in SHARED_FOUND_NAMES:
                     old, new, _, _ = verified[name]
                     if states[name] != ("after-image" if new != old else "before"):
@@ -436,13 +438,14 @@ def classify_native_planned(operation: str) -> dict:
         raise EffectiveKnownRefused("native_original_fd9_required")
     from voice_ipfw_adapter import require_lifecycle_lock
     from shared_apply_seal import WORK, _stat, verify_seal
-    from shared_apply_operation import SharedApplyOperation, FOUND_FILE_PHASES
+    from shared_apply_operation import (SharedApplyOperation, FOUND_FILE_PHASES,
+                                        FOUND_CONFIG_PHASES)
     import hashlib
 
     require_lifecycle_lock()
     record = SharedApplyOperation(owner=0).read()
     if (record is None or record["phase"] not in (
-            "prepared", *FOUND_FILE_PHASES) or
+            "prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES) or
             "found" not in record or
             record["detail"]["id"] != operation or
             record["detail"]["page"] != "strategies"):
