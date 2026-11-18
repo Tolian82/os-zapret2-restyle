@@ -98,9 +98,8 @@ def five_hostlist_native_apply(config_path: Path):
                                  separators=(",", ":")).encode()
             token = base64.urlsafe_b64encode(request).decode().rstrip("=")
             result = run([configctl, "zapret", "shared_apply", "strategies", token], timeout=180)
-            receipt = result.stdout.splitlines()[-1] if result.stdout.strip() else ""
             need(result.returncode == 0, "FIVE_HOSTLIST_CONFIGD_UNAVAILABLE")
-            return receipt
+            return
         sources = {}
         for short, key in editor_names.items():
             editor = snapshot["editors"][key]
@@ -165,20 +164,16 @@ def five_hostlist_native_apply(config_path: Path):
                   flush=True)
         return reply
 
-    def assert_commit(receipt, label):
-        match = re.fullmatch(r"applied-id=([0-9a-f]{32})", receipt)
-        record = json.loads(journal.read_bytes())
-        reason = receipt if re.fullmatch(r"preflight-rejected=[a-z0-9-]+", receipt) else "unconfirmed"
-        if not match:
-            print("FIVE_HOSTLIST_LIST_BASELINE=" + json.dumps({
-                "phase": record.get("phase"),
-                "config_saved_receipt": "result\"" in receipt,
-                "service": status()["service"],
-            }), flush=True)
-        need(match is not None and record.get("phase") == "committed" and
-             record["detail"]["id"] == match[1], "FIVE_HOSTLIST_" + label + "_" + reason)
-
-    assert_commit(apply({"hostlist": {"mode": "list"}}), "LIST_BOOT")
+    # Establish the prior owner independently of configctl's output. Check
+    # the durable owner, saved mode and service status before any test edit.
+    need(not journal.exists(), "FIVE_HOSTLIST_LIST_BASELINE_ALREADY_PRESENT")
+    apply({"hostlist": {"mode": "list"}})
+    record = json.loads(journal.read_bytes())
+    detail = record.get("detail", {})
+    need(record.get("phase") == "committed" and detail.get("page") == "strategies" and
+         re.fullmatch(r"[0-9a-f]{32}", detail.get("id", "")) and
+         ET.fromstring(config_path.read_bytes()).findtext("./OPNsense/Zapret/hostlist/mode") == "list" and
+         status()["service"] == "started", "FIVE_HOSTLIST_LIST_BASELINE_NOT_RUNNING")
     initial_pid = pidfile.read_text().split()[0]
     base = read()
     old_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
