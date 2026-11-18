@@ -94,6 +94,18 @@ def _stage_pin(st: os.stat_result, data: bytes) -> dict:
             "size": st.st_size, "sha256": _sha(data)}
 
 
+def _native_list_modification_visible(before: os.stat_result,
+                                      after: os.stat_result) -> bool:
+    """Match pinned Zapret2 v1.0.7 FILE_MOD_COMPARE: mtime(ns) + size.
+
+    An atomic inode change with identical mtime and size would be invisible
+    to the running engine's next-packet reload check. Never checkpoint or
+    acknowledge such a replacement; leave the old file and P2 pending.
+    """
+    return (before.st_mtime_ns != after.st_mtime_ns or
+            before.st_size != after.st_size)
+
+
 def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
              stage_fn=None, expected_identity=None) -> None:
     """One protected same-directory replace after read-side CAS under GUI lock."""
@@ -120,6 +132,15 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
     # The stage callback must be INSIDE the cleanup scope: a refused journal
     # fsync must never leave unowned private .auto-detect-* temp artifacts.
     try:
+        # Upstream v1.0.7 compares mtime+size, NOT inode or content SHA.
+        # Check the actual fsynced staged inode, before its atomic rename.
+        # A same-signature replacement is not proof of a native hot reload.
+        staged_bytes, staged_stat = _target(temp, uid)
+        if staged_bytes != expected:
+            raise DestinationRefused("original_staged_temp_changed")
+        if (current != expected and
+                not _native_list_modification_visible(st, staged_stat)):
+            raise DestinationRefused("native_list_reload_signature_unchanged")
         if stage_fn is not None:
             stage_fn("ready", temp, expected)
         # Writers that ignore the shared GUI lock are not trusted. Recheck

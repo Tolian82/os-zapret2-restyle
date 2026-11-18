@@ -444,6 +444,48 @@ class OriginalConfigV2Tests(unittest.TestCase):
                          "!untouched.example\nexample.co.uk\n")
         self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
 
+    def test_native_list_reload_rejects_unchanged_mtime_and_size(self):
+        # Native Zapret2 v1.0.7 FILE_MOD_COMPARE only checks mtime + size,
+        # not the inode, byte digest or content. Simulate a genuine physical
+        # temporary file having the old signature despite new same-size data.
+        import auto_detect_destination_commit as mod
+        location = self.lists / "hot-reload-witness.txt"
+        before, after = b"first.example\\n", b"other.example\\n"
+        self.assertEqual(len(before), len(after))
+        location.write_bytes(before)
+        location.chmod(0o600)
+        old_stat = location.stat()
+        original_target = mod._target
+        touched = []
+
+        def collided_stage(target, uid, **kwargs):
+            if target.parent == self.lists and target.name.startswith(".auto-detect-"):
+                os.utime(target, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns))
+                touched.append(target.name)
+            return original_target(target, uid, **kwargs)
+
+        with patch.object(mod, "_target", side_effect=collided_stage):
+            with self.assertRaisesRegex(
+                    mod.DestinationRefused, "native_list_reload_signature_unchanged"):
+                mod._replace(location, before, after, os.geteuid())
+        self.assertEqual(location.read_bytes(), before)
+        self.assertEqual(location.stat().st_ino, old_stat.st_ino)
+        self.assertTrue(touched)
+        self.assertEqual([p.name for p in self.lists.iterdir()
+                          if p.name.startswith(".auto-detect-")], [])
+        self.assertFalse(mod._native_list_modification_visible(
+            old_stat, location.stat()))
+
+        # If size OR nanosecond mtime differs, the real upstream predicate
+        # will schedule a reload on the next eligible packet.
+        from types import SimpleNamespace
+        self.assertTrue(mod._native_list_modification_visible(
+            old_stat, SimpleNamespace(st_size=old_stat.st_size + 1,
+                                       st_mtime_ns=old_stat.st_mtime_ns)))
+        self.assertTrue(mod._native_list_modification_visible(
+            old_stat, SimpleNamespace(st_size=old_stat.st_size,
+                                       st_mtime_ns=old_stat.st_mtime_ns + 1)))
+
     def test_same_bytes_foreign_inode_between_preflight_and_source_cas_refuses(self):
         # The earlier all-target preflight is NOT a free pass for a later
         # source rename. A non-cooperating writer may swap an inode after the
