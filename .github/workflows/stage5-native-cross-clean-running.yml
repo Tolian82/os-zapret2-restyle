@@ -432,5 +432,11 @@ jobs:
               /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
               /usr/local/bin/python3 /root/g03-native-prepared.py
+            # ONE disposable Guest D fault: first protected YouTube rename
+            # truly installed, then original child dies without cleanup.
+            # Recover under the same original FD9/Config/P2; check that the
+            # RUNNING owner and untouched User/Auto physical files survive.
+            GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
+              /usr/local/bin/python3 /root/g03-native-prepared.py partial
             test "$(sha256 -q "$package")" = "$before"
             echo 'PASS: SAME guest A archive, native five HOSTLIST and original FD4/FD9/P2 PREPARED restored without live Config/HOSTLIST/IPFW writes'
