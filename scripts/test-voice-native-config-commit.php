@@ -387,6 +387,19 @@ namespace {
     $coldFilesSaving['stage_evidence']['youtube'] = 'installed-after';
     $jointSaving = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
         classifyFoundJointImages($coldPlan, $coldCandidate, $coldFilesSaving);
+    // Python builds staged evidence in changed-file order, which may
+    // differ from the full canonical three-source order. This is a
+    // shape check, not permission to fabricate a real native stage.
+    $reorderedStages = $coldFilesSaving;
+    $reorderedStages['stage_evidence'] = [
+        'auto'=>'not-started', 'user'=>'not-started',
+        'youtube'=>'installed-after',
+    ];
+    $reordered = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($coldPlan, $coldCandidate, $reorderedStages);
+    verify($reordered['stage_evidence']['youtube'] === 'installed-after' &&
+        !$reordered['restore_authorized'],
+        'reordered native staged source keys incorrectly rejected');
     verify($jointSaving['config_image'] === 'candidate-image' &&
         !$jointSaving['save_attested'] && !$jointSaving['commit_authorized'],
         'matching candidate during uncertain save falsely authorized Apply');

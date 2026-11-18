@@ -190,25 +190,17 @@ final class SharedApplyConfigWorker
     public static function classifyFoundJointImages(
         array $plan, array $current, array $files
     ): array {
-        if (array_keys($files) !== [
-                'schema', 'result', 'journal_phase', 'image', 'states',
-                'stage_evidence', 'commit_authorized', 'restore_authorized'
-            ] && array_keys($files) !== [
-                'result', 'journal_phase', 'image', 'states',
-                'stage_evidence', 'commit_authorized', 'restore_authorized',
-                'schema'
-            ]) {
-            // The native Python JSON encoder uses alphabetical keys:
-            // neither extra data nor missing proof is silently accepted.
-            $expected = ['schema', 'result', 'journal_phase', 'image',
-                'states', 'stage_evidence', 'commit_authorized',
-                'restore_authorized'];
-            $keys = array_keys($files);
-            sort($keys);
-            sort($expected);
-            if ($keys !== $expected) {
-                throw new \RuntimeException('Unqualified original cold file evidence');
-            }
+        // Python serializes sorted JSON keys, while the original source
+        // stage map may be constructed in changed-source order. Do not
+        // confuse key order with missing/foreign evidence.
+        $expected = ['schema', 'result', 'journal_phase', 'image',
+            'states', 'stage_evidence', 'commit_authorized',
+            'restore_authorized'];
+        $keys = array_keys($files);
+        sort($keys);
+        sort($expected);
+        if ($keys !== $expected) {
+            throw new \RuntimeException('Unqualified original cold file evidence');
         }
         if (($files['schema'] ?? null) !== 1 ||
             ($files['result'] ?? null) !== 'read-only-cold-image-classification' ||
@@ -226,7 +218,9 @@ final class SharedApplyConfigWorker
         $phase = $files['journal_phase'];
         if ($phase !== 'prepared') {
             $stages = $files['stage_evidence'];
-            if (array_keys($stages) !== ['youtube', 'user', 'auto'] ||
+            $stageKeys = array_keys($stages);
+            sort($stageKeys);
+            if ($stageKeys !== ['auto', 'user', 'youtube'] ||
                 array_diff($stages, [
                     'ready-but-before', 'ready-but-after', 'installed-after',
                     'not-started', 'unchanged-before'
@@ -325,6 +319,15 @@ final class SharedApplyConfigWorker
                 $reply = json_decode($output, true, 12, JSON_THROW_ON_ERROR);
                 if (!is_array($reply)) {
                     throw new \RuntimeException('Original native cold image malformed');
+                }
+                $namedAgain = @lstat('/conf/config.xml');
+                $heldAgain = @fstat($handle);
+                if (!is_array($namedAgain) || !is_array($heldAgain) ||
+                    $namedAgain['dev'] !== $heldAgain['dev'] ||
+                    $namedAgain['ino'] !== $heldAgain['ino'] ||
+                    $namedAgain['dev'] !== $named['dev'] ||
+                    $namedAgain['ino'] !== $named['ino']) {
+                    throw new \RuntimeException('Native Config replaced during cold files proof');
                 }
                 SharedApplyLifecycleLock::assertHeld();
                 return $reply;
