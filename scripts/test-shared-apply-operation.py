@@ -20,6 +20,63 @@ def detail(ident="1"*32):
 
 class TestJournal(unittest.TestCase):
 
+
+    def test_found_physical_write_intent_is_fsynced_before_any_file_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = SharedApplyOperation(Path(tmp) / "shared-apply")
+            d = {"id": "c" * 32, "page": "strategies", "base": "a" * 64,
+                 "candidate": "b" * 64, "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": d["base"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}},
+            }).encode()
+            journal.prepare_found(d, plan, lambda b: b == plan)
+            steps = []
+            for phase in ("found-files-writing", "found-files-written"):
+                with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                    journal.advance_found_files(phase, d, plan, lambda *_: False)
+                with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                    journal.advance_found_files(phase, d, plan + b"\n",
+                                                lambda *_: True)
+                record = journal.advance_found_files(
+                    phase, d, plan,
+                    lambda p, raw: (steps.append(p) or raw == plan))
+                self.assertEqual(record["phase"], phase)
+                self.assertEqual(journal.read(), record)
+                self.assertEqual(
+                    (journal.root / "operation.json").stat().st_mode & 0o777,
+                    0o600)
+                self.assertFalse(native_lifecycle_gate(
+                    "common-apply", root=journal.root)["safe_to_mutate"])
+                for legacy in ("activated", "restored", "config-saved", "committed"):
+                    with self.assertRaises(SharedOperationError):
+                        journal.advance(legacy, d)
+            self.assertEqual(steps, ["found-files-writing", "found-files-written"])
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                journal.advance_found_files(
+                    "found-files-writing", d, plan, lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                journal.recover_prepared(d["id"], lambda: True)
+
+    def test_found_file_phase_cannot_be_forged_from_ordinary_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = SharedApplyOperation(Path(tmp) / "shared-apply")
+            old = detail("f" * 32)
+            journal.advance("prepared", old)
+            before = (journal.root / "operation.json").read_bytes()
+            with self.assertRaises(SharedOperationError):
+                journal.advance_found_files(
+                    "found-files-writing", old, b'{"plan":1}', lambda *_: True)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+            forged = json.loads(before)
+            forged["phase"] = "found-files-writing"
+            with self.assertRaisesRegex(SharedOperationError, "missing original intent"):
+                journal._persist_record(forged)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+
     def test_found_intent_is_one_durable_original_record_not_ordinary_apply(self):
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:

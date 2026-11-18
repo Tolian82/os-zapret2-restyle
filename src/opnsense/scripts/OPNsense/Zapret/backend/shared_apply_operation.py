@@ -27,6 +27,11 @@ MAX_RECORD = 8192
 MAX_FOUND_PLAN = 4 * 1024 * 1024
 FOUND_NAMES = ("youtube", "user", "auto")
 FOUND_KIND = "sealed-five-editor-three-file-intent"
+# The original journal, not a second file ledger, persists the all-three
+# physical write intent BEFORE the first P2-owned rename/link.
+FOUND_FILE_PHASES = frozenset(("found-files-writing", "found-files-written"))
+FOUND_NEXT = {"prepared": "found-files-writing",
+              "found-files-writing": "found-files-written"}
 DIGEST = re.compile(r"^[a-f0-9]{64}$")
 OP_ID = re.compile(r"^[a-f0-9]{32}$")
 FIELD = re.compile(r"^[a-z]+(?:\.[a-z]+){1,2}$")
@@ -34,6 +39,7 @@ PAGES = frozenset(("strategies", "voice"))
 PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
+    "found-files-writing", "found-files-written",
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -116,7 +122,7 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
             not DIGEST.fullmatch(found["plan_sha256"]) or
             found["sources"] != list(FOUND_NAMES) or
             detail["page"] != "strategies" or
-            phase not in ("prepared", "restored")):
+            phase not in ("prepared", *FOUND_FILE_PHASES)):
         raise SharedOperationError("invalid sealed found intent in original journal")
     return found
 
@@ -134,6 +140,9 @@ def _validate_record(record: object) -> dict:
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
+    # No old Voice/Strategies journal may fake a found-file physical phase.
+    if record["phase"] in FOUND_FILE_PHASES and "found" not in record:
+        raise SharedOperationError("found-file checkpoint missing original intent")
     if "found" in record:
         _validate_found_intent(record["found"], record["detail"], record["phase"])
     if "previous" in record:
@@ -253,6 +262,35 @@ class SharedApplyOperation:
         if previous is not None:
             result["previous"] = previous
         return self._persist_record(result)
+
+    def advance_found_files(self, phase: str, detail: dict,
+                            sealed_plan: bytes, attest) -> dict:
+        """Durable original-journal P2 file checkpoints; import-only.
+
+        Caller's original FD9 + native Config FD + original P2 flock must
+        remain held through the callback, journal fsync and later physical
+        CAS. This function does not itself change any HOSTLIST, Config,
+        runtime or kernel state. There is deliberately NO generic record/
+        CLI permission and NO terminal success/restore transition.
+        """
+        _validate_detail(detail)
+        if phase not in FOUND_FILE_PHASES or type(sealed_plan) is not bytes or \
+                not 0 < len(sealed_plan) <= MAX_FOUND_PLAN:
+            raise SharedOperationError("invalid original found-files checkpoint")
+        record = self.read()
+        if (record is None or record["detail"] != detail or
+                "found" not in record or
+                FOUND_NEXT.get(record["phase"]) != phase or
+                record["found"]["plan_sha256"] !=
+                hashlib.sha256(sealed_plan).hexdigest()):
+            raise SharedOperationError("found-files original state/plan mismatch")
+        if not callable(attest) or attest(phase, sealed_plan) is not True:
+            raise SharedOperationError("original Config/P2 found-files witness refused")
+        if self.read() != record:
+            raise SharedOperationError("found-files journal changed under original locks")
+        advanced = dict(record)
+        advanced["phase"] = phase
+        return self._persist_record(advanced)
 
     def advance(self, phase: str, detail: dict) -> dict:
         if phase not in PHASES:
