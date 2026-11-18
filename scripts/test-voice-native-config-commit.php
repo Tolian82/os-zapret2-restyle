@@ -275,6 +275,82 @@ namespace {
         $noopSteps === ['found-config-saving', 'found-config-saved'],
         'found-only Apply incorrectly created a Config revision');
 
+
+    // Cold inspection is PURE: compare the complete locked native model,
+    // never infer Config::save success merely because the candidate matches.
+    $coldBase = $config->disk;
+    $coldCandidate = $coldBase;
+    $coldCandidate['strategy']['trafficargs'] = '--filter-tcp=80,443';
+    $coldPlan = [
+        'result' => 'prepared',
+        'page' => 'strategies',
+        'dependencies' => VoiceSettingsSnapshot::digest($coldBase),
+        'candidate' => $coldCandidate,
+        'changed_fields' => ['strategy.trafficargs'],
+        'found_intent' => [
+            'config_revision' => VoiceSettingsSnapshot::digest($coldBase),
+            'commit_authorized' => false,
+        ],
+        'found_batch' => ['youtube'=>[], 'user'=>[], 'auto'=>[]],
+    ];
+    $classify = static fn(array $live, string $phase, ?array $plan = null): array =>
+        \OPNsense\Zapret\Native\SharedApplyConfigWorker::classifyFoundConfigImage(
+            $plan ?? $coldPlan, $live, $phase);
+    $beforeCold = $classify($coldBase, 'found-files-written');
+    verify($beforeCold['image'] === 'base-image' &&
+        !$beforeCold['commit_authorized'] && !$beforeCold['restore_authorized'] &&
+        !$beforeCold['save_attested'] && !$beforeCold['runtime_attested'],
+        'cold found BEFORE classified as an authorized Apply');
+    $uncertainBefore = $classify($coldBase, 'found-config-saving');
+    $uncertainAfter = $classify($coldCandidate, 'found-config-saving');
+    verify($uncertainBefore['image'] === 'base-image' &&
+        $uncertainAfter['image'] === 'candidate-image' &&
+        !$uncertainAfter['commit_authorized'] && !$uncertainAfter['save_attested'],
+        'save-attempted uncertainty was converted into a confirmed native save');
+    $savedReadback = $classify($coldCandidate, 'found-config-saved');
+    verify($savedReadback['image'] === 'candidate-image' &&
+        !$savedReadback['commit_authorized'] && !$savedReadback['restore_authorized'],
+        'saved Config image incorrectly terminalized joint Apply');
+    foreach ([
+        [$coldCandidate, 'found-files-written'],
+        [$coldBase, 'found-config-saved'],
+    ] as [$live, $phase]) {
+        try {
+            $classify($live, $phase);
+            verify(false, 'impossible Config-image/journal phase accepted');
+        } catch (\RuntimeException $expected) {}
+    }
+    $foreignCold = $coldCandidate;
+    $foreignCold['general']['divertport'] = '777';
+    foreach (['found-files-written', 'found-config-saving', 'found-config-saved']
+             as $phase) {
+        try {
+            $classify($foreignCold, $phase);
+            verify(false, 'foreign Config state accepted for cold terminalization');
+        } catch (\RuntimeException $expected) {}
+    }
+    $noopCold = $coldPlan;
+    $noopCold['candidate'] = $coldBase;
+    $noopCold['changed_fields'] = [];
+    foreach (['found-files-written', 'found-config-saving', 'found-config-saved']
+             as $phase) {
+        $receipt = $classify($coldBase, $phase, $noopCold);
+        verify($receipt['image'] === 'base-equals-candidate' &&
+            !$receipt['commit_authorized'] && !$receipt['save_attested'],
+            'found-only no-op Config image invented a durable save');
+    }
+    $invalidCold = $coldPlan;
+    $invalidCold['found_intent']['config_revision'] = '0' . substr(
+        $coldPlan['dependencies'], 1
+    );
+    try {
+        $classify($coldBase, 'found-config-saving', $invalidCold);
+        verify(false, 'mismatched original sealed Config dependency accepted');
+    } catch (\RuntimeException $expected) {}
+    verify($config->saves === 1 && $config->locks === 0 &&
+        $config->disk === $coldBase,
+        'read-only cold Config classifier performed a write or held a lock');
+
     // Durable phase recording failure MUST prevent the first save call.
     $refused = new FakeConfig($config->disk);
     try {

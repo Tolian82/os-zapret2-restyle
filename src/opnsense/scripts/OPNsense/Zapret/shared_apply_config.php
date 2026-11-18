@@ -116,6 +116,69 @@ final class SharedApplyConfigWorker
      * Compare the entire live Voice/Strategies dependency snapshot under the
      * actual native Config lock, not a stale GUI baseline or an XML file.
      */
+    /**
+     * Pure, read-only Config outcome classifier for the INTERNAL original
+     * FD9 found recovery. The caller must supply the fresh getNodes() tree
+     * obtained under the ONE native Config lock; it must independently
+     * bind the original sealed plan and journal before invoking this.
+     *
+     * Config::save() releases the lock. Consequently matching candidate
+     * values are evidence only, NOT causal proof of our native save or
+     * permission to commit, restore or restart any engine.
+     * This deliberately registers no CLI/configd/GUI action.
+     */
+    public static function classifyFoundConfigImage(
+        array $plan, array $current, string $phase
+    ): array {
+        if (!in_array($phase, [
+            'found-files-written', 'found-config-saving', 'found-config-saved'
+        ], true) ||
+            ($plan['page'] ?? null) !== 'strategies' ||
+            ($plan['result'] ?? null) !== 'prepared' ||
+            !isset($plan['candidate']) || !is_array($plan['candidate']) ||
+            !isset($plan['dependencies']) || !is_string($plan['dependencies']) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies']) ||
+            !isset($plan['found_intent']) || !is_array($plan['found_intent']) ||
+            ($plan['found_intent']['commit_authorized'] ?? null) !== false ||
+            ($plan['found_intent']['config_revision'] ?? null) !==
+                $plan['dependencies'] ||
+            !isset($plan['found_batch']) || !is_array($plan['found_batch']) ||
+            array_keys($plan['found_batch']) !== ['youtube', 'user', 'auto'] ||
+            !isset($plan['changed_fields']) || !is_array($plan['changed_fields']) ||
+            !is_array($current)) {
+            throw new \RuntimeException('Unqualified original cold Config evidence');
+        }
+        $base = $plan['dependencies'];
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        $observed = VoiceSettingsSnapshot::digest($current);
+        $isBase = hash_equals($base, $observed);
+        $isCandidate = hash_equals($candidate, $observed);
+        if (!$isBase && !$isCandidate) {
+            throw new \RuntimeException('Foreign native Config image during found recovery');
+        }
+        if ($phase === 'found-files-written' && !$isBase) {
+            throw new \RuntimeException('Found files-only phase already changed Config');
+        }
+        if ($phase === 'found-config-saved' && !$isCandidate) {
+            throw new \RuntimeException('Found Config-saved WAL does not match native Config');
+        }
+        // "Both" includes a found-only edit with no XML save, and cannot
+        // tell whether an uncertain native save was attempted.
+        $state = $isBase && $isCandidate
+            ? 'base-equals-candidate'
+            : ($isCandidate ? 'candidate-image' : 'base-image');
+        return [
+            'result' => 'read-only-found-config-classification',
+            'phase' => $phase,
+            'image' => $state,
+            'snapshot' => $observed,
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
     public static function saved(array $plan, array $current): array
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
