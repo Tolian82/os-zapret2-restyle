@@ -239,12 +239,12 @@ def config_save_uncertain_main():
     need(not prepared.startswith("preflight-rejected=") and
          snapshot() == original and json.loads(WAL.read_bytes()) == previous,
          "G03_CONFIG_CANDIDATE_BUILD_REFUSED")
-    call([PHP, NATIVE, "durable", op], locked=True)
-    pending = json.loads(WAL.read_bytes())
-    need(pending.get("phase") == "prepared" and
-         pending.get("previous") == prior and
-         snapshot() == original,
-         "G03_CONFIG_PREPARED_NOT_DURABLE")
+    # Unlike the first-file crash fixture, do NOT pre-create PREPARED.
+    # The ORIGINAL found-save entry itself prepares the WAL under real
+    # FD9/Config/P2 before writing. A second prepare is correctly forbidden
+    # as an unfinished/reused original transaction.
+    need(json.loads(WAL.read_bytes()) == previous and snapshot() == original,
+         "G03_CONFIG_PRE_SAVE_ORIGINAL_OWNER_DRIFT")
     # Native PHP delegates its ONE actual Config::save to the real OPNsense
     # singleton. The test-only wrapper exit(73)s just AFTER that method
     # returns but BEFORE the original saved-Config acknowledgement can fsync.
