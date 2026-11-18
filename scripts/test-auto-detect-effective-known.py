@@ -678,7 +678,9 @@ class EffectiveKnownTests(unittest.TestCase):
                 recover_native_found_prepared_pristine(
                     current["id"], config_fd=4, config_digest=current["base"])
             self.assertFalse(held[0])
-            self.assertEqual(witness_calls[0], 0)
+            # First P2-locked source observation precedes the second
+            # physical plan witness; no terminal second read is permitted.
+            self.assertEqual(witness_calls[0], 1)
             self.assertEqual(journal.read(), original_journal)
 
             plan_reader.side_effect = None
