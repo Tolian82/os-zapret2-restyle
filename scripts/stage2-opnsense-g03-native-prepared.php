@@ -34,7 +34,7 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config): string {
+function stage($config, bool $partial = false): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
@@ -48,6 +48,12 @@ function stage($config): string {
     ] as $name=>$path) {
         $view = image($path, $name === 'auto');
         $draft = $view['content'];
+        if ($partial && in_array($name, ['youtube', 'user'], true)) {
+            // Disposable crash fixture: require TWO genuine protected edits.
+            $domain = $name === 'youtube'
+                ? 'native-partial-youtube-proof.org' : 'native-partial-user-proof.org';
+            $draft = rtrim($draft, "\n") . "\n" . $domain . "\n";
+        }
         if ($name === 'auto') {
             $draft .= "native-cold-prepared-proof.org\n";
         }
@@ -62,7 +68,10 @@ function stage($config): string {
     $prepared['plan']['found_batch'] =
         SharedApplyFoundStage::prepare($config, $prepared['plan']);
     $batch = $prepared['plan']['found_batch'];
-    required($batch['auto']['before'] !== $batch['auto']['after'],
+    required($batch['auto']['before'] !== $batch['auto']['after'] &&
+             (!$partial || (
+                $batch['youtube']['before'] !== $batch['youtube']['after'] &&
+                $batch['user']['before'] !== $batch['user']['after'])),
              'G03_COLD_NO_ACTUAL_EDIT_CANDIDATE');
     return SharedApplyRequest::materialize($prepared);
 }
@@ -127,24 +136,89 @@ PY;
     }
 }
 
+/**
+ * DISPOSABLE ONLY: kill the ORIGINAL three-file WAL child just after its
+ * first real, fsynced rename and installed-inode journal checkpoint.
+ * No fake file writer, second Config owner or product fault switch.
+ */
+function crashFirstFoundFile($config, string $id): void {
+    required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
+             'G03_PARTIAL_BAD_OPERATION');
+    $reflect = new \ReflectionObject($config);
+    required($reflect->hasProperty('config_file_handle') &&
+             $reflect->hasProperty('config_file'), 'G03_PARTIAL_CONFIG_FD_MISSING');
+    $handle = $reflect->getProperty('config_file_handle')->getValue($config);
+    $path = $reflect->getProperty('config_file')->getValue($config);
+    $named = @lstat('/conf/config.xml');
+    $opened = is_resource($handle) ? @fstat($handle) : false;
+    required($path === '/conf/config.xml' && is_array($named) &&
+             is_array($opened) && $named['dev'] === $opened['dev'] &&
+             $named['ino'] === $opened['ino'],
+             'G03_PARTIAL_FOREIGN_CONFIG_FD');
+    $fd9 = @fopen('php://fd/9', 'r+b');
+    required(is_resource($fd9), 'G03_PARTIAL_FD9_MISSING');
+    $script = <<<'PY'
+import os,sys
+sys.path.insert(0,"/usr/local/opnsense/scripts/OPNsense/Zapret/backend")
+import auto_detect_destination_commit as writer
+original=writer._replace
+count=[0]
+def interrupted(*args,**kwargs):
+    result=original(*args,**kwargs)
+    count[0]+=1
+    if count[0]==1:
+        os._exit(73)
+    return result
+writer._replace=interrupted
+writer.shared_apply_found_files_original_fd9(sys.argv[1],4)
+os._exit(74)
+PY;
+    $pipes = [];
+    $proc = null;
+    try {
+        $proc = @proc_open(
+            ['/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+             '-c', $script, $id],
+            [0=>['file','/dev/null','r'],1=>['pipe','w'],
+             2=>['file','/dev/null','a'],4=>$handle,9=>$fd9],
+            $pipes, null, ['LC_ALL'=>'C','PATH'=>'/usr/bin:/bin:/usr/local/bin']
+        );
+        required(is_resource($proc), 'G03_PARTIAL_PYTHON_UNAVAILABLE');
+        $output = @stream_get_contents($pipes[1], 512);
+        fclose($pipes[1]);
+        $pipes = [];
+        $rc = proc_close($proc);
+        $proc = null;
+        required($rc === 73 && $output === '',
+                 'G03_PARTIAL_NOT_CRASHED_AFTER_FIRST_ATOMIC_FILE');
+    } finally {
+        foreach ($pipes as $pipe) { if (is_resource($pipe)) { fclose($pipe); } }
+        if (is_resource($proc)) { @proc_terminate($proc); @proc_close($proc); }
+        fclose($fd9);
+    }
+}
+
 try {
     required(PHP_SAPI === 'cli' && PHP_OS_FAMILY === 'BSD' &&
              getenv('GITHUB_ACTIONS') === 'true' &&
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
-             in_array(($argv[1] ?? ''), ['stage','durable'], true) &&
-             count($argv) === (($argv[1] ?? '') === 'stage' ? 2 : 3),
+             in_array(($argv[1] ?? ''), ['stage','stage-partial','durable','crash-partial'], true) &&
+             count($argv) === (in_array(($argv[1] ?? ''), ['stage','stage-partial'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
     $config = \OPNsense\Core\Config::getInstance();
     $config->lock();
     try {
-        if ($argv[1] === 'stage') {
-            echo 'prepared-id=' . stage($config) . "\n";
-        } else {
+        if ($argv[1] === 'stage' || $argv[1] === 'stage-partial') {
+            echo 'prepared-id=' . stage($config, $argv[1] === 'stage-partial') . "\n";
+        } elseif ($argv[1] === 'durable') {
             durable($config, $argv[2]);
             echo "original-found-prepared-durable\n";
+        } else {
+            crashFirstFoundFile($config, $argv[2]);
+            echo "original-partial-first-atomic-file-crashed\n";
         }
     } finally {
         $config->unlock();
