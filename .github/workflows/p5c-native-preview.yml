@@ -94,4 +94,27 @@ jobs:
             export ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
             export ZAPRET2_P5C_DISPOSABLE_NATIVE=1
             /usr/local/bin/python3 scripts/stage2-opnsense-real-native-clean-install.py
+            # This disposable native P5c checks exact GUI-selected runtime
+            # installation and configd PREVIEW, not GitHub API availability.
+            # A 403 from release enumeration must not masquerade as a
+            # regression in that installed-product path. Trust the same
+            # upstream v1.0.7 tag SHA already pinned by native P2i tests,
+            # and let the stock setup.sh validate its normal release cache.
+            # Never apply this fixture to owner systems or packaged scripts.
+            upstream_tag=$(/usr/local/bin/git ls-remote --refs \
+              https://github.com/bol-van/zapret2.git refs/tags/v1.0.7)
+            expected_tag=$(printf '038c97e5819df10f8e8c22a2f1fffe57f2f7379b\trefs/tags/v1.0.7')
+            [ "$upstream_tag" = "$expected_tag" ] || {
+              echo P5C_PINNED_UPSTREAM_TAG_REFUSED >&2
+              exit 69
+            }
+            cache=/var/db/zapret2-restyle/releases.cache
+            [ ! -e "$cache" ] && [ ! -L "$cache" ] || {
+              echo P5C_RELEASE_CACHE_ALREADY_PRESENT >&2
+              exit 69
+            }
+            /bin/mkdir -p /var/db/zapret2-restyle
+            ( umask 077; printf 'v1.0.7\n' > "$cache" )
+            /bin/chmod 0644 "$cache"
+            echo P5C_RELEASE_DISCOVERY=DISPOSABLE_PINNED_TAG_CACHE_NOT_API_SUCCESS
             /usr/local/bin/python3 scripts/p5c-native-witness.py --native
