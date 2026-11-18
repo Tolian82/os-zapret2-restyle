@@ -273,6 +273,13 @@ class EffectiveKnownTests(unittest.TestCase):
         self.seed()
         rows, targets = self.planned_rows()
         rows["auto"]["after"] = ""
+        # A WRITTEN journal implies every changed source has the intended
+        # after-image; only the unchanged Auto may retain a missing before.
+        for name in ("youtube", "user"):
+            target = targets[name]
+            target.unlink()
+            target.write_text(rows[name]["after"])
+            target.chmod(0o600)
         receipt = self.cold_image(rows, targets, "found-files-written")
         self.assertEqual(receipt["states"]["auto"], "before")
         self.assertFalse(targets["auto"].exists())
