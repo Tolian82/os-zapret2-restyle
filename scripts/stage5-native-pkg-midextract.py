@@ -63,6 +63,28 @@ def witness_labels(witnesses):
     return tuple(values)
 
 
+def qualified_postkill_partial(before, after):
+    """Only the asynchronous completion of a previously missing inode may race.
+
+    A traced pkg child can finish restoring exact source bytes as the parent
+    process group is being killed. Never accept newly marked, missing, half-
+    written or foreign files, POST_INSTALL, or a fully completed extraction.
+    Both observations must still witness a genuinely partial package tree.
+    """
+    if (not isinstance(before, tuple) or not isinstance(after, tuple) or
+            len(before) != len(after) or not before):
+        return False
+    allowed = {"before", "marked", "missing"}
+    if any(old not in allowed or new not in allowed or
+           (old != new and (old, new) != ("missing", "before"))
+           for old, new in zip(before, after)):
+        return False
+    return (before.count("before") > 0 and
+            any(row != "before" for row in before) and
+            after.count("before") > 0 and
+            any(row != "before" for row in after))
+
+
 def select_native_witnesses(root, stage, run, need):
     probe = run(["/usr/bin/tar", "-xOf", str(stage), "+MANIFEST"], timeout=30)
     need(probe.returncode == 0 and len(probe.stdout) < 512 * 1024,
@@ -207,6 +229,8 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
                     "owner_appliance_modified": False,
                 }, sort_keys=True), flush=True)
             need(not postinstall.exists() and
-                 after_kill == captured and after_labels == captured_labels,
+                 qualified_postkill_partial(captured_labels, after_labels) and
+                 after_kill == witness_state(witnesses) and
+                 after_labels == witness_labels(witnesses),
                  "MIDEXTRACT_POST_KILL_FILE_STATE_DRIFT")
-            return captured
+            return after_kill

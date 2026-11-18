@@ -26,6 +26,20 @@ class WitnessTests(unittest.TestCase):
             x.write_bytes(b"one")
             self.assertEqual(module.witness_state(w),(1,0,1,0))
 
+    def test_postkill_allows_only_exact_missing_to_original_completion(self):
+        qualify = module.qualified_postkill_partial
+        original = ("before", "missing", "marked", "before")
+        self.assertTrue(qualify(original, ("before", "before", "marked", "before")))
+        self.assertTrue(qualify(original, original))
+        # Never mistake a fully extracted or later still-mutating package
+        # for a stopped mixed payload. Foreign/partial bytes are not PASS.
+        self.assertFalse(qualify(original, ("before", "before", "before", "before")))
+        self.assertFalse(qualify(original, ("before", "foreign", "marked", "before")))
+        self.assertFalse(qualify(original, ("before", "marked", "marked", "before")))
+        self.assertFalse(qualify(original, ("missing", "missing", "marked", "before")))
+        self.assertFalse(qualify(("before", "marked"), ("missing", "marked")))
+        self.assertFalse(qualify(("before", "missing"), ("before", "missing", "marked")))
+
     def test_truss_invocation_uses_supported_freebsd_15_arguments(self):
         command = module.trace_pkg_command(Path("/root/trace"), Path("/root/candidate.pkg"))
         self.assertEqual(command, ["/usr/bin/truss", "-f", "-o", "/root/trace",
