@@ -743,5 +743,102 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertIn('found:strategies)', service)
 
 
+    def _live_known_fixture(self):
+        """Disposable real files; no native process, FD9 or service changes."""
+        from auto_detect_effective_known import compose_known
+        from auto_detect_owned_sources import read_owned
+        from auto_detect_owner import GenerationProof
+        from auto_detect_fd import OwnerToken
+
+        self.seed()
+        active = self.base / "runtime-v2"
+        managed = active / "managed"
+        managed.mkdir(parents=True)
+        manual = {"youtube": self.youtube.read_text(), "user": self.user.read_text()}
+        desired = compose_known(manual, read_owned(self.root, owner_uid=self.uid))
+        for name in ("youtube", "user"):
+            target = managed / ("hostlist-" + name + ".txt")
+            target.write_text(desired[name])
+            target.chmod(0o644)
+        argv = ("--filter-tcp=443 --hostlist=" +
+                str(managed / "hostlist-youtube.txt") +
+                " --new --filter-tcp=80 --hostlist=" +
+                str(managed / "hostlist-user.txt") + "\n").encode()
+        (active / "dvtws.args").write_bytes(argv)
+        proof = GenerationProof(
+            OwnerToken(12345, "Thu Nov 19 01:00:00 2026", "/usr/local/etc/zapret2/binaries/my/dvtws2"),
+            "a" * 32, "a" * 32, hashlib.sha256(argv).hexdigest(),
+            "/var/db/zapret2-auto-detect/raw", "/var/db/zapret2-auto-detect/debug",
+            3, ((1, "known-hostlist", "youtube"), (2, "known-hostlist", "user"),
+                (3, "observer", None)))
+        return active, managed, manual, proof
+
+    def test_live_known_readonly_attests_exact_paths_and_detects_stale_source(self):
+        from auto_detect_effective_known import inspect_live_known_readonly
+        active, managed, manual, proof = self._live_known_fixture()
+        previous = {name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
+                    for name in ("youtube", "user")}
+        inspection = inspect_live_known_readonly(
+            manual, active=active, owned_root=self.root, owner_uid=self.uid,
+            attest=lambda: proof)
+        self.assertEqual(inspection["status"], "read-only-active-known-witness")
+        self.assertTrue(inspection["aligned"])
+        self.assertEqual(inspection["referenced_known"], ["user", "youtube"])
+        self.assertEqual(inspection["pid"], 12345)
+        self.assertFalse(inspection["commit_authorized"])
+        self.assertFalse(inspection["ack_authorized"])
+        self.assertEqual(
+            previous, {name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
+                       for name in ("youtube", "user")})
+        # The protected source gained a new auto row, but the active engine
+        # file did NOT. Reporting this as aligned would be a false hot reload.
+        (self.root / "youtube.txt").write_text("fresh.example\n")
+        stale = inspect_live_known_readonly(
+            manual, active=active, owned_root=self.root, owner_uid=self.uid,
+            attest=lambda: proof)
+        self.assertFalse(stale["aligned"])
+        self.assertFalse(stale["files"]["youtube"]["aligned"])
+        self.assertTrue(stale["files"]["user"]["aligned"])
+        self.assertFalse(stale["ack_authorized"])
+        self.assertEqual(
+            previous, {name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
+                       for name in ("youtube", "user")})
+
+    def test_live_known_readonly_refuses_foreign_path_or_pid_birth_change(self):
+        from dataclasses import replace
+        from auto_detect_effective_known import inspect_live_known_readonly
+        from auto_detect_fd import OwnerToken
+        active, managed, manual, proof = self._live_known_fixture()
+        original = (active / "dvtws.args").read_bytes()
+        foreign = original.replace(
+            str(managed / "hostlist-user.txt").encode(),
+            str(self.base / "unrelated.txt").encode())
+        (active / "dvtws.args").write_bytes(foreign)
+        updated_proof = replace(proof, final_args_sha256=hashlib.sha256(foreign).hexdigest())
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "foreign_live_hostlist_selector"):
+            inspect_live_known_readonly(
+                manual, active=active, owned_root=self.root, owner_uid=self.uid,
+                attest=lambda: updated_proof)
+        (active / "dvtws.args").write_bytes(original)
+        changed = replace(proof, owner=OwnerToken(
+            12346, proof.owner.started, proof.owner.executable))
+        calls = iter((proof, changed))
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "live_owner_changed_during_inspection"):
+            inspect_live_known_readonly(
+                manual, active=active, owned_root=self.root, owner_uid=self.uid,
+                attest=lambda: next(calls))
+        # An active managed symlink must never be accepted as a physical
+        # file witness or silently followed to a foreign mutable object.
+        target = managed / "hostlist-user.txt"
+        target.unlink()
+        target.symlink_to(self.youtube)
+        with self.assertRaises(DestinationRefused):
+            inspect_live_known_readonly(
+                manual, active=active, owned_root=self.root, owner_uid=self.uid,
+                attest=lambda: proof)
+
+
 if __name__ == '__main__':
     unittest.main()

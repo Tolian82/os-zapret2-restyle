@@ -67,6 +67,113 @@ def compose_known(manual: dict[str, str], owned: dict[str, str]) -> dict[str, st
     return result
 
 
+
+def inspect_live_known_readonly(
+    manual: dict[str, str], *,
+    active: Path = Path("/usr/local/etc/zapret2/runtime-v2"),
+    owned_root: Path = OWNED_ROOT,
+    owner_uid: int = 0,
+    attest=None,
+) -> dict:
+    """TZ6V2-07: read-only, SAME-generation live known-file witness.
+
+    The eventual minute caller MUST already hold original FD9 -> Config ->
+    P2, and MUST obtain manual from that locked native Config Model. The
+    default attester independently verifies owner, PID/birth, executable,
+    full kernel argv, sealed generation, and original journal. This helper
+    does not acquire authority, replace files, checkpoint or ACK pending.
+    No read-side result may authorize a later write without rechecking its
+    physical inode images inside the original destination transaction.
+    """
+    from auto_detect_owner import (
+        GenerationProof, MAX_ARGS, attest_running_generation,
+    )
+
+    attest = attest_running_generation if attest is None else attest
+    if not callable(attest):
+        raise EffectiveKnownRefused("invalid_live_owner_attester")
+    before_owner = attest()
+    if not isinstance(before_owner, GenerationProof):
+        raise EffectiveKnownRefused("live_owner_not_attested")
+
+    active = Path(active)
+    if not active.is_absolute() or not Path(owned_root).is_absolute():
+        raise EffectiveKnownRefused("relative_live_known_root")
+    args, _ = _target(active / "dvtws.args", owner_uid)
+    if (len(args) > MAX_ARGS or
+            hashlib.sha256(args).hexdigest() != before_owner.final_args_sha256):
+        raise EffectiveKnownRefused("live_argv_not_original_generation")
+    try:
+        tokens = args.decode("utf-8").split()
+    except UnicodeError as exc:
+        raise EffectiveKnownRefused("invalid_live_argv_encoding") from exc
+    selectors = [value[len("--hostlist="):] for value in tokens
+                 if value.startswith("--hostlist=")]
+    if len(selectors) > 256 or not all(selectors):
+        raise EffectiveKnownRefused("invalid_live_hostlist_selectors")
+
+    actual_paths = {
+        name: active / "managed" / ("hostlist-" + name + ".txt")
+        for name in KNOWN_HOSTLISTS
+    }
+    used = set(selectors)
+    # Shared auto lives at its independent direct runtime path, and is
+    # intentionally not a known managed source.
+    allowed = {str(path) for path in actual_paths.values()} | {
+        str(AUTO_HOSTLIST)
+    }
+    if used - allowed:
+        raise EffectiveKnownRefused("foreign_live_hostlist_selector")
+    mapped = {name for _number, status, name in before_owner.profiles
+              if status == "known-hostlist"}
+    if (not mapped.issubset(set(KNOWN_HOSTLISTS)) or
+            {name for name, path in actual_paths.items()
+             if str(path) in used} != mapped):
+        raise EffectiveKnownRefused("native_profile_managed_selector_mismatch")
+
+    owned = read_owned(Path(owned_root), owner_uid=owner_uid)
+    if owned is None:
+        raise EffectiveKnownRefused("unqualified_live_known_owned_snapshot")
+    expected = compose_known(manual, owned)
+    files = {}
+    for name in KNOWN_HOSTLISTS:
+        path = actual_paths[name]
+        actual, st = _target(path, owner_uid)
+        files[name] = {
+            "path": str(path),
+            "source_sha256": hashlib.sha256(owned[name].encode("utf-8")).hexdigest(),
+            "expected_sha256": hashlib.sha256(expected[name].encode("utf-8")).hexdigest(),
+            "actual_sha256": hashlib.sha256(actual).hexdigest(),
+            "physical": [st.st_dev, st.st_ino, st.st_ctime_ns,
+                         st.st_mtime_ns, st.st_size],
+            "aligned": actual == expected[name].encode("utf-8"),
+        }
+
+    # A drifted process or replaced file between snapshot and result is NOT
+    # a stable before-image for any future write. No signals or services.
+    for name in KNOWN_HOSTLISTS:
+        actual, st = _target(actual_paths[name], owner_uid)
+        pin = files[name]
+        if (hashlib.sha256(actual).hexdigest() != pin["actual_sha256"] or
+                [st.st_dev, st.st_ino, st.st_ctime_ns,
+                 st.st_mtime_ns, st.st_size] != pin["physical"]):
+            raise EffectiveKnownRefused("live_known_changed_during_inspection")
+    if attest() != before_owner:
+        raise EffectiveKnownRefused("live_owner_changed_during_inspection")
+    return {
+        "status": "read-only-active-known-witness",
+        "generation": before_owner.generation,
+        "operation": before_owner.operation_id,
+        "pid": before_owner.owner.pid,
+        "started": before_owner.owner.started,
+        "referenced_known": sorted(mapped),
+        "files": files,
+        "aligned": all(files[name]["aligned"] for name in KNOWN_HOSTLISTS),
+        "commit_authorized": False,
+        "ack_authorized": False,
+    }
+
+
 def compose_stage(youtube: Path, user: Path, *,
                   root: Path = OWNED_ROOT, lock: Path = AUTO_LOCK,
                   owner_uid: int = 0) -> dict:
