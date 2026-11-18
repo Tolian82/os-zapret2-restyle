@@ -359,6 +359,7 @@ def classify_planned_file_images(
     rows: dict, *, targets: dict, owned_root: Path = OWNED_ROOT,
     lock: Path = AUTO_LOCK, owner_uid: int = 0,
     journal_phase: str | None = None,
+    post_images: dict | None = None,
 ) -> dict:
     """READ ONLY image evidence from the original sealed three-source plan.
 
@@ -404,8 +405,29 @@ def classify_planned_file_images(
                 # Same-byte inode replacements and foreign content are NOT
                 # evidence of the original writer or a valid rollback.
                 raise EffectiveKnownRefused("cold_found_unknown_image")
+        # The physical inode/time attestation is distinct from a byte match.
+        # A cold foreign writer with identical content must be refused.
+        if post_images is not None:
+            from shared_apply_operation import _validate_found_post, SharedOperationError
+            try:
+                _validate_found_post(post_images)
+            except SharedOperationError as exc:
+                raise EffectiveKnownRefused("cold_found_untrusted_post_pins") from exc
+            for name in SHARED_FOUND_NAMES:
+                pin = post_images[name]
+                if pin["status"] == "missing":
+                    _shared_found_assert_missing(targets[name], owner_uid)
+                    continue
+                data, st = _target(targets[name], owner_uid)
+                identity = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                            st.st_mtime_ns, st.st_size)
+                expected = tuple(pin[key] for key in
+                                 ("device", "inode", "ctime_ns", "mtime_ns", "size"))
+                if (identity != expected or
+                        hashlib.sha256(data).hexdigest() != pin["sha256"]):
+                    raise EffectiveKnownRefused("cold_found_postimage_inode_changed")
         # Evaluate phase/physical consistency under this SAME destination
-        # lock. No matching bytes prove which writer made them.
+        # lock. No matching bytes alone prove which writer made them.
         if journal_phase is not None:
             if journal_phase not in (
                     "prepared", "found-files-writing", "found-files-written",
@@ -477,6 +499,7 @@ def classify_native_planned(operation: str) -> dict:
                  "user": OWNED_ROOT / "user.txt",
                  "auto": AUTO_HOSTLIST},
         journal_phase=record["phase"],
+        post_images=record["found"].get("post"),
     )
 
 

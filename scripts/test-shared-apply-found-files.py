@@ -107,6 +107,13 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertFalse(receipt["config_committed"])
         self.assertFalse(receipt["commit_authorized"])
         self.assertEqual(journal.read()["phase"], "found-files-written")
+        pins = journal.read()["found"]["post"]
+        self.assertEqual(list(pins), list(SHARED_FOUND_NAMES))
+        for name, path in self.targets.items():
+            st = path.lstat()
+            self.assertEqual((pins[name]["device"], pins[name]["inode"],
+                              pins[name]["ctime_ns"], pins[name]["mtime_ns"]),
+                             (st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns))
         self.assertEqual({name: path.read_text()
                           for name, path in self.targets.items()}, self.new)
         with self.assertRaises(SharedOperationError):
@@ -115,6 +122,31 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             journal.advance("restored", detail)
         with self.assertRaises(DestinationRefused):
             apply()
+
+    def test_original_journal_refuses_same_bytes_different_inode_after_write(self):
+        # After writer-captured pins but before its durable WRITTEN record,
+        # replacing a name with identical bytes is NOT valid provenance.
+        journal, _, _, apply = self.journaled()
+        native_target = self.targets["youtube"]
+        original_target = __import__("auto_detect_destination_commit")
+        original_qualified = original_target._qualified_shared_found_batch
+        call = [0]
+        def after_cas(rows):
+            call[0] += 1
+            if call[0] > 1:
+                temp = native_target.with_name("foreign-same-bytes.tmp")
+                temp.write_bytes(native_target.read_bytes())
+                temp.chmod(0o600)
+                os.replace(temp, native_target)
+            return original_qualified(rows)
+        from unittest.mock import patch
+        with patch.object(original_target, "_qualified_shared_found_batch",
+                          side_effect=after_cas):
+            with self.assertRaisesRegex(
+                    DestinationRefused, "shared_found_writer_postimage_changed"):
+                apply()
+        self.assertEqual(journal.read()["phase"], "found-files-writing")
+        self.assertFalse(journal.advisory()["safe_to_mutate"])
 
     def test_journal_fsync_failure_before_first_write_preserves_files(self):
         journal, _, _, apply = self.journaled()

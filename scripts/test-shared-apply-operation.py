@@ -18,6 +18,15 @@ def detail(ident="1"*32):
             "candidate":"b"*64,"changed_fields":[
                 "voice.telegram.enabled","hostlist.telegramips"]}
 
+def trivial_post():
+    import hashlib
+    return {
+        name: {"status": "present", "device": 1, "inode": index + 1,
+               "ctime_ns": 1, "mtime_ns": 1, "size": 0,
+               "sha256": hashlib.sha256(b"").hexdigest()}
+        for index, name in enumerate(("youtube", "user", "auto"))
+    }
+
 class TestJournal(unittest.TestCase):
 
 
@@ -34,13 +43,14 @@ class TestJournal(unittest.TestCase):
                 "dependencies": detail_found["base"],
                 "found_intent": {"config_revision": detail_found["base"],
                                  "commit_authorized": False},
-                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+                "found_batch": {name: {"before": "", "after": "", "before_status": "present"}
+                                for name in ("youtube", "user", "auto")}
             }, separators=(",", ":")).encode()
             store.prepare_found(detail_found, plan, lambda _: True)
             store.advance_found_files("found-files-writing", detail_found,
                                       plan, lambda *_: True)
             store.advance_found_files("found-files-written", detail_found,
-                                      plan, lambda *_: True)
+                                      plan, lambda *_: True, post_images=trivial_post())
             sequence = []
             for phase in ("found-config-saving", "found-config-saved"):
                 record_before = (store.root / "operation.json").read_bytes()
@@ -110,7 +120,8 @@ class TestJournal(unittest.TestCase):
                 "dependencies": d["base"],
                 "found_intent": {"config_revision": d["base"],
                                  "commit_authorized": False},
-                "found_batch": {"youtube": {}, "user": {}, "auto": {}},
+                "found_batch": {name: {"before": "", "after": "", "before_status": "present"}
+                                for name in ("youtube", "user", "auto")},
             }).encode()
             journal.prepare_found(d, plan, lambda b: b == plan)
             steps = []
@@ -122,7 +133,8 @@ class TestJournal(unittest.TestCase):
                                                 lambda *_: True)
                 record = journal.advance_found_files(
                     phase, d, plan,
-                    lambda p, raw: (steps.append(p) or raw == plan))
+                    lambda p, raw: (steps.append(p) or raw == plan),
+                    post_images=trivial_post() if phase == "found-files-written" else None)
                 self.assertEqual(record["phase"], phase)
                 self.assertEqual(journal.read(), record)
                 self.assertEqual(

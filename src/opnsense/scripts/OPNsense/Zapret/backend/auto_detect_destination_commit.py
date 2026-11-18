@@ -515,6 +515,7 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
         original[name] = (path, before, after, status)
     modified = []
     created_pins = {}
+    own_written_inodes = {}
     try:
         for name in SHARED_FOUND_NAMES:
             path, before, after, status = original[name]
@@ -532,8 +533,31 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                 created_pins[name] = (st.st_dev, st.st_ino)
             if actual != after:
                 raise DestinationRefused("shared_found_postwrite_unverified")
+            own_written_inodes[name] = (st.st_dev, st.st_ino)
+        # All physical after-pins originate from this controlled writer.
+        # Inode identity is captured after rename/link under P2, then
+        # independently rechecked before the same FD9 journal is fsynced.
+        post = {}
+        for name in SHARED_FOUND_NAMES:
+            path, before, after, status = original[name]
+            if status == "missing" and before == after:
+                _shared_found_assert_missing(path, uid)
+                post[name] = {
+                    "status": "missing", "device": 0, "inode": 0,
+                    "ctime_ns": 0, "mtime_ns": 0, "size": 0,
+                    "sha256": _sha(b"missing\0")}
+                continue
+            actual, st = _target(path, uid)
+            if actual != after or (name in own_written_inodes and
+                    (st.st_dev, st.st_ino) != own_written_inodes[name]):
+                raise DestinationRefused("shared_found_postimage_inode_drift")
+            post[name] = {
+                "status": "present", "device": st.st_dev, "inode": st.st_ino,
+                "ctime_ns": st.st_ctime_ns, "mtime_ns": st.st_mtime_ns,
+                "size": st.st_size, "sha256": _sha(after)}
         return {
             "result": "files-applied-under-original-transaction",
+            "post_images": post,
             "files": {
                 name: {"before_sha256": _sha(original[name][1]),
                        "before_status": original[name][3],
@@ -623,7 +647,24 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
     # A SIGKILL between renames leaves the journal in files-writing.
     result = _locked_shared_found_replace(
         rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn)
-    store.advance_found_files("found-files-written", detail, plan_bytes, attest)
+    post = result["post_images"]
+    qualified = _qualified_shared_found_batch(rows)
+    for name in SHARED_FOUND_NAMES:
+        before, after, _, initial = qualified[name]
+        target = targets[name]
+        if initial == "missing" and before == after:
+            _shared_found_assert_missing(target, uid)
+        else:
+            observed, st = _target(target, uid)
+            pin = post[name]
+            identity = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                        st.st_mtime_ns, st.st_size)
+            expected = tuple(pin[key] for key in
+                             ("device", "inode", "ctime_ns", "mtime_ns", "size"))
+            if observed != after or pin["status"] != "present" or identity != expected:
+                raise DestinationRefused("shared_found_writer_postimage_changed")
+    store.advance_found_files("found-files-written", detail, plan_bytes,
+                              attest, post_images=post)
     return {**result, "journal_phase": "found-files-written",
             "config_committed": False, "commit_authorized": False}
 

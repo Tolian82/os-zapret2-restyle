@@ -225,10 +225,40 @@ class EffectiveKnownTests(unittest.TestCase):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             verify_native_planned("a" * 32)
 
-    def cold_image(self, rows, targets, phase=None):
+    def cold_image(self, rows, targets, phase=None, post=None):
         return classify_planned_file_images(
             rows, targets=targets, owned_root=self.root,
-            lock=self.lock, owner_uid=self.uid, journal_phase=phase)
+            lock=self.lock, owner_uid=self.uid, journal_phase=phase,
+            post_images=post)
+
+    def test_cold_pin_rejects_identical_byte_foreign_inode(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        for name in ("youtube", "user", "auto"):
+            path = targets[name]
+            if path.exists():
+                path.unlink()
+            path.write_text(rows[name]["after"])
+            path.chmod(0o600)
+        pins = {}
+        for name, path in targets.items():
+            st = path.lstat()
+            pins[name] = {
+                "status": "present", "device": st.st_dev, "inode": st.st_ino,
+                "ctime_ns": st.st_ctime_ns, "mtime_ns": st.st_mtime_ns,
+                "size": st.st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        receipt = self.cold_image(rows, targets, "found-files-written", pins)
+        self.assertFalse(receipt["restore_authorized"])
+        self.assertFalse(receipt["commit_authorized"])
+        old = targets["youtube"]
+        replacement = self.root / "same-byte-foreign"
+        replacement.write_bytes(old.read_bytes())
+        replacement.chmod(0o600)
+        os.replace(replacement, old)
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_postimage_inode_changed"):
+            self.cold_image(rows, targets, "found-files-written", pins)
 
     def test_cold_config_attempt_phases_still_require_all_file_after_images(self):
         self.seed()

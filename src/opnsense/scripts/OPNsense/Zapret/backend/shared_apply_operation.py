@@ -35,6 +35,7 @@ FOUND_FILE_PHASES = frozenset(("found-files-writing", "found-files-written"))
 # Config->P2 for independent post-save proof. Holding P2 while attempting
 # a fresh Config lock reverses lock order and risks deadlocking P2a.
 FOUND_CONFIG_PHASES = frozenset(("found-config-saving", "found-config-saved"))
+FOUND_POST_PHASES = frozenset(("found-files-written", *FOUND_CONFIG_PHASES))
 FOUND_NEXT = {"prepared": "found-files-writing",
               "found-files-writing": "found-files-written",
               "found-files-written": "found-config-saving",
@@ -122,8 +123,10 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
     only a fixed binding to its entire byte-for-byte sealed plan. No alternate
     file parser, Config reader or second write-ahead log is introduced.
     """
+    basics = {"schema", "kind", "plan_sha256", "sources"}
+    pinned = phase in FOUND_POST_PHASES
     if (not isinstance(found, dict) or
-            set(found) != {"schema", "kind", "plan_sha256", "sources"} or
+            set(found) != (basics | {"post"} if pinned else basics) or
             type(found["schema"]) is not int or found["schema"] != 1 or
             found["kind"] != FOUND_KIND or
             type(found["plan_sha256"]) is not str or
@@ -132,7 +135,38 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
             detail["page"] != "strategies" or
             phase not in ("prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES)):
         raise SharedOperationError("invalid sealed found intent in original journal")
+    if pinned:
+        _validate_found_post(found["post"])
     return found
+
+
+def _validate_found_post(post: object) -> dict:
+    """Bounded actual writer-created destination inode witness.
+
+    Captured under the same original P2 lock after this owner wrote all
+    changed sources. A correct byte hash without the original inode/time
+    identity must never authorize cold restore/forward completion.
+    """
+    if not isinstance(post, dict) or list(post) != list(FOUND_NAMES):
+        raise SharedOperationError("invalid original found post-image pins")
+    fields = {"status", "device", "inode", "ctime_ns", "mtime_ns", "size", "sha256"}
+    for name in FOUND_NAMES:
+        row = post[name]
+        if (not isinstance(row, dict) or set(row) != fields or
+                row["status"] not in ("present", "missing") or
+                any(type(row[field]) is not int or row[field] < 0
+                    for field in ("device", "inode", "ctime_ns", "mtime_ns", "size")) or
+                type(row["sha256"]) is not str or not DIGEST.fullmatch(row["sha256"])):
+            raise SharedOperationError("invalid original found post-image pins")
+        if row["status"] == "missing":
+            if (name != "auto" or
+                    any(row[field] != 0 for field in
+                        ("device", "inode", "ctime_ns", "mtime_ns", "size")) or
+                    row["sha256"] != hashlib.sha256(b"missing\0").hexdigest()):
+                raise SharedOperationError("unqualified missing found post-image")
+        elif row["device"] <= 0 or row["inode"] <= 0:
+            raise SharedOperationError("invalid original found post-image inode")
+    return post
 
 
 def _validate_record(record: object) -> dict:
@@ -273,7 +307,8 @@ class SharedApplyOperation:
         return self._persist_record(result)
 
     def advance_found_files(self, phase: str, detail: dict,
-                            sealed_plan: bytes, attest) -> dict:
+                            sealed_plan: bytes, attest, *,
+                            post_images: dict | None = None) -> dict:
         """Durable original-journal P2 file checkpoints; import-only.
 
         Caller's original FD9 + native Config FD + original P2 flock must
@@ -293,12 +328,39 @@ class SharedApplyOperation:
                 record["found"]["plan_sha256"] !=
                 hashlib.sha256(sealed_plan).hexdigest()):
             raise SharedOperationError("found-files original state/plan mismatch")
+        if phase == "found-files-written":
+            _validate_found_post(post_images)
+            try:
+                plan = json.loads(sealed_plan)
+                rows = plan["found_batch"]
+                if list(rows) != list(FOUND_NAMES):
+                    raise ValueError("missing three source rows")
+                for name in FOUND_NAMES:
+                    source = rows[name]
+                    absent = (source["before_status"] == "missing" and
+                              source["before"] == source["after"])
+                    expected_status = "missing" if absent else "present"
+                    expected_hash = hashlib.sha256(
+                        b"missing\0" if absent
+                        else source["after"].encode("utf-8")).hexdigest()
+                    if (post_images[name]["status"] != expected_status or
+                            post_images[name]["sha256"] != expected_hash or
+                            (expected_status == "present" and
+                             post_images[name]["size"] !=
+                             len(source["after"].encode("utf-8")))):
+                        raise ValueError("unsealed post-image mismatch")
+            except (KeyError, ValueError, TypeError, AttributeError) as exc:
+                raise SharedOperationError("original found post-image plan mismatch") from exc
+        elif post_images is not None:
+            raise SharedOperationError("premature original post-image pins")
         if not callable(attest) or attest(phase, sealed_plan) is not True:
             raise SharedOperationError("original Config/P2 found-files witness refused")
         if self.read() != record:
             raise SharedOperationError("found-files journal changed under original locks")
         advanced = dict(record)
         advanced["phase"] = phase
+        if phase == "found-files-written":
+            advanced["found"] = {**record["found"], "post": post_images}
         return self._persist_record(advanced)
 
     def advance_found_config(self, phase: str, detail: dict,
