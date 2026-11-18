@@ -269,7 +269,11 @@ jq -nc \
 ' > "${output}"
 MOCK
 
-cat > "${BIN_DIR}/service" <<'MOCK'
+# The actual installed Strategy Lab PID census explicitly recognizes the
+# transitional OPNsense zapret_service.sh process while it execs the
+# Python orchestrator. Preserve that name in this private mock, rather
+# than presenting a foreign "/bin/service" process during early polling.
+cat > "${BIN_DIR}/zapret_service.sh" <<'MOCK'
 #!/bin/sh
 state=$(cat "${MOCK_STATE_FILE}")
 hash_file()
@@ -366,7 +370,7 @@ api_call()
     SCRIPT_DIR="${WAN_TEST_SCRIPT_DIR}" \
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
-    TRANSACTION_SCRIPT="${BIN_DIR}/service" \
+    TRANSACTION_SCRIPT="${BIN_DIR}/zapret_service.sh" \
     DAEMON_BIN="${BIN_DIR}/daemon" \
     LOCKF_BIN="${BIN_DIR}/lockf" \
     STRATEGY_LAB_RUN_DIR="${RUN_DIR}" \
