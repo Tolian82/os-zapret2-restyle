@@ -271,7 +271,7 @@ try {
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
              in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
                                          'durable','crash-partial','crash-config-save'], true) &&
-             count($argv) === (in_array(($argv[1] ?? ''), 
+             count($argv) === (in_array(($argv[1] ?? ''),
                 ['stage','stage-partial','stage-config'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
