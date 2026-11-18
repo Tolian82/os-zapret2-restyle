@@ -11,6 +11,8 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 import xml.etree.ElementTree as ET
 
 ROOT = Path("/usr/local/etc/zapret2")
@@ -71,46 +73,79 @@ def five_hostlist_native_apply(config_path: Path):
     editor_names = {"youtube": "youtube_found", "user": "user_found", "auto": "shared_found"}
     runpy.run_path(str(Path(__file__).with_name("p5b2b-native-witness.py")))["set_guest_lo0"]()
 
+    gui = runpy.run_path(str(Path(__file__).with_name("stage2-opnsense-real-native-voice-http.py")))
+    web = gui["GuestHttps"]()
+    try:
+        gui["login"](web)
+    except gui["Refusal"] as error:
+        raise Refusal("FIVE_HOSTLIST_HTTPS_LOGIN_REFUSED:" + str(error)) from None
+
     def read():
-        p = run([configctl, "zapret", "hostlist_editors_read"])
-        data = json.loads(p.stdout)
-        need(p.returncode == 0 and data.get("result") == "ok", "FIVE_HOSTLIST_READ_REFUSED")
+        try:
+            data = web.api("POST", "/api/zapret/settings/hostlistEditorsRead")
+        except gui["Refusal"] as error:
+            raise Refusal("FIVE_HOSTLIST_HTTPS_READ_REFUSED:" + str(error)) from None
+        need(data.get("result") == "ok", "FIVE_HOSTLIST_READ_REFUSED")
         return data
 
     def apply(fields, snapshot=None, drafts=None):
         root = ET.fromstring(config_path.read_bytes())
         baseline = root.findtext("./OPNsense/Zapret/hostlist/telegramips") or ""
-        sync = {"telegramips_baseline": baseline}
-        upload = None
-        try:
-            if snapshot is not None:
-                sources = {}
-                for short, key in editor_names.items():
-                    editor = snapshot["editors"][key]
-                    sources[short] = {
-                        "base": {name: editor[name] for name in ("status", "revision", "content")},
-                        "draft": drafts.get(short, editor["content"]),
-                    }
-                payload = {"schema_version": 1, "kind": "tz6v2-found-form-intent",
-                           "config_revision": snapshot["config_revision"], "sources": sources}
-                raw = json.dumps(payload, separators=(",", ":")).encode()
-                upload = Path("/var/lib/php/tmp") / ("php" + secrets.token_hex(6))
-                fd = os.open(upload, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-                with os.fdopen(fd, "wb") as out:
-                    out.write(raw)
-                sync["found_upload"] = {"path": str(upload), "size": len(raw),
-                                        "sha256": hashlib.sha256(raw).hexdigest(),
-                                        "owner_uid": os.geteuid()}
-            request = json.dumps({"page": "strategies", "fields": fields, "sync": sync},
+        if snapshot is None:
+            request = json.dumps({"page": "strategies", "fields": fields,
+                                  "sync": {"telegramips_baseline": baseline}},
                                  separators=(",", ":")).encode()
             token = base64.urlsafe_b64encode(request).decode().rstrip("=")
             result = run([configctl, "zapret", "shared_apply", "strategies", token], timeout=180)
             receipt = result.stdout.splitlines()[-1] if result.stdout.strip() else ""
             need(result.returncode == 0, "FIVE_HOSTLIST_CONFIGD_UNAVAILABLE")
             return receipt
-        finally:
-            if upload is not None:
-                upload.unlink(missing_ok=True)
+        sources = {}
+        for short, key in editor_names.items():
+            editor = snapshot["editors"][key]
+            sources[short] = {
+                "base": {name: editor[name] for name in ("status", "revision", "content")},
+                "draft": drafts.get(short, editor["content"]),
+            }
+        payload = {"schema_version": 1, "kind": "tz6v2-found-form-intent",
+                   "config_revision": snapshot["config_revision"], "sources": sources}
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        boundary = "zapret-" + secrets.token_hex(16)
+        parts = []
+
+        def part(name, value, file_upload=False):
+            headers = ['Content-Disposition: form-data; name="' + name + '"']
+            if file_upload:
+                headers[0] += '; filename="found-intent.json"'
+                headers.append('Content-Type: application/json')
+            parts.extend([("--" + boundary).encode(), *(h.encode() for h in headers), b"", value])
+
+        part("zapret[sync][telegramips_baseline]", baseline.encode())
+        for group, values in fields.items():
+            for field, value in values.items():
+                part(f"zapret[{group}][{field}]", value.encode())
+        part("found_intent", raw, file_upload=True)
+        parts.extend([("--" + boundary + "--").encode(), b""])
+        req = urllib.request.Request(
+            gui["ORIGIN"] + "/api/zapret/settings/apply", data=b"\r\n".join(parts),
+            headers={"Content-Type": "multipart/form-data; boundary=" + boundary,
+                     "X-CSRFToken": web.csrf_token, "Accept": "application/json",
+                     "Referer": gui["ORIGIN"] + "/ui/zapret/general"}, method="POST")
+        try:
+            with web.client.open(req, timeout=180) as response:
+                reply = json.loads(response.read(2 * 1024 * 1024))
+        except urllib.error.HTTPError as error:
+            raise Refusal("FIVE_HOSTLIST_HTTPS_APPLY_STATUS_" + str(error.code)) from None
+        need(isinstance(reply, dict), "FIVE_HOSTLIST_HTTPS_APPLY_NOT_OBJECT")
+        phase = json.loads(journal.read_bytes()).get("phase")
+        reason = str(reply.get("reason", ""))
+        print("FIVE_HOSTLIST_HTTPS=" + json.dumps({
+            "result": reply.get("result") if reply.get("result") in ("saved", "failed") else "unknown",
+            "reason": reason if re.fullmatch(r"[a-z0-9-]{1,100}", reason) else "unspecified",
+            "phase": phase, "requires_review": reply.get("requires_review") is True,
+            "field_error": reply.get("found_error") == {"source": "auto", "line": 1}
+        }), flush=True)
+        return reply
 
     def assert_commit(receipt, label):
         match = re.fullmatch(r"applied-id=([0-9a-f]{32})", receipt)
@@ -123,19 +158,26 @@ def five_hostlist_native_apply(config_path: Path):
     initial_pid = pidfile.read_text().split()[0]
     base = read()
     old_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    old_operation = journal.read_bytes()
     invalid = apply({}, base, {"auto": "!example.net\n"})
-    need(invalid == "preflight-rejected=found-auto-line-1" and
-         pidfile.read_text().split()[0] == initial_pid and
-         hashlib.sha256(config_path.read_bytes()).hexdigest() == old_config,
-         "FIVE_HOSTLIST_INVALID_DRAFT_CHANGED_CONFIG_OR_PROCESS")
+    need(pidfile.read_text().split()[0] == initial_pid and
+         hashlib.sha256(config_path.read_bytes()).hexdigest() == old_config and
+         journal.read_bytes() == old_operation and read() == base,
+         "FIVE_HOSTLIST_INVALID_DRAFT_CHANGED_SAVED_STATE_OR_PROCESS")
+    invalid_confirmed = (invalid.get("result") == "failed" and
+                         invalid.get("found_error") == {"source": "auto", "line": 1})
 
     manual = {"youtubedomains": "!blocked.example.com\nmanual-youtube.example.org",
               "userdomains": "^exact.example.org\nmanual-user.example.com"}
     drafts = {"youtube": "sub.zapret-youtube.org\n", "user": "zapret-user.com\n",
               "auto": "zapret-auto.net\n"}
-    assert_commit(apply({"hostlist": manual}, base, drafts), "RUNNING_APPLY")
+    running_reply = apply({"hostlist": manual}, base, drafts)
+    need(running_reply.get("result") == "saved" and running_reply.get("applied") is True and
+         json.loads(journal.read_bytes()).get("phase") == "committed" and
+         journal.read_bytes() != old_operation, "FIVE_HOSTLIST_RUNNING_NOT_COMMITTED")
     running = read()["editors"]
-    need(status()["service"] == "running" and pidfile.read_text().split()[0] != initial_pid and
+    need(run([str(service), "status"]).returncode == 0 and
+         pidfile.read_text().split()[0] != initial_pid and
          running["youtube_manual"]["content"] == manual["youtubedomains"] and
          running["user_manual"]["content"] == manual["userdomains"] and
          running["youtube_found"]["content"] == "zapret-youtube.org\n" and
@@ -146,12 +188,17 @@ def five_hostlist_native_apply(config_path: Path):
     need(run([str(service), "stop"]).returncode == 0 and status()["service"] == "stopped",
          "FIVE_HOSTLIST_STOP_FAILED")
     same_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
-    assert_commit(apply({}, read(), {"auto": ""}), "STOPPED_APPLY")
+    before_stopped_apply = journal.read_bytes()
+    stopped_reply = apply({}, read(), {"auto": ""})
+    need(stopped_reply.get("result") == "saved" and stopped_reply.get("applied") is True and
+         json.loads(journal.read_bytes()).get("phase") == "committed" and
+         journal.read_bytes() != before_stopped_apply, "FIVE_HOSTLIST_STOPPED_NOT_COMMITTED")
     need(status()["service"] == "stopped" and not pidfile.exists() and
          read()["editors"]["shared_found"]["content"] == "" and
          hashlib.sha256(config_path.read_bytes()).hexdigest() == same_config,
          "FIVE_HOSTLIST_STOPPED_APPLY_STARTED_SERVICE_OR_CHANGED_CONFIG")
-    print("FIVE_HOSTLIST_NATIVE=PASS_CONFIGD_RUNNING_RESTART_STOPPED_APPLY", flush=True)
+    need(invalid_confirmed, "FIVE_HOSTLIST_INVALID_DRAFT_LACKS_FIELD_ERROR")
+    print("FIVE_HOSTLIST_NATIVE=PASS_HTTPS_RUNNING_RESTART_STOPPED_APPLY", flush=True)
 
 
 def native_template_snapshot():
