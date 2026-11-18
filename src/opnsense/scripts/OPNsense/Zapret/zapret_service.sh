@@ -1271,6 +1271,15 @@ shared_apply_execute_service()
         return 0
     }
     if [ "$_shared_found_scope" != ordinary ]; then
+        # Seal already verified above. Re-attest all three physical sources
+        # under the original P2 flock before any Stop, IPFW or Config write.
+        # The future joint durable transaction must recheck/hold these
+        # witnesses across its actual commit; this guard alone is read-only.
+        if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+            verify-planned "$_shared_apply_id"; then
+            printf '%s\n' preflight-rejected=found-source-drift
+            return 0
+        fi
         printf '%s\n' preflight-rejected=found-transaction-pending
         return 0
     fi

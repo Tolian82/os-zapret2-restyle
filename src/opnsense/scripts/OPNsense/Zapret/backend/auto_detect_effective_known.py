@@ -102,6 +102,51 @@ def compose_stage(youtube: Path, user: Path, *,
 
 
 
+def _verify_planned_preimages_locked(verified: dict, targets: dict, *,
+                                      owned_root: Path, owner_uid: int) -> None:
+    """One P2-locked physical witness shared by detached build and Apply gate."""
+    current = read_owned(Path(owned_root), owner_uid=owner_uid)
+    if current is None:
+        raise EffectiveKnownRefused("planned_known_owner_uninitialized")
+    for name in SHARED_FOUND_NAMES:
+        before, _after, identity, status = verified[name]
+        path = targets[name]
+        if status == "missing":
+            if name != "auto":
+                raise EffectiveKnownRefused("planned_known_missing")
+            _shared_found_assert_missing(path, owner_uid)
+        else:
+            content, st = _target(path, owner_uid)
+            observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                        st.st_mtime_ns, st.st_size)
+            if content != before or observed != identity:
+                raise EffectiveKnownRefused("planned_preimage_drift")
+        if name in KNOWN_HOSTLISTS and current[name].encode() != before:
+            raise EffectiveKnownRefused("planned_known_owner_drift")
+
+
+def verify_planned_preimages(rows: dict, *, targets: dict,
+                             owned_root: Path = OWNED_ROOT,
+                             lock: Path = AUTO_LOCK, owner_uid: int = 0) -> dict:
+    """Read-only post-seal check; not a lock held through later activation.
+
+    A minute write between detached build and FD9 executor must be detected.
+    This DOES NOT authorize commit or solve the Config+three-file crash window.
+    """
+    if (not isinstance(targets, dict) or
+            list(targets) != list(SHARED_FOUND_NAMES) or
+            any(not isinstance(targets[name], Path) or
+                    not targets[name].is_absolute() for name in SHARED_FOUND_NAMES) or
+            targets["youtube"] != Path(owned_root) / "youtube.txt" or
+            targets["user"] != Path(owned_root) / "user.txt"):
+        raise EffectiveKnownRefused("unsafe_planned_known_root")
+    verified = _qualified_shared_found_batch(rows)
+    with exclusive_destination_lock(Path(lock), owner_uid):
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=Path(owned_root), owner_uid=owner_uid)
+    return {"status": "planned-preimages-current", "commit_authorized": False}
+
+
 def compose_stage_planned(
     youtube: Path, user: Path, rows: dict, *, targets: dict,
     owned_root: Path = OWNED_ROOT, lock: Path = AUTO_LOCK,
@@ -126,24 +171,8 @@ def compose_stage_planned(
         raise EffectiveKnownRefused("unsafe_planned_known_root")
     verified = _qualified_shared_found_batch(rows)
     with exclusive_destination_lock(Path(lock), owner_uid):
-        current = read_owned(Path(owned_root), owner_uid=owner_uid)
-        if current is None:
-            raise EffectiveKnownRefused("planned_known_owner_uninitialized")
-        for name in SHARED_FOUND_NAMES:
-            before, after, identity, status = verified[name]
-            path = targets[name]
-            if status == "missing":
-                if name != "auto":
-                    raise EffectiveKnownRefused("planned_known_missing")
-                _shared_found_assert_missing(path, owner_uid)
-            else:
-                content, st = _target(path, owner_uid)
-                observed = (st.st_dev, st.st_ino, st.st_ctime_ns,
-                            st.st_mtime_ns, st.st_size)
-                if content != before or observed != identity:
-                    raise EffectiveKnownRefused("planned_preimage_drift")
-            if name in KNOWN_HOSTLISTS and current[name].encode() != before:
-                raise EffectiveKnownRefused("planned_known_owner_drift")
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=Path(owned_root), owner_uid=owner_uid)
         staged = {name: _target(path, owner_uid)[0] for name, path in paths.items()}
         try:
             manual = {name: staged[name].decode("utf-8") for name in paths}
@@ -204,8 +233,55 @@ def compose_native_planned(youtube: Path, user: Path, operation: str) -> dict:
     )
 
 
+def verify_native_planned(operation: str) -> dict:
+    """Post-seal native FD9 gate, before ANY original lifecycle mutation."""
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation)):
+        raise EffectiveKnownRefused("native_original_fd9_required")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from shared_apply_seal import WORK, _stat, verify_seal
+
+    require_lifecycle_lock()
+    work = WORK / operation
+    _stat(WORK, 0, directory=True)
+    _stat(work, 0, directory=True)
+    # All bytes of the original private plan AND detached release must still
+    # match the original shared Apply seal before comparing live sources.
+    verify_seal(work, owner=0)
+    raw, _ = _target(work / "plan.json", 0)
+    if len(raw) > 4 * 1024 * 1024:
+        raise EffectiveKnownRefused("oversized_planned_bundle")
+    try:
+        plan = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise EffectiveKnownRefused("invalid_planned_bundle") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("commit_authorized") is not False or
+            not isinstance(plan.get("found_batch"), dict)):
+        raise EffectiveKnownRefused("unqualified_planned_bundle")
+    return verify_planned_preimages(
+        plan["found_batch"],
+        targets={"youtube": OWNED_ROOT / "youtube.txt",
+                 "user": OWNED_ROOT / "user.txt",
+                 "auto": AUTO_HOSTLIST},
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == 'verify-planned':
+        try:
+            verify_native_planned(argv[1])
+            return 0
+        except (EffectiveKnownRefused, OwnedSourcesRefused, DestinationRefused,
+                DomainPolicyError, AutoDomainPolicyError,
+                ValueError, RuntimeError, OSError, UnicodeError):
+            print('ERROR: original FD9 sealed HOSTLIST preimage drift',
+                  file=sys.stderr)
+            return 2
     if len(argv) == 4 and argv[0] == 'compose-planned':
         try:
             compose_native_planned(Path(argv[1]), Path(argv[2]), argv[3])

@@ -12,7 +12,8 @@ import unittest
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
 from auto_detect_effective_known import (compose_stage, compose_stage_planned,
-                                         compose_native_planned, EffectiveKnownRefused)
+                                         compose_native_planned, verify_planned_preimages,
+                                         verify_native_planned, EffectiveKnownRefused)
 from auto_detect_owned_sources import bootstrap_empty, OwnedSourcesRefused
 from auto_detect_destination_commit import DestinationRefused
 
@@ -178,6 +179,48 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertEqual(self.youtube.read_text(),
                          "!blocked.example\n^exact.example\nmanual.example\n")
 
+    def test_postseal_preimage_gate_is_readonly_and_rejects_minute_race(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        before = {name: path.read_bytes() for name, path in targets.items()
+                  if path.exists()}
+        receipt = verify_planned_preimages(rows, targets=targets,
+                                           owned_root=self.root, lock=self.lock,
+                                           owner_uid=self.uid)
+        self.assertEqual(receipt, {"status": "planned-preimages-current",
+                                   "commit_authorized": False})
+        self.assertEqual(before, {name: path.read_bytes()
+                                  for name, path in targets.items() if path.exists()})
+        self.assertFalse(targets["auto"].exists())
+        (self.root / "youtube.txt").write_text("minute.net\n")
+        with self.assertRaisesRegex(EffectiveKnownRefused, "planned_preimage_drift"):
+            verify_planned_preimages(rows, targets=targets,
+                                     owned_root=self.root, lock=self.lock,
+                                     owner_uid=self.uid)
+        self.assertEqual((self.root / "youtube.txt").read_text(), "minute.net\n")
+
+    def test_postseal_preimage_gate_refuses_missing_auto_create_and_inode_swap(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        targets["auto"].write_text("")
+        with self.assertRaises(DestinationRefused):
+            verify_planned_preimages(rows, targets=targets,
+                                     owned_root=self.root, lock=self.lock,
+                                     owner_uid=self.uid)
+        targets["auto"].unlink()
+        target = self.root / "user.txt"
+        original = target.read_bytes()
+        target.unlink()
+        target.write_bytes(original)
+        with self.assertRaisesRegex(EffectiveKnownRefused, "planned_preimage_drift"):
+            verify_planned_preimages(rows, targets=targets,
+                                     owned_root=self.root, lock=self.lock,
+                                     owner_uid=self.uid)
+
+    def test_native_postseal_gate_refuses_missing_original_fd9(self):
+        with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
+            verify_native_planned("a" * 32)
+
     def test_planned_native_entry_refuses_without_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             compose_native_planned(self.youtube, self.user, "a" * 32)
@@ -193,6 +236,10 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertIn('"${_orchestrator_build_found_id}"', orchestrator)
         self.assertIn('has("found_intent") and has("found_batch")', service)
         self.assertIn('preflight-rejected=found-transaction-pending', service)
+        self.assertIn('verify-planned "$_shared_apply_id"', service)
+        self.assertIn('preflight-rejected=found-source-drift', service)
+        self.assertLess(service.index('verify-planned "$_shared_apply_id"'),
+                        service.index('if ! apply_runtime_probe "$_shared_apply_root/release"'))
         self.assertIn('if [ "$_shared_found_scope" != ordinary ]; then', service)
 
 
