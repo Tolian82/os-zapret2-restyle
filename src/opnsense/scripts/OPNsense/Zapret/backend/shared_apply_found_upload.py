@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import pwd
 import re
 import stat
 import sys
@@ -39,12 +40,21 @@ def read_qualified(path: Path, length: int, digest: str, owner_uid: int,
         raise UploadRefused("path")
     try:
         parent = path.parent.lstat()
+        if test_parent is None:
+            parent_mode = 0o1777
+            allowed_owners = {0}
+            if parent.st_uid != 0:
+                try:
+                    # OPNsense's PHP boot setup assigns the native WebGUI account.
+                    allowed_owners.add(pwd.getpwnam("wwwonly").pw_uid)
+                except KeyError:
+                    pass
+        else:
+            parent_mode = 0o700
+            allowed_owners = {os.geteuid()}
         if (not stat.S_ISDIR(parent.st_mode) or
-                (test_parent is None and
-                 (parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) != 0o1777)) or
-                (test_parent is not None and
-                 (parent.st_uid != os.geteuid() or
-                  stat.S_IMODE(parent.st_mode) != 0o700))):
+                stat.S_IMODE(parent.st_mode) != parent_mode or
+                parent.st_uid not in allowed_owners):
             raise UploadRefused("directory")
         named = path.lstat()
         if (not stat.S_ISREG(named.st_mode) or named.st_uid != owner_uid or
