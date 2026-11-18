@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """#1052: real staged YouTube/User hostlist + protected known auto-owned rows."""
+from contextlib import contextmanager
 import fcntl
 import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
@@ -543,6 +546,120 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertIn("store.finish_found_prepared_pristine(", source)
         self.assertIn("with exclusive_destination_lock(AUTO_LOCK, 0):", source)
         self.assertNotIn("'recover-prepared-found'", source)
+
+    def test_original_prepared_pristine_closure_requires_both_physical_witnesses(self):
+        # Exercise the real original durable journal but isolate native BSD
+        # descriptors/old IPFW observation with bounded fakes. No production
+        # CLI/Config saver is reached and P2 cannot be dropped before fsync.
+        import auto_detect_effective_known as effective
+        import auto_detect_original_lock_handoff as inherited
+        import shared_apply_operation as opmodule
+        import shared_apply_seal as sealing
+        import voice_ipfw_adapter as ipfw
+        import voice_live_inspect as voice
+
+        self.seed()
+        rows, targets = self.planned_rows()
+        journal = opmodule.SharedApplyOperation(self.base / "journal")
+        previous = {"id": "a" * 32, "page": "strategies",
+                    "base": "b" * 64, "candidate": "c" * 64,
+                    "changed_fields": []}
+        for phase in ("prepared", "activating", "activated",
+                      "config-saved", "committed"):
+            journal.advance(phase, previous)
+        current = {"id": "d" * 32, "page": "strategies",
+                   "base": previous["candidate"], "candidate": "e" * 64,
+                   "changed_fields": ["hostlist.youtubedomains"]}
+        raw = json.dumps({
+            "page": "strategies", "result": "prepared",
+            "dependencies": current["base"],
+            "changed_fields": current["changed_fields"],
+            "found_intent": {"config_revision": current["base"],
+                             "commit_authorized": False},
+            "found_batch": rows,
+        }).encode()
+        journal.prepare_found(current, raw, lambda _: True)
+        plan_path = self.base / "work" / current["id"] / "plan.json"
+        plan_path.parent.mkdir(parents=True)
+        plan_path.write_bytes(raw)
+        original_journal = journal.read()
+        seal = {"sha256": {"plan.json": hashlib.sha256(raw).hexdigest()}}
+        held = [False]
+        witness_calls = [0]
+        refuse_second = [True]
+
+        @contextmanager
+        def original_p2(*_args, **_kwargs):
+            self.assertFalse(held[0], "second P2 lock owner")
+            held[0] = True
+            try:
+                yield
+            finally:
+                held[0] = False
+
+        def physical_preimages(*_args, **_kwargs):
+            self.assertTrue(held[0], "physical source read outside P2")
+            witness_calls[0] += 1
+            if refuse_second[0] and witness_calls[0] == 2:
+                raise EffectiveKnownRefused("minute-worker-image-drift")
+
+        def old_runtime(pending):
+            self.assertTrue(held[0], "runtime IPFW read outside P2")
+            self.assertEqual(pending, original_journal)
+            return {"state": "ready", "id": previous["id"]}
+
+        with patch.object(effective.sys, "platform", "freebsd-test"), \
+             patch.object(effective.os, "geteuid", return_value=0), \
+             patch.object(effective, "OWNED_ROOT", self.root), \
+             patch.object(effective, "AUTO_HOSTLIST", targets["auto"]), \
+             patch.object(effective, "AUTO_LOCK", self.lock), \
+             patch.object(effective, "_target", return_value=(raw, None)), \
+             patch.object(effective, "_verify_planned_preimages_locked",
+                          side_effect=physical_preimages), \
+             patch.object(effective, "exclusive_destination_lock",
+                          side_effect=original_p2), \
+             patch.object(opmodule, "SharedApplyOperation", return_value=journal), \
+             patch.object(sealing, "WORK", plan_path.parent.parent), \
+             patch.object(sealing, "_stat"), \
+             patch.object(sealing, "verify_seal", return_value=seal), \
+             patch.object(ipfw, "require_lifecycle_lock"), \
+             patch.object(inherited, "assert_inherited_config_fd"), \
+             patch.object(voice, "examine_pending_found_previous",
+                          side_effect=old_runtime):
+            from auto_detect_effective_known import recover_native_found_prepared_pristine
+
+            with self.assertRaisesRegex(EffectiveKnownRefused,
+                                        "minute-worker-image-drift"):
+                recover_native_found_prepared_pristine(
+                    current["id"], config_fd=4, config_digest=current["base"])
+            self.assertFalse(held[0])
+            self.assertEqual(journal.read(), original_journal)
+            self.assertEqual(witness_calls[0], 2)
+
+            # A foreign Config BASE or missing predecessor never reaches
+            # the P2 file writer or the terminal transition.
+            with self.assertRaisesRegex(
+                    EffectiveKnownRefused, "phase_or_config_drift"):
+                recover_native_found_prepared_pristine(
+                    current["id"], config_fd=4, config_digest="f" * 64)
+            self.assertEqual(journal.read(), original_journal)
+
+            refuse_second[0] = False
+            witness_calls[0] = 0
+            receipt = recover_native_found_prepared_pristine(
+                current["id"], config_fd=4, config_digest=current["base"])
+            self.assertEqual(witness_calls[0], 2)
+            self.assertEqual(receipt["phase"], "restored")
+            self.assertEqual(receipt["previous_id"], previous["id"])
+            self.assertEqual(receipt["runtime_state"], "ready")
+            self.assertFalse(receipt["service_restarted"])
+            self.assertFalse(held[0])
+            self.assertEqual(journal.read()["previous"], previous)
+            self.assertNotIn("found", journal.read())
+            with self.assertRaisesRegex(
+                    EffectiveKnownRefused, "phase_or_config_drift"):
+                recover_native_found_prepared_pristine(
+                    current["id"], config_fd=4, config_digest=current["base"])
 
     def test_native_cold_classification_requires_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
