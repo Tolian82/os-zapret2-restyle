@@ -46,6 +46,23 @@ def witness_state(witnesses):
     return restored, dirty, missing, foreign
 
 
+def witness_labels(witnesses):
+    """No bytes, paths, domains, or command lines are emitted to CI logs."""
+    values = []
+    for path, original, marked in witnesses:
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            values.append("missing")
+            continue
+        except OSError:
+            values.append("unknown")
+            continue
+        values.append("before" if raw == original else
+                      "marked" if raw == marked else "foreign")
+    return tuple(values)
+
+
 def select_native_witnesses(root, stage, run, need):
     probe = run(["/usr/bin/tar", "-xOf", str(stage), "+MANIFEST"], timeout=30)
     need(probe.returncode == 0 and len(probe.stdout) < 512 * 1024,
@@ -140,8 +157,27 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
                              else "MIDEXTRACT_PKG_EXITED_WITHOUT_WINDOW")
                     if observation[0] > 0 and observation[1] + observation[2] > 0 and observation[3] == 0:
                         os.killpg(proc.pid, signal.SIGSTOP)
-                        time.sleep(0.05)
-                        captured = witness_state(witnesses)
+                        # SIGSTOP is delivered asynchronously to the traced
+                        # pkg process group. Do not take one arbitrary
+                        # immediately-racing snapshot as the pre-kill proof.
+                        # Require per-file classifications, not just totals,
+                        # to remain unchanged across consecutive observations.
+                        stable = None
+                        captured_labels = None
+                        for _ in range(8):
+                            time.sleep(0.03)
+                            before_labels = witness_labels(witnesses)
+                            time.sleep(0.03)
+                            after_labels = witness_labels(witnesses)
+                            if (before_labels == after_labels and
+                                    "foreign" not in after_labels and
+                                    "unknown" not in after_labels):
+                                captured_labels = after_labels
+                                stable = witness_state(witnesses)
+                                break
+                        need(captured_labels is not None and stable is not None,
+                             "MIDEXTRACT_STOPPED_GROUP_NOT_QUIESCENT")
+                        captured = stable
                         need(captured[0] > 0 and captured[1] + captured[2] > 0 and
                              captured[3] == 0 and not postinstall.exists(),
                              "MIDEXTRACT_MIXED_WINDOW_NOT_STABLE")
@@ -156,7 +192,21 @@ def interrupt_real_native_pkg_midextract(stage, witnesses, need):
                 proc.wait(timeout=20)
             need(proc.returncode == -signal.SIGKILL,
                  "MIDEXTRACT_PKG_PROCESS_NOT_KILLED")
+            after_kill = witness_state(witnesses)
+            after_labels = witness_labels(witnesses)
+            if postinstall.exists() or after_kill != captured or after_labels != captured_labels:
+                print("NATIVE_MIDEXTRACT_POSTKILL_DIAGNOSTIC=" + json.dumps({
+                    "before_counts": captured,
+                    "after_counts": after_kill,
+                    "changed_witness_indices": [
+                        index for index, (old, new) in enumerate(
+                            zip(captured_labels, after_labels)) if old != new],
+                    "before_labels": captured_labels,
+                    "after_labels": after_labels,
+                    "postinstall_reached": postinstall.exists(),
+                    "owner_appliance_modified": False,
+                }, sort_keys=True), flush=True)
             need(not postinstall.exists() and
-                 witness_state(witnesses) == captured,
+                 after_kill == captured and after_labels == captured_labels,
                  "MIDEXTRACT_POST_KILL_FILE_STATE_DRIFT")
             return captured
