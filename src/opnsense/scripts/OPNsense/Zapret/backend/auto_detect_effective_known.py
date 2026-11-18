@@ -8,6 +8,7 @@ No native observer, writer, Config mutation, hot reload, or ACK is enabled.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path

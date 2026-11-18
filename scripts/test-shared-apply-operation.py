@@ -127,7 +127,9 @@ class TestJournal(unittest.TestCase):
             steps = []
             for phase in ("found-files-writing", "found-files-written"):
                 with self.assertRaisesRegex(SharedOperationError, "witness refused"):
-                    journal.advance_found_files(phase, d, plan, lambda *_: False)
+                    journal.advance_found_files(
+                        phase, d, plan, lambda *_: False,
+                        post_images=trivial_post() if phase == "found-files-written" else None)
                 with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
                     journal.advance_found_files(phase, d, plan + b"\n",
                                                 lambda *_: True)

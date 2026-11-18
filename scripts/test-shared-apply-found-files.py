@@ -133,7 +133,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         call = [0]
         def after_cas(rows):
             call[0] += 1
-            if call[0] > 1:
+            if call[0] > 2:
                 temp = native_target.with_name("foreign-same-bytes.tmp")
                 temp.write_bytes(native_target.read_bytes())
                 temp.chmod(0o600)
