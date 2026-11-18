@@ -19,6 +19,85 @@ def detail(ident="1"*32):
                 "voice.telegram.enabled","hostlist.telegramips"]}
 
 class TestJournal(unittest.TestCase):
+
+    def test_found_intent_is_one_durable_original_record_not_ordinary_apply(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            old = detail("a" * 32)
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, old)
+            found = {"id": "b" * 32, "page": "strategies",
+                     "base": old["candidate"], "candidate": "c" * 64,
+                     "changed_fields": []}
+            body = json.dumps({"page": "strategies", "result": "prepared",
+                "dependencies": found["base"],
+                "found_intent": {"config_revision": found["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }, separators=(",", ":")).encode()
+            called = []
+            prepared = store.prepare_found(
+                found, body, lambda content: (called.append(content) or True))
+            self.assertEqual(called, [body])
+            self.assertEqual(prepared["phase"], "prepared")
+            self.assertEqual(prepared["previous"], old)
+            self.assertEqual(prepared["found"], {
+                "schema": 1, "kind": "sealed-five-editor-three-file-intent",
+                "plan_sha256": hashlib.sha256(body).hexdigest(),
+                "sources": ["youtube", "user", "auto"]})
+            physical = (store.root / "operation.json").read_bytes()
+            self.assertEqual(store.read(), prepared)
+            self.assertEqual((store.root / "operation.json").stat().st_mode & 0o777, 0o600)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for phase in ("activating", "config-saved", "committed"):
+                with self.assertRaises(SharedOperationError):
+                    store.advance(phase, found)
+                self.assertEqual((store.root / "operation.json").read_bytes(), physical)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                store.recover_prepared(found["id"], lambda: True)
+            self.assertEqual(store.read(), prepared)
+
+    def test_found_prepared_refuses_unsealed_or_nonterminal_reuse_without_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            found = {"id": "c" * 32, "page": "strategies",
+                     "base": "a" * 64, "candidate": "b" * 64,
+                     "changed_fields": []}
+            base_plan = {"page": "strategies", "result": "prepared",
+                         "dependencies": found["base"],
+                         "found_intent": {"config_revision": found["base"],
+                                          "commit_authorized": False},
+                         "found_batch": {"youtube": {}, "user": {}, "auto": {}}}
+            def raw(x):
+                return json.dumps(x).encode()
+            for changed in (
+                {"page": "voice"},
+                {"found_batch": {"youtube": {}, "auto": {}, "user": {}}},
+                {"found_intent": {"config_revision": found["base"],
+                                  "commit_authorized": True}},
+                {"dependencies": "f" * 64},
+                {"found_batch": {}},
+            ):
+                with self.subTest(changed=changed):
+                    with self.assertRaisesRegex(SharedOperationError, "unqualified"):
+                        store.prepare_found(found, raw({**base_plan, **changed}),
+                                            lambda _: True)
+            with self.assertRaisesRegex(SharedOperationError, "unverified"):
+                store.prepare_found(found, raw(base_plan), lambda _: False)
+            self.assertFalse(store.root.exists())
+            good = store.prepare_found(found, raw(base_plan), lambda _: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "unfinished"):
+                store.prepare_found({**found, "id": "d" * 32},
+                                    raw(base_plan), lambda _: True)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            record = json.loads(before)
+            record["found"]["plan_sha256"] = "bad"
+            (store.root / "operation.json").write_text(json.dumps(record))
+            with self.assertRaisesRegex(SharedOperationError, "invalid sealed found"):
+                store.read()
+
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
 

@@ -12,6 +12,7 @@ directories for fault tests; never pass an arbitrary root via production CLI.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,9 @@ DEFAULT_ROOT = Path("/var/db/zapret2/shared-apply")
 RECORD = "operation.json"
 SCHEMA = 1
 MAX_RECORD = 8192
+MAX_FOUND_PLAN = 4 * 1024 * 1024
+FOUND_NAMES = ("youtube", "user", "auto")
+FOUND_KIND = "sealed-five-editor-three-file-intent"
 DIGEST = re.compile(r"^[a-f0-9]{64}$")
 OP_ID = re.compile(r"^[a-f0-9]{32}$")
 FIELD = re.compile(r"^[a-z]+(?:\.[a-z]+){1,2}$")
@@ -95,6 +99,28 @@ def _validate_detail(detail: object) -> dict:
     return detail
 
 
+
+def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
+    """Minimal original-journal binding, not a destination writer/validator.
+
+    All full physical preimages, future after-bytes and Config candidate
+    remain in the independently sealed shared-work plan. The journal holds
+    only a fixed binding to its entire byte-for-byte sealed plan. No alternate
+    file parser, Config reader or second write-ahead log is introduced.
+    """
+    if (not isinstance(found, dict) or
+            set(found) != {"schema", "kind", "plan_sha256", "sources"} or
+            type(found["schema"]) is not int or found["schema"] != 1 or
+            found["kind"] != FOUND_KIND or
+            type(found["plan_sha256"]) is not str or
+            not DIGEST.fullmatch(found["plan_sha256"]) or
+            found["sources"] != list(FOUND_NAMES) or
+            detail["page"] != "strategies" or
+            phase not in ("prepared", "restored")):
+        raise SharedOperationError("invalid sealed found intent in original journal")
+    return found
+
+
 def _validate_record(record: object) -> dict:
     # Existing unextended records remain readable; a new transaction can
     # retain precisely ONE predecessor inside the SAME durable journal.
@@ -102,10 +128,14 @@ def _validate_record(record: object) -> dict:
     if not isinstance(record, dict) or set(record) not in (
         {"schema", "phase", "detail"},
         {"schema", "phase", "detail", "previous"},
+        {"schema", "phase", "detail", "found"},
+        {"schema", "phase", "detail", "previous", "found"},
     ) or type(record["schema"]) is not int or record["schema"] != SCHEMA \
             or record["phase"] not in PHASES:
         raise SharedOperationError("invalid common Apply record")
     _validate_detail(record["detail"])
+    if "found" in record:
+        _validate_found_intent(record["found"], record["detail"], record["phase"])
     if "previous" in record:
         _validate_detail(record["previous"])
         if record["previous"]["id"] == record["detail"]["id"]:
@@ -173,6 +203,57 @@ class SharedApplyOperation:
         except (ValueError, TypeError, UnicodeError) as error:
             raise SharedOperationError("corrupt common Apply record") from error
 
+    def prepare_found(self, detail: dict, sealed_plan: bytes, attest) -> dict:
+        """One fsynced ORIGINAL prepared record, prior to any HOSTLIST write.
+
+        The attest callback must check the original FD9, immutable full
+        bundle seal, Config snapshot and P2-protected physical preimages.
+        This internal primitive has NO production CLI or GUI route yet.
+        Future implementation must hold the approved locks through physical
+        mutation and add cold recovery before lifting the Apply veto.
+        """
+        _validate_detail(detail)
+        if detail["page"] != "strategies":
+            raise SharedOperationError("found intent requires Strategies")
+        if (type(sealed_plan) is not bytes or
+                not 0 < len(sealed_plan) <= MAX_FOUND_PLAN):
+            raise SharedOperationError("invalid sealed found plan bytes")
+        try:
+            plan = json.loads(sealed_plan)
+        except (ValueError, TypeError, UnicodeError) as exc:
+            raise SharedOperationError("invalid sealed found plan") from exc
+        if (not isinstance(plan, dict) or plan.get("result") != "prepared" or
+                plan.get("page") != "strategies" or
+                plan.get("dependencies") != detail["base"] or
+                not isinstance(plan.get("found_intent"), dict) or
+                plan["found_intent"].get("config_revision") != detail["base"] or
+                plan["found_intent"].get("commit_authorized") is not False or
+                not isinstance(plan.get("found_batch"), dict) or
+                list(plan["found_batch"]) != list(FOUND_NAMES) or
+                any(not isinstance(plan["found_batch"][name], dict)
+                    for name in FOUND_NAMES)):
+            raise SharedOperationError("unqualified original found candidate")
+        before = self.read()
+        if before is not None and before["phase"] not in TERMINAL:
+            raise SharedOperationError("unfinished original common Apply")
+        if before is not None and (
+                before["detail"]["id"] == detail["id"] or
+                (committed_owner(before) is not None and
+                 committed_owner(before)["id"] == detail["id"])):
+            raise SharedOperationError("reused original common Apply operation")
+        if not callable(attest) or attest(sealed_plan) is not True:
+            raise SharedOperationError("sealed original found preimages unverified")
+        if self.read() != before:
+            raise SharedOperationError("common Apply owner changed during found attestation")
+        result = {"schema": SCHEMA, "phase": "prepared", "detail": detail,
+                  "found": {"schema": 1, "kind": FOUND_KIND,
+                            "plan_sha256": hashlib.sha256(sealed_plan).hexdigest(),
+                            "sources": list(FOUND_NAMES)}}
+        previous = committed_owner(before)
+        if previous is not None:
+            result["previous"] = previous
+        return self._persist_record(result)
+
     def advance(self, phase: str, detail: dict) -> dict:
         if phase not in PHASES:
             raise SharedOperationError("unrecognized common Apply phase")
@@ -191,10 +272,17 @@ class SharedApplyOperation:
                 raise SharedOperationError("common Apply transaction identity changed")
             if phase not in NEXT[before["phase"]]:
                 raise SharedOperationError("illegal common Apply phase transition")
+            # A recorded found intent is a one-way crash-recovery obligation.
+            # Until the actual original Config/P2 writer and cold recovery are
+            # qualified, no ordinary CLI may advance it into activation.
+            if "found" in before and phase != "restored":
+                raise SharedOperationError("found files require original durable transaction")
             previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
         if previous is not None:
             record["previous"] = previous
+        if before is not None and "found" in before:
+            record["found"] = before["found"]
         return self._persist_record(record)
 
     def revert_committed_remove(self, trial_id: str, old_id: str, attest) -> dict:
@@ -268,7 +356,10 @@ class SharedApplyOperation:
         """
         record = self.read()
         if record is None or record["phase"] != "prepared" or \
-           record["detail"]["id"] != identity:
+           record["detail"]["id"] != identity or "found" in record:
+            # The legacy seal-only attestation is NOT proof that three
+            # physical sources remained untouched after an interrupted
+            # found transaction. Do not grant cold recovery by old rules.
             raise SharedOperationError("prepared-only recovery refused")
         if not callable(attest) or attest() is not True:
             raise SharedOperationError("shared candidate attestation refused")
