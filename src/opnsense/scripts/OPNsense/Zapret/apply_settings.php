@@ -135,6 +135,14 @@ final class SharedConfigCommit
         object $config,
         callable $modelFactory
     ): array {
+        // The original found-file CAS and cold-crash protocol are not yet
+        // authorized. Never persist only XML (including a found-only click)
+        // from a sealed three-source intent: that would split one Apply.
+        if (array_key_exists('found_intent', $plan)) {
+            throw new \InvalidArgumentException(
+                'Original Config and three HOSTLIST files require joint protected Apply'
+            );
+        }
         $saveAttempted = false;
         $targetSnapshot = null;
         $changeCount = null;
@@ -243,6 +251,14 @@ final class SharedConfigCommit
         callable $rollback,
         callable $commit
     ): array {
+        // This legacy callable coordinator must reject found intent BEFORE
+        // making a journal record or activating a runtime, not only when its
+        // later Config persistence would be refused.
+        if (array_key_exists('found_intent', $plan)) {
+            throw new \InvalidArgumentException(
+                'Found sources require original FD9 joint destination transaction'
+            );
+        }
         if ($assertFd9() !== true) {
             throw new \RuntimeException('Shared Apply requires existing FD9 ownership');
         }

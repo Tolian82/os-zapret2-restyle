@@ -173,6 +173,32 @@ namespace {
     );
     verify($same['result']==='unchanged' && $config->saves===1 &&
         $config->locks===0, 'repeated Config save created revision');
+    // A found-only draft (or one with other Config changes) MUST NOT reach
+    // the original Config writer until the single joint Config/P2 transaction
+    // is proven. Otherwise the native model would save XML without all three
+    // physical HOSTLIST sources, creating an unrecoverable split receipt.
+    $foundOnly = $noChange;
+    $foundOnly['found_intent'] = ['commit_authorized'=>false];
+    $forbidden = new FakeConfig($config->disk);
+    try {
+        SharedConfigCommit::persist(
+            $foundOnly, 'strategies', $forbidden, static fn()=>new FakeModel()
+        );
+        verify(false, 'found-only intent saved Config without three HOSTLISTs');
+    } catch (\InvalidArgumentException $expected) {}
+    verify($forbidden->saves === 0 && $forbidden->locks === 0 &&
+           $forbidden->disk === $config->disk,
+           'found-only split Config commit mutated native state');
+    $changedFound = $strategyPlan;
+    $changedFound['found_intent'] = ['commit_authorized'=>false];
+    try {
+        SharedConfigCommit::persist(
+            $changedFound, 'strategies', $forbidden, static fn()=>new FakeModel()
+        );
+        verify(false, 'mixed Config+found intent saved only native Config');
+    } catch (\InvalidArgumentException $expected) {}
+    verify($forbidden->saves === 0 && $forbidden->locks === 0,
+           'mixed found intent changed Config before three-file transaction');
 
     $stale=SettingsApply::prepareStrategies(
         $config->disk,['strategy'=>['trafficargs'=>'--filter-tcp=443']],
@@ -267,6 +293,19 @@ verify($events === [
     'record:activated','record:config-saved','runtime:commit','record:committed',
 ], 'native shared transaction order incorrect: '.implode(',', $events));
 verify($sample->locks===0 && $sample->saves===1, 'FD9 save sequence leaked Config lock');
+
+// A previously sealed three-file intent may not use the old callable
+// coordinator, because it does not own Config+P2 file commit/recovery.
+$events = [];
+try {
+    SharedConfigCommit::transact(
+        $changedFound, 'strategies', new FakeConfig($seed),
+        static fn()=>new FakeModel(), static fn()=>true,
+        $record, $activate, $rollback, $commit
+    );
+    verify(false, 'legacy coordinator activated found draft without file WAL');
+} catch (\InvalidArgumentException $expected) {}
+verify($events === [], 'found intent crossed into legacy journal or runtime');
 
 // Missing FD9 or failed durable intent is a hard refusal before activation.
 $events = [];
