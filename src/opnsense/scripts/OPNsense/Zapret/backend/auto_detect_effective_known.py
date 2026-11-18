@@ -358,6 +358,7 @@ def prepare_native_found_intent(
 def classify_planned_file_images(
     rows: dict, *, targets: dict, owned_root: Path = OWNED_ROOT,
     lock: Path = AUTO_LOCK, owner_uid: int = 0,
+    journal_phase: str | None = None,
 ) -> dict:
     """READ ONLY image evidence from the original sealed three-source plan.
 
@@ -403,6 +404,20 @@ def classify_planned_file_images(
                 # Same-byte inode replacements and foreign content are NOT
                 # evidence of the original writer or a valid rollback.
                 raise EffectiveKnownRefused("cold_found_unknown_image")
+        # Evaluate phase/physical consistency under this SAME destination
+        # lock. No matching bytes prove which writer made them.
+        if journal_phase is not None:
+            if journal_phase not in (
+                    "prepared", "found-files-writing", "found-files-written"):
+                raise EffectiveKnownRefused("cold_found_unknown_journal_phase")
+            if journal_phase == "prepared" and any(
+                    state != "before" for state in states.values()):
+                raise EffectiveKnownRefused("cold_found_unexpected_prepared_image")
+            if journal_phase == "found-files-written":
+                for name in SHARED_FOUND_NAMES:
+                    old, new, _, _ = verified[name]
+                    if states[name] != ("after-image" if new != old else "before"):
+                        raise EffectiveKnownRefused("cold_found_written_phase_diverged")
     return {
         "result": "read-only-cold-image-classification",
         "image": ("all-before" if all(s == "before" for s in states.values())
@@ -447,7 +462,10 @@ def classify_native_planned(operation: str) -> dict:
     if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
             plan.get("result") != "prepared" or
             plan.get("dependencies") != record["detail"]["base"] or
+            plan.get("changed_fields") != record["detail"]["changed_fields"] or
             not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("config_revision") != record["detail"]["base"] or
+            plan["found_intent"].get("commit_authorized") is not False or
             not isinstance(plan.get("found_batch"), dict)):
         raise EffectiveKnownRefused("unqualified_cold_found_plan")
     return classify_planned_file_images(
@@ -455,6 +473,7 @@ def classify_native_planned(operation: str) -> dict:
         targets={"youtube": OWNED_ROOT / "youtube.txt",
                  "user": OWNED_ROOT / "user.txt",
                  "auto": AUTO_HOSTLIST},
+        journal_phase=record["phase"],
     )
 
 

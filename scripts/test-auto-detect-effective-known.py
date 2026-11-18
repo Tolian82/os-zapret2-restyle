@@ -225,10 +225,69 @@ class EffectiveKnownTests(unittest.TestCase):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             verify_native_planned("a" * 32)
 
-    def cold_image(self, rows, targets):
+    def cold_image(self, rows, targets, phase=None):
         return classify_planned_file_images(
             rows, targets=targets, owned_root=self.root,
-            lock=self.lock, owner_uid=self.uid)
+            lock=self.lock, owner_uid=self.uid, journal_phase=phase)
+
+    def test_cold_prepared_phase_refuses_any_after_image(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        self.assertEqual(self.cold_image(rows, targets, "prepared")["image"],
+                         "all-before")
+        targets["youtube"].unlink()
+        targets["youtube"].write_text(rows["youtube"]["after"])
+        targets["youtube"].chmod(0o600)
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_unexpected_prepared_image"):
+            self.cold_image(rows, targets, "prepared")
+        receipt = self.cold_image(rows, targets, "found-files-writing")
+        self.assertEqual(receipt["states"]["youtube"], "after-image")
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertFalse(receipt["restore_authorized"])
+
+    def test_cold_files_written_requires_every_changed_after_image(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_written_phase_diverged"):
+            self.cold_image(rows, targets, "found-files-written")
+        for name in ("youtube", "user"):
+            path = targets[name]
+            path.unlink()
+            path.write_text(rows[name]["after"])
+            path.chmod(0o600)
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_written_phase_diverged"):
+            self.cold_image(rows, targets, "found-files-written")
+        targets["auto"].write_text(rows["auto"]["after"])
+        targets["auto"].chmod(0o600)
+        receipt = self.cold_image(rows, targets, "found-files-written")
+        self.assertEqual(receipt["states"], {
+            "youtube": "after-image", "user": "after-image",
+            "auto": "after-image"})
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertFalse(receipt["restore_authorized"])
+
+    def test_cold_noop_missing_auto_stays_physically_missing(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        rows["auto"]["after"] = ""
+        receipt = self.cold_image(rows, targets, "found-files-written")
+        self.assertEqual(receipt["states"]["auto"], "before")
+        self.assertFalse(targets["auto"].exists())
+        targets["auto"].write_text("")
+        targets["auto"].chmod(0o600)
+        with self.assertRaises(EffectiveKnownRefused):
+            self.cold_image(rows, targets, "found-files-written")
+
+    def test_cold_unrecognized_journal_phase_refused(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "cold_found_unknown_journal_phase"):
+            self.cold_image(rows, targets, "committed")
+        self.assertFalse(targets["auto"].exists())
 
     def test_cold_classification_all_before_is_readonly(self):
         self.seed()
