@@ -354,10 +354,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         prior_replace = mod._replace
-        def broken_second_target(path, *args):
+        def broken_second_target(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("original-second-target-io-failure")
-            return prior_replace(path, *args)
+            return prior_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -398,10 +398,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-source-second-write-failed")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -488,10 +488,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-target-interruption")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -519,10 +519,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         prior_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-second-write-failed")
-            return prior_replace(path, *args)
+            return prior_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -554,10 +554,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("second-target-failed")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             with patch.object(mod, "_replace", side_effect=interrupt_second):
@@ -604,10 +604,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         normal = mod._replace
-        def failing(path, *args):
+        def failing(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("inject second target failure")
-            return normal(path, *args)
+            return normal(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             with patch.object(mod, "_replace", side_effect=failing):
