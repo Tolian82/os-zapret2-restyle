@@ -582,6 +582,8 @@ class EffectiveKnownTests(unittest.TestCase):
         plan_path = self.base / "work" / current["id"] / "plan.json"
         plan_path.parent.mkdir(parents=True)
         plan_path.write_bytes(raw)
+        alternate = self.base / "foreign-same-byte-plan.json"
+        alternate.write_bytes(raw)
         original_journal = journal.read()
         seal = {"sha256": {"plan.json": hashlib.sha256(raw).hexdigest()}}
         held = [False]
@@ -613,7 +615,8 @@ class EffectiveKnownTests(unittest.TestCase):
              patch.object(effective, "OWNED_ROOT", self.root), \
              patch.object(effective, "AUTO_HOSTLIST", targets["auto"]), \
              patch.object(effective, "AUTO_LOCK", self.lock), \
-             patch.object(effective, "_target", return_value=(raw, None)), \
+             patch.object(effective, "_target",
+                          return_value=(raw, plan_path.stat())) as plan_reader, \
              patch.object(effective, "_verify_planned_preimages_locked",
                           side_effect=physical_preimages), \
              patch.object(effective, "exclusive_destination_lock",
@@ -662,6 +665,24 @@ class EffectiveKnownTests(unittest.TestCase):
 
             seal_reader.side_effect = None
             seal_reader.return_value = seal
+
+            # The exact plan bytes and valid bundle seal are insufficient
+            # when the original plan inode was replaced under the P2 lock.
+            plan_reader.side_effect = [
+                (raw, plan_path.stat()), (raw, alternate.stat())
+            ]
+            witness_calls[0] = 0
+            with self.assertRaisesRegex(
+                    opmodule.SharedOperationError,
+                    "original found pristine Config/P2/runtime refused"):
+                recover_native_found_prepared_pristine(
+                    current["id"], config_fd=4, config_digest=current["base"])
+            self.assertFalse(held[0])
+            self.assertEqual(witness_calls[0], 0)
+            self.assertEqual(journal.read(), original_journal)
+
+            plan_reader.side_effect = None
+            plan_reader.return_value = (raw, plan_path.stat())
             witness_calls[0] = 0
             receipt = recover_native_found_prepared_pristine(
                 current["id"], config_fd=4, config_digest=current["base"])

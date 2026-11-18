@@ -582,7 +582,11 @@ def recover_native_found_prepared_pristine(
     work = WORK / operation
     _stat(work, 0, directory=True)
     seal = verify_seal(work, owner=0)
-    raw, _ = _target(work / "plan.json", 0)
+    raw, plan_stat = _target(work / "plan.json", 0)
+    # The seal authenticates bytes, not a pathname's inode. Pin the actual
+    # original file identity as well as the immutable plan hash.
+    plan_pin = (plan_stat.st_dev, plan_stat.st_ino, plan_stat.st_ctime_ns,
+                plan_stat.st_mtime_ns, plan_stat.st_size)
     if (len(raw) > 4 * 1024 * 1024 or
             hashlib.sha256(raw).hexdigest() !=
             pending["found"]["plan_sha256"] or
@@ -619,6 +623,12 @@ def recover_native_found_prepared_pristine(
             # Another self-consistent seal is NOT the original sealed
             # transaction: refuse before the journal becomes RESTORED.
             if verify_seal(work, owner=0) != seal:
+                return False
+            current_raw, current_stat = _target(work / "plan.json", 0)
+            if (current_raw != raw or
+                    (current_stat.st_dev, current_stat.st_ino,
+                     current_stat.st_ctime_ns, current_stat.st_mtime_ns,
+                     current_stat.st_size) != plan_pin):
                 return False
             _verify_planned_preimages_locked(
                 verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
