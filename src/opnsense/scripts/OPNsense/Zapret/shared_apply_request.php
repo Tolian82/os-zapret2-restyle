@@ -16,6 +16,7 @@ require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/WanReq
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
 require_once __DIR__ . '/shared_apply_lock.php';
 require_once __DIR__ . '/shared_apply_found_intent.php';
+require_once __DIR__ . '/shared_apply_found_stage.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\WanRequirement;
@@ -333,6 +334,14 @@ final class SharedApplyRequest
                         throw new \RuntimeException('Could not read locked native Config');
                     }
                     $prepared = self::prepare($request, $current, $activeXml, $phase);
+                    // Read-only three-way preview under this SAME Config lock
+                    // and the original inherited FD9 + protected P2 lock.
+                    // A preview alone cannot save a source or authorize Apply.
+                    if (isset($prepared['plan']['found_intent'])) {
+                        $phase = 'found-batch';
+                        $prepared['plan']['found_batch'] =
+                            SharedApplyFoundStage::prepare($config, $prepared['plan']);
+                    }
                     $phase = 'workspace';
                     $id = self::materialize($prepared);
                     $response = "prepared-id=$id";

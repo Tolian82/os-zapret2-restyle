@@ -126,4 +126,31 @@ $run = file_get_contents(__DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/zap
 must(str_contains($run, 'preflight-rejected=found-transaction-pending') &&
      str_contains($run, "has(\"found_intent\")"),
      'Original FD9 can silently apply uncommitted found payload');
+// TZ6v2 readonly stage: one inherited Config FD plus original FD9.
+require_once __DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/shared_apply_found_stage.php';
+$stageSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/shared_apply_found_stage.php');
+$rootStageSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_found_stage.py');
+$requestSource = file_get_contents(__DIR__ .
+    '/../src/opnsense/scripts/OPNsense/Zapret/shared_apply_request.php');
+must(str_contains($requestSource, 'SharedApplyFoundStage::prepare($config, $prepared[' .
+     "'plan'])") &&
+     str_contains($requestSource, "'found-batch'") &&
+     str_contains($stageSource, '4 => $handle, 9 => $lifecycle') &&
+     str_contains($stageSource, 'SharedApplyLifecycleLock::assertHeld()') &&
+     str_contains($rootStageSource, 'assert_inherited_config_fd(4, CONFIG_PATH') &&
+     str_contains($rootStageSource, 'exclusive_destination_lock(AUTO_LOCK, 0)') &&
+     str_contains($rootStageSource, '"commit_authorized": False') &&
+     str_contains($run, 'preflight-rejected=found-transaction-pending'),
+     'native read-only batch lost original Config/FD9 authority');
+try {
+    \OPNsense\Zapret\Native\SharedApplyFoundStage::prepare(new stdClass(), []);
+    throw new RuntimeException('new helper accepted absent original FD9');
+} catch (RuntimeException $expected) {
+    if ($expected->getMessage() === 'new helper accepted absent original FD9') {
+        throw $expected;
+    }
+}
+
 echo "PASS: PHP multipart >64KiB into original sealed FD9 form, no write/success\n";

@@ -19,6 +19,7 @@ BACKEND = (Path(__file__).resolve().parents[1] / "src/opnsense/scripts"
 sys.path.insert(0, str(BACKEND))
 
 from auto_detect_gui_hostlist import _create
+from shared_apply_found_stage import FoundStageRefused, qualify_readonly
 from auto_detect_destination_commit import (
     DestinationRefused, SHARED_FOUND_NAMES, _locked_shared_found_replace,
     _replace, _plan_shared_found_under_original_locks,
@@ -332,6 +333,93 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         with self.assertRaisesRegex(DestinationRefused,
                                     "shared_found_candidate_revision"):
             self.apply(plan=rows)
+        self.assert_old()
+
+    def root_stage_payload(self, *, drafts=None, base=None):
+        known = self.old
+        raw = self.base_records() if base is None else base
+        # PHP's real multipart schema binds status/revision/content in this
+        # exact order; the older local planner fixtures use a different
+        # dict insertion order. Mirror the genuine wire contract here.
+        source = {
+            name: {"status": raw[name]["status"],
+                   "revision": raw[name]["revision"],
+                   "content": raw[name]["content"]}
+            for name in SHARED_FOUND_NAMES
+        }
+        draft = known if drafts is None else drafts
+        return {
+            "schema_version": 1, "kind": "tz6v2-found-root-stage",
+            "config_revision": "a" * 64,
+            "found_intent": {
+                "schema_version": 1, "kind": "tz6v2-found-intent",
+                "sources": {
+                    name: {"base": source[name], "draft": draft[name]}
+                    for name in SHARED_FOUND_NAMES
+                },
+                "config_revision": "a" * 64,
+                "cross_source_validated": False,
+                "commit_authorized": False,
+            },
+            "manual": {"youtube": "", "user": ""},
+            "global_exclude": "",
+        }
+
+    def test_original_root_stage_qualifies_sealable_batch_without_any_write(self):
+        payload = self.root_stage_payload(drafts=dict(
+            self.old, youtube="example.com\nfresh.net\n", user=""))
+        before = {name: path.read_bytes() for name, path in self.targets.items()}
+        result = qualify_readonly(payload, self.targets,
+                                  {name: self.old[name] for name in ("youtube", "user")},
+                                  uid=self.uid)
+        self.assertEqual(result["kind"], "tz6v2-found-readonly-candidate")
+        self.assertTrue(result["cross_source_validated"])
+        self.assertFalse(result["commit_authorized"])
+        self.assertFalse(result["config_committed"])
+        self.assertEqual(list(result["found_batch"]), list(SHARED_FOUND_NAMES))
+        self.assertEqual(result["found_batch"]["youtube"]["after"],
+                         "example.com\nfresh.net\n")
+        self.assertEqual(result["found_batch"]["user"]["after"], "")
+        self.assertEqual(before, {
+            name: path.read_bytes() for name, path in self.targets.items()
+        })
+        self.assertFalse((self.root / "operation.json").exists())
+
+    def test_original_root_stage_three_way_keeps_independent_minute_find(self):
+        payload = self.root_stage_payload(
+            drafts=dict(self.old, youtube=""))
+        self.targets["youtube"].write_text("example.com\nlater.net\n")
+        result = qualify_readonly(payload, self.targets,
+                                  {"youtube": "example.com\nlater.net\n",
+                                   "user": self.old["user"]}, uid=self.uid)
+        self.assertEqual(result["found_batch"]["youtube"]["before"],
+                         "example.com\nlater.net\n")
+        self.assertEqual(result["found_batch"]["youtube"]["after"],
+                         "later.net\n")
+        # Preview cannot mutate the owner; actual CAS will recheck identity.
+        self.assertEqual(self.targets["youtube"].read_text(),
+                         "example.com\nlater.net\n")
+
+    def test_original_root_stage_rejects_forged_or_incomplete_intent(self):
+        owner = {"youtube": self.old["youtube"], "user": self.old["user"]}
+        for tamper in (
+            lambda p: p["found_intent"].update(commit_authorized=True),
+            lambda p: p["found_intent"].update(cross_source_validated=True),
+            lambda p: p.update(config_revision="b" * 64),
+            lambda p: p["found_intent"]["sources"]["youtube"].update(draft="!invalid.org"),
+            lambda p: p["found_intent"]["sources"]["youtube"]["base"].update(revision="0" * 64),
+            lambda p: p["manual"].update(evil="foreign"),
+            lambda p: p["found_intent"]["sources"].update(evil={}),
+        ):
+            payload = self.root_stage_payload()
+            tamper(payload)
+            with self.subTest(tamper=repr(tamper)):
+                with self.assertRaises((FoundStageRefused, DestinationRefused)):
+                    qualify_readonly(payload, self.targets, owner, uid=self.uid)
+        with self.assertRaisesRegex(FoundStageRefused, "original_known_owner_changed"):
+            qualify_readonly(self.root_stage_payload(), self.targets,
+                             {"youtube": "foreign.net\n",
+                              "user": self.old["user"]}, uid=self.uid)
         self.assert_old()
 
     @unittest.skipIf(sys.platform.startswith("freebsd") and os.geteuid() == 0,

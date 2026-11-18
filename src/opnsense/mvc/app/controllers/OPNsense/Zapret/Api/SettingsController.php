@@ -339,7 +339,7 @@ class SettingsController extends ApiMutableModelControllerBase
             // them only before journal PREPARED / Config / runtime / IPFW changes.
             // A generic requires_review here would freeze the GUI for a
             // safely rejected candidate and conceal the actual stage.
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent|found-transaction-pending|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent|found-batch|found-transaction-pending|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
