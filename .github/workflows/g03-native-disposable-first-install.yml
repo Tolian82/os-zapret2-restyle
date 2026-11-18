@@ -164,4 +164,4 @@ jobs:
             -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile="$RUNNER_TEMP/g03-readonly-browser-ssh/known_hosts" \
             root@127.0.0.1 \
-            'GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py'
+            'env GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py'
