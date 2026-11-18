@@ -438,5 +438,10 @@ jobs:
             # RUNNING owner and untouched User/Auto physical files survive.
             GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
               /usr/local/bin/python3 /root/g03-native-prepared.py partial
+            # Final test on disposable guest only: actual native Config::save
+            # returns, original PHP is interrupted before its WAL ack, cold
+            # candidate-image recovery must REFUSE without changing owner.
+            GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
+              /usr/local/bin/python3 /root/g03-native-prepared.py config-uncertain
             test "$(sha256 -q "$package")" = "$before"
             echo 'PASS: SAME guest A archive, native five HOSTLIST and original FD4/FD9/P2 PREPARED restored without live Config/HOSTLIST/IPFW writes'

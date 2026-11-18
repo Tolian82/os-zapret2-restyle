@@ -34,11 +34,30 @@ function image(string $path, bool $canMiss): array {
             'revision'=>hash('sha256',"present\0" . $text), 'content'=>$text];
 }
 
-function stage($config, bool $partial = false): string {
+function stage($config, bool $partial = false, bool $withConfig = false): string {
     $current = (new \OPNsense\Zapret\Zapret())->getNodes();
     $xml = @file_get_contents('/conf/config.xml');
     required(is_string($xml), 'G03_COLD_CONFIG_UNREADABLE');
-    $prepared = SharedApplyRequest::prepareSavedUnchanged($current, $xml);
+    if ($withConfig) {
+        // A genuine, scoped SettingsApply candidate: toggles ONLY the
+        // Auto Restart preference on the disposable OPNsense. No fake XML.
+        $saved = \OPNsense\Zapret\Api\VoiceModelValues::text(
+            $current['general']['autorestart'] ?? 'off'
+        );
+        required(in_array($saved, ['off','hourly','daily','weekly','monthly'], true),
+                 'G03_CONFIG_NATIVE_SAVED_INTERVAL_INVALID');
+        $next = $saved === 'off' ? 'hourly' : 'off';
+        $prepared = SharedApplyRequest::prepare([
+            'page'=>'strategies',
+            'fields'=>['general'=>['autorestart'=>$next]],
+            'sync'=>['telegramips_baseline'=>
+                (string)($current['hostlist']['telegramips'] ?? '')],
+        ], $current, $xml);
+        required($prepared['plan']['changed_fields'] === ['general.autorestart'],
+                 'G03_CONFIG_SINGLE_NATIVE_CHANGE_REQUIRED');
+    } else {
+        $prepared = SharedApplyRequest::prepareSavedUnchanged($current, $xml);
+    }
     $base = $prepared['plan']['dependencies'];
     $sources = [];
     foreach ([
@@ -198,30 +217,86 @@ PY;
     }
 }
 
+
+/**
+ * TEST ONLY, disposable OPNsense: delegate to the ONE real native Config
+ * singleton, then terminate the original PHP *after the actual save returned*
+ * but before the PHP/P2 post-save handshake. No XML writer is invented.
+ */
+final class G03NativeConfigSaveCrash {
+    public $config_file_handle = null;
+    public $config_file = null;
+    private object $real;
+
+    public function __construct(object $real) { $this->real = $real; }
+    public function lock(): void {
+        $this->real->lock();
+        $r = new \ReflectionObject($this->real);
+        required($r->hasProperty('config_file_handle') &&
+                 $r->hasProperty('config_file'),
+                 'G03_CONFIG_NATIVE_LOCK_INCOMPLETE');
+        $this->config_file_handle = $r->getProperty('config_file_handle')
+            ->getValue($this->real);
+        $this->config_file = $r->getProperty('config_file')
+            ->getValue($this->real);
+    }
+    public function unlock(): void { $this->real->unlock(); }
+    public function save(array $audit): void {
+        $this->real->save($audit);
+        // Exact fault boundary: real OPNsense Config::save returned.
+        // Do not release a fake success receipt or fsync a saved WAL.
+        exit(73);
+    }
+}
+
+function crashAfterActualConfigSave($config, string $id): void {
+    required(preg_match('/^[a-f0-9]{32}$/D', $id) === 1,
+             'G03_CONFIG_BAD_OPERATION');
+    $plan = SharedApplyConfigWorker::readPlan($id);
+    required(($plan['page'] ?? null) === 'strategies' &&
+             ($plan['changed_fields'] ?? null) === ['general.autorestart'] &&
+             isset($plan['found_intent'], $plan['found_batch']) &&
+             count($plan['found_batch']) === 3,
+             'G03_CONFIG_PLAN_NOT_ACTUAL_NATIVE_CHANGE');
+    $m = new \ReflectionMethod(SharedApplyConfigWorker::class, 'saveFoundNative');
+    $m->invoke(null, $plan, $id, '1', new G03NativeConfigSaveCrash($config),
+               static fn() => new \OPNsense\Zapret\Zapret());
+    throw new \RuntimeException('G03_CONFIG_NO_ACTUAL_SAVE_CRASH');
+}
+
 try {
     required(PHP_SAPI === 'cli' && PHP_OS_FAMILY === 'BSD' &&
              getenv('GITHUB_ACTIONS') === 'true' &&
              getenv('ZAPRET2_G03_COLD_PREPARED') === '1' &&
              SharedApplyLifecycleLock::effectiveUid() === 0 &&
-             in_array(($argv[1] ?? ''), ['stage','stage-partial','durable','crash-partial'], true) &&
-             count($argv) === (in_array(($argv[1] ?? ''), ['stage','stage-partial'], true) ? 2 : 3),
+             in_array(($argv[1] ?? ''), ['stage','stage-partial','stage-config',
+                                         'durable','crash-partial','crash-config-save'], true) &&
+             count($argv) === (in_array(($argv[1] ?? ''), 
+                ['stage','stage-partial','stage-config'], true) ? 2 : 3),
              'G03_COLD_DISPOSABLE_ONLY');
     SharedApplyLifecycleLock::assertHeld();
     require_once 'script/load_phalcon.php';
     $config = \OPNsense\Core\Config::getInstance();
-    $config->lock();
-    try {
-        if ($argv[1] === 'stage' || $argv[1] === 'stage-partial') {
-            echo 'prepared-id=' . stage($config, $argv[1] === 'stage-partial') . "\n";
-        } elseif ($argv[1] === 'durable') {
-            durable($config, $argv[2]);
-            echo "original-found-prepared-durable\n";
-        } else {
-            crashFirstFoundFile($config, $argv[2]);
-            echo "original-partial-first-atomic-file-crashed\n";
+    if ($argv[1] === 'crash-config-save') {
+        // The original Config lock must be acquired ONCE by the real
+        // SharedConfigCommit, via the test-only delegating crash adapter.
+        crashAfterActualConfigSave($config, $argv[2]);
+    } else {
+        $config->lock();
+        try {
+            if (in_array($argv[1], ['stage','stage-partial','stage-config'], true)) {
+                echo 'prepared-id=' . stage($config,
+                    $argv[1] !== 'stage', $argv[1] === 'stage-config') . "\n";
+            } elseif ($argv[1] === 'durable') {
+                durable($config, $argv[2]);
+                echo "original-found-prepared-durable\n";
+            } else {
+                crashFirstFoundFile($config, $argv[2]);
+                echo "original-partial-first-atomic-file-crashed\n";
+            }
+        } finally {
+            $config->unlock();
         }
-    } finally {
-        $config->unlock();
     }
 } catch (\Throwable $error) {
     fwrite(STDERR, "G03_COLD_PREPARED=REFUSED:" .

@@ -24,7 +24,7 @@ def need(ok, code):
     if not ok:
         raise RuntimeError(code)
 
-def call(argv, *, locked=False, timeout=180):
+def call(argv, *, locked=False, timeout=180, expected_rc=0):
     if locked:
         argv = ["/bin/sh", "-c",
                 '(/usr/bin/lockf -s -t 30 9 || exit 75; exec "$@") '
@@ -32,7 +32,7 @@ def call(argv, *, locked=False, timeout=180):
     p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
                        env={**os.environ, "GITHUB_ACTIONS":"true",
                             "ZAPRET2_G03_COLD_PREPARED":"1"})
-    need(p.returncode == 0, "G03_COLD_COMMAND_REFUSED_" + str(p.returncode))
+    need(p.returncode == expected_rc, "G03_COLD_COMMAND_REFUSED_" + str(p.returncode))
     return p.stdout.strip()
 
 def image(path):
@@ -202,16 +202,91 @@ def partial_main():
           flush=True)
 
 
+def config_save_uncertain_main():
+    """Real native save returns, but WAL ack is lost with the PHP process."""
+    need(os.environ.get("GITHUB_ACTIONS") == "true" and
+         os.environ.get("ZAPRET2_G03_COLD_PREPARED") == "1" and
+         sys.platform.startswith("freebsd") and os.geteuid() == 0,
+         "G03_CONFIG_DISPOSABLE_ONLY")
+    previous = json.loads(WAL.read_bytes())
+    prior = previous.get("previous")
+    need(previous.get("phase") == "restored" and isinstance(prior, dict) and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 0,
+         "G03_CONFIG_PREVIOUS_RUNNING_OWNER_UNPROVEN")
+    original = snapshot()
+    staged = call([PHP, NATIVE, "stage-config"], locked=True)
+    need(re.fullmatch(r"prepared-id=[a-f0-9]{32}", staged) is not None and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_CONFIG_STAGING_MUTATED_ACTIVE_STATE")
+    op = staged.split("=", 1)[1]
+    prepared = call([SERVICE, "shared-apply-prepare", op])
+    need(not prepared.startswith("preflight-rejected=") and
+         snapshot() == original and json.loads(WAL.read_bytes()) == previous,
+         "G03_CONFIG_CANDIDATE_BUILD_REFUSED")
+    call([PHP, NATIVE, "durable", op], locked=True)
+    pending = json.loads(WAL.read_bytes())
+    need(pending.get("phase") == "prepared" and
+         pending.get("previous") == prior and
+         snapshot() == original,
+         "G03_CONFIG_PREPARED_NOT_DURABLE")
+    # Native PHP delegates its ONE actual Config::save to the real OPNsense
+    # singleton. The test-only wrapper exit(73)s just AFTER that method
+    # returns but BEFORE the original saved-Config acknowledgement can fsync.
+    call([PHP, NATIVE, "crash-config-save", op],
+         locked=True, expected_rc=73)
+    crashed = json.loads(WAL.read_bytes())
+    saved = snapshot()
+    found = crashed.get("found", {})
+    stages = found.get("stages", {})
+    need(crashed.get("phase") == "found-config-saving" and
+         crashed.get("previous") == prior and
+         set(found.get("post", {})) == {"youtube", "user", "auto"} and
+         all(stages.get(k, {}).get("state") == "installed"
+             for k in ("youtube", "user", "auto")) and
+         saved[0][-1] != original[0][-1] and
+         saved[1] == original[1] and saved[3] == original[3] and
+         all(saved[2][i] != original[2][i] for i in range(3)) and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 2,
+         "G03_CONFIG_UNACKED_NATIVE_SAVE_NOT_PROVEN")
+    worker = "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php"
+    cold = json.loads(call([PHP, worker, "found-cold", op, "strategies"],
+                           locked=True))
+    need(cold.get("journal_phase") == "found-config-saving" and
+         cold.get("config_image") == "candidate-image" and
+         cold.get("file_image") == "contains-unattributed-after" and
+         cold.get("commit_authorized") is False and
+         cold.get("restore_authorized") is False and
+         cold.get("save_attested") is False,
+         "G03_CONFIG_COLD_EVIDENCE_FALSE_AUTHORITY")
+    # Candidate bytes do not prove the interrupted PHP process confirmed
+    # its save. This cold request MUST FAIL, leaving WAL, Config, all
+    # protected files and the ORIGINAL engine/PID/IPFW untouched.
+    call([PHP, worker, "found-recover", op, "strategies"],
+         locked=True, expected_rc=69)
+    need(json.loads(WAL.read_bytes()) == crashed and snapshot() == saved and
+         subprocess.run([SERVICE, "status"], capture_output=True,
+                        timeout=30).returncode == 2,
+         "G03_CONFIG_COLD_REFUSAL_MUTATED_PREVIOUS_OWNER")
+    print("G03_COLD_CONFIG=PASS_NATIVE_SAVE_RETURN_UNACKED_CANDIDATE_REFUSED",
+          flush=True)
+
+
 if __name__ == "__main__":
     try:
         if sys.argv[1:] == ["partial"]:
             partial_main()
+        elif sys.argv[1:] == ["config-uncertain"]:
+            config_save_uncertain_main()
         else:
             need(sys.argv[1:] == [], "G03_COLD_UNEXPECTED_ARGUMENTS")
             main()
     except (RuntimeError, OSError, ValueError, KeyError,
             subprocess.TimeoutExpired) as exc:
         label = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-        prefix = "G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else "G03_COLD_PREPARED"
+        prefix = ("G03_COLD_PARTIAL" if sys.argv[1:] == ["partial"] else
+                  "G03_COLD_CONFIG" if sys.argv[1:] == ["config-uncertain"] else
+                  "G03_COLD_PREPARED")
         print(prefix + "=REFUSED:" + label, file=sys.stderr)
         raise SystemExit(1)
