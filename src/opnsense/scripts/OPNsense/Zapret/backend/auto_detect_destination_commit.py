@@ -426,7 +426,9 @@ class DestinationCommit:
             new = _edit(current, change["add"], change["remove"])
             if _sha(new) != change["after"]:
                 raise DestinationRefused("destination_plan_diverged")
-            todo.append((path, current, new))
+            todo.append((path, current, new,
+                         (st.st_dev, st.st_ino, st.st_ctime_ns,
+                          st.st_mtime_ns, st.st_size)))
         live_todo = []
         for name, row in sorted(sealed_live.items()):
             path = Path(row["path"])
@@ -444,8 +446,9 @@ class DestinationCommit:
             live_todo.append((path, current, live[name]["after"], before_identity))
         # First original auto-owned source CAS, then exact active images;
         # checkpoint and physical ACK must remain absent if either fails.
-        for path, current, new in todo:
-            _replace(path, current, new, self.receipts.uid)
+        for path, current, new, identity in todo:
+            _replace(path, current, new, self.receipts.uid,
+                     expected_identity=identity)
         for path, current, new, identity in live_todo:
             _replace(path, current, new, self.receipts.uid,
                      expected_identity=identity)

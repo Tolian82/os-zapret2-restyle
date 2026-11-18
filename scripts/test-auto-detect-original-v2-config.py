@@ -444,6 +444,42 @@ class OriginalConfigV2Tests(unittest.TestCase):
                          "!untouched.example\nexample.co.uk\n")
         self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
 
+    def test_same_bytes_foreign_inode_between_preflight_and_source_cas_refuses(self):
+        # The earlier all-target preflight is NOT a free pass for a later
+        # source rename. A non-cooperating writer may swap an inode after the
+        # preflight while preserving the exact SHA and file mode.
+        import auto_detect_destination_commit as module
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        original = module._replace
+        changed = []
+
+        def swap_after_preflight(path, *args, **kwargs):
+            if path == self.youtube and not changed:
+                moved = path.with_name(".foreign-identical-source")
+                moved.write_bytes(path.read_bytes())
+                moved.chmod(0o600)
+                os.replace(moved, path)
+                changed.append(path.stat().st_ino)
+            return original(path, *args, **kwargs)
+
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(module, "_replace", side_effect=swap_after_preflight):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            folder = self.chain.tip(self.proof).open_folder
+            self.assertEqual(len(changed), 1)
+            self.assertEqual(self.youtube.stat().st_ino, changed[0])
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            # Reopening the same old WAL must still refuse this foreign inode.
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+
     def test_original_partial_plan_user_rewrite_same_bytes_refuses(self):
         # GUI-style atomic save with identical bytes also changes inode.
         # A mere SHA(before) match is not proof an original target was
