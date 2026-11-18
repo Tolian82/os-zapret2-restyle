@@ -271,6 +271,90 @@ def verify_native_planned(operation: str) -> dict:
 
 
 
+
+def prepare_native_found_intent(
+        operation: str, config_fd: int, candidate_digest: str) -> dict:
+    """Original Config -> P2 -> existing journal, before any file mutation.
+
+    Import-only staging primitive. ONLY a future original PHP Config::lock
+    owner can pass its genuine inherited Config FD, plus original FD9. It
+    MUST NOT be dispatched by the current GUI or ordinary shell Apply, since
+    full Config+three-file write/recovery is deliberately still gated.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation) or
+            type(config_fd) is not int or config_fd < 3 or
+            not isinstance(candidate_digest, str) or
+            not re.fullmatch(r"[a-f0-9]{64}", candidate_digest)):
+        raise EffectiveKnownRefused("native_original_config_fd9_required")
+    import hashlib
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd)
+    from shared_apply_seal import WORK, _stat, verify_seal
+    from shared_apply_operation import SharedApplyOperation
+    from voice_ipfw_adapter import require_lifecycle_lock
+
+    require_lifecycle_lock()
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    _stat(WORK, 0, directory=True)
+    work = WORK / operation
+    _stat(work, 0, directory=True)
+    signed = verify_seal(work, owner=0)
+    raw, _ = _target(work / "plan.json", 0)
+    if (len(raw) > 4 * 1024 * 1024 or
+            hashlib.sha256(raw).hexdigest() !=
+            signed.get("sha256", {}).get("plan.json")):
+        raise EffectiveKnownRefused("native_found_sealed_plan_changed")
+    try:
+        plan = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise EffectiveKnownRefused("native_found_plan_invalid") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            not isinstance(plan.get("dependencies"), str) or
+            not re.fullmatch(r"[a-f0-9]{64}", plan["dependencies"]) or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("config_revision") != plan["dependencies"] or
+            plan["found_intent"].get("commit_authorized") is not False or
+            not isinstance(plan.get("found_batch"), dict) or
+            not isinstance(plan.get("changed_fields"), list)):
+        raise EffectiveKnownRefused("native_found_plan_not_qualified")
+    detail = {"id": operation, "page": "strategies",
+              "base": plan["dependencies"], "candidate": candidate_digest,
+              "changed_fields": plan["changed_fields"]}
+    verified = _qualified_shared_found_batch(plan["found_batch"])
+    targets = {"youtube": OWNED_ROOT / "youtube.txt",
+               "user": OWNED_ROOT / "user.txt",
+               "auto": AUTO_HOSTLIST}
+    # The invoking PHP owner holds the original Config lock for the WHOLE
+    # call. P2 is acquired AFTER Config, then held THROUGH original journal
+    # fsync, preventing minute writers from changing physical preimages.
+    with exclusive_destination_lock(AUTO_LOCK, 0):
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+
+        def original_witness(attested: bytes) -> bool:
+            if attested != raw:
+                return False
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            verify_seal(work, owner=0)
+            _verify_planned_preimages_locked(
+                verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            return True
+
+        record = SharedApplyOperation(owner=0).prepare_found(
+            detail, raw, original_witness)
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+    assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+    return {"result": "original-found-intent-durable",
+            "phase": record["phase"],
+            "commit_authorized": False,
+            "restore_authorized": False}
+
+
 def classify_planned_file_images(
     rows: dict, *, targets: dict, owned_root: Path = OWNED_ROOT,
     lock: Path = AUTO_LOCK, owner_uid: int = 0,

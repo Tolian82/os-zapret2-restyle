@@ -13,7 +13,8 @@ BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Z
 sys.path.insert(0, str(BACKEND))
 from auto_detect_effective_known import (compose_stage, compose_stage_planned,
                                          compose_native_planned, verify_planned_preimages,
-                                         verify_native_planned, classify_planned_file_images,
+                                         verify_native_planned, prepare_native_found_intent,
+                                         classify_planned_file_images,
                                          classify_native_planned, EffectiveKnownRefused)
 from auto_detect_owned_sources import bootstrap_empty, OwnedSourcesRefused
 from auto_detect_destination_commit import DestinationRefused
@@ -280,6 +281,17 @@ class EffectiveKnownTests(unittest.TestCase):
         target.chmod(0o600)
         with self.assertRaisesRegex(EffectiveKnownRefused, "cold_found_unknown_image"):
             self.cold_image(rows, targets)
+
+    def test_native_prepared_intent_refuses_without_original_config_and_fd9(self):
+        with self.assertRaisesRegex(EffectiveKnownRefused,
+                                    "native_original_config_fd9_required"):
+            prepare_native_found_intent("a" * 32, 4, "b" * 64)
+        with self.assertRaisesRegex(EffectiveKnownRefused,
+                                    "native_original_config_fd9_required"):
+            prepare_native_found_intent("not-an-op-id", 4, "b" * 64)
+        with self.assertRaisesRegex(EffectiveKnownRefused,
+                                    "native_original_config_fd9_required"):
+            prepare_native_found_intent("a" * 32, 1, "b" * 64)
 
     def test_native_cold_classification_requires_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
