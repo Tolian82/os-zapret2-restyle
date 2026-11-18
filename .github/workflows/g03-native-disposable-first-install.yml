@@ -125,8 +125,26 @@ jobs:
         run: |
           set -eu
           test -s "$RUNNER_TEMP/g03-readonly-browser-ssh/key"
+          # The disposable QEMU guest can be CPU-bound just after a real
+          # engine restart. A TCP listener alone does not prove sshd's banner
+          # and public-key authentication are ready. Require a full SSH
+          # handshake with a bounded retry, no bypass of host-key checks.
+          ssh_ready=0
+          for attempt in 1 2 3 4; do
+            if timeout 30 ssh -T -i "$RUNNER_TEMP/g03-readonly-browser-ssh/key" -p 32222 \
+              -o BatchMode=yes -o ConnectTimeout=20 \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile="$RUNNER_TEMP/g03-readonly-browser-ssh/known_hosts" \
+              root@127.0.0.1 'printf G03_SSH_HANDSHAKE_OK' |
+              grep -qx G03_SSH_HANDSHAKE_OK; then
+              ssh_ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ssh_ready" -eq 1
           ssh -fN -i "$RUNNER_TEMP/g03-readonly-browser-ssh/key" -p 32222 \
-            -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=20 \
+            -o BatchMode=yes -o ExitOnForwardFailure=yes -o ConnectTimeout=30 \
             -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile="$RUNNER_TEMP/g03-readonly-browser-ssh/known_hosts" \
             -L 127.0.0.1:18443:127.0.0.1:443 root@127.0.0.1
