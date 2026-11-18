@@ -582,6 +582,132 @@ class OriginalConfigV2Tests(unittest.TestCase):
             self.assertTrue(self.ack(pending, cp))
         self.assertEqual(self.youtube.read_text(), "")
 
+    def _live_managed_relocation(self):
+        # Only the original P2 destination owner may supply an exact active
+        # after-image; these are disposable physical fixture paths.
+        managed = self.base / "runtime" / "managed"
+        managed.mkdir(parents=True)
+        path = managed / "hostlist-youtube.txt"
+        before = b"youtube.com\\nexample.co.uk\\n".replace(b"\\n", b"\n")
+        after = b"youtube.com\\n".replace(b"\\n", b"\n")
+        path.write_bytes(before)
+        path.chmod(0o644)
+        live = {"youtube": {
+            "path": path,
+            "before_sha256": hashlib.sha256(before).hexdigest(),
+            "after": after,
+        }}
+        effects = {
+            "auto": {"add": ["example.co.uk"], "remove": []},
+            "youtube": {"add": [], "remove": ["example.co.uk"]},
+        }
+        return path, before, after, live, effects
+
+    def test_original_destination_live_wal_recovers_after_source_before_managed(self):
+        # Same immutable P2a slot: source CAS succeeds; live managed replace
+        # fails. There must be NO checkpoint/ACK until this exact live image
+        # is restored through the original journal and GUI lock.
+        import auto_detect_destination_commit as mod
+        self.youtube.write_text("example.co.uk\n")
+        path, before, after, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            journal = tip.open_folder / "destination"
+            original = mod._replace
+
+            def cut_live(target, *args, **kwargs):
+                if target == path:
+                    raise OSError("crash-before-managed-rename")
+                return original(target, *args, **kwargs)
+
+            with self.writer.exclusive_targets():
+                with patch.object(mod, "_replace", side_effect=cut_live):
+                    with self.assertRaises(OSError):
+                        self.writer._locked_commit(
+                            tip.open_folder, tip.open_intent, pending.read_bytes(),
+                            effects, live=live)
+            saved = (journal / "plan.json").read_bytes()
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((journal / "checkpoint.json").exists())
+            self.assertTrue(pending.exists())
+            with self.writer.exclusive_targets():
+                receipt = self.writer._locked_commit(
+                    tip.open_folder, tip.open_intent, pending.read_bytes(),
+                    effects, live=live)
+            self.assertEqual(path.read_bytes(), after)
+            self.assertEqual((journal / "plan.json").read_bytes(), saved)
+            self.assertEqual(receipt["kind"], "destination-and-cursor-committed")
+            self.assertFalse(receipt["ack_authorized"])
+            self.assertTrue(self.ack(pending, receipt))
+            self.assertFalse(pending.exists())
+
+    def test_original_destination_live_wal_refuses_same_byte_foreign_inode(self):
+        import auto_detect_destination_commit as mod
+        from auto_detect_destination_commit import DestinationRefused
+        self.youtube.write_text("example.co.uk\n")
+        path, before, _, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            original = mod._replace
+
+            def cut_live(target, *args, **kwargs):
+                if target == path:
+                    raise OSError("crash-before-managed-rename")
+                return original(target, *args, **kwargs)
+
+            with self.writer.exclusive_targets():
+                with patch.object(mod, "_replace", side_effect=cut_live):
+                    with self.assertRaises(OSError):
+                        self.writer._locked_commit(
+                            tip.open_folder, tip.open_intent, pending.read_bytes(),
+                            effects, live=live)
+            # GUI-style replace with IDENTICAL SHA but foreign inode is not
+            # an original protected P2 preimage and must not be overwritten.
+            replaced = path.with_name(".gui-resaved")
+            replaced.write_bytes(before)
+            replaced.chmod(0o644)
+            os.replace(replaced, path)
+            with self.writer.exclusive_targets():
+                with self.assertRaisesRegex(
+                        DestinationRefused, "live_managed_preimage_changed"):
+                    self.writer._locked_commit(
+                        tip.open_folder, tip.open_intent, pending.read_bytes(),
+                        effects, live=live)
+            self.assertTrue(pending.exists())
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((tip.open_folder / "destination" /
+                              "checkpoint.json").exists())
+
+    def test_original_destination_live_wal_refuses_missing_after_image(self):
+        from auto_detect_destination_commit import DestinationRefused
+        self.youtube.write_text("example.co.uk\n")
+        path, before, _, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            # The original P2 source plan is still absent: no mutation.
+            wrong = dict(live)
+            wrong["youtube"] = {**live["youtube"],
+                                "before_sha256": "f" * 64}
+            with self.writer.exclusive_targets():
+                with self.assertRaisesRegex(
+                        DestinationRefused, "live_managed_not_aligned_at_prepare"):
+                    self.writer._locked_commit(
+                        tip.open_folder, tip.open_intent, pending.read_bytes(),
+                        effects, live=wrong)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertFalse((tip.open_folder / "destination" /
+                              "checkpoint.json").exists())
+
     def test_gui_destination_lock_contention_denied(self):
         self.emit("video.example.co.uk")
         with self.queue.exclusive():

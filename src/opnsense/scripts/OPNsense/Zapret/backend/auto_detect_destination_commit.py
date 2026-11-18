@@ -211,7 +211,8 @@ def qualified_destination_plan(folder: Path, intent: dict, uid: int,
         "debug_end_sha256": intent["debug_end_sha256"],
     }
     if (not isinstance(plan, dict) or
-            set(plan) != set(expected) | {"writes"} or
+            set(plan) not in (set(expected) | {"writes"},
+                             set(expected) | {"writes", "live"}) or
             any(plan.get(k) != v for k, v in expected.items()) or
             not isinstance(plan.get("writes"), dict) or
             len(plan["writes"]) > 16 or
@@ -245,6 +246,29 @@ def qualified_destination_plan(folder: Path, intent: dict, uid: int,
                     for k in ("add", "remove")) or
                 len(change["add"]) + len(change["remove"]) > 4096):
             raise DestinationRefused("destination_preimage_plan_invalid")
+    # Optional live managed files are part of THIS original P2 journal.
+    # Historical source-only schema-2 plans remain readable for interrupted
+    # original receipts; they cannot be silently promoted to live writes.
+    live = plan.get("live", {})
+    if (not isinstance(live, dict) or
+            set(live) - {"youtube", "user"} or len(live) > 2):
+        raise DestinationRefused("unqualified_live_managed_plan")
+    for name, row in live.items():
+        identity = {"before_device", "before_inode", "before_ctime_ns",
+                    "before_mtime_ns", "before_size"}
+        if (not isinstance(row, dict) or
+                set(row) != {"path", "before", "after"} | identity or
+                not isinstance(row.get("path"), str) or
+                not Path(row["path"]).is_absolute() or
+                any(not isinstance(row.get(key), str) or
+                    not SHA256.fullmatch(row[key])
+                    for key in ("before", "after")) or
+                row["before"] == row["after"] or
+                any(type(row.get(key)) is not int or row[key] < 0
+                    for key in identity) or
+                row["before_inode"] == 0 or
+                row["before_size"] > MAX_TARGET):
+            raise DestinationRefused("invalid_live_managed_preimage")
     return plan, plan_raw
 
 
@@ -283,9 +307,25 @@ class DestinationCommit:
                 self._gui_held = False
 
     def _locked_commit(self, folder: Path, intent: dict, raw: bytes,
-                       effects: dict) -> dict:
+                       effects: dict, *, live: dict | None = None) -> dict:
         if not getattr(self, "_gui_held", False):
             raise DestinationRefused("gui_lock_required")
+        # Callers may supply canonical after-BYTES, never a callback or a
+        # stale file path alone. The original Config/P2 owner must derive
+        # these bytes from its currently locked native manual/owned sources.
+        if live is not None and (
+                not isinstance(live, dict) or
+                set(live) - {"youtube", "user"} or
+                any(not isinstance(row, dict) or
+                    set(row) != {"path", "before_sha256", "after"} or
+                    not isinstance(row["path"], Path) or
+                    not row["path"].is_absolute() or
+                    type(row["before_sha256"]) is not str or
+                    not SHA256.fullmatch(row["before_sha256"]) or
+                    type(row["after"]) is not bytes or
+                    len(row["after"]) > MAX_TARGET
+                    for row in live.values())):
+            raise DestinationRefused("unqualified_live_after_images")
         journal = folder / "destination"
         if not journal.exists() and not journal.is_symlink():
             journal.mkdir(mode=0o700)
@@ -310,6 +350,24 @@ class DestinationCommit:
                     "before_mtime_ns": st.st_mtime_ns,
                     "before_size": st.st_size,
                 }
+            live_rows = {}
+            for name, candidate in sorted((live or {}).items()):
+                active_bytes, active_st = _target(
+                    candidate["path"], self.receipts.uid)
+                if _sha(active_bytes) != candidate["before_sha256"]:
+                    raise DestinationRefused("live_managed_not_aligned_at_prepare")
+                if active_bytes == candidate["after"]:
+                    continue  # no live mutation; no synthetic preimage WAL
+                live_rows[name] = {
+                    "path": str(candidate["path"]),
+                    "before": _sha(active_bytes),
+                    "after": _sha(candidate["after"]),
+                    "before_device": active_st.st_dev,
+                    "before_inode": active_st.st_ino,
+                    "before_ctime_ns": active_st.st_ctime_ns,
+                    "before_mtime_ns": active_st.st_mtime_ns,
+                    "before_size": active_st.st_size,
+                }
             plan = {"schema": 2, "kind": "durable-destination-plan",
                     "generation": intent["generation"],
                     "pending_name": intent["pending_name"],
@@ -318,9 +376,28 @@ class DestinationCommit:
                     "debug_end_offset": intent["debug_end_offset"],
                     "debug_end_sha256": intent["debug_end_sha256"],
                     "writes": writes}
+            if live is not None:
+                plan["live"] = live_rows
             _write_once(journal, "plan.json", _canonical(plan), self.receipts.uid)
         plan, plan_raw = qualified_destination_plan(
             folder, intent, self.receipts.uid, targets=self.targets)
+        # A source-only replay cannot downgrade a sealed live-managed slot.
+        # A new live plan cannot retroactively amend a previous checkpoint.
+        sealed_live = plan.get("live", {})
+        if live is not None:
+            if set(live) != set(sealed_live) and (
+                    set(sealed_live) != {name for name, candidate in live.items()
+                                       if _sha(candidate["after"]) !=
+                                       candidate["before_sha256"]}):
+                raise DestinationRefused("original_live_plan_changed")
+            for name, row in sealed_live.items():
+                proposed = live.get(name)
+                if (proposed is None or str(proposed["path"]) != row["path"] or
+                        _sha(proposed["after"]) != row["after"] or
+                        proposed["before_sha256"] != row["before"]):
+                    raise DestinationRefused("original_live_after_image_changed")
+        elif sealed_live:
+            raise DestinationRefused("original_live_plan_required")
         if checkpoint_path.exists() or checkpoint_path.is_symlink():
             checkpoint = json.loads(_read(checkpoint_path, self.receipts.uid))
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
@@ -350,8 +427,32 @@ class DestinationCommit:
             if _sha(new) != change["after"]:
                 raise DestinationRefused("destination_plan_diverged")
             todo.append((path, current, new))
+        live_todo = []
+        for name, row in sorted(sealed_live.items()):
+            path = Path(row["path"])
+            current, st = _target(path, self.receipts.uid)
+            if _sha(current) == row["after"]:
+                continue
+            before_identity = (row["before_device"], row["before_inode"],
+                               row["before_ctime_ns"], row["before_mtime_ns"],
+                               row["before_size"])
+            if (_sha(current) != row["before"] or
+                    _file_identity(st) != before_identity):
+                raise DestinationRefused("live_managed_preimage_changed")
+            if live is None or _sha(live[name]["after"]) != row["after"]:
+                raise DestinationRefused("live_managed_after_image_unavailable")
+            live_todo.append((path, current, live[name]["after"], before_identity))
+        # First original auto-owned source CAS, then exact active images;
+        # checkpoint and physical ACK must remain absent if either fails.
         for path, current, new in todo:
             _replace(path, current, new, self.receipts.uid)
+        for path, current, new, identity in live_todo:
+            _replace(path, current, new, self.receipts.uid,
+                     expected_identity=identity)
+        for row in sealed_live.values():
+            current, _ = _target(Path(row["path"]), self.receipts.uid)
+            if _sha(current) != row["after"]:
+                raise DestinationRefused("live_managed_postimage_not_installed")
         checkpoint = {"schema": 1, "kind": "destination-and-cursor-committed",
                       "generation": intent["generation"], "pending_name": intent["pending_name"],
                       "plan_sha256": _sha(plan_raw),
