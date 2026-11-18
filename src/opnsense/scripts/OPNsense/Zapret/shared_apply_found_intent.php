@@ -10,6 +10,8 @@ final class SharedApplyFoundIntent
     private const MAX_TEXT = 40960;
     private const MAX_JSON = 320 * 1024;
     private const SHA = '/^[a-f0-9]{64}$/D';
+    // PHP can add a 13-character base32 prefix before the six mkstemp characters.
+    private const UPLOAD_PATH = '#^/var/lib/php/tmp/php(?:[0-9a-v]{13})?[A-Za-z0-9]{6}$#D';
     private const PYTHON = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
     private const READER = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_found_upload.py';
 
@@ -71,7 +73,7 @@ final class SharedApplyFoundIntent
     {
         if (array_keys($data) !== ['path', 'size', 'sha256', 'owner_uid'] ||
             !is_string($data['path']) ||
-            preg_match('#^/var/lib/php/tmp/php[A-Za-z0-9]{6,16}$#D', $data['path']) !== 1 ||
+            preg_match(self::UPLOAD_PATH, $data['path']) !== 1 ||
             !is_int($data['size']) || $data['size'] < 1 ||
             $data['size'] > self::MAX_JSON ||
             !is_string($data['sha256']) ||
@@ -115,10 +117,11 @@ final class SharedApplyFoundIntent
             $entry['size'] > self::MAX_JSON ||
             (isset($entry['full_path']) &&
              $entry['full_path'] !== 'found-intent.json') ||
-            (isset($entry['type']) && !is_string($entry['type'])) ||
-            preg_match('#^/var/lib/php/tmp/php[A-Za-z0-9]{6,16}$#D',
-                $entry['tmp_name']) !== 1) {
+            (isset($entry['type']) && !is_string($entry['type']))) {
             throw new \InvalidArgumentException('Untrusted native PHP upload');
+        }
+        if (preg_match(self::UPLOAD_PATH, $entry['tmp_name']) !== 1) {
+            throw new \InvalidArgumentException('Untrusted PHP upload location');
         }
         return $entry;
     }

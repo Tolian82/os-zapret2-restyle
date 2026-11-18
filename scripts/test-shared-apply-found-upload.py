@@ -31,6 +31,10 @@ class MultipartUploadTests(unittest.TestCase):
 
     def test_exact_content(self):
         self.assertEqual(self.read(), self.body)
+        modern_name = self.root / 'php0123456789abvAaBbCc'
+        self.name.rename(modern_name)
+        self.name = modern_name
+        self.assertEqual(self.read(), self.body)
 
     def test_wrong_digest(self):
         with self.assertRaises(UploadRefused):

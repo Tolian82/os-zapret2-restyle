@@ -87,6 +87,14 @@ $nativeUpload = [
 ];
 must(Intent::httpFileShape(['found_intent' => $nativeUpload]) === $nativeUpload,
      'real PHP upload form field shape not preserved');
+$longUpload = $nativeUpload;
+$longUpload['tmp_name'] = '/var/lib/php/tmp/php0123456789abvAaBbCc';
+must(Intent::httpFileShape(['found_intent' => $longUpload]) === $longUpload,
+    'PHP upload with the base32 tempfile prefix was rejected');
+$longMetadata = $metadata;
+$longMetadata['path'] = $longUpload['tmp_name'];
+must(Intent::metadata($longMetadata) === $longMetadata,
+    'PHP tempfile prefix was rejected by root staging metadata');
 $bad = $nativeUpload; $bad['error'] = UPLOAD_ERR_NO_FILE;
 rejects(fn()=>Intent::httpFileShape(['found_intent'=>$bad]), 'upload error');
 $bad = $nativeUpload; $bad['size'] = 320 * 1024 + 1;

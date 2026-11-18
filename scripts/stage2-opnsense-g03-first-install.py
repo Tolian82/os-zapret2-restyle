@@ -145,6 +145,7 @@ def five_hostlist_native_apply(config_path: Path):
             "Missing or invalid Strategies baseline", "Select a WAN interface",
             "Untrusted found upload", "Untrusted native PHP upload", "Invalid native PHP upload",
             "Native PHP upload", "Not a native PHP upload", "Unqualified native PHP upload",
+            "Untrusted PHP upload location",
             "The discovered lists upload was not received",
             "Shared Strategies request", "Voice or shared Strategies settings changed",
         )

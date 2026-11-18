@@ -15,7 +15,8 @@ import sys
 
 MAX_BYTES = 320 * 1024
 HASH = re.compile(r"[a-f0-9]{64}\Z", re.ASCII)
-NAME = re.compile(r"php[A-Za-z0-9]{6,16}\Z", re.ASCII)
+# Match PHP's mkstemp name with or without its newer base32 prefix.
+NAME = re.compile(r"php(?:[0-9a-v]{13})?[A-Za-z0-9]{6}\Z", re.ASCII)
 
 
 class UploadRefused(ValueError):
@@ -33,11 +34,8 @@ def read_qualified(path: Path, length: int, digest: str, owner_uid: int,
             not isinstance(digest, str) or not HASH.fullmatch(digest)):
         raise UploadRefused("upload_metadata_invalid")
     path = Path(path)
-    if test_parent is None:
-        if (str(path.parent) != '/var/lib/php/tmp' or
-                not NAME.fullmatch(path.name)):
-            raise UploadRefused("upload_path_untrusted")
-    elif path.parent != test_parent:
+    parent_path = Path('/var/lib/php/tmp') if test_parent is None else test_parent
+    if path.parent != parent_path or not NAME.fullmatch(path.name):
         raise UploadRefused("upload_path_untrusted")
     try:
         parent = path.parent.lstat()
