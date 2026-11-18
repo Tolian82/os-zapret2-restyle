@@ -714,6 +714,21 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 3 and argv[0] == 'recover-prepared-locked':
+        try:
+            # Authenticated by ORIGINAL FD9 + actual inherited Config fd4,
+            # not an alternate owner or independently reopened config file.
+            # This is private to original PHP's root Config-lock command.
+            receipt = recover_native_found_prepared_pristine(
+                argv[1], config_fd=4, config_digest=argv[2])
+            print(json.dumps(receipt, sort_keys=True, separators=(",", ":")))
+            return 0
+        except (EffectiveKnownRefused, OwnedSourcesRefused, DestinationRefused,
+                DomainPolicyError, AutoDomainPolicyError,
+                ValueError, RuntimeError, OSError, UnicodeError):
+            print('ERROR: original PREPARED pristine native recovery refused',
+                  file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == 'classify-locked':
         try:
             # fd4 is the original OPNsense Config::lock open description

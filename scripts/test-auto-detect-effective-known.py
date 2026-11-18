@@ -661,6 +661,22 @@ class EffectiveKnownTests(unittest.TestCase):
                 recover_native_found_prepared_pristine(
                     current["id"], config_fd=4, config_digest=current["base"])
 
+    def test_private_native_pristine_dispatch_refuses_without_original_fd4_fd9(self):
+        from auto_detect_effective_known import main as original_dispatch
+        # There is no second browser/configd recovery owner; without native
+        # FreeBSD fd4 and original FD9 this private route cannot terminalize.
+        self.assertEqual(original_dispatch([
+            "recover-prepared-locked", "a" * 32, "b" * 64]), 69)
+        php = (BACKEND.parent / "shared_apply_config.php").read_text()
+        self.assertIn("'found-recover-prepared'", php)
+        self.assertIn("'recover-prepared-locked', $base", php)
+        self.assertIn("$config->lock();", php)
+        self.assertIn("self::recoverFoundPreparedNative(", php)
+        self.assertNotIn("Config::save(", php[
+            php.index("private static function recoverFoundPreparedNative("):
+            php.index("public static function saved(")
+        ])
+
     def test_native_cold_classification_requires_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             classify_native_planned("a" * 32)

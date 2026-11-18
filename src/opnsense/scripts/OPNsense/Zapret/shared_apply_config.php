@@ -322,8 +322,18 @@ final class SharedApplyConfigWorker
      * It remains an unregistered internal FD9-only CLI, not a GUI Apply.
      */
     private static function originalFoundLockedFileEvidence(
-        object $config, string $id
+        object $config, string $id, string $mode = 'classify-locked',
+        ?string $configDigest = null
     ): array {
+        // ONLY the original held native Config/FD9 owner may request the
+        // pristine PREPARED closure. The default path remains read-only.
+        if (!in_array($mode, ['classify-locked', 'recover-prepared-locked'], true) ||
+            ($mode === 'recover-prepared-locked' &&
+                (!is_string($configDigest) ||
+                 !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
+            ($mode === 'classify-locked' && $configDigest !== null)) {
+            throw new \RuntimeException('Unqualified original cold native mode');
+        }
         SharedApplyLifecycleLock::assertHeld();
         $reflection = new \ReflectionObject($config);
         if (!$reflection->hasProperty('config_file_handle') ||
@@ -345,10 +355,16 @@ final class SharedApplyConfigWorker
         }
         try {
             $pipes = [];
+            $command = [
+                '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py',
+                $mode, $id
+            ];
+            if ($configDigest !== null) {
+                $command[] = $configDigest;
+            }
             $proc = @proc_open(
-                ['/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
-                 '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py',
-                 'classify-locked', $id],
+                $command,
                 [0 => ['file', '/dev/null', 'r'],
                  1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
                  4 => $handle, 9 => $fd9],
@@ -442,6 +458,62 @@ final class SharedApplyConfigWorker
         }
     }
 
+    /**
+     * ORIGINAL native Config owner -> already held FD9 -> P2 -> SAME journal.
+     *
+     * This is a narrowly restricted cold no-write recovery of found PREPARED
+     * with physically proven predecessor. Not wired to configd/GUI or normal
+     * Apply/Start. No second Config writer and never call Config::save().
+     */
+    private static function recoverFoundPreparedNative(
+        array $plan, string $id, object $config, callable $factory
+    ): array {
+        SharedApplyLifecycleLock::assertHeld();
+        $config->lock();
+        try {
+            $fresh = $factory()->getNodes();
+            if (!is_array($fresh) || !is_string($plan['dependencies'] ?? null) ||
+                !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies'])) {
+                throw new \RuntimeException('Original found Config baseline unavailable');
+            }
+            $base = VoiceSettingsSnapshot::digest($fresh);
+            if (!hash_equals($plan['dependencies'], $base)) {
+                throw new \RuntimeException('Original found pristine Config changed');
+            }
+            // Python independently checks the native inherited Config fd4,
+            // original FD9, same sealed plan and PREPARED WAL, three exact
+            // BEFORE files and same physical previous runtime/IPFW TWICE.
+            // Its ONLY write is original operation.json restored fsync.
+            $receipt = self::originalFoundLockedFileEvidence(
+                $config, $id, 'recover-prepared-locked', $base);
+            $keys = array_keys($receipt);
+            sort($keys);
+            $expected = ['config_saved', 'files_written', 'phase', 'previous_id',
+                'result', 'runtime_state', 'service_restarted'];
+            sort($expected);
+            if ($keys !== $expected ||
+                ($receipt['result'] ?? null) !==
+                    'original-found-prepared-pristine-restored' ||
+                ($receipt['phase'] ?? null) !== 'restored' ||
+                !is_string($receipt['previous_id'] ?? null) ||
+                !preg_match('/^[a-f0-9]{32}$/D', $receipt['previous_id']) ||
+                !in_array($receipt['runtime_state'] ?? null, ['ready', 'stopped'], true) ||
+                ($receipt['config_saved'] ?? null) !== false ||
+                ($receipt['files_written'] ?? null) !== false ||
+                ($receipt['service_restarted'] ?? null) !== false) {
+                throw new \RuntimeException('Unqualified original found pristine terminal receipt');
+            }
+            $again = $factory()->getNodes();
+            if (!is_array($again) ||
+                !hash_equals($base, VoiceSettingsSnapshot::digest($again))) {
+                throw new \RuntimeException('Native Config changed after pristine closure');
+            }
+            return $receipt;
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public static function saved(array $plan, array $current): array
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
@@ -519,9 +591,10 @@ final class SharedApplyConfigWorker
             }
         }
         if (count($argv) !== 4 || !in_array($argv[1],
-                ['preflight', 'save', 'saved', 'found-cold'], true) ||
+                ['preflight', 'save', 'saved', 'found-cold', 'found-recover-prepared'], true) ||
             !in_array($argv[3], ['voice','strategies'], true) ||
-            ($argv[1] === 'found-cold' && $argv[3] !== 'strategies')) {
+            (in_array($argv[1], ['found-cold', 'found-recover-prepared'], true) &&
+             $argv[3] !== 'strategies')) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -541,6 +614,12 @@ final class SharedApplyConfigWorker
                 $joint = self::inspectFoundColdNative(
                     $plan, $argv[2], $config, $factory);
                 echo json_encode($joint, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($argv[1] === 'found-recover-prepared') {
+                $receipt = self::recoverFoundPreparedNative(
+                    $plan, $argv[2], $config, $factory);
+                echo json_encode($receipt, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
