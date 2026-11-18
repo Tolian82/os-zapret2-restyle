@@ -207,6 +207,37 @@ def five_hostlist_native_apply(config_path: Path):
     need(run([str(service), "stop"]).returncode == 0 and status()["service"] == "stopped",
          "FIVE_HOSTLIST_STOP_FAILED")
     same_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
+
+    # TZ6V2 approved three-way user intent: two actual HTTPS submissions
+    # from the same stale browser snapshot. An independent later addition
+    # must survive the stale tab's explicit removal of the viewed domain.
+    # Exercise this while deliberately STOPPED: no extra engine restarts,
+    # mock minute writer, new VM, or background traffic interruption.
+    stale_tab = read()
+    previous_shared = stale_tab["editors"]["shared_found"]["content"]
+    need(previous_shared == "zapret-auto.net\n",
+         "FIVE_HOSTLIST_STALE_TAB_UNEXPECTED_ORIGINAL")
+    later_domain = "parallel-tab.org\n"
+    first_tab = apply({}, stale_tab, {"auto": previous_shared + later_domain})
+    need(first_tab.get("result") == "saved" and first_tab.get("applied") is True and
+         read()["editors"]["shared_found"]["content"] == previous_shared + later_domain,
+         "FIVE_HOSTLIST_FIRST_TAB_ADDITION_NOT_SAVED")
+    stale_remove = apply({}, stale_tab, {"auto": ""})
+    rebased = read()["editors"]
+    need(stale_remove.get("result") == "saved" and
+         stale_remove.get("applied") is True and
+         rebased["shared_found"]["content"] == later_domain and
+         rebased["youtube_found"]["content"] == running["youtube_found"]["content"] and
+         rebased["user_found"]["content"] == running["user_found"]["content"] and
+         rebased["youtube_manual"]["content"] == manual["youtubedomains"] and
+         rebased["user_manual"]["content"] == manual["userdomains"] and
+         json.loads(journal.read_bytes()).get("phase") == "committed" and
+         status()["service"] == "stopped" and not pidfile.exists() and
+         hashlib.sha256(config_path.read_bytes()).hexdigest() == same_config,
+         "FIVE_HOSTLIST_STALE_TAB_LOST_INDEPENDENT_ADDITION_OR_STARTED_SERVICE")
+    print("FIVE_HOSTLIST_NATIVE_STALE_TAB=PASS_DELETE_WINS_NEW_ADD_SURVIVES",
+          flush=True)
+
     before_stopped_apply = journal.read_bytes()
     stopped_reply = apply({}, read(), {"auto": ""})
     need(stopped_reply.get("result") == "saved" and stopped_reply.get("applied") is True and
