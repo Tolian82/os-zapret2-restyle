@@ -10,6 +10,8 @@ on:
       - scripts/test-gui-upstream-progress.mjs
       - scripts/stage2-opnsense-g03-first-install.py
       - scripts/stage2-opnsense-g03-five-editor-f5.py
+      - scripts/stage2-opnsense-g03-native-prepared.py
+      - scripts/stage2-opnsense-g03-native-prepared.php
       - .github/workflows/g03-native-disposable-first-install.yml
   workflow_dispatch:
 
@@ -114,6 +116,9 @@ jobs:
             GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
             # Guest is disposable; host Chromium gets READ-ONLY browser access
             # through a one-run SSH key. No plugin persistence or new service.
+            # Only on disposable G03: test-only files outside installed pkg.
+            install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
+            install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
             test -s g03-five-f5-ci.pub
             install -d -m 0700 /root/.ssh
             grep -Eq '^ssh-ed25519 [A-Za-z0-9+/=]+' g03-five-f5-ci.pub
@@ -150,3 +155,13 @@ jobs:
             -L 127.0.0.1:18443:127.0.0.1:443 root@127.0.0.1
           curl -kfsS --max-time 20 -o /dev/null https://127.0.0.1:18443/index.php
           python3.13 scripts/stage2-opnsense-g03-five-editor-f5.py
+      - name: Original Config FD4 and FD9/P2 no-write PREPARED recovery on same G03 guest
+        run: |
+          set -eu
+          test -s "$RUNNER_TEMP/g03-readonly-browser-ssh/key"
+          ssh -i "$RUNNER_TEMP/g03-readonly-browser-ssh/key" -p 32222 \
+            -o BatchMode=yes -o ConnectTimeout=30 \
+            -o StrictHostKeyChecking=accept-new \
+            -o UserKnownHostsFile="$RUNNER_TEMP/g03-readonly-browser-ssh/known_hosts" \
+            root@127.0.0.1 \
+            'GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 /usr/local/bin/python3 /root/g03-native-prepared.py'
