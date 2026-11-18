@@ -31,6 +31,69 @@ class TestJournal(unittest.TestCase):
 
 
 
+
+    def test_found_staged_temp_inode_requires_two_durable_owner_steps(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "a" * 32, "page": "strategies", "base": "b" * 64,
+                 "candidate": "c" * 64, "changed_fields": []}
+            changes = {"youtube": ("example.com\\n", "new.example.com\\n"),
+                       "user": ("example.org\\n", "new.example.org\\n"),
+                       "auto": ("", "")}
+            rows = {k: {"before": before, "after": after, "before_status": "present"}
+                    for k, (before, after) in changes.items()}
+            plan = json.dumps({"page": "strategies", "result": "prepared",
+                               "dependencies": d["base"], "found_batch": rows,
+                               "found_intent": {"config_revision": d["base"],
+                                                "commit_authorized": False}}).encode()
+            store.prepare_found(d, plan, lambda _: True)
+            store.advance_found_files("found-files-writing", d, plan,
+                                      lambda *_: True)
+            self.assertEqual(store.read()["found"]["stages"], {})
+            make_pin = lambda name, inode: {
+                "device": 13, "inode": inode, "mtime_ns": 900,
+                "size": len(rows[name]["after"].encode()),
+                "sha256": hashlib.sha256(rows[name]["after"].encode()).hexdigest()}
+            yp, up = make_pin("youtube", 20), make_pin("user", 21)
+            with self.assertRaisesRegex(SharedOperationError, "source reordered"):
+                store.advance_found_stage(d, plan, "user", "ready", up,
+                                          lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "not ready"):
+                store.advance_found_stage(d, plan, "youtube", "installed", yp,
+                                          lambda *_: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                store.advance_found_stage(d, plan, "youtube", "ready", yp,
+                                          lambda *_: False)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            for name, pin in (("youtube", yp), ("user", up)):
+                store.advance_found_stage(d, plan, name, "ready", pin,
+                                          lambda phase, raw, n, p:
+                                              phase == "ready" and n == name and p == pin)
+                self.assertEqual(store.read()["found"]["stages"][name]["state"], "ready")
+                with self.assertRaisesRegex(SharedOperationError, "not ready"):
+                    other_pin = {**pin, "inode": pin["inode"] + 90}
+                    store.advance_found_stage(d, plan, name, "installed", other_pin,
+                                              lambda *_: True)
+                store.advance_found_stage(d, plan, name, "installed", pin,
+                                          lambda *_: True)
+            self.assertEqual(set(store.read()["found"]["stages"]), {"youtube", "user"})
+            with self.assertRaisesRegex(SharedOperationError, "original staged found"):
+                store.advance_found_stage(d, plan, "auto", "ready", yp,
+                                          lambda *_: True)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            post = trivial_post()
+            post["youtube"].update(device=yp["device"], inode=yp["inode"],
+                                   mtime_ns=yp["mtime_ns"], size=yp["size"],
+                                   sha256=yp["sha256"])
+            post["user"].update(device=up["device"], inode=up["inode"],
+                                mtime_ns=up["mtime_ns"], size=up["size"],
+                                sha256=up["sha256"])
+            store.advance_found_files("found-files-written", d, plan,
+                                      lambda *_: True, post_images=post)
+            self.assertEqual(store.read()["phase"], "found-files-written")
+            self.assertEqual(store.read()["found"]["stages"]["youtube"]["state"], "installed")
+
     def test_found_prepared_pristine_recovery_reuses_one_journal_and_old_owner(self):
         import hashlib
         with tempfile.TemporaryDirectory() as root:

@@ -125,8 +125,10 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
     """
     basics = {"schema", "kind", "plan_sha256", "sources"}
     pinned = phase in FOUND_POST_PHASES
+    writing = phase in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES
+    required = basics | ({"stages"} if writing else set()) | ({"post"} if pinned else set())
     if (not isinstance(found, dict) or
-            set(found) != (basics | {"post"} if pinned else basics) or
+            set(found) != required or
             type(found["schema"]) is not int or found["schema"] != 1 or
             found["kind"] != FOUND_KIND or
             type(found["plan_sha256"]) is not str or
@@ -135,9 +137,35 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
             detail["page"] != "strategies" or
             phase not in ("prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES)):
         raise SharedOperationError("invalid sealed found intent in original journal")
+    if writing:
+        _validate_found_stages(found["stages"])
     if pinned:
         _validate_found_post(found["post"])
     return found
+
+
+def _validate_found_stages(stages: object) -> dict:
+    """Each fsynced pre-rename inode pin belongs to the original FD9 writer.
+
+    The journal is intentionally not a rollback instruction. Read-only
+    recovery must independently check the sealed plan and physical inode.
+    """
+    if (not isinstance(stages, dict) or len(stages) > len(FOUND_NAMES) or
+            not set(stages).issubset(FOUND_NAMES)):
+        raise SharedOperationError("invalid found staged source set")
+    for name, row in stages.items():
+        if not isinstance(row, dict) or set(row) != {"state", "pin"} or \
+                row["state"] not in ("ready", "installed"):
+            raise SharedOperationError("invalid found staged source status")
+        pin = row["pin"]
+        if not isinstance(pin, dict) or set(pin) != {
+                "device", "inode", "mtime_ns", "size", "sha256"} or \
+                any(type(pin[k]) is not int or pin[k] <= 0
+                    for k in ("device", "inode", "mtime_ns")) or \
+                type(pin["size"]) is not int or pin["size"] < 0 or \
+                type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
+            raise SharedOperationError("invalid found staged inode pin")
+    return stages
 
 
 def _validate_found_post(post: object) -> dict:
@@ -351,6 +379,19 @@ class SharedApplyOperation:
                              post_images[name]["size"] !=
                              len(source["after"].encode("utf-8")))):
                         raise ValueError("unsealed post-image mismatch")
+                    stage = record["found"]["stages"].get(name)
+                    changed = source["before"] != source["after"]
+                    if (changed and
+                            (stage is None or stage["state"] != "installed" or
+                             (stage["pin"]["device"], stage["pin"]["inode"],
+                              stage["pin"]["mtime_ns"], stage["pin"]["size"],
+                              stage["pin"]["sha256"]) !=
+                             (post_images[name]["device"], post_images[name]["inode"],
+                              post_images[name]["mtime_ns"], post_images[name]["size"],
+                              post_images[name]["sha256"]))):
+                        raise ValueError("missing installed staged inode")
+                    if not changed and stage is not None:
+                        raise ValueError("staged unchanged source")
             except (KeyError, ValueError, TypeError, AttributeError) as exc:
                 raise SharedOperationError("original found post-image plan mismatch") from exc
         elif post_images is not None:
@@ -361,9 +402,63 @@ class SharedApplyOperation:
             raise SharedOperationError("found-files journal changed under original locks")
         advanced = dict(record)
         advanced["phase"] = phase
+        if phase == "found-files-writing":
+            advanced["found"] = {**record["found"], "stages": {}}
         if phase == "found-files-written":
             advanced["found"] = {**record["found"], "post": post_images}
         return self._persist_record(advanced)
+
+    def advance_found_stage(self, detail: dict, sealed_plan: bytes,
+                            name: str, phase: str, pin: dict, attest) -> dict:
+        """One fsynced staged temp inode BEFORE rename, then installed proof.
+
+        Called ONLY by the existing original Config->P2-held FD9 writer.
+        This is NOT a second physical writer, CLI route or recovery grant.
+        """
+        _validate_detail(detail)
+        if (name not in FOUND_NAMES or phase not in ("ready", "installed") or
+                type(sealed_plan) is not bytes or
+                not 0 < len(sealed_plan) <= MAX_FOUND_PLAN):
+            raise SharedOperationError("invalid original staged found checkpoint")
+        _validate_found_stages({name: {"state": phase, "pin": pin}})
+        record = self.read()
+        if (record is None or record["phase"] != "found-files-writing" or
+                record["detail"] != detail or "found" not in record or
+                record["found"]["plan_sha256"] !=
+                hashlib.sha256(sealed_plan).hexdigest()):
+            raise SharedOperationError("original staged found journal mismatch")
+        try:
+            rows = json.loads(sealed_plan)["found_batch"]
+            if (list(rows) != list(FOUND_NAMES) or
+                    any(not isinstance(rows[n], dict) for n in FOUND_NAMES)):
+                raise ValueError("bad rows")
+            row = rows[name]
+            if (row["before"] == row["after"] or
+                    len(row["after"].encode("utf-8")) != pin["size"] or
+                    hashlib.sha256(row["after"].encode("utf-8")).hexdigest() !=
+                    pin["sha256"]):
+                raise ValueError("wrong staged after-image")
+            changed = [n for n in FOUND_NAMES
+                       if rows[n]["before"] != rows[n]["after"]]
+        except (ValueError, UnicodeError, KeyError, TypeError, AttributeError) as exc:
+            raise SharedOperationError("original staged found plan mismatch") from exc
+        stages = record["found"]["stages"]
+        previous = stages.get(name)
+        if phase == "ready":
+            if previous is not None or any(
+                    other not in stages or stages[other]["state"] != "installed"
+                    for other in changed[:changed.index(name)]):
+                raise SharedOperationError("original staged found source reordered")
+        elif (previous is None or previous["state"] != "ready" or
+              previous["pin"] != pin):
+            raise SharedOperationError("original staged found inode not ready")
+        if not callable(attest) or attest(phase, sealed_plan, name, pin) is not True:
+            raise SharedOperationError("original staged inode witness refused")
+        if self.read() != record:
+            raise SharedOperationError("original staged journal changed under locks")
+        next_found = {**record["found"], "stages": {
+            **stages, name: {"state": phase, "pin": pin}}}
+        return self._persist_record({**record, "found": next_found})
 
     def advance_found_config(self, phase: str, detail: dict,
                              sealed_plan: bytes, attest) -> dict:
