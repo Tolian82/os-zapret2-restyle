@@ -3,8 +3,7 @@
 
 No CLI can save Config, write found files, start a service, create a journal,
 or grant Apply success. The only production caller is the original locked PHP
-SharedApplyRequest stage. The unchanged common executor still refuses found
-intent until Config + all sources + generated release have durable recovery.
+SharedApplyRequest stage. The common executor owns the durable transaction.
 """
 from __future__ import annotations
 
@@ -132,6 +131,13 @@ def main(argv: list[str]) -> int:
         sys.stdout.buffer.write(output)
         sys.stdout.buffer.flush()
         return 0
+    except DestinationRefused as error:
+        issue = re.fullmatch(
+            r"shared_found_planner_(youtube|user|auto)_invalid_draft_line_([1-9][0-9]{0,5})_[a-z_]+",
+            str(error))
+        if issue:
+            print(json.dumps({"field": issue[1], "line": int(issue[2])}))
+        return 69
     except (OSError, ValueError, TypeError, RuntimeError, UnicodeError):
         # Never log or echo a domain, raw Config or private file path here.
         print("ERROR: original found stage preflight refused", file=sys.stderr)

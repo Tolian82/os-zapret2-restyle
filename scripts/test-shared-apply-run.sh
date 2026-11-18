@@ -39,6 +39,9 @@ check() {
     set -e
     [ "$code" = "$expected" ] || fail "status $code expected $expected"
 }
+shared_apply_has_record_service() { [ "${FOUND_PENDING:-0}" = 1 ]; }
+shared_apply_pending_found_service() { printf '%s\n' "$ID"; }
+shared_apply_recover_found_service() { echo "recover:$1" >> "$LOG"; }
 GUARD_OK=1; BUILD_OK=1; EXECUTE_OK=1
 check 0 voice c2FmZQ
 [ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply build:c2FmZQ execute:$ID:voice " ] ||
@@ -65,6 +68,11 @@ check 70 voice c2FmZQ
 [ "$(tr '\n' ' ' < "$LOG")" = "guard:common-apply build:c2FmZQ execute:$ID:voice " ] ||
     fail "failed runtime concealed"
 EXECUTE_OK=1
+FOUND_PENDING=1
+check 0 strategies c2FmZQ
+[ "$(cat "$LOG")" = "recover:$ID" ] || fail "pending found Apply submitted another request"
+grep -Fqx "apply-recovered=$ID" "$TMP/response" || fail "recovery receipt missing"
+FOUND_PENDING=0
 check 64 other c2FmZQ
 [ ! -s "$LOG" ] || fail "unknown page started mutation"
 check 64 voice ''

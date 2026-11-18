@@ -274,7 +274,8 @@ def verify_native_planned(operation: str) -> dict:
 
 
 def prepare_native_found_intent(
-        operation: str, config_fd: int, candidate_digest: str) -> dict:
+        operation: str, config_fd: int, candidate_digest: str, *,
+        runtime_mode: str | None = None) -> dict:
     """Original Config -> P2 -> existing journal, before any file mutation.
 
     Import-only staging primitive. ONLY a future original PHP Config::lock
@@ -293,7 +294,7 @@ def prepare_native_found_intent(
     from auto_detect_original_lock_handoff import (
         CONFIG_PATH, assert_inherited_config_fd)
     from shared_apply_seal import WORK, _stat, verify_seal
-    from shared_apply_operation import SharedApplyOperation
+    from shared_apply_operation import SharedApplyOperation, committed_owner
     from voice_ipfw_adapter import require_lifecycle_lock
 
     require_lifecycle_lock()
@@ -331,9 +332,19 @@ def prepare_native_found_intent(
     # The invoking PHP owner holds the original Config lock for the WHOLE
     # call. P2 is acquired AFTER Config, then held THROUGH original journal
     # fsync, preventing minute writers from changing physical preimages.
+    store = SharedApplyOperation(owner=0)
     with exclusive_destination_lock(AUTO_LOCK, 0):
         _verify_planned_preimages_locked(
             verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        if runtime_mode is not None:
+            from voice_live_inspect import examine_shared
+            current = store.read()
+            previous = committed_owner(current)
+            if previous is None or previous["candidate"] != detail["base"]:
+                raise EffectiveKnownRefused("native_found_predecessor_unverified")
+            prior = examine_shared(current)
+            if prior is None or prior.get("state") not in ("ready", "stopped"):
+                raise EffectiveKnownRefused("native_found_predecessor_unverified")
 
         def original_witness(attested: bytes) -> bool:
             if attested != raw:
@@ -345,8 +356,8 @@ def prepare_native_found_intent(
                 verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
             return True
 
-        record = SharedApplyOperation(owner=0).prepare_found(
-            detail, raw, original_witness)
+        record = store.prepare_found(
+            detail, raw, original_witness, runtime_mode=runtime_mode)
         _verify_planned_preimages_locked(
             verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
@@ -712,8 +723,97 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
     return {**evidence, "journal_phase": record["phase"]}
 
 
+def advance_native_found_locked(action: str, operation: str, digest: str,
+                                *, config_fd: int) -> dict:
+    from auto_detect_destination_commit import (
+        _attest_found_after_locked, _native_found_wal_context,
+        _recover_found_preimages_locked,
+    )
+    from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
+    from voice_live_inspect import examine_pending_found_previous
+
+    store, record, raw, rows, targets, attest = _native_found_wal_context(
+        operation, config_fd)
+    detail = record["detail"]
+    phase = record["phase"]
+    if action == "recover-found-locked" and phase == "prepared":
+        return recover_native_found_prepared_pristine(
+            operation, config_fd=config_fd, config_digest=digest)
+    with exclusive_destination_lock(AUTO_LOCK, store.owner):
+        if read_owned(OWNED_ROOT, owner_uid=store.owner) is None:
+            raise EffectiveKnownRefused("found_source_owner_unavailable")
+        if action == "recover-found-locked" and digest == detail["base"] and (
+                phase in FOUND_ROLLBACK_FROM | {FOUND_RESTORING}):
+            prior = examine_pending_found_previous(record)
+            if prior["state"] not in ("ready", "stopped"):
+                raise EffectiveKnownRefused("found_rollback_predecessor_unverified")
+            result = _recover_found_preimages_locked(
+                rows, targets, store=store, record=record, plan_bytes=raw, uid=store.owner,
+                attest=lambda: attest() and examine_pending_found_previous(record) == prior)
+            return {"result": result["phase"]}
+
+        if digest != detail["candidate"]:
+            raise EffectiveKnownRefused("found_candidate_config_not_saved")
+
+        def after_images() -> bool:
+            return attest() and _attest_found_after_locked(
+                rows, targets, record, uid=store.owner)
+
+        if action in ("confirm-found-save-locked", "recover-found-locked"):
+            if phase == "found-config-saving":
+                # Config::save flushes but does not fsync the native Config
+                # handle. The freshly loaded Model still describes these bytes.
+                os.fsync(config_fd)
+                record = store.advance_found_config(
+                    "found-config-saved", detail, raw,
+                    lambda next_phase, plan: after_images())
+            elif (action != "recover-found-locked" or phase != "found-config-saved" or
+                  not after_images()):
+                raise EffectiveKnownRefused("found_recovery_phase_or_files_unknown")
+            return {"result": record["phase"], "mode": record["found"]["runtime_mode"]}
+
+        next_phase = action.removeprefix("found-runtime-")
+        if next_phase == "activating":
+            prior = examine_pending_found_previous(record)
+            if prior["state"] not in ("ready", "stopped"):
+                raise EffectiveKnownRefused("found_runtime_predecessor_unverified")
+        record = store.advance_found_runtime(next_phase, record, raw, after_images)
+        return {"result": record["phase"]}
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 4 and argv[0] == "begin-found-save-locked":
+        try:
+            from auto_detect_destination_commit import shared_apply_found_files_original_fd9
+            if argv[3] not in ("0", "1"):
+                return 64
+
+            def wait_for_save():
+                # stdout signals that the before-save WAL is durable.
+                # The original PHP parent releases stdin after Config::save,
+                # including on failure. EOF also releases P2 after parent death.
+                print("ready", flush=True)
+                sys.stdin.buffer.read(1)
+
+            prepare_native_found_intent(argv[1], 4, argv[2], runtime_mode=argv[3])
+            shared_apply_found_files_original_fd9(argv[1], 4, before_save=wait_for_save)
+            return 0
+        except (ValueError, RuntimeError, OSError, UnicodeError):
+            print("ERROR: original found-data save scope refused", file=sys.stderr)
+            return 69
+    if len(argv) == 3 and argv[0] in (
+            "recover-found-locked", "confirm-found-save-locked",
+            "found-runtime-activating", "found-runtime-activated",
+            "found-runtime-config-saved", "found-runtime-epoch-finalizing",
+            "found-runtime-committed"):
+        try:
+            reply = advance_native_found_locked(argv[0], argv[1], argv[2], config_fd=4)
+            print(json.dumps(reply, separators=(",", ":")))
+            return 0
+        except (ValueError, RuntimeError, OSError, UnicodeError):
+            print("ERROR: original found Apply phase refused", file=sys.stderr)
+            return 69
     if len(argv) == 3 and argv[0] == 'recover-prepared-locked':
         try:
             # Authenticated by ORIGINAL FD9 + actual inherited Config fd4,

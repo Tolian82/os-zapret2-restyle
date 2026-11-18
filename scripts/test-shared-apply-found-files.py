@@ -14,12 +14,14 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 BACKEND = (Path(__file__).resolve().parents[1] / "src/opnsense/scripts"
            / "OPNsense/Zapret/backend")
 sys.path.insert(0, str(BACKEND))
 
 from auto_detect_gui_hostlist import _create
+import auto_detect_destination_commit as destination
 from shared_apply_operation import SharedApplyOperation, SharedOperationError
 from shared_apply_found_stage import FoundStageRefused, qualify_readonly
 from auto_detect_destination_commit import (
@@ -80,7 +82,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             self.old)
 
 
-    def journaled(self, *, rows=None, witness=None, **kwargs):
+    def journaled(self, *, rows=None, witness=None, runtime_mode=None, **kwargs):
         rows = self.plan() if rows is None else rows
         d = {"id": "b" * 32, "page": "strategies",
              "base": "a" * 64, "candidate": "c" * 64,
@@ -94,7 +96,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         }, separators=(",", ":")).encode()
         journal = SharedApplyOperation(self.root / "shared-apply",
                                        owner=self.uid)
-        journal.prepare_found(d, body, lambda _: True)
+        journal.prepare_found(d, body, lambda _: True, runtime_mode=runtime_mode)
         callback = (lambda phase, raw: raw == body) if witness is None else witness
         return journal, d, body, lambda: _locked_shared_found_apply_journal(
             rows, self.targets, store=journal, detail=d,
@@ -140,8 +142,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             return original_advance(detail, raw, name, phase, pin, attest)
 
         journal.advance_found_stage = fail_after_file_stage
-        with self.assertRaisesRegex(
-                DestinationRefused, "shared_found_restored_after_failure"):
+        with self.assertRaisesRegex(OSError, "simulated stage WAL fsync"):
             apply()
         self.assertEqual(seen, [("youtube", "ready")])
         self.assert_old()
@@ -157,7 +158,7 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             return original_advance(detail, raw, name, phase, pin, attest)
 
         journal.advance_found_stage = fail_post_rename
-        with self.assertRaisesRegex(DestinationRefused, "shared_found_requires_review"):
+        with self.assertRaisesRegex(OSError, "simulated postrename WAL fsync"):
             apply()
         # Physical rename has happened, but WRITTEN is never asserted.
         self.assertEqual(journal.read()["phase"], "found-files-writing")
@@ -221,20 +222,124 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             apply()
         self.assert_old()
 
-    def test_journal_partial_file_error_retains_writing_phase_even_after_compensation(self):
-        call = [0]
-        def second_fails(path, before, after, uid):
-            call[0] += 1
-            if call[0] == 2:
+    def recover(self, journal, body, attest=lambda: True):
+        return destination._recover_found_preimages_locked(
+            json.loads(body)["found_batch"], self.targets, store=journal,
+            record=journal.read(), plan_bytes=body, uid=self.uid, attest=attest)
+
+    def test_journal_rollback_resumes_after_partial_write_and_rollback_crash(self):
+        journal, _, body, apply = self.journaled()
+        rename = os.replace
+
+        def second_fails(temp, target):
+            if target == self.targets["user"]:
                 raise OSError("file 2 pre-rename")
-            return _replace(path, before, after, uid)
-        journal, _, _, apply = self.journaled(replace_fn=second_fails)
-        with self.assertRaisesRegex(
-                DestinationRefused, "shared_found_restored_after_failure"):
-            apply()
-        self.assert_old()
+            rename(temp, target)
+
+        with patch.object(destination.os, "replace", side_effect=second_fails):
+            with self.assertRaisesRegex(OSError, "file 2 pre-rename"):
+                apply()
         self.assertEqual(journal.read()["phase"], "found-files-writing")
         self.assertFalse(journal.advisory()["safe_to_mutate"])
+        self.assertEqual(self.targets["youtube"].read_text(), self.new["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), self.old["user"])
+
+        def crash_after_rollback_rename(temp, target):
+            rename(temp, target)
+            if target == self.targets["youtube"]:
+                raise OSError("rollback interrupted after rename")
+
+        with patch.object(destination.os, "replace", side_effect=crash_after_rollback_rename):
+            with self.assertRaisesRegex(OSError, "rollback interrupted"):
+                self.recover(journal, body)
+        self.assertEqual(journal.read()["phase"], "found-restoring")
+        self.assertEqual(self.recover(journal, body)["phase"], "restored")
+        self.assert_old()
+
+    def test_recovery_refuses_all_writes_on_same_byte_source_substitution(self):
+        journal, _, body, apply = self.journaled()
+        apply()
+        foreign = self.root / "foreign"
+        foreign.write_text(self.new["user"])
+        foreign.replace(self.targets["user"])
+        with self.assertRaisesRegex(DestinationRefused, "foreign_found_source"):
+            self.recover(journal, body)
+        self.assertEqual(journal.read()["phase"], "found-files-written")
+        self.assertEqual(self.targets["youtube"].read_text(), self.new["youtube"])
+
+    def test_uncertain_config_save_follows_proven_base_or_candidate(self):
+        import auto_detect_effective_known as effective
+        import voice_live_inspect as runtime
+
+        for unchanged in (True, False):
+            with self.subTest(config_unchanged=unchanged):
+                for name, path in self.targets.items():
+                    path.write_text(self.old[name])
+                journal, detail, body, apply = self.journaled(runtime_mode="1")
+                apply()
+                journal.advance_found_config("found-config-saving", detail, body,
+                                             lambda *_: True)
+                record = journal.read()
+                context = (journal, record, body, json.loads(body)["found_batch"],
+                           self.targets, lambda: True)
+                fd = os.open(self.root / "native-config", os.O_RDWR | os.O_CREAT, 0o600)
+                try:
+                    with (patch.object(destination, "_native_found_wal_context", return_value=context),
+                          patch.object(effective, "AUTO_LOCK", self.root / "p2.lock"),
+                          patch.object(effective, "read_owned", return_value={}),
+                          patch.object(runtime, "examine_pending_found_previous",
+                                       return_value={"state": "stopped", "id": "d" * 32})):
+                        with self.assertRaisesRegex(effective.EffectiveKnownRefused,
+                                                    "found_candidate_config_not_saved"):
+                            effective.advance_native_found_locked(
+                                "recover-found-locked", detail["id"], "e" * 64, config_fd=fd)
+                        self.assertEqual(journal.read(), record)
+                        digest = detail["base"] if unchanged else detail["candidate"]
+                        receipt = effective.advance_native_found_locked(
+                            "recover-found-locked", detail["id"], digest, config_fd=fd)
+                finally:
+                    os.close(fd)
+                if unchanged:
+                    self.assertEqual(receipt, {"result": "restored"})
+                    self.assert_old()
+                else:
+                    self.assertEqual(receipt, {"result": "found-config-saved", "mode": "1"})
+                    self.assertFalse(journal.advisory()["safe_to_mutate"])
+                    self.assertEqual({name: path.read_text()
+                                      for name, path in self.targets.items()}, self.new)
+                (journal.root / "operation.json").unlink()
+                journal.root.rmdir()
+
+    def test_recovery_removes_only_its_interrupted_link_once_create(self):
+        self.targets["auto"].unlink()
+        rows, _ = self.proposed(draft={"youtube": self.new["youtube"], "user": self.new["user"],
+                                        "auto": self.new["auto"]}, baseline=self.missing_base())
+        journal, _, body, apply = self.journaled(rows=rows)
+        link = os.link
+        ready_link = []
+
+        def interrupted_link(temp, target, **kwargs):
+            result = link(temp, target, **kwargs)
+            if target == self.targets["auto"]:
+                ready_link.append(temp)
+            return result
+
+        # Emulate process death after link, before the original temp unlink.
+        unlink = Path.unlink
+
+        def skip_temp_unlink(path, *args, **kwargs):
+            if path in ready_link:
+                raise OSError("crashed before temp unlink")
+            return unlink(path, *args, **kwargs)
+
+        with patch.object(destination.os, "link", side_effect=interrupted_link):
+            with patch.object(Path, "unlink", skip_temp_unlink):
+                with self.assertRaisesRegex(OSError, "crashed before temp unlink"):
+                    apply()
+        self.assertEqual(self.targets["auto"].lstat().st_nlink, 2)
+        self.assertEqual(self.recover(journal, body)["phase"], "restored")
+        self.assertFalse(self.targets["auto"].exists())
+        self.assertFalse(ready_link[0].exists())
 
     def test_journal_postwrite_witness_refusal_leaves_nonterminal_physical_after(self):
         journal, _, _, apply = self.journaled(

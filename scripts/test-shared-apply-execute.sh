@@ -6,6 +6,9 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
+for entry in shared_apply_record_current_service shared_apply_activate_and_commit_service; do
+    sed -n "/^$entry()$/,/^}$/p" "$SOURCE" >> "$ROOT/executor.sh"
+done
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
 sed -n '/^apply_runtime_observer_previous_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
 sh -n "$ROOT/executor.sh" || fail "shell syntax"
@@ -68,7 +71,8 @@ shared_apply_json_field() {
             # No successful old Apply may ignore a pending found-file edit.
             plan_content=$(cat)
             case "$plan_content" in
-                *'"found_intent"'*) printf '%s\n' pending ;;
+                *'"found_intent"'*'"found_batch"'*) printf '%s\n' found ;;
+                *'"found_intent"'*) printf '%s\n' invalid ;;
                 *'"page"'*) printf '%s\n' ordinary ;;
                 *) return 1 ;;
             esac ;;
@@ -149,21 +153,26 @@ grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
 # legacy Voice Apply fixture must remain operational with no found intent.
 printf '%s\n' '{"page":"voice","found_intent":{}}' > "$ROOT/work/plan.json"
 reset
-expect_status 0 'bundle:verify found-witness '
-grep -Fqx 'preflight-rejected=found-transaction-pending' "$ROOT/response.txt" ||
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=found-intent' "$ROOT/response.txt" ||
     fail "found intent crossed pre-journal gate"
 # Verify a post-seal minute change stays a bounded pre-journal refusal.
 reset
 FOUND_DRIFT=1
 export FOUND_DRIFT
-expect_status 0 'bundle:verify found-witness '
+printf '%s\n' '{"page":"strategies","found_intent":{},"found_batch":{}}' > "$ROOT/work/plan.json"
+set +e
+shared_apply_execute_service "$ID" strategies > "$ROOT/response.txt"
+result=$?
+set -e
+[ "$result" = 0 ] && [ "$(tr '\n' ' ' < "$LOG")" = 'bundle:verify found-witness ' ] ||
+    fail "found drift reached native Config or runtime"
 grep -Fqx 'preflight-rejected=found-source-drift' "$ROOT/response.txt" ||
     fail "late minute drift crossed pre-journal gate"
 printf '%s\n' '{"invalid":' > "$ROOT/work/plan.json"
 reset
-expect_status 0 'bundle:verify '
-grep -Fqx 'preflight-rejected=found-transaction-pending' "$ROOT/response.txt" ||
-    fail "corrupt found candidate crossed pre-journal gate"
+expect_status 69 'bundle:verify '
+[ ! -s "$ROOT/response.txt" ] || fail "corrupt found candidate crossed pre-journal gate"
 printf '%s\n' '{"page":"voice"}' > "$ROOT/work/plan.json"
 # The final proof is AFTER native Config + IPFW commit: neither an
 # altered installed traffic/IPSET tree, nor dead engine, nor a changed

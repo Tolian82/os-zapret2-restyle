@@ -371,26 +371,23 @@
         // TZ6v2: base_form owns the Advanced-only Auto Restart row/width/help.
         // Keep the native select in its original row, not beside Enabled.
 
-        // TZ6v2 STEP 6/7: five read-backed HOSTLIST controls. The original
-        // native manual inputs remain owned by config.xml. The three new
-        // found-only drafts have NO zapret.* form name and CANNOT be saved
-        // until the existing original-FD9 single Apply transaction accepts
-        // source revisions + the entire cross-list candidate. Never use the
-        // superseded independent Save List / Reload List API.
+        // The native manual fields and found sources share the bottom Apply.
+        // Found drafts are sent separately from the Config model fields.
         const foundHostlistFields = [
-            {key: 'youtube_found', id: 'zapretYoutubeFound', manual: 'youtubedomains',
+            {key: 'youtube_found', source: 'youtube', id: 'zapretYoutubeFound', manual: 'youtubedomains',
              label: isRussian ? 'Найденные домены YouTube' : 'YouTube Found Domains',
              disclosure: true},
-            {key: 'user_found', id: 'zapretUserFound', manual: 'userdomains',
+            {key: 'user_found', source: 'user', id: 'zapretUserFound', manual: 'userdomains',
              label: isRussian ? 'Найденные домены пользователя' : 'User Found Domains',
              disclosure: true},
-            {key: 'shared_found', id: 'zapretSharedFound', manual: 'userdomains',
+            {key: 'shared_found', source: 'auto', id: 'zapretSharedFound', manual: 'userdomains',
              label: isRussian ? 'Общий список найденных доменов' : 'Shared Found Domains',
              disclosure: false}
         ];
         let fiveHostlistBase = null;
         let fiveHostlistBusy = false;
         let fiveHostlistReady = false;
+        let fiveHostlistExclusions = '';
         function foundHostlistDirty() {
             if (!fiveHostlistBase || !fiveHostlistBase.editors) return false;
             return foundHostlistFields.some(function(spec) {
@@ -510,7 +507,7 @@
             if (fiveHostlistBusy || !$('#zapretSharedFoundRow').length) return;
             fiveHostlistBusy = true;
             fiveHostlistStatus(isRussian ? 'Чтение пяти списков…' : 'Reading five sources…', false);
-            $.ajax({
+            return $.ajax({
                 type: 'POST', url: '/api/zapret/settings/hostlistEditorsRead',
                 dataType: 'json', timeout: 30000
             }).done(function(data) {
@@ -571,12 +568,15 @@
                     return;
                 }
                 fiveHostlistBase = data;
+                fiveHostlistExclusions = $(document.getElementById('zapret.hostlist.excludedomains')).val();
                 fiveHostlistReady = true;
+                const knownInitialized = data.editors.youtube_found.status !== 'uninitialized' &&
+                    data.editors.user_found.status !== 'uninitialized';
                 foundHostlistFields.forEach(function(spec) {
                     const item = data.editors[spec.key];
                     $('#' + spec.id).val(item.content)
-                        .prop('disabled', item.status === 'uninitialized');
-                    $('#' + spec.id + 'State').text(item.status === 'uninitialized'
+                        .prop('disabled', !knownInitialized);
+                    $('#' + spec.id + 'State').text(!knownInitialized
                         ? (isRussian ? 'Не инициализирован' : 'Not initialized')
                         : '');
                 });
@@ -590,19 +590,41 @@
                 fiveHostlistBusy = false;
             });
         }
-        function blockUncommittedFoundEdits() {
-            if (!foundHostlistDirty()) return false;
-            showRuntimeError(
-                isRussian ? 'Применение найденных доменов' : 'Found Domains Apply',
-                isRussian
-                    ? 'Найденные домены изменены, но единая защищённая транзакция '
-                      + 'Config/Auto-detect ещё не подключена. Ваши правки сохранены '
-                      + 'в редакторах; ничего не отправлено и служба не перезапускалась.'
-                    : 'Found-list edits have not yet been connected to the original '
-                      + 'protected Config/Auto-detect transaction. Your drafts are '
-                      + 'preserved; no Apply was dispatched and no service restarted.'
-            );
-            return true;
+        function strategiesFormData() {
+            const form = getFormData('frm_GeneralSettings');
+            foundHostlistFields.forEach(function(spec) {
+                delete form[spec.id];
+            });
+            return form;
+        }
+
+        function fiveHostlistIntent() {
+            if (!fiveHostlistReady || !fiveHostlistBase) return null;
+            const editors = fiveHostlistBase.editors;
+            if (editors.youtube_found.status === 'uninitialized' ||
+                editors.user_found.status === 'uninitialized') return null;
+            const exclusion = $(document.getElementById('zapret.hostlist.excludedomains')).val();
+            const manualEdited = ['youtube', 'user'].some(function(name) {
+                const manual = document.getElementById('zapret.hostlist.' + name + 'domains');
+                return manual.value !== editors[name + '_manual'].content;
+            });
+            if (!foundHostlistDirty() && !manualEdited && exclusion === fiveHostlistExclusions) {
+                return null;
+            }
+            const sources = {};
+            foundHostlistFields.forEach(function(spec) {
+                const item = editors[spec.key];
+                sources[spec.source] = {
+                    base: {status: item.status, revision: item.revision, content: item.content},
+                    draft: $('#' + spec.id).val()
+                };
+            });
+            return {
+                schema_version: 1,
+                kind: 'tz6v2-found-form-intent',
+                config_revision: fiveHostlistBase.config_revision,
+                sources: sources
+            };
         }
 
         // Localize ONLY known validation outputs from the Python-backed
@@ -667,6 +689,14 @@
         // Keep known pre-dispatch errors localized like the rest of the UI.
         // Other PHP exception strings are not suitable as UI translations.
         function localizeStrategiesApplyError(message, reason) {
+            if (reason === 'found-restored') {
+                return isRussian ? 'Сохранение прервалось. Исходные настройки восстановлены.'
+                    : 'Apply failed and the original settings were restored.';
+            }
+            if (reason === 'found-recovered') {
+                return isRussian ? 'Предыдущая операция восстановлена. После обновления страницы проверьте списки.'
+                    : 'The previous Apply was recovered. Reload the page to check the lists.';
+            }
             // Server gettext and browser language can differ.
             if (reason === 'runtime-not-installed') {
                 return isRussian
@@ -677,7 +707,7 @@
             // PHP contract may be displayed. No raw exception/config text.
             if (typeof reason === 'string' && reason.indexOf('native-preflight-') === 0) {
                 const stage = reason.slice('native-preflight-'.length);
-                const allowed = /^(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/;
+                const allowed = /^(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model|found-intent|found-batch|found-source-drift|owned-baseline)$/;
                 if (allowed.test(stage)) {
                     return isRussian
                         ? 'Нативная проверка не пройдена (этап: ' + stage + '). Изменения не применены.'
@@ -1620,7 +1650,12 @@
         // P5c: use UNSAVED form data; never submit an Apply transaction.
         $('#zapretPreviewAct').off('click').on('click', function(event) {
             event.preventDefault();
-            if (blockUncommittedFoundEdits()) return;
+            if (foundHostlistDirty()) {
+                showRuntimeError(runtimeText.applyError, isRussian
+                    ? 'Чтобы проверить стратегию с правками найденных доменов, сначала примените списки.'
+                    : 'Apply found-list edits before previewing the strategies that use them.');
+                return;
+            }
             if (previewPending || strategiesApplyPending || strategiesApplyNeedsReview ||
                 runtimeWasBusy || releaseApplyPending || releaseNeedsReview ||
                 extraBusy || extraInstallPending || extraRemovePending || extraNeedsReview) return;
@@ -1634,7 +1669,7 @@
             $.ajax({
                 type: 'POST',
                 url: '/api/zapret/settings/preview',
-                data: getFormData('frm_GeneralSettings'),
+                data: strategiesFormData(),
                 dataType: 'json',
                 timeout: 170000
             }).done(function(data) {
@@ -1708,10 +1743,26 @@
         // timeout is not proof that native Config/runtime/IPFW were untouched.
         $("#reconfigureAct").off('click').on('click', function(event) {
             event.preventDefault();
-            if (blockUncommittedFoundEdits()) return;
             if (strategiesApplyPending || strategiesApplyNeedsReview || previewPending ||
                 extraBusy || extraInstallPending || extraNeedsReview || runtimeWasBusy ||
                 releaseApplyPending) return;
+            const intent = fiveHostlistIntent();
+            if (!intent && foundHostlistDirty()) {
+                showRuntimeError(runtimeText.applyError, isRussian
+                    ? 'Не удалось подтвердить исходные списки. Сохраните текст правок перед обновлением страницы.'
+                    : 'The source lists could not be verified. Copy your edits before reloading.');
+                return;
+            }
+            let form = strategiesFormData();
+            if (intent) {
+                const multipart = new FormData();
+                new URLSearchParams($.param(form)).forEach(function(value, key) {
+                    multipart.append(key, value);
+                });
+                multipart.append('found_intent', new Blob([JSON.stringify(intent)],
+                    {type: 'application/json'}), 'found-intent.json');
+                form = multipart;
+            }
             strategiesApplyPending = true;
             reconcileStrategiesApplyControls();
 
@@ -1729,7 +1780,9 @@
             $.ajax({
                 type: 'POST',
                 url: '/api/zapret/settings/apply',
-                data: getFormData('frm_GeneralSettings'),
+                data: form,
+                processData: !intent,
+                contentType: intent ? false : 'application/x-www-form-urlencoded; charset=UTF-8',
                 dataType: 'json',
                 // Native configdpRun may run for 600s. A short default
                 // timeout must not invite another Apply during that worker.
@@ -1738,8 +1791,10 @@
                 handleFormValidation('frm_GeneralSettings',
                     localizeStrategiesFieldErrors((data && data.validations) || {}));
                 if (data && data.result === 'saved' && data.status === 'ok') {
-                    reloadSettings().done(function() {
-                        loadFiveHostlists();
+                    fiveHostlistBase = null;
+                    fiveHostlistReady = false;
+                    reloadSettings().then(loadFiveHostlists).done(function() {
+                        if (!fiveHostlistReady) needsReview();
                         if (data.normalized && Array.isArray(data.normalization)) {
                             BootstrapDialog.show({
                                 type: BootstrapDialog.TYPE_INFO,
@@ -1761,6 +1816,20 @@
                     if (!data || data.result !== 'failed' ||
                         data.requires_review === true) {
                         needsReview();
+                    } else if (data.found_error) {
+                        const invalid = foundHostlistFields.find(function(spec) {
+                            return spec.source === data.found_error.source;
+                        });
+                        const line = data.found_error.line;
+                        if (invalid && Number.isInteger(line) && line > 0) {
+                            const field = $('#' + invalid.id);
+                            if (!field.is(':visible')) $('#' + invalid.id + 'Toggle').trigger('click');
+                            const message = isRussian
+                                ? invalid.label + ', строка ' + line + '. Укажите домен без ! и ^.'
+                                : invalid.label + ', line ' + line + '. Enter a valid domain without ! or ^.';
+                            fiveHostlistStatus(message, true);
+                            field.trigger('focus');
+                        }
                     } else if (typeof data.message === 'string' && data.message) {
                         // Only explicitly rejected, pre-dispatch errors are
                         // editable without a new Config snapshot.

@@ -2,8 +2,7 @@
 
 ## ACTIVE — transition from integrated _70 to ТЗ_6v2 (16 November 2026)
 
-**Owner priority correction, 17 Nov:** separate CLOSED/NOT MERGED #1182 damaged pkgdb/SQLite investigation no longer blocks approved TZ6v2 GUI and testing .pkg. New source-only _89 from merged _88 first fixes directly observed native Advanced Auto Restart mislayout (a bounded piece of STEP 8). Proceed with STEP 2–7 and then remaining STEP 8–10; no claim of a completed five-editor GUI or native acceptance.
-
+**Owner priority, 18 November 2026.** Deliver the bottom Apply in four steps. Complete PREPARED, partial file and uncertain Config recovery. Finish the single native Apply for all five editors. Verify persistence and the real RUNNING/STOPPED lifecycle. Then run the affected acceptance and prepare the testing package. During implementation use the shortest affected checks and reuse evidence for unchanged paths.
 
 **`_88` real native bounded PASS — 17 November 2026:** [one OPNsense 26.7 VM #44087872134](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44087872134) (test-code head `cdd1f1d2a5c0d84e6b6df5382a60942882c7c85b`) physically interrupted native `pkg` extraction at **4 restored / 7 unrestored** files, issued QEMU `system_reset` and proved new FreeBSD boot on the same VM. After restart original protected `prepared` record SHA and root-private candidate archive survived, previous Auto epoch stayed retired, saved Zapret2 and WAN semantic settings were unchanged and `dvtws2` was absent. Installed service was **untrusted** and `pkgdb` package query failed (rc=1); no postboot Start/Apply/repair was attempted: **PASS_FAIL_CLOSED_NO_SERVICE, manual review required**. Before interruption the disposable test **fsynced the already saved system Config inode without changing bytes**. Therefore this is NOT proof of full host power loss, unsynced Config durability, safe package recovery or an operational updated product. No `_88.pkg` published and owner installed `_79` untouched.
 
@@ -113,10 +112,10 @@ Every step has the **existing input → minimum actual change → observable exi
 
 **18 November 2026 `_94` physical predecessor observation (SOURCE ONLY):** The read-only cold FD9→Config→P2 inspection now reuses the existing common Voice/Strategies runtime/IPFW inspector to qualify the previous sealed committed owner as ready or stopped, with explicit unproven initial/no-previous state. Recheck all three P2 sources and original WAL after that observation, preserving no-commit/no-restore. See [verification](../verification/TZ6V2_FIVE_EDITOR_UI_DRAFT.md). This is one prerequisite for recovery, NOT the actual durable cross-resource commit or GUI Apply.
 
-**STEP 6 — Connect all five editors to the ONE existing bottom Apply. STATUS: `_94` DRAFT safety guard (dirty found draft refuses old Apply); original native FD9 all-source commit, successful Apply receipt and rollback OPEN.**
+**STEP 6 — Connect all five editors to the one existing bottom Apply. STATUS: `_94` Draft source connected. Installed browser and native service acceptance are open.**
 - **Input:** new safe validated five-source transaction and existing Strategies+Voice WAN-first shared original Apply/FD9.
 - **Minimum change:** original bottom Apply persists correct Config+three auto files, then follows **normal native lifecycle**, including **intentional restart if RUNNING even when only found-files or unchanged form**; STOPPED/Disabled intent stays stopped. Remove independent GUI Save/Reload/found-only file Apply path; do not remove native protected writer reused by minute worker. Unknown transport outcome requires status review, never extra blind restart.
-- **Exit:** rendered native input → real protected commit → same original service restart/rollback → F5 persisted all sources; invalid value fails before mutation; no second service/Config owner or double restart. Test RUNNING, STOPPED and failure separately.
+- **Exit:** the installed browser sends one original Apply, invalid input refuses before mutation, and F5 shows the persisted five sources. Confirm the native RUNNING restart, STOPPED persistence and the recovery branches. Reuse prior unrelated evidence.
 
 **STEP 7 — Rework the P4 native Strategies GUI/help. STATUS: `_94` DRAFT SOURCE PARTIAL: 2 found disclosures, 1 shared field, root-locked load, local RU/EN Help and removal of separate GUI Save/Reload; native installed browser and backend Apply acceptance OPEN.**
 - **Input:** original two native manual editors + original shared field.

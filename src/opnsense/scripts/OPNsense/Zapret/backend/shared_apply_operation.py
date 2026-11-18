@@ -36,6 +36,16 @@ FOUND_FILE_PHASES = frozenset(("found-files-writing", "found-files-written"))
 # a fresh Config lock reverses lock order and risks deadlocking P2a.
 FOUND_CONFIG_PHASES = frozenset(("found-config-saving", "found-config-saved"))
 FOUND_POST_PHASES = frozenset(("found-files-written", *FOUND_CONFIG_PHASES))
+FOUND_ROLLBACK_FROM = frozenset((*FOUND_FILE_PHASES, "found-config-saving"))
+FOUND_RESTORING = "found-restoring"
+FOUND_RUNTIME_NEXT = {
+    "found-config-saved": {"activating"},
+    "activating": {"activated"},
+    "activated": {"config-saved", "epoch-finalizing"},
+    "config-saved": {"committed"},
+    "epoch-finalizing": {"committed"},
+}
+FOUND_RUNTIME_PHASES = frozenset(FOUND_RUNTIME_NEXT) - {"found-config-saved"}
 FOUND_NEXT = {"prepared": "found-files-writing",
               "found-files-writing": "found-files-written",
               "found-files-written": "found-config-saving",
@@ -48,7 +58,7 @@ PHASES = frozenset((
     "prepared", "activating", "activated", "config-saved",
     "epoch-finalizing", "committed", "restored", "restore-failed", "requires-review",
     "found-files-writing", "found-files-written",
-    "found-config-saving", "found-config-saved",
+    "found-config-saving", "found-config-saved", FOUND_RESTORING,
 ))
 TERMINAL = frozenset(("committed", "restored"))
 NEXT = {
@@ -124,9 +134,17 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
     file parser, Config reader or second write-ahead log is introduced.
     """
     basics = {"schema", "kind", "plan_sha256", "sources"}
-    pinned = phase in FOUND_POST_PHASES
-    writing = phase in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES
+    rollback = phase == FOUND_RESTORING
+    pinned = phase in FOUND_POST_PHASES | FOUND_RUNTIME_PHASES or (
+        rollback and isinstance(found, dict) and "post" in found)
+    writing = rollback or pinned or phase == "found-files-writing"
     required = basics | ({"stages"} if writing else set()) | ({"post"} if pinned else set())
+    if isinstance(found, dict) and "runtime_mode" in found:
+        if found["runtime_mode"] not in ("0", "1"):
+            raise SharedOperationError("invalid found runtime mode")
+        required.add("runtime_mode")
+    if rollback:
+        required.add("restoring")
     if (not isinstance(found, dict) or
             set(found) != required or
             type(found["schema"]) is not int or found["schema"] != 1 or
@@ -135,12 +153,21 @@ def _validate_found_intent(found: object, detail: dict, phase: str) -> dict:
             not DIGEST.fullmatch(found["plan_sha256"]) or
             found["sources"] != list(FOUND_NAMES) or
             detail["page"] != "strategies" or
-            phase not in ("prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES)):
+            phase not in {"prepared", FOUND_RESTORING} | FOUND_FILE_PHASES |
+                         FOUND_CONFIG_PHASES | FOUND_RUNTIME_PHASES):
         raise SharedOperationError("invalid sealed found intent in original journal")
     if writing:
         _validate_found_stages(found["stages"])
     if pinned:
         _validate_found_post(found["post"])
+    if rollback:
+        restoring = found["restoring"]
+        if not isinstance(restoring, dict) or not set(restoring).issubset(found["stages"]):
+            raise SharedOperationError("invalid found rollback sources")
+        for name, pin in restoring.items():
+            if pin is None and name == "auto":
+                continue
+            _validate_found_stages({name: {"state": "ready", "pin": pin}})
     return found
 
 
@@ -158,13 +185,16 @@ def _validate_found_stages(stages: object) -> dict:
                 row["state"] not in ("ready", "installed"):
             raise SharedOperationError("invalid found staged source status")
         pin = row["pin"]
-        if not isinstance(pin, dict) or set(pin) != {
-                "device", "inode", "mtime_ns", "size", "sha256"} or \
+        fields = {"device", "inode", "mtime_ns", "size", "sha256"}
+        if not isinstance(pin, dict) or set(pin) not in (fields, fields | {"temp"}) or \
                 any(type(pin[k]) is not int or pin[k] <= 0
                     for k in ("device", "inode", "mtime_ns")) or \
                 type(pin["size"]) is not int or pin["size"] < 0 or \
                 type(pin["sha256"]) is not str or not DIGEST.fullmatch(pin["sha256"]):
             raise SharedOperationError("invalid found staged inode pin")
+        if "temp" in pin and (not isinstance(pin["temp"], str) or not re.fullmatch(
+                r"\.auto-(?:detect|hostlist)-[a-f0-9]{32}\.tmp", pin["temp"])):
+            raise SharedOperationError("invalid found temporary filename")
     return stages
 
 
@@ -214,7 +244,7 @@ def _validate_record(record: object) -> dict:
     _validate_detail(record["detail"])
     # No old Voice/Strategies record may invent protected physical or
     # Config-save uncertainty checkpoints without this exact found intent.
-    if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES and "found" not in record:
+    if record["phase"] in FOUND_FILE_PHASES | FOUND_CONFIG_PHASES | {FOUND_RESTORING} and "found" not in record:
         raise SharedOperationError("found checkpoint missing original intent")
     if "found" in record:
         _validate_found_intent(record["found"], record["detail"], record["phase"])
@@ -285,7 +315,8 @@ class SharedApplyOperation:
         except (ValueError, TypeError, UnicodeError) as error:
             raise SharedOperationError("corrupt common Apply record") from error
 
-    def prepare_found(self, detail: dict, sealed_plan: bytes, attest) -> dict:
+    def prepare_found(self, detail: dict, sealed_plan: bytes, attest, *,
+                      runtime_mode: str | None = None) -> dict:
         """One fsynced ORIGINAL prepared record, prior to any HOSTLIST write.
 
         The attest callback must check the original FD9, immutable full
@@ -331,6 +362,8 @@ class SharedApplyOperation:
                   "found": {"schema": 1, "kind": FOUND_KIND,
                             "plan_sha256": hashlib.sha256(sealed_plan).hexdigest(),
                             "sources": list(FOUND_NAMES)}}
+        if runtime_mode is not None:
+            result["found"]["runtime_mode"] = runtime_mode
         previous = committed_owner(before)
         if previous is not None:
             result["previous"] = previous
@@ -491,6 +524,47 @@ class SharedApplyOperation:
         record = dict(before)
         record["phase"] = phase
         return self._persist_record(record)
+
+    def record_found_rollback(self, record: dict, sealed_plan: bytes, *,
+                              source: str | None = None, pin: dict | None = None,
+                              complete: bool = False) -> dict:
+        """Persist rollback intent and each before-inode pin under Config/P2."""
+        if ("found" not in record or
+                record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or
+                self.read() != record):
+            raise SharedOperationError("original found rollback record changed")
+        phase = record["phase"]
+        if phase in FOUND_ROLLBACK_FROM and source is None and not complete:
+            return self._persist_record({
+                **record, "phase": FOUND_RESTORING,
+                "found": {**record["found"], "restoring": {}},
+            })
+        if phase != FOUND_RESTORING:
+            raise SharedOperationError("original found rollback phase mismatch")
+        if complete and source is None:
+            restored = dict(record)
+            restored.pop("found")
+            restored["phase"] = "restored"
+            return self._persist_record(restored)
+        if source not in record["found"]["stages"] or complete:
+            raise SharedOperationError("source was not written by the found transaction")
+        restoring = {**record["found"]["restoring"], source: pin}
+        return self._persist_record({
+            **record, "found": {**record["found"], "restoring": restoring},
+        })
+
+    def advance_found_runtime(self, phase: str, record: dict, sealed_plan: bytes, attest) -> dict:
+        """Keep the file intent through the ordinary runtime/IPFW lifecycle."""
+        if ("found" not in record or
+                record["found"].get("runtime_mode") not in ("0", "1") or
+                phase not in FOUND_RUNTIME_NEXT.get(record["phase"], set()) or
+                record["found"]["plan_sha256"] != hashlib.sha256(sealed_plan).hexdigest() or
+                self.read() != record or attest() is not True or self.read() != record):
+            raise SharedOperationError("original found runtime transition refused")
+        result = {**record, "phase": phase}
+        if phase == "committed":
+            result.pop("found")
+        return self._persist_record(result)
 
     def advance(self, phase: str, detail: dict) -> dict:
         if phase not in PHASES:
@@ -976,7 +1050,7 @@ def native_lifecycle_gate(action: str | None = None, *,
         return {"state": "blocked", "reason": "shared-runtime-owned",
                 "phase": phase, "safe_to_mutate": False}
     if phase in TERMINAL or (
-        action is not None and exceptions[action] == phase
+        "found" not in record and action is not None and exceptions[action] == phase
     ):
         return {"state": "clear", "safe_to_mutate": True}
     return {"state": "blocked", "reason": "shared-apply-pending",
@@ -985,6 +1059,7 @@ def native_lifecycle_gate(action: str | None = None, *,
 
 def main(argv: list[str]) -> int:
     inspection = len(argv) == 2 and argv[1] == "inspect"
+    found_pending = len(argv) == 2 and argv[1] == "found-pending"
     native_gate_request = len(argv) in (2, 3) and argv[1] == "native-gate" and (
         len(argv) == 2 or argv[2] in (
             "common-apply", "common-recover-saved",
@@ -1014,14 +1089,18 @@ def main(argv: list[str]) -> int:
     cold_restore = len(argv) == 4 and argv[1] in (
         "finish-activated", "finish-activating", "finish-remove-saved"
     ) and all(OP_ID.fullmatch(value) for value in argv[2:])
-    if not (inspection or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or recovery or finish or pristine or cold_restore or native_gate_request):
+    if not (inspection or found_pending or owner_witness or remove_prepared_context or remove_trial_context or remove_pair or remove_revert or review or finish_review or review_native or finish_review_native or recording or recovery or finish or pristine or cold_restore or native_gate_request):
         print("usage: shared_apply_operation.py inspect|record PHASE ID PAGE BASE CANDIDATE FIELDS",
               file=sys.stderr)
         return 64
     try:
         from voice_ipfw_adapter import require_lifecycle_lock
         require_lifecycle_lock()
-        if native_gate_request:
+        if found_pending:
+            record = SharedApplyOperation().read()
+            if record is not None and "found" in record:
+                print(record["detail"]["id"])
+        elif native_gate_request:
             action = argv[2] if len(argv) == 3 else None
             state = native_lifecycle_gate(action)
             if not state["safe_to_mutate"]:

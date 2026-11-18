@@ -123,7 +123,7 @@ must(str_contains($controller, 'SharedApplyFoundIntent::uploadedMetadata(') &&
      str_contains($controller, "SharedApplyEnvelope::encode('strategies'"),
      'Existing Strategies Apply does not bind original PHP upload');
 $run = file_get_contents(__DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh');
-must(str_contains($run, 'preflight-rejected=found-transaction-pending') &&
+must(str_contains($run, 'shared_apply_native_config found-save') &&
      str_contains($run, "has(\"found_intent\")"),
      'Original FD9 can silently apply uncommitted found payload');
 // TZ6v2 readonly stage: one inherited Config FD plus original FD9.
@@ -142,7 +142,7 @@ must(str_contains($requestSource, 'SharedApplyFoundStage::prepare($config, $prep
      str_contains($rootStageSource, 'assert_inherited_config_fd(4, CONFIG_PATH') &&
      str_contains($rootStageSource, 'exclusive_destination_lock(AUTO_LOCK, 0)') &&
      str_contains($rootStageSource, '"commit_authorized": False') &&
-     str_contains($run, 'preflight-rejected=found-transaction-pending'),
+     str_contains($run, 'shared_apply_native_config found-save'),
      'native read-only batch lost original Config/FD9 authority');
 try {
     \OPNsense\Zapret\Native\SharedApplyFoundStage::prepare(new stdClass(), []);

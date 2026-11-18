@@ -156,8 +156,6 @@ class SettingsController extends ApiMutableModelControllerBase
                 }
                 // This request's actual PHP upload only. Do not accept a
                 // client-specified file path, and never create a second writer.
-                // The root FD9 executor continues to refuse uncommitted
-                // found intent BEFORE Config, runtime or IPFW mutation.
                 $preflightStage = 'found-upload';
                 $foundUpload = \OPNsense\Zapret\Native\SharedApplyFoundIntent::uploadedMetadata(
                     $_FILES
@@ -235,7 +233,7 @@ class SettingsController extends ApiMutableModelControllerBase
                         $duplicates = 0;
                     } else {
                         try {
-                            $domain = DomainSetPolicyBridge::inspect($raw, $field);
+                            $domain = DomainSetPolicyBridge::inspect($raw, $field, sortManual: true);
                         } catch (\InvalidArgumentException $error) {
                             return $this->validationFailure($field, $error->getMessage());
                         }
@@ -339,7 +337,14 @@ class SettingsController extends ApiMutableModelControllerBase
             // them only before journal PREPARED / Config / runtime / IPFW changes.
             // A generic requires_review here would freeze the GUI for a
             // safely rejected candidate and conceal the actual stage.
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent|found-batch|found-transaction-pending|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=found-(youtube|user|auto)-line-([1-9][0-9]{0,5})$/D',
+                    $response, $match)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                    'found_error' => ['source' => $match[1], 'line' => (int)$match[2]],
+                ];
+            }
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
@@ -349,6 +354,15 @@ class SettingsController extends ApiMutableModelControllerBase
                         gettext('Native Strategies preflight rejected before Apply (%s)'),
                         $match[1]
                     ),
+                ];
+            }
+            if (preg_match('/(?:^|\n)apply-(restored|recovered)=[a-f0-9]{32}$/D', $response, $match)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                    'reason' => 'found-' . $match[1],
+                    'message' => $match[1] === 'restored'
+                        ? gettext('Apply failed and the original settings were restored.')
+                        : gettext('The previous Apply was recovered. Reload before applying again.'),
                 ];
             }
             $wanSaved = $wanOnlyCandidate &&
@@ -523,54 +537,6 @@ class SettingsController extends ApiMutableModelControllerBase
             return $data;
         } catch (\Throwable $error) {
             error_log('Zapret Auto Hostlist read unavailable: ' . get_class($error));
-            return ['result' => 'error', 'reason' => 'unavailable'];
-        }
-    }
-
-    public function autoHostlistSaveAction(): array
-    {
-        if (!$this->request->isPost()) {
-            return ['result' => 'error', 'reason' => 'post_required'];
-        }
-        $this->throwReadOnly();
-        $post = $this->request->getPost('auto_hostlist');
-        if (!is_array($post) || count($post) !== 2 ||
-            !isset($post['revision'], $post['content']) ||
-            !is_string($post['revision']) || !is_string($post['content']) ||
-            preg_match('/^[a-f0-9]{64}$/D', $post['revision']) !== 1 ||
-            strlen($post['content']) > 40960) {
-            return ['result' => 'error', 'reason' => 'invalid_request'];
-        }
-        try {
-            $json = json_encode(
-                ['revision' => $post['revision'], 'content' => $post['content']],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-            );
-            $token = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
-            if (strlen($token) > 57000) {
-                return ['result' => 'error', 'reason' => 'input_too_large'];
-            }
-            $output = (string)(new Backend())->configdpRun(
-                'zapret auto_hostlist_save', [$token], false, 30
-            );
-            if (strlen($output) > 50000) {
-                throw new \RuntimeException('Auto Hostlist save reply too large');
-            }
-            $data = json_decode(trim($output), true);
-            if (!is_array($data) || !in_array($data['result'] ?? null,
-                    ['saved', 'conflict', 'error'], true)) {
-                throw new \RuntimeException('Invalid Auto Hostlist save response');
-            }
-            if ($data['result'] === 'saved' &&
-                (!is_string($data['revision'] ?? null) ||
-                 preg_match('/^[a-f0-9]{64}$/D', $data['revision']) !== 1 ||
-                 !is_string($data['content'] ?? null) ||
-                 !in_array($data['status'] ?? null, ['empty', 'populated'], true))) {
-                throw new \RuntimeException('Invalid Auto Hostlist save receipt');
-            }
-            return $data;
-        } catch (\Throwable $error) {
-            error_log('Zapret Auto Hostlist save unavailable: ' . get_class($error));
             return ['result' => 'error', 'reason' => 'unavailable'];
         }
     }

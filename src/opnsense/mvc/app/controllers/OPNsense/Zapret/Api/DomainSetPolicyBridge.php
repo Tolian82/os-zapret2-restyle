@@ -27,7 +27,8 @@ final class DomainSetPolicyBridge
     ];
 
     /** @return array{normalized:string,changed:int,duplicates:int,entry_count:int} */
-    public static function inspect(string $input, string $field, ?string $python = null, ?string $module = null): array
+    public static function inspect(string $input, string $field, ?string $python = null,
+                                   ?string $module = null, bool $sortManual = false): array
     {
         if (!isset(self::FIELDS[$field]) || strlen($input) > self::MAX_INPUT_BYTES) {
             throw new \InvalidArgumentException('Invalid bounded domain field');
@@ -46,7 +47,7 @@ final class DomainSetPolicyBridge
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         $pipes = [];
         $process = @proc_open(
-            [$binary, $script, 'inspect'],
+            [$binary, $script, $sortManual && $field !== 'excludedomains' ? 'manual-edit' : 'inspect'],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,

@@ -413,7 +413,7 @@ def examine_pending_found_previous(record: dict, *, inspector=examine_shared,
     if (not isinstance(record, dict) or
             record.get("phase") not in (
                 "prepared", "found-files-writing", "found-files-written",
-                "found-config-saving", "found-config-saved") or
+                "found-config-saving", "found-config-saved", "found-restoring") or
             not isinstance(record.get("found"), dict) or
             not isinstance(record.get("detail"), dict)):
         raise VoiceInspectError("not an original pending found operation")

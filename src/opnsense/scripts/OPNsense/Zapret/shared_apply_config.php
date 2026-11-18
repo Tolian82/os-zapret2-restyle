@@ -323,15 +323,15 @@ final class SharedApplyConfigWorker
      */
     private static function originalFoundLockedFileEvidence(
         object $config, string $id, string $mode = 'classify-locked',
-        ?string $configDigest = null
+        ?string $configDigest = null, ?string $runtimeMode = null,
+        ?callable $whileP2Held = null
     ): array {
-        // ONLY the original held native Config/FD9 owner may request the
-        // pristine PREPARED closure. The default path remains read-only.
-        if (!in_array($mode, ['classify-locked', 'recover-prepared-locked'], true) ||
-            ($mode === 'recover-prepared-locked' &&
+        $begin = $mode === 'begin-found-save-locked';
+        if (($mode === 'classify-locked' ? $configDigest !== null :
                 (!is_string($configDigest) ||
                  !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
-            ($mode === 'classify-locked' && $configDigest !== null)) {
+            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null)
+                    : ($runtimeMode !== null || $whileP2Held !== null))) {
             throw new \RuntimeException('Unqualified original cold native mode');
         }
         SharedApplyLifecycleLock::assertHeld();
@@ -363,9 +363,12 @@ final class SharedApplyConfigWorker
             if ($configDigest !== null) {
                 $command[] = $configDigest;
             }
+            if ($begin) {
+                $command[] = $runtimeMode;
+            }
             $proc = @proc_open(
                 $command,
-                [0 => ['file', '/dev/null', 'r'],
+                [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
                  1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
                  4 => $handle, 9 => $fd9],
                 $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
@@ -394,6 +397,17 @@ final class SharedApplyConfigWorker
                             throw new \RuntimeException('Original cold native child interrupted');
                         }
                         $output .= $piece;
+                        if ($begin && $output === "ready\n" && isset($pipes[0])) {
+                            // The original Python child keeps P2 held from
+                            // physical writes through the only native save.
+                            // Even a throwing save releases this scope.
+                            try {
+                                $whileP2Held();
+                            } finally {
+                                fclose($pipes[0]);
+                                unset($pipes[0]);
+                            }
+                        }
                     }
                 }
                 fclose($pipes[1]);
@@ -403,7 +417,9 @@ final class SharedApplyConfigWorker
                 if ($code !== 0 || strlen($output) > 16384 || $output === '') {
                     throw new \RuntimeException('Original FD9/P2 staged image unknown');
                 }
-                $reply = json_decode($output, true, 12, JSON_THROW_ON_ERROR);
+                $reply = $begin && $output === "ready\n" && !isset($pipes[0])
+                    ? ['result' => 'ready']
+                    : json_decode($output, true, 12, JSON_THROW_ON_ERROR);
                 if (!is_array($reply)) {
                     throw new \RuntimeException('Original native cold image malformed');
                 }
@@ -429,6 +445,81 @@ final class SharedApplyConfigWorker
             }
         } finally {
             fclose($fd9);
+        }
+    }
+
+    private static function saveFoundNative(
+        array $plan, string $id, string $mode, object $config, callable $factory
+    ): array {
+        $scopes = 0;
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        try {
+            return SharedConfigCommit::persistFoundUnderOriginalOwner(
+                $plan, 'strategies', $config, $factory,
+                static function (callable $saveScope) use (
+                    &$scopes, $config, $mode, $id, $candidate
+                ): string {
+                    if (++$scopes === 1) {
+                        $status = null;
+                        $ready = self::originalFoundLockedFileEvidence(
+                            $config, $id, 'begin-found-save-locked', $candidate, $mode,
+                            static function () use ($saveScope, &$status): void {
+                                $status = $saveScope();
+                            }
+                        );
+                        if (($ready['result'] ?? null) !== 'ready' || !is_string($status)) {
+                            throw new \RuntimeException('Original found save scope unavailable');
+                        }
+                        return $status;
+                    }
+                    $receipt = self::originalFoundLockedFileEvidence(
+                        $config, $id, 'confirm-found-save-locked', $candidate
+                    );
+                    if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
+                        throw new \RuntimeException('Original found save readback unavailable');
+                    }
+                    return $saveScope();
+                },
+                // The child proves the sealed files and fsyncs the relevant
+                // phase before either callback can execute.
+                static fn(string $stage, string $digest): bool =>
+                    hash_equals($candidate, $digest),
+                static fn(string $phase): bool => in_array(
+                    $phase, ['found-config-saving', 'found-config-saved'], true
+                )
+            );
+        } catch (\Throwable $error) {
+            // Even an error before the ready handshake can leave PREPARED
+            // or partial HOSTLIST bytes. Recovery reads the original WAL.
+            throw new SharedConfigSaveUncertain(
+                'Original found settings require joint recovery', 0, $error
+            );
+        }
+    }
+
+    private static function foundPhaseNative(
+        string $action, string $id, object $config, callable $factory
+    ): array {
+        $config->lock();
+        try {
+            $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
+            return self::originalFoundLockedFileEvidence(
+                $config, $id, $action === 'found-recover' ? 'recover-found-locked' : $action,
+                $digest
+            );
+        } finally {
+            $config->unlock();
+        }
+    }
+
+    private static function requireReadableConfig(): void
+    {
+        // Core Config initializes from a backup if the live XML is invalid.
+        // An interrupted save must keep its evidence for native review.
+        $xml = @simplexml_load_file('/conf/config.xml', \SimpleXMLElement::class,
+            LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        if ($xml === false || $xml->getName() !== 'opnsense') {
+            throw new SharedConfigSaveUncertain('Native Config image is unreadable');
         }
     }
 
@@ -590,11 +681,14 @@ final class SharedApplyConfigWorker
                 return 69;
             }
         }
-        if (count($argv) !== 4 || !in_array($argv[1],
-                ['preflight', 'save', 'saved', 'found-cold', 'found-recover-prepared'], true) ||
-            !in_array($argv[3], ['voice','strategies'], true) ||
-            (in_array($argv[1], ['found-cold', 'found-recover-prepared'], true) &&
-             $argv[3] !== 'strategies')) {
+        $action = $argv[1] ?? '';
+        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-recover',
+            'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
+            'found-runtime-epoch-finalizing', 'found-runtime-committed'];
+        $found = in_array($action, $foundActions, true);
+        if (count($argv) !== ($action === 'found-save' ? 5 : 4) ||
+            !in_array($action, ['preflight', 'save', 'saved', ...$foundActions], true) ||
+            !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -603,6 +697,9 @@ final class SharedApplyConfigWorker
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
             SharedApplyLifecycleLock::assertHeld();
+            if ($found) {
+                self::requireReadableConfig();
+            }
             require_once('script/load_phalcon.php');
             $plan = self::readPlan($argv[2], self::ROOT, 0);
             if ($plan['page'] !== $argv[3]) {
@@ -610,6 +707,16 @@ final class SharedApplyConfigWorker
             }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
+            if ($action === 'found-save') {
+                if (!in_array($argv[4], ['0', '1'], true) ||
+                    ($argv[4] === '1' &&
+                     (string)($plan['candidate']['general']['enabled'] ?? '') !== '1')) {
+                    throw new \InvalidArgumentException('Invalid planned found runtime mode');
+                }
+                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory);
+                echo self::postSaveReceipt($result);
+                return 0;
+            }
             if ($argv[1] === 'found-cold') {
                 $joint = self::inspectFoundColdNative(
                     $plan, $argv[2], $config, $factory);
@@ -620,6 +727,12 @@ final class SharedApplyConfigWorker
                 $receipt = self::recoverFoundPreparedNative(
                     $plan, $argv[2], $config, $factory);
                 echo json_encode($receipt, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($found) {
+                echo self::postSaveReceipt(self::foundPhaseNative(
+                    $action, $argv[2], $config, $factory
+                ));
                 return 0;
             }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {

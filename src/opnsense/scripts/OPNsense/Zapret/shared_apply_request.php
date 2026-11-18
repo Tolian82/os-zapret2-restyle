@@ -359,6 +359,11 @@ final class SharedApplyRequest
                 // Never echo the submitted envelope or exception text.
                 error_log(sprintf('Zapret shared Apply stage refused phase=%s type=%s',
                     $phase, get_class($error)));
+                if ($phase === 'found-batch' && $error instanceof \InvalidArgumentException &&
+                    preg_match('/^found-(youtube|user|auto)-line-[1-9][0-9]{0,5}$/D',
+                        $error->getMessage())) {
+                    $phase = $error->getMessage();
+                }
                 echo 'preflight-rejected=' . $phase . "\n";
                 return 0;
             }

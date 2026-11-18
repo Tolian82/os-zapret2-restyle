@@ -695,12 +695,12 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertIn('compose-planned', shell)
         self.assertIn('"${_orchestrator_build_found_id}"', orchestrator)
         self.assertIn('has("found_intent") and has("found_batch")', service)
-        self.assertIn('preflight-rejected=found-transaction-pending', service)
+        self.assertIn('shared_apply_native_config found-save', service)
         self.assertIn('verify-planned "$_shared_apply_id"', service)
         self.assertIn('preflight-rejected=found-source-drift', service)
         self.assertLess(service.index('verify-planned "$_shared_apply_id"'),
                         service.index('if ! apply_runtime_probe "$_shared_apply_root/release"'))
-        self.assertIn('if [ "$_shared_found_scope" != ordinary ]; then', service)
+        self.assertIn('found:strategies)', service)
 
 
 if __name__ == '__main__':

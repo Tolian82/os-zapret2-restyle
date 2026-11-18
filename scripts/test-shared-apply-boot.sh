@@ -182,6 +182,7 @@ MOCK
 chmod 700 "$ROOT/lockf"
 LOCKF_BIN="$ROOT/lockf"
 LIFECYCLE_LOCK_FILE="$ROOT/owner.lock"
+shared_apply_pending_found_service() { :; }
 shared_apply_has_record_service() { [ "$HAS_RECORD" = 1 ]; }
 shared_apply_inspect_service() { [ "$OWNER_OK" = 1 ] || return 69; echo "$OWNER"; }
 shared_apply_recover_saved_service() { echo saved-recovered >> "$LOG"; [ "$SAVED_OK" = 0 ] || return 69; }

@@ -33,7 +33,7 @@ def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def _target(path: Path, uid: int) -> tuple[bytes, os.stat_result]:
+def _target(path: Path, uid: int, *, links: int = 1) -> tuple[bytes, os.stat_result]:
     """Strict regular-file snapshot; never trust a symlink or a stale FD."""
     try:
         parent = path.parent.lstat()
@@ -41,7 +41,7 @@ def _target(path: Path, uid: int) -> tuple[bytes, os.stat_result]:
         if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != uid or
                 parent.st_mode & 0o022 or
                 not stat.S_ISREG(st.st_mode) or st.st_uid != uid or
-                st.st_nlink != 1 or st.st_mode & 0o022 or
+                st.st_nlink != links or st.st_mode & 0o022 or
                 st.st_size > MAX_TARGET):
             raise DestinationRefused("unsafe_destination")
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
@@ -51,9 +51,9 @@ def _target(path: Path, uid: int) -> tuple[bytes, os.stat_result]:
             b = os.fstat(fd)
         finally:
             os.close(fd)
-        identity = lambda x: (x.st_dev, x.st_ino, x.st_size,
-                              x.st_mtime_ns, x.st_ctime_ns, x.st_mode)
-        if identity(st) != identity(a) or identity(a) != identity(b) or len(data) != st.st_size:
+        identity = lambda x: (*_file_identity(x), x.st_mode, x.st_nlink)
+        if (identity(st) != identity(a) or identity(a) != identity(b) or
+                identity(b) != identity(path.lstat()) or len(data) != st.st_size):
             raise DestinationRefused("destination_changed_during_read")
         data.decode("utf-8")
         return data, st
@@ -85,10 +85,21 @@ def _edit(before: bytes, add: list[str], remove: list[str]) -> bytes:
     return result
 
 
-def _replace(path: Path, current: bytes, expected: bytes, uid: int, *, stage_fn=None) -> None:
+def _file_identity(st: os.stat_result) -> tuple:
+    return st.st_dev, st.st_ino, st.st_ctime_ns, st.st_mtime_ns, st.st_size
+
+
+def _stage_pin(st: os.stat_result, data: bytes) -> dict:
+    return {"device": st.st_dev, "inode": st.st_ino, "mtime_ns": st.st_mtime_ns,
+            "size": st.st_size, "sha256": _sha(data)}
+
+
+def _replace(path: Path, current: bytes, expected: bytes, uid: int, *,
+             stage_fn=None, expected_identity=None) -> None:
     """One protected same-directory replace after read-side CAS under GUI lock."""
     now, st = _target(path, uid)
-    if now != current:
+    if now != current or (expected_identity is not None and
+                          _file_identity(st) != expected_identity):
         raise DestinationRefused("destination_conflict_with_gui")
     temp = path.parent / (".auto-detect-" + secrets.token_hex(16) + ".tmp")
     fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -114,10 +125,8 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *, stage_fn=
         # Writers that ignore the shared GUI lock are not trusted. Recheck
         # before replace against the actual original inode identity.
         again, check = _target(path, uid)
-        preimage = (st.st_dev, st.st_ino, st.st_ctime_ns,
-                    st.st_mtime_ns, st.st_size)
-        observed = (check.st_dev, check.st_ino, check.st_ctime_ns,
-                    check.st_mtime_ns, check.st_size)
+        preimage = _file_identity(st)
+        observed = _file_identity(check)
         if again != current or observed != preimage:
             # The same inode and identical content can still be modified
             # in place by a foreign writer during temporary inode creation.
@@ -545,15 +554,17 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
         observed, st = _target(target, uid)
         if observed != contents:
             raise DestinationRefused("original_staged_inode_content_changed")
-        pin = {"device": st.st_dev, "inode": st.st_ino,
-               "mtime_ns": st.st_mtime_ns, "size": st.st_size,
-               "sha256": _sha(contents)}
+        pin = _stage_pin(st, contents)
         if phase == "ready":
             if name in ready_pins:
                 raise DestinationRefused("duplicate_original_staged_inode")
+            pin["temp"] = target.name
             ready_pins[name] = pin
         elif phase == "installed":
-            if name not in ready_pins or pin != ready_pins[name]:
+            if name not in ready_pins:
+                raise DestinationRefused("original_staged_inode_disappeared")
+            pin["temp"] = ready_pins[name]["temp"]
+            if pin != ready_pins[name]:
                 raise DestinationRefused("original_staged_inode_changed_at_rename")
         else:
             raise DestinationRefused("invalid_original_staged_inode_phase")
@@ -590,6 +601,7 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
             else:
                 if stage_fn is not None and replace_fn is None:
                     replace(path, before, after, uid,
+                            expected_identity=batch[name][2],
                             stage_fn=lambda phase, item, contents, n=name:
                                 file_stage(n, phase, item, contents))
                 else:
@@ -644,6 +656,10 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
             "config_committed": False, "commit_authorized": False,
         }
     except (OSError, ValueError, DestinationRefused) as error:
+        if stage_fn is not None:
+            # Durable forward pins already describe the actual replacements.
+            # Only journaled rollback may replace a before-image after this.
+            raise
         try:
             for name in reversed(modified):
                 path, before, after, status = original[name]
@@ -779,13 +795,155 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
             "config_committed": False, "commit_authorized": False}
 
 
-def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> dict:
-    """Apply three files only after durable PREPARED original FD9 intent.
+def _matches_stage(pin: dict, data: bytes, st: os.stat_result) -> bool:
+    return _stage_pin(st, data) == {key: pin[key] for key in
+                                   ("device", "inode", "mtime_ns", "size", "sha256")}
 
-    This API has NO registered configd action and cannot independently save
-    Config or claim a successful native Apply. Its caller must additionally
-    hold the original Config/P2 lock ordering across plan qualification.
-    """
+
+def _found_temp(path: Path, pin: dict, uid: int, *, links: int = 1) -> Path | None:
+    name = pin.get("temp")
+    if name is None:
+        return None
+    temp = path.with_name(name)
+    try:
+        data, info = _target(temp, uid, links=links)
+    except DestinationRefused as exc:
+        if isinstance(exc.__cause__, FileNotFoundError):
+            return None
+        raise
+    if not _matches_stage(pin, data, info):
+        raise DestinationRefused("foreign_found_temporary_inode")
+    return temp
+
+
+def _observe_found_source(path: Path, name: str, row: tuple,
+                         found: dict, uid: int) -> tuple[str, tuple | None, Path | None]:
+    before, after, original, status = row
+    stage = found["stages"].get(name)
+    forward = stage["pin"] if stage is not None else None
+    rollback = found.get("restoring", {})
+    backward = rollback.get(name)
+    linked_temp = None
+    try:
+        raw, info = _target(path, uid)
+    except DestinationRefused as exc:
+        if status != "missing":
+            raise
+        if isinstance(exc.__cause__, FileNotFoundError):
+            _shared_found_assert_missing(path, uid)
+            if name in rollback and backward is None:
+                return "restored", None, None
+            if stage is None or stage["state"] == "ready":
+                return "before", None, None
+            raise DestinationRefused("found_installed_source_missing") from exc
+        if forward is None or stage["state"] != "ready":
+            raise
+        # A crash between link-once and unlinking its temporary name leaves
+        # two links only for a newly created shared list. Pin both names.
+        raw, info = _target(path, uid, links=2)
+        linked_temp = _found_temp(path, forward, uid, links=2)
+        if linked_temp is None or not _matches_stage(forward, raw, info):
+            raise DestinationRefused("foreign_found_hardlink") from exc
+    identity = _file_identity(info)
+    if backward is not None and raw == before and _matches_stage(backward, raw, info):
+        return "restored", identity, None
+    if (status == "present" and raw == before and identity == original and
+            (stage is None or stage["state"] == "ready")):
+        return "before", identity, None
+    if before != after and raw == after and forward is not None and _matches_stage(
+            forward, raw, info):
+        post = found.get("post", {}).get(name)
+        if post is not None and identity != tuple(post[k] for k in
+                ("device", "inode", "ctime_ns", "mtime_ns", "size")):
+            raise DestinationRefused("found_postimage_changed")
+        return "after", identity, linked_temp
+    raise DestinationRefused("foreign_found_source_image")
+
+
+def _recover_found_preimages_locked(rows: dict, targets: dict, *, store, record: dict,
+                                   plan_bytes: bytes, uid: int, attest) -> dict:
+    """Restore only journal-attributed writes with the original Config and P2 held."""
+    from shared_apply_operation import FOUND_RESTORING, FOUND_ROLLBACK_FROM
+
+    if record["phase"] not in FOUND_ROLLBACK_FROM | {FOUND_RESTORING}:
+        raise DestinationRefused("found_rollback_phase_refused")
+    verified = _qualified_shared_found_batch(rows)
+    if set(targets) != set(verified) or len(set(targets.values())) != len(verified):
+        raise DestinationRefused("shared_found_targets_incomplete")
+    if store.read() != record or attest() is not True:
+        raise DestinationRefused("original_found_rollback_witness_refused")
+
+    def observe_all():
+        found = record["found"]
+        out = {}
+        for name in SHARED_FOUND_NAMES:
+            path = targets[name]
+            current = _observe_found_source(path, name, verified[name], found, uid)
+            # Validate every extant temporary name before the first mutation.
+            pinned = found["stages"].get(name, {}).get("pin")
+            if pinned is not None and current[2] is None:
+                _found_temp(path, pinned, uid)
+            restored = found.get("restoring", {}).get(name)
+            if restored is not None:
+                _found_temp(path, restored, uid)
+            out[name] = current
+        return out
+
+    observe_all()
+    if record["phase"] != FOUND_RESTORING:
+        record = store.record_found_rollback(record, plan_bytes)
+    for name in reversed(SHARED_FOUND_NAMES):
+        path = targets[name]
+        before, after, _, status = verified[name]
+        found = record["found"]
+        state, identity, linked_temp = observe_all()[name]
+        if attest() is not True:
+            raise DestinationRefused("original_found_rollback_witness_refused")
+        if state == "after":
+            if status == "missing":
+                record = store.record_found_rollback(record, plan_bytes, source=name)
+                # Recheck the exact attributed inode immediately before unlink.
+                if _observe_found_source(path, name, verified[name], record["found"],
+                                         uid) != (state, identity, linked_temp):
+                    raise DestinationRefused("found_create_changed_during_rollback")
+                path.unlink()
+                _sync(path.parent)
+            else:
+                # A refused or interrupted prior rollback may have left its
+                # own staged before-image. It is never another authority.
+                prior = found["restoring"].get(name)
+                temp = _found_temp(path, prior, uid) if prior is not None else None
+                if temp is not None:
+                    temp.unlink()
+                    _sync(path.parent)
+
+                def stage_restore(phase, item, content):
+                    nonlocal record
+                    if phase == "ready":
+                        actual, st = _target(item, uid)
+                        if actual != before or content != before or attest() is not True:
+                            raise DestinationRefused("original_found_restore_stage_refused")
+                        pin = {**_stage_pin(st, actual), "temp": item.name}
+                        record = store.record_found_rollback(
+                            record, plan_bytes, source=name, pin=pin)
+
+                _replace(path, after, before, uid, stage_fn=stage_restore,
+                         expected_identity=identity)
+        # Clean a ready forward file that never installed, or the remaining
+        # link of an interrupted create. Never scan/unlink by a name pattern.
+        forward = found["stages"].get(name, {}).get("pin")
+        temp = _found_temp(path, forward, uid) if forward is not None else None
+        if temp is not None:
+            temp.unlink()
+            _sync(path.parent)
+    if (any(state == "after" for state, _, _ in observe_all().values()) or
+            attest() is not True):
+        raise DestinationRefused("original_found_restore_not_attested")
+    return store.record_found_rollback(record, plan_bytes, complete=True)
+
+
+def _native_found_wal_context(operation_id: str, config_fd: int):
+    """Bind a private found phase to the existing locked Config and seal."""
     import sys
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not isinstance(operation_id, str) or
@@ -794,10 +952,10 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
         raise DestinationRefused("original_native_fd9_required")
     from shared_apply_seal import WORK, verify_seal
     from shared_apply_operation import SharedApplyOperation
-    from auto_detect_owned_sources import OWNED_ROOT, read_owned
+    from auto_detect_owned_sources import OWNED_ROOT
     from auto_detect_original_lock_handoff import (
         CONFIG_PATH, assert_inherited_config_fd)
-    from auto_detect_gui_hostlist import AUTO_HOSTLIST, AUTO_LOCK
+    from auto_detect_gui_hostlist import AUTO_HOSTLIST
     from voice_ipfw_adapter import require_lifecycle_lock
 
     require_lifecycle_lock()
@@ -806,7 +964,7 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
     store = SharedApplyOperation(owner=0)
     record = store.read()
-    if (record is None or record["phase"] != "prepared" or
+    if (record is None or
             "found" not in record or
             record["detail"]["id"] != operation_id or
             record["detail"]["page"] != "strategies"):
@@ -814,21 +972,8 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     work = WORK / operation_id
     signed = verify_seal(work, owner=0)
     target = work / "plan.json"
-    st = target.lstat()
-    if (not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or
-            st.st_nlink != 1 or stat.S_IMODE(st.st_mode) != 0o600 or
-            not 0 < st.st_size <= 4 * 1024 * 1024):
-        raise DestinationRefused("shared_found_original_plan_untrusted")
-    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
-    try:
-        pinned = os.fstat(fd)
-        raw = os.read(fd, 4 * 1024 * 1024 + 1)
-        after = os.fstat(fd)
-    finally:
-        os.close(fd)
-    identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns)
-    if (identity(st) != identity(pinned) or identity(st) != identity(after) or
-            len(raw) != st.st_size or
+    raw, mode = _target(target, 0)
+    if (stat.S_IMODE(mode.st_mode) != 0o600 or not raw or
             _sha(raw) != signed["sha256"]["plan.json"] or
             _sha(raw) != record["found"]["plan_sha256"]):
         raise DestinationRefused("shared_found_original_plan_changed")
@@ -842,57 +987,74 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
             plan.get("changed_fields") != record["detail"]["changed_fields"] or
             not isinstance(plan.get("found_intent"), dict) or
             plan["found_intent"].get("commit_authorized") is not False or
+            plan["found_intent"].get("config_revision") != record["detail"]["base"] or
             not isinstance(plan.get("found_batch"), dict)):
         raise DestinationRefused("shared_found_plan_not_original_owner")
     targets = {"youtube": OWNED_ROOT / "youtube.txt",
                "user": OWNED_ROOT / "user.txt",
                "auto": AUTO_HOSTLIST}
+    def attest() -> bool:
+        require_lifecycle_lock()
+        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return verify_seal(work, owner=0) == signed
+
+    return store, record, raw, plan["found_batch"], targets, attest
+
+
+def _attest_found_after_locked(rows: dict, targets: dict, record: dict, *, uid: int) -> bool:
+    """The recorded post-images belong to this Apply, including untouched sources."""
+    batch = _qualified_shared_found_batch(rows)
+    found = record["found"]
+    if set(batch) != set(found["post"]):
+        return False
+    for name, row in batch.items():
+        state, physical, alias = _observe_found_source(targets[name], name, row, found, uid)
+        pin = found["post"][name]
+        expected = "after" if row[0] != row[1] else "before"
+        expected_pin = (None if pin["status"] == "missing" else tuple(
+            pin[key] for key in ("device", "inode", "ctime_ns", "mtime_ns", "size")))
+        if state != expected or physical != expected_pin or alias is not None:
+            return False
+    return True
+
+
+def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int,
+                                          *, before_save=None) -> dict:
+    """Apply the P2 files under the original WAL and keep P2 through native save."""
+    from auto_detect_effective_known import _verify_planned_preimages_locked
+    from auto_detect_gui_hostlist import AUTO_LOCK
+    from auto_detect_owned_sources import OWNED_ROOT, read_owned
+
+    store, record, raw, rows, targets, attest = _native_found_wal_context(
+        operation_id, config_fd)
+    if record["phase"] != "prepared":
+        raise DestinationRefused("original_apply_not_prepared")
+    verified = _qualified_shared_found_batch(rows)
     with exclusive_destination_lock(AUTO_LOCK, 0):
-        owned = read_owned(OWNED_ROOT, owner_uid=0)
-        if not isinstance(owned, dict) or list(owned) != ["youtube", "user"]:
-            raise DestinationRefused("shared_found_known_owner_uninitialized")
-        rows = plan["found_batch"]
-        if not isinstance(rows, dict) or list(rows) != list(SHARED_FOUND_NAMES):
-            raise DestinationRefused("shared_found_plan_not_complete")
-        if any(owned[name] != rows[name].get("before") for name in ("youtube", "user")
-               if isinstance(rows[name], dict)):
-            raise DestinationRefused("shared_found_known_owner_changed")
-        from auto_detect_effective_known import _verify_planned_preimages_locked
-        verified = _qualified_shared_found_batch(rows)
-        _verify_planned_preimages_locked(
-            verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+        _verify_planned_preimages_locked(verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
 
         def exact_original_witness(phase: str, content: bytes) -> bool:
-            require_lifecycle_lock()
-            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-            if content != raw or verify_seal(work, owner=0) != signed:
+            if content != raw or not attest():
                 return False
             if phase == "found-files-writing":
                 _verify_planned_preimages_locked(
                     verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
-            elif phase in ("found-stage-ready", "found-stage-installed"):
-                # The stage callback's physical source reads establish
-                # the temp/destination inode under this inherited P2 lock.
-                pass
             elif phase == "found-files-written":
-                for name in SHARED_FOUND_NAMES:
-                    before_data, after_data, _, initial = verified[name]
-                    target = targets[name]
-                    if initial == "missing" and after_data == before_data:
-                        _shared_found_assert_missing(target, 0)
-                    elif _target(target, 0)[0] != after_data:
-                        return False
-                after_owned = read_owned(OWNED_ROOT, owner_uid=0)
-                if (after_owned is None or
-                        any(after_owned[name].encode() != verified[name][1]
-                            for name in ("youtube", "user"))):
+                owned = read_owned(OWNED_ROOT, owner_uid=0)
+                if (owned is None or any(owned[name].encode() != verified[name][1]
+                                          for name in ("youtube", "user"))):
                     return False
-            else:
-                return False
             return True
 
         result = _locked_shared_found_apply_journal(
             rows, targets, store=store, detail=record["detail"],
             plan_bytes=raw, uid=0, attest=exact_original_witness)
-        assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        if before_save is not None:
+            store.advance_found_config(
+                "found-config-saving", record["detail"], raw,
+                lambda phase, content: attest() and _attest_found_after_locked(
+                    rows, targets, store.read(), uid=0))
+            # Config::save() can release FD4. The callback must only wait for
+            # the PHP parent's acknowledgement; never try to re-lock Config.
+            before_save()
         return result

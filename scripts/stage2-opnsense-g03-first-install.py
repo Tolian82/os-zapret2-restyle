@@ -5,11 +5,13 @@ import hashlib
 import json
 import os
 import re
-import stat
+import runpy
+import secrets
 from pathlib import Path
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 ROOT = Path("/usr/local/etc/zapret2")
 STATE = Path("/var/db/zapret2-restyle")
@@ -60,71 +62,96 @@ def dispatch_and_poll():
     raise Refusal("G03_INSTALL_DID_NOT_REACH_VERIFIED_READY_STOPPED")
 
 
-def p4_native_hostlist_configd_acceptance(config_path: Path, config_sha: str):
-    """Real installed runtime path in the existing disposable G03 VM.
+def five_hostlist_native_apply(config_path: Path):
+    """Exercise the installed configd/FD9 path on the existing G03 guest."""
+    service = LAUNCHER.with_name("zapret_service.sh")
+    configctl = "/usr/local/sbin/configctl"
+    journal = Path("/var/db/zapret2/shared-apply/operation.json")
+    pidfile = Path("/var/run/dvtws2.pid")
+    editor_names = {"youtube": "youtube_found", "user": "user_found", "auto": "shared_found"}
+    runpy.run_path(str(Path(__file__).with_name("p5b2b-native-witness.py")))["set_guest_lo0"]()
 
-    This verifies native configd and file CAS, NOT browser button actions.
-    The test runs only after the genuine G03 first install/reinstall, and
-    starts neither dvtws2 nor a second writer to OPNsense config.xml.
-    """
-    path = ROOT / "ipset" / "auto-domains.txt"
-    directory = path.parent.lstat()
-    need(stat.S_ISDIR(directory.st_mode) and directory.st_uid == 0 and
-         not (directory.st_mode & 0o022),
-         "P4_RUNTIME_HOSTLIST_PARENT_UNSAFE_OR_MISSING")
-    need(not path.is_symlink(), "P4_RUNTIME_HOSTLIST_SYMLINK")
-
-    def command(action, token=None):
-        args = ["/usr/local/sbin/configctl", "zapret", action]
-        if token is not None:
-            args.append(token)
-        reply = run(args, timeout=40)
-        need(reply.returncode == 0, "P4_NATIVE_CONFIGD_CALL_FAILED_" + action)
-        try:
-            data = json.loads(reply.stdout.strip())
-        except (ValueError, TypeError):
-            raise Refusal("P4_NATIVE_CONFIGD_REPLY_INVALID_" + action) from None
-        need(type(data) is dict, "P4_NATIVE_CONFIGD_REPLY_NOT_OBJECT_" + action)
+    def read():
+        p = run([configctl, "zapret", "hostlist_editors_read"])
+        data = json.loads(p.stdout)
+        need(p.returncode == 0 and data.get("result") == "ok", "FIVE_HOSTLIST_READ_REFUSED")
         return data
 
-    def save(revision, value):
-        envelope = json.dumps({"revision": revision, "content": value},
-                              ensure_ascii=True, separators=(",", ":"))
-        token = base64.urlsafe_b64encode(envelope.encode()).decode().rstrip("=")
-        return command("auto_hostlist_save", token)
+    def apply(fields, snapshot=None, drafts=None):
+        root = ET.fromstring(config_path.read_bytes())
+        baseline = root.findtext("./OPNsense/Zapret/hostlist/telegramips") or ""
+        sync = {"telegramips_baseline": baseline}
+        upload = None
+        try:
+            if snapshot is not None:
+                sources = {}
+                for short, key in editor_names.items():
+                    editor = snapshot["editors"][key]
+                    sources[short] = {
+                        "base": {name: editor[name] for name in ("status", "revision", "content")},
+                        "draft": drafts.get(short, editor["content"]),
+                    }
+                payload = {"schema_version": 1, "kind": "tz6v2-found-form-intent",
+                           "config_revision": snapshot["config_revision"], "sources": sources}
+                raw = json.dumps(payload, separators=(",", ":")).encode()
+                upload = Path("/var/lib/php/tmp") / ("php" + secrets.token_hex(6))
+                fd = os.open(upload, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                with os.fdopen(fd, "wb") as out:
+                    out.write(raw)
+                sync["found_upload"] = {"path": str(upload), "size": len(raw),
+                                        "sha256": hashlib.sha256(raw).hexdigest(),
+                                        "owner_uid": os.geteuid()}
+            request = json.dumps({"page": "strategies", "fields": fields, "sync": sync},
+                                 separators=(",", ":")).encode()
+            token = base64.urlsafe_b64encode(request).decode().rstrip("=")
+            result = run([configctl, "zapret", "shared_apply", "strategies", token], timeout=180)
+            receipt = result.stdout.splitlines()[-1] if result.stdout.strip() else ""
+            need(result.returncode == 0, "FIVE_HOSTLIST_CONFIGD_UNAVAILABLE")
+            return receipt
+        finally:
+            if upload is not None:
+                upload.unlink(missing_ok=True)
 
-    before = command("auto_hostlist_read")
-    need(before.get("result") == "ok" and before.get("status") in ("missing", "empty")
-         and before.get("content") == "" and
-         re.fullmatch(r"[0-9a-f]{64}", str(before.get("revision", ""))),
-         "P4_NATIVE_CLEAN_HOSTLIST_READ_NOT_READY")
-    original = before["revision"]
-    probe = "p4-native-ci.example.com\n!^p4-native-skip.example.net\n"
-    saved = save(original, probe)
-    need(saved.get("result") == "saved" and saved.get("content") == probe and
-         saved.get("revision") != original and
-         saved.get("status") == "populated",
-         "P4_NATIVE_CONFIGD_HOSTLIST_SAVE_FAILED")
-    stale = save(original, "p4-stale.example.com\n")
-    need(stale.get("result") == "conflict",
-         "P4_NATIVE_CONFIGD_HOSTLIST_STALE_SAVE_NOT_REFUSED")
-    again = command("auto_hostlist_read")
-    need(again.get("result") == "ok" and again.get("content") == probe and
-         again.get("revision") == saved["revision"],
-         "P4_NATIVE_CONFIGD_STALE_SAVE_MODIFIED_DATA")
-    restored = save(again["revision"], "")
-    need(restored.get("result") == "saved" and
-         restored.get("status") == "empty" and restored.get("content") == "",
-         "P4_NATIVE_CONFIGD_RESTORE_EMPTY_FAILED")
-    final = path.lstat()
-    need(stat.S_ISREG(final.st_mode) and final.st_uid == 0 and
-         final.st_nlink == 1 and not (final.st_mode & 0o022) and
-         path.read_bytes() == b"",
-         "P4_NATIVE_CONFIGD_FINAL_FILE_UNSAFE")
-    need(hashlib.sha256(config_path.read_bytes()).hexdigest() == config_sha and
-         status()["service"] == "stopped",
-         "P4_NATIVE_CONFIGD_TOUCHED_CONFIG_OR_STARTED_SERVICE")
-    return "PASS_P4_NATIVE_CONFIGD_READ_SAVE_STALE_CAS_STOPPED"
+    def assert_commit(receipt, label):
+        match = re.fullmatch(r"applied-id=([0-9a-f]{32})", receipt)
+        record = json.loads(journal.read_bytes())
+        reason = receipt if re.fullmatch(r"preflight-rejected=[a-z0-9-]+", receipt) else "unconfirmed"
+        need(match is not None and record.get("phase") == "committed" and
+             record["detail"]["id"] == match[1], "FIVE_HOSTLIST_" + label + "_" + reason)
+
+    assert_commit(apply({"hostlist": {"mode": "list"}}), "LIST_BOOT")
+    initial_pid = pidfile.read_text().split()[0]
+    base = read()
+    old_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    invalid = apply({}, base, {"auto": "!example.net\n"})
+    need(invalid == "preflight-rejected=found-auto-line-1" and
+         pidfile.read_text().split()[0] == initial_pid and
+         hashlib.sha256(config_path.read_bytes()).hexdigest() == old_config,
+         "FIVE_HOSTLIST_INVALID_DRAFT_CHANGED_CONFIG_OR_PROCESS")
+
+    manual = {"youtubedomains": "!blocked.example.com\nmanual-youtube.example.org",
+              "userdomains": "^exact.example.org\nmanual-user.example.com"}
+    drafts = {"youtube": "sub.zapret-youtube.org\n", "user": "zapret-user.com\n",
+              "auto": "zapret-auto.net\n"}
+    assert_commit(apply({"hostlist": manual}, base, drafts), "RUNNING_APPLY")
+    running = read()["editors"]
+    need(status()["service"] == "running" and pidfile.read_text().split()[0] != initial_pid and
+         running["youtube_manual"]["content"] == manual["youtubedomains"] and
+         running["user_manual"]["content"] == manual["userdomains"] and
+         running["youtube_found"]["content"] == "zapret-youtube.org\n" and
+         running["user_found"]["content"] == drafts["user"] and
+         running["shared_found"]["content"] == drafts["auto"],
+         "FIVE_HOSTLIST_RUNNING_RESTART_OR_PERSISTENCE_UNVERIFIED")
+
+    need(run([str(service), "stop"]).returncode == 0 and status()["service"] == "stopped",
+         "FIVE_HOSTLIST_STOP_FAILED")
+    same_config = hashlib.sha256(config_path.read_bytes()).hexdigest()
+    assert_commit(apply({}, read(), {"auto": ""}), "STOPPED_APPLY")
+    need(status()["service"] == "stopped" and not pidfile.exists() and
+         read()["editors"]["shared_found"]["content"] == "" and
+         hashlib.sha256(config_path.read_bytes()).hexdigest() == same_config,
+         "FIVE_HOSTLIST_STOPPED_APPLY_STARTED_SERVICE_OR_CHANGED_CONFIG")
+    print("FIVE_HOSTLIST_NATIVE=PASS_CONFIGD_RUNNING_RESTART_STOPPED_APPLY", flush=True)
 
 
 def native_template_snapshot():
@@ -202,7 +229,6 @@ def main():
     # not a second package build or a separate VM.
     second = dispatch_and_poll()
     need(second == first, "G03_SAME_RELEASE_REINSTALL_STATE_CHANGED")
-    p4_hostlist_receipt = p4_native_hostlist_configd_acceptance(cfg, config_before)
     need(hashlib.sha256(cfg.read_bytes()).hexdigest() == config_before,
          "G03_UNEXPECTED_OPNSENSE_CONFIG_MUTATION")
     after = run(["/sbin/ipfw", "list"], timeout=15)
@@ -222,10 +248,9 @@ def main():
         "stock_configd_templates_preserved": True,
         "ipfw_initially_loaded": ipfw_before.returncode == 0,
         "no_foreign_config_or_ipfw_change": True,
-        "owner_browser_tested": False,
-        "p4_hostlist_native_configd_result": p4_hostlist_receipt,
-        "p4_hostlist_browser_save_tested": False
+        "owner_browser_tested": False
     }, sort_keys=True))
+    five_hostlist_native_apply(cfg)
 
 
 def bounded_disposable_failure_evidence():

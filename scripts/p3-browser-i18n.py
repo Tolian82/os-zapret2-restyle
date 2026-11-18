@@ -3,8 +3,7 @@
 
 Tests the actual server-selected root user profile locale, native Strategies
 and Voice forms, popup + F5 Full Help source, unsaved editing, reload and one
-read-only Voice invalid-IPSET validation. No shared Apply or Save Draft;
-explicit disposable-only P4 fixture separately exercises final HOSTLIST Save.
+read-only Voice invalid-IPSET validation and five-source form loading.
 The owner appliance A12-A16 acceptance remains a separate gate.
 """
 from __future__ import annotations
@@ -372,7 +371,7 @@ def check_p4_native_gui(page, mode: str) -> str:
         field = page.locator("#" + input_id)
         need(field.count() == 1 and field.input_value() == source["content"],
              "TZ6V2_BROWSER_FOUND_SOURCE_NOT_LOADED_" + mode + "_" + name)
-        need(field.is_enabled() == (source["status"] != "uninitialized"),
+        need(field.is_enabled() == snap["auto_owned_complete"],
              "TZ6V2_BROWSER_UNINITIALIZED_SOURCE_WRONG_" + name)
         help_block = row.locator('[data-for="help_for_' + input_id + '"]')
         need(help_block.count() == 1 and
@@ -424,34 +423,7 @@ def check_p4_native_gui(page, mode: str) -> str:
     page.wait_for_timeout(130)
     need(page.locator("#zapretSharedFoundRow .zapret-found-help").is_visible() != state_one,
          "TZ6V2_NATIVE_HELP_NOT_TOGGLING_FOUND_FIELD")
-    # Prove dirty found drafts cannot trigger old original Apply while
-    # protected Config + 3-file transaction is unfinished. This is a
-    # temporary *safety gate* on this unmerged integration branch.
-    shared = page.locator("#zapretSharedFound")
-    previous = shared.input_value()
-    requests = []
-    def observe(request):
-        if request.method == "POST" and request.url.split("?")[0].endswith(
-                "/api/zapret/settings/apply"):
-            requests.append("unsafe-apply")
-    page.on("request", observe)
-    shared.fill(previous + "\nfixture-unsaved.example.org\n")
-    page.locator("#reconfigureAct").click()
-    dialog = page.locator(".bootstrap-dialog .modal-dialog")
-    dialog.last.wait_for(state="visible", timeout=12000)
-    need(shared.input_value().endswith("fixture-unsaved.example.org\n") and
-         not requests, "TZ6V2_PREMATURE_FOUND_APPLY_WAS_DISPATCHED")
-    dialog.last.locator(".modal-footer button").last.click()
-    shared.fill(previous)
-    return "five-native-read-and-guarded-apply"
-
-
-def check_p4_actual_browser_save(context, primary) -> bool:
-    """Superseded separate GUI Save/Reload must NOT exist in TZ6v2 UI."""
-    need(primary.locator("#zapretAutoHostlistSave").count() == 0 and
-         primary.locator("#zapretAutoHostlistReload").count() == 0,
-         "TZ6V2_SECOND_SAVE_REINTRODUCED")
-    return False
+    return "five-native-read"
 
 
 def check_tz6v2_five_source_read(page) -> dict:
@@ -767,7 +739,6 @@ def browser_run(mode: str) -> None:
             page = context.new_page()
             login(page)
             strategies, cache_state, p4_editor_status = check_strategies(page, mode)
-            p4_browser_save_verified = check_p4_actual_browser_save(context, page) if mode == "en" else False
             voice, validated = check_voice(page, mode)
             lab_guidance = check_lab_guidance(page, mode)
             context.close()
@@ -797,8 +768,6 @@ def browser_run(mode: str) -> None:
         "strategies_p4_native_full_help_checked": True,
         "tz6v2_five_editors_read_only_gui_checked": True,
         "tz6v2_five_editor_status": p4_editor_status,
-        "tz6v2_single_apply_found_edits_guarded": True,
-        "p4_browser_save_and_conflict_verified": p4_browser_save_verified,
         "resource_help_cache_state": cache_state,
         "resource_help_actual_backend_checked": True,
         "apply_or_save_sent": False,

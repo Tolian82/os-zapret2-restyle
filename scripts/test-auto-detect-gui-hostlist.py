@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""#1052 P2k5: physical GUI read/save root flock and stale-page protection."""
+"""#1052 P2k5: physical shared HOSTLIST reads and original link-once creation."""
 from __future__ import annotations
 import fcntl
 import os
@@ -11,7 +11,7 @@ import unittest
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
 from auto_detect_gui_hostlist import (
-    AutoHostlistRefused, read_current, save_current, _revision,
+    AutoHostlistRefused, read_current, _create,
 )
 from auto_detect_destination_commit import DestinationRefused
 
@@ -29,42 +29,26 @@ class AutoHostlistGuiTests(unittest.TestCase):
     def read(self):
         return read_current(self.path, self.lock, owner_uid=self.uid)
 
-    def save(self, token, value):
-        return save_current(token, value, self.path, self.lock, owner_uid=self.uid)
-
-    def test_missing_create_empty_then_populated_with_modifiers(self):
+    def test_missing_and_empty_are_distinct_revisions(self):
         initial = self.read()
         self.assertEqual(initial['status'], 'missing')
         self.assertFalse(self.path.exists())
-        saved = self.save(initial['revision'], '')
-        self.assertEqual(saved['result'], 'saved')
+        _create(self.path, b'', self.uid)
         self.assertEqual(self.read()['status'], 'empty')
-        self.assertNotEqual(initial['revision'], saved['revision'])
-        populated = self.save(saved['revision'], 'Example.COM\n!^test.invalid\n')
-        self.assertEqual(populated['result'], 'saved')
-        self.assertEqual(self.path.read_text(), 'example.com\n!^test.invalid\n')
-        self.assertEqual(self.read()['status'], 'populated')
-
-    def test_two_tabs_reject_stale_save_and_preserve_user_deletion(self):
-        token = self.read()['revision']
-        first = self.save(token, 'alpha.example\n')
-        self.assertEqual(self.save(token, 'beta.example\n')['result'], 'conflict')
-        self.assertEqual(self.path.read_text(), 'alpha.example\n')
-        second = self.save(first['revision'], '')
-        self.assertEqual(second['status'], 'empty')
-        self.assertEqual(self.path.read_bytes(), b'')
-        self.assertEqual(self.save(first['revision'], 'alpha.example\n')['result'], 'conflict')
+        self.assertNotEqual(initial['revision'], self.read()['revision'])
+        with self.assertRaises(FileExistsError):
+            _create(self.path, b'example.com\n', self.uid)
         self.assertEqual(self.path.read_bytes(), b'')
 
     def test_retired_file_never_imported_or_inspected(self):
         # A malicious or unreadable obsolete path must not initialize the NEW
-        # final file, block a fresh read, or change a manual save.
+        # final file, or block a fresh read.
         self.retired.symlink_to(self.root / 'nonexistent-old-target')
         initial = self.read()
         self.assertEqual(initial['status'], 'missing')
         self.assertEqual(initial['content'], '')
         self.assertFalse(self.path.exists())
-        self.assertEqual(self.save(initial['revision'], 'new.example\n')['result'], 'saved')
+        _create(self.path, b'new.example\n', self.uid)
         self.assertEqual(self.path.read_bytes(), b'new.example\n')
         self.assertEqual(self.read()['content'], 'new.example\n')
         self.assertTrue(self.retired.is_symlink())
@@ -77,20 +61,18 @@ class AutoHostlistGuiTests(unittest.TestCase):
         self.path.chmod(0o600)
         first = self.read()
         self.assertEqual(first['content'], 'new.example\n')
-        self.assertEqual(self.save(first['revision'], '')['status'], 'empty')
+        self.path.write_bytes(b'')
         self.assertEqual(self.read()['status'], 'empty')
         self.assertEqual(self.path.read_bytes(), b'')
         self.assertEqual(self.retired.read_text(), 'old.example\n')
 
-    def test_busy_shared_worker_lock_rejects_both_read_and_save(self):
-        token = self.read()['revision']
+    def test_busy_shared_worker_lock_rejects_read(self):
+        self.read()
         fd = os.open(self.lock, os.O_RDWR)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             with self.assertRaisesRegex(DestinationRefused, 'gui_writer_busy'):
                 self.read()
-            with self.assertRaisesRegex(DestinationRefused, 'gui_writer_busy'):
-                self.save(token, 'example.com\n')
         finally:
             os.close(fd)
         self.assertFalse(self.path.exists())
@@ -103,10 +85,9 @@ class AutoHostlistGuiTests(unittest.TestCase):
         with self.assertRaises(AutoHostlistRefused):
             self.read()
         self.path.unlink()
-        snapshot = self.read()
+        self.path.write_bytes(b'\xff')
         with self.assertRaises(AutoHostlistRefused):
-            self.save(snapshot['revision'], '!bad.example\nbad.example\n')
-        self.assertFalse(self.path.exists())
+            self.read()
         self.assertEqual(unrelated.read_text(), 'original.example\n')
 
     def test_no_retired_api_or_gui_import_paths(self):
@@ -125,12 +106,14 @@ class AutoHostlistGuiTests(unittest.TestCase):
                 self.assertNotIn('zapret-hosts-auto.txt', source)
                 self.assertNotIn('auto_hostlist_migrate', source)
                 self.assertNotIn('autoHostlistMigrate', source)
+                self.assertNotIn('autoHostlistSave', source)
+                self.assertNotIn('auto_hostlist_save', source)
                 self.assertNotIn('autoHostlistLegacyState', source)
                 self.assertNotIn('auto-domains-legacy-migration', source)
         import inspect
         import auto_detect_gui_hostlist as module
         self.assertNotIn('legacy', inspect.signature(module.read_current).parameters)
-        self.assertNotIn('legacy', inspect.signature(module.save_current).parameters)
+        self.assertFalse(hasattr(module, 'save_current'))
 
     def test_no_auto_service_runtime_or_config_touch(self):
         import auto_detect_gui_hostlist as module

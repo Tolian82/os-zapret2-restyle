@@ -119,6 +119,17 @@ final class SharedApplyFoundStage
                 unset($pipes[1]);
                 $status = proc_close($proc);
                 $proc = null;
+                if ($status === 69 && $reply !== '' && strlen($reply) < 128) {
+                    $issue = json_decode($reply, true);
+                    if (is_array($issue) && in_array($issue['field'] ?? null,
+                            ['youtube', 'user', 'auto'], true) &&
+                        is_int($issue['line'] ?? null) &&
+                        $issue['line'] >= 1 && $issue['line'] <= 999999) {
+                        throw new \InvalidArgumentException(
+                            'found-' . $issue['field'] . '-line-' . $issue['line']
+                        );
+                    }
+                }
                 if ($status !== 0 || $reply === '' ||
                     strlen($reply) > self::MAX_OUTPUT) {
                     throw new \RuntimeException('Original found candidate refused');
