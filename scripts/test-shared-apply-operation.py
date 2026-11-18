@@ -50,7 +50,7 @@ class TestJournal(unittest.TestCase):
             self.assertEqual(store.read(), prepared)
             self.assertEqual((store.root / "operation.json").stat().st_mode & 0o777, 0o600)
             self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
-            for phase in ("activating", "config-saved", "committed"):
+            for phase in ("activating", "restored", "config-saved", "committed"):
                 with self.assertRaises(SharedOperationError):
                     store.advance(phase, found)
                 self.assertEqual((store.root / "operation.json").read_bytes(), physical)

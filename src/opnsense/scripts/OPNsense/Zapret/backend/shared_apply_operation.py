@@ -273,9 +273,10 @@ class SharedApplyOperation:
             if phase not in NEXT[before["phase"]]:
                 raise SharedOperationError("illegal common Apply phase transition")
             # A recorded found intent is a one-way crash-recovery obligation.
-            # Until the actual original Config/P2 writer and cold recovery are
-            # qualified, no ordinary CLI may advance it into activation.
-            if "found" in before and phase != "restored":
+            # Until the original Config/P2 writer AND cold recovery exist,
+            # even generic 'restored' is forbidden: it could mask partially
+            # written file data without attesting their actual identities.
+            if "found" in before:
                 raise SharedOperationError("found files require original durable transaction")
             previous = before.get("previous")
         record = {"schema": SCHEMA, "phase": phase, "detail": detail}
