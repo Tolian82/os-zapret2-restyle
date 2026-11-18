@@ -286,6 +286,56 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertEqual(self.targets["user"].read_text(), self.new["user"])
         self.assertEqual(self.targets["auto"].read_text(), self.old["auto"])
 
+    def test_atomic_replace_refuses_same_inode_same_bytes_change_during_temp_fsync(self):
+        # Reproduce a foreign in-place write after initial _target() but
+        # BEFORE os.replace(temp, target). A device/inode-only CAS misses it.
+        from unittest.mock import patch
+        import auto_detect_destination_commit as destination
+        target = self.targets["youtube"]
+        old = target.read_bytes()
+        native_fsync = destination.os.fsync
+        touched = [False]
+        def change_during_temp(fd):
+            result = native_fsync(fd)
+            if not touched[0]:
+                st = target.lstat()
+                os.utime(target, ns=(st.st_atime_ns,
+                                     st.st_mtime_ns + 2_000_000_000))
+                touched[0] = True
+            return result
+        with patch.object(destination.os, "fsync",
+                          side_effect=change_during_temp):
+            with self.assertRaisesRegex(
+                    DestinationRefused, "destination_conflict_with_gui"):
+                _replace(target, old, self.new["youtube"].encode(), self.uid)
+        self.assertTrue(touched[0])
+        self.assertEqual(target.read_bytes(), old)
+        self.assertFalse(any(
+            child.name.startswith(".auto-detect-") for child in self.root.iterdir()))
+
+    def test_later_source_same_bytes_foreign_touch_before_rename_refused(self):
+        # Replacing YouTube takes time. An out-of-lock in-place writer
+        # touches User but leaves its bytes/ino unchanged before User's CAS.
+        user = self.targets["user"]
+        original = user.read_bytes()
+        changed = [False]
+        def touch_user_after_youtube(path, before, after, uid):
+            _replace(path, before, after, uid)
+            if path == self.targets["youtube"]:
+                st = user.lstat()
+                os.utime(user, ns=(st.st_atime_ns,
+                                   st.st_mtime_ns + 2_000_000_000))
+                changed[0] = True
+        with self.assertRaisesRegex(
+                DestinationRefused, "shared_found_requires_review"):
+            self.apply(replace_fn=touch_user_after_youtube)
+        self.assertTrue(changed[0])
+        self.assertEqual(user.read_bytes(), original)
+        self.assertEqual(self.targets["youtube"].read_text(),
+                         self.old["youtube"])
+        self.assertEqual(self.targets["auto"].read_text(),
+                         self.old["auto"])
+
     def test_rollback_rejects_same_inode_same_bytes_timestamp_change(self):
         # A foreign in-place writer may leave EXACTLY the same bytes and inode
         # but change ctime/mtime. A dev+inode-only rollback would overwrite it.

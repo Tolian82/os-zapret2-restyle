@@ -51,7 +51,8 @@ def _target(path: Path, uid: int) -> tuple[bytes, os.stat_result]:
             b = os.fstat(fd)
         finally:
             os.close(fd)
-        identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns, x.st_mode)
+        identity = lambda x: (x.st_dev, x.st_ino, x.st_size,
+                              x.st_mtime_ns, x.st_ctime_ns, x.st_mode)
         if identity(st) != identity(a) or identity(a) != identity(b) or len(data) != st.st_size:
             raise DestinationRefused("destination_changed_during_read")
         data.decode("utf-8")
@@ -107,7 +108,14 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int) -> None:
     # replace; the next GUI implementation MUST acquire this same lock.
     try:
         again, check = _target(path, uid)
-        if again != current or (check.st_dev, check.st_ino) != (st.st_dev, st.st_ino):
+        preimage = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                    st.st_mtime_ns, st.st_size)
+        observed = (check.st_dev, check.st_ino, check.st_ctime_ns,
+                    check.st_mtime_ns, check.st_size)
+        if again != current or observed != preimage:
+            # The same inode and identical content can still be modified
+            # in place by a foreign writer during temporary inode creation.
+            # Never replace such a file or discard a new minute finding.
             raise DestinationRefused("destination_conflict_with_gui")
         os.replace(temp, path)
         _sync(path.parent)
@@ -521,6 +529,19 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
             path, before, after, status = original[name]
             if before == after:
                 continue
+            # The previous all-source scan is NOT enough: a foreign actor
+            # could alter a later source during an earlier physical write.
+            # Revalidate the exact sealed preimage immediately before EACH
+            # replacement, even if the byte contents have stayed identical.
+            if status == "missing":
+                _shared_found_assert_missing(path, uid)
+            else:
+                fresh, st = _target(path, uid)
+                physical = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                            st.st_mtime_ns, st.st_size)
+                if fresh != before or physical != batch[name][2]:
+                    raise DestinationRefused(
+                        "shared_found_preimage_changed_before_write")
             # Include a potentially completed rename/link that raises before
             # returning. Never blindly unlink an unpinned ambiguous create.
             modified.append(name)
