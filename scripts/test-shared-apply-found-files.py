@@ -295,8 +295,25 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
                                 "recover-found-locked", detail["id"], "e" * 64, config_fd=fd)
                         self.assertEqual(journal.read(), record)
                         digest = detail["base"] if unchanged else detail["candidate"]
-                        receipt = effective.advance_native_found_locked(
-                            "recover-found-locked", detail["id"], digest, config_fd=fd)
+                        if unchanged:
+                            receipt = effective.advance_native_found_locked(
+                                "recover-found-locked", detail["id"], digest, config_fd=fd)
+                        else:
+                            # Cold candidate bytes alone MUST NOT promote an
+                            # uncertain save to a confirmed WAL checkpoint.
+                            with self.assertRaisesRegex(
+                                    effective.EffectiveKnownRefused,
+                                    "found_config_save_candidate_uncertain_requires_review"):
+                                effective.advance_native_found_locked(
+                                    "recover-found-locked", detail["id"], digest,
+                                    config_fd=fd)
+                            self.assertEqual(journal.read(), record)
+                            self.assertFalse(journal.advisory()["safe_to_mutate"])
+                            # Only the *original returning* PHP save/readback
+                            # path is allowed to issue this separate confirm.
+                            receipt = effective.advance_native_found_locked(
+                                "confirm-found-save-locked", detail["id"],
+                                digest, config_fd=fd)
                 finally:
                     os.close(fd)
                 if unchanged:

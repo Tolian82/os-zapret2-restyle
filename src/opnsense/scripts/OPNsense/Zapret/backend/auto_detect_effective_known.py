@@ -774,6 +774,14 @@ def advance_native_found_locked(action: str, operation: str, digest: str,
 
         if action in ("confirm-found-save-locked", "recover-found-locked"):
             if phase == "found-config-saving":
+                # A cold candidate-image match does NOT prove that OUR
+                # Config::save returned, even with all three pinned HOSTLISTs.
+                # Only the original in-flight PHP save/readback handoff may
+                # durably confirm this phase. Preserve the uncertain WAL
+                # without claiming success or triggering any runtime change.
+                if action == "recover-found-locked":
+                    raise EffectiveKnownRefused(
+                        "found_config_save_candidate_uncertain_requires_review")
                 # Config::save flushes but does not fsync the native Config
                 # handle. The freshly loaded Model still describes these bytes.
                 os.fsync(config_fd)
