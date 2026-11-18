@@ -99,9 +99,9 @@ class EffectiveKnownTests(unittest.TestCase):
 
     def planned_rows(self):
         names = ("youtube", "user", "auto")
-        after = {"youtube": "fresh.example.com\n",
-                 "user": "login.example.com\n",
-                 "auto": "fallback.example.com\n"}
+        after = {"youtube": "fresh.net\n",
+                 "user": "login.net\n",
+                 "auto": "fallback.net\n"}
         targets = {name: self.root / (name + ".txt") for name in ("youtube", "user")}
         targets["auto"] = self.base / "auto-domains.txt"
         rows = {}
@@ -140,9 +140,9 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertFalse(result["config_committed"])
         self.assertEqual(result["changed"], ["youtube", "user"])
         self.assertEqual(self.youtube.read_text(),
-                         "!blocked.example\n^exact.example\nmanual.example\nfresh.example.com\n")
+                         "!blocked.example\n^exact.example\nmanual.example\nfresh.net\n")
         self.assertEqual(self.user.read_text(),
-                         "user.example\nlogin.example.com\n")
+                         "user.example\nlogin.net\n")
         self.assertEqual(before, {
             name: targets[name].read_bytes() for name in ("youtube", "user")
         })
@@ -151,7 +151,7 @@ class EffectiveKnownTests(unittest.TestCase):
     def test_planned_composer_refuses_poststage_minute_find(self):
         self.seed()
         rows, targets = self.planned_rows()
-        (self.root / "youtube.txt").write_text("newer.example.com\n")
+        (self.root / "youtube.txt").write_text("newer.net\n")
         before = (self.youtube.read_bytes(), self.user.read_bytes())
         with self.assertRaisesRegex(EffectiveKnownRefused, "planned_preimage_drift"):
             compose_stage_planned(self.youtube, self.user, rows, targets=targets,
@@ -159,12 +159,12 @@ class EffectiveKnownTests(unittest.TestCase):
                                   owner_uid=self.uid)
         self.assertEqual(before, (self.youtube.read_bytes(), self.user.read_bytes()))
         self.assertEqual((self.root / "youtube.txt").read_text(),
-                         "newer.example.com\n")
+                         "newer.net\n")
 
     def test_planned_composer_rejects_replaced_auto_and_tampered_after(self):
         self.seed()
         rows, targets = self.planned_rows()
-        targets["auto"].write_text("later.example.com\n")
+        targets["auto"].write_text("later.net\n")
         with self.assertRaises(DestinationRefused):
             compose_stage_planned(self.youtube, self.user, rows, targets=targets,
                                   owned_root=self.root, lock=self.lock,
