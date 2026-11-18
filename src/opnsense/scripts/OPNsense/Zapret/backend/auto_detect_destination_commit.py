@@ -581,8 +581,55 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
         raise DestinationRefused("shared_found_restored_after_failure") from error
 
 
+
+def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
+                                       store, detail: dict, plan_bytes: bytes,
+                                       uid: int, attest, replace_fn=None,
+                                       create_fn=None) -> dict:
+    """Original common WAL -> existing three-file CAS -> common WAL.
+
+    Import-only. Caller MUST hold FD9 + original Config lock + original P2
+    flock across the ENTIRE function. A failure after files-writing is
+    never a safe terminal restore/commit, even if the CAS compensated bytes.
+    Full native Config save and phase-aware cold recovery are NOT enabled.
+    """
+    from shared_apply_operation import SharedApplyOperation
+    if (not isinstance(store, SharedApplyOperation) or
+            not isinstance(detail, dict) or
+            not isinstance(plan_bytes, bytes) or
+            not callable(attest)):
+        raise DestinationRefused("shared_found_original_journal_required")
+    try:
+        plan = json.loads(plan_bytes)
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise DestinationRefused("shared_found_original_plan_unreadable") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            plan.get("dependencies") != detail.get("base") or
+            plan.get("changed_fields") != detail.get("changed_fields") or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("config_revision") != detail.get("base") or
+            plan["found_intent"].get("commit_authorized") is not False or
+            plan.get("found_batch") != rows):
+        raise DestinationRefused("shared_found_plan_or_file_rows_mismatch")
+    _qualified_shared_found_batch(rows)
+    before = store.read()
+    if (before is None or before["phase"] != "prepared" or
+            before["detail"] != detail or "found" not in before or
+            before["found"]["plan_sha256"] != _sha(plan_bytes)):
+        raise DestinationRefused("shared_found_missing_original_prepared_intent")
+    store.advance_found_files("found-files-writing", detail, plan_bytes, attest)
+    # Original Config/P2 locks forbid any minute write interleaving.
+    # A SIGKILL between renames leaves the journal in files-writing.
+    result = _locked_shared_found_replace(
+        rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn)
+    store.advance_found_files("found-files-written", detail, plan_bytes, attest)
+    return {**result, "journal_phase": "found-files-written",
+            "config_committed": False, "commit_authorized": False}
+
+
 def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> dict:
-    """Apply the three files ONLY from existing activating FD9/sealed plan.
+    """Apply three files only after durable PREPARED original FD9 intent.
 
     This API has NO registered configd action and cannot independently save
     Config or claim a successful native Apply. Its caller must additionally
@@ -606,8 +653,10 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     # The original OPNsense Config lock is an inherited real open file
     # description; a JSON token or fresh guessed lock is insufficient.
     assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-    record = SharedApplyOperation().read()
-    if (record is None or record["phase"] != "activating" or
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
+    if (record is None or record["phase"] != "prepared" or
+            "found" not in record or
             record["detail"]["id"] != operation_id or
             record["detail"]["page"] != "strategies"):
         raise DestinationRefused("original_apply_not_activating")
@@ -629,7 +678,8 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     identity = lambda x: (x.st_dev, x.st_ino, x.st_size, x.st_mtime_ns)
     if (identity(st) != identity(pinned) or identity(st) != identity(after) or
             len(raw) != st.st_size or
-            _sha(raw) != signed["sha256"]["plan.json"]):
+            _sha(raw) != signed["sha256"]["plan.json"] or
+            _sha(raw) != record["found"]["plan_sha256"]):
         raise DestinationRefused("shared_found_original_plan_changed")
     try:
         plan = json.loads(raw)
@@ -638,6 +688,9 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
     if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
             plan.get("result") != "prepared" or
             plan.get("dependencies") != record["detail"]["base"] or
+            plan.get("changed_fields") != record["detail"]["changed_fields"] or
+            not isinstance(plan.get("found_intent"), dict) or
+            plan["found_intent"].get("commit_authorized") is not False or
             not isinstance(plan.get("found_batch"), dict)):
         raise DestinationRefused("shared_found_plan_not_original_owner")
     targets = {"youtube": OWNED_ROOT / "youtube.txt",
@@ -653,6 +706,38 @@ def shared_apply_found_files_original_fd9(operation_id: str, config_fd: int) -> 
         if any(owned[name] != rows[name].get("before") for name in ("youtube", "user")
                if isinstance(rows[name], dict)):
             raise DestinationRefused("shared_found_known_owner_changed")
-        result = _locked_shared_found_replace(rows, targets, uid=0)
+        from auto_detect_effective_known import _verify_planned_preimages_locked
+        verified = _qualified_shared_found_batch(rows)
+        _verify_planned_preimages_locked(
+            verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+
+        def exact_original_witness(phase: str, content: bytes) -> bool:
+            require_lifecycle_lock()
+            assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+            if content != raw or verify_seal(work, owner=0) != signed:
+                return False
+            if phase == "found-files-writing":
+                _verify_planned_preimages_locked(
+                    verified, targets, owned_root=OWNED_ROOT, owner_uid=0)
+            elif phase == "found-files-written":
+                for name in SHARED_FOUND_NAMES:
+                    before_data, after_data, _, initial = verified[name]
+                    target = targets[name]
+                    if initial == "missing" and after_data == before_data:
+                        _shared_found_assert_missing(target, 0)
+                    elif _target(target, 0)[0] != after_data:
+                        return False
+                after_owned = read_owned(OWNED_ROOT, owner_uid=0)
+                if (after_owned is None or
+                        any(after_owned[name].encode() != verified[name][1]
+                            for name in ("youtube", "user"))):
+                    return False
+            else:
+                return False
+            return True
+
+        result = _locked_shared_found_apply_journal(
+            rows, targets, store=store, detail=record["detail"],
+            plan_bytes=raw, uid=0, attest=exact_original_witness)
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
         return result

@@ -8,6 +8,7 @@ public original-FD9 entry refuses on non-native hosts.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import sys
@@ -19,9 +20,11 @@ BACKEND = (Path(__file__).resolve().parents[1] / "src/opnsense/scripts"
 sys.path.insert(0, str(BACKEND))
 
 from auto_detect_gui_hostlist import _create
+from shared_apply_operation import SharedApplyOperation, SharedOperationError
 from shared_apply_found_stage import FoundStageRefused, qualify_readonly
 from auto_detect_destination_commit import (
     DestinationRefused, SHARED_FOUND_NAMES, _locked_shared_found_replace,
+    _locked_shared_found_apply_journal,
     _replace, _plan_shared_found_under_original_locks,
     _shared_found_assert_missing,
     shared_apply_found_files_original_fd9,
@@ -75,6 +78,88 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertEqual(
             {name: path.read_text() for name, path in self.targets.items()},
             self.old)
+
+
+    def journaled(self, *, rows=None, witness=None, **kwargs):
+        rows = self.plan() if rows is None else rows
+        d = {"id": "b" * 32, "page": "strategies",
+             "base": "a" * 64, "candidate": "c" * 64,
+             "changed_fields": []}
+        body = json.dumps({
+            "page": "strategies", "result": "prepared",
+            "dependencies": d["base"], "changed_fields": [],
+            "found_intent": {"config_revision": d["base"],
+                             "commit_authorized": False},
+            "found_batch": rows,
+        }, separators=(",", ":")).encode()
+        journal = SharedApplyOperation(self.root / "shared-apply",
+                                       owner=self.uid)
+        journal.prepare_found(d, body, lambda _: True)
+        callback = (lambda phase, raw: raw == body) if witness is None else witness
+        return journal, d, body, lambda: _locked_shared_found_apply_journal(
+            rows, self.targets, store=journal, detail=d,
+            plan_bytes=body, uid=self.uid, attest=callback, **kwargs)
+
+    def test_journal_original_wal_before_first_three_file_write(self):
+        journal, detail, raw, apply = self.journaled()
+        receipt = apply()
+        self.assertEqual(receipt["journal_phase"], "found-files-written")
+        self.assertFalse(receipt["config_committed"])
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertEqual(journal.read()["phase"], "found-files-written")
+        self.assertEqual({name: path.read_text()
+                          for name, path in self.targets.items()}, self.new)
+        with self.assertRaises(SharedOperationError):
+            journal.advance("committed", detail)
+        with self.assertRaises(SharedOperationError):
+            journal.advance("restored", detail)
+        with self.assertRaises(DestinationRefused):
+            apply()
+
+    def test_journal_fsync_failure_before_first_write_preserves_files(self):
+        journal, _, _, apply = self.journaled()
+        journal._persist_record = lambda _: (_ for _ in ()).throw(
+            OSError("simulated original journal fsync refusal"))
+        with self.assertRaises(OSError):
+            apply()
+        self.assert_old()
+
+    def test_journal_partial_file_error_retains_writing_phase_even_after_compensation(self):
+        call = [0]
+        def second_fails(path, before, after, uid):
+            call[0] += 1
+            if call[0] == 2:
+                raise OSError("file 2 pre-rename")
+            return _replace(path, before, after, uid)
+        journal, _, _, apply = self.journaled(replace_fn=second_fails)
+        with self.assertRaisesRegex(
+                DestinationRefused, "shared_found_restored_after_failure"):
+            apply()
+        self.assert_old()
+        self.assertEqual(journal.read()["phase"], "found-files-writing")
+        self.assertFalse(journal.advisory()["safe_to_mutate"])
+
+    def test_journal_postwrite_witness_refusal_leaves_nonterminal_physical_after(self):
+        journal, _, _, apply = self.journaled(
+            witness=lambda phase, raw: phase == "found-files-writing")
+        with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+            apply()
+        self.assertEqual(journal.read()["phase"], "found-files-writing")
+        self.assertEqual({name: path.read_text()
+                          for name, path in self.targets.items()}, self.new)
+
+    def test_journal_missing_shared_auto_create_and_crash_boundary(self):
+        self.targets["auto"].unlink()
+        self.old["auto"] = ""
+        baseline = self.missing_base()
+        rows, _ = self.proposed(
+            baseline=baseline, draft=dict(self.old, auto="shared.org\n"))
+        journal, _, _, apply = self.journaled(rows=rows)
+        receipt = apply()
+        self.assertEqual(receipt["files"]["auto"]["before_status"], "missing")
+        self.assertTrue(receipt["files"]["auto"]["changed"])
+        self.assertEqual(self.targets["auto"].read_text(), "shared.org\n")
+        self.assertEqual(journal.read()["phase"], "found-files-written")
 
     def test_complete_three_source_apply_has_only_files_receipt(self):
         applied = self.apply()
