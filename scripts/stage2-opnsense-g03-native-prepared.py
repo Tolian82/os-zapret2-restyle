@@ -178,10 +178,11 @@ def partial_main():
          broken[2][0][-1] != original[2][0][-1] and
          broken[2][1:] == original[2][1:] and
          subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode == 0,
+                        timeout=30).returncode == 2,
          "G03_PARTIAL_INDETERMINATE_OWNER_OR_FILE_PHASE")
-    # Status is explicitly read-only and must continue observing the original
-    # healthy RUNNING engine. Never issue Start/Restart on a pending WAL.
+    # Original status explicitly reports "incomplete" for a nonterminal WAL,
+    # although the prior PID and IPFW are still physically unchanged.
+    # No Start/Restart/Stop may run before the protected cold recovery.
     recovered = json.loads(call([
         PHP, "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
         "found-recover", op, "strategies"], locked=True))
