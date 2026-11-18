@@ -202,15 +202,22 @@ final class SharedApplyConfigWorker
         if ($keys !== $expected) {
             throw new \RuntimeException('Unqualified original cold file evidence');
         }
+        // Python's classify-locked JSON is sort_keys=True recursively:
+        // legitimate source maps arrive auto,user,youtube on the wire.
+        // Require EXACTLY these three keys but never confuse JSON map order
+        // with missing/foreign source evidence.
+        $states = $files['states'] ?? null;
+        $stateKeys = is_array($states) ? array_keys($states) : [];
+        sort($stateKeys);
         if (($files['schema'] ?? null) !== 1 ||
             ($files['result'] ?? null) !== 'read-only-cold-image-classification' ||
             !in_array($files['image'] ?? null,
                 ['all-before', 'contains-unattributed-after'], true) ||
             ($files['commit_authorized'] ?? null) !== false ||
             ($files['restore_authorized'] ?? null) !== false ||
-            !is_array($files['states'] ?? null) ||
-            array_keys($files['states']) !== ['youtube', 'user', 'auto'] ||
-            array_diff($files['states'], ['before', 'after-image']) ||
+            !is_array($states) ||
+            $stateKeys !== ['auto', 'user', 'youtube'] ||
+            array_diff($states, ['before', 'after-image']) ||
             (!is_array($files['stage_evidence'] ?? null) &&
                 ($files['journal_phase'] ?? null) !== 'prepared')) {
             throw new \RuntimeException('Original cold files cannot be attributed');

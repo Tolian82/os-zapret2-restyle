@@ -373,6 +373,17 @@ namespace {
     ];
     $joint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
         classifyFoundJointImages($jointPlan, $coldBase, $coldFileBase);
+    // The native Python command encodes sort_keys=True recursively. Check
+    // the ACTUAL wire-shaped source map, not just manually ordered PHP data.
+    $wireStates = $coldFileBase;
+    $wireStates['states'] = [
+        'auto'=>'before', 'user'=>'before', 'youtube'=>'before',
+    ];
+    $wireJoint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldBase, $wireStates);
+    verify($wireJoint['file_image'] === 'all-before' &&
+        !$wireJoint['restore_authorized'],
+        'sorted native Python cold source-map keys incorrectly rejected');
     verify($joint['config_image'] === 'base-image' &&
         $joint['file_image'] === 'all-before' &&
         !$joint['commit_authorized'] && !$joint['restore_authorized'] &&
@@ -416,6 +427,10 @@ namespace {
         ['schema'=>2],
         ['commit_authorized'=>true],
         ['states'=>['youtube'=>'before']],
+        ['states'=>[
+            'auto'=>'before', 'user'=>'before', 'youtube'=>'before',
+            'foreign'=>'before',
+        ]],
         ['stage_evidence'=>['youtube'=>'installed-after']],
         ['journal_phase'=>'unexpected'],
         ['previous_runtime'=>['state'=>'ready', 'id'=>null]],
