@@ -95,7 +95,9 @@ class TestJournal(unittest.TestCase):
             plan = json.dumps(original).encode()
             journal.prepare_found(d, plan, lambda _: True)
             invalid = dict(original, changed_fields=["hostlist.userdomains"])
-            with self.assertRaisesRegex(SharedOperationError, "plan mismatches journal"):
+            # Changing the plan also changes its SHA; reject before trusting
+            # any source fields or running the attestation callback.
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
                 journal.finish_found_prepared_pristine(
                     d["id"], json.dumps(invalid).encode(),
                     lambda *_: True)
