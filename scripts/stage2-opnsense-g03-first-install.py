@@ -218,10 +218,11 @@ def five_hostlist_native_apply(config_path: Path):
     need(previous_shared == "zapret-auto.net\n",
          "FIVE_HOSTLIST_STALE_TAB_UNEXPECTED_ORIGINAL")
     later_domain = "parallel-tab.org\n"
+    expected_first = "\n".join(sorted((previous_shared + later_domain).splitlines())) + "\n"
     first_tab = apply({}, stale_tab, {"auto": previous_shared + later_domain})
     need(first_tab.get("result") == "saved" and first_tab.get("applied") is True and
-         read()["editors"]["shared_found"]["content"] == previous_shared + later_domain,
-         "FIVE_HOSTLIST_FIRST_TAB_ADDITION_NOT_SAVED")
+         read()["editors"]["shared_found"]["content"] == expected_first,
+         "FIVE_HOSTLIST_FIRST_TAB_ADDITION_NOT_SAVED_OR_CANONICAL_SORTED")
     stale_remove = apply({}, stale_tab, {"auto": ""})
     rebased = read()["editors"]
     need(stale_remove.get("result") == "saved" and
