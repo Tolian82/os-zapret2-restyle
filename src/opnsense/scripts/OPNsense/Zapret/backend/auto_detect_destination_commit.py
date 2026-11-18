@@ -106,11 +106,13 @@ def _replace(path: Path, current: bytes, expected: bytes, uid: int, *, stage_fn=
         os.close(fd)
     # The original FD9 WAL can persist the just-fsynced private inode
     # BEFORE the first rename. Ordinary GUI/P2 writers pass no stage_fn.
-    if stage_fn is not None:
-        stage_fn("ready", temp, expected)
-    # Writers that ignore the shared GUI lock are not trusted. Recheck before
-    # replace; the next GUI implementation MUST acquire this same lock.
+    # The stage callback must be INSIDE the cleanup scope: a refused journal
+    # fsync must never leave unowned private .auto-detect-* temp artifacts.
     try:
+        if stage_fn is not None:
+            stage_fn("ready", temp, expected)
+        # Writers that ignore the shared GUI lock are not trusted. Recheck
+        # before replace against the actual original inode identity.
         again, check = _target(path, uid)
         preimage = (st.st_dev, st.st_ino, st.st_ctime_ns,
                     st.st_mtime_ns, st.st_size)
@@ -748,9 +750,9 @@ def _locked_shared_found_apply_journal(rows: dict, targets: dict, *,
     def durable_file_stage(name: str, phase: str, pin: dict) -> None:
         store.advance_found_stage(
             detail, plan_bytes, name, phase, pin,
-            lambda stage, content, staged_name, staged_pin:
+            lambda stage, content, staged_name, staged_pin: (
                 staged_name == name and staged_pin == pin and
-                attest("found-stage-" + stage, content) is True)
+                attest("found-stage-" + stage, content) is True))
 
     result = _locked_shared_found_replace(
         rows, targets, uid=uid, replace_fn=replace_fn, create_fn=create_fn,
