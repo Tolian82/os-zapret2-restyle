@@ -32,10 +32,12 @@ final class SharedApplyFoundIntent
             $payload['schema_version'] !== 1 ||
             $payload['kind'] !== 'tz6v2-found-form-intent' ||
             !is_string($payload['config_revision']) ||
-            !hash_equals($configRevision, $payload['config_revision']) ||
             !is_array($payload['sources']) ||
             array_keys($payload['sources']) !== ['youtube', 'user', 'auto']) {
             throw new \InvalidArgumentException('Unqualified found intent schema or Config');
+        }
+        if (!hash_equals($configRevision, $payload['config_revision'])) {
+            throw new \InvalidArgumentException('found-intent-config-changed');
         }
         foreach ($payload['sources'] as $name => $source) {
             if (!is_array($source) || array_keys($source) !== ['base', 'draft'] ||
@@ -198,13 +200,18 @@ final class SharedApplyFoundIntent
             $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
         );
         if (!is_resource($process)) {
-            throw new \RuntimeException('Native found intent reader unavailable');
+            throw new \RuntimeException('found-intent-upload-reader');
         }
         $raw = stream_get_contents($pipes[1], self::MAX_JSON + 1);
         fclose($pipes[1]);
         $status = proc_close($process);
-        if (!is_string($raw) || $status !== 0 || strlen($raw) !== $data['size']) {
-            throw new \RuntimeException('Native found intent read refused');
+        if ($status !== 0 || !is_string($raw) || strlen($raw) !== $data['size']) {
+            $reason = $status === 69 && is_string($raw) ? trim($raw) : '';
+            if (!in_array($reason, ['metadata', 'path', 'directory', 'inode',
+                    'missing', 'reader', 'changed'], true)) {
+                $reason = 'reader';
+            }
+            throw new \RuntimeException('found-intent-upload-' . $reason);
         }
         return self::validateJson($raw, $configRevision);
     }

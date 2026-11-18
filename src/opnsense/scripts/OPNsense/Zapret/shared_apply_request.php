@@ -364,6 +364,11 @@ final class SharedApplyRequest
                         $error->getMessage())) {
                     $phase = $error->getMessage();
                 }
+                if ($phase === 'found-intent' &&
+                    preg_match('/^found-intent-(config-changed|upload-(metadata|path|directory|inode|missing|reader|changed))$/D',
+                        $error->getMessage())) {
+                    $phase = $error->getMessage();
+                }
                 echo 'preflight-rejected=' . $phase . "\n";
                 return 0;
             }

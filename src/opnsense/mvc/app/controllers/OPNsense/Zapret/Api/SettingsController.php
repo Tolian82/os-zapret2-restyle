@@ -351,16 +351,15 @@ class SettingsController extends ApiMutableModelControllerBase
                     'found_error' => ['source' => $match[1], 'line' => (int)$match[2]],
                 ];
             }
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent(?:-config-changed|-upload-(?:metadata|path|directory|inode|missing|reader|changed))?|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
                     // Only the exact root receipt allowlist can supply this stage.
                     'reason' => 'native-preflight-' . $match[1],
-                    'message' => sprintf(
-                        gettext('Native Strategies preflight rejected before Apply (%s)'),
-                        $match[1]
-                    ),
+                    'message' => $match[1] === 'found-intent-config-changed'
+                        ? gettext('Zapret settings changed while this form was open. Reload before applying again.')
+                        : sprintf(gettext('Native Strategies preflight rejected before Apply (%s)'), $match[1]),
                 ];
             }
             if (preg_match('/(?:^|\n)apply-(restored|recovered)=[a-f0-9]{32}$/D', $response, $match)) {

@@ -1,6 +1,10 @@
-# TZ6v2 `_94` Draft — native five-editor GUI, read-only qualified source; Apply remains gated
+# TZ6v2 `_94` Draft — five HOSTLIST editors and one native Apply
 
 **18 November 2026.** The source now connects the single bottom Apply to the original FD9 Config and HOSTLIST transaction. The original journal handles partial-file rollback and classifies an uncertain Config save before continuing or restoring. The earlier GUI veto below describes the previous Draft. The installed RUNNING/STOPPED test and full package acceptance are open.
+
+[Installed HTTPS check](https://github.com/Tolian82/os-zapret2-restyle/actions/runs/44327551158) on `490b98d1` accepted the newer PHP multipart filename and reached the original root stage. Root refused the upload intent before changing Config, HOSTLIST files, or the running engine. The existing preflight result now identifies whether the root worker rejected the PHP tempfile or the saved Config revision. The native same-request and lifecycle checks remain open.
+
+## Earlier draft stages
 
 Original manual YouTube/User form values are unchanged and still owned by OPNsense Model/Config. Two native-looking collapsed discovered-only panels appear below those fields and a separate full-width shared found-only field remains visible. Three found values come from the same authorized POST `hostlistEditorsRead` (`_91` original Config→destination-lock snapshot), with `status`, exact `content` and SHA `revision`; never initialize files on read or infer empty from uninitialized ownership. Found input IDs carry no `zapret.*` Config serialization name.
 
