@@ -672,7 +672,7 @@ class EffectiveKnownTests(unittest.TestCase):
         self.assertIn("'recover-prepared-locked', $base", php)
         self.assertIn("$config->lock();", php)
         self.assertIn("self::recoverFoundPreparedNative(", php)
-        self.assertNotIn("Config::save(", php[
+        self.assertNotIn("$config->save(", php[
             php.index("private static function recoverFoundPreparedNative("):
             php.index("public static function saved(")
         ])
