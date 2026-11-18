@@ -16,7 +16,7 @@ import re
 import sys
 
 from auto_detect_destination_commit import (
-    DestinationRefused, SHARED_FOUND_NAMES, _qualified_shared_found_batch,
+    DestinationRefused, SHARED_FOUND_NAMES, _qualified_shared_found_batch, _edit,
     _shared_found_assert_missing, _target, _replace,
     exclusive_destination_lock,
 )
@@ -169,6 +169,101 @@ def inspect_live_known_readonly(
         "referenced_known": sorted(mapped),
         "files": files,
         "aligned": all(files[name]["aligned"] for name in KNOWN_HOSTLISTS),
+        "commit_authorized": False,
+        "ack_authorized": False,
+    }
+
+
+def preview_live_known_after_readonly(
+    manual: dict[str, str], effects: dict, *,
+    active: Path = Path("/usr/local/etc/zapret2/runtime-v2"),
+    owned_root: Path = OWNED_ROOT,
+    owner_uid: int = 0,
+    attest=None,
+) -> dict:
+    """TZ6V2-07 P2: calculate exact future active managed-file images.
+
+    Call ONLY inside the original FD9 -> native Config -> P2 critical
+    section, from the original Model's locked manual snapshot. Do not use
+    this returned preview as authorization to write: the original minute
+    destination WAL must still seal the BEFORE physical inodes, AFTER
+    hashes, owner epoch, per-file CAS/recovery and the final checkpoint.
+    """
+    if (not isinstance(effects, dict) or
+            set(effects) - {"auto", *KNOWN_HOSTLISTS} or
+            any(not isinstance(change, dict) or
+                set(change) != {"add", "remove"} or
+                not isinstance(change["add"], list) or
+                not isinstance(change["remove"], list) or
+                (name in KNOWN_HOSTLISTS and change["add"]) or
+                (name == "auto" and change["remove"])
+                for name, change in effects.items())):
+        raise EffectiveKnownRefused("unqualified_live_known_effects")
+
+    witness = inspect_live_known_readonly(
+        manual, active=active, owned_root=owned_root,
+        owner_uid=owner_uid, attest=attest)
+    if not witness["aligned"]:
+        raise EffectiveKnownRefused("live_known_preimage_not_aligned")
+
+    owned = read_owned(Path(owned_root), owner_uid=owner_uid)
+    if owned is None:
+        raise EffectiveKnownRefused("missing_live_owned_source")
+    prospective = {}
+    for name in KNOWN_HOSTLISTS:
+        original = owned[name].encode("utf-8")
+        if hashlib.sha256(original).hexdigest() != witness["files"][name]["source_sha256"]:
+            raise EffectiveKnownRefused("live_owned_source_changed_during_preview")
+        edits = effects.get(name, {"add": [], "remove": []})
+        modified = _edit(original, edits["add"], edits["remove"])
+        prospective[name] = modified.decode("utf-8")
+    after = compose_known(manual, prospective)
+
+    records = {}
+    changed = []
+    for name in KNOWN_HOSTLISTS:
+        previous = witness["files"][name]
+        digest = hashlib.sha256(after[name].encode("utf-8")).hexdigest()
+        records[name] = {
+            "path": previous["path"],
+            "before_sha256": previous["actual_sha256"],
+            "after_sha256": digest,
+            "source_before_sha256": previous["source_sha256"],
+            "source_after_sha256": hashlib.sha256(
+                prospective[name].encode("utf-8")).hexdigest(),
+            "before_physical": previous["physical"],
+            "changed": digest != previous["actual_sha256"],
+        }
+        if records[name]["changed"]:
+            changed.append(name)
+    # Between two P2-locked observations an external non-cooperating writer
+    # may have changed a file. The preview must not imply a stable image.
+    for name in KNOWN_HOSTLISTS:
+        value, st = _target(Path(records[name]["path"]), owner_uid)
+        pin = records[name]
+        if (hashlib.sha256(value).hexdigest() != pin["before_sha256"] or
+                [st.st_dev, st.st_ino, st.st_ctime_ns,
+                 st.st_mtime_ns, st.st_size] != pin["before_physical"]):
+            raise EffectiveKnownRefused("live_known_physical_preview_drift")
+    if attest is None:
+        from auto_detect_owner import attest_running_generation
+        attest = attest_running_generation
+    from auto_detect_owner import GenerationProof
+    final_owner = attest()
+    if (not isinstance(final_owner, GenerationProof) or
+            final_owner.owner.pid != witness["pid"] or
+            final_owner.owner.started != witness["started"] or
+            final_owner.operation_id != witness["operation"] or
+            final_owner.generation != witness["generation"]):
+        raise EffectiveKnownRefused("live_known_preview_owner_drift")
+    return {
+        "status": "read-only-live-after-images",
+        "generation": witness["generation"],
+        "operation": witness["operation"],
+        "pid": witness["pid"],
+        "started": witness["started"],
+        "changed": changed,
+        "files": records,
         "commit_authorized": False,
         "ack_authorized": False,
     }

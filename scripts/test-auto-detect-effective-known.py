@@ -804,6 +804,45 @@ class EffectiveKnownTests(unittest.TestCase):
             previous, {name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
                        for name in ("youtube", "user")})
 
+    def test_live_known_after_preview_seals_only_changed_effects_without_writes(self):
+        from auto_detect_effective_known import preview_live_known_after_readonly
+        active, managed, manual, proof = self._live_known_fixture()
+        owned = self.root / "youtube.txt"
+        owned.write_text("fresh.example\\n".replace("\\n", "\n"))
+        target = managed / "hostlist-youtube.txt"
+        target.write_text(manual["youtube"] + "fresh.example\\n".replace("\\n", "\n"))
+        before = target.read_bytes()
+        remove = {"youtube": {"add": [], "remove": ["fresh.example"]}}
+        preview = preview_live_known_after_readonly(
+            manual, remove, active=active, owned_root=self.root,
+            owner_uid=self.uid, attest=lambda: proof)
+        self.assertEqual(preview["status"], "read-only-live-after-images")
+        self.assertEqual(preview["changed"], ["youtube"])
+        self.assertEqual(preview["files"]["youtube"]["after_sha256"],
+                         hashlib.sha256(manual["youtube"].encode()).hexdigest())
+        self.assertEqual(preview["files"]["youtube"]["before_sha256"],
+                         hashlib.sha256(before).hexdigest())
+        self.assertFalse(preview["files"]["user"]["changed"])
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(owned.read_text(), "fresh.example\\n".replace("\\n", "\n"))
+        self.assertFalse(preview["commit_authorized"])
+        self.assertFalse(preview["ack_authorized"])
+
+        # A stale already-live image, unsafe effect and foreign symlink all
+        # refuse without a journal or source/managed mutation.
+        owned.write_text("another.example\\n".replace("\\n", "\n"))
+        with self.assertRaisesRegex(EffectiveKnownRefused, "live_known_preimage_not_aligned"):
+            preview_live_known_after_readonly(
+                manual, remove, active=active, owned_root=self.root,
+                owner_uid=self.uid, attest=lambda: proof)
+        owned.write_text("fresh.example\\n".replace("\\n", "\n"))
+        with self.assertRaisesRegex(EffectiveKnownRefused, "unqualified_live_known_effects"):
+            preview_live_known_after_readonly(
+                manual, {"youtube": {"add": ["foreign.example"], "remove": []}},
+                active=active, owned_root=self.root, owner_uid=self.uid,
+                attest=lambda: proof)
+        self.assertEqual(target.read_bytes(), before)
+
     def test_live_known_readonly_refuses_foreign_path_or_pid_birth_change(self):
         from dataclasses import replace
         from auto_detect_effective_known import inspect_live_known_readonly
