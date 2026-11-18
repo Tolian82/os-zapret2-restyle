@@ -530,10 +530,12 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                 replace(path, before, after, uid)
             actual, st = _target(path, uid)
             if status == "missing":
-                created_pins[name] = (st.st_dev, st.st_ino)
+                created_pins[name] = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                                           st.st_mtime_ns, st.st_size)
             if actual != after:
                 raise DestinationRefused("shared_found_postwrite_unverified")
-            own_written_inodes[name] = (st.st_dev, st.st_ino)
+            own_written_inodes[name] = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                                           st.st_mtime_ns, st.st_size)
         # All physical after-pins originate from this controlled writer.
         # Inode identity is captured after rename/link under P2, then
         # independently rechecked before the same FD9 journal is fsynced.
@@ -548,9 +550,16 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                     "sha256": _sha(b"missing\0")}
                 continue
             actual, st = _target(path, uid)
+            identity = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                        st.st_mtime_ns, st.st_size)
             if actual != after or (name in own_written_inodes and
-                    (st.st_dev, st.st_ino) != own_written_inodes[name]):
+                                   identity != own_written_inodes[name]):
                 raise DestinationRefused("shared_found_postimage_inode_drift")
+            if before == after and status == "present" and identity != batch[name][2]:
+                # A file not modified by this transaction may NOT be
+                # substituted by an unrelated same-byte inode while P2
+                # is held. The original preimage is the sole authority.
+                raise DestinationRefused("shared_found_untouched_source_drift")
             post[name] = {
                 "status": "present", "device": st.st_dev, "inode": st.st_ino,
                 "ctime_ns": st.st_ctime_ns, "mtime_ns": st.st_mtime_ns,
@@ -580,8 +589,10 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                             raise
                         _shared_found_assert_missing(path, uid)
                         continue
+                    current_pin = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                                   st.st_mtime_ns, st.st_size)
                     if (name not in created_pins or current != after or
-                            (st.st_dev, st.st_ino) != created_pins[name]):
+                            current_pin != created_pins[name]):
                         raise DestinationRefused("shared_found_restore_unknown_create")
                     path.unlink()
                     _sync(path.parent)
@@ -593,8 +604,9 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                     # rename can raise AFTER replacing the name: without a
                     # captured writer-owned inode, the outcome is ambiguous.
                     writer_pin = own_written_inodes.get(name)
-                    if (writer_pin is None or
-                            (st.st_dev, st.st_ino) != writer_pin):
+                    current_pin = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                                   st.st_mtime_ns, st.st_size)
+                    if writer_pin is None or current_pin != writer_pin:
                         raise DestinationRefused("shared_found_restore_unpinned_after")
                     replace(path, after, before, uid)
                 elif current == before:
@@ -613,9 +625,17 @@ def _locked_shared_found_replace(rows: dict, targets: dict, *, uid: int,
                 if status == "missing":
                     _shared_found_assert_missing(path, uid)
                 else:
-                    current, _ = _target(path, uid)
+                    current, current_stat = _target(path, uid)
                     if current != before:
                         raise DestinationRefused("shared_found_restore_mismatch")
+                    if name not in modified:
+                        current_pin = (
+                            current_stat.st_dev, current_stat.st_ino,
+                            current_stat.st_ctime_ns, current_stat.st_mtime_ns,
+                            current_stat.st_size)
+                        if current_pin != batch[name][2]:
+                            raise DestinationRefused(
+                                "shared_found_restore_untouched_source_drift")
         except (OSError, ValueError, DestinationRefused) as rollback:
             raise DestinationRefused("shared_found_requires_review") from rollback
         raise DestinationRefused("shared_found_restored_after_failure") from error

@@ -286,6 +286,52 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
         self.assertEqual(self.targets["user"].read_text(), self.new["user"])
         self.assertEqual(self.targets["auto"].read_text(), self.old["auto"])
 
+    def test_rollback_rejects_same_inode_same_bytes_timestamp_change(self):
+        # A foreign in-place writer may leave EXACTLY the same bytes and inode
+        # but change ctime/mtime. A dev+inode-only rollback would overwrite it.
+        youtube = self.targets["youtube"]
+        def modify_first_after_write(path, before, after, uid):
+            if path == self.targets["user"]:
+                st = youtube.lstat()
+                os.utime(youtube, ns=(st.st_atime_ns,
+                                      st.st_mtime_ns + 2_000_000_000))
+                raise OSError("foreign in-place touch before second rename")
+            return _replace(path, before, after, uid)
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_requires_review"):
+            self.apply(replace_fn=modify_first_after_write)
+        self.assertEqual(youtube.read_text(), self.new["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), self.old["user"])
+        self.assertEqual(self.targets["auto"].read_text(), self.old["auto"])
+
+    def test_untouched_same_byte_inode_swap_never_reports_compensated(self):
+        # Three-source CAS must attest an untouched source's ORIGINAL inode,
+        # not record a foreign inode as a qualified post-image. Even if prior
+        # changed files were compensated, a foreign unchanged file remains.
+        new = dict(self.new, auto=self.old["auto"])
+        rows = self.plan(new)
+        unchanged = self.targets["auto"]
+        foreign_pin = [None]
+        def replace_and_swap(path, before, after, uid):
+            result = _replace(path, before, after, uid)
+            if path == self.targets["youtube"]:
+                candidate = self.root / "foreign-equal-auto.tmp"
+                candidate.write_bytes(unchanged.read_bytes())
+                candidate.chmod(0o600)
+                os.replace(candidate, unchanged)
+                st = unchanged.lstat()
+                foreign_pin[0] = (st.st_dev, st.st_ino)
+            return result
+        with self.assertRaisesRegex(DestinationRefused,
+                                    "shared_found_requires_review"):
+            self.apply(plan=rows, replace_fn=replace_and_swap)
+        self.assertIsNotNone(foreign_pin[0])
+        st = unchanged.lstat()
+        self.assertEqual(foreign_pin[0], (st.st_dev, st.st_ino))
+        self.assertEqual(unchanged.read_text(), self.old["auto"])
+        self.assertEqual(self.targets["youtube"].read_text(), self.old["youtube"])
+        self.assertEqual(self.targets["user"].read_text(), self.old["user"])
+
     def test_rollback_refuses_same_byte_foreign_inode(self):
         calls = [0]
         youtube = self.targets["youtube"]
