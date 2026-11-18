@@ -178,10 +178,10 @@ def partial_main():
          broken[2][0][-1] != original[2][0][-1] and
          broken[2][1:] == original[2][1:] and
          subprocess.run([SERVICE, "status"], capture_output=True,
-                        timeout=30).returncode != 0,
+                        timeout=30).returncode == 0,
          "G03_PARTIAL_INDETERMINATE_OWNER_OR_FILE_PHASE")
-    # A nonterminal shared journal must refuse ordinary lifecycle mutation.
-    # The service status in this phase is expected to refuse (not stop it).
+    # Status is explicitly read-only and must continue observing the original
+    # healthy RUNNING engine. Never issue Start/Restart on a pending WAL.
     recovered = json.loads(call([
         PHP, "/usr/local/opnsense/scripts/OPNsense/Zapret/shared_apply_config.php",
         "found-recover", op, "strategies"], locked=True))
