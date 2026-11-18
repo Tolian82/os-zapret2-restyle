@@ -13,7 +13,8 @@ BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Z
 sys.path.insert(0, str(BACKEND))
 from auto_detect_effective_known import (compose_stage, compose_stage_planned,
                                          compose_native_planned, verify_planned_preimages,
-                                         verify_native_planned, EffectiveKnownRefused)
+                                         verify_native_planned, classify_planned_file_images,
+                                         classify_native_planned, EffectiveKnownRefused)
 from auto_detect_owned_sources import bootstrap_empty, OwnedSourcesRefused
 from auto_detect_destination_commit import DestinationRefused
 
@@ -222,6 +223,64 @@ class EffectiveKnownTests(unittest.TestCase):
     def test_native_postseal_gate_refuses_missing_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
             verify_native_planned("a" * 32)
+
+    def cold_image(self, rows, targets):
+        return classify_planned_file_images(
+            rows, targets=targets, owned_root=self.root,
+            lock=self.lock, owner_uid=self.uid)
+
+    def test_cold_classification_all_before_is_readonly(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        before = {name: path.read_bytes() for name, path in targets.items()
+                  if path.exists()}
+        receipt = self.cold_image(rows, targets)
+        self.assertEqual(receipt["image"], "all-before")
+        self.assertEqual(receipt["states"], dict.fromkeys(
+            ("youtube", "user", "auto"), "before"))
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertFalse(receipt["restore_authorized"])
+        self.assertFalse(targets["auto"].exists())
+        self.assertEqual(before, {name: path.read_bytes()
+                                  for name, path in targets.items() if path.exists()})
+
+    def test_cold_classification_partial_after_is_only_unattributed_bytes(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        targets["youtube"].unlink()
+        targets["youtube"].write_text(rows["youtube"]["after"])
+        result = self.cold_image(rows, targets)
+        self.assertEqual(result["image"], "contains-unattributed-after")
+        self.assertEqual(result["states"], {
+            "youtube": "after-image", "user": "before", "auto": "before"})
+        self.assertFalse(result["restore_authorized"])
+
+    def test_cold_classification_missing_auto_create_is_not_authority(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        targets["auto"].write_text(rows["auto"]["after"])
+        receipt = self.cold_image(rows, targets)
+        self.assertEqual(receipt["states"]["auto"], "after-image")
+        self.assertFalse(receipt["commit_authorized"])
+        self.assertFalse(receipt["restore_authorized"])
+
+    def test_cold_classification_foreign_content_and_inode_swap_refused(self):
+        self.seed()
+        rows, targets = self.planned_rows()
+        target = targets["user"]
+        old = target.read_bytes()
+        target.unlink()
+        target.write_bytes(old)
+        with self.assertRaisesRegex(EffectiveKnownRefused, "cold_found_unknown_image"):
+            self.cold_image(rows, targets)
+        target.unlink()
+        target.write_text("foreign.net\n")
+        with self.assertRaisesRegex(EffectiveKnownRefused, "cold_found_unknown_image"):
+            self.cold_image(rows, targets)
+
+    def test_native_cold_classification_requires_original_fd9(self):
+        with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):
+            classify_native_planned("a" * 32)
 
     def test_planned_native_entry_refuses_without_original_fd9(self):
         with self.assertRaisesRegex(EffectiveKnownRefused, "native_original_fd9_required"):

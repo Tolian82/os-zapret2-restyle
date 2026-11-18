@@ -270,8 +270,122 @@ def verify_native_planned(operation: str) -> dict:
     )
 
 
+
+def classify_planned_file_images(
+    rows: dict, *, targets: dict, owned_root: Path = OWNED_ROOT,
+    lock: Path = AUTO_LOCK, owner_uid: int = 0,
+) -> dict:
+    """READ ONLY image evidence from the original sealed three-source plan.
+
+    An 'after-image' proves matching bytes, NEVER which writer produced them.
+    It cannot authorize Config/target changes, restore, lifecycle or journal
+    advancement. Cold recovery needs a future original durable write receipt.
+    """
+    if (not isinstance(targets, dict) or
+            list(targets) != list(SHARED_FOUND_NAMES) or
+            any(not isinstance(targets[name], Path) or
+                    not targets[name].is_absolute() for name in SHARED_FOUND_NAMES) or
+            len(set(targets.values())) != len(SHARED_FOUND_NAMES) or
+            targets["youtube"] != Path(owned_root) / "youtube.txt" or
+            targets["user"] != Path(owned_root) / "user.txt"):
+        raise EffectiveKnownRefused("unsafe_cold_found_targets")
+    verified = _qualified_shared_found_batch(rows)
+    with exclusive_destination_lock(Path(lock), owner_uid):
+        current = read_owned(Path(owned_root), owner_uid=owner_uid)
+        if current is None:
+            raise EffectiveKnownRefused("cold_found_owner_uninitialized")
+        states = {}
+        for name in SHARED_FOUND_NAMES:
+            before, after, identity, initial_status = verified[name]
+            path = targets[name]
+            try:
+                observed, st = _target(path, owner_uid)
+            except DestinationRefused as exc:
+                if (name == "auto" and initial_status == "missing" and
+                        isinstance(exc.__cause__, FileNotFoundError)):
+                    _shared_found_assert_missing(path, owner_uid)
+                    states[name] = "before"
+                    continue
+                raise
+            if name in KNOWN_HOSTLISTS and current[name].encode("utf-8") != observed:
+                raise EffectiveKnownRefused("cold_found_owner_mismatch")
+            physical = (st.st_dev, st.st_ino, st.st_ctime_ns,
+                        st.st_mtime_ns, st.st_size)
+            if initial_status == "present" and observed == before and physical == identity:
+                states[name] = "before"
+            elif observed == after and after != before:
+                states[name] = "after-image"
+            else:
+                # Same-byte inode replacements and foreign content are NOT
+                # evidence of the original writer or a valid rollback.
+                raise EffectiveKnownRefused("cold_found_unknown_image")
+    return {
+        "result": "read-only-cold-image-classification",
+        "image": ("all-before" if all(s == "before" for s in states.values())
+                  else "contains-unattributed-after"),
+        "states": states,
+        "commit_authorized": False,
+        "restore_authorized": False,
+    }
+
+
+def classify_native_planned(operation: str) -> dict:
+    """No new Config owner: original FD9, original journal and sealed plan."""
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation, str) or
+            not re.fullmatch(r"[a-f0-9]{32}", operation)):
+        raise EffectiveKnownRefused("native_original_fd9_required")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    from shared_apply_seal import WORK, _stat, verify_seal
+    from shared_apply_operation import SharedApplyOperation
+
+    require_lifecycle_lock()
+    record = SharedApplyOperation(owner=0).read()
+    if (record is None or record["phase"] not in (
+            "activating", "activated", "config-saved", "requires-review") or
+            record["detail"]["id"] != operation or
+            record["detail"]["page"] != "strategies"):
+        raise EffectiveKnownRefused("cold_found_not_original_pending_operation")
+    work = WORK / operation
+    _stat(WORK, 0, directory=True)
+    _stat(work, 0, directory=True)
+    verify_seal(work, owner=0)
+    raw, _ = _target(work / "plan.json", 0)
+    if len(raw) > 4 * 1024 * 1024:
+        raise EffectiveKnownRefused("oversized_cold_found_plan")
+    try:
+        plan = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise EffectiveKnownRefused("invalid_cold_found_plan") from exc
+    if (not isinstance(plan, dict) or plan.get("page") != "strategies" or
+            plan.get("result") != "prepared" or
+            plan.get("dependencies") != record["detail"]["base"] or
+            not isinstance(plan.get("found_intent"), dict) or
+            not isinstance(plan.get("found_batch"), dict)):
+        raise EffectiveKnownRefused("unqualified_cold_found_plan")
+    return classify_planned_file_images(
+        plan["found_batch"],
+        targets={"youtube": OWNED_ROOT / "youtube.txt",
+                 "user": OWNED_ROOT / "user.txt",
+                 "auto": AUTO_HOSTLIST},
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if len(argv) == 2 and argv[0] == 'classify-planned':
+        try:
+            receipt = classify_native_planned(argv[1])
+            # Only bounded status tokens; never print private domains or
+            # imply that this diagnostic authorizes any mutation.
+            print('found-image=' + receipt['image'])
+            return 0
+        except (EffectiveKnownRefused, OwnedSourcesRefused, DestinationRefused,
+                DomainPolicyError, AutoDomainPolicyError,
+                ValueError, RuntimeError, OSError, UnicodeError):
+            print('ERROR: original FD9 cold HOSTLIST image unknown',
+                  file=sys.stderr)
+            return 69
     if len(argv) == 2 and argv[0] == 'verify-planned':
         try:
             verify_native_planned(argv[1])
