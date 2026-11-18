@@ -355,6 +355,14 @@ namespace {
     // The *same* native Config snapshot and original physically locked
     // P2 reader may be projected together, but never become an Apply
     // or permission to restore based solely on image equivalence.
+    // Unlike the Config-only classifier fixtures, joint inspection must
+    // bind physical rows to the immutable three-source after/before plan.
+    $jointPlan = $coldPlan;
+    $jointPlan['found_batch'] = [
+        'youtube'=>['before'=>"before.example\n", 'after'=>"after.example\n"],
+        'user'=>['before'=>"same.example\n", 'after'=>"same.example\n"],
+        'auto'=>['before'=>'', 'after'=>''],
+    ];
     $coldFileBase = [
         'schema' => 1, 'result' => 'read-only-cold-image-classification',
         'journal_phase' => 'prepared', 'image' => 'all-before',
@@ -363,7 +371,7 @@ namespace {
         'commit_authorized' => false, 'restore_authorized' => false,
     ];
     $joint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-        classifyFoundJointImages($coldPlan, $coldBase, $coldFileBase);
+        classifyFoundJointImages($jointPlan, $coldBase, $coldFileBase);
     verify($joint['config_image'] === 'base-image' &&
         $joint['file_image'] === 'all-before' &&
         !$joint['commit_authorized'] && !$joint['restore_authorized'] &&
@@ -372,11 +380,11 @@ namespace {
     $coldFilesWriting = $coldFileBase;
     $coldFilesWriting['journal_phase'] = 'found-files-writing';
     $coldFilesWriting['stage_evidence'] = [
-        'youtube'=>'ready-but-before', 'user'=>'not-started',
-        'auto'=>'not-started',
+        'youtube'=>'ready-but-before', 'user'=>'unchanged-before',
+        'auto'=>'unchanged-before',
     ];
     $jointWriting = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-        classifyFoundJointImages($coldPlan, $coldBase, $coldFilesWriting);
+        classifyFoundJointImages($jointPlan, $coldBase, $coldFilesWriting);
     verify($jointWriting['journal_phase'] === 'found-files-writing' &&
         !$jointWriting['restore_authorized'],
         'found-files-writing was treated as terminal recovery');
@@ -386,17 +394,17 @@ namespace {
     $coldFilesSaving['states']['youtube'] = 'after-image';
     $coldFilesSaving['stage_evidence']['youtube'] = 'installed-after';
     $jointSaving = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-        classifyFoundJointImages($coldPlan, $coldCandidate, $coldFilesSaving);
+        classifyFoundJointImages($jointPlan, $coldCandidate, $coldFilesSaving);
     // Python builds staged evidence in changed-file order, which may
     // differ from the full canonical three-source order. This is a
     // shape check, not permission to fabricate a real native stage.
     $reorderedStages = $coldFilesSaving;
     $reorderedStages['stage_evidence'] = [
-        'auto'=>'not-started', 'user'=>'not-started',
+        'auto'=>'unchanged-before', 'user'=>'unchanged-before',
         'youtube'=>'installed-after',
     ];
     $reordered = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-        classifyFoundJointImages($coldPlan, $coldCandidate, $reorderedStages);
+        classifyFoundJointImages($jointPlan, $coldCandidate, $reorderedStages);
     verify($reordered['stage_evidence']['youtube'] === 'installed-after' &&
         !$reordered['restore_authorized'],
         'reordered native staged source keys incorrectly rejected');
@@ -412,16 +420,43 @@ namespace {
     ] as $tamper) {
         try {
             \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-                classifyFoundJointImages($coldPlan, $coldBase,
+                classifyFoundJointImages($jointPlan, $coldBase,
                     array_replace($coldFilesWriting, $tamper));
             verify(false, 'malformed original physical cold proof accepted');
         } catch (\RuntimeException $expected) {}
     }
     try {
         \OPNsense\Zapret\Native\SharedApplyConfigWorker::
-            classifyFoundJointImages($coldPlan, $coldCandidate, $coldFileBase);
+            classifyFoundJointImages($jointPlan, $coldCandidate, $coldFileBase);
         verify(false, 'prepared files with candidate XML accepted');
     } catch (\RuntimeException $expected) {}
+
+    // Physically contradictory but otherwise well-shaped evidence MUST
+    // refuse, including unsupported writer stage for an unchanged file.
+    $jointContradictions = [];
+    $wrong = $coldFilesWriting;
+    $wrong['image'] = 'contains-unattributed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['stage_evidence']['youtube'] = 'installed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['stage_evidence']['user'] = 'ready-but-before';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['states']['youtube'] = 'after-image';
+    $wrong['image'] = 'contains-unattributed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesSaving;
+    $wrong['stage_evidence']['youtube'] = 'ready-but-after';
+    $jointContradictions[] = $wrong;
+    foreach ($jointContradictions as $contradiction) {
+        try {
+            \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+                classifyFoundJointImages($jointPlan, $coldBase, $contradiction);
+            verify(false, 'well-shaped contradictory joint proof was accepted');
+        } catch (\RuntimeException $expected) {}
+    }
     verify($config->saves === 1 && $config->locks === 0 &&
         $config->disk === $coldBase,
         'joint cold classification attempted an extra native Config save');

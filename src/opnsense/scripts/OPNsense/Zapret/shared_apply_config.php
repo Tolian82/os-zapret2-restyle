@@ -230,6 +230,50 @@ final class SharedApplyConfigWorker
         } elseif ($files['stage_evidence'] !== null) {
             throw new \RuntimeException('Prepared Config has no staged file writes');
         }
+
+        // The parent must not trust a shaped JSON receipt alone. Bind every
+        // file's BEFORE/AFTER and ready/installed state to the SAME sealed
+        // found_batch and WAL phase before inspecting native Config. A
+        // contradictory but well-formed child receipt must fail closed.
+        $rows = $plan['found_batch'] ?? null;
+        if (!is_array($rows) ||
+            array_keys($rows) !== ['youtube', 'user', 'auto']) {
+            throw new \RuntimeException('Original joint found plan incomplete');
+        }
+        $expectedImage = in_array('after-image', $files['states'], true)
+            ? 'contains-unattributed-after' : 'all-before';
+        if ($files['image'] !== $expectedImage) {
+            throw new \RuntimeException('Original joint image summary contradicts sources');
+        }
+        foreach (['youtube', 'user', 'auto'] as $name) {
+            $row = $rows[$name];
+            if (!is_array($row) || !is_string($row['before'] ?? null) ||
+                !is_string($row['after'] ?? null)) {
+                throw new \RuntimeException('Original joint source not sealed');
+            }
+            $changed = $row['before'] !== $row['after'];
+            $state = $files['states'][$name];
+            $stage = $phase === 'prepared' ? null : $files['stage_evidence'][$name];
+            if ($phase === 'prepared') {
+                if ($state !== 'before') {
+                    throw new \RuntimeException('Original prepared file was modified');
+                }
+            } elseif (!$changed) {
+                if ($state !== 'before' || $stage !== 'unchanged-before') {
+                    throw new \RuntimeException('Original unchanged source has staged mutation');
+                }
+            } elseif ($phase === 'found-files-writing') {
+                $valid = ($state === 'before' && in_array(
+                    $stage, ['not-started', 'ready-but-before'], true)) ||
+                    ($state === 'after-image' && in_array(
+                        $stage, ['ready-but-after', 'installed-after'], true));
+                if (!$valid) {
+                    throw new \RuntimeException('Original staged source contradicts physical image');
+                }
+            } elseif ($state !== 'after-image' || $stage !== 'installed-after') {
+                throw new \RuntimeException('Original found checkpoint lacks installed source');
+            }
+        }
         $config = self::classifyFoundConfigImage($plan, $current, $phase);
         return [
             'result' => 'read-only-original-joint-classification',
