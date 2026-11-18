@@ -368,6 +368,7 @@ namespace {
         'journal_phase' => 'prepared', 'image' => 'all-before',
         'states' => ['youtube'=>'before','user'=>'before','auto'=>'before'],
         'stage_evidence' => null,
+        'previous_runtime' => ['state'=>'no-predecessor-proof', 'id'=>null],
         'commit_authorized' => false, 'restore_authorized' => false,
     ];
     $joint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
@@ -417,6 +418,9 @@ namespace {
         ['states'=>['youtube'=>'before']],
         ['stage_evidence'=>['youtube'=>'installed-after']],
         ['journal_phase'=>'unexpected'],
+        ['previous_runtime'=>['state'=>'ready', 'id'=>null]],
+        ['previous_runtime'=>['state'=>'no-predecessor-proof', 'id'=>str_repeat('f',32)]],
+        ['previous_runtime'=>['state'=>'ready', 'id'=>'foreign']],
     ] as $tamper) {
         try {
             \OPNsense\Zapret\Native\SharedApplyConfigWorker::

@@ -194,8 +194,8 @@ final class SharedApplyConfigWorker
         // stage map may be constructed in changed-source order. Do not
         // confuse key order with missing/foreign evidence.
         $expected = ['schema', 'result', 'journal_phase', 'image',
-            'states', 'stage_evidence', 'commit_authorized',
-            'restore_authorized'];
+            'states', 'stage_evidence', 'previous_runtime',
+            'commit_authorized', 'restore_authorized'];
         $keys = array_keys($files);
         sort($keys);
         sort($expected);
@@ -274,6 +274,25 @@ final class SharedApplyConfigWorker
                 throw new \RuntimeException('Original found checkpoint lacks installed source');
             }
         }
+        // The child must have inspected the ORIGINAL previous sealed
+        // common runtime and plugin IPFW through the existing Voice reader.
+        // On an initial no-predecessor transaction, this does not prove
+        // an empty machine; no mutation or terminalization is authorized.
+        $prior = $files['previous_runtime'];
+        if (!is_array($prior)) {
+            throw new \RuntimeException('Original previous runtime evidence missing');
+        }
+        $priorKeys = array_keys($prior);
+        sort($priorKeys);
+        if ($priorKeys !== ['id', 'state'] ||
+            !in_array($prior['state'] ?? null,
+                ['ready', 'stopped', 'no-predecessor-proof'], true) ||
+            (($prior['state'] === 'no-predecessor-proof') !== ($prior['id'] === null)) ||
+            ($prior['id'] !== null && (
+                !is_string($prior['id']) ||
+                !preg_match('/^[a-f0-9]{32}$/D', $prior['id'])))) {
+            throw new \RuntimeException('Unqualified previous native runtime owner');
+        }
         $config = self::classifyFoundConfigImage($plan, $current, $phase);
         return [
             'result' => 'read-only-original-joint-classification',
@@ -282,6 +301,7 @@ final class SharedApplyConfigWorker
             'file_image' => $files['image'],
             'file_states' => $files['states'],
             'stage_evidence' => $files['stage_evidence'],
+            'previous_runtime' => $prior,
             'commit_authorized' => false,
             'restore_authorized' => false,
             'save_attested' => false,

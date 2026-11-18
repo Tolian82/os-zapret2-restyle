@@ -545,7 +545,8 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
         from auto_detect_original_lock_handoff import (
             CONFIG_PATH, assert_inherited_config_fd)
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
-    record = SharedApplyOperation(owner=0).read()
+    store = SharedApplyOperation(owner=0)
+    record = store.read()
     if (record is None or record["phase"] not in (
             "prepared", *FOUND_FILE_PHASES, *FOUND_CONFIG_PHASES) or
             "found" not in record or
@@ -583,9 +584,29 @@ def classify_native_planned(operation: str, *, config_fd: int | None = None) -> 
         staged_images=record["found"].get("stages"),
     )
     if config_fd is not None:
-        # The one original native Config remains locked while the existing
-        # P2 destination flock is taken and released by the classifier.
+        # Still under the inherited original FD9 and Config lock, observe
+        # only the already-sealed PREVIOUS common runtime and its exact IPFW.
+        # A healthy old owner is information, NEVER an authorization.
+        from voice_live_inspect import examine_pending_found_previous
+        previous_runtime = examine_pending_found_previous(record)
+        # The minute collector may have updated a source while we inspected
+        # the old engine. Require exactly the same current P2 images again.
+        # This is diagnostic; no one may later use its receipt to skip a
+        # fresh lock-held preimage check before writing.
+        again = classify_planned_file_images(
+            plan["found_batch"],
+            targets={"youtube": OWNED_ROOT / "youtube.txt",
+                     "user": OWNED_ROOT / "user.txt",
+                     "auto": AUTO_HOSTLIST},
+            journal_phase=record["phase"],
+            post_images=record["found"].get("post"),
+            staged_images=record["found"].get("stages"))
+        if again != evidence or store.read() != record:
+            raise EffectiveKnownRefused("cold_found_changed_during_runtime_read")
+        # Native Config remains pinned by original fd4 and original FD9.
         assert_inherited_config_fd(config_fd, CONFIG_PATH, owner_uid=None)
+        return {**evidence, "journal_phase": record["phase"],
+                "previous_runtime": previous_runtime}
     return {**evidence, "journal_phase": record["phase"]}
 
 
@@ -602,6 +623,7 @@ def main(argv: list[str] | None = None) -> int:
                 "journal_phase": evidence["journal_phase"],
                 "image": evidence["image"], "states": evidence["states"],
                 "stage_evidence": evidence.get("stage_evidence"),
+                "previous_runtime": evidence["previous_runtime"],
                 "commit_authorized": False, "restore_authorized": False,
             }, sort_keys=True, separators=(",", ":")))
             return 0

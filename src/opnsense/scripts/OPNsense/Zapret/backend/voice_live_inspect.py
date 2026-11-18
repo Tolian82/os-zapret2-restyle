@@ -399,6 +399,45 @@ def examine_shared(record: dict | None, *, work_root: Path = WORK,
     }
 
 
+
+def examine_pending_found_previous(record: dict, *, inspector=examine_shared,
+                                   **read_only_kwargs) -> dict:
+    """Observe the previous common owner of ORIGINAL pending found WAL only.
+
+    The caller already holds original FD9 and the inherited native Config
+    lock. Reuse the same terminal-owner physical/manifest/IPFW inspector with
+    the sealed previous identity, never a new daemon or mutable owner.
+    This is observational evidence ONLY; even a healthy old runtime is not
+    proof that Config save, new runtime or found rollback is authorized.
+    """
+    if (not isinstance(record, dict) or
+            record.get("phase") not in (
+                "prepared", "found-files-writing", "found-files-written",
+                "found-config-saving", "found-config-saved") or
+            not isinstance(record.get("found"), dict) or
+            not isinstance(record.get("detail"), dict)):
+        raise VoiceInspectError("not an original pending found operation")
+    previous = record.get("previous")
+    if previous is None:
+        # Initial installation can have no predecessor. This deliberately
+        # does NOT prove an empty kernel, no orphan engine or pristine files.
+        return {"state": "no-predecessor-proof", "id": None}
+    if (not isinstance(previous, dict) or
+            previous.get("id") == record["detail"].get("id") or
+            previous.get("candidate") != record["detail"].get("base")):
+        raise VoiceInspectError("pending found predecessor differs from native Config base")
+    synthetic = {"schema": record["schema"], "phase": "committed",
+                 "detail": previous}
+    observed = inspector(synthetic, **read_only_kwargs)
+    if (not isinstance(observed, dict) or
+            observed.get("source") != "native-common" or
+            observed.get("can_activate") is not False or
+            observed.get("config_digest") != previous["candidate"] or
+            observed.get("state") not in ("ready", "stopped")):
+        raise VoiceInspectError("original previous runtime/IPFW not qualified")
+    return {"state": observed["state"], "id": previous["id"]}
+
+
 def main(args: list[str]) -> int:
     if len(args) != 1:
         print("usage: voice_live_inspect.py", file=sys.stderr)
