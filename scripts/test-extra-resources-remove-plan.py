@@ -166,6 +166,47 @@ class TestReadOnlyRemovalPlanner(unittest.TestCase):
                 self.plan()
         self.assertEqual({p: p.read_bytes() for p in original}, original)
 
+    def test_unrelated_root_entry_churn_does_not_poison_resource_only_plan(self):
+        from extra_resources_reconcile import _remove_directory_witness
+        original = _remove_directory_witness
+        calls = [0]
+        untouched = {p: p.read_bytes() for p in (
+            self.root / "lua/native.lua", self.root / "lua/addon.lua",
+            self.root / "files/fake/native.bin", self.root / "files/fake/manual.bin",
+            self.config)}
+        def unrelated_root_write(root):
+            witness = original(root)
+            calls[0] += 1
+            if calls[0] == 1:
+                # Simulate a service writing a NON-resource top-level entry
+                # after original root attestation, while all resource trees,
+                # tracked bytes and native Config remain exactly unchanged.
+                (root / ".runtime-unrelated").write_text("status\n")
+            return witness
+        with patch("extra_resources_reconcile._remove_directory_witness",
+                   side_effect=unrelated_root_write):
+            report = self.plan()
+        self.assertEqual(calls[0], 2)
+        self.assertEqual(report["counts"]["total"], 2)
+        self.assertFalse(report["authorized"])
+        self.assertEqual({p: p.read_bytes() for p in untouched}, untouched)
+
+    def test_root_inode_substitution_remains_strictly_refused(self):
+        from extra_resources_reconcile import _remove_directory_witness
+        original = _remove_directory_witness
+        calls = [0]
+        def forged_root(root):
+            witness = original(root)
+            calls[0] += 1
+            if calls[0] == 2:
+                pinned = witness[""]
+                witness[""] = (pinned[0], pinned[1] + 1, *pinned[2:])
+            return witness
+        with patch("extra_resources_reconcile._remove_directory_witness",
+                   side_effect=forged_root):
+            with self.assertRaisesRegex(PreflightError, "directory/root"):
+                self.plan()
+
     def test_runtime_resource_census_drift_identifies_witness_and_refuses(self):
         from extra_resources_reconcile import installed_resources
         calls = [0]

@@ -199,8 +199,18 @@ def _remove_directory_witness(root: Path) -> dict[str, tuple]:
             raise PreflightError(f"missing resource directory: {name or 'runtime'}") from exc
         if not stat.S_ISDIR(entry.st_mode):
             raise PreflightError(f"unsafe resource directory: {name or 'runtime'}")
-        witness[name] = (entry.st_dev, entry.st_ino, entry.st_mode,
-                         entry.st_mtime_ns, entry.st_ctime_ns)
+        if not name:
+            # The runtime root also contains ordinary service-owned files.
+            # A change to one such *unrelated* entry must not invalidate an
+            # exact Lua/BIN removal plan. Pin root identity, owner and mode;
+            # keep strict mtime/ctime for every actual resource directory.
+            # HEAD, full Lua/BIN bytes, Config and managed manifest are still
+            # re-attested below before ANY candidate becomes actionable.
+            witness[name] = (entry.st_dev, entry.st_ino, entry.st_mode,
+                             entry.st_uid, entry.st_gid)
+        else:
+            witness[name] = (entry.st_dev, entry.st_ino, entry.st_mode,
+                             entry.st_mtime_ns, entry.st_ctime_ns)
     return witness
 
 
