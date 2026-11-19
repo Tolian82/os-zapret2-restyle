@@ -8,6 +8,7 @@ submits an Apply, starts/stops a service or logs Config/domain values.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 import runpy
@@ -61,11 +62,26 @@ def run() -> None:
                  for key in EXPECTED},
             timeout=30000,
         )
-        snapshot = p3["check_tz6v2_five_source_read"](page)
+        snapshot = p3["check_tz6v3_five_source_read"](page)
         demand(snapshot["auto_owned_complete"] is True,
                "G03_F5_FOUND_SOURCE_NOT_INITIALIZED")
-        demand(all(snapshot["editors"][key]["content"] == EXPECTED[key]
-                   for key in EXPECTED), "G03_F5_SAVED_CONTENT_NOT_PERSISTED")
+        # The native OPNsense textarea supplies manual bytes, while the
+        # root-locked API returns only length/revision, never an echoed manual
+        # content field. Verify the fixture against the *saved* SHA proof.
+        def source_matches(key: str) -> bool:
+            row = snapshot["editors"][key]
+            expected = EXPECTED[key]
+            if key.endswith("_manual"):
+                raw = expected.encode("utf-8")
+                return (row.get("owner") == "config" and
+                        "content" not in row and
+                        row.get("length_bytes") == len(raw) and
+                        row.get("revision") ==
+                        hashlib.sha256(b"present\0" + raw).hexdigest())
+            return row.get("content") == expected
+
+        demand(all(source_matches(key) for key in EXPECTED),
+               "G03_F5_SAVED_CONTENT_NOT_PERSISTED")
         demand(all(page.locator('[id="' + INPUTS[key] + '"]').input_value() ==
                    EXPECTED[key] for key in EXPECTED),
                "G03_F5_NATIVE_RENDER_MISMATCH")
