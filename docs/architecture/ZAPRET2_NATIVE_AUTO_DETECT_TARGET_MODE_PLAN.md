@@ -2,14 +2,16 @@
 
 ## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
 
+**Current source implementation checkpoint `_98`:** S0 old-read refusal witness is embedded in existing PHP native contract tests; S1 single PHP Strategies editor catalogue is called from original root capture/projection and Settings read validation. The old schema 2 response remains stable so existing GUI behavior is unchanged. **S2 is the next code step** — do not claim the 1 MiB owner failure is fixed or start S3 before validating S2. New packaged artifact/owner qualification OPEN.
+
 **Только текущая обязательная работа:** [ТЗ_6v3](TZ_6v3.md) поверх неизменённой [ТЗ_6v2](TZ_6v2.md); [API v1](STRATEGIES_LIST_API_V1.md). [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) и [future design](STRATEGIES_LIST_FUTURE.md) — не сейчас.
 
 **Фактическая позиция:** `main v0.6.5_96` — проектный контракт, последний реальный пакет `_94.pkg` установлен у владельца. Уже работают пять GUI редакторов, original FD9/Shared Apply/rollback/P2, существующий `FormData(found-intent.json)` и SHA-дельта больших ручных списков; native same-PID hot reload доказан. **Открытый блокер #1190:** User Domains 1 774 109 байт превышает внутренний 1 МиБ guard, из-за общего отказа snapshot не виден безопасно пустой shared_found. Последний owner Apply не подтверждён. Повторного изобретения прошлых STEP 1–10 и масштабных native матриц не требуется.
 
 | Шаг | Статус | Минимальный необходимый результат |
 | --- | --- | --- |
-| S0 | OPEN | Старая красная регрессия для 1 774 109 байт User + безопасного пустого shared, без owner mutation |
-| S1 | OPEN | Единый реестр ровно пяти источников со связью с existing target registry, без добавления новых targets/списков |
+| S0 | Source fixture added; pre-merge check PENDING | 1 774 109 байт User + пустой shared в существующем PHP read-контракте; без записи, старый отказ сохраняется до S2 |
+| S1 | Source implemented; pre-merge check PENDING | Единый PHP реестр пяти редакторов используется оригинальным snapshot и API; old wire shape и target registry не изменены |
 | S2 | OPEN | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
 | S3 | OPEN | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
 | S4 | OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |

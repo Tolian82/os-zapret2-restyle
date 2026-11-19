@@ -54,6 +54,8 @@ Expose a registry-driven read response via the existing authenticated Strategies
 
 ## Smallest effective implementation sequence
 
+**S0/S1 code status (`_98` candidate):** `StrategiesHostlistCatalog` installed in the existing PHP API namespace and imported by root native snapshot and Settings controller for original five source IDs/owners and manual/auto target bindings. No new target registry, engine writer, `FormData` transport or root read schema yet. The known 1.77 MiB failure remains intentionally reproducible. **Next: S2 read/API/browser**, then S3 unified five-source multipart/JSON. [ТЗ_6v3](TZ_6v3.md).
+
 1. Introduce the canonical Strategies catalog and a portable parser/validator with unit coverage; current five entries only and stable GUI IDs. No Voice or runtime target additions.
 2. Reproduce the actual 1,774,109-byte saved User Domains + safe empty shared-list read failure on the old code. Adapt root read and authenticated API to metadata-only **for saved manual data**, retaining full found-only content and exact revisions; fix only directly applicable per-field product guards.
 3. Update the Strategies frontend to capture manual saved baselines and verify the new read contract, preserve unsaved drafts and independent empty-list display. Keep native GUI geometry and one bottom Apply. Test F5 and a changed manual list rather than only a mocked positive read.

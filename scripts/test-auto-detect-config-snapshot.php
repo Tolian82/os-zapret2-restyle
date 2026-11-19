@@ -2,6 +2,7 @@
 /** P2k8a: actual native read-only model bridge, no Config write or active worker. */
 require_once __DIR__ . '/../src/opnsense/scripts/OPNsense/Zapret/auto_detect_config_snapshot.php';
 use OPNsense\Zapret\Native\AutoDetectConfigSnapshot as Snapshot;
+use OPNsense\Zapret\Api\StrategiesHostlistCatalog as Catalog;
 
 final class TestConfig
 {
@@ -65,6 +66,23 @@ $source = file_get_contents(__DIR__.'/../src/opnsense/scripts/OPNsense/Zapret/ba
 check(is_string($source),'registry unavailable');
 preg_match_all("/printf 'HOSTLIST\\\\t([a-z]+)\\\\t/",$source,$matches);
 check($matches[1] === ['youtube','user','auto'],'registered HOSTLIST names changed: adapt native snapshot before proceeding');
+check(Catalog::editorIds() === [
+    'youtube_manual','youtube_found','user_manual','user_found','shared_found'
+] && Catalog::manualModelFields() === [
+    'youtubedomains'=>'youtube', 'userdomains'=>'user'
+] && Catalog::manualTargets() === ['youtube','user'] &&
+    Catalog::ownedTargets() === ['youtube','user'], 'Strategies catalogue mapping drift');
+check(Catalog::editorOwners() === [
+    'youtube_manual'=>'config', 'youtube_found'=>'auto-owned',
+    'user_manual'=>'config', 'user_found'=>'auto-owned', 'shared_found'=>'shared-auto'
+], 'Strategies catalogue owners drift');
+foreach (Catalog::sources() as $id => $row) {
+    check($row['kind']==='hostlist' &&
+        in_array($row['target'], $matches[1], true) &&
+        in_array($row['storage_kind'], ['config','file'], true) &&
+        (($row['owner']==='config') === ($row['model_field']!==null)),
+        'Strategies source must match existing target registry: '.$id);
+}
 ++$count;
 
 $c=new TestConfig;
@@ -107,6 +125,24 @@ check(!$c->held,'invalid model lock release');++$count;
 $nodes=nativeModel();$nodes['hostlist']['youtubedomains']=str_repeat('A',1048577);
 $c=new TestConfig;expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel($nodes),fn()=>correctFile('')),'oversized model');
 check(!$c->held,'oversized model lock release');++$count;
+
+// S0/TZ6v3: owner's real 1,774,109-byte source is rejected by the
+// current 1 MiB product guard even with a verified empty shared source.
+// This negative witness becomes a positive assertion in the read-API change.
+$ownerText = str_repeat("a.com\n", 295684) . "x.io\n";
+check(strlen($ownerText) === 1774109, 'owner fixture exact byte count');
+$ownerNodes = nativeModel();
+$ownerNodes['hostlist']['userdomains'] = $ownerText;
+$ownerLock = new TestConfig;
+$ownedReads = 0;
+expectFailure(fn()=>Snapshot::capture($ownerLock,
+    fn()=>new TestModel($ownerNodes),
+    function() use (&$ownedReads): array { ++$ownedReads; return correctFile(''); }),
+    'owner 1,774,109 bytes still over original read guard');
+check(!$ownerLock->held && $ownerLock->locks === 1 &&
+    $ownerLock->unlocks === 1 && $ownerLock->writes === 0 &&
+    $ownedReads === 0, 'oversize refusal must release lock without mutation');
+++$count;
 
 foreach ([['status'=>'populated','content'=>'','revision'=>correctFile('')['revision'],'result'=>'ok'],
           ['status'=>'populated','content'=>'tampered.example','revision'=>str_repeat('0',64),'result'=>'ok'],
