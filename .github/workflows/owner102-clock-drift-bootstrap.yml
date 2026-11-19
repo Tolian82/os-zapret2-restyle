@@ -1,0 +1,61 @@
+name: Real _102 clock-drift to published _104 native bootstrap
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/test-owner102-clock-drift-bootstrap.py
+      - .github/workflows/owner102-clock-drift-bootstrap.yml
+permissions:
+  contents: read
+concurrency:
+  group: owner102-clock-bootstrap
+  cancel-in-progress: true
+jobs:
+  fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: |
+          set -euo pipefail
+          python3.13 -m py_compile scripts/test-owner102-clock-drift-bootstrap.py
+          python3.13 scripts/test-owner102-clock-drift-bootstrap.py --self-test
+  native:
+    needs: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bound QEMU and DNS readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v qemu-system-x86_64 >/dev/null 2>&1 &&
+             ! timeout 8 getent ahostsv4 azure.archive.ubuntu.com >/dev/null; then
+            echo '::error::Native bootstrap untested: host QEMU/DNS unavailable'
+            exit 1
+          fi
+      - name: Real immutable _102 to published _104 guest transition
+        uses: vmactions/opnsense-vm@abaa977e3dbc77a0d1eeed4d82c8d9914b018235
+        with:
+          release: '26.7'
+          sync: rsync
+          copyback: false
+          cache-after-prepare: true
+          cpu: 3
+          mem: 4096
+          prepare: |
+            set -eu
+            pkg update -f
+            pkg install -y git ca_root_nss jq gmake pkgconf luajit
+          run: |
+            set -eu
+            export GITHUB_ACTIONS=true
+            export ZAPRET2_NATIVE_BUILD_CI=1
+            export ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1
+            export ZAPRET2_OWNER102_CLOCK_BOOTSTRAP=1
+            export ZAPRET2_PROTECTED_PKG_NATIVE_TEST=1
+            /usr/local/bin/python3 scripts/test-owner102-clock-drift-bootstrap.py --native
