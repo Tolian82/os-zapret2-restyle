@@ -18,6 +18,8 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
+Current Strategies-only portable list catalog/read/transport design: [Strategies list API v1](architecture/STRATEGIES_LIST_API_V1.md) (approved design, no product implementation yet, Issue #1190).
+
 | Need | Primary document |
 |---|---|
 | #1052 approved behavior | [Original native discovery/FD9 contract](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [**ТЗ_6v2** current five-list GUI/Apply contract](architecture/TZ_6v2.md) (implementation OPEN) |
