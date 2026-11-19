@@ -16,9 +16,11 @@
 namespace OPNsense\Zapret\Native;
 
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/VoiceSettingsSnapshot.php';
+require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/StrategiesHostlistCatalog.php';
 require_once __DIR__ . '/shared_apply_lock.php';
 
 use OPNsense\Zapret\Api\VoiceSettingsSnapshot;
+use OPNsense\Zapret\Api\StrategiesHostlistCatalog;
 
 final class AutoDetectConfigSnapshot
 {
@@ -40,7 +42,7 @@ final class AutoDetectConfigSnapshot
         if (!is_array($fields)) {
             throw new \RuntimeException('Native Hostlist model unavailable');
         }
-        $textFields = ['youtubedomains' => 'youtube', 'userdomains' => 'user'];
+        $textFields = StrategiesHostlistCatalog::manualModelFields();
         $lists = [];
         $total = 0;
         foreach ($textFields as $field => $name) {
@@ -101,7 +103,7 @@ final class AutoDetectConfigSnapshot
             $complete = $final['auto_owned_complete'] ?? false;
             $owned = $final['auto_owned_components'] ?? null;
             if (!is_bool($complete) ||
-                ($complete && (!is_array($owned) || array_keys($owned) !== ['youtube', 'user'])) ||
+                ($complete && (!is_array($owned) || array_keys($owned) !== StrategiesHostlistCatalog::ownedTargets())) ||
                 (!$complete && $owned !== null)) {
                 throw new \RuntimeException('Untrusted automatic owned-source snapshot');
             }
@@ -147,7 +149,7 @@ final class AutoDetectConfigSnapshot
             ($snapshot['status'] ?? null) !== 'read_only_unqualified' ||
             ($snapshot['commit_authorized'] ?? null) !== false ||
             !is_array($snapshot['manual_hostlists'] ?? null) ||
-            array_keys($snapshot['manual_hostlists']) !== ['youtube', 'user'] ||
+            array_keys($snapshot['manual_hostlists']) !== StrategiesHostlistCatalog::manualTargets() ||
             !is_string($snapshot['config_snapshot_sha256'] ?? null) ||
             preg_match('/^[a-f0-9]{64}$/D', $snapshot['config_snapshot_sha256']) !== 1 ||
             !is_bool($snapshot['auto_owned_complete'] ?? null) ||
@@ -160,7 +162,7 @@ final class AutoDetectConfigSnapshot
         }
 
         $manualRows = [];
-        foreach (['youtube', 'user'] as $name) {
+        foreach (StrategiesHostlistCatalog::manualTargets() as $name) {
             $contents = $snapshot['manual_hostlists'][$name];
             if (!is_string($contents) || strlen($contents) > self::MAX_MODEL_TEXT) {
                 throw new \RuntimeException('Unsafe original manual Hostlist');
@@ -176,12 +178,12 @@ final class AutoDetectConfigSnapshot
         $known = $snapshot['auto_owned_components'] ?? null;
         $complete = $snapshot['auto_owned_complete'];
         if (($complete && (!is_array($known) ||
-                array_keys($known) !== ['youtube', 'user'])) ||
+                array_keys($known) !== StrategiesHostlistCatalog::ownedTargets())) ||
             (!$complete && $known !== null)) {
             throw new \RuntimeException('Unqualified original automatic ownership');
         }
         $ownedRows = [];
-        foreach (['youtube', 'user'] as $name) {
+        foreach (StrategiesHostlistCatalog::ownedTargets() as $name) {
             if (!$complete) {
                 $ownedRows[$name] = [
                     'owner' => 'auto-owned',
@@ -216,23 +218,28 @@ final class AutoDetectConfigSnapshot
             strlen($shared) > 40960) {
             throw new \RuntimeException('Unsafe original shared Hostlist');
         }
+        // One catalogue determines presentation order; no second read or writer.
+        $editors = [];
+        foreach (StrategiesHostlistCatalog::sources() as $id => $source) {
+            if ($source['owner'] === 'config') {
+                $editors[$id] = $manualRows[$source['target']];
+            } elseif ($source['owner'] === 'auto-owned') {
+                $editors[$id] = $ownedRows[$source['target']];
+            } else {
+                $editors[$id] = [
+                    'owner' => 'shared-auto',
+                    'status' => $sharedStatus,
+                    'content' => $shared,
+                    'revision' => $snapshot['shared_auto_revision'],
+                ];
+            }
+        }
         return [
             'schema_version' => 2,
             'result' => 'ok',
             'kind' => 'tz6v2-five-hostlist-snapshot',
             'config_revision' => $snapshot['config_snapshot_sha256'],
-            'editors' => [
-                'youtube_manual' => $manualRows['youtube'],
-                'youtube_found' => $ownedRows['youtube'],
-                'user_manual' => $manualRows['user'],
-                'user_found' => $ownedRows['user'],
-                'shared_found' => [
-                    'owner' => 'shared-auto',
-                    'status' => $sharedStatus,
-                    'content' => $shared,
-                    'revision' => $snapshot['shared_auto_revision'],
-                ],
-            ],
+            'editors' => $editors,
             'auto_owned_complete' => $complete,
             // A reader cannot authorize the future combined Config/files
             // transaction after its original locks are released.

@@ -15,6 +15,7 @@ require_once __DIR__ . '/WanRequirement.php';
 
 require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
+require_once __DIR__ . '/StrategiesHostlistCatalog.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
 require_once __DIR__ . '/DomainSetPolicyBridge.php';
 require_once __DIR__ . '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
@@ -460,15 +461,12 @@ class SettingsController extends ApiMutableModelControllerBase
                 !is_string($data['config_revision'] ?? null) ||
                 preg_match('/^[a-f0-9]{64}$/D', $data['config_revision']) !== 1 ||
                 !is_array($data['editors'] ?? null) ||
-                array_keys($data['editors']) !== [
-                    'youtube_manual', 'youtube_found', 'user_manual',
-                    'user_found', 'shared_found'
-                ]) {
+                array_keys($data['editors']) !== StrategiesHostlistCatalog::editorIds()) {
                 throw new \RuntimeException('Untrusted five-source HOSTLIST reply');
             }
+            $expectedOwners = StrategiesHostlistCatalog::editorOwners();
             foreach ($data['editors'] as $name => $entry) {
-                $owner = str_ends_with($name, '_manual') ? 'config' :
-                    ($name === 'shared_found' ? 'shared-auto' : 'auto-owned');
+                $owner = $expectedOwners[$name];
                 if (!is_array($entry) || ($entry['owner'] ?? null) !== $owner ||
                     !is_string($entry['content'] ?? null) ||
                     strlen($entry['content']) > ($owner === 'config' ? 1048576 : 40960) ||
