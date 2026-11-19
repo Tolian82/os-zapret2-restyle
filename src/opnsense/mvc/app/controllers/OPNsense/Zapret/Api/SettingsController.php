@@ -16,6 +16,7 @@ require_once __DIR__ . '/WanRequirement.php';
 require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/StrategiesHostlistCatalog.php';
+require_once __DIR__ . '/StrategiesListManifest.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
 require_once __DIR__ . '/DomainSetPolicyBridge.php';
 require_once __DIR__ . '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
@@ -168,6 +169,15 @@ class SettingsController extends ApiMutableModelControllerBase
                         'The discovered lists upload was not received. Apply was stopped.'
                     );
                 }
+                // TZ6v3 S3: one multipart form and JSON source manifest.
+                // The manifest is not an upload path, a writer or a proof of
+                // commit. Compare it with the same Config-locked original used
+                // by the existing StrategySettingsPayload and original FD9.
+                $preflightStage = 'source-manifest';
+                StrategiesListManifest::validate(
+                    $_POST['strategies_lists_manifest'] ?? null,
+                    $current, $post, $foundUpload !== null
+                );
                 // Native missing-upstream diagnosis must precede seeded
                 // candidate overlay/normalization; WAN-first already ran.
                 if (SettingsApply::isPassiveStrategiesRequest($current, $post)) {

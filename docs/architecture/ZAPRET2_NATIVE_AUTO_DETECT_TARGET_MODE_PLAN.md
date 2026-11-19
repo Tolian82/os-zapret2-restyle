@@ -2,18 +2,18 @@
 
 ## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
 
-**S0/S1 DONE in merged `_98`** (main `19963e36`; PR #1194; fast PHP and native Chromium/FD9 CI PASS): canonical five-entry PHP catalogue and old 1.77 MiB negative witness. **S2 `_99` source candidate under qualification**: editor-specific bounded 4 MiB read, manual saved metadata length/revision in schema3, browser SHA of original native Model baseline, original found content and correct empty shared, positive exact owner-sized regression. **S3 remains NEXT** after S2 exact-head native CI; S4/S5 and a new `.pkg`/owner acceptance are OPEN. Do not assert `#1190` owner-installed fix or a successful Apply from source-only evidence.
+**S0/S1 выполнены в merged `_98`, S2 выполнен в merged `_99`** ([PR #1195](https://github.com/Tolian82/os-zapret2-restyle/pull/1195), `main 15b7f635`, все семь проверок CI, native Chromium, G03-F5, FD9/P5c, Stage5 PASS). **S3 текущий source-кандидат `_100`**: один `FormData + JSON` манифест для пяти HOSTLIST, реальные изменённые ручные байты/дельты плюс оригинальный `found-intent` и один FD9; неизменённые большие ручные поля не повторять в POST. Сохранение WAN-first и неинициализированного начального состояния — обязательно. **S3 code/native tests, S4/S5 и публикация пакета ещё открыты**. Реальная OPNsense владельца остаётся `_94`, #1190 открыт.
 
 **Только текущая обязательная работа:** [ТЗ_6v3](TZ_6v3.md) поверх неизменённой [ТЗ_6v2](TZ_6v2.md); [API v1](STRATEGIES_LIST_API_V1.md). [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) и [future design](STRATEGIES_LIST_FUTURE.md) — не сейчас.
 
-**Фактическая позиция:** `main v0.6.5_96` — проектный контракт, последний реальный пакет `_94.pkg` установлен у владельца. Уже работают пять GUI редакторов, original FD9/Shared Apply/rollback/P2, существующий `FormData(found-intent.json)` и SHA-дельта больших ручных списков; native same-PID hot reload доказан. **Открытый блокер #1190:** User Domains 1 774 109 байт превышает внутренний 1 МиБ guard, из-за общего отказа snapshot не виден безопасно пустой shared_found. Последний owner Apply не подтверждён. Повторного изобретения прошлых STEP 1–10 и масштабных native матриц не требуется.
+**Фактическая позиция:** текущий `main v0.6.5_99` после S2, последний опубликованный и установленный владельцем `.pkg` — `_94`. В исходниках `_99` подтверждены чтение 1 774 109-байтного User Domains, статус пустого shared, GUI-F5, исходная транзакция FD9/Config и native жизненный цикл. **Не доказано на owner appliance** до публикации и установки нового пакета: #1190 остаётся открытым. S3 касается только транспорта страницы Стратегии; Voice/IPSET/Exclude не расширяем.
 
 | Шаг | Статус | Минимальный необходимый результат |
 | --- | --- | --- |
 | S0 | DONE in merged `_98` | 1 774 109 байт User + пустой shared в существующем PHP read-контракте; без записи, старый отказ сохраняется до S2 |
 | S1 | DONE in merged `_98` | Единый PHP реестр пяти редакторов используется оригинальным snapshot и API; old wire shape и target registry не изменены |
-| S2 | Source candidate `_99`, exact-head CI/native pending | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
-| S3 | OPEN | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
+| S2 | DONE in merged `_99`, native G03/Chromium/P5c/Stage5 PASS | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
+| S3 | Source candidate `_100`, exact-head CI/native pending | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
 | S4 | OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |
 | S5 | OPEN | Точный CI, уместный native FreeBSD/OPNsense test, merge, qualified only `.pkg`, затем owner-live проверка и #1190 closure только при доказательствах |
 
