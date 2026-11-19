@@ -13,7 +13,9 @@ This file owns product-level behavior and the BH reachability requirements. Deta
 | Additional Resources | [Install](architecture/ZAPRET2_EXTRA_RESOURCES_GUI.md), [Remove](architecture/ZAPRET2_EXTRA_RESOURCES_REMOVE_SPEC.md) | Native transactions and resource ownership; no universal bypass claim |
 | Voice Transmission | [Five-service shared-backend contract](architecture/VOICE_TRANSMISSION_GUI.md) | Current STUN/IPSET feature; media/call evidence is independent |
 | Laboratory | [Lab architecture](architecture/STRATEGY_LAB.md), [browser probes](architecture/STRATEGY_LAB_BROWSER_HTTP.md) | Current asynchronous Python/Model-C product |
-| Auto-detect / Auto Hostlist / scheduled restart | [#1052 specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) | Approved work with partial source implementation; [P0–P5 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) and state own progress |
+| Auto-detect / Auto Hostlist / scheduled restart | [#1052 specification](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md), [текущее ТЗ_6v3](architecture/TZ_6v3.md) и [Strategies List API v1](architecture/STRATEGIES_LIST_API_V1.md) | Пять GUI/FD9 реализованы в `_94`, унификация чтения/`FormData + JSON` и owner acceptance открыты; [active plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
+
+| Deferred Strategies lists | [Future design](architecture/STRATEGIES_LIST_FUTURE.md), [Feature #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) | 6–8 HOSTLIST источников в сумме, возможный typed каталог IPSET/Exclude и pfSense далеко потом — НЕ текущая задача |
 
 ## Product identity
 
@@ -55,6 +57,8 @@ User-authored standalone `--new` separators remain part of the Traffic Strategy 
 Named native profiles/templates/imports and duplicate resolved-list validation follow the [Strategies specification](architecture/ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md).
 
 ## Targets and exclusions
+
+**Новая редакция ТЗ_6v3:** только пять текущих доменных GUI источников получают общий реестр и `FormData + JSON` для сохранения фактических изменённых ручных/найденных значений через оригинальный Shared Apply. Telegram IPSET, другие IPSET, Exclude Domains и Exclude IPSet **не добавляются** в новый HOSTLIST каталог и сохраняют свои прежние валидаторы/хранение/Apply; глобальные доменные исключения по-прежнему учитываются в доменной политике. [Дальнейшие планы](architecture/STRATEGIES_LIST_FUTURE.md) не нужны для приёмки текущего ТЗ.
 
 - One Python domain policy validates YouTube, User and Exclude Domains. Native `!`/`^` modifiers, wildcard handling, IDNA and duplicate semantics follow the Strategies specification. Invalid content produces a field/line error rather than silent loss.
 - One Python IP policy validates managed IPv4/IPv6 addresses and CIDRs, including all five Voice lists and Exclude IPSet. Explicit or effective whole-family `/0` is forbidden. Empty lists do not imply destination-any capture.
