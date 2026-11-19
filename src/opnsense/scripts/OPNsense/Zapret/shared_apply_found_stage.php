@@ -134,7 +134,13 @@ final class SharedApplyFoundStage
                     strlen($reply) > self::MAX_OUTPUT) {
                     throw new \RuntimeException('Original found candidate refused');
                 }
-                $result = json_decode($reply, true, 12, JSON_THROW_ON_ERROR);
+                // Native Python st_dev/st_ino are unsigned 64-bit on FreeBSD.
+                // Without JSON_BIGINT_AS_STRING PHP silently turns values
+                // above PHP_INT_MAX into floats, invalidating exact P2 pins.
+                // Keep their decimal digits lossless for native validation.
+                $result = json_decode(
+                    $reply, true, 12, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING
+                );
                 if (!is_array($result) ||
                     array_keys($result) !== [
                         'schema_version', 'kind', 'found_batch',
