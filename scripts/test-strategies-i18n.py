@@ -318,8 +318,9 @@ fiveManualBaseline = {
 fiveHostlistBase = {config_revision: 'd'.repeat(64), editors: {
     youtube_manual: {owner: 'config', length_bytes: 18, status: 'populated', revision:
         createHash('sha256').update(Buffer.from('present\0manual.example.com')).digest('hex')},
+    youtube_found: empty,
     user_manual: {owner: 'config', length_bytes: 0, status: 'empty', revision},
-    youtube_found: empty, user_found: empty, shared_found: shared
+    user_found: empty, shared_found: shared
 }};
 fiveHostlistReady = true;
 handler({preventDefault() {}});
