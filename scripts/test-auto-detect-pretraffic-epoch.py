@@ -177,6 +177,64 @@ class PretrafficEpochTests(unittest.TestCase):
             self.finish(attest=lambda: other)
         self.assertFalse((self.folder / "epoch.json").exists())
 
+
+    def test_explicit_stop_tolerates_only_original_ps_wall_clock_drift(self):
+        self.seal()
+        self.finish()
+        epoch_file = self.folder / "epoch.json"
+        immutable = epoch_file.read_bytes()
+        drifted = replace(self.proof, owner=replace(
+            self.proof.owner, started="Sat Nov 14 09:00:01 2026"))
+        with self.assertRaisesRegex(
+                ReceiptRefused, "epoch_differs_from_original_pretraffic_or_owner"):
+            self.receipts._epoch(drifted)
+        with self.queue.exclusive():
+            self.assertTrue(self.receipts.verify_stop_only_epoch(
+                drifted, self.queue, attest=lambda: drifted))
+        self.assertEqual(epoch_file.read_bytes(), immutable)
+        self.assertEqual(self.receipts._epoch(self.proof)[1]["owner_start"],
+                         self.proof.owner.started)
+
+    def test_stop_birth_drift_never_bypasses_other_owner_or_epoch_proof(self):
+        self.seal()
+        self.finish()
+        immutable = (self.folder / "epoch.json").read_bytes()
+        shifted = replace(self.proof, owner=replace(
+            self.proof.owner, started="Sat Nov 14 09:00:01 2026"))
+        bad_proofs = [
+            replace(shifted, owner=replace(shifted.owner, pid=shifted.owner.pid + 1)),
+            replace(shifted, final_args_sha256="e" * 64),
+            replace(shifted, owner=replace(shifted.owner, executable="/different/engine")),
+        ]
+        with self.queue.exclusive():
+            for bad in bad_proofs:
+                with self.subTest(kind=bad):
+                    with self.assertRaises(ReceiptRefused):
+                        self.receipts.verify_stop_only_epoch(
+                            bad, self.queue, attest=lambda proof=bad: proof)
+            with self.assertRaisesRegex(ReceiptRefused, "stop_owner_changed_after_epoch_read"):
+                times = iter((shifted, self.proof))
+                self.receipts.verify_stop_only_epoch(
+                    shifted, self.queue, attest=lambda: next(times))
+            with self.assertRaisesRegex(ReceiptRefused, "stop_owner_changed_before_epoch_read"):
+                self.receipts.verify_stop_only_epoch(
+                    shifted, self.queue, attest=lambda: self.proof)
+        self.assertEqual((self.folder / "epoch.json").read_bytes(), immutable)
+
+    def test_stop_birth_drift_cannot_hide_tampered_receipt(self):
+        self.seal()
+        self.finish()
+        doc = json.loads((self.folder / "epoch.json").read_bytes())
+        doc["raw_inode"] += 1
+        (self.folder / "epoch.json").write_text(json.dumps(doc))
+        drifted = replace(self.proof, owner=replace(
+            self.proof.owner, started="Sat Nov 14 09:00:01 2026"))
+        with self.queue.exclusive():
+            with self.assertRaisesRegex(
+                    ReceiptRefused, "stop_epoch_not_same_original_owner"):
+                self.receipts.verify_stop_only_epoch(
+                    drifted, self.queue, attest=lambda: drifted)
+
     def test_different_second_running_owner_cannot_rewrite_epoch(self):
         self.seal()
         self.finish()

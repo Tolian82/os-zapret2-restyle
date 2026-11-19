@@ -151,7 +151,14 @@ def native_retire_preflight() -> int:
         receipts = EpochReceipts(owner_uid=0, writer_gid=gid)
         with queue.exclusive():
             qualified_current_source(proof, queue)
-            receipts._epoch(proof)
+            drifted = receipts.verify_stop_only_epoch(
+                proof, queue, attest=attest_running_generation)
+            if drifted:
+                # Stop is an explicit operator action. Do not block stopping
+                # a genuinely owned engine on ps wall-time drift. Never
+                # change epoch.json or grant minute/ACK from this exception.
+                print('auto-detect-retire-warning=owner-birth-clock-drift',
+                      file=sys.stderr)
             if attest_running_generation() != proof:
                 raise MinuteRefused("old_owner_changed_before_stop")
         print('auto-detect-retire=original-running-attested')
