@@ -1,5 +1,8 @@
 # os-zapret2-restyle — current handoff
 
+**Current source identity (19 November 2026):** `v0.6.5_102` (`VERSION=0.6.5`, `PLUGIN_REVISION=102`) — source-only owner-live P2 correction candidate. Calculated `os-zapret2-restyle-0.6.5_102.pkg` is **NOT BUILT OR PUBLISHED**. Last immutable installed owner report is `_100`; original auto-minute/Apply/Stop outcomes are still awaiting native qualification.
+
+
 **Owner-live fix candidate `v0.6.5_102` (19 November 2026):** installed `_100` on FreeBSD 15.1-p6 proves `read-editors=0`, original `read=69` for an unchanged 1,774,109-byte User Domains; service `status=0` and old Shared Apply `committed`. Native original per-manual limits (PHP/Python) and bounded FD4 handoff are now aligned with existing 4-MiB editor/P1 limits, while 1-MiB Exclude Domains remains unchanged. New owner-size read/P2/FD regressions are in the same candidate. Observed original Auto minute rc69, RUNNING Apply rc70 and native pkg PRE-INSTALL Stop rc69 remain **not yet proven repaired**; do not retry on owner appliance. Source/CI/native qualification and testing `.pkg` are pending. **Next:** validate exact `_102` source regression and native FD9/Auto Stop/Apply + package replacement before merge/publication.
 
 

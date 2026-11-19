@@ -6,6 +6,9 @@ State-line scope: **`v0.6.x`**. Current-work flow: `START_HERE -> PROJECT_STATE 
 
 ## Current integrated source and delivery, 19 November 2026
 
+**Current source identity (19 November 2026):** `v0.6.5_102` (`VERSION=0.6.5`, `PLUGIN_REVISION=102`) — source-only owner-live P2 correction candidate. Calculated `os-zapret2-restyle-0.6.5_102.pkg` is **NOT BUILT OR PUBLISHED**. Last immutable installed owner report is `_100`; original auto-minute/Apply/Stop outcomes are still awaiting native qualification.
+
+
 **Owner-live `v0.6.5_100` regression and authorized `_102` correction (19 November 2026):** user installed `_100` with PRE-INSTALL Stop rc69 (pkg continued), installed pkg files later verified clean; `zapret_service.sh status=0`, saved Target Mode `auto` predates install, five-editor read rc0 and original `auto_detect_config_snapshot.php read` rc69 on 1,774,109-byte User Domains. `configd` shows repeated original `auto-detect-minute` rc69 and one `shared-apply-run strategies` rc70; unchanged `committed` journal, so RUNNING Apply is not accepted. `_102` aligns the original PHP/Python per-manual P2 boundary with editor/P1 4 MiB and increases only the bounded original FD stream payload; legacy Exclude Domains limit 1 MiB is unchanged. **New source tests do not prove** minute success, normal Stop, protected pkg replacement, or owner-live Apply. Qualified native exact-source checks and `.pkg` publication OPEN; no manual intervention on appliance.
 
 
