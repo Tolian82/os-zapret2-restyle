@@ -4,6 +4,8 @@
 
 Scope: `os-zapret2-restyle`, Strategies page only, initial five sources and future **six to eight sources in total**, with approximately unchanged total manual-domain volume. Voice/Передача Голоса, Strategy Lab, generic forms framework, pfSense product or a new service are OUT OF SCOPE. См. [ТЗ_6v3](TZ_6v3.md) — активный scope, [ТЗ_6v2](TZ_6v2.md) — сохраняемая часть GUI/FD9. Дальние вопросы — [Future](STRATEGIES_LIST_FUTURE.md) и [Feature #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192). This design narrows the transport/registry implementation and does not cancel TZ6v2 acceptance.
 
+**Owner-live follow-up (19 November 2026):** `_100` passed the revised five-source GUI read for 1,774,109-byte User Domains but the unchanged original P2 worker still failed with rc69. Approved `_102` scope aligns original Config/P2 PHP/Python per-manual checks and the bounded PHP→Python original FD stream with existing 4 MiB manual/P1 guard; the 1 MiB Exclude Domains guard is retained. The separate RUNNING Apply rc70, minute rc69 and package Stop rc69 are not accepted as repaired until exact native proof.
+
 ## Why `FormData` alone does not fix the installed issue
 
 - `FormData`/multipart is a **GUI -> HTTP** transport. It does not fix **root -> configd -> API -> GUI** rereading, or PHP application-side per-list checks, or the native `configd` argv bound.

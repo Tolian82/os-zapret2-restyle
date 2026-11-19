@@ -35,7 +35,8 @@ from auto_detect_effective_known import (EffectiveKnownRefused, compose_known,
                                          preview_live_known_after_readonly)
 from voice_live_inspect import COMMON_ACTIVE
 
-MAX_MODEL_TEXT = 1 << 20
+MAX_MODEL_TEXT = 4 * 1024 * 1024
+MAX_EXCLUDE_TEXT = 1 << 20
 
 
 class V2OriginalConfigRefused(RuntimeError):
@@ -264,7 +265,7 @@ def commit_with_original_v2_model(
             not isinstance(pending, Path) or
             pending.parent != writer.queue.pending or
             type(global_exclude) is not str or
-            len(global_exclude.encode("utf-8")) > MAX_MODEL_TEXT or
+            len(global_exclude.encode("utf-8")) > MAX_EXCLUDE_TEXT or
             not isinstance(manual_hostlists, dict) or
             set(manual_hostlists) != set(KNOWN_HOSTLISTS) or
             any(type(value) is not str or
