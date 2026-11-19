@@ -1,6 +1,6 @@
 # Strategies list API v1 — portable core boundary (OPNsense only for now)
 
-**Статус: технический контракт для текущего [ТЗ_6v3](TZ_6v3.md), утверждено 19 ноября 2026; реализация пока не выполнена.**
+**Статус: согласованный контракт [ТЗ_6v3](TZ_6v3.md).** S0/S1 внедрены в `_98`, S2 чтение/браузер — в merged `_99` (`15b7f635`); S3 единый `FormData + JSON` — только source-кандидат `_100`, ещё не проверен и не опубликован. Реальная приёмка OPNsense отдельно OPEN.
 
 Scope: `os-zapret2-restyle`, Strategies page only, initial five sources and future **six to eight sources in total**, with approximately unchanged total manual-domain volume. Voice/Передача Голоса, Strategy Lab, generic forms framework, pfSense product or a new service are OUT OF SCOPE. См. [ТЗ_6v3](TZ_6v3.md) — активный scope, [ТЗ_6v2](TZ_6v2.md) — сохраняемая часть GUI/FD9. Дальние вопросы — [Future](STRATEGIES_LIST_FUTURE.md) и [Feature #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192). This design narrows the transport/registry implementation and does not cancel TZ6v2 acceptance.
 
@@ -40,6 +40,8 @@ Expose a registry-driven read response via the existing authenticated Strategies
 - The current legacy `hostlistEditorsRead` JSON contract and browser tests must be versioned together. Do not ship a backend-only contract change that strands the installed frontend.
 
 ## Saving (preserve one existing authority)
+
+**S3 кандидат `_100` — точная on-wire форма:** один HTTP `multipart/form-data` POST к прежнему `/api/zapret/settings/apply`; JSON как ограниченное текстовое поле `strategies_lists_manifest` (без нового `$_FILES` uploader), `schema_version=1`, `kind=tz6v3-strategies-list-manifest`, `config_revision` (SHA256 от исходного Model), строго пять зарегистрированных source IDs в порядке каталога. Для каждого — `owner/status/revision/changed`; только для двух ручных дополнительно `length_bytes` сохранённого текста. Реальное новое содержимое **только изменённых** manual идёт обычным `zapret[hostlist][youtubedomains|userdomains]`, затем прежний `SharedApplyEnvelope::compactStrategies`/FD9. Для найденных — прежний `found_intent` multipart Blob, когда это требуется original Apply; root проверяет все found версии/черновики. У неизменённых ручных полей POST-значений нет, Config root перечитывает их под исходной блокировкой. Контроллер сверяет JSON с текущим Config и реальным наличием изменённых HTTP полей; при ошибке отказ до FD9. **Нет изменения `config.xml` writer, `php.ini`, target registry, IPSET/Exclude/Voice.** При первом неинициализированном GUI/историческом native HTTP клиенте отсутствие нового manifest сохраняет проверенный WAN-first/исходный Apply путь; после подтверждённого read новый GUI всегда передаёт manifest. Следующая стадия — квалификация source+native S3, затем S4/S5.
 
 - The full current *user-edited* text, or a verified byte-exact delta that reconstructs it, MUST reach the server when a manual list changed. A SHA or metadata alone is not user content.
 - Unchanged manual fields are not redundantly sent through configd. Keep the existing bound SHA-delta path and original native Config re-read. Found-only edits continue through the existing `found-intent` PHP multipart upload and one original FD9 staging path.

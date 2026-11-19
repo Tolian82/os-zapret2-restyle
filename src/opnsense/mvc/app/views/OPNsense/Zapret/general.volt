@@ -375,6 +375,12 @@
 
         // The native manual fields and found sources share the bottom Apply.
         // Found drafts are sent separately from the Config model fields.
+        // Source-to-native-model bindings for this page only. Registered
+        // identities and owner rules are checked against the PHP catalogue.
+        const manualHostlistFields = [
+            {key: 'youtube_manual', field: 'youtubedomains', baseline: 'youtube'},
+            {key: 'user_manual', field: 'userdomains', baseline: 'user'}
+        ];
         const foundHostlistFields = [
             {key: 'youtube_found', source: 'youtube', id: 'zapretYoutubeFound', manual: 'youtubedomains',
              label: isRussian ? 'Найденные домены YouTube' : 'YouTube Found Domains',
@@ -643,6 +649,46 @@
                 delete form[spec.id];
             });
             return form;
+        }
+
+        // One bounded manifest for ALL registered Strategies sources.
+        // Saved manual bytes stay in the native form baseline; changed bytes
+        // still travel as ordinary FormData values and root-checked FD9 delta.
+        // Found bytes continue through the existing found-intent JSON upload.
+        function strategiesListManifest() {
+            if (!fiveHostlistReady || !fiveHostlistBase || !fiveManualBaseline ||
+                !fiveHostlistBase.editors ||
+                !/^[a-f0-9]{64}$/.test(fiveHostlistBase.config_revision || '') ||
+                fiveHostlistBase.editors.youtube_found.status === 'uninitialized' ||
+                fiveHostlistBase.editors.user_found.status === 'uninitialized') return null;
+            const sources = {};
+            Object.keys(fiveHostlistBase.editors).forEach(function(key) {
+                const row = fiveHostlistBase.editors[key];
+                const manual = manualHostlistFields.find(spec => spec.key === key);
+                const found = foundHostlistFields.find(spec => spec.key === key);
+                if (manual) {
+                    const element = document.getElementById('zapret.hostlist.' + manual.field);
+                    sources[key] = {
+                        owner: row.owner, status: row.status,
+                        revision: row.revision, length_bytes: row.length_bytes,
+                        changed: !!element && element.value !== fiveManualBaseline[manual.baseline]
+                    };
+                } else if (found) {
+                    sources[key] = {
+                        owner: row.owner, status: row.status, revision: row.revision,
+                        changed: $('#' + found.id).val() !== row.content
+                    };
+                }
+            });
+            if (Object.keys(sources).length !== Object.keys(fiveHostlistBase.editors).length) {
+                return null;
+            }
+            return {
+                schema_version: 1,
+                kind: 'tz6v3-strategies-list-manifest',
+                config_revision: fiveHostlistBase.config_revision,
+                sources: sources
+            };
         }
 
         function fiveHostlistIntent() {
@@ -1805,17 +1851,30 @@
                     : 'The source lists could not be verified. Copy your edits before reloading.');
                 return;
             }
+            const manifest = strategiesListManifest();
             let form = strategiesFormData();
-            if (intent) {
-                const multipart = new FormData();
-                new URLSearchParams($.param(form)).forEach(function(value, key) {
-                    multipart.append(key, value);
+            if (manifest && form.zapret && form.zapret.hostlist) {
+                // The saved native Model has been SHA-verified on read.
+                // Unchanged multi-megabyte manual lists are NOT posted again.
+                manualHostlistFields.forEach(function(spec) {
+                    if (!manifest.sources[spec.key].changed) {
+                        delete form.zapret.hostlist[spec.field];
+                    }
                 });
+            }
+            const multipart = new FormData();
+            new URLSearchParams($.param(form)).forEach(function(value, key) {
+                multipart.append(key, value);
+            });
+            if (manifest) {
+                multipart.append('strategies_lists_manifest', JSON.stringify(manifest));
+            }
+            if (intent) {
                 multipart.append('found_intent_expected', '1');
                 multipart.append('found_intent', new Blob([JSON.stringify(intent)],
                     {type: 'application/json'}), 'found-intent.json');
-                form = multipart;
             }
+            form = multipart;
             strategiesApplyPending = true;
             reconcileStrategiesApplyControls();
 
@@ -1834,8 +1893,8 @@
                 type: 'POST',
                 url: '/api/zapret/settings/apply',
                 data: form,
-                processData: !intent,
-                contentType: intent ? false : 'application/x-www-form-urlencoded; charset=UTF-8',
+                processData: false,
+                contentType: false,
                 dataType: 'json',
                 // Native configdpRun may run for 600s. A short default
                 // timeout must not invite another Apply during that worker.

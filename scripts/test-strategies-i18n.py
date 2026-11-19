@@ -215,7 +215,9 @@ for marker in (
     "/api/zapret/settings/hostlistEditorsRead",
     "reloadSettings().done(loadFiveHostlists)",
     "multipart.append('found_intent', new Blob([JSON.stringify(intent)]",
-    "processData: !intent",
+    "processData: false",
+    "function strategiesListManifest()",
+    "multipart.append('strategies_lists_manifest', JSON.stringify(manifest))",
     "const exact = ['youtube_manual', 'youtube_found', 'user_manual',",
     "data.commit_authorized === false",
     "data.config_revision",
@@ -252,7 +254,7 @@ for marker in (
 assert "editors[name + '_manual'].content" not in view
 
 if shutil.which("node"):
-    form_code = view[view.index("        const foundHostlistFields"):
+    form_code = view[view.index("        const manualHostlistFields"):
                      view.index("        function fiveHostlistStatus")]
     helpers = view[view.index("        function strategiesFormData()"):
                    view.index("        // Localize ONLY known validation")]
@@ -275,7 +277,12 @@ const $ = selector => ({
 });
 $.param = object => {
     assert.deepEqual(Object.keys(object), ['zapret']);
-    return 'zapret%5Bsync%5D%5Btelegramips_baseline%5D=';
+    const out = new URLSearchParams();
+    out.append('zapret[sync][telegramips_baseline]', object.zapret.sync.telegramips_baseline);
+    for (const [key, value] of Object.entries(object.zapret.hostlist || {})) {
+        out.append('zapret[hostlist][' + key + ']', value);
+    }
+    return out.toString();
 };
 $.ajax = data => {
     assert.equal(request, undefined);
@@ -284,7 +291,14 @@ $.ajax = data => {
     return chain;
 };
 const getFormData = () => ({
-    zapret: {sync: {telegramips_baseline: ''}},
+    zapret: {
+        sync: {telegramips_baseline: ''},
+        hostlist: {
+            youtubedomains: values['zapret.hostlist.youtubedomains'],
+            userdomains: values['zapret.hostlist.userdomains'],
+            excludedomains: values['zapret.hostlist.excludedomains']
+        }
+    },
     zapretYoutubeFound: values.zapretYoutubeFound,
     zapretUserFound: values.zapretUserFound, zapretSharedFound: values.zapretSharedFound
 });
@@ -295,15 +309,18 @@ let strategiesApplyPending = false, strategiesApplyNeedsReview = false, previewP
 """
     invoke = r"""
 const revision = createHash('sha256').update(Buffer.from('present\0')).digest('hex');
-const empty = {status: 'empty', revision, content: ''};
+const empty = {owner: 'auto-owned', status: 'empty', revision, content: ''};
+const shared = {owner: 'shared-auto', status: 'empty', revision, content: ''};
 fiveManualBaseline = {
     youtube: values['zapret.hostlist.youtubedomains'],
     user: values['zapret.hostlist.userdomains']
 };
 fiveHostlistBase = {config_revision: 'd'.repeat(64), editors: {
-    youtube_manual: {length_bytes: 18, status: 'populated', revision: 'a'.repeat(64)},
-    user_manual: {length_bytes: 0, status: 'empty', revision},
-    youtube_found: empty, user_found: empty, shared_found: empty
+    youtube_manual: {owner: 'config', length_bytes: 18, status: 'populated', revision:
+        createHash('sha256').update(Buffer.from('present\0manual.example.com')).digest('hex')},
+    youtube_found: empty,
+    user_manual: {owner: 'config', length_bytes: 0, status: 'empty', revision},
+    user_found: empty, shared_found: shared
 }};
 fiveHostlistReady = true;
 handler({preventDefault() {}});
@@ -313,12 +330,47 @@ assert.equal(request.processData, false);
 assert.equal(request.contentType, false);
 assert.equal(request.data.get('zapret[sync][telegramips_baseline]'), '');
 assert.equal(request.data.get('found_intent_expected'), '1');
+const manifestOne = JSON.parse(request.data.get('strategies_lists_manifest'));
+assert.deepEqual(Object.keys(manifestOne.sources), [
+    'youtube_manual','youtube_found','user_manual','user_found','shared_found'
+]);
+assert.equal(manifestOne.sources.youtube_manual.changed, false);
+assert.equal(manifestOne.sources.user_manual.changed, false);
+assert.equal(manifestOne.sources.youtube_found.changed, true);
+assert.equal(request.data.has('zapret[hostlist][youtubedomains]'), false);
+assert.equal(request.data.has('zapret[hostlist][userdomains]'), false);
+assert.equal(request.data.get('zapret[hostlist][excludedomains]'), '');
 const upload = request.data.get('found_intent');
 assert.equal(upload.name, 'found-intent.json');
 upload.text().then(value => {
     const payload = JSON.parse(value);
     assert.equal(payload.sources.youtube.draft, values.zapretYoutubeFound);
     assert.equal(payload.sources.youtube.base.revision, revision);
+
+    // Actual changed manual list is still sent, unchanged 1.77MB-equivalent
+    // saved YouTube field is omitted, and found upload reuses the old FD9.
+    request = undefined; strategiesApplyPending = false;
+    values.zapretYoutubeFound = '';
+    values['zapret.hostlist.userdomains'] = 'added.example.org\n';
+    handler({preventDefault() {}});
+    const second = JSON.parse(request.data.get('strategies_lists_manifest'));
+    assert.equal(second.sources.user_manual.changed, true);
+    assert.equal(second.sources.youtube_found.changed, false);
+    assert.equal(request.data.has('zapret[hostlist][youtubedomains]'), false);
+    assert.equal(request.data.get('zapret[hostlist][userdomains]'), values['zapret.hostlist.userdomains']);
+    assert.equal(request.data.get('found_intent_expected'), '1');
+
+    // No changed domain sources: still one multipart FormData request, but
+    // no redundant manual values or unneeded found-intent file.
+    request = undefined; strategiesApplyPending = false;
+    values['zapret.hostlist.userdomains'] = '';
+    handler({preventDefault() {}});
+    const third = JSON.parse(request.data.get('strategies_lists_manifest'));
+    assert.equal(Object.values(third.sources).every(x => x.changed === false), true);
+    assert.equal(request.data.get('found_intent'), null);
+    assert.equal(request.data.get('found_intent_expected'), null);
+    assert.equal(request.data.has('zapret[hostlist][youtubedomains]'), false);
+    assert.equal(request.data.has('zapret[hostlist][userdomains]'), false);
     console.log(value);
 });
 """
@@ -338,5 +390,15 @@ echo json_encode($data['sources']);
 ''', str(native)], input=sent.stdout, text=True, capture_output=True, check=False)
         assert decoded.returncode == 0, decoded.stderr + decoded.stdout
         assert json.loads(decoded.stdout) == parsed["sources"]
+
+# Reuse the already scheduled Strategies UI contract CI instead of adding
+# a separate VM/workflow: validate the common five-source JSON/PHP gate.
+if shutil.which("php"):
+    test = subprocess.run(
+        ["php", str(root / "scripts/test-strategies-list-manifest.php")],
+        text=True, capture_output=True, check=False,
+    )
+    assert test.returncode == 0, test.stderr + test.stdout
+    assert "PASS: TZ6v3 Strategies FormData+JSON list manifest" in test.stdout
 
 print("PASS: 11 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")
