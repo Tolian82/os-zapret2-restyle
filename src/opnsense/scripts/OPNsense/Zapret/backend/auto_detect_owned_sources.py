@@ -213,6 +213,23 @@ def native_bootstrap_known(config_digest: str) -> str:
     from voice_ipfw_adapter import require_lifecycle_lock
     from auto_detect_epoch_receipts import ROOT as EPOCHS
     require_lifecycle_lock()
+    # Older runtimes can have the compiled engine without the upstream ipset
+    # directory. Create the original parent before opening its P2 lock. Never
+    # follow or replace an existing directory, and leave all files to P2.
+    destination_root = AUTO_LOCK.parent
+    try:
+        destination_root.lstat()
+    except FileNotFoundError:
+        runtime = destination_root.parent.lstat()
+        if (not stat.S_ISDIR(runtime.st_mode) or runtime.st_uid != 0 or
+                runtime.st_mode & 0o022):
+            raise OwnedSourcesRefused('unsafe_initial_runtime_root')
+        try:
+            destination_root.mkdir(mode=0o755)
+        except FileExistsError:
+            pass  # The original P2 lock validates the actual directory below.
+        else:
+            _sync(destination_root.parent)
     with exclusive_destination_lock(AUTO_LOCK, 0):
         if read_owned(OWNED_ROOT, owner_uid=0) is not None:
             return 'existing'

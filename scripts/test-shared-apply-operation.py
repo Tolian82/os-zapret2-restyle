@@ -2,6 +2,7 @@
 """Common Apply durable phases and existing lifecycle guard, without kernel changes."""
 import sys
 import json
+import hashlib
 from contextlib import ExitStack
 import subprocess
 from unittest.mock import patch
@@ -18,7 +19,402 @@ def detail(ident="1"*32):
             "candidate":"b"*64,"changed_fields":[
                 "voice.telegram.enabled","hostlist.telegramips"]}
 
+def trivial_post():
+    import hashlib
+    return {
+        name: {"status": "present", "device": 1, "inode": index + 1,
+               "ctime_ns": 1, "mtime_ns": 1, "size": 0,
+               "sha256": hashlib.sha256(b"").hexdigest()}
+        for index, name in enumerate(("youtube", "user", "auto"))
+    }
+
 class TestJournal(unittest.TestCase):
+
+
+
+
+    def test_found_staged_temp_inode_requires_two_durable_owner_steps(self):
+        with tempfile.TemporaryDirectory() as root:
+            store = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "a" * 32, "page": "strategies", "base": "b" * 64,
+                 "candidate": "c" * 64, "changed_fields": []}
+            changes = {"youtube": ("example.com\\n", "new.example.com\\n"),
+                       "user": ("example.org\\n", "new.example.org\\n"),
+                       "auto": ("", "")}
+            rows = {k: {"before": before, "after": after, "before_status": "present"}
+                    for k, (before, after) in changes.items()}
+            plan = json.dumps({"page": "strategies", "result": "prepared",
+                               "dependencies": d["base"], "found_batch": rows,
+                               "found_intent": {"config_revision": d["base"],
+                                                "commit_authorized": False}}).encode()
+            store.prepare_found(d, plan, lambda _: True)
+            store.advance_found_files("found-files-writing", d, plan,
+                                      lambda *_: True)
+            self.assertEqual(store.read()["found"]["stages"], {})
+            make_pin = lambda name, inode: {
+                "device": 13, "inode": inode, "mtime_ns": 900,
+                "size": len(rows[name]["after"].encode()),
+                "sha256": hashlib.sha256(rows[name]["after"].encode()).hexdigest()}
+            yp, up = make_pin("youtube", 20), make_pin("user", 21)
+            with self.assertRaisesRegex(SharedOperationError, "source reordered"):
+                store.advance_found_stage(d, plan, "user", "ready", up,
+                                          lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "not ready"):
+                store.advance_found_stage(d, plan, "youtube", "installed", yp,
+                                          lambda *_: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                store.advance_found_stage(d, plan, "youtube", "ready", yp,
+                                          lambda *_: False)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            for name, pin in (("youtube", yp), ("user", up)):
+                store.advance_found_stage(d, plan, name, "ready", pin,
+                                          lambda phase, raw, n, p:
+                                              phase == "ready" and n == name and p == pin)
+                self.assertEqual(store.read()["found"]["stages"][name]["state"], "ready")
+                with self.assertRaisesRegex(SharedOperationError, "not ready"):
+                    other_pin = {**pin, "inode": pin["inode"] + 90}
+                    store.advance_found_stage(d, plan, name, "installed", other_pin,
+                                              lambda *_: True)
+                store.advance_found_stage(d, plan, name, "installed", pin,
+                                          lambda *_: True)
+            self.assertEqual(set(store.read()["found"]["stages"]), {"youtube", "user"})
+            with self.assertRaisesRegex(SharedOperationError, "original staged found"):
+                store.advance_found_stage(d, plan, "auto", "ready", yp,
+                                          lambda *_: True)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            post = trivial_post()
+            post["youtube"].update(device=yp["device"], inode=yp["inode"],
+                                   mtime_ns=yp["mtime_ns"], size=yp["size"],
+                                   sha256=yp["sha256"])
+            post["user"].update(device=up["device"], inode=up["inode"],
+                                mtime_ns=up["mtime_ns"], size=up["size"],
+                                sha256=up["sha256"])
+            store.advance_found_files("found-files-written", d, plan,
+                                      lambda *_: True, post_images=post)
+            self.assertEqual(store.read()["phase"], "found-files-written")
+            self.assertEqual(store.read()["found"]["stages"]["youtube"]["state"], "installed")
+
+    def test_found_prepared_pristine_recovery_reuses_one_journal_and_old_owner(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            previous = detail("a" * 32)
+            for phase in ("prepared", "activating", "activated",
+                          "config-saved", "committed"):
+                journal.advance(phase, previous)
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": previous["candidate"], "candidate": "c" * 64,
+                 "changed_fields": ["hostlist.youtubedomains"]}
+            plan = json.dumps({
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"],
+                "changed_fields": d["changed_fields"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            before = (journal.root / "operation.json").read_bytes()
+            calls = []
+            with self.assertRaisesRegex(SharedOperationError, "runtime refused"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan,
+                    lambda raw, old: calls.append((raw, old)) or False)
+            self.assertEqual(calls, [(plan, previous)])
+            self.assertEqual(before, (journal.root / "operation.json").read_bytes())
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan + b" ", lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    "f" * 32, plan, lambda *_: True)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+            result = journal.finish_found_prepared_pristine(
+                d["id"], plan, lambda raw, old: raw == plan and old == previous)
+            self.assertEqual(result["phase"], "restored")
+            self.assertEqual(result["previous"], previous)
+            self.assertNotIn("found", result)
+            self.assertEqual(journal.read(), result)
+            self.assertEqual(committed_owner(result), previous)
+            self.assertTrue(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+            self.assertEqual((journal.root / "operation.json").stat().st_mode & 0o777, 0o600)
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan, lambda *_: True)
+            self.assertEqual(journal.read(), result)
+
+    def test_found_prepared_pristine_refuses_later_phases_and_modified_plan(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "c" * 64, "changed_fields": []}
+            original = {
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"], "changed_fields": [],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }
+            plan = json.dumps(original).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            invalid = dict(original, changed_fields=["hostlist.userdomains"])
+            # Changing the plan also changes its SHA; reject before trusting
+            # any source fields or running the attestation callback.
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], json.dumps(invalid).encode(),
+                    lambda *_: True)
+            # Source remains untouched in the journal after refusal.
+            self.assertEqual(journal.read()["phase"], "prepared")
+            journal.advance_found_files(
+                "found-files-writing", d, plan, lambda *_: True)
+            before = (journal.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "phase/plan mismatch"):
+                journal.finish_found_prepared_pristine(
+                    d["id"], plan, lambda *_: True)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=journal.root)["safe_to_mutate"])
+
+    def test_found_prepared_pristine_first_install_retains_no_previous_owner(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = SharedApplyOperation(Path(root) / "journal")
+            d = {"id": "b" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "c" * 64, "changed_fields": []}
+            plan = json.dumps({
+                "result": "prepared", "page": "strategies",
+                "dependencies": d["base"], "changed_fields": [],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            journal.prepare_found(d, plan, lambda _: True)
+            witnessed = []
+            completed = journal.finish_found_prepared_pristine(
+                d["id"], plan, lambda raw, previous:
+                    witnessed.append(previous) is None and previous is None)
+            self.assertEqual(witnessed, [None])
+            self.assertEqual(completed["phase"], "restored")
+            self.assertNotIn("previous", completed)
+            self.assertIsNone(committed_owner(completed))
+
+    def test_found_config_wal_pre_save_and_post_save_is_strictly_nonterminal(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            store = SharedApplyOperation(Path(temporary) / "shared-apply")
+            detail_found = {"id": "e" * 32, "page": "strategies",
+                            "base": "a" * 64, "candidate": "b" * 64,
+                            "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": detail_found["base"],
+                "found_intent": {"config_revision": detail_found["base"],
+                                 "commit_authorized": False},
+                "found_batch": {name: {"before": "", "after": "", "before_status": "present"}
+                                for name in ("youtube", "user", "auto")}
+            }, separators=(",", ":")).encode()
+            store.prepare_found(detail_found, plan, lambda _: True)
+            store.advance_found_files("found-files-writing", detail_found,
+                                      plan, lambda *_: True)
+            store.advance_found_files("found-files-written", detail_found,
+                                      plan, lambda *_: True, post_images=trivial_post())
+            sequence = []
+            for phase in ("found-config-saving", "found-config-saved"):
+                record_before = (store.root / "operation.json").read_bytes()
+                with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                    store.advance_found_config(phase, detail_found, plan,
+                                               lambda *_: False)
+                self.assertEqual((store.root / "operation.json").read_bytes(),
+                                 record_before)
+                with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                    store.advance_found_config(phase, detail_found, plan + b" ",
+                                               lambda *_: True)
+                persisted = store.advance_found_config(
+                    phase, detail_found, plan,
+                    lambda p, raw: (sequence.append(p) or raw == plan))
+                self.assertEqual(store.read(), persisted)
+                self.assertEqual(persisted["phase"], phase)
+                self.assertEqual(persisted["found"]["plan_sha256"],
+                                 hashlib.sha256(plan).hexdigest())
+                self.assertEqual((store.root / "operation.json").stat().st_mode & 0o777, 0o600)
+                self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+                for illegal in ("committed", "restored", "requires-review",
+                                "config-saved", "activated"):
+                    with self.assertRaisesRegex(
+                            SharedOperationError, "found files require original durable"):
+                        store.advance(illegal, detail_found)
+            self.assertEqual(sequence, ["found-config-saving", "found-config-saved"])
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                store.advance_found_config(
+                    "found-config-saving", detail_found, plan, lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                store.recover_prepared(detail_found["id"], lambda: True)
+            self.assertEqual(store.read()["phase"], "found-config-saved")
+
+    def test_found_config_attempt_refused_before_files_written(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            store = SharedApplyOperation(Path(temporary) / "shared-apply")
+            d = {"id": "d" * 32, "page": "strategies",
+                 "base": "a" * 64, "candidate": "b" * 64,
+                 "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": d["base"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }).encode()
+            store.prepare_found(d, plan, lambda _: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                store.advance_found_config("found-config-saving", d, plan,
+                                           lambda *_: True)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            with self.assertRaisesRegex(SharedOperationError, "missing original intent"):
+                store._persist_record(
+                    {"schema": 1, "phase": "found-config-saving", "detail": d})
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            with self.assertRaisesRegex(SharedOperationError, "invalid original found Config"):
+                store.advance_found_config("committed", d, plan, lambda *_: True)
+
+    def test_found_physical_write_intent_is_fsynced_before_any_file_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = SharedApplyOperation(Path(tmp) / "shared-apply")
+            d = {"id": "c" * 32, "page": "strategies", "base": "a" * 64,
+                 "candidate": "b" * 64, "changed_fields": []}
+            plan = json.dumps({
+                "page": "strategies", "result": "prepared",
+                "dependencies": d["base"],
+                "found_intent": {"config_revision": d["base"],
+                                 "commit_authorized": False},
+                "found_batch": {name: {"before": "", "after": "", "before_status": "present"}
+                                for name in ("youtube", "user", "auto")},
+            }).encode()
+            journal.prepare_found(d, plan, lambda b: b == plan)
+            steps = []
+            for phase in ("found-files-writing", "found-files-written"):
+                with self.assertRaisesRegex(SharedOperationError, "witness refused"):
+                    journal.advance_found_files(
+                        phase, d, plan, lambda *_: False,
+                        post_images=trivial_post() if phase == "found-files-written" else None)
+                with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                    journal.advance_found_files(phase, d, plan + b"\n",
+                                                lambda *_: True)
+                record = journal.advance_found_files(
+                    phase, d, plan,
+                    lambda p, raw: (steps.append(p) or raw == plan),
+                    post_images=trivial_post() if phase == "found-files-written" else None)
+                self.assertEqual(record["phase"], phase)
+                self.assertEqual(journal.read(), record)
+                self.assertEqual(
+                    (journal.root / "operation.json").stat().st_mode & 0o777,
+                    0o600)
+                self.assertFalse(native_lifecycle_gate(
+                    "common-apply", root=journal.root)["safe_to_mutate"])
+                for legacy in ("activated", "restored", "config-saved", "committed"):
+                    with self.assertRaises(SharedOperationError):
+                        journal.advance(legacy, d)
+            self.assertEqual(steps, ["found-files-writing", "found-files-written"])
+            with self.assertRaisesRegex(SharedOperationError, "state/plan mismatch"):
+                journal.advance_found_files(
+                    "found-files-writing", d, plan, lambda *_: True)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                journal.recover_prepared(d["id"], lambda: True)
+
+    def test_found_file_phase_cannot_be_forged_from_ordinary_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journal = SharedApplyOperation(Path(tmp) / "shared-apply")
+            old = detail("f" * 32)
+            journal.advance("prepared", old)
+            before = (journal.root / "operation.json").read_bytes()
+            with self.assertRaises(SharedOperationError):
+                journal.advance_found_files(
+                    "found-files-writing", old, b'{"plan":1}', lambda *_: True)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+            forged = json.loads(before)
+            forged["phase"] = "found-files-writing"
+            with self.assertRaisesRegex(SharedOperationError, "missing original intent"):
+                journal._persist_record(forged)
+            self.assertEqual((journal.root / "operation.json").read_bytes(), before)
+
+    def test_found_intent_is_one_durable_original_record_not_ordinary_apply(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            old = detail("a" * 32)
+            for phase in ("prepared", "activating", "activated", "config-saved", "committed"):
+                store.advance(phase, old)
+            found = {"id": "b" * 32, "page": "strategies",
+                     "base": old["candidate"], "candidate": "c" * 64,
+                     "changed_fields": []}
+            body = json.dumps({"page": "strategies", "result": "prepared",
+                "dependencies": found["base"],
+                "found_intent": {"config_revision": found["base"],
+                                 "commit_authorized": False},
+                "found_batch": {"youtube": {}, "user": {}, "auto": {}}
+            }, separators=(",", ":")).encode()
+            called = []
+            prepared = store.prepare_found(
+                found, body, lambda content: (called.append(content) or True))
+            self.assertEqual(called, [body])
+            self.assertEqual(prepared["phase"], "prepared")
+            self.assertEqual(prepared["previous"], old)
+            self.assertEqual(prepared["found"], {
+                "schema": 1, "kind": "sealed-five-editor-three-file-intent",
+                "plan_sha256": hashlib.sha256(body).hexdigest(),
+                "sources": ["youtube", "user", "auto"]})
+            physical = (store.root / "operation.json").read_bytes()
+            self.assertEqual(store.read(), prepared)
+            self.assertEqual((store.root / "operation.json").stat().st_mode & 0o777, 0o600)
+            self.assertFalse(native_lifecycle_gate("common-apply", root=store.root)["safe_to_mutate"])
+            for phase in ("activating", "restored", "config-saved", "committed"):
+                with self.assertRaises(SharedOperationError):
+                    store.advance(phase, found)
+                self.assertEqual((store.root / "operation.json").read_bytes(), physical)
+            with self.assertRaisesRegex(SharedOperationError, "prepared-only"):
+                store.recover_prepared(found["id"], lambda: True)
+            self.assertEqual(store.read(), prepared)
+
+    def test_found_prepared_refuses_unsealed_or_nonterminal_reuse_without_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = SharedApplyOperation(Path(tmp) / "shared-apply")
+            found = {"id": "c" * 32, "page": "strategies",
+                     "base": "a" * 64, "candidate": "b" * 64,
+                     "changed_fields": []}
+            base_plan = {"page": "strategies", "result": "prepared",
+                         "dependencies": found["base"],
+                         "found_intent": {"config_revision": found["base"],
+                                          "commit_authorized": False},
+                         "found_batch": {"youtube": {}, "user": {}, "auto": {}}}
+            def raw(x):
+                return json.dumps(x).encode()
+            for changed in (
+                {"page": "voice"},
+                {"found_batch": {"youtube": {}, "auto": {}, "user": {}}},
+                {"found_intent": {"config_revision": found["base"],
+                                  "commit_authorized": True}},
+                {"dependencies": "f" * 64},
+                {"found_batch": {}},
+            ):
+                with self.subTest(changed=changed):
+                    with self.assertRaisesRegex(SharedOperationError, "unqualified"):
+                        store.prepare_found(found, raw({**base_plan, **changed}),
+                                            lambda _: True)
+            with self.assertRaisesRegex(SharedOperationError, "unverified"):
+                store.prepare_found(found, raw(base_plan), lambda _: False)
+            self.assertFalse(store.root.exists())
+            good = store.prepare_found(found, raw(base_plan), lambda _: True)
+            before = (store.root / "operation.json").read_bytes()
+            with self.assertRaisesRegex(SharedOperationError, "unfinished"):
+                store.prepare_found({**found, "id": "d" * 32},
+                                    raw(base_plan), lambda _: True)
+            self.assertEqual((store.root / "operation.json").read_bytes(), before)
+            record = json.loads(before)
+            record["found"]["plan_sha256"] = "bad"
+            (store.root / "operation.json").write_text(json.dumps(record))
+            with self.assertRaisesRegex(SharedOperationError, "invalid sealed found"):
+                store.read()
+
     # Retired private Telegram PoC migration/rollback test matrix was removed
     # by owner decision. Only active shared Apply durability is exercised here.
 

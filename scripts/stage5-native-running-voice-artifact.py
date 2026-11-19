@@ -128,7 +128,11 @@ def receipt_check(data, path, source_sha, *, verify_manifest=True):
          isinstance(data.get("engine_sha256"), str) and
          re.fullmatch(r"[a-f0-9]{64}", data["engine_sha256"]) and
          isinstance(data.get("native_deps"), list) and
-         len(data["native_deps"]) == 7,
+         0 < len(data["native_deps"]) <= 32 and
+         all(isinstance(dep, str) and
+             re.fullmatch(r"[a-z0-9][a-z0-9+_.-]{0,63}", dep)
+             for dep in data["native_deps"]) and
+         data["native_deps"] == sorted(set(data["native_deps"])),
          "STAGE5_RUNNING_INSTALLED_RECEIPT_INVALID")
     if verify_manifest:
         standard = load("stage5-native-single-artifact.py")
@@ -582,7 +586,7 @@ def self_test():
                 "archive_sha256": sha256(PACKAGE),
                 "archive_size_bytes": PACKAGE.stat().st_size,
                 "manifest_sha256": "b" * 64,
-                "native_deps": list("abcdefg"),
+                "native_deps": list("abcdefgh"),
                 "installed_file_count": 292, "engine_sha256": "c" * 64,
                 "published": False, "owner_device_changed": False,
                 "extra_install_source_commit": load("stage5-installed-extra-install-http.py").SOURCE_REVISION,
@@ -668,6 +672,10 @@ def self_test():
             for key, value in (
                 ("archive_sha256", "0" * 64), ("archive_size_bytes", 0),
                 ("identity", "other"), ("native_deps", []),
+                ("native_deps", ["a", "a"]),
+                ("native_deps", ["z", "a"]),
+                ("native_deps", ["a", "bad/path"]),
+                ("native_deps", list("abcdefgh") + ["h"]),
                 ("published", True), ("all_feature_suites_qualified", True),
                 ("shared_voice_original_fd9", False),
                 ("authenticated_https_voice_apply_and_restore", False),

@@ -511,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"schema_version": 1, "result": "unprocessed", "code": error.code}))
         return 2
     except DomainPolicyError as error:
-        if args.command == "inspect":
+        if args.command in ("inspect", "manual-edit"):
             print(json.dumps({"schema_version": 1, "result": "failed", "error": error.evidence()}))
         else:
             print(error.diagnostic(), file=sys.stderr)

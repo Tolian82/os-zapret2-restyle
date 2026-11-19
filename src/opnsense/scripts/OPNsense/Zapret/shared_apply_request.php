@@ -15,6 +15,8 @@ require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/Settin
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/WanRequirement.php';
 require_once __DIR__ . '/../../../mvc/app/controllers/OPNsense/Zapret/Api/SharedApplyEnvelope.php';
 require_once __DIR__ . '/shared_apply_lock.php';
+require_once __DIR__ . '/shared_apply_found_intent.php';
+require_once __DIR__ . '/shared_apply_found_stage.php';
 
 use OPNsense\Zapret\Api\SettingsApply;
 use OPNsense\Zapret\Api\WanRequirement;
@@ -48,8 +50,21 @@ final class SharedApplyRequest
             if (array_keys($data['sync']) !== ['snapshot']) {
                 throw new \InvalidArgumentException('Voice snapshot required');
             }
-        } elseif (array_keys($data['sync']) !== ['telegramips_baseline']) {
-            throw new \InvalidArgumentException('Strategies Telegram baseline required');
+        } else {
+            $keys = array_keys($data['sync']);
+            if (!in_array($keys, [
+                ['telegramips_baseline'],
+                ['telegramips_baseline', 'found_upload'],
+            ], true) ||
+                !is_string($data['sync']['telegramips_baseline'] ?? null)) {
+                throw new \InvalidArgumentException('Strategies baseline required');
+            }
+            if (array_key_exists('found_upload', $data['sync'])) {
+                if (!is_array($data['sync']['found_upload'])) {
+                    throw new \InvalidArgumentException('Invalid found upload');
+                }
+                SharedApplyFoundIntent::metadata($data['sync']['found_upload']);
+            }
         }
         return $data;
     }
@@ -91,6 +106,15 @@ final class SharedApplyRequest
         // Bind the form's page to the native plan itself. A configd caller
         // cannot replay a Voice candidate as a Strategies transaction.
         $plan['page'] = $request['page'];
+        if ($request['page'] === 'strategies' &&
+            array_key_exists('found_upload', $request['sync'])) {
+            // The one original root FD9 stage reads the existing PHP upload,
+            // and retains EXACT typed baselines/drafts only in its private
+            // candidate plan. Later P1 locked comparison is still mandatory.
+            $phase = 'found-intent';
+            $plan['found_intent'] = SharedApplyFoundIntent::consume(
+                $request['sync']['found_upload'], $plan['dependencies']);
+        }
         return ['plan' => $plan, 'xml' => $xml];
     }
 
@@ -310,6 +334,14 @@ final class SharedApplyRequest
                         throw new \RuntimeException('Could not read locked native Config');
                     }
                     $prepared = self::prepare($request, $current, $activeXml, $phase);
+                    // Read-only three-way preview under this SAME Config lock
+                    // and the original inherited FD9 + protected P2 lock.
+                    // A preview alone cannot save a source or authorize Apply.
+                    if (isset($prepared['plan']['found_intent'])) {
+                        $phase = 'found-batch';
+                        $prepared['plan']['found_batch'] =
+                            SharedApplyFoundStage::prepare($config, $prepared['plan']);
+                    }
                     $phase = 'workspace';
                     $id = self::materialize($prepared);
                     $response = "prepared-id=$id";
@@ -327,6 +359,16 @@ final class SharedApplyRequest
                 // Never echo the submitted envelope or exception text.
                 error_log(sprintf('Zapret shared Apply stage refused phase=%s type=%s',
                     $phase, get_class($error)));
+                if ($phase === 'found-batch' && $error instanceof \InvalidArgumentException &&
+                    preg_match('/^found-(youtube|user|auto)-line-[1-9][0-9]{0,5}$/D',
+                        $error->getMessage())) {
+                    $phase = $error->getMessage();
+                }
+                if ($phase === 'found-intent' &&
+                    preg_match('/^found-intent-(config-changed|upload-(metadata|path|directory|inode|missing|reader|changed))$/D',
+                        $error->getMessage())) {
+                    $phase = $error->getMessage();
+                }
                 echo 'preflight-rejected=' . $phase . "\n";
                 return 0;
             }

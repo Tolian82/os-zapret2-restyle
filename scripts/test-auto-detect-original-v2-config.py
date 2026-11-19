@@ -109,13 +109,14 @@ class OriginalConfigV2Tests(unittest.TestCase):
         return prepare_original_v2_locked(
             self.queue, self.receipts, attest=self.attest, inspect=self.inspect)
 
-    def commit(self, pending, *, manual=None, excluded=None, attest=None):
+    def commit(self, pending, *, manual=None, excluded=None, attest=None,
+               running_live=False):
         return commit_with_original_v2_model(
             self.writer, pending, owned_root=self.owned,
             manual_hostlists=self.manual if manual is None else manual,
             global_exclude=self.excluded if excluded is None else excluded,
             attest=self.attest if attest is None else attest,
-            inspect=self.inspect, psl=self.psl)
+            inspect=self.inspect, psl=self.psl, running_live=running_live)
 
     def ack(self, pending, result):
         return self.chain.acknowledge(
@@ -353,10 +354,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         prior_replace = mod._replace
-        def broken_second_target(path, *args):
+        def broken_second_target(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("original-second-target-io-failure")
-            return prior_replace(path, *args)
+            return prior_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -397,10 +398,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-source-second-write-failed")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -443,6 +444,84 @@ class OriginalConfigV2Tests(unittest.TestCase):
                          "!untouched.example\nexample.co.uk\n")
         self.assertEqual(old_debug.read_bytes().count(b"adding to "), 1)
 
+    def test_native_list_reload_rejects_unchanged_mtime_and_size(self):
+        # Native Zapret2 v1.0.7 FILE_MOD_COMPARE only checks mtime + size,
+        # not the inode, byte digest or content. Simulate a genuine physical
+        # temporary file having the old signature despite new same-size data.
+        import auto_detect_destination_commit as mod
+        location = self.lists / "hot-reload-witness.txt"
+        before, after = b"first.example\\n", b"other.example\\n"
+        self.assertEqual(len(before), len(after))
+        location.write_bytes(before)
+        location.chmod(0o600)
+        old_stat = location.stat()
+        original_target = mod._target
+        touched = []
+
+        def collided_stage(target, uid, **kwargs):
+            if target.parent == self.lists and target.name.startswith(".auto-detect-"):
+                os.utime(target, ns=(old_stat.st_atime_ns, old_stat.st_mtime_ns))
+                touched.append(target.name)
+            return original_target(target, uid, **kwargs)
+
+        with patch.object(mod, "_target", side_effect=collided_stage):
+            with self.assertRaisesRegex(
+                    mod.DestinationRefused, "native_list_reload_signature_unchanged"):
+                mod._replace(location, before, after, os.geteuid())
+        self.assertEqual(location.read_bytes(), before)
+        self.assertEqual(location.stat().st_ino, old_stat.st_ino)
+        self.assertTrue(touched)
+        self.assertEqual([p.name for p in self.lists.iterdir()
+                          if p.name.startswith(".auto-detect-")], [])
+        self.assertFalse(mod._native_list_modification_visible(
+            old_stat, location.stat()))
+
+        # If size OR nanosecond mtime differs, the real upstream predicate
+        # will schedule a reload on the next eligible packet.
+        from types import SimpleNamespace
+        self.assertTrue(mod._native_list_modification_visible(
+            old_stat, SimpleNamespace(st_size=old_stat.st_size + 1,
+                                       st_mtime_ns=old_stat.st_mtime_ns)))
+        self.assertTrue(mod._native_list_modification_visible(
+            old_stat, SimpleNamespace(st_size=old_stat.st_size,
+                                       st_mtime_ns=old_stat.st_mtime_ns + 1)))
+
+    def test_same_bytes_foreign_inode_between_preflight_and_source_cas_refuses(self):
+        # The earlier all-target preflight is NOT a free pass for a later
+        # source rename. A non-cooperating writer may swap an inode after the
+        # preflight while preserving the exact SHA and file mode.
+        import auto_detect_destination_commit as module
+        self.youtube.write_text("example.co.uk\n")
+        self.emit("video.example.co.uk")
+        original = module._replace
+        changed = []
+
+        def swap_after_preflight(path, *args, **kwargs):
+            if path == self.youtube and not changed:
+                moved = path.with_name(".foreign-identical-source")
+                moved.write_bytes(path.read_bytes())
+                moved.chmod(0o600)
+                os.replace(moved, path)
+                changed.append(path.stat().st_ino)
+            return original(path, *args, **kwargs)
+
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(module, "_replace", side_effect=swap_after_preflight):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    self.commit(pending)
+            folder = self.chain.tip(self.proof).open_folder
+            self.assertEqual(len(changed), 1)
+            self.assertEqual(self.youtube.stat().st_ino, changed[0])
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+            # Reopening the same old WAL must still refuse this foreign inode.
+            with self.assertRaises(V2OriginalConfigRefused):
+                self.commit(pending)
+            self.assertTrue(pending.exists())
+            self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+
     def test_original_partial_plan_user_rewrite_same_bytes_refuses(self):
         # GUI-style atomic save with identical bytes also changes inode.
         # A mere SHA(before) match is not proof an original target was
@@ -451,10 +530,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-target-interruption")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -482,10 +561,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         prior_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("known-second-write-failed")
-            return prior_replace(path, *args)
+            return prior_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             folder = self.chain.tip(self.proof).open_folder
@@ -517,10 +596,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         original_replace = mod._replace
-        def interrupt_second(path, *args):
+        def interrupt_second(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("second-target-failed")
-            return original_replace(path, *args)
+            return original_replace(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             with patch.object(mod, "_replace", side_effect=interrupt_second):
@@ -567,10 +646,10 @@ class OriginalConfigV2Tests(unittest.TestCase):
         self.emit("video.example.co.uk")
         import auto_detect_destination_commit as mod
         normal = mod._replace
-        def failing(path, *args):
+        def failing(path, *args, **kwargs):
             if path == self.youtube:
                 raise OSError("inject second target failure")
-            return normal(path, *args)
+            return normal(path, *args, **kwargs)
         with self.queue.exclusive():
             pending = self.prepare()
             with patch.object(mod, "_replace", side_effect=failing):
@@ -581,6 +660,229 @@ class OriginalConfigV2Tests(unittest.TestCase):
             cp = self.commit(pending)
             self.assertTrue(self.ack(pending, cp))
         self.assertEqual(self.youtube.read_text(), "")
+
+    def _live_managed_relocation(self):
+        # Only the original P2 destination owner may supply an exact active
+        # after-image; these are disposable physical fixture paths.
+        managed = self.base / "runtime" / "managed"
+        managed.mkdir(parents=True)
+        path = managed / "hostlist-youtube.txt"
+        before = b"youtube.com\\nexample.co.uk\\n".replace(b"\\n", b"\n")
+        after = b"youtube.com\\n".replace(b"\\n", b"\n")
+        path.write_bytes(before)
+        path.chmod(0o644)
+        live = {"youtube": {
+            "path": path,
+            "before_sha256": hashlib.sha256(before).hexdigest(),
+            "after": after,
+        }}
+        effects = {
+            "auto": {"add": ["example.co.uk"], "remove": []},
+            "youtube": {"add": [], "remove": ["example.co.uk"]},
+        }
+        return path, before, after, live, effects
+
+    def test_original_destination_live_wal_recovers_after_source_before_managed(self):
+        # Same immutable P2a slot: source CAS succeeds; live managed replace
+        # fails. There must be NO checkpoint/ACK until this exact live image
+        # is restored through the original journal and GUI lock.
+        import auto_detect_destination_commit as mod
+        self.youtube.write_text("example.co.uk\n")
+        path, before, after, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            journal = tip.open_folder / "destination"
+            original = mod._replace
+
+            def cut_live(target, *args, **kwargs):
+                if target == path:
+                    raise OSError("crash-before-managed-rename")
+                return original(target, *args, **kwargs)
+
+            with self.writer.exclusive_targets():
+                with patch.object(mod, "_replace", side_effect=cut_live):
+                    with self.assertRaises(OSError):
+                        self.writer._locked_commit(
+                            tip.open_folder, tip.open_intent, pending.read_bytes(),
+                            effects, live=live)
+            saved = (journal / "plan.json").read_bytes()
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((journal / "checkpoint.json").exists())
+            self.assertTrue(pending.exists())
+            with self.writer.exclusive_targets():
+                receipt = self.writer._locked_commit(
+                    tip.open_folder, tip.open_intent, pending.read_bytes(),
+                    effects, live=live)
+            self.assertEqual(path.read_bytes(), after)
+            self.assertEqual((journal / "plan.json").read_bytes(), saved)
+            self.assertEqual(receipt["kind"], "destination-and-cursor-committed")
+            self.assertFalse(receipt["ack_authorized"])
+            self.assertTrue(self.ack(pending, receipt))
+            self.assertFalse(pending.exists())
+
+    def test_original_destination_live_wal_refuses_same_byte_foreign_inode(self):
+        import auto_detect_destination_commit as mod
+        from auto_detect_destination_commit import DestinationRefused
+        self.youtube.write_text("example.co.uk\n")
+        path, before, _, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            original = mod._replace
+
+            def cut_live(target, *args, **kwargs):
+                if target == path:
+                    raise OSError("crash-before-managed-rename")
+                return original(target, *args, **kwargs)
+
+            with self.writer.exclusive_targets():
+                with patch.object(mod, "_replace", side_effect=cut_live):
+                    with self.assertRaises(OSError):
+                        self.writer._locked_commit(
+                            tip.open_folder, tip.open_intent, pending.read_bytes(),
+                            effects, live=live)
+            # GUI-style replace with IDENTICAL SHA but foreign inode is not
+            # an original protected P2 preimage and must not be overwritten.
+            replaced = path.with_name(".gui-resaved")
+            replaced.write_bytes(before)
+            replaced.chmod(0o644)
+            os.replace(replaced, path)
+            with self.writer.exclusive_targets():
+                with self.assertRaisesRegex(
+                        DestinationRefused, "live_managed_preimage_changed"):
+                    self.writer._locked_commit(
+                        tip.open_folder, tip.open_intent, pending.read_bytes(),
+                        effects, live=live)
+            self.assertTrue(pending.exists())
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((tip.open_folder / "destination" /
+                              "checkpoint.json").exists())
+
+    def test_original_destination_live_wal_refuses_missing_after_image(self):
+        from auto_detect_destination_commit import DestinationRefused
+        self.youtube.write_text("example.co.uk\n")
+        path, before, _, live, effects = self._live_managed_relocation()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            tip = self.chain.tip(self.proof)
+            # The original P2 source plan is still absent: no mutation.
+            wrong = dict(live)
+            wrong["youtube"] = {**live["youtube"],
+                                "before_sha256": "f" * 64}
+            with self.writer.exclusive_targets():
+                with self.assertRaisesRegex(
+                        DestinationRefused, "live_managed_not_aligned_at_prepare"):
+                    self.writer._locked_commit(
+                        tip.open_folder, tip.open_intent, pending.read_bytes(),
+                        effects, live=wrong)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertEqual(self.youtube.read_text(), "example.co.uk\n")
+            self.assertFalse((tip.open_folder / "destination" /
+                              "checkpoint.json").exists())
+
+    def _running_live_original_fixture(self):
+        # Genuine original P2 Model/P1/queue/epoch, with only the independently
+        # tested full FreeBSD kernel argv/read-only process witness injected.
+        active = self.base / "runtime-v2"
+        managed = active / "managed"
+        managed.mkdir(parents=True)
+        path = managed / "hostlist-youtube.txt"
+        path.write_text("youtube.com\nexample.co.uk\n")
+        path.chmod(0o644)
+        expected = b"youtube.com\n"
+        return active, path, {
+            "status": "read-only-live-after-images",
+            "generation": self.proof.generation,
+            "operation": self.proof.operation_id,
+            "pid": self.proof.owner.pid,
+            "started": self.proof.owner.started,
+            "changed": ["youtube"],
+            "files": {
+                "youtube": {
+                    "path": str(path),
+                    "before_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    "after_sha256": hashlib.sha256(expected).hexdigest(),
+                },
+            },
+            "commit_authorized": False,
+            "ack_authorized": False,
+        }
+
+    def test_real_original_p2_live_known_relocation_same_slot_and_ack(self):
+        import json
+        import auto_detect_original_v2_model as model
+        self.youtube.write_text("example.co.uk\n")
+        active, path, receipt = self._running_live_original_fixture()
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "COMMON_ACTIVE", active), patch.object(
+                    model, "preview_live_known_after_readonly",
+                    return_value=receipt) as checked:
+                result = self.commit(pending, running_live=True)
+                self.assertEqual(checked.call_count, 1)
+            self.assertEqual(path.read_text(), "youtube.com\n")
+            self.assertEqual(self.youtube.read_text(), "")
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
+            plan = json.loads((self.chain.tip(self.proof).open_folder /
+                               "destination" / "plan.json").read_bytes())
+            self.assertEqual(set(plan["live"]), {"youtube"})
+            self.assertEqual(plan["live"]["youtube"]["path"], str(path))
+            self.assertFalse(result["ack_authorized"])
+            self.assertTrue(self.ack(pending, result))
+            self.assertFalse(pending.exists())
+
+    def test_real_original_p2_live_known_replay_after_partial_source(self):
+        import auto_detect_destination_commit as dest
+        import auto_detect_original_v2_model as model
+        self.youtube.write_text("example.co.uk\n")
+        active, path, receipt = self._running_live_original_fixture()
+        self.emit("video.example.co.uk")
+        ordinary_replace = dest._replace
+        def interrupt_managed(target, *args, **kwargs):
+            if target == path:
+                raise OSError("simulate-kill-before-live-managed")
+            return ordinary_replace(target, *args, **kwargs)
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "COMMON_ACTIVE", active), patch.object(
+                    model, "preview_live_known_after_readonly",
+                    return_value=receipt):
+                with patch.object(dest, "_replace", side_effect=interrupt_managed):
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        self.commit(pending, running_live=True)
+                folder = self.chain.tip(self.proof).open_folder
+                self.assertTrue(pending.exists())
+                self.assertFalse((folder / "destination" / "checkpoint.json").exists())
+                self.assertEqual(path.read_text(), "youtube.com\nexample.co.uk\n")
+                self.assertEqual(self.youtube.read_text(), "")
+                # The earlier authenticated plan, not a new stale source
+                # preview, supplies the unchanged after-image on replay.
+                with patch.object(model, "preview_live_known_after_readonly",
+                                  side_effect=AssertionError("unexpected fresh preview")):
+                    result = self.commit(pending, running_live=True)
+            self.assertEqual(path.read_text(), "youtube.com\n")
+            self.assertTrue(self.ack(pending, result))
+
+    def test_running_shared_fallback_uses_original_p2_without_live_rewrite(self):
+        import auto_detect_original_v2_model as model
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with patch.object(model, "preview_live_known_after_readonly",
+                              side_effect=AssertionError("unnecessary live update")):
+                result = self.commit(pending, running_live=True)
+            self.assertTrue(self.ack(pending, result))
+            self.assertEqual(self.auto.read_text(),
+                             "!untouched.example\nexample.co.uk\n")
 
     def test_gui_destination_lock_contention_denied(self):
         self.emit("video.example.co.uk")

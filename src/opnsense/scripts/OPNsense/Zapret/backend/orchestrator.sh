@@ -172,6 +172,15 @@ orchestrator_build_release()
     _orchestrator_build_stage_file="$6"
     _orchestrator_build_variant="${7:-ordinary}"
     _orchestrator_build_voice_xml="${8:-/conf/config.xml}"
+    _orchestrator_build_found_id="${9:-}"
+    # Planned found rows are only permitted in the existing shared private
+    # workspace. Ordinary Start, Lab and detached callers cannot import them.
+    if [ -n "${_orchestrator_build_found_id}" ]; then
+        [ "${_orchestrator_build_variant}" = shared-candidate ] &&
+        [ "${_orchestrator_build_workspace}" = "/var/db/zapret2/shared-work/${_orchestrator_build_found_id}" ] &&
+        [ "${#_orchestrator_build_found_id}" -eq 32 ] || return 1
+        case "${_orchestrator_build_found_id}" in *[!a-f0-9]*) return 1 ;; esac
+    fi
     _orchestrator_build_total=8
     _orchestrator_build_error="${_orchestrator_build_workspace}/stage-error.log"
 
@@ -335,7 +344,7 @@ orchestrator_build_release()
         "${TELEGRAM_IPS}" \
         "${USER_DOMAINS}" \
         "${DISCORD_IPS:-}" "${X_IPS:-}" "${SIP_IPS:-}" "${CUSTOM_IPS:-}" \
-        "${EXCLUDE_IPSET:-}" \
+        "${EXCLUDE_IPSET:-}" "${_orchestrator_build_found_id}" \
         2>"${_orchestrator_build_error}" || {
             orchestrator_fail_from_log \
                 "${_orchestrator_build_stage_file}" 3 \

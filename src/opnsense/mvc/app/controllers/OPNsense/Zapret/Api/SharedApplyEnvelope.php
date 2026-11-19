@@ -107,8 +107,21 @@ final class SharedApplyEnvelope
             throw new \InvalidArgumentException('Invalid shared Apply page');
         }
         $required = $page === 'voice' ? 'snapshot' : 'telegramips_baseline';
-        if (array_keys($sync) !== [$required] || !is_string($sync[$required])) {
+        $keys = array_keys($sync);
+        if (!in_array($keys, $page === 'strategies'
+                ? [[$required], [$required, 'found_upload']]
+                : [[$required]], true) ||
+            !is_string($sync[$required])) {
             throw new \InvalidArgumentException('Missing shared Apply form baseline');
+        }
+        if ($page === 'strategies' && array_key_exists('found_upload', $sync)) {
+            $upload = $sync['found_upload'];
+            if (!is_array($upload) ||
+                array_keys($upload) !== ['path', 'size', 'sha256', 'owner_uid'] ||
+                !is_string($upload['path']) || !is_int($upload['size']) ||
+                !is_string($upload['sha256']) || !is_int($upload['owner_uid'])) {
+                throw new \InvalidArgumentException('Invalid found upload reference');
+            }
         }
         $raw = json_encode(
             ['page' => $page, 'fields' => $fields, 'sync' => $sync],

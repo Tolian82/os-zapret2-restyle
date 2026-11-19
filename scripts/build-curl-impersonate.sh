@@ -44,9 +44,39 @@ printf '%s\n' "${CATALOG_VERSION}" |
     echo 'ERROR: curl-impersonate signed catalog version invalid or missing' >&2
     exit 1
 }
-if [ -n "${PINNED_VERSION}" ] &&
-   [ "${CATALOG_VERSION}" != "${PINNED_VERSION}" ]; then
-    echo "ERROR: pinned curl-impersonate ${PINNED_VERSION} unavailable (got ${CATALOG_VERSION})" >&2
+if [ -n "$PINNED_VERSION" ] &&
+   [ "$CATALOG_VERSION" != "$PINNED_VERSION" ]; then
+    if [ "${ZAPRET2_CURL_SIGNED_DISCOVERY:-0}" = 1 ]; then
+        # Observational signed-source probe in the existing disposable CI.
+        # The required manifest pin still refuses any different ELF.
+        if IGNORE_OSVERSION=yes pkg -o REPOS_DIR="$TMP/repos" \
+            fetch -y -r FreeBSD -o "$TMP/packages" curl-impersonate; then
+            PROBE_PACKAGE=$(find "$TMP/packages" -type f \
+                -name 'curl-impersonate-*.pkg' | head -n 1)
+            if [ -n "$PROBE_PACKAGE" ] && [ -f "$PROBE_PACKAGE" ]; then
+                mkdir -p "$TMP/probe"
+                if tar -xf "$PROBE_PACKAGE" -C "$TMP/probe"; then
+                    PROBE_ROOT="$TMP/probe/usr/local"
+                    PROBE_ELF="$PROBE_ROOT/bin/curl-impersonate"
+                    if [ -f "$PROBE_ELF" ]; then
+                        PROBE_PACKAGE_SHA=$(sha256 -q "$PROBE_PACKAGE")
+                        PROBE_ELF_SHA=$(sha256 -q "$PROBE_ELF")
+                        PROBE_PROFILE=$(find "$PROBE_ROOT/bin" -type f -name 'curl_chrome[0-9]*' |
+                            sed -n 's|.*/curl_\(chrome[0-9][0-9]*\)$|\1|p' |
+                            awk '{v=$0; sub(/^chrome/, "", v); print v " " $0}' |
+                            sort -nr | head -n 1 | awk '{print $2}')
+                        if printf '%s\n%s\n' "$PROBE_PACKAGE_SHA" "$PROBE_ELF_SHA" |
+                            LC_ALL=C grep -Eqv '^[a-f0-9]{64}$'; then
+                            echo 'CURL_SIGNED_LATEST_OBSERVATION=invalid-hash' >&2
+                        elif [ -n "$PROBE_PROFILE" ]; then
+                            echo "CURL_SIGNED_LATEST_OBSERVATION=unqualified version=$CATALOG_VERSION source_pkg_sha256=$PROBE_PACKAGE_SHA elf_sha256=$PROBE_ELF_SHA chrome_profile=$PROBE_PROFILE" >&2
+                        fi
+                    fi
+                fi
+            fi
+        fi
+    fi
+    echo "ERROR: pinned curl-impersonate $PINNED_VERSION unavailable (got $CATALOG_VERSION)" >&2
     exit 1
 fi
 IGNORE_OSVERSION=yes pkg -o REPOS_DIR="${TMP}/repos" fetch -y -r FreeBSD -o "${TMP}/packages" curl-impersonate

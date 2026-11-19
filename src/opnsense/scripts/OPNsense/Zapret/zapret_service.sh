@@ -1158,6 +1158,10 @@ shared_apply_boot_service()
         if [ "$_shared_boot_retired" != auto-detect-retire=ready ]; then
             shared_apply_retire_stopped_original_service || return 69
         fi
+    elif [ -f "$_shared_boot_dir/release/auto-detect-source-map.json" ] &&
+         [ ! -e "$_shared_boot_dir/release/auto-detect-generation.json" ]; then
+        atomic_verify_tree "$_shared_boot_dir/release" "$ACTIVE_DIR" || return 69
+        _shared_boot_prior_observer=1
     fi
     apply_runtime_observer_previous_preflight || return 69
     if [ "$_shared_boot_prior_observer" = 1 ] &&
@@ -1242,7 +1246,7 @@ shared_apply_bundle_service()
 }
 shared_apply_execute_service()
 {
-    [ "$#" -eq 2 ] || return 64
+    [ "$#" -eq 2 ] || { [ "$#" -eq 3 ] && [ "$3" = after-retirement ]; } || return 64
     case "$1" in ""|*[!a-f0-9]*) return 64 ;; esac
     [ "${#1}" -eq 32 ] || return 64
     case "$2" in voice|strategies) ;; *) return 64 ;; esac
@@ -1261,6 +1265,22 @@ shared_apply_execute_service()
         printf '%s\n' preflight-rejected=bundle-verify
         return 0
     fi
+    _shared_found_scope=$(shared_apply_json_field '
+        if has("found_intent") and has("found_batch") and .page=="strategies"
+        then "found"
+        elif has("found_intent") or has("found_batch") then "invalid"
+        else "ordinary" end' < "$_shared_apply_root/plan.json") || return 69
+    case "$_shared_found_scope:$_shared_apply_page" in
+        ordinary:*) ;;
+        found:strategies)
+            if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_effective_known.py" \
+                verify-planned "$_shared_apply_id"; then
+                printf '%s\n' preflight-rejected=found-source-drift
+                return 0
+            fi
+            ;;
+        *) printf '%s\n' preflight-rejected=found-intent; return 0 ;;
+    esac
     _shared_apply_preview=$(shared_apply_native_config preflight \
         "$_shared_apply_id" "$_shared_apply_page") || {
         printf '%s\n' preflight-rejected=config-preflight
@@ -1274,6 +1294,17 @@ shared_apply_execute_service()
         shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
     _shared_apply_fields=$(printf "%s\n" "$_shared_apply_preview" |
         shared_apply_json_field '.fields | if length==0 then "-" else join(",") end') || return 69
+    _shared_apply_enabled="$_shared_apply_mode"
+    if [ "$_shared_found_scope" = found ] &&
+       ! launcher_is_running "$CHILD_PIDFILE" &&
+       [ "${3:-}" != after-retirement ]; then
+        # An intentional Stop is independent of the saved Enabled checkbox.
+        # Start only when the form explicitly switches Enabled on.
+        case ",$_shared_apply_fields," in
+            *,general.enabled,*) ;;
+            *) _shared_apply_mode=0 ;;
+        esac
+    fi
     # Re-read the original source-to-native profile mapping after seal:
     # the promoted schema-2 map/args must still exactly bind this PHP
     # candidate and the original generated profile order. The launcher
@@ -1316,7 +1347,17 @@ shared_apply_execute_service()
         fi
         _shared_apply_previous=$(shared_apply_inspect_service) || return 69
         case "$_shared_apply_previous" in committed\ *) ;; *) return 69 ;; esac
+        if [ "$_shared_found_scope" = found ] && [ -z "${_shared_run_encoded:-}" ]; then
+            printf '%s\n' preflight-rejected=found-intent
+            return 0
+        fi
         shared_apply_stop_service "$_shared_apply_previous" || return 70
+        if [ "$_shared_found_scope" = found ]; then
+            # The retired epoch's final ACK can add HOSTLIST entries. Build
+            # from the same submitted three-way intent against those bytes.
+            shared_apply_run_after_found_retirement "$_shared_apply_previous"
+            return $?
+        fi
         _shared_apply_retired_old=1
         if ! apply_runtime_probe "$_shared_apply_root/release" "$_shared_apply_mode"; then
             common_error "shared Apply: candidate changed after retiring old original"
@@ -1338,8 +1379,9 @@ shared_apply_execute_service()
     # component baseline under the SAME original FD9 and native PHP Config
     # lock. Once sealed it is preserved across Apply/Boot and cannot import
     # obsolete zapret-hosts-auto.txt or overwrite manual YouTube/User text.
-    if [ "$_shared_apply_mode" = 1 ] &&
-       [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
+    if [ "$_shared_apply_page" = strategies ] ||
+       { [ "$_shared_apply_mode" = 1 ] &&
+         [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; }; then
         _shared_owned_start=$(/usr/local/bin/php \
             "$SCRIPT_DIR/auto_detect_config_snapshot.php" \
             bootstrap-known "$_shared_apply_base") || {
@@ -1350,40 +1392,70 @@ shared_apply_execute_service()
             shared_apply_json_field '.result | select(.=="created" or .=="existing")') || return 69
         case "$_shared_owned_state" in created|existing) ;; *) return 69 ;; esac
     fi
-    # The journal records only a fixed operation identity and owned-fields
-    # proof. It never contains private Config XML or untrusted shell strings.
-    shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
-        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
-    shared_apply_record_service activating "$_shared_apply_id" "$_shared_apply_page" \
+    if [ "$_shared_found_scope" = found ]; then
+        if ! shared_apply_native_config found-save "$_shared_apply_id" \
+            strategies "$_shared_apply_mode" >/dev/null; then
+            _found_pending=$(shared_apply_pending_found_service) || return 70
+            case "$_found_pending" in
+                "") printf '%s\n' preflight-rejected=found-source-drift; return 0 ;;
+                "$_shared_apply_id") shared_apply_recover_found_service "$_found_pending"; return $? ;;
+                *) return 70 ;;
+            esac
+        fi
+    else
+        shared_apply_record_service prepared "$_shared_apply_id" "$_shared_apply_page" \
+            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
+    fi
+    shared_apply_activate_and_commit_service
+}
+# Ordinary and five-list Apply share the same runtime, IPFW and epoch path.
+shared_apply_record_current_service()
+{
+    if [ "$_shared_found_scope" = found ]; then
+        case "$1" in
+            activating|activated|config-saved|epoch-finalizing|committed)
+                shared_apply_native_config "found-runtime-$1" "$2" strategies >/dev/null
+                ;;
+            requires-review) return 0 ;; # Keep the original found WAL intact.
+            *) return 70 ;;
+        esac
+    else
+        shared_apply_record_service "$@"
+    fi
+}
+
+shared_apply_activate_and_commit_service()
+{
+    shared_apply_record_current_service activating "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 69
     if ! apply_runtime_activate "$_shared_apply_root/release" "$_shared_apply_mode" "$_shared_apply_id" "$_shared_apply_candidate"; then
         # activate() may have restored internally, or may have failed between
         # irreversible observations. Never claim a verified rollback merely
         # because a shell status is zero or APPLY_PHASE was reset.
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
-    if ! shared_apply_record_service activated "$_shared_apply_id" "$_shared_apply_page" \
+    if ! shared_apply_record_current_service activated "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
-        if apply_runtime_restore; then
-            shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
+        if [ "$_shared_found_scope" = ordinary ] && apply_runtime_restore; then
+            shared_apply_record_current_service restored "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
             return 69
         fi
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
     # Independent proof against a swap between preflight and kernel install.
     # A failed proof is still pre-Config; restore only if fully attested.
     if ! shared_apply_bundle_service verify "$_shared_apply_id"; then
-        if apply_runtime_restore; then
-            shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
+        if [ "$_shared_found_scope" = ordinary ] && apply_runtime_restore; then
+            shared_apply_record_current_service restored "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
             return 69
         fi
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
@@ -1391,26 +1463,28 @@ shared_apply_execute_service()
     # Reject dead/replaced engine, changed active tree or unexpected IPFW
     # BEFORE native Config::save. Never claim rollback on ambiguous drift.
     if ! apply_runtime_attest_activated; then
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
-    # Native Config::save is performed by the SAME existing model writer.
-    # Only explicit 69 means no save was attempted; every other nonzero
-    # status could be a mid-save crash and MUST preserve runtime/evidence.
-    shared_apply_native_config save "$_shared_apply_id" "$_shared_apply_page"
-    _shared_apply_save_status=$?
-    if [ "$_shared_apply_save_status" -ne 0 ]; then
-        if [ "$_shared_apply_save_status" -eq 69 ]; then
-            if apply_runtime_restore; then
-                shared_apply_record_service restored "$_shared_apply_id" "$_shared_apply_page" \
-                    "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
-                return 69
+    if [ "$_shared_found_scope" = ordinary ]; then
+        # Native Config::save is performed by the SAME existing model writer.
+        # Only explicit 69 means no save was attempted; every other nonzero
+        # status could be a mid-save crash and MUST preserve runtime/evidence.
+        shared_apply_native_config save "$_shared_apply_id" "$_shared_apply_page"
+        _shared_apply_save_status=$?
+        if [ "$_shared_apply_save_status" -ne 0 ]; then
+            if [ "$_shared_apply_save_status" -eq 69 ]; then
+                if apply_runtime_restore; then
+                    shared_apply_record_current_service restored "$_shared_apply_id" "$_shared_apply_page" \
+                        "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
+                    return 69
+                fi
             fi
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+                "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
+            return 70
         fi
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
-            "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
-        return 70
     fi
     # An active observer MUST enter a nonterminal journal phase immediately
     # after Config::save, before IPFW commit or any saved-only recovery path.
@@ -1418,14 +1492,14 @@ shared_apply_execute_service()
     if [ "$_shared_apply_mode" = 1 ] &&
        [ -f "$_shared_apply_root/release/auto-detect-generation.json" ]; then
         _shared_apply_epoch_required=1
-        if ! shared_apply_record_service epoch-finalizing "$_shared_apply_id" "$_shared_apply_page" \
+        if ! shared_apply_record_current_service epoch-finalizing "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields"; then
-            shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             return 70
         fi
     else
-        shared_apply_record_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service config-saved "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
     fi
     # Native Config::save releases its own lock. Reacquire/read the saved
@@ -1433,7 +1507,7 @@ shared_apply_execute_service()
     # introduced here: the same OPNsense worker handles the readback.
     _shared_apply_saved=$(shared_apply_native_config saved \
         "$_shared_apply_id" "$_shared_apply_page") || {
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     }
@@ -1446,17 +1520,17 @@ shared_apply_execute_service()
             shared_apply_json_field '.enabled | select(.=="0" or .=="1")') &&
         [ "$_shared_apply_saved_result" = committed ] &&
         [ "$_shared_apply_saved_digest" = "$_shared_apply_candidate" ] &&
-        [ "$_shared_apply_saved_mode" = "$_shared_apply_mode" ] &&
+        [ "$_shared_apply_saved_mode" = "$_shared_apply_enabled" ] &&
         apply_runtime_attest_activated
     }; then
         # A changed native Config, a dead common engine or foreign IPFW
         # AFTER save cannot be undone by merely restoring the old release.
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
     if ! apply_runtime_commit; then
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
@@ -1477,7 +1551,7 @@ shared_apply_execute_service()
     }; then
         # No rollback after IPFW COMMIT / native Config::save: retain the
         # durable transaction and force review instead of false success.
-        shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+        shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
             "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
         return 70
     fi
@@ -1490,13 +1564,13 @@ shared_apply_execute_service()
         # original raw/debug or move the starting cursor away from zero.
         _shared_epoch_complete=$("$PYTHON_RUNTIME" \
             "$BACKEND_DIR/auto_detect_post_drop.py" finish-epoch "$_shared_apply_id") || {
-            shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion refused"
             return 70
         }
         if [ "$_shared_epoch_complete" != original-fd9-running-epoch=attested ]; then
-            shared_apply_record_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
+            shared_apply_record_current_service requires-review "$_shared_apply_id" "$_shared_apply_page" \
                 "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || true
             common_error "shared Apply: original epoch completion unverified"
             return 70
@@ -1504,9 +1578,76 @@ shared_apply_execute_service()
     fi
     # Ordinary no-observer Apply retains its prior route. Only a completed
     # real native observer epoch can become the terminal shared owner.
-    shared_apply_record_service committed "$_shared_apply_id" "$_shared_apply_page" \
+    shared_apply_record_current_service committed "$_shared_apply_id" "$_shared_apply_page" \
         "$_shared_apply_base" "$_shared_apply_candidate" "$_shared_apply_fields" || return 70
     printf "applied-id=%s\n" "$_shared_apply_id"
+}
+
+shared_apply_pending_found_service()
+{
+    [ -x "$PYTHON_RUNTIME" ] || return 69
+    "$PYTHON_RUNTIME" "$BACKEND_DIR/shared_apply_operation.py" found-pending
+}
+
+# Called only by existing Apply/Start under FD9. A proven saved candidate
+# continues the same operation; a proven base goes through file rollback.
+shared_apply_recover_found_service()
+{
+    [ "$#" -eq 1 ] || return 64
+    _shared_apply_id="$1"
+    _shared_apply_page=strategies
+    _shared_found_scope=found
+    _shared_apply_root=$(shared_apply_workspace "$1") || return 70
+    _found_recovery=$(shared_apply_native_config found-recover "$1" strategies) || return 70
+    _found_recovery_result=$(printf '%s\n' "$_found_recovery" |
+        shared_apply_json_field '.result') || return 70
+    case "$_found_recovery_result" in
+        restored|original-found-prepared-pristine-restored)
+            printf 'apply-restored=%s\n' "$_shared_apply_id"
+            return 0
+            ;;
+        found-config-saved) ;;
+        *) return 70 ;;
+    esac
+    _shared_apply_mode=$(printf '%s\n' "$_found_recovery" |
+        shared_apply_json_field '.mode | select(.=="0" or .=="1")') || return 70
+    _shared_apply_saved=$(shared_apply_native_config saved "$1" strategies) || return 70
+    _shared_apply_candidate=$(printf '%s\n' "$_shared_apply_saved" |
+        shared_apply_json_field '.snapshot | select(test("^[a-f0-9]{64}$"))') || return 70
+    _shared_apply_enabled=$(printf '%s\n' "$_shared_apply_saved" |
+        shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 70
+    if [ "$_shared_apply_mode" = 1 ]; then
+        [ "$_shared_apply_enabled" = 1 ] && wan_first_service require || return 70
+    fi
+    _shared_apply_base=
+    _shared_apply_fields=-
+    shared_apply_activate_and_commit_service
+}
+
+shared_apply_run_after_found_retirement()
+{
+    [ "$#" -eq 1 ] || return 64
+    _found_old_owner="$1"
+    _found_rebuilt=$(
+        _shared_found_rebuild_running=1
+        shared_apply_build_service "$_shared_run_encoded"
+    ) || _found_rebuilt=
+    _found_new_receipt=$(printf '%s\n' "$_found_rebuilt" | tail -n 1)
+    case "$_found_new_receipt" in
+        prepared-id=*)
+            _found_new_result=$(shared_apply_execute_service "${_found_new_receipt#prepared-id=}" \
+                strategies after-retirement) || return 70
+            case "$(printf '%s\n' "$_found_new_result" | tail -n 1)" in
+                preflight-rejected=*|apply-restored=*) ;;
+                *) printf '%s\n' "$_found_new_result"; return 0 ;;
+            esac
+            ;;
+        *) _found_new_result=preflight-rejected=found-source-drift ;;
+    esac
+    # The proven original was RUNNING before the explicit Apply. If the
+    # new attempt never switched it, use the original Boot to resume it.
+    shared_apply_boot_service "$_found_old_owner" >/dev/null || return 70
+    printf '%s\n' "$_found_new_result"
 }
 # LC-06 WAN-only Config mode of the ORIGINAL FD9, not a second owner.
 # A committed native journal requires the full runtime transaction. With
@@ -1689,11 +1830,21 @@ shared_apply_run_service()
     _shared_run_page="$1"
     _shared_run_encoded="$2"
     [ -n "$_shared_run_encoded" ] || return 64
+    if shared_apply_has_record_service; then
+        _found_pending=$(shared_apply_pending_found_service) || return 69
+        if [ -n "$_found_pending" ]; then
+            # Resolve the interrupted operation first. This click must not
+            # dispatch a second candidate after an uncertain earlier Apply.
+            shared_apply_recover_found_service "$_found_pending" >/dev/null || return 70
+            printf 'apply-recovered=%s\n' "$_found_pending"
+            return 0
+        fi
+    fi
     preflight_shared_apply_journal common-apply || return 69
     _shared_run_report=$(shared_apply_build_service "$_shared_run_encoded") || return $?
     _shared_run_receipt=$(printf "%s\n" "$_shared_run_report" | tail -n 1)
     case "$_shared_run_receipt" in
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=render|preflight-rejected=runtime-build|preflight-rejected=seal|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
             # Nothing reached shared_apply_execute_service: no Config save,
             # runtime handoff, IPFW mutation or durable operation was started.
             printf '%s\n' "$_shared_run_receipt"
@@ -1724,7 +1875,7 @@ shared_apply_build_service()
         "${SCRIPT_DIR}/shared_apply_request.php" stage "$1") || return 69
     case "$_shared_stage_result" in
         prepared-id=*) _shared_stage_id="${_shared_stage_result#prepared-id=}" ;;
-        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace)
+        preflight-rejected=root-gate|preflight-rejected=bootstrap|preflight-rejected=model|preflight-rejected=decode|preflight-rejected=candidate|preflight-rejected=wan-required|preflight-rejected=candidate-plan|preflight-rejected=candidate-validation|preflight-rejected=candidate-xml|preflight-rejected=candidate-size|preflight-rejected=workspace|preflight-rejected=found-intent|preflight-rejected=found-intent-config-changed|preflight-rejected=found-intent-upload-*|preflight-rejected=found-batch|preflight-rejected=found-youtube-line-*|preflight-rejected=found-user-line-*|preflight-rejected=found-auto-line-*)
             printf '%s\n' "$_shared_stage_result"
             return 0
             ;;
@@ -1774,10 +1925,29 @@ shared_apply_prepare_service()
     }
     _shared_template="$_shared_work/templates/usr/local/etc/zapret2/zapret.conf"
     [ -f "$_shared_template" ] && [ ! -L "$_shared_template" ] || return 69
+    # A discovered-source candidate MUST use its original P1-rebased
+    # after-image for the detached managed runtime. Never snapshot currently
+    # live known files a second time and silently lose the user deletion.
+    # Unsealed plan is root-private; Python revalidates all three original
+    # physical preimages under the existing P2 destination lock.
+    _shared_found_build_scope=$(/usr/local/bin/jq -er '
+        if has("found_intent") and has("found_batch") then "planned"
+        elif has("found_intent") or has("found_batch") then "invalid"
+        else "ordinary" end
+    ' "$_shared_work/plan.json") || {
+        printf '%s\n' preflight-rejected=runtime-build
+        return 0
+    }
+    _shared_found_build_id=
+    case "$_shared_found_build_scope" in
+        planned) _shared_found_build_id="$1" ;;
+        ordinary) ;;
+        *) printf '%s\n' preflight-rejected=runtime-build; return 0 ;;
+    esac
     orchestrator_build_release \
         "$_shared_template" "$ZAPRET_DIR" "$ACTIVE_DIR" \
         "$_shared_work" "$_shared_work/release" "$STAGE_FILE" \
-        shared-candidate "$_shared_work/candidate.xml" || {
+        shared-candidate "$_shared_work/candidate.xml" "$_shared_found_build_id" || {
         printf '%s\n' preflight-rejected=runtime-build
         return 0
     }
@@ -1802,6 +1972,16 @@ shared_apply_prepare_service()
             shared_apply_json_field '.enabled | select(.=="0" or .=="1")') || return 69
         _shared_auto_digest=$(printf "%s\n" "$_shared_auto_preflight" |
             shared_apply_json_field '.candidate | select(test("^[a-f0-9]{64}$"))') || return 69
+        if [ "$_shared_found_build_scope" = planned ] &&
+           [ "${_shared_found_rebuild_running:-0}" != 1 ] &&
+           ! launcher_is_running "$CHILD_PIDFILE"; then
+            _shared_auto_fields=$(printf '%s\n' "$_shared_auto_preflight" |
+                shared_apply_json_field '.fields | join(",")') || return 69
+            case ",$_shared_auto_fields," in
+                *,general.enabled,*) ;;
+                *) _shared_auto_mode=0 ;;
+            esac
+        fi
         if [ "$_shared_auto_mode" = 1 ]; then
             if ! "$PYTHON_RUNTIME" "$BACKEND_DIR/auto_detect_origin_map.py" \
                 preview "$_shared_work" "$_shared_auto_digest" >/dev/null ||
@@ -3164,6 +3344,15 @@ service_with_lifecycle_lock()
                 # never the old template/engine builder. Pending/foreign
                 # evidence still blocks start before any kernel mutation.
                 if shared_apply_has_record_service; then
+                    _found_pending=$(shared_apply_pending_found_service) || return 69
+                    if [ -n "$_found_pending" ]; then
+                        _found_reconciled=$(shared_apply_recover_found_service "$_found_pending") || return 70
+                        case "$(printf '%s\n' "$_found_reconciled" | tail -n 1)" in
+                            applied-id=*) printf '%s\n' "$_found_reconciled"; return 0 ;;
+                            apply-restored=*) ;;
+                            *) return 70 ;;
+                        esac
+                    fi
                     _shared_owner=$(shared_apply_inspect_service) || return 69
                     case "$_shared_owner" in
                         committed\ *)

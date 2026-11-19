@@ -173,6 +173,367 @@ namespace {
     );
     verify($same['result']==='unchanged' && $config->saves===1 &&
         $config->locks===0, 'repeated Config save created revision');
+    // A found-only draft (or one with other Config changes) MUST NOT reach
+    // the original Config writer until the single joint Config/P2 transaction
+    // is proven. Otherwise the native model would save XML without all three
+    // physical HOSTLIST sources, creating an unrecoverable split receipt.
+    $foundOnly = $noChange;
+    $foundOnly['found_intent'] = ['commit_authorized'=>false];
+    $forbidden = new FakeConfig($config->disk);
+    try {
+        SharedConfigCommit::persist(
+            $foundOnly, 'strategies', $forbidden, static fn()=>new FakeModel()
+        );
+        verify(false, 'found-only intent saved Config without three HOSTLISTs');
+    } catch (\InvalidArgumentException $expected) {}
+    verify($forbidden->saves === 0 && $forbidden->locks === 0 &&
+           $forbidden->disk === $config->disk,
+           'found-only split Config commit mutated native state');
+    $changedFound = $strategyPlan;
+    $changedFound['found_intent'] = ['commit_authorized'=>false];
+    try {
+        SharedConfigCommit::persist(
+            $changedFound, 'strategies', $forbidden, static fn()=>new FakeModel()
+        );
+        verify(false, 'mixed Config+found intent saved only native Config');
+    } catch (\InvalidArgumentException $expected) {}
+    verify($forbidden->saves === 0 && $forbidden->locks === 0,
+           'mixed found intent changed Config before three-file transaction');
+
+    // Internal original owner: same Config::save writer, with P2 held
+    // over the native save, but released BEFORE the second Config lock.
+    $nativeFound = SettingsApply::prepareStrategies(
+        $config->disk,
+        ['strategy'=>['trafficargs'=>'--filter-tcp=443']],
+        $config->disk['hostlist']['telegramips']
+    );
+    $nativeFound['found_intent'] = ['commit_authorized'=>false];
+    $nativeFound['found_batch'] = ['youtube'=>[], 'user'=>[], 'auto'=>[]];
+    $orig = new FakeConfig($config->disk);
+    $sequence = [];
+    $p2Held = false;
+    $withP2 = static function (callable $scope) use (&$sequence, &$p2Held, $orig): string {
+        verify($orig->locks === 1 && !$p2Held,
+               'P2 attempted before Config lock or still held at relock');
+        $p2Held = true;
+        $sequence[] = 'p2-lock';
+        try { return $scope(); }
+        finally { $p2Held = false; $sequence[] = 'p2-unlock'; }
+    };
+    $attest = static function (string $stage, string $digest) use (
+        &$sequence, &$p2Held, $orig
+    ): bool {
+        verify($orig->locks === 1 && $p2Held && strlen($digest) === 64,
+               'native file witness did not hold original Config->P2');
+        $sequence[] = $stage;
+        return true;
+    };
+    $journal = static function (string $phase) use (
+        &$sequence, &$p2Held
+    ): bool {
+        verify($p2Held, 'found Config phase not under P2 lock');
+        $sequence[] = $phase;
+        return true;
+    };
+    $foundResult = SharedConfigCommit::persistFoundUnderOriginalOwner(
+        $nativeFound, 'strategies', $orig, static fn()=>new FakeModel(),
+        $withP2, $attest, $journal
+    );
+    verify($foundResult['result'] === 'found-config-saved-nonterminal' &&
+        $foundResult['saved'] && !$foundResult['applied'] &&
+        !$foundResult['commit_authorized'] &&
+        $orig->saves === 1 && $orig->locks === 0 &&
+        $orig->disk['strategy']['trafficargs'] === '--filter-tcp=443',
+        'original found Config writer failed to persist or falsely applied');
+    verify($sequence === [
+        'p2-lock','before-config-save','found-config-saving','p2-unlock',
+        'p2-lock','after-config-save','found-config-saved','p2-unlock'
+    ], 'original Config->P2 lock order or durable phase order changed');
+
+    // Found-only edit must still pass through one sealed nonterminal WAL,
+    // but it must not manufacture a new native XML revision.
+    $unchangedFound = SettingsApply::prepareStrategies(
+        $orig->disk, [], $orig->disk['hostlist']['telegramips']
+    );
+    $unchangedFound['found_intent'] = ['commit_authorized'=>false];
+    $unchangedFound['found_batch'] = ['youtube'=>[], 'user'=>[], 'auto'=>[]];
+    $noop = new FakeConfig($orig->disk);
+    $noopSteps = [];
+    $resultNoop = SharedConfigCommit::persistFoundUnderOriginalOwner(
+        $unchangedFound, 'strategies', $noop, static fn()=>new FakeModel(),
+        static function (callable $run) use ($noop): string {
+            verify($noop->locks === 1, 'found-only original Config lock lost');
+            return $run();
+        },
+        static fn(string $stage, string $digest): bool => strlen($digest) === 64,
+        static function (string $phase) use (&$noopSteps): bool {
+            $noopSteps[] = $phase;
+            return true;
+        }
+    );
+    verify($resultNoop['saved'] === false && $noop->saves === 0 &&
+        $noopSteps === ['found-config-saving', 'found-config-saved'],
+        'found-only Apply incorrectly created a Config revision');
+
+
+    // Cold inspection is PURE: compare the complete locked native model,
+    // never infer Config::save success merely because the candidate matches.
+    $coldBase = $config->disk;
+    $coldCandidate = $coldBase;
+    $coldCandidate['strategy']['trafficargs'] = '--filter-tcp=80,443';
+    $coldPlan = [
+        'result' => 'prepared',
+        'page' => 'strategies',
+        'dependencies' => VoiceSettingsSnapshot::digest($coldBase),
+        'candidate' => $coldCandidate,
+        'changed_fields' => ['strategy.trafficargs'],
+        'found_intent' => [
+            'config_revision' => VoiceSettingsSnapshot::digest($coldBase),
+            'commit_authorized' => false,
+        ],
+        'found_batch' => ['youtube'=>[], 'user'=>[], 'auto'=>[]],
+    ];
+    $classify = static fn(array $live, string $phase, ?array $plan = null): array =>
+        \OPNsense\Zapret\Native\SharedApplyConfigWorker::classifyFoundConfigImage(
+            $plan ?? $coldPlan, $live, $phase);
+    $beforeCold = $classify($coldBase, 'found-files-written');
+    verify($beforeCold['image'] === 'base-image' &&
+        !$beforeCold['commit_authorized'] && !$beforeCold['restore_authorized'] &&
+        !$beforeCold['save_attested'] && !$beforeCold['runtime_attested'],
+        'cold found BEFORE classified as an authorized Apply');
+    $uncertainBefore = $classify($coldBase, 'found-config-saving');
+    $uncertainAfter = $classify($coldCandidate, 'found-config-saving');
+    verify($uncertainBefore['image'] === 'base-image' &&
+        $uncertainAfter['image'] === 'candidate-image' &&
+        !$uncertainAfter['commit_authorized'] && !$uncertainAfter['save_attested'],
+        'save-attempted uncertainty was converted into a confirmed native save');
+    $savedReadback = $classify($coldCandidate, 'found-config-saved');
+    verify($savedReadback['image'] === 'candidate-image' &&
+        !$savedReadback['commit_authorized'] && !$savedReadback['restore_authorized'],
+        'saved Config image incorrectly terminalized joint Apply');
+    foreach ([
+        [$coldCandidate, 'found-files-written'],
+        [$coldBase, 'found-config-saved'],
+    ] as [$live, $phase]) {
+        try {
+            $classify($live, $phase);
+            verify(false, 'impossible Config-image/journal phase accepted');
+        } catch (\RuntimeException $expected) {}
+    }
+    $foreignCold = $coldCandidate;
+    $foreignCold['general']['divertport'] = '777';
+    foreach (['found-files-written', 'found-config-saving', 'found-config-saved']
+             as $phase) {
+        try {
+            $classify($foreignCold, $phase);
+            verify(false, 'foreign Config state accepted for cold terminalization');
+        } catch (\RuntimeException $expected) {}
+    }
+    $noopCold = $coldPlan;
+    $noopCold['candidate'] = $coldBase;
+    $noopCold['changed_fields'] = [];
+    foreach (['found-files-written', 'found-config-saving', 'found-config-saved']
+             as $phase) {
+        $receipt = $classify($coldBase, $phase, $noopCold);
+        verify($receipt['image'] === 'base-equals-candidate' &&
+            !$receipt['commit_authorized'] && !$receipt['save_attested'],
+            'found-only no-op Config image invented a durable save');
+    }
+    $invalidCold = $coldPlan;
+    $invalidCold['found_intent']['config_revision'] = '0' . substr(
+        $coldPlan['dependencies'], 1
+    );
+    try {
+        $classify($coldBase, 'found-config-saving', $invalidCold);
+        verify(false, 'mismatched original sealed Config dependency accepted');
+    } catch (\RuntimeException $expected) {}
+    verify($config->saves === 1 && $config->locks === 0 &&
+        $config->disk === $coldBase,
+        'read-only cold Config classifier performed a write or held a lock');
+
+
+    // The *same* native Config snapshot and original physically locked
+    // P2 reader may be projected together, but never become an Apply
+    // or permission to restore based solely on image equivalence.
+    // Unlike the Config-only classifier fixtures, joint inspection must
+    // bind physical rows to the immutable three-source after/before plan.
+    $jointPlan = $coldPlan;
+    $jointPlan['found_batch'] = [
+        'youtube'=>['before'=>"before.example\n", 'after'=>"after.example\n"],
+        'user'=>['before'=>"same.example\n", 'after'=>"same.example\n"],
+        'auto'=>['before'=>'', 'after'=>''],
+    ];
+    $coldFileBase = [
+        'schema' => 1, 'result' => 'read-only-cold-image-classification',
+        'journal_phase' => 'prepared', 'image' => 'all-before',
+        'states' => ['youtube'=>'before','user'=>'before','auto'=>'before'],
+        'stage_evidence' => null,
+        'previous_runtime' => ['state'=>'no-predecessor-proof', 'id'=>null],
+        'commit_authorized' => false, 'restore_authorized' => false,
+    ];
+    $joint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldBase, $coldFileBase);
+    // The native Python command encodes sort_keys=True recursively. Check
+    // the ACTUAL wire-shaped source map, not just manually ordered PHP data.
+    $wireStates = $coldFileBase;
+    $wireStates['states'] = [
+        'auto'=>'before', 'user'=>'before', 'youtube'=>'before',
+    ];
+    $wireJoint = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldBase, $wireStates);
+    verify($wireJoint['file_image'] === 'all-before' &&
+        !$wireJoint['restore_authorized'],
+        'sorted native Python cold source-map keys incorrectly rejected');
+    verify($joint['config_image'] === 'base-image' &&
+        $joint['file_image'] === 'all-before' &&
+        !$joint['commit_authorized'] && !$joint['restore_authorized'] &&
+        !$joint['save_attested'] && !$joint['runtime_attested'],
+        'cold pristine Config+file pair fabricated terminal Apply');
+    $coldFilesWriting = $coldFileBase;
+    $coldFilesWriting['journal_phase'] = 'found-files-writing';
+    $coldFilesWriting['stage_evidence'] = [
+        'youtube'=>'ready-but-before', 'user'=>'unchanged-before',
+        'auto'=>'unchanged-before',
+    ];
+    $jointWriting = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldBase, $coldFilesWriting);
+    verify($jointWriting['journal_phase'] === 'found-files-writing' &&
+        !$jointWriting['restore_authorized'],
+        'found-files-writing was treated as terminal recovery');
+    $coldFilesSaving = $coldFilesWriting;
+    $coldFilesSaving['journal_phase'] = 'found-config-saving';
+    $coldFilesSaving['image'] = 'contains-unattributed-after';
+    $coldFilesSaving['states']['youtube'] = 'after-image';
+    $coldFilesSaving['stage_evidence']['youtube'] = 'installed-after';
+    $jointSaving = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldCandidate, $coldFilesSaving);
+    // Python builds staged evidence in changed-file order, which may
+    // differ from the full canonical three-source order. This is a
+    // shape check, not permission to fabricate a real native stage.
+    $reorderedStages = $coldFilesSaving;
+    $reorderedStages['stage_evidence'] = [
+        'auto'=>'unchanged-before', 'user'=>'unchanged-before',
+        'youtube'=>'installed-after',
+    ];
+    $reordered = \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+        classifyFoundJointImages($jointPlan, $coldCandidate, $reorderedStages);
+    verify($reordered['stage_evidence']['youtube'] === 'installed-after' &&
+        !$reordered['restore_authorized'],
+        'reordered native staged source keys incorrectly rejected');
+    verify($jointSaving['config_image'] === 'candidate-image' &&
+        !$jointSaving['save_attested'] && !$jointSaving['commit_authorized'],
+        'matching candidate during uncertain save falsely authorized Apply');
+    foreach ([
+        ['schema'=>2],
+        ['commit_authorized'=>true],
+        ['states'=>['youtube'=>'before']],
+        ['states'=>[
+            'auto'=>'before', 'user'=>'before', 'youtube'=>'before',
+            'foreign'=>'before',
+        ]],
+        ['stage_evidence'=>['youtube'=>'installed-after']],
+        ['journal_phase'=>'unexpected'],
+        ['previous_runtime'=>['state'=>'ready', 'id'=>null]],
+        ['previous_runtime'=>['state'=>'no-predecessor-proof', 'id'=>str_repeat('f',32)]],
+        ['previous_runtime'=>['state'=>'ready', 'id'=>'foreign']],
+    ] as $tamper) {
+        try {
+            \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+                classifyFoundJointImages($jointPlan, $coldBase,
+                    array_replace($coldFilesWriting, $tamper));
+            verify(false, 'malformed original physical cold proof accepted');
+        } catch (\RuntimeException $expected) {}
+    }
+    try {
+        \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+            classifyFoundJointImages($jointPlan, $coldCandidate, $coldFileBase);
+        verify(false, 'prepared files with candidate XML accepted');
+    } catch (\RuntimeException $expected) {}
+
+    // Physically contradictory but otherwise well-shaped evidence MUST
+    // refuse, including unsupported writer stage for an unchanged file.
+    $jointContradictions = [];
+    $wrong = $coldFilesWriting;
+    $wrong['image'] = 'contains-unattributed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['stage_evidence']['youtube'] = 'installed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['stage_evidence']['user'] = 'ready-but-before';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesWriting;
+    $wrong['states']['youtube'] = 'after-image';
+    $wrong['image'] = 'contains-unattributed-after';
+    $jointContradictions[] = $wrong;
+    $wrong = $coldFilesSaving;
+    $wrong['stage_evidence']['youtube'] = 'ready-but-after';
+    $jointContradictions[] = $wrong;
+    foreach ($jointContradictions as $contradiction) {
+        try {
+            \OPNsense\Zapret\Native\SharedApplyConfigWorker::
+                classifyFoundJointImages($jointPlan, $coldBase, $contradiction);
+            verify(false, 'well-shaped contradictory joint proof was accepted');
+        } catch (\RuntimeException $expected) {}
+    }
+    verify($config->saves === 1 && $config->locks === 0 &&
+        $config->disk === $coldBase,
+        'joint cold classification attempted an extra native Config save');
+
+    // Durable phase recording failure MUST prevent the first save call.
+    $refused = new FakeConfig($config->disk);
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $refused, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static fn(string $phase): bool => false
+        );
+        verify(false, 'undurable Config intent crossed save');
+    } catch (\RuntimeException $expected) {}
+    verify($refused->saves === 0 && $refused->locks === 0,
+           'Config changed despite absent found-save WAL');
+
+    // Native IO error after the durable intent: no automatic rollback or
+    // invented restored. The saved outcome is uncertain.
+    $uncertain = new FakeConfig($config->disk);
+    $uncertain->saveFails = true;
+    $savedPhases = [];
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $uncertain, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static function (string $phase) use (&$savedPhases): bool {
+                $savedPhases[] = $phase;
+                return true;
+            }
+        );
+        verify(false, 'native Config failure was marked saved');
+    } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $expected) {}
+    verify($uncertain->saves === 1 && $uncertain->locks === 0 &&
+           $savedPhases === ['found-config-saving'],
+           'native Config failure erased unresolved original WAL');
+
+    // Config::save unlocks; a foreign edit between save and relock
+    // must remain uncertain before the post-save found journal.
+    $raced = new FakeConfig($config->disk);
+    $raced->raceAfterSave = true;
+    $racePhases = [];
+    try {
+        SharedConfigCommit::persistFoundUnderOriginalOwner(
+            $nativeFound, 'strategies', $raced, static fn()=>new FakeModel(),
+            static fn(callable $run): string => $run(),
+            static fn(string $stage, string $digest): bool => true,
+            static function (string $phase) use (&$racePhases): bool {
+                $racePhases[] = $phase;
+                return true;
+            }
+        );
+        verify(false, 'raced saved Config accepted as original owner');
+    } catch (\OPNsense\Zapret\Native\SharedConfigSaveUncertain $expected) {}
+    verify($racePhases === ['found-config-saving'] &&
+           $raced->locks === 0, 'saved Config race was not isolated');
 
     $stale=SettingsApply::prepareStrategies(
         $config->disk,['strategy'=>['trafficargs'=>'--filter-tcp=443']],
@@ -267,6 +628,19 @@ verify($events === [
     'record:activated','record:config-saved','runtime:commit','record:committed',
 ], 'native shared transaction order incorrect: '.implode(',', $events));
 verify($sample->locks===0 && $sample->saves===1, 'FD9 save sequence leaked Config lock');
+
+// A previously sealed three-file intent may not use the old callable
+// coordinator, because it does not own Config+P2 file commit/recovery.
+$events = [];
+try {
+    SharedConfigCommit::transact(
+        $changedFound, 'strategies', new FakeConfig($seed),
+        static fn()=>new FakeModel(), static fn()=>true,
+        $record, $activate, $rollback, $commit
+    );
+    verify(false, 'legacy coordinator activated found draft without file WAL');
+} catch (\InvalidArgumentException $expected) {}
+verify($events === [], 'found intent crossed into legacy journal or runtime');
 
 // Missing FD9 or failed durable intent is a hard refusal before activation.
 $events = [];

@@ -17,6 +17,7 @@ require_once __DIR__ . '/SettingsApply.php';
 require_once __DIR__ . '/SharedApplyEnvelope.php';
 require_once __DIR__ . '/IPSetPolicyBridge.php';
 require_once __DIR__ . '/DomainSetPolicyBridge.php';
+require_once __DIR__ . '/../../../../../../scripts/OPNsense/Zapret/shared_apply_found_intent.php';
 
 class SettingsController extends ApiMutableModelControllerBase
 {
@@ -153,6 +154,19 @@ class SettingsController extends ApiMutableModelControllerBase
                         ],
                     ];
                 }
+                // This request's actual PHP upload only. Do not accept a
+                // client-specified file path, and never create a second writer.
+                $preflightStage = 'found-upload';
+                $expectsFoundUpload = $_POST['found_intent_expected'] ?? null;
+                $foundUpload = \OPNsense\Zapret\Native\SharedApplyFoundIntent::uploadedMetadata(
+                    $_FILES
+                );
+                if ($expectsFoundUpload !== null &&
+                    ($expectsFoundUpload !== '1' || $foundUpload === null)) {
+                    throw new \InvalidArgumentException(
+                        'The discovered lists upload was not received. Apply was stopped.'
+                    );
+                }
                 // Native missing-upstream diagnosis must precede seeded
                 // candidate overlay/normalization; WAN-first already ran.
                 if (SettingsApply::isPassiveStrategiesRequest($current, $post)) {
@@ -187,7 +201,8 @@ class SettingsController extends ApiMutableModelControllerBase
                 // LC-06: the actual changed-field scope, not the full POST,
                 // identifies an independent WAN edit. Stored lists/IPSETs
                 // are irrelevant to that field when runtime is stopped.
-                $wanOnlyCandidate = $plan['changed_fields'] === ['general.waninterface'];
+                $wanOnlyCandidate = $foundUpload === null &&
+                    $plan['changed_fields'] === ['general.waninterface'];
                 if (!$wanOnlyCandidate) {
                 $preflightStage = 'normalization';
                 // Native Python is the only IP/CIDR grammar. This read-only
@@ -225,7 +240,7 @@ class SettingsController extends ApiMutableModelControllerBase
                         $duplicates = 0;
                     } else {
                         try {
-                            $domain = DomainSetPolicyBridge::inspect($raw, $field);
+                            $domain = DomainSetPolicyBridge::inspect($raw, $field, sortManual: true);
                         } catch (\InvalidArgumentException $error) {
                             return $this->validationFailure($field, $error->getMessage());
                         }
@@ -303,6 +318,10 @@ class SettingsController extends ApiMutableModelControllerBase
                     }
                     $transport[$group][$field] = $value;
                 }
+                // Bind only the short descriptor, never the multi-KiB body.
+                if ($foundUpload !== null) {
+                    $sync['found_upload'] = $foundUpload;
+                }
                 // Do not relax envelope size checks for actually edited lists.
                 $encoded = SharedApplyEnvelope::encode('strategies',
                     SharedApplyEnvelope::compactStrategies($transport, $current), $sync);
@@ -325,16 +344,31 @@ class SettingsController extends ApiMutableModelControllerBase
             // them only before journal PREPARED / Config / runtime / IPFW changes.
             // A generic requires_review here would freeze the GUI for a
             // safely rejected candidate and conceal the actual stage.
-            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
+            if (preg_match('/^preflight-rejected=found-(youtube|user|auto)-line-([1-9][0-9]{0,5})$/D',
+                    $response, $match)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                    'found_error' => ['source' => $match[1], 'line' => (int)$match[2]],
+                ];
+            }
+            if (preg_match('/^preflight-rejected=(root-gate|bootstrap|model|decode|candidate|wan-required|candidate-plan|candidate-validation|candidate-xml|candidate-size|workspace|render|runtime-build|seal|found-intent(?:-config-changed|-upload-(?:metadata|path|directory|inode|missing|reader|changed))?|found-batch|found-source-drift|owned-baseline|bundle-verify|config-preflight|runtime-preflight|wan-candidate|wan-lifecycle|wan-runtime-owner|wan-kernel|wan-model)$/D', $response, $match)) {
                 return [
                     'result' => 'failed', 'applied' => false,
                     'requires_review' => false,
                     // Only the exact root receipt allowlist can supply this stage.
                     'reason' => 'native-preflight-' . $match[1],
-                    'message' => sprintf(
-                        gettext('Native Strategies preflight rejected before Apply (%s)'),
-                        $match[1]
-                    ),
+                    'message' => $match[1] === 'found-intent-config-changed'
+                        ? gettext('Zapret settings changed while this form was open. Reload before applying again.')
+                        : sprintf(gettext('Native Strategies preflight rejected before Apply (%s)'), $match[1]),
+                ];
+            }
+            if (preg_match('/(?:^|\n)apply-(restored|recovered)=[a-f0-9]{32}$/D', $response, $match)) {
+                return [
+                    'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                    'reason' => 'found-' . $match[1],
+                    'message' => $match[1] === 'restored'
+                        ? gettext('Apply failed and the original settings were restored.')
+                        : gettext('The previous Apply was recovered. Reload before applying again.'),
                 ];
             }
             $wanSaved = $wanOnlyCandidate &&
@@ -367,7 +401,12 @@ class SettingsController extends ApiMutableModelControllerBase
                     ),
                 ];
             }
-            return ['result' => 'failed', 'message' => $error->getMessage()];
+            return [
+                'result' => 'failed', 'applied' => false, 'requires_review' => false,
+                'reason' => $preflightStage === 'found-upload' ? 'strategies-found-upload-refused'
+                    : 'strategies-preflight-' . $preflightStage,
+                'message' => $error->getMessage(),
+            ];
         } catch (\Throwable $error) {
             if (!$nativeApplyDispatched) {
                 // All failures before configdpRun are known non-mutating.
@@ -509,54 +548,6 @@ class SettingsController extends ApiMutableModelControllerBase
             return $data;
         } catch (\Throwable $error) {
             error_log('Zapret Auto Hostlist read unavailable: ' . get_class($error));
-            return ['result' => 'error', 'reason' => 'unavailable'];
-        }
-    }
-
-    public function autoHostlistSaveAction(): array
-    {
-        if (!$this->request->isPost()) {
-            return ['result' => 'error', 'reason' => 'post_required'];
-        }
-        $this->throwReadOnly();
-        $post = $this->request->getPost('auto_hostlist');
-        if (!is_array($post) || count($post) !== 2 ||
-            !isset($post['revision'], $post['content']) ||
-            !is_string($post['revision']) || !is_string($post['content']) ||
-            preg_match('/^[a-f0-9]{64}$/D', $post['revision']) !== 1 ||
-            strlen($post['content']) > 40960) {
-            return ['result' => 'error', 'reason' => 'invalid_request'];
-        }
-        try {
-            $json = json_encode(
-                ['revision' => $post['revision'], 'content' => $post['content']],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-            );
-            $token = rtrim(strtr(base64_encode($json), '+/', '-_'), '=');
-            if (strlen($token) > 57000) {
-                return ['result' => 'error', 'reason' => 'input_too_large'];
-            }
-            $output = (string)(new Backend())->configdpRun(
-                'zapret auto_hostlist_save', [$token], false, 30
-            );
-            if (strlen($output) > 50000) {
-                throw new \RuntimeException('Auto Hostlist save reply too large');
-            }
-            $data = json_decode(trim($output), true);
-            if (!is_array($data) || !in_array($data['result'] ?? null,
-                    ['saved', 'conflict', 'error'], true)) {
-                throw new \RuntimeException('Invalid Auto Hostlist save response');
-            }
-            if ($data['result'] === 'saved' &&
-                (!is_string($data['revision'] ?? null) ||
-                 preg_match('/^[a-f0-9]{64}$/D', $data['revision']) !== 1 ||
-                 !is_string($data['content'] ?? null) ||
-                 !in_array($data['status'] ?? null, ['empty', 'populated'], true))) {
-                throw new \RuntimeException('Invalid Auto Hostlist save receipt');
-            }
-            return $data;
-        } catch (\Throwable $error) {
-            error_log('Zapret Auto Hostlist save unavailable: ' . get_class($error));
             return ['result' => 'error', 'reason' => 'unavailable'];
         }
     }

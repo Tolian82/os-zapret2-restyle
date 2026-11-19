@@ -295,7 +295,8 @@ def _native_fd_child(pending_name: str, payload: dict, *,
             manual_hostlists=payload["manual_hostlists"],
             global_exclude=payload["global_exclude"],
             attest=attest_stopped_generation if retired else attest_running_generation,
-            inspect=probe_stopped_pending_fd if retired else probe_pending_fd)
+            inspect=probe_stopped_pending_fd if retired else probe_pending_fd,
+            running_live=not retired)
         if completion.get("ack_authorized") is not False:
             raise OriginalLockRefused("original_v2_checkpoint_not_authorization")
         return completion

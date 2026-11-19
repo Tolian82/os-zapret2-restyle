@@ -229,10 +229,22 @@ launcher()
 wait_for_completion()
 {
     job_id="$1"
+    # This fixture tests Stage 30 timeout + Stage 90 restoration, NOT the
+    # launcher stale-PID census. Polling the public status API mid-flight
+    # invokes a separate stale-recovery mutation. A busy CI runner can see
+    # a transient shell/process-name transition and terminate the real
+    # fixture worker before it completes, falsely producing RESTORE_FAILED.
+    # Observe the worker's atomically published status file without a
+    # concurrent recovery writer. The public "result" endpoint is still
+    # exercised after terminal status and genuine restore proof is required.
+    case "$job_id" in job.*) ;; *) fail "invalid fixture job ID" ;; esac
+    status_file="${RUN_DIR}/jobs/${job_id}/status.json"
+    [ -f "$status_file" ] || fail "started job status file missing"
     attempts=0
     while [ "${attempts}" -lt 40 ]
     do
-        state=$(launcher status "${job_id}" | jq -r '.state // ""')
+        state=$(jq -er '.state // ""' "$status_file") ||
+            fail "job status not readable"
         case "${state}" in completed|error) return 0 ;; esac
         sleep 1
         attempts=$((attempts + 1))

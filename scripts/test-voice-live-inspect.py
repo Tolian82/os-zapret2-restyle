@@ -215,6 +215,69 @@ class InspectionTests(unittest.TestCase):
                     self.assertEqual("interrupted",mismatch["state"])
                     self.assertFalse(mismatch["can_activate"])
 
+    def test_pending_found_original_previous_runtime_read_only(self):
+        import json
+        from voice_live_inspect import examine_pending_found_previous, VoiceInspectError
+        manifest = fixtures(("telegram", "91.108.0.0/16"))
+        with tempfile.TemporaryDirectory() as root:
+            old = {"id": "b"*32, "page": "strategies",
+                   "base": "c"*64, "candidate": "d"*64,
+                   "changed_fields": []}
+            new = {"id": "a"*32, "page": "strategies",
+                   "base": old["candidate"], "candidate": "e"*64,
+                   "changed_fields": []}
+            path = Path(root)/old["id"]
+            path.mkdir()
+            (path/"plan.json").write_text(json.dumps({
+                "page": old["page"], "dependencies": old["base"],
+                "changed_fields": old["changed_fields"]}))
+            record = {"schema": 1, "phase": "found-files-writing",
+                      "detail": new, "previous": old, "found": {"schema": 1}}
+            adapter_calls = []
+            def adapter(first, last):
+                adapter_calls.append(FakeAdapter(manifest))
+                return adapter_calls[-1]
+            kwargs = dict(work_root=Path(root),
+                          bundle_verify=lambda path: self.assertEqual(path, Path(root)/old["id"]),
+                          manifest_reader=lambda release: manifest,
+                          adapter_factory=adapter,
+                          runtime_probe=lambda *args: {"state": "running",
+                                                        "services": {}})
+            result = examine_pending_found_previous(record, **kwargs)
+            self.assertEqual(result, {"state": "ready", "id": old["id"]})
+            self.assertTrue(adapter_calls)
+            self.assertTrue(all(
+                operation.startswith("read-")
+                for adapter_instance in adapter_calls
+                for operation in adapter_instance.operations))
+            # Existing verified stopped owner, without any plugin-owned
+            # kernel rules, is legitimate evidence but no restart authority.
+            stopped = {**kwargs,
+                       "adapter_factory": lambda *args: FakeAdapter({
+                           **manifest, "rules": {}, "tables": {}}),
+                       "runtime_probe": lambda *args: {"state": "stopped", "services": {}}}
+            self.assertEqual("stopped",
+                             examine_pending_found_previous(record, **stopped)["state"])
+            for state in ("partial", "unverified-release"):
+                with self.subTest(state=state), self.assertRaises(VoiceInspectError):
+                    examine_pending_found_previous(
+                        record, **{**kwargs, "runtime_probe":
+                                   lambda *args, value=state: {
+                                       "state": value, "services": {}}})
+            foreign = {**record, "previous": {**old, "candidate": "f"*64}}
+            with self.assertRaisesRegex(VoiceInspectError, "predecessor"):
+                examine_pending_found_previous(foreign, **kwargs)
+            no_previous = {k: v for k, v in record.items() if k != "previous"}
+            self.assertEqual(
+                {"state": "no-predecessor-proof", "id": None},
+                examine_pending_found_previous(
+                    no_previous,
+                    inspector=lambda *_a, **_k: self.fail(
+                        "no previous runtime must not be fabricated")))
+            for wrong in ("committed", "found-config-failed", "requires-review"):
+                with self.subTest(phase=wrong), self.assertRaises(VoiceInspectError):
+                    examine_pending_found_previous({**record, "phase": wrong}, **kwargs)
+
     def test_common_pending_phase_blocks_before_kernel_read(self):
         identity={"id":"a"*32,"page":"voice","base":"b"*64,
                   "candidate":"c"*64,"changed_fields":[]}

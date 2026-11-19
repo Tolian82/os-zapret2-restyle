@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import json
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -201,4 +202,122 @@ if shutil.which("node"):
         text=True, capture_output=True, check=False,
     )
     assert run.returncode == 0, run.stderr
+# TZ6v2: five registered editor sources, old Model fields stay native,
+# no standalone Auto Hostlist Save/Reload and no premature lossy Apply.
+for marker in (
+    "function mountFoundHostlists()",
+    "function loadFiveHostlists()",
+    "function foundHostlistDirty()",
+    "function fiveHostlistIntent()",
+    "'youtube_found', source: 'youtube', id: 'zapretYoutubeFound'",
+    "'user_found', source: 'user', id: 'zapretUserFound'",
+    "'shared_found', source: 'auto', id: 'zapretSharedFound'",
+    "/api/zapret/settings/hostlistEditorsRead",
+    "reloadSettings().done(loadFiveHostlists)",
+    "multipart.append('found_intent', new Blob([JSON.stringify(intent)]",
+    "processData: !intent",
+    "const exact = ['youtube_manual', 'youtube_found', 'user_manual',",
+    "data.commit_authorized === false",
+    "data.config_revision",
+    "fiveHostlistBase = data;",
+    "foundHostlistDirty()",
+    "toggle.attr('aria-expanded', String(!shown));",
+):
+    assert marker in view, ("TZ6v2 five-UI integration missing", marker)
+for obsolete in (
+    "blockUncommittedFoundEdits", "mountAutoHostlistEditor",
+    "zapretAutoHostlistSave",
+    "zapretAutoHostlistReload",
+    "/api/zapret/settings/autoHostlistSave",
+    "/api/zapret/settings/autoHostlistRead",
+    "Saving does not Apply or restart the service",
+):
+    assert obsolete not in view, ("TZ6v2 legacy independent GUI save", obsolete)
+assert "name: 'zapretSharedFound'" not in view
+assert "commit_authorized=true" not in view
+assert "One original-FD9 Apply" in view
+
+if shutil.which("node"):
+    form_code = view[view.index("        const foundHostlistFields"):
+                     view.index("        function fiveHostlistStatus")]
+    helpers = view[view.index("        function strategiesFormData()"):
+                   view.index("        // Localize ONLY known validation")]
+    click = view[view.index('        $("#reconfigureAct").off'):
+                 view.index("        updateServiceControlUI('zapret');\n    });")]
+    click = re.sub(r"\{\{[^{}]*\}\}", "fixture", click)
+    fixture = r"""
+const assert = require('node:assert/strict');
+const {createHash} = require('node:crypto');
+const values = {
+    zapretYoutubeFound: "fresh.example.org\n", zapretUserFound: "",
+    zapretSharedFound: "", "zapret.hostlist.youtubedomains": "manual.example.com",
+    "zapret.hostlist.userdomains": "", "zapret.hostlist.excludedomains": ""
+};
+const document = {getElementById: id => ({value: values[id]})};
+let handler, request;
+const $ = selector => ({
+    val: () => typeof selector === 'string' ? values[selector.slice(1)] : selector.value,
+    off: () => ({on: (_, fn) => {handler = fn;}})
+});
+$.param = object => {
+    assert.deepEqual(Object.keys(object), ['zapret']);
+    return 'zapret%5Bsync%5D%5Btelegramips_baseline%5D=';
+};
+$.ajax = data => {
+    assert.equal(request, undefined);
+    request = data;
+    const chain = {done: () => chain, fail: () => chain};
+    return chain;
+};
+const getFormData = () => ({
+    zapret: {sync: {telegramips_baseline: ''}},
+    zapretYoutubeFound: values.zapretYoutubeFound,
+    zapretUserFound: values.zapretUserFound, zapretSharedFound: values.zapretSharedFound
+});
+const isRussian = false, reconcileStrategiesApplyControls = () => {};
+let strategiesApplyPending = false, strategiesApplyNeedsReview = false, previewPending = false,
+    extraBusy = false, extraInstallPending = false, extraNeedsReview = false,
+    runtimeWasBusy = false, releaseApplyPending = false;
+"""
+    invoke = r"""
+const revision = createHash('sha256').update(Buffer.from('present\0')).digest('hex');
+const empty = {status: 'empty', revision, content: ''};
+fiveHostlistBase = {config_revision: 'd'.repeat(64), editors: {
+    youtube_manual: {content: values['zapret.hostlist.youtubedomains']},
+    user_manual: {content: ''}, youtube_found: empty, user_found: empty, shared_found: empty
+}};
+fiveHostlistReady = true;
+handler({preventDefault() {}});
+assert.equal(request.url, '/api/zapret/settings/apply');
+assert.equal(request.type, 'POST');
+assert.equal(request.processData, false);
+assert.equal(request.contentType, false);
+assert.equal(request.data.get('zapret[sync][telegramips_baseline]'), '');
+assert.equal(request.data.get('found_intent_expected'), '1');
+const upload = request.data.get('found_intent');
+assert.equal(upload.name, 'found-intent.json');
+upload.text().then(value => {
+    const payload = JSON.parse(value);
+    assert.equal(payload.sources.youtube.draft, values.zapretYoutubeFound);
+    assert.equal(payload.sources.youtube.base.revision, revision);
+    console.log(value);
+});
+"""
+    sent = subprocess.run(["node", "-"], input=fixture + form_code + helpers + click + invoke,
+                          text=True, capture_output=True, check=False)
+    assert sent.returncode == 0, sent.stderr
+    parsed = json.loads(sent.stdout)
+    assert list(parsed["sources"]) == ["youtube", "user", "auto"]
+    if shutil.which("php"):
+        native = root / "src/opnsense/scripts/OPNsense/Zapret/shared_apply_found_intent.php"
+        decoded = subprocess.run(
+            ["php", "-r", r'''
+require $argv[1];
+$data = OPNsense\Zapret\Native\SharedApplyFoundIntent::validateJson(
+    stream_get_contents(STDIN), str_repeat('d', 64));
+echo json_encode($data['sources']);
+''', str(native)], input=sent.stdout, text=True, capture_output=True, check=False)
+        assert decoded.returncode == 0, decoded.stderr + decoded.stdout
+        assert json.loads(decoded.stdout) == parsed["sources"]
+
 print("PASS: 11 Strategies field IDs, native help/F5, RU info, EN fallback, unchanged values")

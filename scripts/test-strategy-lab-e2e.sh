@@ -269,7 +269,11 @@ jq -nc \
 ' > "${output}"
 MOCK
 
-cat > "${BIN_DIR}/service" <<'MOCK'
+# The actual installed Strategy Lab PID census explicitly recognizes the
+# transitional OPNsense zapret_service.sh process while it execs the
+# Python orchestrator. Preserve that name in this private mock, rather
+# than presenting a foreign "/bin/service" process during early polling.
+cat > "${BIN_DIR}/zapret_service.sh" <<'MOCK'
 #!/bin/sh
 state=$(cat "${MOCK_STATE_FILE}")
 hash_file()
@@ -366,7 +370,7 @@ api_call()
     SCRIPT_DIR="${WAN_TEST_SCRIPT_DIR}" \
     MODULE_DIR="${MODULE_DIR}" \
     WORKER_SCRIPT="${WORKER}" \
-    TRANSACTION_SCRIPT="${BIN_DIR}/service" \
+    TRANSACTION_SCRIPT="${BIN_DIR}/zapret_service.sh" \
     DAEMON_BIN="${BIN_DIR}/daemon" \
     LOCKF_BIN="${BIN_DIR}/lockf" \
     STRATEGY_LAB_RUN_DIR="${RUN_DIR}" \
@@ -409,12 +413,18 @@ api_call()
 wait_terminal()
 {
     job="$1"
+    # This fixture owns the mock job directory. Reading the worker's atomic
+    # status file is a passive wait; the public status API can trigger
+    # stale-worker recovery while the simulated daemon is still running.
+    # Call the real public status/result API only AFTER terminal state below.
+    status_file="${RUN_DIR}/jobs/${job}/status.json"
     attempt=0
     while [ "${attempt}" -lt 40 ]
     do
-        status=$(api_call strategy_lab_status "${job}")
-        state=$(printf '%s\n' "${status}" | jq -r '.state // ""')
-        case "${state}" in completed|error) return 0 ;; esac
+        if [ -r "${status_file}" ]; then
+            state=$(jq -r '.state // ""' "${status_file}" 2>/dev/null || true)
+            case "${state}" in completed|error) return 0 ;; esac
+        fi
         sleep 1
         attempt=$((attempt + 1))
     done

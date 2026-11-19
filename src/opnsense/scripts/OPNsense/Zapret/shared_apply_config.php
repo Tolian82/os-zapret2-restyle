@@ -116,6 +116,495 @@ final class SharedApplyConfigWorker
      * Compare the entire live Voice/Strategies dependency snapshot under the
      * actual native Config lock, not a stale GUI baseline or an XML file.
      */
+    /**
+     * Pure, read-only Config outcome classifier for the INTERNAL original
+     * FD9 found recovery. The caller must supply the fresh getNodes() tree
+     * obtained under the ONE native Config lock; it must independently
+     * bind the original sealed plan and journal before invoking this.
+     *
+     * Config::save() releases the lock. Consequently matching candidate
+     * values are evidence only, NOT causal proof of our native save or
+     * permission to commit, restore or restart any engine.
+     * This deliberately registers no CLI/configd/GUI action.
+     */
+    public static function classifyFoundConfigImage(
+        array $plan, array $current, string $phase
+    ): array {
+        if (!in_array($phase, [
+            'prepared', 'found-files-writing', 'found-files-written',
+            'found-config-saving', 'found-config-saved'
+        ], true) ||
+            ($plan['page'] ?? null) !== 'strategies' ||
+            ($plan['result'] ?? null) !== 'prepared' ||
+            !isset($plan['candidate']) || !is_array($plan['candidate']) ||
+            !isset($plan['dependencies']) || !is_string($plan['dependencies']) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies']) ||
+            !isset($plan['found_intent']) || !is_array($plan['found_intent']) ||
+            ($plan['found_intent']['commit_authorized'] ?? null) !== false ||
+            ($plan['found_intent']['config_revision'] ?? null) !==
+                $plan['dependencies'] ||
+            !isset($plan['found_batch']) || !is_array($plan['found_batch']) ||
+            array_keys($plan['found_batch']) !== ['youtube', 'user', 'auto'] ||
+            !isset($plan['changed_fields']) || !is_array($plan['changed_fields']) ||
+            !is_array($current)) {
+            throw new \RuntimeException('Unqualified original cold Config evidence');
+        }
+        $base = $plan['dependencies'];
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        $observed = VoiceSettingsSnapshot::digest($current);
+        $isBase = hash_equals($base, $observed);
+        $isCandidate = hash_equals($candidate, $observed);
+        if (!$isBase && !$isCandidate) {
+            throw new \RuntimeException('Foreign native Config image during found recovery');
+        }
+        if (in_array($phase, ['prepared', 'found-files-writing',
+                'found-files-written'], true) && !$isBase) {
+            throw new \RuntimeException('Found files-only phase already changed Config');
+        }
+        if ($phase === 'found-config-saved' && !$isCandidate) {
+            throw new \RuntimeException('Found Config-saved WAL does not match native Config');
+        }
+        // "Both" includes a found-only edit with no XML save, and cannot
+        // tell whether an uncertain native save was attempted.
+        $state = $isBase && $isCandidate
+            ? 'base-equals-candidate'
+            : ($isCandidate ? 'candidate-image' : 'base-image');
+        return [
+            'result' => 'read-only-found-config-classification',
+            'phase' => $phase,
+            'image' => $state,
+            'snapshot' => $observed,
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
+    /**
+     * Compose an explicitly NON-authorizing witness from the original
+     * FD9→native Config→P2 read-only inspection. This helper is also used
+     * by fake-native tests: only inspectFoundColdNative() may obtain its
+     * real file evidence, under the ORIGINAL inherited descriptor.
+     */
+    public static function classifyFoundJointImages(
+        array $plan, array $current, array $files
+    ): array {
+        // Python serializes sorted JSON keys, while the original source
+        // stage map may be constructed in changed-source order. Do not
+        // confuse key order with missing/foreign evidence.
+        $expected = ['schema', 'result', 'journal_phase', 'image',
+            'states', 'stage_evidence', 'previous_runtime',
+            'commit_authorized', 'restore_authorized'];
+        $keys = array_keys($files);
+        sort($keys);
+        sort($expected);
+        if ($keys !== $expected) {
+            throw new \RuntimeException('Unqualified original cold file evidence');
+        }
+        // Python's classify-locked JSON is sort_keys=True recursively:
+        // legitimate source maps arrive auto,user,youtube on the wire.
+        // Require EXACTLY these three keys but never confuse JSON map order
+        // with missing/foreign source evidence.
+        $states = $files['states'] ?? null;
+        $stateKeys = is_array($states) ? array_keys($states) : [];
+        sort($stateKeys);
+        if (($files['schema'] ?? null) !== 1 ||
+            ($files['result'] ?? null) !== 'read-only-cold-image-classification' ||
+            !in_array($files['image'] ?? null,
+                ['all-before', 'contains-unattributed-after'], true) ||
+            ($files['commit_authorized'] ?? null) !== false ||
+            ($files['restore_authorized'] ?? null) !== false ||
+            !is_array($states) ||
+            $stateKeys !== ['auto', 'user', 'youtube'] ||
+            array_diff($states, ['before', 'after-image']) ||
+            (!is_array($files['stage_evidence'] ?? null) &&
+                ($files['journal_phase'] ?? null) !== 'prepared')) {
+            throw new \RuntimeException('Original cold files cannot be attributed');
+        }
+        $phase = $files['journal_phase'];
+        if ($phase !== 'prepared') {
+            $stages = $files['stage_evidence'];
+            $stageKeys = array_keys($stages);
+            sort($stageKeys);
+            if ($stageKeys !== ['auto', 'user', 'youtube'] ||
+                array_diff($stages, [
+                    'ready-but-before', 'ready-but-after', 'installed-after',
+                    'not-started', 'unchanged-before'
+                ])) {
+                throw new \RuntimeException('Original staged file proof incomplete');
+            }
+        } elseif ($files['stage_evidence'] !== null) {
+            throw new \RuntimeException('Prepared Config has no staged file writes');
+        }
+
+        // The parent must not trust a shaped JSON receipt alone. Bind every
+        // file's BEFORE/AFTER and ready/installed state to the SAME sealed
+        // found_batch and WAL phase before inspecting native Config. A
+        // contradictory but well-formed child receipt must fail closed.
+        $rows = $plan['found_batch'] ?? null;
+        if (!is_array($rows) ||
+            array_keys($rows) !== ['youtube', 'user', 'auto']) {
+            throw new \RuntimeException('Original joint found plan incomplete');
+        }
+        $expectedImage = in_array('after-image', $files['states'], true)
+            ? 'contains-unattributed-after' : 'all-before';
+        if ($files['image'] !== $expectedImage) {
+            throw new \RuntimeException('Original joint image summary contradicts sources');
+        }
+        foreach (['youtube', 'user', 'auto'] as $name) {
+            $row = $rows[$name];
+            if (!is_array($row) || !is_string($row['before'] ?? null) ||
+                !is_string($row['after'] ?? null)) {
+                throw new \RuntimeException('Original joint source not sealed');
+            }
+            $changed = $row['before'] !== $row['after'];
+            $state = $files['states'][$name];
+            $stage = $phase === 'prepared' ? null : $files['stage_evidence'][$name];
+            if ($phase === 'prepared') {
+                if ($state !== 'before') {
+                    throw new \RuntimeException('Original prepared file was modified');
+                }
+            } elseif (!$changed) {
+                if ($state !== 'before' || $stage !== 'unchanged-before') {
+                    throw new \RuntimeException('Original unchanged source has staged mutation');
+                }
+            } elseif ($phase === 'found-files-writing') {
+                $valid = ($state === 'before' && in_array(
+                    $stage, ['not-started', 'ready-but-before'], true)) ||
+                    ($state === 'after-image' && in_array(
+                        $stage, ['ready-but-after', 'installed-after'], true));
+                if (!$valid) {
+                    throw new \RuntimeException('Original staged source contradicts physical image');
+                }
+            } elseif ($state !== 'after-image' || $stage !== 'installed-after') {
+                throw new \RuntimeException('Original found checkpoint lacks installed source');
+            }
+        }
+        // The child must have inspected the ORIGINAL previous sealed
+        // common runtime and plugin IPFW through the existing Voice reader.
+        // On an initial no-predecessor transaction, this does not prove
+        // an empty machine; no mutation or terminalization is authorized.
+        $prior = $files['previous_runtime'];
+        if (!is_array($prior)) {
+            throw new \RuntimeException('Original previous runtime evidence missing');
+        }
+        $priorKeys = array_keys($prior);
+        sort($priorKeys);
+        if ($priorKeys !== ['id', 'state'] ||
+            !in_array($prior['state'] ?? null,
+                ['ready', 'stopped', 'no-predecessor-proof'], true) ||
+            (($prior['state'] === 'no-predecessor-proof') !== ($prior['id'] === null)) ||
+            ($prior['id'] !== null && (
+                !is_string($prior['id']) ||
+                !preg_match('/^[a-f0-9]{32}$/D', $prior['id'])))) {
+            throw new \RuntimeException('Unqualified previous native runtime owner');
+        }
+        $config = self::classifyFoundConfigImage($plan, $current, $phase);
+        return [
+            'result' => 'read-only-original-joint-classification',
+            'journal_phase' => $phase,
+            'config_image' => $config['image'],
+            'file_image' => $files['image'],
+            'file_states' => $files['states'],
+            'stage_evidence' => $files['stage_evidence'],
+            'previous_runtime' => $prior,
+            'commit_authorized' => false,
+            'restore_authorized' => false,
+            'save_attested' => false,
+            'runtime_attested' => false,
+        ];
+    }
+
+    /**
+     * Real cold inspection uses the ONE original PHP Config::lock and the
+     * child inherited descriptors 4 + 9. No new lock owner and NO mutation.
+     * It remains an unregistered internal FD9-only CLI, not a GUI Apply.
+     */
+    private static function originalFoundLockedFileEvidence(
+        object $config, string $id, string $mode = 'classify-locked',
+        ?string $configDigest = null, ?string $runtimeMode = null,
+        ?callable $whileP2Held = null
+    ): array {
+        $begin = $mode === 'begin-found-save-locked';
+        if (($mode === 'classify-locked' ? $configDigest !== null :
+                (!is_string($configDigest) ||
+                 !preg_match('/^[a-f0-9]{64}$/D', $configDigest))) ||
+            ($begin ? (!in_array($runtimeMode, ['0', '1'], true) || $whileP2Held === null)
+                    : ($runtimeMode !== null || $whileP2Held !== null))) {
+            throw new \RuntimeException('Unqualified original cold native mode');
+        }
+        SharedApplyLifecycleLock::assertHeld();
+        $reflection = new \ReflectionObject($config);
+        if (!$reflection->hasProperty('config_file_handle') ||
+            !$reflection->hasProperty('config_file')) {
+            throw new \RuntimeException('Native Config locked descriptor missing');
+        }
+        $handle = $reflection->getProperty('config_file_handle')->getValue($config);
+        $path = $reflection->getProperty('config_file')->getValue($config);
+        $named = @lstat('/conf/config.xml');
+        $opened = is_resource($handle) ? @fstat($handle) : false;
+        if ($path !== '/conf/config.xml' || !is_array($named) ||
+            !is_array($opened) || $opened['dev'] !== $named['dev'] ||
+            $opened['ino'] !== $named['ino']) {
+            throw new \RuntimeException('Original native Config lock inode changed');
+        }
+        $fd9 = @fopen('php://fd/9', 'r+b');
+        if (!is_resource($fd9)) {
+            throw new \RuntimeException('Original FD9 descriptor missing');
+        }
+        try {
+            $pipes = [];
+            $command = [
+                '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh',
+                '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_effective_known.py',
+                $mode, $id
+            ];
+            if ($configDigest !== null) {
+                $command[] = $configDigest;
+            }
+            if ($begin) {
+                $command[] = $runtimeMode;
+            }
+            $proc = @proc_open(
+                $command,
+                [0 => $begin ? ['pipe', 'r'] : ['file', '/dev/null', 'r'],
+                 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'a'],
+                 4 => $handle, 9 => $fd9],
+                $pipes, null, ['LC_ALL' => 'C', 'PATH' => '/usr/bin:/bin:/usr/local/bin']
+            );
+            if (!is_resource($proc)) {
+                throw new \RuntimeException('Original cold native child unavailable');
+            }
+            try {
+                stream_set_blocking($pipes[1], false);
+                $output = '';
+                $deadline = microtime(true) + 40;
+                while (!feof($pipes[1])) {
+                    if (microtime(true) >= $deadline || strlen($output) > 16384) {
+                        throw new \RuntimeException('Original cold native child timeout');
+                    }
+                    $read = [$pipes[1]];
+                    $write = [];
+                    $except = [];
+                    $ready = @stream_select($read, $write, $except, 1);
+                    if ($ready === false) {
+                        throw new \RuntimeException('Original cold native child read failed');
+                    }
+                    if ($ready > 0) {
+                        $piece = @fread($pipes[1], 16385 - strlen($output));
+                        if ($piece === false) {
+                            throw new \RuntimeException('Original cold native child interrupted');
+                        }
+                        $output .= $piece;
+                        if ($begin && $output === "ready\n" && isset($pipes[0])) {
+                            // The original Python child keeps P2 held from
+                            // physical writes through the only native save.
+                            // Even a throwing save releases this scope.
+                            try {
+                                $whileP2Held();
+                            } finally {
+                                fclose($pipes[0]);
+                                unset($pipes[0]);
+                            }
+                        }
+                    }
+                }
+                fclose($pipes[1]);
+                unset($pipes[1]);
+                $code = proc_close($proc);
+                $proc = null;
+                if ($code !== 0 || strlen($output) > 16384 || $output === '') {
+                    throw new \RuntimeException('Original FD9/P2 staged image unknown');
+                }
+                $reply = $begin && $output === "ready\n" && !isset($pipes[0])
+                    ? ['result' => 'ready']
+                    : json_decode($output, true, 12, JSON_THROW_ON_ERROR);
+                if (!is_array($reply)) {
+                    throw new \RuntimeException('Original native cold image malformed');
+                }
+                $namedAgain = @lstat('/conf/config.xml');
+                $heldAgain = @fstat($handle);
+                if (!is_array($namedAgain) || !is_array($heldAgain) ||
+                    $namedAgain['dev'] !== $heldAgain['dev'] ||
+                    $namedAgain['ino'] !== $heldAgain['ino'] ||
+                    $namedAgain['dev'] !== $named['dev'] ||
+                    $namedAgain['ino'] !== $named['ino']) {
+                    throw new \RuntimeException('Native Config replaced during cold files proof');
+                }
+                SharedApplyLifecycleLock::assertHeld();
+                return $reply;
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) { fclose($pipe); }
+                }
+                if (is_resource($proc)) {
+                    @proc_terminate($proc);
+                    @proc_close($proc);
+                }
+            }
+        } finally {
+            fclose($fd9);
+        }
+    }
+
+    private static function saveFoundNative(
+        array $plan, string $id, string $mode, object $config, callable $factory
+    ): array {
+        $scopes = 0;
+        $candidate = VoiceSettingsSnapshot::digest($plan['candidate']);
+        try {
+            return SharedConfigCommit::persistFoundUnderOriginalOwner(
+                $plan, 'strategies', $config, $factory,
+                static function (callable $saveScope) use (
+                    &$scopes, $config, $mode, $id, $candidate
+                ): string {
+                    if (++$scopes === 1) {
+                        $status = null;
+                        $ready = self::originalFoundLockedFileEvidence(
+                            $config, $id, 'begin-found-save-locked', $candidate, $mode,
+                            static function () use ($saveScope, &$status): void {
+                                $status = $saveScope();
+                            }
+                        );
+                        if (($ready['result'] ?? null) !== 'ready' || !is_string($status)) {
+                            throw new \RuntimeException('Original found save scope unavailable');
+                        }
+                        return $status;
+                    }
+                    $receipt = self::originalFoundLockedFileEvidence(
+                        $config, $id, 'confirm-found-save-locked', $candidate
+                    );
+                    if ($receipt !== ['result' => 'found-config-saved', 'mode' => $mode]) {
+                        throw new \RuntimeException('Original found save readback unavailable');
+                    }
+                    return $saveScope();
+                },
+                // The child proves the sealed files and fsyncs the relevant
+                // phase before either callback can execute.
+                static fn(string $stage, string $digest): bool =>
+                    hash_equals($candidate, $digest),
+                static fn(string $phase): bool => in_array(
+                    $phase, ['found-config-saving', 'found-config-saved'], true
+                )
+            );
+        } catch (\Throwable $error) {
+            // Even an error before the ready handshake can leave PREPARED
+            // or partial HOSTLIST bytes. Recovery reads the original WAL.
+            throw new SharedConfigSaveUncertain(
+                'Original found settings require joint recovery', 0, $error
+            );
+        }
+    }
+
+    private static function foundPhaseNative(
+        string $action, string $id, object $config, callable $factory
+    ): array {
+        $config->lock();
+        try {
+            $digest = VoiceSettingsSnapshot::digest($factory()->getNodes());
+            return self::originalFoundLockedFileEvidence(
+                $config, $id, $action === 'found-recover' ? 'recover-found-locked' : $action,
+                $digest
+            );
+        } finally {
+            $config->unlock();
+        }
+    }
+
+    private static function requireReadableConfig(): void
+    {
+        // Core Config initializes from a backup if the live XML is invalid.
+        // An interrupted save must keep its evidence for native review.
+        $xml = @simplexml_load_file('/conf/config.xml', \SimpleXMLElement::class,
+            LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        if ($xml === false || $xml->getName() !== 'opnsense') {
+            throw new SharedConfigSaveUncertain('Native Config image is unreadable');
+        }
+    }
+
+    private static function inspectFoundColdNative(
+        array $plan, string $id, object $config, callable $factory
+    ): array {
+        SharedApplyLifecycleLock::assertHeld();
+        $config->lock();
+        try {
+            $before = $factory()->getNodes();
+            $files = self::originalFoundLockedFileEvidence($config, $id);
+            $after = $factory()->getNodes();
+            if (!is_array($before) || !is_array($after) ||
+                VoiceSettingsSnapshot::digest($before) !==
+                    VoiceSettingsSnapshot::digest($after)) {
+                throw new \RuntimeException('Native Config changed during cold inspection');
+            }
+            $joint = self::classifyFoundJointImages($plan, $after, $files);
+            // Re-attest the named original plan before allowing ANY receipt
+            // out of the protected scope (not an Apply/restore receipt).
+            if (self::readPlan($id, self::ROOT, 0) !== $plan) {
+                throw new \RuntimeException('Original cold sealed plan changed');
+            }
+            return $joint;
+        } finally {
+            $config->unlock();
+        }
+    }
+
+    /**
+     * ORIGINAL native Config owner -> already held FD9 -> P2 -> SAME journal.
+     *
+     * This is a narrowly restricted cold no-write recovery of found PREPARED
+     * with physically proven predecessor. Not wired to configd/GUI or normal
+     * Apply/Start. No second Config writer and never call Config::save().
+     */
+    private static function recoverFoundPreparedNative(
+        array $plan, string $id, object $config, callable $factory
+    ): array {
+        SharedApplyLifecycleLock::assertHeld();
+        $config->lock();
+        try {
+            $fresh = $factory()->getNodes();
+            if (!is_array($fresh) || !is_string($plan['dependencies'] ?? null) ||
+                !preg_match('/^[a-f0-9]{64}$/D', $plan['dependencies'])) {
+                throw new \RuntimeException('Original found Config baseline unavailable');
+            }
+            $base = VoiceSettingsSnapshot::digest($fresh);
+            if (!hash_equals($plan['dependencies'], $base)) {
+                throw new \RuntimeException('Original found pristine Config changed');
+            }
+            // Python independently checks the native inherited Config fd4,
+            // original FD9, same sealed plan and PREPARED WAL, three exact
+            // BEFORE files and same physical previous runtime/IPFW TWICE.
+            // Its ONLY write is original operation.json restored fsync.
+            $receipt = self::originalFoundLockedFileEvidence(
+                $config, $id, 'recover-prepared-locked', $base);
+            $keys = array_keys($receipt);
+            sort($keys);
+            $expected = ['config_saved', 'files_written', 'phase', 'previous_id',
+                'result', 'runtime_state', 'service_restarted'];
+            sort($expected);
+            if ($keys !== $expected ||
+                ($receipt['result'] ?? null) !==
+                    'original-found-prepared-pristine-restored' ||
+                ($receipt['phase'] ?? null) !== 'restored' ||
+                !is_string($receipt['previous_id'] ?? null) ||
+                !preg_match('/^[a-f0-9]{32}$/D', $receipt['previous_id']) ||
+                !in_array($receipt['runtime_state'] ?? null, ['ready', 'stopped'], true) ||
+                ($receipt['config_saved'] ?? null) !== false ||
+                ($receipt['files_written'] ?? null) !== false ||
+                ($receipt['service_restarted'] ?? null) !== false) {
+                throw new \RuntimeException('Unqualified original found pristine terminal receipt');
+            }
+            $again = $factory()->getNodes();
+            if (!is_array($again) ||
+                !hash_equals($base, VoiceSettingsSnapshot::digest($again))) {
+                throw new \RuntimeException('Native Config changed after pristine closure');
+            }
+            return $receipt;
+        } finally {
+            $config->unlock();
+        }
+    }
+
     public static function saved(array $plan, array $current): array
     {
         $expected = VoiceSettingsSnapshot::digest($plan['candidate']);
@@ -192,8 +681,14 @@ final class SharedApplyConfigWorker
                 return 69;
             }
         }
-        if (count($argv) !== 4 || !in_array($argv[1], ['preflight','save','saved'], true) ||
-            !in_array($argv[3], ['voice','strategies'], true)) {
+        $action = $argv[1] ?? '';
+        $foundActions = ['found-cold', 'found-recover-prepared', 'found-save', 'found-recover',
+            'found-runtime-activating', 'found-runtime-activated', 'found-runtime-config-saved',
+            'found-runtime-epoch-finalizing', 'found-runtime-committed'];
+        $found = in_array($action, $foundActions, true);
+        if (count($argv) !== ($action === 'found-save' ? 5 : 4) ||
+            !in_array($action, ['preflight', 'save', 'saved', ...$foundActions], true) ||
+            !in_array($argv[3], $found ? ['strategies'] : ['voice', 'strategies'], true)) {
             fwrite(STDERR, "usage: shared_apply_config.php preflight|save ID voice|strategies\n");
             return 64;
         }
@@ -202,6 +697,9 @@ final class SharedApplyConfigWorker
                 throw new \RuntimeException('Root OPNsense native Config required');
             }
             SharedApplyLifecycleLock::assertHeld();
+            if ($found) {
+                self::requireReadableConfig();
+            }
             require_once('script/load_phalcon.php');
             $plan = self::readPlan($argv[2], self::ROOT, 0);
             if ($plan['page'] !== $argv[3]) {
@@ -209,6 +707,34 @@ final class SharedApplyConfigWorker
             }
             $config = \OPNsense\Core\Config::getInstance();
             $factory = static fn() => new \OPNsense\Zapret\Zapret();
+            if ($action === 'found-save') {
+                if (!in_array($argv[4], ['0', '1'], true) ||
+                    ($argv[4] === '1' &&
+                     (string)($plan['candidate']['general']['enabled'] ?? '') !== '1')) {
+                    throw new \InvalidArgumentException('Invalid planned found runtime mode');
+                }
+                $result = self::saveFoundNative($plan, $argv[2], $argv[4], $config, $factory);
+                echo self::postSaveReceipt($result);
+                return 0;
+            }
+            if ($argv[1] === 'found-cold') {
+                $joint = self::inspectFoundColdNative(
+                    $plan, $argv[2], $config, $factory);
+                echo json_encode($joint, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($argv[1] === 'found-recover-prepared') {
+                $receipt = self::recoverFoundPreparedNative(
+                    $plan, $argv[2], $config, $factory);
+                echo json_encode($receipt, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES), "\n";
+                return 0;
+            }
+            if ($found) {
+                echo self::postSaveReceipt(self::foundPhaseNative(
+                    $action, $argv[2], $config, $factory
+                ));
+                return 0;
+            }
             if ($argv[1] === 'preflight' || $argv[1] === 'saved') {
                 $config->lock();
                 try {

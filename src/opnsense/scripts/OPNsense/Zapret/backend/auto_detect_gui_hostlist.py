@@ -1,34 +1,22 @@
 #!/usr/bin/env python3
-"""#1052: native root-owned GUI editor for the shared final Auto HOSTLIST.
-
-Only revisioned `read` and `save` access the new final auto-domains.txt.
-The editor never imports files from past implementations. This does not
-install or enable a native observer, cron worker or extra Config writer.
-Native domain syntax stays in domain_policy.py.
-"""
+"""Read the shared final HOSTLIST and create it for the original P2 owner."""
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import secrets
 import stat
 import sys
 
 from auto_detect_destination_commit import (
-    DestinationRefused, _target, _replace, _sync, exclusive_destination_lock,
+    DestinationRefused, _target, _sync, exclusive_destination_lock,
 )
-from domain_policy import DomainPolicyError, AutoDomainPolicyError, normalize
 
 AUTO_HOSTLIST = Path('/usr/local/etc/zapret2/ipset/auto-domains.txt')
 AUTO_LOCK = Path('/usr/local/etc/zapret2/ipset/.auto-domains.lock')
-MAX_GUI_BYTES = 40 * 1024  # bounded configd argv; native hostlist may be larger
-MAX_TOKEN = 57000
-HASH = re.compile(r'[a-f0-9]{64}\Z', re.ASCII)
-ENCODED = re.compile(r'[A-Za-z0-9_-]{1,57000}\Z', re.ASCII)
+MAX_GUI_BYTES = 40 * 1024
 
 
 class AutoHostlistRefused(ValueError):
@@ -71,7 +59,7 @@ def read_current(path: Path = AUTO_HOSTLIST, lock: Path = AUTO_LOCK, *,
         }
 
 
-def _create(path: Path, data: bytes, uid: int) -> None:
+def _create(path: Path, data: bytes, uid: int, *, stage_fn=None) -> None:
     """Write a complete temporary inode, then link-once an absent name."""
     temp = path.parent / ('.auto-hostlist-' + secrets.token_hex(16) + '.tmp')
     fd = None
@@ -88,6 +76,8 @@ def _create(path: Path, data: bytes, uid: int) -> None:
         os.fsync(fd)
         os.close(fd)
         fd = None
+        if stage_fn is not None:
+            stage_fn("ready", temp, data)
         os.link(temp, path, follow_symlinks=False)
         _sync(path.parent)
     finally:
@@ -96,61 +86,20 @@ def _create(path: Path, data: bytes, uid: int) -> None:
         if temp.exists():
             temp.unlink()
             _sync(path.parent)
-
-
-def save_current(revision: str, content: str, path: Path = AUTO_HOSTLIST,
-                 lock: Path = AUTO_LOCK, *, owner_uid: int = 0) -> dict:
-    """One revision-check + normalized atomic write under the worker's lock."""
-    if (not isinstance(revision, str) or not HASH.fullmatch(revision) or
-            not isinstance(content, str) or len(content.encode('utf-8')) > MAX_GUI_BYTES):
-        raise AutoHostlistRefused('invalid_revision_or_content')
-    # Canonical policy owns modifiers, hosts, invalid input and deduplication.
-    try:
-        result = normalize(content, 'user')
-    except (DomainPolicyError, AutoDomainPolicyError) as exc:
-        raise AutoHostlistRefused('invalid_domain_lines') from exc
-    normalized = result['normalized']
-    encoded = (normalized + '\n' if normalized else '').encode('utf-8')
-    if len(encoded) > MAX_GUI_BYTES:
-        raise AutoHostlistRefused('normalized_file_exceeds_limit')
-    with exclusive_destination_lock(lock, owner_uid):
-        before = _read_current(path, owner_uid)
-        if _revision(before) != revision:
-            return {'result': 'conflict', 'reason': 'revision_changed'}
-        if before != encoded:
-            if before is None:
-                _create(path, encoded, owner_uid)
-            else:
-                _replace(path, before, encoded, owner_uid)
-        return {'result': 'saved', 'revision': _revision(encoded),
-                'status': 'empty' if not encoded else 'populated',
-                'content': encoded.decode('utf-8')}
-
-
-
-def _unpack(arg: str) -> tuple[str, str]:
-    if not isinstance(arg, str) or not ENCODED.fullmatch(arg) or len(arg) > MAX_TOKEN:
-        raise AutoHostlistRefused('invalid_envelope')
-    raw = base64.urlsafe_b64decode(arg + '=' * (-len(arg) % 4))
-    if len(raw) > 43000:
-        raise AutoHostlistRefused('oversized_envelope')
-    payload = json.loads(raw)
-    if (not isinstance(payload, dict) or set(payload) != {'revision', 'content'} or
-            type(payload['revision']) is not str or type(payload['content']) is not str):
-        raise AutoHostlistRefused('invalid_envelope_fields')
-    return payload['revision'], payload['content']
+    # A temporary link has been removed, so _target() can now validate
+    # the single-link final inode and the same WAL pin.
+    if stage_fn is not None:
+        stage_fn("installed", path, data)
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if (not sys.platform.startswith('freebsd') or os.geteuid() != 0 or
-            not argv or argv[0] not in ('read', 'save') or
-            (argv[0] == 'read' and len(argv) != 1) or
-            (argv[0] == 'save' and len(argv) != 2)):
+            argv != ['read']):
         print(json.dumps({'result': 'error', 'reason': 'native_request_refused'}))
         return 0
     try:
-        result = read_current() if argv[0] == 'read' else save_current(*_unpack(argv[1]))
+        result = read_current()
     except (AutoHostlistRefused, DestinationRefused, OSError, ValueError,
             UnicodeError, TypeError, KeyError) as exc:
         # Never log user domains or the contents of a failed transport.

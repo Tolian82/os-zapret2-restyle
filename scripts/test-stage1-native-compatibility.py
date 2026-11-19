@@ -127,6 +127,21 @@ class Stage1NativePolicyTests(unittest.TestCase):
                     guard.Refusal, code):
                 guard.scan(changed)
 
+    def test_authoritative_compatibility_manifest_routes_to_production(self):
+        # Regression: changing exact signed pin previously aborted the
+        # Classify changed paths job with UNCLASSIFIED_NEW_EXECUTION_PATH.
+        self.assertEqual(guard.classify_path("compatibility.json"), "production")
+        self.assertEqual(guard.scan_changed({
+            "compatibility.json": '"version": "2.3.2",\n'
+        }), ["compatibility.json"])
+        with self.assertRaisesRegex(guard.Refusal,
+                                    "UNCLASSIFIED_NEW_EXECUTION_PATH"):
+            guard.scan_changed({"unreviewed-policy.json": '"version":"2.3.2"'})
+        with self.assertRaisesRegex(guard.Refusal, "DUPLICATE_FREEBSD_ABI"):
+            guard.scan_changed({
+                "scripts/foreign.py": 'ABI = "FreeBSD:16:amd64"'
+            })
+
     def test_new_production_paths_reject_duplicate_compatibility_policy(self):
         self.assertEqual(guard.scan_changed({
             "src/opnsense/scripts/new_feature.py": "print('supported')\n",

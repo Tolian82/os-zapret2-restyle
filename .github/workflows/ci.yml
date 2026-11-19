@@ -555,8 +555,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Validate fast path routing
-        run: python3.13 scripts/ci_owner_journey_scope.py --self-test
+      - name: Validate fast path routing and strict private-curl source mismatch
+        run: |
+          python3.13 scripts/ci_owner_journey_scope.py --self-test
+          sh -n scripts/build-curl-impersonate.sh scripts/test-build-curl-signed-drift.sh
+          sh scripts/test-build-curl-signed-drift.sh
       - name: Test P2c read-only shared generation owner refusal and provenance
         run: |
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owner.py scripts/test-auto-detect-owner.py
@@ -769,6 +772,12 @@ jobs:
           python3.13 scripts/test-domain-policy.py
           python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_editor_merge.py scripts/test-auto-detect-editor-merge.py
           PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-auto-detect-editor-merge.py
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_destination_commit.py scripts/test-shared-apply-found-files.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-found-files.py -v
+          php -l src/opnsense/scripts/OPNsense/Zapret/shared_apply_found_intent.php
+          php scripts/test-shared-apply-found-intent.php
+          python3.13 -m py_compile src/opnsense/scripts/OPNsense/Zapret/backend/shared_apply_found_upload.py scripts/test-shared-apply-found-upload.py
+          PYTHONDONTWRITEBYTECODE=1 python3.13 scripts/test-shared-apply-found-upload.py
           python3.13 scripts/test-owner-p6-list-ui.py
           sh -n scripts/test-domain-policy-shell.sh
           sh scripts/test-domain-policy-shell.sh
@@ -1670,7 +1679,7 @@ jobs:
             sh scripts/test-voice-atomic-rollback-preflight.sh
             /usr/local/bin/python3 scripts/test-ipset-policy.py
             /usr/local/bin/python3 scripts/test-voice-targets-integration.py
-            GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" sh scripts/build-pkg.sh
+            ZAPRET2_CURL_SIGNED_DISCOVERY=1 GITHUB_ACTIONS=true ZAPRET2_STAGE0_DISPOSABLE_OFFICIAL_MK=1 ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_NATIVE_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" ZAPRET2_STAGE0_PROJECT_SHA="${{ github.event.pull_request.head.sha || github.sha }}" sh scripts/build-pkg.sh
 
       - name: Inspect native OPNsense 26.7 package
         run: |

@@ -27,6 +27,9 @@ on:
       - scripts/test-ipset-policy.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage5-native-same-archive-reboot.py
+      - scripts/stage2-opnsense-g03-first-install.py
+      - scripts/stage2-opnsense-g03-native-prepared.py
+      - scripts/stage2-opnsense-g03-native-prepared.php
       - scripts/stage5-native-real-shared-voice-reboot.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
   pull_request:
@@ -55,6 +58,9 @@ on:
       - scripts/test-ipset-policy.py
       - scripts/stage2-opnsense-real-native-running-upgrade.py
       - scripts/stage5-native-same-archive-reboot.py
+      - scripts/stage2-opnsense-g03-first-install.py
+      - scripts/stage2-opnsense-g03-native-prepared.py
+      - scripts/stage2-opnsense-g03-native-prepared.php
       - scripts/stage5-native-real-shared-voice-reboot.py
       - scripts/stage2-opnsense-real-native-boot-syshook.py
   workflow_dispatch:
@@ -392,3 +398,50 @@ jobs:
               exit 1
             }
             echo 'PASS: fresh no-git guest installed SAME .pkg via official manifest dependencies and native pkg hooks, no external installer'
+
+            # ORIGINAL TZ6v2 native PREPARED recovery on the SAME disposable
+            # no-git-installed package. Keep the successful A/B/C jobs separate:
+            # no new VM, curl source fetch, pkg build, producer, Config writer or
+            # background scheduler. First configure genuine selected upstream
+            # and save FIVE HOSTLIST via stock configd/HTTPS Apply.
+            test "$(sha256 -q "$package")" = "$before"
+            /usr/local/bin/python3 -m py_compile scripts/stage2-opnsense-g03-first-install.py scripts/stage2-opnsense-g03-native-prepared.py
+            /usr/local/bin/php -l scripts/stage2-opnsense-g03-native-prepared.php
+            install -m 0700 scripts/stage2-opnsense-g03-native-prepared.py /root/g03-native-prepared.py
+            install -m 0600 scripts/stage2-opnsense-g03-native-prepared.php /root/g03-native-prepared.php
+            # Borrow the existing P5c disposable release-discovery fixture;
+            # never claim GitHub Releases API success, and never touch the
+            # owner's system or the packaged setup.sh code path.
+            upstream_tag=$(/usr/local/bin/git ls-remote --refs \
+              https://github.com/bol-van/zapret2.git refs/tags/v1.0.7)
+            expected_tag=$(printf '038c97e5819df10f8e8c22a2f1fffe57f2f7379b\trefs/tags/v1.0.7')
+            [ "$upstream_tag" = "$expected_tag" ] || {
+              echo G03_COLD_PINNED_UPSTREAM_TAG_REFUSED >&2
+              exit 69
+            }
+            cache=/var/db/zapret2-restyle/releases.cache
+            [ ! -e "$cache" ] && [ ! -L "$cache" ] || {
+              echo G03_COLD_RELEASE_CACHE_UNEXPECTED >&2
+              exit 69
+            }
+            /bin/mkdir -p /var/db/zapret2-restyle
+            ( umask 077; printf 'v1.0.7\n' > "$cache" )
+            /bin/chmod 0644 "$cache"
+            echo G03_COLD_RELEASE_DISCOVERY=DISPOSABLE_PINNED_TAG_CACHE_NOT_API_SUCCESS
+            GITHUB_ACTIONS=true ZAPRET2_NATIVE_BUILD_CI=1 ZAPRET2_G03_DISPOSABLE_NATIVE=1 \
+              /usr/local/bin/python3 scripts/stage2-opnsense-g03-first-install.py
+            GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
+              /usr/local/bin/python3 /root/g03-native-prepared.py
+            # ONE disposable Guest D fault: first protected YouTube rename
+            # truly installed, then original child dies without cleanup.
+            # Recover under the same original FD9/Config/P2; check that the
+            # RUNNING owner and untouched User/Auto physical files survive.
+            GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
+              /usr/local/bin/python3 /root/g03-native-prepared.py partial
+            # Final test on disposable guest only: actual native Config::save
+            # returns, original PHP is interrupted before its WAL ack, cold
+            # candidate-image recovery must REFUSE without changing owner.
+            GITHUB_ACTIONS=true ZAPRET2_G03_COLD_PREPARED=1 \
+              /usr/local/bin/python3 /root/g03-native-prepared.py config-uncertain
+            test "$(sha256 -q "$package")" = "$before"
+            echo 'PASS: SAME guest A archive, native five HOSTLIST and original FD4/FD9/P2 PREPARED restored without live Config/HOSTLIST/IPFW writes'

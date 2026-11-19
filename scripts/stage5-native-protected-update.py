@@ -217,6 +217,43 @@ def native_running_reinstall(archive, target, candidate_sha):
     check_running_replacement("AUTO", observer_required=True)
 
 
+def interrupted_prepare_diagnostic(prepare, old_id, config_before):
+    """Bounded, source-free test evidence; never alter the failed owner."""
+    stderr = prepare.stderr
+    if "another zapret lifecycle operation is already running" in stderr:
+        reason = "lifecycle-lock-busy"
+    elif "prior pkg restart marker needs review" in stderr:
+        reason = "existing-pkg-marker"
+    elif "protected package update refuses incomplete owner" in stderr:
+        reason = "incomplete-current-owner"
+    elif "original runtime did not reach verified STOPPED" in stderr:
+        reason = "stop-proof-unavailable"
+    elif "FD9" in stderr:
+        reason = "fd9-ownership-refused"
+    elif "ERROR:" in stderr or "REFUSED:" in stderr:
+        reason = "other-safe-refusal"
+    else:
+        reason = "missing-or-unclassified-diagnostic"
+    try:
+        state = json.loads(ACTIVE.read_text()) if ACTIVE.is_file() else None
+        phase = state.get("phase") if isinstance(state, dict) else None
+    except (OSError, ValueError):
+        phase = "unreadable"
+    status = run([str(SERVICE), "status"], timeout=45).returncode
+    return {
+        "phase": phase if phase in ("prepared", "postinstall-attested", "unreadable") else "absent-or-invalid",
+        "prepare_rc": prepare.returncode,
+        "prepare_receipt": "zapret-pkg-update-prepared=1" in prepare.stdout,
+        "stderr_category": reason,
+        "active_record_exists": ACTIVE.is_file() and not ACTIVE.is_symlink(),
+        "restart_marker_exists": MARKER.is_file(),
+        "status_rc": status,
+        "retired_epoch_exists": (EPOCHS / old_id / "retired.json").is_file(),
+        "old_config_unchanged": CONFIG.is_file() and sha(CONFIG) == config_before,
+        "owner_appliance_modified": False,
+    }
+
+
 def native_interrupted_handoff(archive, version, digest):
     """A real *inter-process* incomplete handoff, never owner recovery.
 
@@ -246,12 +283,18 @@ def native_interrupted_handoff(archive, version, digest):
 
     prepare = run([str(SERVICE), "pkg-update-prepare",
                    str(stage), staged_sha, stage_version], timeout=90)
-    need(prepare.returncode == 0 and
-         "zapret-pkg-update-prepared=1" in prepare.stdout and
-         ACTIVE.is_file() and not ACTIVE.is_symlink() and
-         MARKER.is_file() and
-         run([str(SERVICE), "status"]).returncode == 1,
-         "INTERRUPT_PRE_PKG_PREPARE_FAILED")
+    # Preserve the precise cause of a failed prepare before the VM exits.
+    # This reads only guard/epoch/Config state and never retries or cleans up.
+    prepared_ok = (prepare.returncode == 0 and
+                   "zapret-pkg-update-prepared=1" in prepare.stdout and
+                   ACTIVE.is_file() and not ACTIVE.is_symlink() and
+                   MARKER.is_file() and
+                   run([str(SERVICE), "status"]).returncode == 1)
+    if not prepared_ok:
+        print("NATIVE_PROTECTED_PREPARE_DIAGNOSTIC=" + json.dumps(
+            interrupted_prepare_diagnostic(prepare, old_id, before_config),
+            sort_keys=True), flush=True)
+    need(prepared_ok, "INTERRUPT_PRE_PKG_PREPARE_FAILED")
     record_before = sha(ACTIVE)
     pkg_before = installed_version()
     # Crucial SAME-VERSION ambiguity: the preceding installed version is

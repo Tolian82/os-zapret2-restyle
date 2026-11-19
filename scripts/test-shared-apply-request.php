@@ -77,6 +77,36 @@ $input=rtrim(strtr(base64_encode($raw),'+/','-_'),'=');
 $parsed=Request::decode($input);
 must($parsed['page']==='strategies','request parse');
 $out=Request::prepare($parsed,$all,$active);
+
+// TZ6V2-08: genuine Advanced Auto Restart edit uses the SAME scoped
+// Config XML renderer as bottom Apply. Older XML may omit the leaf;
+// native OptionField is a selected-value dictionary, not a scalar.
+$intervalModel = $all;
+$intervalModel['general']['autorestart'] = [
+    'off'=>['value'=>'Off','selected'=>1],
+    'hourly'=>['value'=>'Hourly','selected'=>0],
+];
+$intervalEdit = Request::prepare([
+    'page'=>'strategies',
+    'fields'=>['general'=>['autorestart'=>'hourly']],
+    'sync'=>['telegramips_baseline'=>'91.108.0.0/16'],
+], $intervalModel, $active);
+must($intervalEdit['plan']['changed_fields'] === ['general.autorestart'] &&
+     str_contains($intervalEdit['xml'], '<autorestart>hourly</autorestart>') &&
+     str_contains($intervalEdit['xml'], '<hostname>keep</hostname>') &&
+     str_contains($intervalEdit['xml'], '<Unboundplus><enabled>1</enabled></Unboundplus>') &&
+     !str_contains($active, '<autorestart>'),
+     'Auto Restart change refused or modified foreign active Config');
+$oldInterval = Request::prepare([
+    'page'=>'strategies',
+    'fields'=>['general'=>['autorestart'=>'hourly']],
+    'sync'=>['telegramips_baseline'=>'91.108.0.0/16'],
+], $all, $active);
+must($oldInterval['plan']['changed_fields'] === ['general.autorestart'] &&
+     str_contains($oldInterval['xml'], '<autorestart>hourly</autorestart>'),
+     'Missing legacy Auto Restart leaf did not use safe Off default');
+
+
 // This path must expand the changed huge User Domains under the ORIGINAL
 // FD9 request preparation before normal model, Config XML and lifecycle.
 $largeSaved = $all;

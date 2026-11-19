@@ -6,15 +6,34 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 SOURCE=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)/src/opnsense/scripts/OPNsense/Zapret/zapret_service.sh
 RUNTIME=$(dirname "$SOURCE")/backend/apply_runtime.sh
 sed -n '/^shared_apply_execute_service()$/,/^}$/p' "$SOURCE" > "$ROOT/executor.sh"
+for entry in shared_apply_record_current_service shared_apply_activate_and_commit_service; do
+    sed -n "/^$entry()$/,/^}$/p" "$SOURCE" >> "$ROOT/executor.sh"
+done
 sed -n '/^apply_runtime_observer_retirement_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
 sed -n '/^apply_runtime_observer_previous_preflight()$/,/^}$/p' "$RUNTIME" >> "$ROOT/executor.sh"
 sh -n "$ROOT/executor.sh" || fail "shell syntax"
 . "$ROOT/executor.sh"
 ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 mkdir -p "$ROOT/work/release"
-: > "$ROOT/work/plan.json"
+printf '%s\n' '{"page":"voice"}' > "$ROOT/work/plan.json"
 : > "$ROOT/work/candidate.xml"
 LOG="$ROOT/steps.log"
+# Source-only executor test: the real service normally initializes these.
+# Stub precisely the new read-only original FD9 verification child.
+BACKEND_DIR="$ROOT"
+PYTHON_RUNTIME="$ROOT/mock-python-runtime.sh"
+FOUND_DRIFT=0
+export ROOT ID LOG BACKEND_DIR FOUND_DRIFT
+cat > "$PYTHON_RUNTIME" <<'MOCK'
+#!/bin/sh
+[ "$#" -eq 3 ] &&
+[ "$1" = "$BACKEND_DIR/auto_detect_effective_known.py" ] &&
+[ "$2" = verify-planned ] &&
+[ "$3" = "$ID" ] || exit 69
+echo found-witness >> "$LOG"
+[ "$FOUND_DRIFT" = 0 ]
+MOCK
+chmod 700 "$PYTHON_RUNTIME"
 # The production FD9 executor uses fixed PID paths. This isolated mock
 # supplies disposable equivalents so the new final process check is run.
 CHILD_PIDFILE="$ROOT/dvtws.pid"
@@ -47,6 +66,16 @@ shared_apply_native_config() {
 }
 shared_apply_json_field() {
     case "$1" in
+        *'has("found_intent")'*)
+            # Mirror the real jq predicate using ONLY this fixture plan.
+            # No successful old Apply may ignore a pending found-file edit.
+            plan_content=$(cat)
+            case "$plan_content" in
+                *'"found_intent"'*'"found_batch"'*) printf '%s\n' found ;;
+                *'"found_intent"'*) printf '%s\n' invalid ;;
+                *'"page"'*) printf '%s\n' ordinary ;;
+                *) return 1 ;;
+            esac ;;
         *".enabled"*)
             # The saved worker runs inside $(...), so side effects cannot
             # change a parent-shell flag. Inspect this exact readback input.
@@ -105,7 +134,7 @@ apply_runtime_verify_retired_legacy_committed() {
     echo runtime-final-verify >> "$LOG"
     [ "$FINAL_RC" -eq 0 ]
 }
-reset() { : > "$LOG"; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
+reset() { : > "$LOG"; FOUND_DRIFT=0; export FOUND_DRIFT; FINISH_FAIL=0; SAVE_RC=0; ACTIVATE_RC=0; RESTORE_RC=0; COMMIT_RC=0; BAD_RECORD=none; BAD_BUNDLE=0; TAMPER_DURING_ACTIVATION=0; PROBE_RC=0; ATTEST_RC=0; ATTEST_COUNT=0; ATTEST_FAIL_AT=0; SAVED_RC=0; SAVED_DIGEST_DRIFT=0; SAVED_MODE_DRIFT=0; BAD_OWNER=0; REHYDRATE_RC=0; PRE_DRIFT=0; CONFIG_PREFLIGHT_RC=0; COMMIT_OWNER=0; FINAL_RC=0; PROBE_COUNT=0; FINAL_PROBE_FAIL=0; FINAL_TREE_OK=1; FINAL_ENGINE=1; FINAL_MONITOR=1; _apply_engine=0; }
 expect_status() {
     expected="$1"; shift
     set +e
@@ -119,6 +148,32 @@ expect_status() {
 reset
 expect_status 0 'bundle:verify runtime-probe record:prepared record:activating runtime-activate record:activated bundle:verify runtime-attest config-save record:config-saved config-readback runtime-attest runtime-commit bundle:verify runtime-tree runtime-probe record:committed '
 grep -Fqx "applied-id=$ID" "$ROOT/response.txt" || fail "successful receipt"
+# A sealed but uncommitted form intent must refuse BEFORE the original
+# Prepared journal, Config::save, runtime transition and IPFW. The same
+# legacy Voice Apply fixture must remain operational with no found intent.
+printf '%s\n' '{"page":"voice","found_intent":{}}' > "$ROOT/work/plan.json"
+reset
+expect_status 0 'bundle:verify '
+grep -Fqx 'preflight-rejected=found-intent' "$ROOT/response.txt" ||
+    fail "found intent crossed pre-journal gate"
+# Verify a post-seal minute change stays a bounded pre-journal refusal.
+reset
+FOUND_DRIFT=1
+export FOUND_DRIFT
+printf '%s\n' '{"page":"strategies","found_intent":{},"found_batch":{}}' > "$ROOT/work/plan.json"
+set +e
+shared_apply_execute_service "$ID" strategies > "$ROOT/response.txt"
+result=$?
+set -e
+[ "$result" = 0 ] && [ "$(tr '\n' ' ' < "$LOG")" = 'bundle:verify found-witness ' ] ||
+    fail "found drift reached native Config or runtime"
+grep -Fqx 'preflight-rejected=found-source-drift' "$ROOT/response.txt" ||
+    fail "late minute drift crossed pre-journal gate"
+printf '%s\n' '{"invalid":' > "$ROOT/work/plan.json"
+reset
+expect_status 69 'bundle:verify '
+[ ! -s "$ROOT/response.txt" ] || fail "corrupt found candidate crossed pre-journal gate"
+printf '%s\n' '{"page":"voice"}' > "$ROOT/work/plan.json"
 # The final proof is AFTER native Config + IPFW commit: neither an
 # altered installed traffic/IPSET tree, nor dead engine, nor a changed
 # committed rule set may produce the GUI's applied-id receipt.
