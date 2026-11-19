@@ -98,7 +98,16 @@ def main():
  with tempfile.TemporaryDirectory(prefix="owner102-stage-",dir="/root") as d:
   root=Path(d);root.chmod(0o700);stage=bridge.staged_source(new,root)
   installed_sha=sha(SERVICE)
-  need(sha(stage/"zapret_service.sh")!=installed_sha and bridge.recovered_status(stage,"status").returncode==0,"STAGED_104_SOURCE_NOT_QUALIFIED")
+  staged_status=bridge.recovered_status(stage,"status")
+  staged_differs=sha(stage/"zapret_service.sh")!=installed_sha
+  print("OWNER102_STAGED_STATUS="+json.dumps({
+      "published_104_code_differs_from_installed_102":staged_differs,
+      "staged_status_rc":staged_status.returncode,
+      "staged_reports_running":staged_status.stdout.strip()=="zapret is running",
+      "native_status_rc":run([str(SERVICE),"status"],t=30).returncode,
+  },sort_keys=True),flush=True)
+  need(staged_differs,"STAGED_104_CODE_NOT_DISTINCT")
+  need(staged_status.returncode==0 and staged_status.stdout.strip()=="zapret is running","STAGED_104_RUNNING_OWNER_STATUS_REFUSED")
   stopped=bridge.recovered_status(stage,"stop",timeout=180)
   output={"staged_stop_rc":stopped.returncode,"config_unchanged":sha(CONFIG)==cfg,
           "old_retirement_receipt":(EPOCHS/old_id/"retired.json").is_file(),
