@@ -19,6 +19,7 @@ import stat
 import sys
 
 from auto_detect_debug_window import _read_exact, DebugWindowRefused
+from auto_detect_fd import _START
 from auto_detect_owner import (GenerationProof, GenerationRefused,
                                MAX_ARGS, MAX_MAP, _secure_bytes, _valid_map,
                                attest_running_generation)
@@ -815,6 +816,59 @@ class EpochReceipts:
                 plan.get("cycle") != tip.cycle):
             raise ReceiptRefused("retired_old_ack_not_final")
         return self._retired_sources(proof, queue, plan, repair=False)
+
+    def verify_stop_only_epoch(self, proof: GenerationProof,
+                               queue: DurableInbox, *,
+                               attest=attest_running_generation) -> bool:
+        """Permit an explicit user Stop when only ps wall-clock birth drifted.
+
+        This is NOT the strict v2 worker / raw ACK / cursor permission. The
+        original FD9 and P2a flock, CURRENT native process/argv/supervisor
+        attestation, sealed generation and every epoch/pretraffic field
+        except the display-only owner_start must all be genuine. The receipt
+        is never repaired or replaced. A different owner, missing evidence,
+        stale callback or changed runtime remains refused. The caller may
+        sacrifice uncommitted discovery during normal Stop, never Config,
+        manual/known HOSTLIST, IPFW owner or the actual engine census.
+        """
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                not callable(attest) or not isinstance(proof, GenerationProof)):
+            raise ReceiptRefused("stop_requires_original_queue_and_owner")
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        if attest() != proof:
+            raise ReceiptRefused("stop_owner_changed_before_epoch_read")
+        queue._verify()
+        folder, seed, seed_raw = self._pretraffic(proof)
+        try:
+            actual = json.loads(_read(folder / "epoch.json", self.uid))
+        except (ValueError, UnicodeError, TypeError) as exc:
+            raise ReceiptRefused("stop_epoch_unreadable") from exc
+        expected = _proof_fields(proof)
+        expected.update(
+            owner_candidate_sha256=seed["owner_candidate_sha256"],
+            pretraffic_sha256=hashlib.sha256(seed_raw).hexdigest(),
+            raw_device=seed["raw_device"], raw_inode=seed["raw_inode"],
+            debug_device=seed["debug_device"],
+            debug_inode=seed["debug_inode"],
+            committed_cursor_offset=0,
+            committed_cursor_sha256=EMPTY_HASH,
+        )
+        if (not isinstance(actual, dict) or
+                set(actual) != set(expected) or
+                type(actual.get("owner_start")) is not str or
+                _START.fullmatch(actual["owner_start"]) is None or
+                any(actual.get(key) != value for key, value in expected.items()
+                    if key != "owner_start")):
+            raise ReceiptRefused("stop_epoch_not_same_original_owner")
+        # A second live attestation closes the window between checking the
+        # root-private receipts and the normal process/IPFW stop preflight.
+        queue._verify()
+        if attest() != proof:
+            raise ReceiptRefused("stop_owner_changed_after_epoch_read")
+        return actual["owner_start"] != expected["owner_start"]
 
     def _epoch(self, proof: GenerationProof) -> tuple[Path, dict]:
         expected = _proof_fields(proof)
