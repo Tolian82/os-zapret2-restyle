@@ -7,6 +7,7 @@ model/owner evidence is NOT installed OPNsense/FD9 acceptance.
 from __future__ import annotations
 
 import json
+from io import BytesIO
 import os
 import re
 from pathlib import Path
@@ -22,6 +23,7 @@ from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_original_lock_handoff import (
     OriginalLockRefused, assert_inherited_config_fd,
     inherited_original_locks, _original_completion_locked,
+    read_bounded_original_model, MAX_ORIGINAL_MODEL_WIRE,
 )
 
 PHP_FIXTURE = Path(__file__).with_suffix('.php')
@@ -121,6 +123,17 @@ class OriginalLockHandoffTests(unittest.TestCase):
             ['php', str(PHP_FIXTURE), 'commit-with-fds', str(fd), self.segment.name],
             pass_fds=(fd,), env=self.environment(unlocked_config=unlocked_config),
             capture_output=True, text=True, timeout=15)
+
+    def test_owner_sized_original_model_fd_wire_and_finite_cap(self):
+        data = (b"a.com\n" * 295684) + b"x.io\n"
+        self.assertEqual(len(data), 1774109)
+        stream = BytesIO(data)
+        self.assertEqual(read_bounded_original_model(
+            lambda fd, n: stream.read(n)), data)
+        too_large = BytesIO(b"x" * (MAX_ORIGINAL_MODEL_WIRE + 1))
+        with self.assertRaisesRegex(OriginalLockRefused,
+                                    "oversized_original_model"):
+            read_bounded_original_model(lambda fd, n: too_large.read(n))
 
     def test_actual_three_process_handoff_and_retained_pending(self):
         # The same original queue FD stays open across two exec boundaries,

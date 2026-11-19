@@ -263,6 +263,27 @@ def run_native_original_v2_cycle_once(*, retired: bool = False) -> bool:
         raise OriginalLockRefused("original_native_v2_source_unavailable") from exc
 
 
+
+# The 4-MiB per-manual fields, preserved 1-MiB exclusions, JSON metadata and
+# escaping need a separate *finite* original PHP->Python FD payload budget.
+# This is NOT a configd argv, HTTP POST or mutable system/PHP memory limit.
+MAX_ORIGINAL_MODEL_WIRE = 16 << 20
+
+
+def read_bounded_original_model(reader=os.read) -> bytes:
+    chunks = []
+    total = 0
+    while True:
+        piece = reader(0, min(65536, MAX_ORIGINAL_MODEL_WIRE + 1 - total))
+        if not piece:
+            break
+        total += len(piece)
+        if total > MAX_ORIGINAL_MODEL_WIRE:
+            raise OriginalLockRefused("oversized_original_model")
+        chunks.append(piece)
+    return b"".join(chunks)
+
+
 def _native_fd_child(pending_name: str, payload: dict, *,
                      retired: bool = False) -> dict:
     """Original PHP Config child with BOTH verified inherited lock descriptors."""
@@ -308,17 +329,7 @@ def main(argv: list[str] | None = None) -> int:
             not sys.platform.startswith("freebsd") or os.geteuid() != 0):
         return 64
     try:
-        chunks = []
-        total = 0
-        while True:
-            piece = os.read(0, min(65536, (3 << 20) + 1 - total))
-            if not piece:
-                break
-            total += len(piece)
-            if total > (3 << 20):
-                raise OriginalLockRefused("oversized_original_model")
-            chunks.append(piece)
-        response = _native_fd_child(argv[1], json.loads(b"".join(chunks)),
+        response = _native_fd_child(argv[1], json.loads(read_bounded_original_model()),
                                     retired=argv[0] == "commit-retired-fds")
         print(json.dumps(response, sort_keys=True, separators=(",", ":")))
         return 0

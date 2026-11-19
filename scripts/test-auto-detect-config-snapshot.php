@@ -122,30 +122,32 @@ foreach (['youtubedomains','userdomains','excludedomains'] as $field) {
 $nodes=nativeModel();$nodes['hostlist']['userdomains']=['selected'=>'example.com'];
 $c=new TestConfig;expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel($nodes),fn()=>correctFile('')),'dropdown cannot masquerade as text');
 check(!$c->held,'invalid model lock release');++$count;
-$nodes=nativeModel();$nodes['hostlist']['youtubedomains']=str_repeat('A',1048577);
+$nodes=nativeModel();$nodes['hostlist']['youtubedomains']=str_repeat('A',4 * 1048576 + 1);
 $c=new TestConfig;expectFailure(fn()=>Snapshot::capture($c,fn()=>new TestModel($nodes),fn()=>correctFile('')),'oversized model');
 check(!$c->held,'oversized model lock release');++$count;
 
-// S0/TZ6v3: owner's real 1,774,109-byte source is rejected by the
-// current 1 MiB product guard even with a verified empty shared source.
-// This negative witness becomes a positive assertion in the read-API change.
+// Owner-live S5 follow-up: original read and native P2 must accept the SAME
+// 1,774,109-byte saved manual source as the already qualified editor read.
+// The legacy 1 MiB Exclude Domains limit remains independently enforced.
 $ownerText = str_repeat("a.com\n", 295684) . "x.io\n";
 check(strlen($ownerText) === 1774109, 'owner fixture exact byte count');
 $ownerNodes = nativeModel();
 $ownerNodes['hostlist']['userdomains'] = $ownerText;
 $ownerLock = new TestConfig;
 $ownedReads = 0;
-expectFailure(fn()=>Snapshot::capture($ownerLock,
+$ownerOriginal = Snapshot::capture($ownerLock,
     fn()=>new TestModel($ownerNodes),
-    function() use (&$ownedReads): array { ++$ownedReads; return correctFile(''); }),
-    'owner 1,774,109 bytes still over original read guard');
-check(!$ownerLock->held && $ownerLock->locks === 1 &&
-    $ownerLock->unlocks === 1 && $ownerLock->writes === 0 &&
-    $ownedReads === 0, 'oversize refusal must release lock without mutation');
+    function() use (&$ownedReads): array { ++$ownedReads; return correctFile(''); });
+check($ownerOriginal['manual_hostlists']['user'] === $ownerText &&
+    $ownerOriginal['shared_auto_status'] === 'empty' &&
+    !$ownerOriginal['commit_authorized'] && $ownedReads === 1 &&
+    !$ownerLock->held && $ownerLock->locks === 1 &&
+    $ownerLock->unlocks === 1 && $ownerLock->writes === 0,
+    'original P2 reader must accept owner-size source without writing');
 ++$count;
 
-// TZ6v3 editor-only read accepts the same owner-sized saved Model without
-// weakening the original background P2 worker's 1 MiB limit or writing files.
+// TZ6v3 editor metadata read remains non-writing and independent of the
+// larger original P2 bounded snapshot, preserving byte-exact revisions.
 $editorLock = new TestConfig;
 $editorReaderCalls = 0;
 $ownerSnap = Snapshot::capture($editorLock,
@@ -169,6 +171,16 @@ check($ownerEditor['schema_version'] === 3 &&
     $ownerEditor['editors']['shared_found']['revision'] === hash('sha256', "present\0") &&
     !$ownerEditor['commit_authorized'],
     'owner-sized native manual metadata plus physically safe empty shared');
+++$count;
+
+$excludedTooLarge = nativeModel();
+$excludedTooLarge['hostlist']['excludedomains'] = str_repeat('x', 1048577);
+$exclusionLock = new TestConfig;
+expectFailure(fn()=>Snapshot::capture($exclusionLock,
+    fn()=>new TestModel($excludedTooLarge), fn()=>correctFile('')),
+    'Exclude Domains must retain the original 1 MiB guard');
+check($exclusionLock->writes === 0 && !$exclusionLock->held,
+    'no excluded-source mutation on refusal');
 ++$count;
 
 $tooLargeEditorNodes = nativeModel();

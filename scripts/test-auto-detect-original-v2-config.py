@@ -123,6 +123,32 @@ class OriginalConfigV2Tests(unittest.TestCase):
             self.proof, pending, result, self.writer,
             attest=self.attest, inspect=self.inspect)
 
+    def test_owner_sized_user_manual_original_config_and_ack(self):
+        # Owner-live 1,774,109-byte source: old 1-MiB P2 model rejects it.
+        owner_text = ("a.com\n" * 295684) + "x.io\n"
+        self.assertEqual(len(owner_text.encode("utf-8")), 1774109)
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            receipt = self.commit(pending, manual={
+                "youtube": "youtube.com\n", "user": owner_text,
+            })
+            self.assertFalse(receipt["ack_authorized"])
+            self.assertTrue(self.ack(pending, receipt))
+        self.assertFalse(pending.exists())
+
+    def test_original_p2_rejects_manual_over_four_megabytes(self):
+        self.emit("video.example.co.uk")
+        with self.queue.exclusive():
+            pending = self.prepare()
+            with self.assertRaisesRegex(V2OriginalConfigRefused,
+                                        "original_config_model_and_queue_required"):
+                self.commit(pending, manual={
+                    "youtube": "youtube.com\n",
+                    "user": "x" * (4 * 1048576 + 1),
+                })
+            self.assertTrue(pending.exists())
+
     def test_two_real_v2_minutes_with_original_p1_and_ack(self):
         for host in ("video.example.co.uk", "cdn.second.com"):
             self.emit(host)

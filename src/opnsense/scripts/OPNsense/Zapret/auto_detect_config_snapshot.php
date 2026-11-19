@@ -24,8 +24,10 @@ use OPNsense\Zapret\Api\StrategiesHostlistCatalog;
 
 final class AutoDetectConfigSnapshot
 {
-    private const MAX_MODEL_TEXT = 1048576;
-    // Bounded read-only Strategies editor cap; original P2 worker unchanged.
+    // Same finite per-manual HOSTLIST bound as the native editor and P1 parser.
+    // The legacy 1 MiB exclusion bound is deliberately unchanged.
+    private const MAX_MODEL_TEXT = 4 * 1048576;
+    private const MAX_EXCLUDE_TEXT = 1048576;
     private const MAX_EDITOR_TOTAL = 4 * 1048576;
     private const MAX_NATIVE_REPLY = 150000;
     private const NATIVE_PYTHON = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
@@ -59,7 +61,7 @@ final class AutoDetectConfigSnapshot
         }
         if (!array_key_exists('excludedomains', $fields) ||
             !is_string($fields['excludedomains']) ||
-            strlen($fields['excludedomains']) > self::MAX_MODEL_TEXT ||
+            strlen($fields['excludedomains']) > self::MAX_EXCLUDE_TEXT ||
             $total + strlen($fields['excludedomains']) > $totalCap) {
             throw new \RuntimeException('Native global domain exclusion unavailable');
         }
