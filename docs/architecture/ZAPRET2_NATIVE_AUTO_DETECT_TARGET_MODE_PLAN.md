@@ -1,6 +1,27 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-## ACTIVE — transition from integrated _70 to ТЗ_6v2 (16 November 2026)
+## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
+
+**Только текущая обязательная работа:** [ТЗ_6v3](TZ_6v3.md) поверх неизменённой [ТЗ_6v2](TZ_6v2.md); [API v1](STRATEGIES_LIST_API_V1.md). [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) и [future design](STRATEGIES_LIST_FUTURE.md) — не сейчас.
+
+**Фактическая позиция:** `main v0.6.5_96` — проектный контракт, последний реальный пакет `_94.pkg` установлен у владельца. Уже работают пять GUI редакторов, original FD9/Shared Apply/rollback/P2, существующий `FormData(found-intent.json)` и SHA-дельта больших ручных списков; native same-PID hot reload доказан. **Открытый блокер #1190:** User Domains 1 774 109 байт превышает внутренний 1 МиБ guard, из-за общего отказа snapshot не виден безопасно пустой shared_found. Последний owner Apply не подтверждён. Повторного изобретения прошлых STEP 1–10 и масштабных native матриц не требуется.
+
+| Шаг | Статус | Минимальный необходимый результат |
+| --- | --- | --- |
+| S0 | OPEN | Старая красная регрессия для 1 774 109 байт User + безопасного пустого shared, без owner mutation |
+| S1 | OPEN | Единый реестр ровно пяти источников со связью с existing target registry, без добавления новых targets/списков |
+| S2 | OPEN | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
+| S3 | OPEN | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
+| S4 | OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |
+| S5 | OPEN | Точный CI, уместный native FreeBSD/OPNsense test, merge, qualified only `.pkg`, затем owner-live проверка и #1190 closure только при доказательствах |
+
+**Не делать сейчас:** 6–8 реальных списков (только расширяемая архитектура), IPSET/Exclude/Voice, pfSense, миграцию manual из config.xml в файлы, полное переустройство проверки изменений и global PHP tuning. Один bottom Apply/FD9/Config writer и минутная безостановочная Auto-detect логика сохраняются. Весь старый план ниже сохранён как доказательная история, но его прежние заголовки ACTIVE/CURRENT **не задают новую очередь**.
+
+---
+
+## RETAINED HISTORICAL — прежняя очередь ТЗ_6v2 от 16–18 ноября 2026
+
+
 
 **Owner priority, 18 November 2026.** Deliver the bottom Apply in four steps. Complete PREPARED, partial file and uncertain Config recovery. Finish the single native Apply for all five editors. Verify persistence and the real RUNNING/STOPPED lifecycle. Then run the affected acceptance and prepare the testing package. During implementation use the shortest affected checks and reuse evidence for unchanged paths.
 
@@ -156,7 +177,7 @@ Every step has the **existing input → minimum actual change → observable exi
 **Normative specification:** [approved newer ТЗ_6v2](TZ_6v2.md) for GUI, five lists, manual Apply and Auto Restart presentation, alongside [unchanged original #1052 native worker contract](ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [latest Issue #1052 decision](https://github.com/Tolian82/os-zapret2-restyle/issues/1052); earlier [consolidated comment](https://github.com/Tolian82/os-zapret2-restyle/issues/1052#issuecomment-6798093626) is historical where superseded.
 **Boundary:** The owner authorized continuation after P0 success. P1 adds pure policy/data and package qualification to the existing domain parser; no production observer/cron/worker, GUI/scheduler or Strategy Lab change. The prior accepted [#936 feature](ZAPRET2_STRATEGIES_HOSTLIST_I18N_PREVIEW_SPEC.md), shared service/FD9/Config ownership and published stable package remain unchanged.
 
-## Current approved execution order — ТЗ_6v2
+## RETAINED historical approved execution order — ТЗ_6v2
 
 > **RETAINED early transition sketch, not current execution authority.** It is replaced by active §C above. Old P4 and owner-acceptance text retained below is not an alternative to the approved five-field/single Apply/Advanced-only dropdown contract.
 

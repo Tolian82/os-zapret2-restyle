@@ -1,8 +1,8 @@
 # Strategies list API v1 — portable core boundary (OPNsense only for now)
 
-**Status: owner-approved design contract, 19 November 2026; implementation NOT complete.**
+**Статус: технический контракт для текущего [ТЗ_6v3](TZ_6v3.md), утверждено 19 ноября 2026; реализация пока не выполнена.**
 
-Scope: `os-zapret2-restyle`, Strategies page only, initial five sources and future **six to eight sources in total**, with approximately unchanged total manual-domain volume. Voice/Передача Голоса, Strategy Lab, generic forms framework, pfSense product or a new service are OUT OF SCOPE. See [TZ_6v2](TZ_6v2.md) for the active existing GUI, single Apply, per-source semantics and protected runtime behavior. This design narrows the transport/registry implementation and does not cancel TZ6v2 acceptance.
+Scope: `os-zapret2-restyle`, Strategies page only, initial five sources and future **six to eight sources in total**, with approximately unchanged total manual-domain volume. Voice/Передача Голоса, Strategy Lab, generic forms framework, pfSense product or a new service are OUT OF SCOPE. См. [ТЗ_6v3](TZ_6v3.md) — активный scope, [ТЗ_6v2](TZ_6v2.md) — сохраняемая часть GUI/FD9. Дальние вопросы — [Future](STRATEGIES_LIST_FUTURE.md) и [Feature #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192). This design narrows the transport/registry implementation and does not cancel TZ6v2 acceptance.
 
 ## Why `FormData` alone does not fix the installed issue
 
@@ -41,7 +41,7 @@ Expose a registry-driven read response via the existing authenticated Strategies
 
 - The full current *user-edited* text, or a verified byte-exact delta that reconstructs it, MUST reach the server when a manual list changed. A SHA or metadata alone is not user content.
 - Unchanged manual fields are not redundantly sent through configd. Keep the existing bound SHA-delta path and original native Config re-read. Found-only edits continue through the existing `found-intent` PHP multipart upload and one original FD9 staging path.
-- Standardize a **Strategies-only** manifest/envelope for registered source IDs, baselines and changed-source payload references when a change actually needs it; prefer one normal `FormData` request containing non-list fields, metadata JSON and only changed content. Do NOT require a new file upload or chunk protocol for every unedited field; reuse the currently qualified compact delta where sufficient.
+- **Обязательно в ТЗ_6v3:** один Strategies `FormData + JSON` манифест для **всех пяти** источников, включая оба ручных YouTube/User и три найденных. В нём обычные неизменяемые поля формы, версии/ID и реальные данные **только изменённых** списков (текст/Blob или проверенная SHA-дельта). Повторно используем `found-intent.json`/`SharedApplyEnvelope`; метаданные не заменяют новый текст. Не делаем отдельный новый writer или обязательную chunk-систему.
 - Any new whole-list Blob transport must be bounded by measured application/request budgets; no arbitrary PHP global limit increase. Chunking is **not in this initial scope** and needs a measured blocker and an explicit atomic-staging design if subsequently justified.
 - Validation and conflict checks must be extended **only as necessary** to keep the current one-bottom-Apply safe. Do not undertake a separate project to rewrite all user-edit tracking or all concurrency checks now. A stale source must never overwrite a newer source silently.
 - All edits remain ONE existing bottom Strategies Apply with the existing original FD9 authority, Config writer, rollback journal, P2 destination locking, service lifecycle and cross-source policy. No independent Auto Save/Reload, separate Config writer, SQLite, extra daemon or off-path target mutation.
@@ -57,9 +57,11 @@ Expose a registry-driven read response via the existing authenticated Strategies
 1. Introduce the canonical Strategies catalog and a portable parser/validator with unit coverage; current five entries only and stable GUI IDs. No Voice or runtime target additions.
 2. Reproduce the actual 1,774,109-byte saved User Domains + safe empty shared-list read failure on the old code. Adapt root read and authenticated API to metadata-only **for saved manual data**, retaining full found-only content and exact revisions; fix only directly applicable per-field product guards.
 3. Update the Strategies frontend to capture manual saved baselines and verify the new read contract, preserve unsaved drafts and independent empty-list display. Keep native GUI geometry and one bottom Apply. Test F5 and a changed manual list rather than only a mocked positive read.
-4. Reuse existing `FormData` and `SharedApplyEnvelope` for current edits; refactor identity/order iteration to the catalog. Introduce new Blob payloads **only** for a reproduced large-edits case not satisfied by the current checked deltas. Never alter Voice Apply.
+4. Подключить оба ручных и три найденных списка к одному `FormData + JSON` при сохранении существующих `found-intent.json`, SHA-дельт и одного original FD9 Apply. Реальные отредактированные байты должны доходить; большие Blob-части — по фактической необходимости и в пределах проверенных лимитов. Voice Apply не менять.
 5. Fast red->green owner-sized regression and narrow relevant native OPNsense GUI/FD9 test; then source PR merge under current GitHub rules. Any test `.pkg` must be published separately only when authorized/requested and qualified. Owner appliance evidence remains separate.
 
 ## Explicit non-goals
+
+IPSET Telegram, остальные IPSET, Exclude Domains, Exclude IPSet не входят в текущий HOSTLIST реестр и сохраняют свои валидаторы, правила и штатный Apply. Возможный отдельный тип `ipset`/исключения в будущем — [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192), не ТЗ_6v3.
 
 Full pfSense implementation, altering the Voice page, adding 6–8 *new* lists now, changing the GUI design, global PHP tuning, mandatory move of manual data to text files, a second Config writer, independent list-save buttons, and comprehensive rewriting of unrelated user-change/concurrency logic.

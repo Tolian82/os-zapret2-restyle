@@ -2,7 +2,7 @@
 
 ## Current priority
 
-**New owner-approved Strategies scope, 19 November 2026:** Before another test package, establish the portable, OPNsense-first [Strategies list API v1](architecture/STRATEGIES_LIST_API_V1.md) for existing five editors and future 6–8 in total. Native Config manual storage remains, found lists remain plaintext files. Avoid global PHP settings, second Config writer, Voice changes or premature broad Apply rewrite. Reproduce the owner's 1.77 MiB manual/empty shared-list failure and fix the read/transport path with bounded checks. Issue [#1190](https://github.com/Tolian82/os-zapret2-restyle/issues/1190) remains open; `_96` here is design-only.
+**Актуальный приоритет (19 ноября 2026):** завершить [ТЗ_6v3](architecture/TZ_6v3.md), наследующее рабочий GUI/FD9/Auto-detect из ТЗ_6v2, на существующих пяти источниках. [S0–S5](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md): направленная регрессия 1,77 МБ/пустой shared; реестр; защищённый metadata-only read для сохранённых ручных; один FormData + JSON для фактических изменений ручных и found; короткая проверка одного Apply/конфликтов; проверенный `.pkg` и owner acceptance. Владелец работает на `_94.pkg` с открытой ошибкой [#1190](https://github.com/Tolian82/os-zapret2-restyle/issues/1190); `_97` сейчас **только документация без опубликованного пакета**. Отложенная эволюция — [Features/Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192), [Future design](architecture/STRATEGIES_LIST_FUTURE.md); **не новый гейт**.
 
 **Earlier 19 November priority (publication record now completed in `_95`).** `v0.6.5_94.pkg` was published from its merged source. The bounded `GH-061` record was subsequently merged in `_95`; native owner acceptance remains pending. Earlier instructions were to hand the immutable package to the owner for native upgrade/clean reinstall, saved Settings/WAN/Voice, full/purge lifecycle and actual ISP/DPI Auto-detect acceptance. Existing same-PID managed YouTube HOSTLIST reload is proven on one disposable native HTTP/loopback fixture; production known-origin attribution under a real ISP remains OPEN. Do not run more synthetic native matrices without a concrete owner failure. See the [TZ6v2 plan](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md).
 
@@ -49,6 +49,8 @@
 | Documentation review, 13 November | Current authority separated from historical plans/diaries; no information discarded; [findings](audit/DOCS-2026-11-13.md) |
 
 ## Accepted future direction
+
+- **[Features/Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192):** в дальней перспективе **6–8** реальных доменных источников *в сумме* (с примерно тем же общим объёмом), возможно типизированный каталог для IPSET/доменных и IPSet исключений, полный user-edit tracking, отдельные файлы при необходимости и pfSense adapter. [Постоянная пометка](architecture/STRATEGIES_LIST_FUTURE.md). Не выполнять по текущему ТЗ_6v3.
 
 - [Future #1167 — Strategy Lab comparative checks](https://github.com/Tolian82/os-zapret2-restyle/issues/1167): owner-approved deferred comparison of verified TLS/HTTP/QUIC strategies, one finite warm session and restored normal service; **IPFW rule numbers `19140–19200` reserved in README only**, not used by the current plugin. No implementation or current delivery priority authorized.
 

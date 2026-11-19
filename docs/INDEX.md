@@ -18,12 +18,12 @@ Read through EOF in this order:
 
 ## Level 2 — active work and current contracts
 
-Current Strategies-only portable list catalog/read/transport design: [Strategies list API v1](architecture/STRATEGIES_LIST_API_V1.md) (approved design, no product implementation yet, Issue #1190).
+**Текущая очередь:** [ТЗ_6v3](architecture/TZ_6v3.md), [Strategies List API v1](architecture/STRATEGIES_LIST_API_V1.md) и [обновлённый P0–P5 план](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md). **Будущее:** [Future design](architecture/STRATEGIES_LIST_FUTURE.md) / [Features #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) — отдельно, не входит в ТЗ_6v3.
 
 | Need | Primary document |
 |---|---|
-| #1052 approved behavior | [Original native discovery/FD9 contract](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [**ТЗ_6v2** current five-list GUI/Apply contract](architecture/TZ_6v2.md) (implementation OPEN) |
-| #1052 staged work | [Current ТЗ_6v2 prioritized P0→P5 plan, TZ6V2-01…09 and owner acceptance](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
+| #1052 approved behavior | [Original native discovery/FD9 contract](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_SPEC.md) and [**ТЗ_6v3** — текущее чтение/реестр/FormData](architecture/TZ_6v3.md) (код/приёмка OPEN), [ТЗ_6v2 — сохраняемые GUI/FD9 правила](architecture/TZ_6v2.md) |
+| #1052 staged work | [ТЗ_6v3 — активные S0–S5 поверх исторического P0–P5 плана](architecture/ZAPRET2_NATIVE_AUTO_DETECT_TARGET_MODE_PLAN.md) |
 | P2e completed original-builder qualification | [Original shared-builder witness](verification/P2E_ORIGINAL_SHARED_BUILDER.md); [P0–P2 proof map](verification/README.md) |
 | P2f source-only observer proposal | [Nonactivating P2f contract](verification/P2F_OFFLINE_OBSERVER_PLAN.md); owner/FD9 and raw/debug qualification remains open |
 | P2g protected raw/debug producer permissions | [Native writer and queue path contract](verification/P2G_NATIVE_WRITER_STORAGE.md); production observer inactive |
