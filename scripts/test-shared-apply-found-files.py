@@ -71,6 +71,40 @@ class OriginalFoundFileBatchTests(unittest.TestCase):
             }
         return rows
 
+    def test_lossless_php_uint64_native_identity_preserves_preimage_pin(self):
+        # Python native st_dev/st_ino can exceed PHP_INT_MAX on FreeBSD.
+        # The root PHP response must preserve exact decimal digits, not
+        # float-round and thereby weaken the original P2 preimage check.
+        qualified = destination._qualified_shared_found_batch
+        oversized = (1 << 63) + 12345
+        identity_keys = ("before_device", "before_inode",
+                         "before_ctime_ns", "before_mtime_ns")
+        for key in identity_keys:
+            with self.subTest(field=key):
+                rows = self.plan()
+                rows["youtube"][key] = oversized
+                original = qualified(rows)
+                rows["youtube"][key] = str(oversized)
+                transported = qualified(json.loads(json.dumps(rows)))
+                self.assertEqual(transported, original)
+                self.assertEqual(transported["youtube"][2][
+                    ("before_device", "before_inode", "before_ctime_ns",
+                     "before_mtime_ns", "before_size").index(key)], oversized)
+                for malformed in (float(oversized), str(1 << 64),
+                                  "0" + str(oversized), "123", -1, True):
+                    rows["youtube"][key] = malformed
+                    with self.assertRaisesRegex(
+                            DestinationRefused, "shared_found_candidate_shape"):
+                        qualified(rows)
+        # The real file's physical stat must still match the decoded pin:
+        # accepted JSON shape is not permission to adopt foreign inode data.
+        rows = self.plan()
+        rows["youtube"]["before_device"] = str(oversized)
+        with self.assertRaisesRegex(
+                DestinationRefused, "shared_found_preimage_changed"):
+            self.apply(rows)
+        self.assert_old()
+
     def apply(self, plan=None, **kwargs):
         return _locked_shared_found_replace(
             self.plan() if plan is None else plan, self.targets,

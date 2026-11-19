@@ -495,6 +495,26 @@ class DestinationCommit:
 # deliberately private for controlled preflight/partial-failure tests.
 SHARED_FOUND_NAMES = ("youtube", "user", "auto")
 SHARED_FOUND_LIMIT = 40 * 1024
+_PHP_INT64_MAX = (1 << 63) - 1
+_NATIVE_U64_MAX = (1 << 64) - 1
+
+
+def _shared_found_identity_integer(value: object) -> int | None:
+    """Normalize ONLY a lossless native stat ID, never a PHP-rounded float.
+
+    PHP JSON_BIGINT_AS_STRING preserves FreeBSD unsigned st_dev/st_ino
+    that exceed PHP_INT_MAX as canonical decimal strings. Small numbers
+    must remain actual JSON integers. Every result is compared to original
+    os.stat() under the existing Config/P2 locks before any file mutation.
+    """
+    if type(value) is int:
+        return value if 0 <= value <= _NATIVE_U64_MAX else None
+    if (type(value) is str and
+            re.fullmatch(r"[1-9][0-9]{18,19}", value)):
+        number = int(value)
+        if _PHP_INT64_MAX < number <= _NATIVE_U64_MAX:
+            return number
+    return None
 
 
 def _qualified_shared_found_batch(rows: dict) -> dict:
@@ -508,6 +528,8 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
                 "before_mtime_ns", "before_size")
     for name in SHARED_FOUND_NAMES:
         entry = rows[name]
+        numeric = ({key: _shared_found_identity_integer(entry.get(key))
+                    for key in identity} if isinstance(entry, dict) else {})
         if (not isinstance(entry, dict) or
                 set(entry) != {"before", "after", "before_status",
                                "before_revision", *identity} or
@@ -516,18 +538,18 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
                 entry["before_status"] not in ("present", "missing") or
                 not isinstance(entry["before_revision"], str) or
                 not SHA256.fullmatch(entry["before_revision"]) or
-                any(type(entry.get(k)) is not int or entry[k] < 0 for k in identity)):
+                any(numeric[k] is None for k in identity)):
             raise DestinationRefused("shared_found_candidate_shape")
         before, after = (entry[k].encode("utf-8") for k in ("before", "after"))
         if len(before) > SHARED_FOUND_LIMIT or len(after) > SHARED_FOUND_LIMIT:
             raise DestinationRefused("shared_found_candidate_revision")
         if entry["before_status"] == "missing":
             if (name != "auto" or before != b"" or
-                    any(entry[k] != 0 for k in identity) or
+                    any(numeric[k] != 0 for k in identity) or
                     _sha(b"missing\0") != entry["before_revision"]):
                 raise DestinationRefused("shared_found_candidate_revision")
-        elif (entry["before_inode"] == 0 or
-              entry["before_size"] != len(before) or
+        elif (numeric["before_inode"] == 0 or
+              numeric["before_size"] != len(before) or
               _sha(b"present\0" + before) != entry["before_revision"]):
             raise DestinationRefused("shared_found_candidate_revision")
         try:
@@ -537,7 +559,7 @@ def _qualified_shared_found_batch(rows: dict) -> dict:
                     raise DestinationRefused("shared_found_candidate_noncanonical")
         except (ValueError, TypeError) as exc:
             raise DestinationRefused("shared_found_candidate_domain_policy") from exc
-        out[name] = (before, after, tuple(entry[k] for k in identity),
+        out[name] = (before, after, tuple(numeric[k] for k in identity),
                      entry["before_status"])
     return out
 

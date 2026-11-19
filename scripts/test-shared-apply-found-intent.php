@@ -161,4 +161,17 @@ try {
     }
 }
 
-echo "PASS: PHP multipart >64KiB into original sealed FD9 form, no write/success\n";
+// Exercise the same native Python->PHP->plan JSON transport width.
+$nativePins = '{"device":18446744073709551615,"inode":9223372036854775808,"mtime":1795122633000000000}';
+$lossless = json_decode($nativePins, true, 12,
+    JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+must($lossless['device'] === '18446744073709551615' &&
+     $lossless['inode'] === '9223372036854775808' &&
+     is_int($lossless['mtime']), 'PHP silently rounded unsigned native stat IDs');
+$planRoundtrip = json_decode(json_encode($lossless, JSON_THROW_ON_ERROR), true,
+    12, JSON_THROW_ON_ERROR);
+must($planRoundtrip === $lossless &&
+     str_contains($stageSource, 'JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING'),
+     'original FD9 PHP stage lost exact unsigned file identity');
+
+echo "PASS: PHP multipart >64KiB and lossless FreeBSD uint64 original FD9 pins\n";
