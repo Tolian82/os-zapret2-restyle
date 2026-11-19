@@ -100,14 +100,18 @@ Manifest::validate(encodeManifest($edited), $saved, [], true);
 
 // All invalid or forged HTTP declarations fail closed before FD9.
 $invalid = $manifest;
+$invalid['sources']['youtube_manual']['changed'] = true;
 $invalid['sources']['youtube_manual']['length_bytes']++;
 expectManifestRefusal(fn() => Manifest::validate(
-    encodeManifest($invalid), $saved, [], false), 'manual byte length');
+    encodeManifest($invalid), $saved,
+    ['hostlist' => ['youtubedomains' => "new.youtube\n"]], true), 'manual byte length');
 ++$count;
 $invalid = $manifest;
+$invalid['sources']['user_manual']['changed'] = true;
 $invalid['sources']['user_manual']['revision'] = str_repeat('a', 64);
 expectManifestRefusal(fn() => Manifest::validate(
-    encodeManifest($invalid), $saved, [], false), 'manual digest');
+    encodeManifest($invalid), $saved,
+    ['hostlist' => ['userdomains' => "new.example\n"]], true), 'manual digest');
 ++$count;
 $invalid = $manifest;
 $invalid['sources']['youtube_manual']['changed'] = true;
@@ -157,6 +161,15 @@ expectManifestRefusal(fn() => Manifest::validate(
 ++$count;
 expectManifestRefusal(fn() => Manifest::validate(
     ['schema_version' => 1], $saved, [], false), 'non-scalar manifest');
+++$count;
+
+// An unrelated manual edit in a second tab must not block WAN-only Apply:
+// unchanged manual values are omitted, so they cannot overwrite fresh Config.
+$wanOnlyFromStaleTab = $manifest;
+$wanOnlyFromStaleTab['sources']['user_manual']['revision'] = str_repeat('e', 64);
+$wanOnlyFromStaleTab['sources']['user_manual']['length_bytes'] = 1234;
+Manifest::validate(encodeManifest($wanOnlyFromStaleTab), $saved,
+    ['general' => ['waninterface' => 'wan']], false);
 ++$count;
 
 // Existing WAN-first/native G03 clients with no established editor-read

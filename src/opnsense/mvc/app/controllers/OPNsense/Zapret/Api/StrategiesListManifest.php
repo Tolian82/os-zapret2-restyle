@@ -72,12 +72,22 @@ final class StrategiesListManifest
             if ($manual) {
                 $field = $spec['model_field'];
                 $original = $saved['hostlist'][$field] ?? '';
-                if (!is_string($original) ||
-                    strlen($original) > self::MAX_MANUAL ||
-                    !is_int($row['length_bytes']) ||
-                    $row['length_bytes'] !== strlen($original) ||
-                    $row['status'] !== ($original === '' ? 'empty' : 'populated') ||
-                    !hash_equals(hash('sha256', "present\0" . $original), $row['revision'])) {
+                if (!is_int($row['length_bytes']) ||
+                    $row['length_bytes'] < 0 ||
+                    $row['length_bytes'] > self::MAX_MANUAL) {
+                    throw new \InvalidArgumentException('Invalid manual source byte length');
+                }
+                // A WAN-only/non-list Apply must not become dependent on an
+                // unrelated manual list changed in another browser tab. The
+                // unchanged manual HTTP field is absent and cannot overwrite
+                // that newer source. Enforce the exact saved baseline only
+                // when this particular manual list is actually being edited.
+                if ($row['changed'] &&
+                    (!is_string($original) ||
+                     strlen($original) > self::MAX_MANUAL ||
+                     $row['length_bytes'] !== strlen($original) ||
+                     $row['status'] !== ($original === '' ? 'empty' : 'populated') ||
+                     !hash_equals(hash('sha256', "present\0" . $original), $row['revision']))) {
                     throw new \InvalidArgumentException('Stale Strategies manual source');
                 }
                 $sent = is_array($submitted['hostlist'] ?? null) &&
