@@ -2,7 +2,7 @@
 
 ## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
 
-**Current source implementation checkpoint `_98`:** S0 old-read refusal witness is embedded in existing PHP native contract tests; S1 single PHP Strategies editor catalogue is called from original root capture/projection and Settings read validation. The old schema 2 response remains stable so existing GUI behavior is unchanged. **S2 is the next code step** — do not claim the 1 MiB owner failure is fixed or start S3 before validating S2. New packaged artifact/owner qualification OPEN.
+**S0/S1 DONE in merged `_98`** (main `19963e36`; PR #1194; fast PHP and native Chromium/FD9 CI PASS): canonical five-entry PHP catalogue and old 1.77 MiB negative witness. **S2 `_99` source candidate under qualification**: editor-specific bounded 4 MiB read, manual saved metadata length/revision in schema3, browser SHA of original native Model baseline, original found content and correct empty shared, positive exact owner-sized regression. **S3 remains NEXT** after S2 exact-head native CI; S4/S5 and a new `.pkg`/owner acceptance are OPEN. Do not assert `#1190` owner-installed fix or a successful Apply from source-only evidence.
 
 **Только текущая обязательная работа:** [ТЗ_6v3](TZ_6v3.md) поверх неизменённой [ТЗ_6v2](TZ_6v2.md); [API v1](STRATEGIES_LIST_API_V1.md). [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) и [future design](STRATEGIES_LIST_FUTURE.md) — не сейчас.
 
@@ -10,9 +10,9 @@
 
 | Шаг | Статус | Минимальный необходимый результат |
 | --- | --- | --- |
-| S0 | Source fixture added; pre-merge check PENDING | 1 774 109 байт User + пустой shared в существующем PHP read-контракте; без записи, старый отказ сохраняется до S2 |
-| S1 | Source implemented; pre-merge check PENDING | Единый PHP реестр пяти редакторов используется оригинальным snapshot и API; old wire shape и target registry не изменены |
-| S2 | OPEN | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
+| S0 | DONE in merged `_98` | 1 774 109 байт User + пустой shared в существующем PHP read-контракте; без записи, старый отказ сохраняется до S2 |
+| S1 | DONE in merged `_98` | Единый PHP реестр пяти редакторов используется оригинальным snapshot и API; old wire shape и target registry не изменены |
+| S2 | Source candidate `_99`, exact-head CI/native pending | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
 | S3 | OPEN | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
 | S4 | OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |
 | S5 | OPEN | Точный CI, уместный native FreeBSD/OPNsense test, merge, qualified only `.pkg`, затем owner-live проверка и #1190 closure только при доказательствах |

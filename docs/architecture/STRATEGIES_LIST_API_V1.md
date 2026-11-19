@@ -29,6 +29,8 @@ Platform-neutral core owns list identity, semantic validation (existing Python d
 
 ## Read API (first implementation target)
 
+**S2 `_99` source candidate (not yet installed):** the protected `read-editors` reply is now proposed as `schema_version=3`, `kind=tz6v3-five-hostlist-snapshot`. Each manual editor returns `owner=config`, `status`, `length_bytes`, `revision=SHA256("present\\0" + original bytes)` and **NO `content`**. Auto-owned and shared found editors keep protected `content/status/revision`. The browser hashes its saved Model baseline via WebCrypto before accepting the read; this is **not** the current edited textarea. The bounded 4 MiB original editor-read cap does not modify the 1 MiB minute P2/worker path or system PHP limits. The `1,774,109`-byte owner case and safe empty shared are required positive scoped tests. S3 unified `FormData+JSON` save is still OPEN.
+
 Expose a registry-driven read response via the existing authenticated Strategies endpoint, versioned to avoid interpreting old/new shapes interchangeably. Read must remain read-only, with original Config lock + existing protected file destination lock and stable per-source status. It must not initialize, repair, delete or save.
 
 - **Manual** sources: their *full saved content* is already loaded by the native OPNsense Model form; do not return a duplicate megabyte-scale `content` through configd. Return `id`, `owner`, `status`, byte length and SHA-256 of the saved authoritative bytes, as well as the coherent Config revision. The frontend captures the original saved textarea baseline separately from the mutable draft before edits. It verifies UTF-8 bytes and the agreed `present\0` SHA-256 against this read before declaring that source ready. If browser/native textarea normalization makes exact proof impossible, refuse the snapshot and diagnose; never silently accept a mismatch or overwrite an unsaved edit.
@@ -54,7 +56,7 @@ Expose a registry-driven read response via the existing authenticated Strategies
 
 ## Smallest effective implementation sequence
 
-**S0/S1 code status (`_98` candidate):** `StrategiesHostlistCatalog` installed in the existing PHP API namespace and imported by root native snapshot and Settings controller for original five source IDs/owners and manual/auto target bindings. No new target registry, engine writer, `FormData` transport or root read schema yet. The known 1.77 MiB failure remains intentionally reproducible. **Next: S2 read/API/browser**, then S3 unified five-source multipart/JSON. [ТЗ_6v3](TZ_6v3.md).
+**S0/S1 merged source record (`_98`, main `19963e36`):** `StrategiesHostlistCatalog` installed in the existing PHP API namespace and imported by root native snapshot and Settings controller for original five source IDs/owners and manual/auto target bindings. No new target registry, engine writer, `FormData` transport or root read schema yet. The known 1.77 MiB failure remains intentionally reproducible. **Next: S2 read/API/browser**, then S3 unified five-source multipart/JSON. [ТЗ_6v3](TZ_6v3.md).
 
 1. Introduce the canonical Strategies catalog and a portable parser/validator with unit coverage; current five entries only and stable GUI IDs. No Voice or runtime target additions.
 2. Reproduce the actual 1,774,109-byte saved User Domains + safe empty shared-list read failure on the old code. Adapt root read and authenticated API to metadata-only **for saved manual data**, retaining full found-only content and exact revisions; fix only directly applicable per-field product guards.
