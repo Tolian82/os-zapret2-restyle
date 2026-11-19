@@ -237,6 +237,20 @@ assert "name: 'zapretSharedFound'" not in view
 assert "commit_authorized=true" not in view
 assert "One original-FD9 Apply" in view
 
+# TZ6v3: the manual baseline lives in the native GUI, not a second root JSON
+# content field. The one protected read must await WebCrypto SHA qualification.
+for marker in (
+    "function nativeManualBaseline()",
+    "function verifySavedManualRevisions(data)",
+    "fiveManualBaseline = nativeManualBaseline();",
+    "data.kind === 'tz6v3-five-hostlist-snapshot'",
+    "data.schema_version === 3",
+    "return finished.promise();",
+    "manual.value !== fiveManualBaseline[name]",
+):
+    assert marker in view, ("TZ6v3 native/manual SHA read integration missing", marker)
+assert "editors[name + '_manual'].content" not in view
+
 if shutil.which("node"):
     form_code = view[view.index("        const foundHostlistFields"):
                      view.index("        function fiveHostlistStatus")]
@@ -282,9 +296,14 @@ let strategiesApplyPending = false, strategiesApplyNeedsReview = false, previewP
     invoke = r"""
 const revision = createHash('sha256').update(Buffer.from('present\0')).digest('hex');
 const empty = {status: 'empty', revision, content: ''};
+fiveManualBaseline = {
+    youtube: values['zapret.hostlist.youtubedomains'],
+    user: values['zapret.hostlist.userdomains']
+};
 fiveHostlistBase = {config_revision: 'd'.repeat(64), editors: {
-    youtube_manual: {content: values['zapret.hostlist.youtubedomains']},
-    user_manual: {content: ''}, youtube_found: empty, user_found: empty, shared_found: empty
+    youtube_manual: {length_bytes: 18, status: 'populated', revision: 'a'.repeat(64)},
+    user_manual: {length_bytes: 0, status: 'empty', revision},
+    youtube_found: empty, user_found: empty, shared_found: empty
 }};
 fiveHostlistReady = true;
 handler({preventDefault() {}});

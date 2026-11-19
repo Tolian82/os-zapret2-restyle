@@ -358,6 +358,8 @@
             return mapDataToFormUI(data_get_map).done(function() {
                 const currentField = document.getElementById('zapret.hostlist.telegramips');
                 telegramBaseline.val(currentField ? currentField.value : '');
+                // This is the SAVED native Model baseline, not a user's draft.
+                fiveManualBaseline = nativeManualBaseline();
                 formatTokenizersUI();
                 localizeStrategiesForm();
                 localizeExcludeIPSet();
@@ -388,6 +390,41 @@
         let fiveHostlistBusy = false;
         let fiveHostlistReady = false;
         let fiveHostlistExclusions = '';
+        let fiveManualBaseline = null;
+        function nativeManualBaseline() {
+            const youtube = document.getElementById('zapret.hostlist.youtubedomains');
+            const user = document.getElementById('zapret.hostlist.userdomains');
+            return youtube && user ? {youtube: youtube.value, user: user.value} : null;
+        }
+
+        // Prove the saved native form text is the same original Config bytes
+        // seen under the root/P2 locks, without echoing megabytes via configd.
+        function verifySavedManualRevisions(data) {
+            if (!fiveManualBaseline || typeof TextEncoder !== 'function' ||
+                !window.crypto || !window.crypto.subtle) return Promise.resolve(false);
+            const encoder = new TextEncoder();
+            return Promise.all(['youtube', 'user'].map(function(name) {
+                const row = data.editors[name + '_manual'];
+                const original = fiveManualBaseline[name];
+                if (!row || typeof original !== 'string' ||
+                    Object.prototype.hasOwnProperty.call(row, 'content') ||
+                    !Number.isInteger(row.length_bytes) ||
+                    !/^[a-f0-9]{64}$/.test(row.revision || '') ||
+                    !['empty', 'populated'].includes(row.status)) return Promise.resolve(false);
+                const utf8 = encoder.encode(original);
+                if (utf8.byteLength !== row.length_bytes ||
+                    (original === '' ? 'empty' : 'populated') !== row.status) {
+                    return Promise.resolve(false);
+                }
+                const bytes = encoder.encode('present\0' + original);
+                return window.crypto.subtle.digest('SHA-256', bytes).then(function(raw) {
+                    const digest = Array.from(new Uint8Array(raw)).map(function(n) {
+                        return n.toString(16).padStart(2, '0');
+                    }).join('');
+                    return digest === row.revision;
+                });
+            })).then(function(results) { return results.every(Boolean); });
+        }
         function foundHostlistDirty() {
             if (!fiveHostlistBase || !fiveHostlistBase.editors) return false;
             return foundHostlistFields.some(function(spec) {
@@ -504,91 +541,101 @@
             });
         }
         function loadFiveHostlists() {
-            if (fiveHostlistBusy || !$('#zapretSharedFoundRow').length) return;
+            const finished = $.Deferred();
+            if (fiveHostlistBusy || !$('#zapretSharedFoundRow').length) {
+                finished.resolve();
+                return finished.promise();
+            }
             fiveHostlistBusy = true;
+            fiveHostlistReady = false;
             fiveHostlistStatus(isRussian ? 'Чтение пяти списков…' : 'Reading five sources…', false);
-            return $.ajax({
+            $.ajax({
                 type: 'POST', url: '/api/zapret/settings/hostlistEditorsRead',
                 dataType: 'json', timeout: 30000
             }).done(function(data) {
                 const exact = ['youtube_manual', 'youtube_found', 'user_manual',
                     'user_found', 'shared_found'];
                 const valid = data && data.result === 'ok' &&
-                    data.kind === 'tz6v2-five-hostlist-snapshot' &&
-                    data.schema_version === 2 && data.commit_authorized === false &&
+                    data.kind === 'tz6v3-five-hostlist-snapshot' &&
+                    data.schema_version === 3 && data.commit_authorized === false &&
                     data.editors && typeof data.editors === 'object' &&
                     !Array.isArray(data.editors) &&
                     Object.keys(data.editors).join('|') === exact.join('|') &&
                     /^[a-f0-9]{64}$/.test(data.config_revision || '');
                 if (!valid) {
-                    fiveHostlistReady = false;
                     fiveHostlistStatus(isRussian
                         ? 'Не удалось подтвердить согласованный снимок пяти списков.'
                         : 'Coherent five-source snapshot unavailable.', true);
+                    finished.resolve();
                     return;
                 }
-                const manualValid = ['youtube', 'user'].every(function(name) {
-                    const manual = data.editors[name + '_manual'];
-                    const nativeField = document.getElementById(
-                        'zapret.hostlist.' + (name === 'youtube' ?
-                            'youtubedomains' : 'userdomains'));
-                    return manual && nativeField &&
-                        typeof manual.content === 'string' &&
-                        nativeField.value === manual.content;
-                });
-                if (!manualValid) {
-                    fiveHostlistReady = false;
-                    fiveHostlistStatus(isRussian
-                        ? 'Конфигурация изменилась во время чтения. Перезагрузите страницу.'
-                        : 'Configuration changed while reading; reload the page.', true);
-                    return;
-                }
-                for (const spec of foundHostlistFields) {
-                    const entry = data.editors[spec.key];
-                    const possible = spec.key === 'shared_found'
-                        ? ['missing', 'empty', 'populated']
-                        : ['uninitialized', 'empty', 'populated'];
-                    if (!entry || typeof entry.content !== 'string' ||
-                        possible.indexOf(entry.status) < 0 ||
-                        !(entry.revision === null && entry.status === 'uninitialized' ||
-                          /^[a-f0-9]{64}$/.test(entry.revision || ''))) {
-                        fiveHostlistReady = false;
+
+                // This asynchronous SHA check finishes BEFORE the caller's
+                // reloadSettings().then(loadFiveHostlists).done() review gate.
+                verifySavedManualRevisions(data).then(function(manualValid) {
+                    if (!manualValid) {
                         fiveHostlistStatus(isRussian
-                            ? 'Недостоверное состояние автоматического списка.'
-                            : 'Untrusted discovered source state.', true);
+                            ? 'Конфигурация изменилась во время чтения. Перезагрузите страницу.'
+                            : 'Configuration changed while reading; reload the page.', true);
+                        finished.resolve();
                         return;
                     }
-                }
-                // Preserve a typed unsaved draft: never replace baseline or
-                // text with an asynchronously updated minute-worker snapshot.
-                if (foundHostlistDirty()) {
+                    for (const spec of foundHostlistFields) {
+                        const entry = data.editors[spec.key];
+                        const possible = spec.key === 'shared_found'
+                            ? ['missing', 'empty', 'populated']
+                            : ['uninitialized', 'empty', 'populated'];
+                        if (!entry || typeof entry.content !== 'string' ||
+                            possible.indexOf(entry.status) < 0 ||
+                            !(entry.revision === null && entry.status === 'uninitialized' ||
+                              /^[a-f0-9]{64}$/.test(entry.revision || ''))) {
+                            fiveHostlistStatus(isRussian
+                                ? 'Недостоверное состояние автоматического списка.'
+                                : 'Untrusted discovered source state.', true);
+                            finished.resolve();
+                            return;
+                        }
+                    }
+                    // Do not erase any in-progress found draft after an
+                    // asynchronous read. Manual drafts also remain untouched.
+                    if (foundHostlistDirty()) {
+                        fiveHostlistStatus(isRussian
+                            ? 'Есть несохранённые изменения; они сохранены в редакторах.'
+                            : 'Unsaved edits retained; no background overwrite.', false);
+                        finished.resolve();
+                        return;
+                    }
+                    fiveHostlistBase = data;
+                    fiveHostlistExclusions = $(document.getElementById(
+                        'zapret.hostlist.excludedomains')).val();
+                    fiveHostlistReady = true;
+                    const knownInitialized =
+                        data.editors.youtube_found.status !== 'uninitialized' &&
+                        data.editors.user_found.status !== 'uninitialized';
+                    foundHostlistFields.forEach(function(spec) {
+                        const item = data.editors[spec.key];
+                        $('#' + spec.id).val(item.content)
+                            .prop('disabled', !knownInitialized);
+                        $('#' + spec.id + 'State').text(!knownInitialized
+                            ? (isRussian ? 'Не инициализирован' : 'Not initialized')
+                            : '');
+                    });
+                    fiveHostlistStatus('', false);
+                    finished.resolve();
+                }).catch(function() {
                     fiveHostlistStatus(isRussian
-                        ? 'Есть несохранённые изменения; они сохранены в редакторах.'
-                        : 'Unsaved edits retained; no background overwrite.', false);
-                    return;
-                }
-                fiveHostlistBase = data;
-                fiveHostlistExclusions = $(document.getElementById('zapret.hostlist.excludedomains')).val();
-                fiveHostlistReady = true;
-                const knownInitialized = data.editors.youtube_found.status !== 'uninitialized' &&
-                    data.editors.user_found.status !== 'uninitialized';
-                foundHostlistFields.forEach(function(spec) {
-                    const item = data.editors[spec.key];
-                    $('#' + spec.id).val(item.content)
-                        .prop('disabled', !knownInitialized);
-                    $('#' + spec.id + 'State').text(!knownInitialized
-                        ? (isRussian ? 'Не инициализирован' : 'Not initialized')
-                        : '');
+                        ? 'Невозможно проверить исходную версию списков.'
+                        : 'Cannot verify the saved source revision.', true);
+                    finished.resolve();
                 });
-                fiveHostlistStatus('', false); // A safe empty list is not an error.
             }).fail(function() {
-                fiveHostlistReady = false;
                 fiveHostlistStatus(isRussian
                     ? 'Ошибка чтения пяти списков. Изменения не сохранены.'
                     : 'Five-source read failed. No changes were saved.', true);
-            }).always(function() {
-                fiveHostlistBusy = false;
+                finished.resolve();
             });
+            finished.always(function() { fiveHostlistBusy = false; });
+            return finished.promise();
         }
         function strategiesFormData() {
             const form = getFormData('frm_GeneralSettings');
@@ -606,7 +653,8 @@
             const exclusion = $(document.getElementById('zapret.hostlist.excludedomains')).val();
             const manualEdited = ['youtube', 'user'].some(function(name) {
                 const manual = document.getElementById('zapret.hostlist.' + name + 'domains');
-                return manual.value !== editors[name + '_manual'].content;
+                return !fiveManualBaseline ||
+                    manual.value !== fiveManualBaseline[name];
             });
             if (!foundHostlistDirty() && !manualEdited && exclusion === fiveHostlistExclusions) {
                 return null;

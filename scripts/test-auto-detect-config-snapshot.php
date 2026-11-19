@@ -144,6 +144,44 @@ check(!$ownerLock->held && $ownerLock->locks === 1 &&
     $ownedReads === 0, 'oversize refusal must release lock without mutation');
 ++$count;
 
+// TZ6v3 editor-only read accepts the same owner-sized saved Model without
+// weakening the original background P2 worker's 1 MiB limit or writing files.
+$editorLock = new TestConfig;
+$editorReaderCalls = 0;
+$ownerSnap = Snapshot::capture($editorLock,
+    fn()=>new TestModel($ownerNodes),
+    function() use (&$editorReaderCalls): array {
+        ++$editorReaderCalls;
+        return correctFile('');
+    }, true);
+$ownerEditor = Snapshot::fiveEditorsFromCapture($ownerSnap);
+check($editorReaderCalls === 1 && $editorLock->locks === 1 &&
+    $editorLock->unlocks === 1 && $editorLock->writes === 0 &&
+    !$editorLock->held, 'editor-only root read must keep original lock and no writes');
+check($ownerEditor['schema_version'] === 3 &&
+    $ownerEditor['kind'] === 'tz6v3-five-hostlist-snapshot' &&
+    $ownerEditor['editors']['user_manual']['length_bytes'] === 1774109 &&
+    !array_key_exists('content', $ownerEditor['editors']['user_manual']) &&
+    $ownerEditor['editors']['user_manual']['revision'] ===
+        hash('sha256', "present\0" . $ownerText) &&
+    $ownerEditor['editors']['shared_found']['status'] === 'empty' &&
+    $ownerEditor['editors']['shared_found']['content'] === '' &&
+    $ownerEditor['editors']['shared_found']['revision'] === hash('sha256', "present\0") &&
+    !$ownerEditor['commit_authorized'],
+    'owner-sized native manual metadata plus physically safe empty shared');
+++$count;
+
+$tooLargeEditorNodes = nativeModel();
+$tooLargeEditorNodes['hostlist']['userdomains'] = str_repeat('x', 4 * 1048576 + 1);
+$noReader = 0; $unsafeLock = new TestConfig;
+expectFailure(fn()=>Snapshot::capture($unsafeLock,
+    fn()=>new TestModel($tooLargeEditorNodes),
+    function() use (&$noReader): array { ++$noReader; return correctFile(''); },
+    true), 'editor root read must retain finite 4 MiB aggregate bound');
+check($noReader === 0 && $unsafeLock->locks === $unsafeLock->unlocks &&
+    $unsafeLock->writes === 0, 'oversized editor refusal before P2 read');
+++$count;
+
 foreach ([['status'=>'populated','content'=>'','revision'=>correctFile('')['revision'],'result'=>'ok'],
           ['status'=>'populated','content'=>'tampered.example','revision'=>str_repeat('0',64),'result'=>'ok'],
           ['status'=>'missing','content'=>'unexpected','revision'=>correctFile(null)['revision'],'result'=>'ok'],
@@ -188,17 +226,24 @@ $fOne = Snapshot::capture(
 $five = Snapshot::fiveEditorsFromCapture($fOne);
 check($cFive->locks === 1 && $cFive->unlocks === 1 && $cFive->writes === 0 &&
     $callReader === 1 && !$cFive->held, 'five-editor read must not write or reread');
-check($five['schema_version'] === 2 &&
-    $five['kind'] === 'tz6v2-five-hostlist-snapshot' &&
+check($five['schema_version'] === 3 &&
+    $five['kind'] === 'tz6v3-five-hostlist-snapshot' &&
     $five['result'] === 'ok' && $five['commit_authorized'] === false &&
     $five['auto_owned_complete'] === true, 'five-source contract');
 check(array_keys($five['editors']) === [
     'youtube_manual', 'youtube_found', 'user_manual',
     'user_found', 'shared_found'
 ], 'exact ordered five sources');
-check($five['editors']['youtube_manual']['content'] === "youtube.com\n!^test.invalid\n" &&
-    $five['editors']['user_manual']['content'] === "example.org\n^t.me\n",
-    'native manual bytes and exclusions not modified');
+foreach ([
+    'youtube_manual' => "youtube.com\n!^test.invalid\n",
+    'user_manual' => "example.org\n^t.me\n"
+] as $name => $original) {
+    $row = $five['editors'][$name];
+    check($row['length_bytes'] === strlen($original) &&
+        $row['revision'] === hash('sha256', "present\0" . $original) &&
+        !array_key_exists('content', $row),
+        'manual native Model bytes must not cross configd: '.$name);
+}
 check($five['editors']['youtube_found']['content'] === "youtube-found.example\n" &&
     $five['editors']['user_found']['content'] === "user-found.example\n" &&
     $five['editors']['shared_found']['content'] === "shared.example\n",
@@ -208,8 +253,11 @@ check($five['editors']['youtube_manual']['owner'] === 'config' &&
     $five['editors']['shared_found']['owner'] === 'shared-auto',
     'no automatic sources reclassified as manual');
 foreach ($five['editors'] as $name => $entry) {
+    $original = $entry['owner'] === 'config'
+        ? ($name === 'youtube_manual' ? "youtube.com\n!^test.invalid\n" : "example.org\n^t.me\n")
+        : $entry['content'];
     check($entry['status'] === 'populated' &&
-        $entry['revision'] === hash('sha256', "present\0" . $entry['content']),
+        $entry['revision'] === hash('sha256', "present\0" . $original),
         "five source content/revision mismatch: $name");
 }
 check($five['config_revision'] === $fOne['config_snapshot_sha256'],

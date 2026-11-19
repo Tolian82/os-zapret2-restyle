@@ -89,6 +89,19 @@ def five_hostlist_native_apply(config_path: Path):
         need(data.get("result") == "ok", "FIVE_HOSTLIST_READ_REFUSED")
         return data
 
+    def manual_attested(row, text):
+        """S2: verify the saved manual Config bytes without a root JSON echo."""
+        raw = text.encode("utf-8")
+        return (
+            isinstance(row, dict) and row.get("owner") == "config"
+            and "content" not in row
+            and row.get("status") == ("empty" if not raw else "populated")
+            and type(row.get("length_bytes")) is int
+            and row["length_bytes"] == len(raw)
+            and row.get("revision") == hashlib.sha256(
+                b"present\0" + raw).hexdigest()
+        )
+
     def apply(fields, snapshot=None, drafts=None):
         root = ET.fromstring(config_path.read_bytes())
         baseline = root.findtext("./OPNsense/Zapret/hostlist/telegramips") or ""
@@ -197,8 +210,8 @@ def five_hostlist_native_apply(config_path: Path):
     running = read()["editors"]
     need(run([str(service), "status"]).returncode == 0 and
          pidfile.read_text().split()[0] != initial_pid and
-         running["youtube_manual"]["content"] == manual["youtubedomains"] and
-         running["user_manual"]["content"] == manual["userdomains"] and
+         manual_attested(running["youtube_manual"], manual["youtubedomains"]) and
+         manual_attested(running["user_manual"], manual["userdomains"]) and
          running["youtube_found"]["content"] == "zapret-youtube.org\n" and
          running["user_found"]["content"] == drafts["user"] and
          running["shared_found"]["content"] == drafts["auto"],
@@ -230,8 +243,8 @@ def five_hostlist_native_apply(config_path: Path):
          rebased["shared_found"]["content"] == later_domain and
          rebased["youtube_found"]["content"] == running["youtube_found"]["content"] and
          rebased["user_found"]["content"] == running["user_found"]["content"] and
-         rebased["youtube_manual"]["content"] == manual["youtubedomains"] and
-         rebased["user_manual"]["content"] == manual["userdomains"] and
+         manual_attested(rebased["youtube_manual"], manual["youtubedomains"]) and
+         manual_attested(rebased["user_manual"], manual["userdomains"]) and
          json.loads(journal.read_bytes()).get("phase") == "committed" and
          status()["service"] == "stopped" and not pidfile.exists() and
          hashlib.sha256(config_path.read_bytes()).hexdigest() == same_config,

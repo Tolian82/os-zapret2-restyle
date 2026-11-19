@@ -25,6 +25,8 @@ use OPNsense\Zapret\Api\StrategiesHostlistCatalog;
 final class AutoDetectConfigSnapshot
 {
     private const MAX_MODEL_TEXT = 1048576;
+    // Bounded read-only Strategies editor cap; original P2 worker unchanged.
+    private const MAX_EDITOR_TOTAL = 4 * 1048576;
     private const MAX_NATIVE_REPLY = 150000;
     private const NATIVE_PYTHON = '/usr/local/opnsense/scripts/OPNsense/Zapret/python_runtime.sh';
     private const FINAL_READER = '/usr/local/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_owned_sources.py';
@@ -36,18 +38,20 @@ final class AutoDetectConfigSnapshot
      * The historical hostlist.domains field is not a registered destination.
      * Any new registered HOSTLIST requires an explicit update plus drift test.
      */
-    public static function manualFromModel(array $model): array
+    public static function manualFromModel(array $model, bool $editorRead = false): array
     {
         $fields = $model['hostlist'] ?? null;
         if (!is_array($fields)) {
             throw new \RuntimeException('Native Hostlist model unavailable');
         }
         $textFields = StrategiesHostlistCatalog::manualModelFields();
+        $fieldCap = $editorRead ? self::MAX_EDITOR_TOTAL : self::MAX_MODEL_TEXT;
+        $totalCap = $editorRead ? self::MAX_EDITOR_TOTAL : self::MAX_MODEL_TEXT * 3;
         $lists = [];
         $total = 0;
         foreach ($textFields as $field => $name) {
             if (!array_key_exists($field, $fields) || !is_string($fields[$field]) ||
-                strlen($fields[$field]) > self::MAX_MODEL_TEXT) {
+                strlen($fields[$field]) > $fieldCap) {
                 throw new \RuntimeException('Required native manual Hostlist missing or oversized');
             }
             $lists[$name] = $fields[$field];
@@ -56,7 +60,7 @@ final class AutoDetectConfigSnapshot
         if (!array_key_exists('excludedomains', $fields) ||
             !is_string($fields['excludedomains']) ||
             strlen($fields['excludedomains']) > self::MAX_MODEL_TEXT ||
-            $total + strlen($fields['excludedomains']) > self::MAX_MODEL_TEXT * 3) {
+            $total + strlen($fields['excludedomains']) > $totalCap) {
             throw new \RuntimeException('Native global domain exclusion unavailable');
         }
         return ['lists' => $lists, 'global_exclude' => $fields['excludedomains']];
@@ -68,7 +72,7 @@ final class AutoDetectConfigSnapshot
      * Config::lock. Missing unbootstrapped ownership never becomes {}.
      */
     public static function capture(object $config, callable $modelFactory,
-                                   callable $finalReader): array
+                                   callable $finalReader, bool $editorRead = false): array
     {
         $config->lock();
         try {
@@ -80,7 +84,7 @@ final class AutoDetectConfigSnapshot
             if (!is_array($nodes)) {
                 throw new \RuntimeException('Native Config model invalid');
             }
-            $manual = self::manualFromModel($nodes);
+            $manual = self::manualFromModel($nodes, $editorRead);
             $final = $finalReader();
             if (!is_array($final) || ($final['result'] ?? null) !== 'ok' ||
                 !in_array($final['status'] ?? null, ['missing', 'empty', 'populated'], true) ||
@@ -164,13 +168,15 @@ final class AutoDetectConfigSnapshot
         $manualRows = [];
         foreach (StrategiesHostlistCatalog::manualTargets() as $name) {
             $contents = $snapshot['manual_hostlists'][$name];
-            if (!is_string($contents) || strlen($contents) > self::MAX_MODEL_TEXT) {
+            if (!is_string($contents) || strlen($contents) > self::MAX_EDITOR_TOTAL) {
                 throw new \RuntimeException('Unsafe original manual Hostlist');
             }
+            // Native Model already supplies saved text to the GUI textarea.
+            // Keep only the byte-exact proof in root's configd reply.
             $manualRows[$name] = [
                 'owner' => 'config',
                 'status' => $contents === '' ? 'empty' : 'populated',
-                'content' => $contents,
+                'length_bytes' => strlen($contents),
                 'revision' => hash('sha256', "present\0" . $contents),
             ];
         }
@@ -235,9 +241,9 @@ final class AutoDetectConfigSnapshot
             }
         }
         return [
-            'schema_version' => 2,
+            'schema_version' => 3,
             'result' => 'ok',
-            'kind' => 'tz6v2-five-hostlist-snapshot',
+            'kind' => 'tz6v3-five-hostlist-snapshot',
             'config_revision' => $snapshot['config_snapshot_sha256'],
             'editors' => $editors,
             'auto_owned_complete' => $complete,
@@ -669,7 +675,7 @@ final class AutoDetectConfigSnapshot
             if (count($argv) === 2 && $argv[1] === 'read-editors') {
                 $result = self::fiveEditorsFromCapture(self::capture(
                     $config, static fn() => new \OPNsense\Zapret\Zapret(),
-                    static fn() => self::nativeFinalRead()
+                    static fn() => self::nativeFinalRead(), true
                 ));
             } elseif (count($argv) === 2 && $argv[1] === 'read') {
                 $result = self::capture(

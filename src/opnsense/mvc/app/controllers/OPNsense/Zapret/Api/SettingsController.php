@@ -454,8 +454,8 @@ class SettingsController extends ApiMutableModelControllerBase
             }
             $data = json_decode(trim($output), true, 10, JSON_THROW_ON_ERROR);
             if (!is_array($data) || ($data['result'] ?? null) !== 'ok' ||
-                ($data['schema_version'] ?? null) !== 2 ||
-                ($data['kind'] ?? null) !== 'tz6v2-five-hostlist-snapshot' ||
+                ($data['schema_version'] ?? null) !== 3 ||
+                ($data['kind'] ?? null) !== 'tz6v3-five-hostlist-snapshot' ||
                 ($data['commit_authorized'] ?? null) !== false ||
                 !is_bool($data['auto_owned_complete'] ?? null) ||
                 !is_string($data['config_revision'] ?? null) ||
@@ -467,34 +467,53 @@ class SettingsController extends ApiMutableModelControllerBase
             $expectedOwners = StrategiesHostlistCatalog::editorOwners();
             foreach ($data['editors'] as $name => $entry) {
                 $owner = $expectedOwners[$name];
+                $status = is_array($entry) ? ($entry['status'] ?? null) : null;
                 if (!is_array($entry) || ($entry['owner'] ?? null) !== $owner ||
-                    !is_string($entry['content'] ?? null) ||
-                    strlen($entry['content']) > ($owner === 'config' ? 1048576 : 40960) ||
-                    !in_array($entry['status'] ?? null,
+                    !in_array($status,
                         $owner === 'auto-owned'
                             ? ['uninitialized', 'empty', 'populated']
                             : ($owner === 'shared-auto'
                                 ? ['missing', 'empty', 'populated']
                                 : ['empty', 'populated']), true)) {
-                    throw new \RuntimeException('Invalid five-source HOSTLIST editor');
+                    throw new \RuntimeException('Invalid Strategies HOSTLIST editor');
                 }
-                // A stale/malformed native result may not relabel a
-                // missing or nonempty file as a different trusted state.
-                if (($entry['status'] === 'missing' && $entry['content'] !== '') ||
-                    ($entry['status'] === 'empty' && $entry['content'] !== '') ||
-                    ($entry['status'] === 'populated' && $entry['content'] === '')) {
-                    throw new \RuntimeException('Inconsistent five-source HOSTLIST state');
+
+                $manual = $owner === 'config';
+                if ($manual) {
+                    // Only the original root-locked digest/byte count crosses
+                    // configd. The full saved text is in the native MVC form.
+                    $n = $entry['length_bytes'] ?? null;
+                    if (array_key_exists('content', $entry) || !is_int($n) ||
+                        $n < 0 || $n > 4 * 1048576 ||
+                        ($status === 'empty' && $n !== 0) ||
+                        ($status === 'populated' && $n === 0)) {
+                        throw new \RuntimeException('Unsafe manual HOSTLIST attestation');
+                    }
+                } else {
+                    if (array_key_exists('length_bytes', $entry) ||
+                        !is_string($entry['content'] ?? null) ||
+                        strlen($entry['content']) > 40960 ||
+                        ($status === 'uninitialized' && $entry['content'] !== '') ||
+                        ($status === 'missing' && $entry['content'] !== '') ||
+                        ($status === 'empty' && $entry['content'] !== '') ||
+                        ($status === 'populated' && $entry['content'] === '')) {
+                        throw new \RuntimeException('Inconsistent found HOSTLIST state');
+                    }
                 }
+
                 $revision = $entry['revision'] ?? null;
-                $uninitialized = $entry['status'] === 'uninitialized';
-                if (($uninitialized && ($revision !== null || $entry['content'] !== '')) ||
-                    (!$uninitialized && (!is_string($revision) ||
-                        preg_match('/^[a-f0-9]{64}$/D', $revision) !== 1 ||
-                        !hash_equals(hash('sha256',
-                            $entry['status'] === 'missing'
-                                ? "missing\0" : "present\0" . $entry['content']),
-                            $revision)))) {
-                    throw new \RuntimeException('Invalid five-source HOSTLIST revision');
+                $uninitialized = $status === 'uninitialized';
+                if ($uninitialized) {
+                    if ($revision !== null || $entry['content'] !== '') {
+                        throw new \RuntimeException('Uninitialized HOSTLIST attestation');
+                    }
+                } elseif (!is_string($revision) ||
+                          preg_match('/^[a-f0-9]{64}$/D', $revision) !== 1) {
+                    throw new \RuntimeException('Malformed HOSTLIST revision');
+                } elseif (!$manual &&
+                          !hash_equals(hash('sha256', $status === 'missing'
+                              ? "missing\0" : "present\0" . $entry['content']), $revision)) {
+                    throw new \RuntimeException('Found HOSTLIST revision mismatch');
                 }
             }
             if (!$data['auto_owned_complete'] &&
