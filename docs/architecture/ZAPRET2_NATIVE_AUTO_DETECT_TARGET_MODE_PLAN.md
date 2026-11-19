@@ -2,20 +2,20 @@
 
 ## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
 
-**S0/S1 выполнены в merged `_98`, S2 выполнен в merged `_99`** ([PR #1195](https://github.com/Tolian82/os-zapret2-restyle/pull/1195), `main 15b7f635`, все семь проверок CI, native Chromium, G03-F5, FD9/P5c, Stage5 PASS). **S3 текущий source-кандидат `_100`**: один `FormData + JSON` манифест для пяти HOSTLIST, реальные изменённые ручные байты/дельты плюс оригинальный `found-intent` и один FD9; неизменённые большие ручные поля не повторять в POST. Сохранение WAN-first и неинициализированного начального состояния — обязательно. **S3 code/native tests, S4/S5 и публикация пакета ещё открыты**. Реальная OPNsense владельца остаётся `_94`, #1190 открыт.
+**ТЗ_6v3 — S0–S3 слиты в `_98`/`_99`/`_100`; S4 квалифицирован нативной OPNsense 26.7, S5 тестовый пакет опубликован.** Целевые PHP/Node, G03 HTTPS Apply RUNNING/STOPPED, конфликт вкладок, F5 всех пяти редакторов, P5c/FD9 и Chromium прошли на точном head PR #1196. [Тестовый `v0.6.5_100.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_100/os-zapret2-restyle-0.6.5_100.pkg) собран штатным OPNsense Mk от `ea0585ab9160b0687d25c68aa26f1f1e0afe4753`, ABI `FreeBSD:15:amd64`, SHA-256 `220c6e76d9e6577f2b34fc4425eaba97450984288329ff23a5ed233fbc828045`. Обязательный publication-record PR повышает ревизию исходников до `_101` только для документации, без нового `.pkg`. **Owner-live установка/Apply/журнал в #1190 ещё OPEN.** Не расширять scope до Voice/IPSET/Exclude, pfSense или дополнительных списков.
 
 **Только текущая обязательная работа:** [ТЗ_6v3](TZ_6v3.md) поверх неизменённой [ТЗ_6v2](TZ_6v2.md); [API v1](STRATEGIES_LIST_API_V1.md). [Future #1192](https://github.com/Tolian82/os-zapret2-restyle/issues/1192) и [future design](STRATEGIES_LIST_FUTURE.md) — не сейчас.
 
-**Фактическая позиция:** текущий `main v0.6.5_99` после S2, последний опубликованный и установленный владельцем `.pkg` — `_94`. В исходниках `_99` подтверждены чтение 1 774 109-байтного User Domains, статус пустого shared, GUI-F5, исходная транзакция FD9/Config и native жизненный цикл. **Не доказано на owner appliance** до публикации и установки нового пакета: #1190 остаётся открытым. S3 касается только транспорта страницы Стратегии; Voice/IPSET/Exclude не расширяем.
+**Фактическая позиция:** последний опубликованный тестовый `.pkg` — `_100`, последний подтверждённый установленный владельцем — `_94`; docs-only `_101` не является пакетом. В disposable OPNsense подтверждены чтение 1 774 109-байтного User Domains, пустой shared и сохранение пяти источников. **На устройстве владельца это не проверено.** Открытая #1190 требует реального GUI F5, одного Apply, Config/journal, RUNNING/STOPPED и проверки отсутствия побочных изменений.
 
 | Шаг | Статус | Минимальный необходимый результат |
 | --- | --- | --- |
 | S0 | DONE in merged `_98` | 1 774 109 байт User + пустой shared в существующем PHP read-контракте; без записи, старый отказ сохраняется до S2 |
 | S1 | DONE in merged `_98` | Единый PHP реестр пяти редакторов используется оригинальным snapshot и API; old wire shape и target registry не изменены |
 | S2 | DONE in merged `_99`, native G03/Chromium/P5c/Stage5 PASS | Согласованный root read с метаданными сохранённых ручных и полным текстом found, API/GUI/F5, без повторной 1,77-МБ передачи через configd |
-| S3 | Source candidate `_100`, exact-head CI/native pending | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
-| S4 | OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |
-| S5 | OPEN | Точный CI, уместный native FreeBSD/OPNsense test, merge, qualified only `.pkg`, затем owner-live проверка и #1190 closure только при доказательствах |
+| S3 | DONE merged `_100`, exact-head source/native CI PASS | Один Strategies `FormData + JSON`: все пять через общие ID, реальные правки YouTube/User и found через существующие verified delta/found-intent в один FD9 Apply |
+| S4 | PRE-OWNER PASS in native OPNsense 26.7; owner-live OPEN | Узкие регрессии чтения/сохранения/F5/черновиков/конфликта и RUNNING/STOPPED, не ломать IPSET/Exclude/Voice/WAN |
+| S5 | `_100.pkg` PUBLISHED and ABI verified; owner-live OPEN | Точный CI, уместный native FreeBSD/OPNsense test, merge, qualified only `.pkg`, затем owner-live проверка и #1190 closure только при доказательствах |
 
 **Не делать сейчас:** 6–8 реальных списков (только расширяемая архитектура), IPSET/Exclude/Voice, pfSense, миграцию manual из config.xml в файлы, полное переустройство проверки изменений и global PHP tuning. Один bottom Apply/FD9/Config writer и минутная безостановочная Auto-detect логика сохраняются. Весь старый план ниже сохранён как доказательная история, но его прежние заголовки ACTIVE/CURRENT **не задают новую очередь**.
 
