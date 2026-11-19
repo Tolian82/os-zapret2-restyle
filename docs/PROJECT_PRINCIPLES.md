@@ -215,4 +215,3 @@ DEV-064. **Operator lifecycle availability outranks transient Auto-detect collec
 ## Rule lifecycle
 
 No cancelled or replaced `DEV-*` IDs currently exist. Existing IDs remain permanent and are never recycled.
-
