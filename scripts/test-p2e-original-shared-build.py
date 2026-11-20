@@ -33,6 +33,8 @@ import auto_detect_owner as owner
 import auto_detect_post_drop as post_drop
 import auto_detect_storage as producer_storage
 from auto_detect_queue import DurableInbox
+from auto_detect_fd import OwnerToken
+from voice_live_inspect import CHILD_EXEC
 from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_original_v2_model import (preview_learning_domains,
                                            V2OriginalConfigRefused)
@@ -470,6 +472,45 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertFalse((folder / "epoch.json").exists())
                 native = Path(learning[0][2])
                 native.write_bytes(b"video.example.com\n")
+                (data_root / "debug.log").write_bytes(
+                    b"test native postlaunch debug record\n")
+                # The owner proof shape is SYNTHETIC in this source-only
+                # fixture. Real original FD9/P2c PID/birth/argv attestation
+                # is still unconnected; this does not qualify live runtime.
+                proof = owner.LearningGenerationProof(
+                    OwnerToken(3214, "Fri Nov 20 12:34:56 2026", CHILD_EXEC),
+                    self.work.name, self.work.name, candidate,
+                    hashlib.sha256(projected).hexdigest(),
+                    hashlib.sha256((self.release / owner.MAP_NAME).read_bytes()).hexdigest(),
+                    learning,
+                )
+                with self.assertRaises(ReceiptRefused):
+                    epoch.finish_learning_running(
+                        proof, queue, workspace=self.work,
+                        attest=lambda: None)
+                self.assertFalse((folder / "epoch.json").exists())
+                completed = epoch.finish_learning_running(
+                    proof, queue, workspace=self.work,
+                    attest=lambda: proof)
+                self.assertEqual(completed["schema"], 3)
+                self.assertEqual(completed["owner_pid"], 3214)
+                self.assertEqual(completed["learning"], seed["learning"])
+                self.assertEqual(completed["files"], seed["files"])
+                self.assertEqual(
+                    completed["pretraffic_sha256"],
+                    hashlib.sha256(raw).hexdigest())
+                self.assertFalse(completed["ack_authorized"])
+                epoch_bytes = (folder / "epoch.json").read_bytes()
+                self.assertEqual(json.loads(epoch_bytes), completed)
+                # Legacy P2 worker/ACK reader must NEVER accept schema3.
+                with self.assertRaises(ReceiptRefused):
+                    epoch._epoch(proof)
+                # Idempotent same-proof replay may not mutate durable bytes.
+                self.assertEqual(
+                    epoch.finish_learning_running(
+                        proof, queue, workspace=self.work,
+                        attest=lambda: proof), completed)
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
                 with self.assertRaises(ReceiptRefused):
                     epoch.seal_learning_pretraffic(
                         queue, workspace=self.work,
@@ -478,6 +519,20 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         attest=lambda: True)
                 self.assertEqual((folder / "pretraffic.json").read_bytes(), raw)
                 self.assertEqual(native.read_bytes(), b"video.example.com\n")
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+                # Native replaced inode is fatal even if its bytes match:
+                # a new process must never inherit the original zero cut.
+                replacement = data_root / "new-native-inode"
+                replacement.write_bytes(b"video.example.com\n")
+                replacement.chmod(0o660)
+                if os.geteuid() == 0:
+                    os.chown(replacement, 0, writer_gid)
+                replacement.replace(native)
+                with self.assertRaises(ReceiptRefused):
+                    epoch.finish_learning_running(
+                        proof, queue, workspace=self.work,
+                        attest=lambda: proof)
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
 
     def test_tz6v4_active_source_refuses_forged_found_owner(self):
         mapped, args = self.build(

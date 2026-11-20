@@ -58,6 +58,26 @@ class GenerationProof:
     profiles: tuple[tuple[int | None, str, str | None], ...]
 
 
+
+@dataclass(frozen=True)
+class LearningGenerationProof:
+    """Inert original FD9/P2c schema3 process witness shape.
+
+    No producer constructs this from a map alone. A future owner attester
+    must independently prove the SAME committed Apply journal, sealed
+    release == active runtime, single real PID/birth/full kernel argv,
+    supervisor and N native inputs before returning this shape.
+    The legacy GenerationProof/observer worker never accepts it.
+    """
+    owner: OwnerToken
+    operation_id: str
+    generation: str
+    owner_candidate_sha256: str
+    final_args_sha256: str
+    native_map_sha256: str
+    learning: tuple[tuple[int, str, str], ...]
+
+
 def _secure_bytes(path: Path, limit: int, owner_uid: int) -> bytes:
     before = path.lstat()
     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
