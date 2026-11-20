@@ -916,6 +916,66 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         global_exclude="", attest=lambda: proof,
                         inspect=drained)
 
+                # First original schema3 durable N-native cursor slot:
+                # one write-once intent inside the EXISTING v2 chain root,
+                # never a replacement queue or an ACK/Found permission.
+                from auto_detect_cursor_chain import (
+                    CursorChain, CursorChainRefused,
+                )
+                chain = CursorChain(epoch, queue)
+                saved = chain.prepare_learning_first_slot(
+                    proof, self.work, attest=lambda: proof, inspect=drained)
+                slot = folder / "cursor-chain-v2" / "00000000"
+                self.assertEqual(saved["slot"], slot)
+                self.assertEqual(
+                    set(path.name for path in slot.iterdir()), {"intent.json"})
+                durable = (slot / "intent.json").read_bytes()
+                persisted = json.loads(durable)
+                self.assertEqual(persisted["schema"], 3)
+                self.assertEqual(persisted["kind"],
+                                 "original-learning-cursor-prepared")
+                self.assertEqual(persisted["observations"],
+                                 observed["observations"])
+                self.assertEqual(
+                    [row["hostlist"] for row in persisted["native"]],
+                    ["youtube", "user"])
+                self.assertEqual(
+                    [row["end_offset"] for row in persisted["native"]],
+                    [len(b"video.example.com\n"),
+                     len(b"mail.example.org\n")])
+                self.assertFalse(saved["commit_authorized"])
+                self.assertFalse(saved["cleanup_authorized"])
+                self.assertFalse(saved["ack_authorized"])
+                self.assertEqual(
+                    chain.prepare_learning_first_slot(
+                        proof, self.work, attest=lambda: proof,
+                        inspect=drained)["intent_sha256"],
+                    saved["intent_sha256"])
+                self.assertEqual((slot / "intent.json").read_bytes(), durable)
+                self.assertFalse((slot / "ack.json").exists())
+                self.assertFalse((slot / "destination").exists())
+                self.assertEqual(
+                    {str(path): path.read_bytes() for path in protected},
+                    originals)
+                with self.assertRaises(CursorChainRefused):
+                    chain.prepare_learning_first_slot(
+                        proof, self.work, attest=lambda: None,
+                        inspect=drained)
+                with self.assertRaises(CursorChainRefused):
+                    chain.prepare_learning_first_slot(
+                        proof, self.work, attest=lambda: proof,
+                        inspect=lambda *args, **kwargs: FDState.UNKNOWN)
+                # An unjournaled second native append may NOT replace a
+                # write-once first intent even while original P2a is held.
+                with user_native.open("ab") as out:
+                    out.write(b"late.example.org\n")
+                with self.assertRaises(CursorChainRefused):
+                    chain.prepare_learning_first_slot(
+                        proof, self.work, attest=lambda: proof,
+                        inspect=drained)
+                self.assertEqual((slot / "intent.json").read_bytes(), durable)
+                user_native.write_bytes(b"mail.example.org\n")
+
                 self.assertTrue(all(row[3] == proof.owner and
                                     row[4] == writer_gid for row in scans))
                 for not_drained in (FDState.BUSY, FDState.UNKNOWN, True):
