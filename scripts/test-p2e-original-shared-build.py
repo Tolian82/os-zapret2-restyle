@@ -435,12 +435,15 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 if os.geteuid() == 0:
                     os.chown(path, 0, writer_gid)
             names = tuple(Path(path).name for _, _, path in learning)
+            # Original _capture takes its own short P2a lock. It must
+            # complete BEFORE the later original FD9 epoch lock is held;
+            # nested flock would be a second writer and correctly refuses.
+            captured = post_drop._capture(
+                data_root, root_uid=os.geteuid(), root_gid=root_gid,
+                engine_uid=engine_uid, engine_gid=writer_gid,
+                learning_names=names)
+            wire = post_drop._witness_line_learning(captured, learning)
             with queue.exclusive():
-                captured = post_drop._capture(
-                    data_root, root_uid=os.geteuid(), root_gid=root_gid,
-                    engine_uid=engine_uid, engine_gid=writer_gid,
-                    learning_names=names)
-                wire = post_drop._witness_line_learning(captured, learning)
                 epoch = EpochReceipts(self.root / "epochs",
                                       owner_uid=os.geteuid(),
                                       writer_gid=writer_gid)
@@ -457,9 +460,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 raw = (folder / "pretraffic.json").read_bytes()
                 self.assertEqual(json.loads(raw), seed)
                 self.assertFalse((folder / "epoch.json").exists())
-                # Original schema2 deliberately cannot use this receipt.
-                legacy = self.root / "legacy-does-not-exist"
-                self.assertFalse(legacy.exists())
                 native = Path(learning[0][2])
                 native.write_bytes(b"video.example.com\n")
                 with self.assertRaises(ReceiptRefused):
