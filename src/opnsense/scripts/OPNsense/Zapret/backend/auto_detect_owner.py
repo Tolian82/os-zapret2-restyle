@@ -638,6 +638,38 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
 
 
 
+def attest_learning_running_generation(*,
+                                       journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                       work_root: Path = WORK,
+                                       active: Path = COMMON_ACTIVE,
+                                       child_pidfile: Path = CHILD_PID,
+                                       monitor_pidfile: Path = MONITOR_PID,
+                                       runner=subprocess.run) -> LearningGenerationProof:
+    """One terminal committed schema3 owner for original-FD9 minute P2.
+
+    Same _attest_core, sealed argv/source, PID/birth/kernel argv and
+    supervisor+census as schema2. Unlike epoch-finalizing, a normal
+    minute must refuse any nonterminal Apply journal. Even a valid
+    witness never authorizes P1 destination commit or native cleanup.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise GenerationRefused("native_root_learning_running_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0, learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("learning_running_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("learning_running_owner_not_attested") from exc
+
+
 def attest_learning_epoch_finalizing_generation(operation_id: str, *,
                                                 journal: Path = Path("/var/db/zapret2/shared-apply"),
                                                 work_root: Path = WORK,
