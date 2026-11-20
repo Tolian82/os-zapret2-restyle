@@ -384,6 +384,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             os.chown(data_root, 0, writer_gid)
         pending = data_root / "pending"
         pending.mkdir(mode=0o700)
+        if os.geteuid() == 0:
+            # FreeBSD native filesystem inherits parent producer group
+            # (nobody) on mkdir; original P2a pending must be root:root.
+            os.chown(pending, 0, os.getegid())
         for name in ("inbox.txt", "debug.log"):
             item = data_root / name
             item.write_bytes(b"")
