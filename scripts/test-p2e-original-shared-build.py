@@ -422,6 +422,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             args.write_bytes(projected)
             (self.release / owner.MAP_NAME).write_bytes(
                 json.dumps(active, sort_keys=True).encode())
+            (self.work / "plan.json").write_text(json.dumps({
+                "page": "strategies",
+                "candidate": {"general": {"enabled": "1"}},
+                "changed_fields": [], "dependencies": "a" * 64,
+            }))
             create_seal(self.work, owner=os.geteuid())
             for _, _, filename in learning:
                 path = Path(filename)
