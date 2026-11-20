@@ -843,6 +843,77 @@ class EffectiveKnownTests(unittest.TestCase):
                 attest=lambda: proof)
         self.assertEqual(target.read_bytes(), before)
 
+    def test_tz6v4_sealed_schema3_live_preimage_accepts_new_known_found(self):
+        """Only a current schema3 process may propose known-list addition.
+
+        This is a synthetic owner; production attestation also demands
+        the original FD9, native source map, complete argv and process.
+        The preflight itself writes neither Found nor active HOSTLIST.
+        """
+        from dataclasses import replace
+        from auto_detect_effective_known import (
+            inspect_live_known_readonly, preview_live_known_after_readonly)
+        from auto_detect_owner import LearningGenerationProof
+
+        active, managed, manual, old = self._live_known_fixture()
+        proof = LearningGenerationProof(
+            old.owner, old.operation_id, old.generation, "b" * 64,
+            old.final_args_sha256, "c" * 64,
+            ((3, "youtube", str(self.base / "native-youtube.txt")),
+             (4, "user", str(self.base / "native-user.txt"))))
+        before = {
+            name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
+            for name in ("youtube", "user")
+        }
+        found_before = {
+            name: (self.root / (name + ".txt")).read_bytes()
+            for name in ("youtube", "user")
+        }
+        inspected = inspect_live_known_readonly(
+            manual, active=active, owned_root=self.root,
+            owner_uid=self.uid, attest=lambda: proof)
+        self.assertEqual(inspected["owner_schema"], 3)
+        self.assertTrue(inspected["aligned"])
+        effects = {
+            "youtube": {"add": ["fresh.example"], "remove": []},
+            "user": {"add": ["mail.example.org"], "remove": []},
+        }
+        preview = preview_live_known_after_readonly(
+            manual, effects, active=active, owned_root=self.root,
+            owner_uid=self.uid, attest=lambda: proof)
+        self.assertEqual(preview["changed"], ["youtube", "user"])
+        self.assertEqual(
+            preview["files"]["youtube"]["after_sha256"],
+            hashlib.sha256(
+                before["youtube"] + b"fresh.example\n").hexdigest())
+        self.assertEqual(
+            preview["files"]["user"]["after_sha256"],
+            hashlib.sha256(
+                before["user"] + b"mail.example.org\n").hexdigest())
+        self.assertFalse(preview["commit_authorized"])
+        self.assertFalse(preview["ack_authorized"])
+        self.assertEqual(before, {
+            name: (managed / ("hostlist-" + name + ".txt")).read_bytes()
+            for name in before})
+        self.assertEqual(found_before, {
+            name: (self.root / (name + ".txt")).read_bytes()
+            for name in found_before})
+
+        # Under exact same images the legacy observer cannot initiate a
+        # new known add; an incomplete schema3 owner-map cannot either.
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused, "unqualified_live_known_effects"):
+            preview_live_known_after_readonly(
+                manual, effects, active=active, owned_root=self.root,
+                owner_uid=self.uid, attest=lambda: old)
+        incomplete = replace(proof, learning=proof.learning[:1])
+        with self.assertRaisesRegex(
+                EffectiveKnownRefused,
+                "native_profile_managed_selector_mismatch"):
+            preview_live_known_after_readonly(
+                manual, effects, active=active, owned_root=self.root,
+                owner_uid=self.uid, attest=lambda: incomplete)
+
     def test_live_known_readonly_refuses_foreign_path_or_pid_birth_change(self):
         from dataclasses import replace
         from auto_detect_effective_known import inspect_live_known_readonly
