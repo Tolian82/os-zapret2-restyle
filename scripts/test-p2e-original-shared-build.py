@@ -158,6 +158,97 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertTrue(any(r["status"] == "excluded-ipset" for r in candidates))
 
 
+    def test_tz6v4_two_tier_preserves_ordinary_first_match(self):
+        strategy = (
+            "--filter-tcp=443\n--filter-l7=tls\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+            "--new\n--filter-udp=443\n--filter-l7=quic\n<HOSTLIST:youtube>\n"
+            "--lua-desync=fake\n--new\n--filter-tcp=443\n"
+            "<HOSTLIST:user>\n--lua-desync=fake\n"
+        )
+        mapped, args = self.build(strategy, voice_on=True)
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        profiles = proposal["profiles"]
+        regular = [p for p in profiles if p["role"] in ("working", "excluded")
+                   and p["native_number"] not in (None, 0)]
+        learning = [p for p in profiles if p["role"] == "learning"]
+        self.assertEqual([p["hostlist"] for p in learning],
+                         ["youtube", "youtube", "user"])
+        self.assertEqual([p["found_source_id"] for p in learning],
+                         ["youtube_found", "youtube_found", "user_found"])
+        self.assertEqual([p["native_number"] for p in learning],
+                         list(range(len(regular) + 1, len(regular) + 4)))
+        self.assertEqual([p["source_profile"] for p in learning],
+                         [p["source_profile"] for p in regular
+                          if p["hostlist"] in ("youtube", "user")])
+        self.assertEqual(projected.count(b"--hostlist-auto="), 3)
+        self.assertEqual(projected.count(b"--hostlist-auto-debug="), 1)
+        self.assertEqual(len({p["auto_inbox"] for p in learning}), 3)
+        # Level-1 original argv is bit-for-bit untouched and precedes level 2.
+        self.assertEqual(
+            [t for t in projected.split() if not t.startswith(b"--hostlist-auto-debug=")]
+            [:len(original.split())], original.split())
+        self.assertEqual(args.read_bytes(), original)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        self.assertEqual(proposal["evidence"], origin.LEARNING_PROPOSAL)
+        self.assertIs(proposal["activation_authorized"], False)
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_map(json.dumps(proposal).encode(),
+                             {"id": self.work.name, "candidate": "d" * 64},
+                             projected)
+
+    def test_tz6v4_mixed_ipset_and_voice_not_learned(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:user>\n<IPSET:telegram>\n"
+            "--lua-desync=fake\n", voice_on=True)
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        self.assertEqual(projected, original)
+        self.assertFalse(any(p["role"] == "learning"
+                             for p in proposal["profiles"]))
+        self.assertTrue(any(p["origin_status"] == "excluded-voice"
+                            for p in proposal["profiles"]))
+        self.assertTrue(any(p["origin_status"] == "excluded-ipset"
+                            for p in proposal["profiles"]))
+        self.assertNotIn(b"--hostlist-auto=", projected)
+
+    def test_tz6v4_list_mode_has_no_learning(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n",
+            mode="list")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        self.assertEqual(projected, original)
+        self.assertEqual(proposal["mode"], "list")
+        self.assertFalse(any(p["role"] == "learning"
+                             for p in proposal["profiles"]))
+
+    def test_tz6v4_stale_or_forged_source_map_is_refused(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        for field, value in (
+            ("final_args_sha256", "0" * 64),
+            ("evidence", "P2F_OFFLINE_PLAN_ONLY"),
+            ("activation_authorized", True),
+            ("generation", "e" * 32),
+        ):
+            damaged = dict(source, **{field: value})
+            with self.subTest(field=field), self.assertRaises(origin.AttributionError):
+                origin.plan_learning_tier(
+                    damaged, original, owner_id=self.work.name,
+                    owner_candidate_sha256="d" * 64)
+
     def test_p2f_observer_plan_is_trailing_but_not_authorized(self):
         mapped, args = self.build("--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
         original = args.read_bytes()

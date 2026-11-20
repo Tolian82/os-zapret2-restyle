@@ -277,6 +277,174 @@ def _attach_original_global_exclusions(release: Path, original: bytes,
         raise AttributionError("observer global exclusion proof unavailable") from exc
 
 
+
+# TZ6v4 STEP 2: offline-only learning-tier projection. The running owner
+# deliberately does not accept this proposal schema: the original FD9/P2
+# and native inbox lifecycle must be cut over in the SAME #1052 PR first.
+LEARNING_PROPOSAL = "TZ6V4_OFFLINE_LEARNING_PROPOSAL_ONLY"
+
+
+def plan_learning_tier(mapping: dict, original: bytes, *,
+                       owner_id: str, owner_candidate_sha256: str) -> tuple[bytes, dict]:
+    """Project exact ordinary native argv followed by qualified learning copies.
+
+    The original source map is produced by the one real generator AFTER
+    expansion, native --new, Voice/Extra and global exclusions. This function
+    neither edits that generation nor provisions files, signs an epoch, starts
+    the service or authorizes any native owner. Its planned raw paths are
+    *reservations*, not trustworthy filesystem artifacts or ACK permissions.
+    """
+    from auto_detect_owned_sources import KNOWN_HOSTLISTS
+
+    if (not isinstance(original, bytes) or not original
+            or len(original) > ARGS_LIMIT or b"\x00" in original
+            or not isinstance(mapping, dict)
+            or mapping.get("schema") != 1
+            or mapping.get("evidence") != NONACTIVATING
+            or mapping.get("activation_authorized") is not False
+            or mapping.get("observer_attached") is not False
+            or mapping.get("mode") not in {"auto", "list", "all"}
+            or mapping.get("final_args_sha256") != _sha(original)
+            or not re.fullmatch(r"[0-9a-f]{32}", owner_id)
+            or mapping.get("generation") != owner_id
+            or not re.fullmatch(r"[0-9a-f]{64}", owner_candidate_sha256)):
+        raise AttributionError("unqualified original generator learning input")
+
+    try:
+        original_text = _text(original)
+        rows = segments(original_text)
+    except ExclusionError as exc:
+        raise AttributionError("invalid final native profile sequence") from exc
+    if any(t.startswith("--hostlist-auto") for t in original_text.split()):
+        raise AttributionError("original native argv already includes auto detector")
+    records = mapping.get("profiles")
+    if (not isinstance(records, list) or len(records) != len(rows) + 1
+            or not isinstance(records[-1], dict)
+            or records[-1].get("native_number") != 0
+            or records[-1].get("status") != "unknown-native-default"):
+        raise AttributionError("original source map and final argv disagree")
+
+    next_number = 0
+    working = []
+    learning = []
+    seen = set()
+    for ordinal, (row, source) in enumerate(zip(rows, records), 1):
+        if (not isinstance(source, dict)
+                or source.get("id") != f"{owner_id}:{ordinal}"):
+            raise AttributionError("stale original source profile identity")
+        number = source.get("native_number")
+        if number is not None:
+            if (type(number) is not int or number != next_number + 1
+                    or number in seen):
+                raise AttributionError("unqualified final executable numbering")
+            next_number = number
+            seen.add(number)
+        hostlist = source.get("hostlist")
+        eligible = (
+            mapping["mode"] == "auto"
+            and number is not None
+            and source.get("status") == "known-hostlist"
+            and source.get("role") == "strategy"
+            and source.get("authored_has_ipset") is False
+            and source.get("source_has_ipset") is False
+            and isinstance(hostlist, str)
+            and hostlist in KNOWN_HOSTLISTS
+            and source.get("selector") == f"<HOSTLIST:{hostlist}>"
+            and source.get("source_selectors") == [f"<HOSTLIST:{hostlist}>"]
+            and sum(t.startswith("--hostlist=") for t in row) == 1
+            and not any(t.startswith(("--ipset=", "--ipset-ip=",
+                                      "--hostlist-domains=", "--import",
+                                      "--template", "--skip")) for t in row)
+            and not is_stun(visible(row))
+            and not any(t.startswith("--name=") for t in row)
+        )
+        found = f"{hostlist}_found" if eligible else None
+        working.append({
+            "native_number": number,
+            "role": "working" if source.get("status") == "known-hostlist" else "excluded",
+            "source_profile": source.get("id"),
+            "source_sha256": source.get("source_sha256"),
+            "selector": source.get("selector"),
+            "hostlist": hostlist,
+            "found_source_id": found,
+            "auto_inbox": None,
+            "debug_identity": None,
+            "origin_status": source.get("status"),
+        })
+        if not eligible:
+            continue
+        # Never copy global --port/other engine preamble or named --new
+        # boundaries. Preserve the exact effective filters, exclusions,
+        # payload and desync arguments of this one ordinary native row.
+        clone = [t for t in visible(row)
+                 if t.partition("=")[0] not in BASE]
+        if not clone:
+            raise AttributionError("empty original learning profile")
+        learning.append((source, hostlist, found, clone))
+    # Native numbers account for *all* regular executable profiles, including
+    # Voice/IPSET and unknown profiles skipped for learning.
+    ordinary_numbers = [r["native_number"] for r in working
+                        if r["native_number"] is not None]
+    if ordinary_numbers != list(range(1, len(ordinary_numbers) + 1)):
+        raise AttributionError("nonsequential native ordinary profiles")
+    next_number = len(ordinary_numbers)
+
+    projected = original_text.split()
+    result = list(working)
+    for source, hostlist, found, clone in learning:
+        next_number += 1
+        native_inbox = str(RAW_PATH.parent /
+                           f"learning-{owner_id}-{next_number}.txt")
+        projected.extend(["--new", *clone,
+                          f"--hostlist-auto={native_inbox}",
+                          "--hostlist-auto-retrans-reset=0"])
+        result.append({
+            "native_number": next_number,
+            "role": "learning",
+            "source_profile": source["id"],
+            "source_sha256": source["source_sha256"],
+            "selector": source["selector"],
+            "hostlist": hostlist,
+            "found_source_id": found,
+            "auto_inbox": native_inbox,
+            "debug_identity": str(DEBUG_PATH),
+            "origin_status": "qualified-source-proposal",
+        })
+    if learning:
+        # The original global option is inserted exactly once, not into
+        # every learning profile; provenance comes from its unique inbox.
+        if not projected[0].startswith("--port="):
+            raise AttributionError("original native preamble not qualified")
+        projected.insert(1, f"--hostlist-auto-debug={DEBUG_PATH}")
+        planned = ("\n".join(projected) + "\n").encode("utf-8")
+    else:
+        planned = original  # all/list and no-eligible auto must not change argv
+    try:
+        final_rows = segments(_text(planned))
+    except ExclusionError as exc:
+        raise AttributionError("learning tier exceeds native profile limit") from exc
+    if len(final_rows) != len(rows) + len(learning) or len(planned) > ARGS_LIMIT:
+        raise AttributionError("unbounded or misaligned native learning tier")
+    result.append({
+        "native_number": 0, "role": "excluded",
+        "source_profile": records[-1].get("id"),
+        "source_sha256": None, "selector": None, "hostlist": None,
+        "found_source_id": None, "auto_inbox": None, "debug_identity": None,
+        "origin_status": "unknown-native-default",
+    })
+    return planned, {
+        "schema": 3, "evidence": LEARNING_PROPOSAL,
+        "activation_authorized": False,
+        "generation": owner_id, "owner_operation_id": owner_id,
+        "owner_candidate_sha256": owner_candidate_sha256,
+        "mode": mapping["mode"],
+        "original_args_sha256": _sha(original),
+        "final_args_sha256": _sha(planned),
+        "profiles": result,
+    }
+
+
+
 def plan_trailing_observer(mapping: dict, original: bytes, *, owner_id: str,
                            owner_candidate_sha256: str, raw_path: str,
                            debug_path: str, tcp_ports: str,
