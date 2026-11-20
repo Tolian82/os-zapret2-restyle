@@ -489,7 +489,6 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         }))
         data_root = self.root / "producer"
         with patch.object(origin, "RAW_PATH", data_root / "inbox.txt"), \
-             patch.object(owner, "ROOT", data_root), \
              patch.object(producer_storage, "ROOT", data_root), \
              patch.object(post_drop, "ROOT", data_root), \
              patch("shared_apply_seal.WORK", self.root):
