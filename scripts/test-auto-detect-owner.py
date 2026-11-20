@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "src/opnsense/scripts/OPNsense/Zapret/backend"
@@ -167,13 +168,15 @@ class OwnerGenerationTests(unittest.TestCase):
         create_seal(self.work, owner=UID)
         self.ps.args = " ".join(self.argv.split())
 
-    def witness(self, *, epoch_finalizing_operation=None, reviewed_operation=None):
+    def witness(self, *, epoch_finalizing_operation=None,
+                reviewed_operation=None, learning_schema3=False):
         return owner_mod._attest_core(
             journal=self.journal, work_root=self.work_root, active=self.active,
             child_pidfile=self.child, monitor_pidfile=self.monitor,
             runner=self.ps, owner_uid=UID,
             epoch_finalizing_operation=epoch_finalizing_operation,
             reviewed_operation=reviewed_operation,
+            learning_schema3=learning_schema3,
             argv_reader=lambda pid: [EXE, *self.ps.args.split(),
                                      "--sockarg=0x200", "--user=nobody"],
         )
@@ -297,6 +300,83 @@ class OwnerGenerationTests(unittest.TestCase):
         with self.assertRaises(owner_mod.GenerationRefused):
             self.witness(epoch_finalizing_operation=OP_ID)
         self.assertEqual(self.witness().generation, OP_ID)
+
+    def test_schema3_uses_the_same_exact_original_process_attester(self):
+        """Only the map validator is stubbed; full FD9/native owner path runs.
+
+        A separate real-generator fixture verifies the actual schema3
+        attribution. This test ensures schema3 CANNOT bypass original
+        journal, sealed bundle, active files, argv, PID/birth and census.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        source = '{"schema":1,"evidence":"source-only"}\n'
+        original = "--port=989\n--filter-tcp=443\n"
+        self._write(self.release / "dvtws.original.args", original)
+        self._write(self.release / ORIGIN_FILE, source)
+        self._write(self.active / "dvtws.original.args", original)
+        self._write(self.active / ORIGIN_FILE, source)
+        self.argv = self.argv.replace(
+            f"--hostlist-auto={RAW}",
+            "--hostlist-auto=/var/db/zapret2-restyle/auto-detect/"
+            f"learning-{OP_ID}-2.txt")
+        self.map = {
+            "schema": 3, "activation_authorized": True,
+            "generation": OP_ID, "evidence": owner_mod.LEARNING_ACTIVE,
+            "native_test": "fixture-only",
+        }
+        self.refresh()
+        self.record["phase"] = "epoch-finalizing"
+        self._write(self.journal / "operation.json", json.dumps(self.record))
+        learning = (
+            (2, "youtube", "/var/db/zapret2-restyle/auto-detect/"
+             f"learning-{OP_ID}-2.txt"),
+        )
+        with patch.object(owner_mod, "_valid_learning_active",
+                          return_value=learning) as verified:
+            proof = self.witness(
+                epoch_finalizing_operation=OP_ID, learning_schema3=True)
+            self.assertIsInstance(proof, owner_mod.LearningGenerationProof)
+            self.assertEqual(proof.owner.pid, PID)
+            self.assertEqual(proof.owner.started, START)
+            self.assertEqual(proof.generation, OP_ID)
+            self.assertEqual(proof.learning, learning)
+            self.assertEqual(proof.native_map_sha256,
+                             hashlib.sha256((self.release / owner_mod.MAP_NAME).
+                                            read_bytes()).hexdigest())
+            self.assertEqual(proof.final_args_sha256,
+                             hashlib.sha256(self.argv.encode()).hexdigest())
+            self.assertTrue(verified.called)
+            self.assertTrue(any("-A" in cmd for cmd in self.ps.commands))
+            # Legacy schema2 cannot take this exact schema3 runtime owner.
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(epoch_finalizing_operation=OP_ID)
+            # Genuine exact-PID reuse, wrong full argv, foreign engine,
+            # wrong original source and broken supervisor still refuse.
+            self.ps.birth = "Sat Nov 14 07:00:00 2026"
+            self.ps.args += " --unknown"
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(
+                    epoch_finalizing_operation=OP_ID, learning_schema3=True)
+            self.ps.birth = START
+            self.ps.args = " ".join(self.argv.split())
+            self.ps.extra = True
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(
+                    epoch_finalizing_operation=OP_ID, learning_schema3=True)
+            self.ps.extra = False
+            self._write(self.active / ORIGIN_FILE,
+                        '{"schema":1,"unexpected":true}')
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(
+                    epoch_finalizing_operation=OP_ID, learning_schema3=True)
+            self._write(self.active / ORIGIN_FILE, source)
+            self.assertEqual(
+                self.witness(
+                    epoch_finalizing_operation=OP_ID,
+                    learning_schema3=True), proof)
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness(
+                    reviewed_operation=OP_ID, learning_schema3=True)
 
     def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
         long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,

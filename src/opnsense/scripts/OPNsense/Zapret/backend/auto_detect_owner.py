@@ -469,9 +469,13 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
                  runner, owner_uid: int,
                  epoch_finalizing_operation: str | None = None,
                  reviewed_operation: str | None = None,
-                 argv_reader=None) -> GenerationProof:
+                 argv_reader=None,
+                 learning_schema3: bool = False) -> GenerationProof | LearningGenerationProof:
     if argv_reader is None:
         argv_reader = _freebsd_argv
+    if type(learning_schema3) is not bool or (
+            learning_schema3 and reviewed_operation is not None):
+        raise GenerationRefused("unsupported_learning_reviewed_owner")
     record = SharedApplyOperation(journal, owner=owner_uid).read()
     if reviewed_operation is not None:
         # Only the explicit original-FD9 rescue may inspect a reviewed
@@ -514,7 +518,21 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     active_map = _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid)
     if raw_map != active_map:
         raise GenerationRefused("active_generation_not_same_sealed_map")
-    mapping, profiles = _valid_map(raw_map, owner, sealed_argv)
+    if learning_schema3:
+        from auto_detect_origin_map import ORIGIN_FILE
+        original = _secure_bytes(
+            work / "release" / "dvtws.original.args", MAX_ARGS, owner_uid)
+        source_bytes = _secure_bytes(
+            work / "release" / ORIGIN_FILE, MAX_MAP, owner_uid)
+        if (_secure_bytes(active / "dvtws.original.args", MAX_ARGS, owner_uid) !=
+                original or
+                _secure_bytes(active / ORIGIN_FILE, MAX_MAP, owner_uid) !=
+                source_bytes):
+            raise GenerationRefused("learning_active_original_source_not_same_release")
+        learning = _valid_learning_active(
+            raw_map, owner, json.loads(source_bytes), original, sealed_argv)
+    else:
+        mapping, profiles = _valid_map(raw_map, owner, sealed_argv)
 
     pid, monitor = _pid(child_pidfile, owner_uid), _pid(monitor_pidfile, owner_uid)
     birth, ps_command = _snapshot(runner, pid)
@@ -552,6 +570,20 @@ def _attest_core(*, journal: Path, work_root: Path, active: Path,
     if (_secure_bytes(active / "dvtws.args", MAX_ARGS, owner_uid) != sealed_argv or
             _secure_bytes(active / MAP_NAME, MAX_MAP, owner_uid) != raw_map):
         raise GenerationRefused("active_release_changed_during_read")
+    if learning_schema3:
+        if (_secure_bytes(active / "dvtws.original.args", MAX_ARGS, owner_uid) !=
+                original or
+                _secure_bytes(active / ORIGIN_FILE, MAX_MAP, owner_uid) !=
+                source_bytes or
+                _secure_bytes(work / "release" / "dvtws.original.args",
+                              MAX_ARGS, owner_uid) != original or
+                _secure_bytes(work / "release" / ORIGIN_FILE,
+                              MAX_MAP, owner_uid) != source_bytes):
+            raise GenerationRefused("learning_source_changed_during_owner_read")
+        return LearningGenerationProof(
+            token, owner["id"], owner["id"], owner["candidate"],
+            hashlib.sha256(sealed_argv).hexdigest(),
+            hashlib.sha256(raw_map).hexdigest(), learning)
     return GenerationProof(token, owner["id"], mapping["generation"],
                            mapping["final_args_sha256"], mapping["raw_path"],
                            mapping["debug_path"], mapping["observer_native_number"],
@@ -602,6 +634,45 @@ def attest_epoch_finalizing_generation(operation_id: str, *,
             SharedOperationError, SharedBundleError, ExclusionError) as exc:
         raise GenerationRefused("original_epoch_finalizing_not_attested") from exc
 
+
+
+
+
+def attest_learning_epoch_finalizing_generation(operation_id: str, *,
+                                                journal: Path = Path("/var/db/zapret2/shared-apply"),
+                                                work_root: Path = WORK,
+                                                active: Path = COMMON_ACTIVE,
+                                                child_pidfile: Path = CHILD_PID,
+                                                monitor_pidfile: Path = MONITOR_PID,
+                                                runner=subprocess.run,
+                                                ) -> LearningGenerationProof:
+    """Original FD9-only schema3 attestation via the SAME native owner gate.
+
+    Before use the real generator must promote a fully sealed schema3
+    release, original launcher must start it and the existing shared Apply
+    journal must be epoch-finalizing. This is not a public minute/ACK
+    path and does not enable a new CLI or a separate process inspector.
+    """
+    if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
+            not isinstance(operation_id, str) or
+            not HEX32.fullmatch(operation_id)):
+        raise GenerationRefused("native_root_learning_epoch_fd9_required")
+    try:
+        from voice_ipfw_adapter import require_lifecycle_lock
+        require_lifecycle_lock()
+        proof = _attest_core(
+            journal=journal, work_root=work_root, active=active,
+            child_pidfile=child_pidfile, monitor_pidfile=monitor_pidfile,
+            runner=runner, owner_uid=0,
+            epoch_finalizing_operation=operation_id,
+            learning_schema3=True)
+        if not isinstance(proof, LearningGenerationProof):
+            raise GenerationRefused("learning_owner_not_schema3")
+        return proof
+    except (OSError, ValueError, TypeError, UnicodeError,
+            subprocess.SubprocessError, SharedOperationError,
+            SharedBundleError, ExclusionError) as exc:
+        raise GenerationRefused("learning_epoch_owner_not_attested") from exc
 
 
 def attest_reviewed_native_generation(operation_id: str, *,
