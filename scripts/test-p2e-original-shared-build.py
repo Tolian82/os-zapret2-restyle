@@ -954,6 +954,77 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual((slot / "intent.json").read_bytes(), durable)
                 self.assertFalse((slot / "ack.json").exists())
                 self.assertFalse((slot / "destination").exists())
+
+                # Original schema3 destination writer reuse: write-once
+                # SOURCE-BOUND plan + existing multi-file CAS. This invokes
+                # the private writer only in a disposable source fixture;
+                # no real FD4/FD9 Config, engine or product minute is wired.
+                from auto_detect_destination_commit import (
+                    DestinationRefused, qualified_destination_plan,
+                )
+                from auto_detect_epoch_receipts import _canonical
+                active_managed = self.root / "synthetic-active-managed"
+                active_managed.mkdir(mode=0o700)
+                working = {}
+                for name, before in (
+                    ("youtube", b"youtube.com\n"), ("user", b"")):
+                    path = active_managed / ("hostlist-" + name + ".txt")
+                    path.write_bytes(before)
+                    path.chmod(0o600)
+                    working[name] = {
+                        "path": path,
+                        "before_sha256": hashlib.sha256(before).hexdigest(),
+                        "after": p1["p1"]["managed_after"][name],
+                    }
+                source_raw = _canonical(
+                    {"observations": persisted["observations"]})
+                with writer.exclusive_targets():
+                    with self.assertRaisesRegex(
+                            DestinationRefused,
+                            "learning_wal_requires_live_and_source"):
+                        writer._locked_commit(
+                            slot, persisted, source_raw,
+                            p1["p1"]["effects"], live=None)
+                    saved_checkpoint = writer._locked_commit(
+                        slot, persisted, source_raw,
+                        p1["p1"]["effects"], live=working)
+                    self.assertFalse(saved_checkpoint["ack_authorized"])
+                    expected_plan, plan_raw = qualified_destination_plan(
+                        slot, persisted, epoch.uid, targets=writer.targets)
+                    self.assertEqual(expected_plan["schema"], 3)
+                    self.assertEqual(
+                        expected_plan["source_intent_sha256"],
+                        hashlib.sha256(durable).hexdigest())
+                    self.assertEqual(
+                        expected_plan["pending_name"], "learning-00000000")
+                self.assertEqual(targets["youtube"].read_bytes(),
+                                 b"example.com\n")
+                self.assertEqual(targets["user"].read_bytes(),
+                                 b"example.org\n")
+                self.assertEqual(working["youtube"]["path"].read_bytes(),
+                                 b"youtube.com\nexample.com\n")
+                self.assertEqual(working["user"]["path"].read_bytes(),
+                                 b"example.org\n")
+                self.assertEqual(shared.read_bytes(), b"")
+                self.assertFalse((slot / "ack.json").exists())
+                self.assertEqual((slot / "intent.json").read_bytes(), durable)
+                self.assertEqual((folder / "epoch.json").read_bytes(),
+                                 epoch_bytes)
+                self.assertEqual(native.read_bytes(),
+                                 b"video.example.com\n")
+                self.assertEqual(user_native.read_bytes(),
+                                 b"mail.example.org\n")
+                # Checkpoint means the original event cannot be reapplied
+                # after an explicit GUI deletion of that permanent Found.
+                targets["youtube"].write_bytes(b"")
+                with writer.exclusive_targets():
+                    repeated = writer._locked_commit(
+                        slot, persisted, source_raw,
+                        p1["p1"]["effects"], live=working)
+                self.assertEqual(repeated, saved_checkpoint)
+                self.assertEqual(targets["youtube"].read_bytes(), b"")
+                self.assertEqual((slot / "intent.json").read_bytes(), durable)
+                self.assertFalse((slot / "ack.json").exists())
                 self.assertEqual(
                     {str(path): path.read_bytes() for path in protected},
                     originals)
