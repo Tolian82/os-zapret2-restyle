@@ -569,6 +569,11 @@ def attest_original_learning_sealed_prefix_locked(
                 not isinstance(intent["observations"], list) or
                 not 0 < len(intent["observations"]) <= 128):
             raise OriginalSourceRefused("learning_sealed_prefix_not_original_epoch")
+        original_raw = _read(
+            folder / "cursor-chain-v2" / "00000000" / "intent.json",
+            receipts.uid)
+        if json.loads(original_raw) != intent:
+            raise OriginalSourceRefused("learning_sealed_prefix_foreign_intent")
         pinned = []
         debug = seed["files"][1]
         pinned.append((queue.root / "debug.log",
@@ -624,9 +629,7 @@ def attest_original_learning_sealed_prefix_locked(
             raise OriginalSourceRefused("learning_original_source_prefix_raced")
         return {
             "generation": proof.generation,
-            "source_intent_sha256": hashlib.sha256(
-                _read(folder / "cursor-chain-v2" / "00000000" /
-                      "intent.json", receipts.uid)).hexdigest(),
+            "source_intent_sha256": hashlib.sha256(original_raw).hexdigest(),
             "p2b_drained": True,
             "commit_authorized": False,
             "cleanup_authorized": False,
