@@ -698,6 +698,66 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual((folder / "pretraffic.json").read_bytes(), raw)
                 self.assertEqual(native.read_bytes(), b"video.example.com\n")
                 self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+
+                # Read-only original-P2a physical native → registered P1
+                # proposal. The source-level process proof is synthetic,
+                # never a real FD9 owner or a permission to ACK.
+                from auto_detect_original_v2_source import (
+                    preview_original_learning_candidates_locked,
+                    OriginalSourceRefused,
+                )
+                user_native = Path(learning[1][2])
+                user_native.write_bytes(b"mail.example.org\n")
+                def native_debug(number, hostname, pathname):
+                    return (f"12:00 : {hostname} : profile {number} (learn) "
+                            f": client 198.51.100.1 : proto tls : adding to "
+                            f"{pathname}\n").encode("ascii")
+                first_debug = native_debug(
+                    learning[0][0], "video.example.com", learning[0][2])
+                second_debug = native_debug(
+                    learning[1][0], "mail.example.org", learning[1][2])
+                debug_path = data_root / "debug.log"
+                debug_path.write_bytes(first_debug + second_debug)
+                observed = preview_original_learning_candidates_locked(
+                    queue, epoch, proof, self.work, attest=lambda: proof)
+                self.assertEqual(observed["observations"], [
+                    {"hostname": "video.example.com", "hostlist": "youtube"},
+                    {"hostname": "mail.example.org", "hostlist": "user"},
+                ])
+                self.assertEqual(set(observed["native_cursors"]),
+                                 {item[2] for item in learning})
+                self.assertEqual(
+                    [observed["native_cursors"][item[2]].offset
+                     for item in learning],
+                    [len(b"video.example.com\n"), len(b"mail.example.org\n")])
+                self.assertFalse(observed["commit_authorized"])
+                self.assertFalse(observed["ack_authorized"])
+                self.assertEqual(native.read_bytes(), b"video.example.com\n")
+                self.assertEqual(user_native.read_bytes(), b"mail.example.org\n")
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+                # A positive emitted before its matching native append
+                # cannot create a Found entry. Neither can wrong-profile
+                # debug, an incomplete debug window or a stale owner.
+                for bad_debug in (
+                    first_debug + second_debug +
+                        native_debug(learning[0][0], "absent.example.com",
+                                     learning[0][2]),
+                    native_debug(learning[1][0], "video.example.com",
+                                 learning[0][2]) + second_debug,
+                    first_debug + second_debug[:-1],
+                ):
+                    debug_path.write_bytes(bad_debug)
+                    with self.assertRaises(OriginalSourceRefused):
+                        preview_original_learning_candidates_locked(
+                            queue, epoch, proof, self.work,
+                            attest=lambda: proof)
+                debug_path.write_bytes(first_debug + second_debug)
+                with self.assertRaises(OriginalSourceRefused):
+                    preview_original_learning_candidates_locked(
+                        queue, epoch, proof, self.work,
+                        attest=lambda: None)
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+                self.assertEqual(native.read_bytes(), b"video.example.com\n")
                 # Native replaced inode is fatal even if its bytes match:
                 # a new process must never inherit the original zero cut.
                 replacement = data_root / "new-native-inode"

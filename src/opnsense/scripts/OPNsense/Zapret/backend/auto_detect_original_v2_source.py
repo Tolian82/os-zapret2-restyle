@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import sys
 
 from auto_detect_debug_window import MAX_RAW, _raw_hosts, DebugWindowRefused
 from auto_detect_owner import GenerationProof
@@ -286,6 +287,145 @@ def preview_original_learning_windows_locked(
             ValueError, TypeError, KeyError, AttributeError) as exc:
         raise OriginalSourceRefused("native_learning_physical_snapshot_refused") from exc
 
+
+
+
+# ТЗ_6v4: the original P2 source-to-P1 *read-only* boundary.
+# The current product never calls this function: schema3 requires a future
+# original-FD9/P2b/WAL owner before any durable cursor, Found or ACK.
+def preview_original_learning_candidates_locked(
+    queue: DurableInbox, receipts, proof, workspace: Path, *, attest,
+) -> dict:
+    """Prove one stable all-N native/debug candidate from the sealed epoch.
+
+    An immutable schema3 pretraffic/epoch and the independently reattested
+    original running process are required. The native inbox files are WORKING
+    hostlists: the result has no permission to clear, rotate or ACK them.
+    """
+    import json
+    from auto_detect_debug_window import MAX_WINDOW, _read_exact
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_origin_map import LEARNING_PROPOSAL
+    from auto_detect_owner import (
+        LearningGenerationProof, MAX_ARGS, MAX_MAP, _secure_bytes,
+    )
+    from auto_detect_original_v2_model import preview_learning_domains
+
+    if (not isinstance(queue, DurableInbox) or not queue._held or
+            not isinstance(receipts, EpochReceipts) or
+            receipts.uid != queue.uid or
+            receipts.writer_gid != queue.writer_gid or
+            not isinstance(proof, LearningGenerationProof) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            not callable(attest) or attest() != proof):
+        raise OriginalSourceRefused("learning_original_epoch_and_queue_required")
+    try:
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        queue._verify()
+        if queue.segments():
+            raise OriginalSourceRefused("learning_preview_pending_not_reconciled")
+        folder, seed, pretraffic_raw = receipts._learning_pretraffic(
+            proof, queue, workspace)
+        epoch = json.loads(_read(folder / "epoch.json", receipts.uid))
+        required = {
+            "schema", "kind", "generation", "operation_id",
+            "owner_candidate_sha256", "final_args_sha256",
+            "native_map_sha256", "pretraffic_sha256", "owner_pid",
+            "owner_start", "owner_executable", "files", "learning",
+            "ack_authorized",
+        }
+        if (not isinstance(epoch, dict) or set(epoch) != required or
+                type(epoch["schema"]) is not int or epoch["schema"] != 3 or
+                epoch["kind"] != "original-native-learning-epoch" or
+                epoch["generation"] != proof.generation or
+                epoch["operation_id"] != proof.operation_id or
+                epoch["owner_candidate_sha256"] != proof.owner_candidate_sha256 or
+                epoch["final_args_sha256"] != proof.final_args_sha256 or
+                epoch["native_map_sha256"] != proof.native_map_sha256 or
+                epoch["pretraffic_sha256"] != hashlib.sha256(
+                    pretraffic_raw).hexdigest() or
+                (epoch["owner_pid"], epoch["owner_start"],
+                 epoch["owner_executable"]) !=
+                (proof.owner.pid, proof.owner.started, proof.owner.executable) or
+                epoch["files"] != seed["files"] or
+                epoch["learning"] != seed["learning"] or
+                epoch["ack_authorized"] is not False):
+            raise OriginalSourceRefused("learning_epoch_not_original_running_owner")
+        release = workspace / "release"
+        original = _secure_bytes(release / "dvtws.original.args",
+                                 MAX_ARGS, receipts.uid)
+        argv = _secure_bytes(release / "dvtws.args", MAX_ARGS, receipts.uid)
+        active_map = json.loads(_secure_bytes(
+            release / "auto-detect-generation.json", MAX_MAP, receipts.uid))
+        # _learning_pretraffic independently reconstituted the sealed ACTIVE
+        # map from the original generator. Reuse the strict original P1
+        # decoder's proposal format without treating this conversion as an
+        # extra activation or authority.
+        projection = {**active_map, "evidence": LEARNING_PROPOSAL,
+                      "activation_authorized": False}
+        map_raw = json.dumps(
+            projection, sort_keys=True, separators=(",", ":")).encode()
+        cursors = {
+            row["path"]: LearningCursor(
+                proof.generation, row["native_number"], row["hostlist"],
+                row["path"], row["device"], row["inode"], row["offset"],
+                row["prefix_sha256"])
+            for row in epoch["learning"]
+        }
+
+        debug = queue.root / "debug.log"
+        debug_id = epoch["files"][1]
+        first_stat, debug_bytes = _read_exact(
+            debug, owner_uid=receipts.uid, writer_gid=queue.writer_gid)
+        def fingerprint(st):
+            return (st.st_dev, st.st_ino, st.st_nlink, st.st_uid, st.st_gid,
+                    stat.S_IMODE(st.st_mode), st.st_size, st.st_mtime_ns,
+                    st.st_ctime_ns)
+        if ((first_stat.st_dev, first_stat.st_ino, first_stat.st_nlink) !=
+                (debug_id["device"], debug_id["inode"], debug_id["nlink"]) or
+                len(debug_bytes) > MAX_WINDOW or
+                (debug_bytes and not debug_bytes.endswith(b"\n")) or
+                b"\r" in debug_bytes or b"\x00" in debug_bytes):
+            raise OriginalSourceRefused("learning_debug_not_sealed_complete_window")
+        windows = preview_original_learning_windows_locked(
+            queue, proof.learning, cursors, attest=lambda: attest() == proof)
+        observations = preview_learning_domains(
+            map_raw, {"id": proof.generation,
+                      "candidate": proof.owner_candidate_sha256},
+            original, argv,
+            {path: window.rows for path, window in windows.items()},
+            debug_bytes)
+        second_stat, second_debug = _read_exact(
+            debug, owner_uid=receipts.uid, writer_gid=queue.writer_gid)
+        if (fingerprint(first_stat) != fingerprint(second_stat) or
+                debug_bytes != second_debug):
+            raise OriginalSourceRefused("learning_debug_raced_native_snapshot")
+        for path, window in windows.items():
+            now = _stat_regular(Path(path), queue.uid, max_size=MAX_SEGMENT,
+                                writer_gid=queue.writer_gid)
+            if ((now.st_dev, now.st_ino, now.st_size, now.st_mtime_ns,
+                 now.st_ctime_ns, now.st_nlink) != window.physical):
+                raise OriginalSourceRefused("learning_native_raced_debug_snapshot")
+        queue._verify()
+        if queue.segments() or attest() != proof:
+            raise OriginalSourceRefused("learning_owner_changed_after_p1_preview")
+        return {
+            "observations": observations,
+            "native_cursors": {path: window.after
+                               for path, window in windows.items()},
+            "debug_end_offset": len(debug_bytes),
+            "debug_end_sha256": hashlib.sha256(debug_bytes).hexdigest(),
+            "commit_authorized": False,
+            "ack_authorized": False,
+        }
+    except OriginalSourceRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, AttributeError,
+            QueueSafetyError, DebugWindowRefused, RuntimeError) as exc:
+        raise OriginalSourceRefused(
+            "learning_original_native_debug_candidate_refused") from exc
 
 
 def detached_original_raw(queue: DurableInbox, pending: Path) -> bytes:
