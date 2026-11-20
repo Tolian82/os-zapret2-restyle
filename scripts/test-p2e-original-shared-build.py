@@ -835,6 +835,67 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertFalse(qualified["ack_authorized"])
                 self.assertEqual([row[0] for row in scans],
                                  [debug_path, native, user_native])
+                # Original locked P2+GUI+P1 preflight: a real physical N
+                # native candidate becomes only a proposed three-Found
+                # destination and two effective managed byte images.
+                # No durable WAL/Config authority is granted by this fixture.
+                from auto_detect_destination_commit import DestinationCommit
+                from auto_detect_owned_sources import bootstrap_empty
+                from auto_detect_original_v2_model import (
+                    preview_original_learning_p1_locked,
+                )
+                owned_dir = self.root / "owned-source-test"
+                bootstrap_empty(
+                    owned_dir, original_config_sha256="a" * 64,
+                    owner_uid=os.geteuid(),
+                    authorized_clean_start=True)
+                shared = self.root / "shared-source-test.txt"
+                shared.write_bytes(b"")
+                shared.chmod(0o600)
+                targets = {
+                    "auto": shared,
+                    "youtube": owned_dir / "youtube.txt",
+                    "user": owned_dir / "user.txt",
+                }
+                writer = DestinationCommit(
+                    epoch, queue, targets,
+                    self.root / "source-test-gui.lock")
+                protected = [debug_path, native, user_native,
+                             shared, targets["youtube"], targets["user"]]
+                originals = {str(path): path.read_bytes()
+                             for path in protected}
+                with writer.exclusive_targets():
+                    p1 = preview_original_learning_p1_locked(
+                        writer, proof, self.work, owned_root=owned_dir,
+                        manual_hostlists={
+                            "youtube": "youtube.com\n", "user": ""},
+                        global_exclude="", attest=lambda: proof,
+                        inspect=drained)
+                self.assertEqual(p1["p1"]["effects"], {
+                    "youtube": {"add": ["example.com"], "remove": []},
+                    "user": {"add": ["example.org"], "remove": []},
+                })
+                self.assertEqual(p1["p1"]["managed_after"]["youtube"],
+                                 b"youtube.com\nexample.com\n")
+                self.assertEqual(p1["p1"]["managed_after"]["user"],
+                                 b"example.org\n")
+                self.assertFalse(p1["commit_authorized"])
+                self.assertFalse(p1["cleanup_authorized"])
+                self.assertFalse(p1["ack_authorized"])
+                self.assertEqual(
+                    {str(path): path.read_bytes() for path in protected},
+                    originals)
+                self.assertEqual((folder / "epoch.json").read_bytes(),
+                                 epoch_bytes)
+                # This API refuses a call outside the ORIGINAL existing
+                # destination lock even with a valid synthetic P2b result.
+                with self.assertRaises(V2OriginalConfigRefused):
+                    preview_original_learning_p1_locked(
+                        writer, proof, self.work, owned_root=owned_dir,
+                        manual_hostlists={"youtube": "", "user": ""},
+                        global_exclude="", attest=lambda: proof,
+                        inspect=drained)
+
                 self.assertTrue(all(row[3] == proof.owner and
                                     row[4] == writer_gid for row in scans))
                 for not_drained in (FDState.BUSY, FDState.UNKNOWN, True):
