@@ -1017,20 +1017,45 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         "commit_authorized": False,
                         "ack_authorized": False,
                     }
-                with patch(
-                        "auto_detect_original_v2_model.COMMON_ACTIVE",
-                        active_root), patch(
-                        "auto_detect_original_v2_model.preview_live_known_after_readonly",
-                        side_effect=native_live_preview):
-                    saved_checkpoint = commit_with_original_learning_first_slot(
-                        writer, proof, self.work,
-                        config_fd=cfg_fd, config_path=config_path,
-                        owned_root=owned_dir,
-                        manual_hostlists={
-                            "youtube": "youtube.com\n", "user": ""},
-                        global_exclude="", attest=lambda: proof,
-                        inspect=drained,
-                        psl=self._tz6v4_psl_for_fixtures())
+                if sys.platform.startswith("freebsd"):
+                    # FreeBSD production accepts ONLY the genuine /conf
+                    # Config FD, never our disposable fixture. Verify
+                    # refusal rather than weakening that security gate or
+                    # opening/saving real OPNsense config in source CI.
+                    with self.assertRaisesRegex(
+                            V2OriginalConfigRefused,
+                            "learning_original_config_fd9_model_required"):
+                        commit_with_original_learning_first_slot(
+                            writer, proof, self.work,
+                            config_fd=cfg_fd, config_path=config_path,
+                            owned_root=owned_dir,
+                            manual_hostlists={
+                                "youtube": "youtube.com\n", "user": ""},
+                            global_exclude="", attest=lambda: proof,
+                            inspect=drained,
+                            psl=self._tz6v4_psl_for_fixtures())
+                    # The same original P2k2b writer proves the actual
+                    # native filesystem Found→managed CAS/epoch/checkpoint.
+                    # This private fixture is NOT a product Config owner.
+                    with writer.exclusive_targets():
+                        saved_checkpoint = writer._locked_commit(
+                            slot, persisted, source_raw,
+                            p1["p1"]["effects"], live=working)
+                else:
+                    with patch(
+                            "auto_detect_original_v2_model.COMMON_ACTIVE",
+                            active_root), patch(
+                            "auto_detect_original_v2_model.preview_live_known_after_readonly",
+                            side_effect=native_live_preview):
+                        saved_checkpoint = commit_with_original_learning_first_slot(
+                            writer, proof, self.work,
+                            config_fd=cfg_fd, config_path=config_path,
+                            owned_root=owned_dir,
+                            manual_hostlists={
+                                "youtube": "youtube.com\n", "user": ""},
+                            global_exclude="", attest=lambda: proof,
+                            inspect=drained,
+                            psl=self._tz6v4_psl_for_fixtures())
                 self.assertFalse(saved_checkpoint["ack_authorized"])
                 expected_plan, plan_raw = qualified_destination_plan(
                     slot, persisted, epoch.uid, targets=writer.targets)
@@ -1060,15 +1085,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 # Checkpoint means the original event cannot be reapplied
                 # after an explicit GUI deletion of that permanent Found.
                 targets["youtube"].write_bytes(b"")
-                repeated = commit_with_original_learning_first_slot(
-                    writer, proof, self.work,
-                    config_fd=cfg_fd, config_path=config_path,
-                    owned_root=owned_dir,
-                    manual_hostlists={
-                        "youtube": "youtube.com\n", "user": ""},
-                    global_exclude="", attest=lambda: proof,
-                    inspect=drained,
-                    psl=self._tz6v4_psl_for_fixtures())
+                if sys.platform.startswith("freebsd"):
+                    with writer.exclusive_targets():
+                        repeated = writer._locked_commit(
+                            slot, persisted, source_raw,
+                            p1["p1"]["effects"], live=working)
+                else:
+                    repeated = commit_with_original_learning_first_slot(
+                        writer, proof, self.work,
+                        config_fd=cfg_fd, config_path=config_path,
+                        owned_root=owned_dir,
+                        manual_hostlists={
+                            "youtube": "youtube.com\n", "user": ""},
+                        global_exclude="", attest=lambda: proof,
+                        inspect=drained,
+                        psl=self._tz6v4_psl_for_fixtures())
                 self.assertEqual(repeated, saved_checkpoint)
                 os.close(cfg_fd)
                 self.assertEqual(targets["youtube"].read_bytes(), b"")
