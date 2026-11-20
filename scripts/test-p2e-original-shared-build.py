@@ -222,15 +222,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         mapped, args = self.build(
             "--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n",
             mode="list")
-        source = self.check_nonactivating(mapped, args)
-        original = args.read_bytes()
-        projected, proposal = origin.plan_learning_tier(
-            source, original, owner_id=self.work.name,
-            owner_candidate_sha256="d" * 64)
-        self.assertEqual(projected, original)
-        self.assertEqual(proposal["mode"], "list")
-        self.assertFalse(any(p["role"] == "learning"
-                             for p in proposal["profiles"]))
+        # The original generator does not publish an Auto-detect source
+        # map outside auto mode and therefore cannot admit learning profiles.
+        self.assertFalse(mapped.exists())
+        self.assertNotIn(b"--hostlist-auto=", args.read_bytes())
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
 
     def test_tz6v4_stale_or_forged_source_map_is_refused(self):
         mapped, args = self.build(
