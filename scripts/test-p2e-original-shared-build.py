@@ -470,6 +470,80 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertFalse((self.release / owner.MAP_NAME).exists())
         self.assertFalse((self.release / "dvtws.original.args").exists())
 
+
+    def test_tz6v4_real_promotion_fd9_source_gate_matches_active_copy(self):
+        """Real original generator -> sealed candidate -> FD9 source gate.
+
+        Only the original process launcher may later enter this gate
+        on a FreeBSD host with the inherited original FD9. This source
+        fixture neither starts dvtws2 nor constructs a second owner.
+        """
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+            "--new\n--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n")
+        self.check_nonactivating(mapped, args)
+        candidate = "d" * 64
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        data_root = self.root / "producer"
+        with patch.object(origin, "RAW_PATH", data_root / "inbox.txt"), \
+             patch.object(owner, "ROOT", data_root), \
+             patch.object(producer_storage, "ROOT", data_root), \
+             patch.object(post_drop, "ROOT", data_root), \
+             patch("shared_apply_seal.WORK", self.root):
+            record = origin.promote_learning_release(self.work, candidate)
+            create_seal(self.work, owner=os.geteuid())
+            approved = tuple(
+                (row["native_number"], row["hostlist"], row["auto_inbox"])
+                for row in record["profiles"] if row["role"] == "learning")
+            self.assertEqual(
+                [row[1] for row in approved], ["youtube", "user"])
+            self.assertEqual(
+                post_drop._learning_release_sources(self.release),
+                (self.work, candidate, approved))
+            self.assertFalse(data_root.exists())
+            active = self.root / "installed-active"
+            shutil.copytree(self.release, active)
+            with patch("voice_live_inspect.COMMON_ACTIVE", active):
+                self.assertEqual(
+                    post_drop._learning_release_sources(active),
+                    (self.work, candidate, approved))
+                # The owner cannot adopt an edited active source or argv
+                # merely because a once-valid candidate remains sealed.
+                (active / "dvtws.args").write_bytes(b"--port=989\n")
+                with self.assertRaises(post_drop.PostDropRefused):
+                    post_drop._learning_release_sources(active)
+                self.assertFalse(data_root.exists())
+                # A foreign release path is never an authorization.
+                with self.assertRaises(post_drop.PostDropRefused):
+                    post_drop._learning_release_sources(self.root / "unknown")
+                # Restore active exact bytes and verify no new candidate
+                # was created behind the original release seal.
+                shutil.copy2(self.release / "dvtws.args", active / "dvtws.args")
+                self.assertEqual(
+                    post_drop._learning_release_sources(active),
+                    (self.work, candidate, approved))
+
+    def test_tz6v4_schema3_fd9_verbs_have_exact_shapes(self):
+        """Unconnected CLI cannot authorize non-FD9 caller or emit witness."""
+        actions = {
+            "authorize-learning": 2, "prepare-learning": 2,
+            "capture-learning": 2, "seal-learning-epoch": 4,
+            "restore-learning": 6, "finish-learning-epoch": 2,
+        }
+        for action, n in actions.items():
+            with self.subTest(action=action):
+                self.assertEqual(
+                    post_drop.original_fd9_command([action]), 64)
+                # Test the non-native guard deterministically without
+                # inventing a FreeBSD inherited-FD9 context.
+                with patch.object(post_drop.sys, "platform", "linux"):
+                    self.assertEqual(
+                        post_drop.original_fd9_command(
+                            [action] + ["bogus"] * (n - 1)), 64)
+
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
 

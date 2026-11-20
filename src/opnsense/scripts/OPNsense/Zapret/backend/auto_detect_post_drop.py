@@ -306,7 +306,7 @@ def native_prepare_original_producer() -> None:
 # Route the sole original FD9 through the existing immutable
 # pretraffic -> committed process epoch. Release authorization is read-only
 # and never by itself permits launch, receipt ACK or native file deletion.
-def _original_epoch_queue():
+def _original_epoch_queue(learning_names: tuple[str, ...] = ()):
     from auto_detect_epoch_receipts import EpochReceipts
     if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
         raise PostDropRefused("native_root_fd9_epoch_only")
@@ -314,7 +314,7 @@ def _original_epoch_queue():
     native_user = pwd.getpwnam(ENGINE_USER)
     if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
         raise PostDropRefused("unqualified_original_epoch_engine")
-    _check_layout(ROOT, 0, 0, native_user.pw_gid)
+    _check_layout(ROOT, 0, 0, native_user.pw_gid, learning_names)
     return (DurableInbox(ROOT, owner_uid=0, writer_gid=native_user.pw_gid),
             EpochReceipts(writer_gid=native_user.pw_gid))
 
@@ -349,6 +349,171 @@ def native_finish_original_epoch(generation: str, *, reviewed: bool = False) -> 
     with queue.exclusive():
         receipts.finish_running(
             proof, queue, attest=lambda: attester(generation))
+
+
+
+
+# TZ6v4: the SAME original FD9 owner now has a schema3-native command
+# surface. Nothing invokes these verbs from common Apply/launcher yet.
+# The writer and minute/ACK paths remain deliberately schema2-only until
+# multi-inbox P2 proves managed-before-native transfer and retirement.
+def _learning_release_sources(
+    release: Path,
+) -> tuple[Path, str, tuple[tuple[int, str, str], ...]]:
+    """Attest the exact sealed original candidate and optional active copy.
+
+    Root-only FreeBSD/FD9 is enforced by original_fd9_command, *not* by a
+    supplied release pathname. A fresh generation must be root-sealed,
+    match the original source/argv and have a reproducible approved N-map.
+    """
+    from auto_detect_owner import (
+        _secure_bytes, _valid_learning_active, MAP_NAME, MAX_ARGS, MAX_MAP,
+    )
+    from auto_detect_origin_map import ORIGIN_FILE, verify_learning_promotion
+    from shared_apply_seal import WORK, verify_seal
+    from voice_live_inspect import COMMON_ACTIVE
+    import json
+
+    uid = os.geteuid()
+    if (not isinstance(release, Path) or not release.is_absolute() or
+            release.is_symlink() or not release.is_dir() or
+            release.stat().st_uid != uid or release.stat().st_mode & 0o022):
+        raise PostDropRefused("learning_untrusted_release_directory")
+    raw_map = _secure_bytes(release / MAP_NAME, MAX_MAP, uid)
+    try:
+        mapping = json.loads(raw_map)
+        generation = mapping["generation"]
+        candidate = mapping["owner_candidate_sha256"]
+    except (ValueError, TypeError, KeyError, UnicodeError) as exc:
+        raise PostDropRefused("learning_untrusted_generation_map") from exc
+    if (not isinstance(generation, str) or
+            not re.fullmatch(r"[0-9a-f]{32}", generation) or
+            not isinstance(candidate, str) or
+            not re.fullmatch(r"[0-9a-f]{64}", candidate)):
+        raise PostDropRefused("learning_unqualified_operation")
+    workspace = WORK / generation
+    sealed = workspace / "release"
+    if release not in (sealed, COMMON_ACTIVE):
+        raise PostDropRefused("learning_release_outside_original_owner")
+    verify_seal(workspace, owner=uid)
+    expected = verify_learning_promotion(workspace, candidate)
+    if json.loads(raw_map) != expected:
+        raise PostDropRefused("learning_active_map_not_same_sealed_candidate")
+    for name, limit in (
+        (MAP_NAME, MAX_MAP),
+        ("dvtws.args", MAX_ARGS),
+        ("dvtws.original.args", MAX_ARGS),
+        (ORIGIN_FILE, MAX_MAP),
+        ("dvtws.args.global-policy.json", 16384),
+    ):
+        if name == "dvtws.args.global-policy.json":
+            has_active = (release / name).exists() or (release / name).is_symlink()
+            has_sealed = (sealed / name).exists() or (sealed / name).is_symlink()
+            if has_active != has_sealed:
+                raise PostDropRefused("learning_active_exclusion_policy_drift")
+            if not has_active:
+                continue
+        if _secure_bytes(release / name, limit, uid) != _secure_bytes(
+                sealed / name, limit, uid):
+            raise PostDropRefused("learning_active_release_not_same_sealed_candidate")
+    source = json.loads(_secure_bytes(release / ORIGIN_FILE, MAX_MAP, uid))
+    approved = _valid_learning_active(
+        raw_map, {"id": generation, "candidate": candidate}, source,
+        _secure_bytes(release / "dvtws.original.args", MAX_ARGS, uid),
+        _secure_bytes(release / "dvtws.args", MAX_ARGS, uid))
+    native_generation, _ = _qualified_learning_sources(approved, ROOT)
+    if native_generation != generation:
+        raise PostDropRefused("learning_source_foreign_generation")
+    return workspace, candidate, approved
+
+
+def native_prepare_learning_producer(release: Path) -> None:
+    """Prepare exact qualified N-inboxes; refuse stale old ROOT contents."""
+    from auto_detect_storage import prepare_native_learning
+    _, _, sources = _learning_release_sources(release)
+    _, names = _qualified_learning_sources(sources, ROOT)
+    prepare_native_learning(names)
+
+
+def native_capture_learning_before_launch(release: Path) -> str:
+    """Exact original P2a zero-cut witness for every learning native file."""
+    _, _, sources = _learning_release_sources(release)
+    _, names = _qualified_learning_sources(sources, ROOT)
+    _parent(ROOT, 0)
+    identity = pwd.getpwnam(ENGINE_USER)
+    if identity.pw_uid <= 0 or identity.pw_gid <= 0:
+        raise PostDropRefused("learning_engine_identity_missing")
+    witness = _capture(
+        ROOT, root_uid=0, root_gid=0,
+        engine_uid=identity.pw_uid, engine_gid=identity.pw_gid,
+        learning_names=names)
+    return _witness_line_learning(witness, sources)
+
+
+def native_seal_learning_epoch(
+    generation: str, candidate: str, wire: str,
+) -> None:
+    from auto_detect_epoch_receipts import HEX32, HEX64
+    from voice_live_inspect import COMMON_ACTIVE
+    if (not isinstance(generation, str) or not HEX32.fullmatch(generation) or
+            not isinstance(candidate, str) or not HEX64.fullmatch(candidate) or
+            not isinstance(wire, str)):
+        raise PostDropRefused("learning_invalid_pretraffic_request")
+    workspace, observed_candidate, sources = _learning_release_sources(
+        COMMON_ACTIVE)
+    if (workspace.name != generation or observed_candidate != candidate):
+        raise PostDropRefused("learning_epoch_candidate_not_original")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    identity = pwd.getpwnam(ENGINE_USER)
+    def same_owner() -> bool:
+        return _learning_release_sources(COMMON_ACTIVE) == (
+            workspace, candidate, sources)
+    with queue.exclusive():
+        receipts.seal_learning_pretraffic(
+            queue, workspace=workspace, candidate_sha256=candidate,
+            wire=wire, root_gid=0, engine_uid=identity.pw_uid,
+            attest=same_owner)
+
+
+def native_restore_learning_before_ipfw(
+    wire: str, pid_text: str, executable: str,
+    generation: str, candidate: str,
+) -> None:
+    from voice_live_inspect import COMMON_ACTIVE
+    workspace, observed_candidate, sources = _learning_release_sources(
+        COMMON_ACTIVE)
+    if (workspace.name != generation or observed_candidate != candidate):
+        raise PostDropRefused("learning_postdrop_not_same_candidate")
+    witness = _witness_read_learning(wire, sources)
+    owner = _original_owner_from_pid(pid_text, executable)
+    native_restore_before_ipfw(witness, owner)
+    if _learning_release_sources(COMMON_ACTIVE) != (
+            workspace, candidate, sources):
+        raise PostDropRefused("learning_postdrop_owner_changed")
+
+
+def native_finish_learning_epoch(generation: str) -> None:
+    """Finish original schema3 receipt only after real shared Apply PID gate."""
+    from auto_detect_epoch_receipts import HEX32
+    from auto_detect_owner import attest_learning_epoch_finalizing_generation
+    from voice_live_inspect import COMMON_ACTIVE
+    if not isinstance(generation, str) or not HEX32.fullmatch(generation):
+        raise PostDropRefused("learning_invalid_running_generation")
+    attester = attest_learning_epoch_finalizing_generation
+    proof = attester(generation)
+    workspace, candidate, sources = _learning_release_sources(COMMON_ACTIVE)
+    if (proof.operation_id != generation or
+            workspace.name != generation or
+            proof.owner_candidate_sha256 != candidate or
+            proof.learning != sources):
+        raise PostDropRefused("learning_running_owner_not_same_generation")
+    _, names = _qualified_learning_sources(sources, ROOT)
+    queue, receipts = _original_epoch_queue(names)
+    with queue.exclusive():
+        receipts.finish_learning_running(
+            proof, queue, workspace=workspace,
+            attest=lambda: attester(generation))
 
 
 # P2k8i: the two half-calls are a *single* original-FD9 shell operation.
@@ -568,7 +733,10 @@ def original_fd9_command(args: list[str]) -> int:
     """
     shapes = {"authorize": 2, "prepare": 1, "capture": 1,
               "restore": 4, "seal-epoch": 3, "finish-epoch": 2,
-              "finish-reviewed-epoch": 2}
+              "finish-reviewed-epoch": 2,
+              "authorize-learning": 2, "prepare-learning": 2,
+              "capture-learning": 2, "seal-learning-epoch": 4,
+              "restore-learning": 6, "finish-learning-epoch": 2}
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0 or
             not args or len(args) != shapes.get(args[0], -1)):
         return 64
@@ -596,6 +764,24 @@ def original_fd9_command(args: list[str]) -> int:
         elif args[0] == "finish-reviewed-epoch":
             native_finish_original_epoch(args[1], reviewed=True)
             print("original-fd9-reviewed-epoch=attested")
+        elif args[0] == "authorize-learning":
+            _learning_release_sources(Path(args[1]))
+            print("original-fd9-learning-release=authorized")
+        elif args[0] == "prepare-learning":
+            native_prepare_learning_producer(Path(args[1]))
+            print("original-fd9-learning-producer=prepared")
+        elif args[0] == "capture-learning":
+            print(native_capture_learning_before_launch(Path(args[1])))
+        elif args[0] == "seal-learning-epoch":
+            native_seal_learning_epoch(args[1], args[2], args[3])
+            print("original-fd9-learning-pretraffic=sealed")
+        elif args[0] == "restore-learning":
+            native_restore_learning_before_ipfw(
+                args[1], args[2], args[3], args[4], args[5])
+            print("original-fd9-learning-postdrop=attested")
+        elif args[0] == "finish-learning-epoch":
+            native_finish_learning_epoch(args[1])
+            print("original-fd9-learning-running-epoch=attested")
         else:
             native_finish_original_epoch(args[1])
             print("original-fd9-running-epoch=attested")

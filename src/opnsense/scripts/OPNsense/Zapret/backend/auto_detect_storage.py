@@ -163,6 +163,30 @@ def prepare_native() -> None:
     _prepare(ROOT, uid=0, engine_gid=identity.pw_gid)
 
 
+
+
+def prepare_native_learning(names: tuple[str, ...]) -> None:
+    """Original FD9-only N-inbox preparation after SEALED source-map proof.
+
+    This does not independently authorize a generation: the caller must
+    already have attested the original sealed candidate and mapped these
+    exact names to qualified native learning profiles. It uses precisely
+    the existing producer root and P2a layout, never a second queue.
+    """
+    if not sys.platform.startswith("freebsd") or os.geteuid() != 0:
+        raise StorageRefused("learning_native_root_freebsd_only")
+    validated = _learning_names(names)
+    if not validated:
+        raise StorageRefused("empty_learning_native_producer_set")
+    from voice_ipfw_adapter import require_lifecycle_lock
+    require_lifecycle_lock()
+    identity = pwd.getpwnam(ENGINE_USER)
+    if identity.pw_uid <= 0 or identity.pw_gid <= 0:
+        raise StorageRefused("learning_native_engine_group_unqualified")
+    _prepare(ROOT, uid=0, engine_gid=identity.pw_gid,
+             learning_inboxes=validated)
+
+
 def main() -> None:
     raise SystemExit("P2g is an import-only storage primitive; no native CLI enabled")
 
