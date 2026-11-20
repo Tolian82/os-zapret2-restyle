@@ -23,7 +23,7 @@ ROOT_MODE = 0o710
 FILE_MODE = 0o660
 PENDING_MODE = 0o700
 ENGINE_USER = "nobody"
-LEARNING_NAME = re.compile(r"learning-([0-9a-f]{32})-([1-9][0-9]{0,2})\\.txt\\Z")
+LEARNING_NAME = re.compile(r"learning-([0-9a-f]{32})-([1-9][0-9]{0,2})\.txt\Z")
 
 
 class StorageRefused(RuntimeError):
@@ -100,8 +100,8 @@ def _learning_names(names: tuple[str, ...]) -> tuple[str, ...]:
         numbers.append(int(found[2]))
     if (len(generations) > 1 or
             len(set(numbers)) != len(numbers) or
-            numbers != list(range(numbers[0], numbers[0] + len(numbers)))
-            if numbers else False):
+            (bool(numbers) and
+             numbers != list(range(numbers[0], numbers[0] + len(numbers))))):
         raise StorageRefused("ambiguous_native_learning_inbox_sequence")
     return names
 
