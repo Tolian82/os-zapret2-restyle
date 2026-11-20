@@ -181,6 +181,169 @@ def preview_learning_domains(map_raw: bytes, owner: dict, original: bytes,
 
 
 
+# TZ6v4 STEP 4: one existing P1 policy and effective-known composer,
+# with original source attribution BEFORE the PSL collapse. This projection
+# is not itself a durable Found/live write nor an original cursor ACK.
+def preview_learning_p1_effects(
+    observations: list[dict], manual_hostlists: dict[str, str],
+    owned_found: dict[str, str], shared_found: str,
+    global_exclude: str, *, psl: PublicSuffixList | None = None,
+) -> dict:
+    """Derive all three permanent Found effects and both active images.
+
+    Requires a COMPLETE original Config/Found snapshot, not a partial
+    observation-to-one-field shortcut. The caller must prove P2/P2b/P2c
+    native-to-map provenance independently and still use the same original
+    destination WAL for every durable write. Rejections keep ALL source
+    bytes pending; unknown source cannot be guessed from its hostname.
+    """
+    if (not isinstance(observations, list) or
+            not 0 < len(observations) <= 4096 or
+            any(not isinstance(row, dict) or
+                set(row) != {"hostname", "hostlist"} or
+                type(row["hostname"]) is not str or
+                row["hostlist"] not in KNOWN_HOSTLISTS
+                for row in observations) or
+            not isinstance(manual_hostlists, dict) or
+            set(manual_hostlists) != set(KNOWN_HOSTLISTS) or
+            not isinstance(owned_found, dict) or
+            set(owned_found) != set(KNOWN_HOSTLISTS) or
+            any(type(s) is not str or len(s.encode("utf-8")) > MAX_MODEL_TEXT
+                for s in (*manual_hostlists.values(), *owned_found.values())) or
+            type(shared_found) is not str or
+            len(shared_found.encode("utf-8")) > MAX_MODEL_TEXT or
+            type(global_exclude) is not str or
+            len(global_exclude.encode("utf-8")) > MAX_EXCLUDE_TEXT):
+        raise V2OriginalConfigRefused("learning_p1_incomplete_registered_sources")
+    try:
+        canonical = {}
+        for name in KNOWN_HOSTLISTS:
+            normal = normalize(manual_hostlists[name], name)["normalized"]
+            canonical[name] = normal + ("\n" if normal else "")
+        # The same canonical P1 logic is shared with the old source-only
+        # observer, GUI and manual paths; attribution is already exact.
+        planned = plan_auto_additions(
+            observations, {**canonical, "auto": shared_found},
+            owned_found, global_exclude, psl=psl)
+        if (planned["result"] != "ok" or planned["unprocessed"] or
+                set(planned["additions"]) - {"auto", *KNOWN_HOSTLISTS} or
+                set(planned["removals"]) - set(KNOWN_HOSTLISTS) or
+                planned["removals"].get("auto")):
+            raise V2OriginalConfigRefused("learning_p1_unprocessed_requires_retention")
+        effects = {}
+        found_after = {}
+        for name in (*KNOWN_HOSTLISTS, "auto"):
+            add = planned["additions"].get(name, [])
+            remove = planned["removals"].get(name, [])
+            if add or remove:
+                effects[name] = {"add": add, "remove": remove}
+            before = (shared_found if name == "auto" else owned_found[name])
+            found_after[name] = _edit(
+                before.encode("utf-8"), add, remove)
+        known_after = compose_known(
+            canonical,
+            {name: found_after[name].decode("utf-8")
+             for name in KNOWN_HOSTLISTS})
+        return {
+            "effects": effects,
+            "found_after": found_after,
+            "managed_after": {
+                name: known_after[name].encode("utf-8")
+                for name in KNOWN_HOSTLISTS
+            },
+            "routes": planned["routes"],
+            "excluded": planned["excluded"],
+            "psl_sha256": planned["psl_sha256"],
+            "commit_authorized": False,
+            "cleanup_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (AutoDomainPolicyError, DomainPolicyError, EffectiveKnownRefused,
+            DestinationRefused, UnicodeError, ValueError, TypeError, KeyError,
+            AttributeError) as exc:
+        raise V2OriginalConfigRefused("learning_p1_sources_or_psl_refused") from exc
+
+
+def preview_original_learning_p1_locked(
+    writer: DestinationCommit, proof, workspace: Path, *,
+    owned_root: Path, manual_hostlists: dict[str, str],
+    global_exclude: str, attest, inspect=probe_pending_fd,
+    psl: PublicSuffixList | None = None,
+) -> dict:
+    """Original P2a/P2b/P2c + GUI locked native → P1 → live plan, NO writes.
+
+    Original PHP Config::lock supplies the exact manual values. P2a and the
+    original GUI destination flock MUST already be held; the attester must
+    prove the current schema3 terminal-running FD9 owner independently.
+    Neither a preview nor a drained FD authorizes cleanup before a future
+    durable original per-slot WAL + active managed checkpoint.
+    """
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_original_v2_source import (
+        attest_original_learning_drained_candidate_locked,
+        preview_original_learning_candidates_locked,
+    )
+
+    if (not isinstance(writer, DestinationCommit) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False)
+            or not isinstance(proof, LearningGenerationProof)
+            or not isinstance(workspace, Path) or not workspace.is_absolute()
+            or not isinstance(owned_root, Path) or not owned_root.is_absolute()
+            or not callable(attest) or not callable(inspect) or
+            set(writer.targets) != {"auto", *KNOWN_HOSTLISTS} or
+            writer.targets["auto"].parent == owned_root or
+            any(writer.targets[name] != owned_root / (name + ".txt")
+                for name in KNOWN_HOSTLISTS) or
+            attest() != proof):
+        raise V2OriginalConfigRefused("original_learning_config_p2_gui_owner_required")
+    try:
+        candidate = attest_original_learning_drained_candidate_locked(
+            writer.queue, writer.receipts, proof, workspace,
+            attest=attest, inspect=inspect)
+        original_owned = read_owned(owned_root, owner_uid=writer.receipts.uid)
+        if original_owned is None:
+            raise V2OriginalConfigRefused("original_learning_found_ledger_absent")
+        shared_bytes, shared_stat = _target(
+            writer.targets["auto"], writer.receipts.uid)
+        projection = preview_learning_p1_effects(
+            candidate["observations"], manual_hostlists, original_owned,
+            shared_bytes.decode("utf-8"), global_exclude, psl=psl)
+        # The native writer ignores the P2a flock. P1/PSL can take time:
+        # prove the SAME debug+N native physical windows again before
+        # returning the proposal to the original Config/WAL owner.
+        after = preview_original_learning_candidates_locked(
+            writer.queue, writer.receipts, proof, workspace, attest=attest)
+        same_owned = read_owned(owned_root, owner_uid=writer.receipts.uid)
+        same_shared, same_stat = _target(
+            writer.targets["auto"], writer.receipts.uid)
+        physical = lambda st: (st.st_dev, st.st_ino, st.st_size,
+                               st.st_ctime_ns, st.st_mtime_ns)
+        if (after["observations"] != candidate["observations"] or
+                after["native_cursors"] != candidate["native_cursors"] or
+                after["debug_end_offset"] != candidate["debug_end_offset"] or
+                after["debug_end_sha256"] != candidate["debug_end_sha256"] or
+                same_owned != original_owned or
+                same_shared != shared_bytes or
+                physical(same_stat) != physical(shared_stat) or
+                attest() != proof):
+            raise V2OriginalConfigRefused("learning_p1_owner_or_sources_changed")
+        return {
+            "source": candidate,
+            "p1": projection,
+            "commit_authorized": False,
+            "cleanup_authorized": False,
+            "ack_authorized": False,
+        }
+    except V2OriginalConfigRefused:
+        raise
+    except (OSError, TypeError, ValueError, KeyError, AttributeError,
+            ReceiptRefused, OriginalSourceRefused, DestinationRefused,
+            OwnedSourcesRefused, EffectiveKnownRefused) as exc:
+        raise V2OriginalConfigRefused("original_learning_p1_preview_refused") from exc
+
+
 def _validate_partial_plan(folder: Path, writer: DestinationCommit,
                            effects: dict, eligible: set[str]) -> None:
     """Original P2k8d fail-closed interrupted physical plan replay.
