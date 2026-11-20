@@ -1,6 +1,94 @@
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
-## ACTIVE — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
+## ACTIVE — ТЗ_6v4: двухуровневые профили, постоянные Found и восстановление Strategy Lab (20 ноября 2026)
+
+**Новый нормативный маршрут:** [ТЗ_6v4](TZ_6v4.md) / [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052). Настоящий блок заменяет старые предложения о завершающем универсальном observer, но сохраняет ТЗ_6v3 как действующий GUI/API/FD9/Apply контракт. **Весь предыдущий план S0–S5, P0–P5 и P2k* ниже оставлен как история выполненных решений и доказательств, а не удалён и не переобъявлен невыполненным.** Прежние отметки ACTIVE/NEXT внутри исторической части больше не управляют порядком работ.
+
+**Фактический старт, 19–20 ноября:** опубликованный и установленный владельцем через защищённый pkg-update тестовый 0.6.5_107, service RUNNING rc0, основной Traffic Strategy снова работает; список найденных доменов текущего финального наблюдателя направляется в shared, потому что исходный P2 передаёт hostlist=None. Существуют рабочие StrategiesHostlistCatalog/пять редакторов/FormData + JSON, origin-map, Python P1/PSL, FD9, P2 с WAL/ACK, native managed hot-reload. Они остаются базой реализации. Отдельная [#1203](https://github.com/Tolian82/os-zapret2-restyle/issues/1203) — Strategy Lab Stage20/Stage90 непостоянный FAIL, несмотря на RUNNING основной службы. [#1207](https://github.com/Tolian82/os-zapret2-restyle/issues/1207) — медленный Apply, отдельная performance-задача, не удалять два build-прохода слепым shortcut.
+
+### 0. Сохранённая история и повторное использование (не удалять)
+
+| Этап | Уже достигнуто; используем повторно | Остаток по ТЗ_6v4 |
+| --- | --- | --- |
+| P0 | Исследована прежняя native observer-схема; поведение движка определено официальным manual | Не перепроверять upstream опытами; owner изменил разрешённую архитектуру на двухуровневую |
+| P1 | Python domain_policy: PSL ICANN+PRIVATE, IDNA, исключения, нормализация, коллизии | Передавать доказанное known-hostlist вместо общего None |
+| P2 | Оригинальный короткий collector/queue/debug/raw, FD9/P2c, WAL/ACK, native retention | Перевести с одного observer-inbox на несколько защищённых inbox обучающих профилей |
+| P3 | Постоянные auto-owned YouTube/User, общий shared, effective managed и native hot reload | Подключить confirmed per-profile event и последовательность managed-before-native-remove |
+| P4 | Пять редакторов, справка, нижний Apply, независимый Auto Restart | Не менять внешний GUI и не добавлять pending approval |
+| P5 | Публикация тестовых pkg, выборочные native/CI-проверки по старой схеме | Отдельно принять новую схему на OPNsense владельца |
+| ТЗ_6v3 S0–S3 | MERGED (_98/_99/_100), registry/API/FormData+JSON | Никакого второго Config writer, GUI transport или root-read |
+| ТЗ_6v3 S4–S5 | pre-owner проверки и тестовый пакет выполнены | Исторические PASS остаются; новая owner-live приёмка ТЗ_6v4 открыта |
+
+### 1. STEP 0 — Зафиксировать исходную точку и границы изменения
+
+- [ ] Закрепить точный main SHA, исходную установленную версию 0.6.5_107, service status, Target Mode, действующие поколения/карту профилей, пять авторитетных источников и предыдущий успешный protected pkg-update. Никаких изменений реальных пользовательских файлов/engine/rules для обследования.
+- [ ] Отметить в source карту исходных профилей auto_detect_origin_map.py, текущий trailing observer из generator, константу hostlist=None в auto_detect_original_v2_model.py::_domains и неизменяемые P1/P2/FD9/GUI точки. Документировать маленькую дельту и прежние завершённые результаты; не запускать новый исследовательский проект.
+- [ ] Не смешивать независимые проблемы: [#1052](https://github.com/Tolian82/os-zapret2-restyle/issues/1052) native attribution; [#1203](https://github.com/Tolian82/os-zapret2-restyle/issues/1203) Strategy Lab; [#1207](https://github.com/Tolian82/os-zapret2-restyle/issues/1207) Apply timing, и исторические ошибки старых пакетов.
+
+### 2. STEP 1 — Приоритетно собрать диагностические данные и исправить Strategy Lab #1203
+
+**Из пользовательских данных на 0.6.5_107 (не смешивать job-id):** job.fJcQ19 — Stage20 FAIL 3712 ms, Stage90 PASS 18311 ms; job.2GAkJi — Stage20 FAIL 3710 ms, Stage90 PASS 18146 ms; job.p0Dbdy — Stage20 PASS 7069 ms, Stage90 PASS 17955 ms; job.GSxZWN — Stage20 FAIL 3823 ms, Stage90 FAIL 8192 ms, итог RESTORE_FAILED. Последний service status RUNNING, rc0. Стандартный limit Stage20 — 10 секунд, но эти FAIL за ~3.7 секунды **не доказывают истечение timeout**. Нельзя слепо менять 10/45 секунд или логику восстановления.
+
+- [ ] **Только read-only** собрать существующие четыре job status.json, timing-telemetry.json, lifecycle-snapshot.json, lifecycle-restoration.json, Stage20/Stage90 adapter rc/stderr, соответствующие job logs и native service/FD9 stop+auto-retirement логи. Если файл отсутствует — отметить отсутствующий файл, а не выдумывать причину. Узнать точный Stage20 subprocess return code и время semantic STOPPED verification, момент отказа; отдельно для Stage90.
+- [ ] Сверить установленный pkg, current service status/действующий dvtws2 PID, наличие живого Lab worker и точную инвентаризацию своих IPFW диапазонов 19000–19010 (основные) и 19100–19131 (Lab) только чтением. Не делать Stop/Start/Apply, не удалять правила/журнал, не перезапускать Lab ради диагностики. Не передавать полный пользовательский HOSTLIST в публичный issue.
+- [ ] По существующим данным различить Stage20 timeout rc124, native Stop rc69/70, mismatch native owner/epoch/FD9, уже STOPPED при неуспешном status verify, и отдельный Stage90 Restore FAIL. Проверить исходные strategy_lab/lifecycle.sh и original zapret_service.sh, не приписывая одному Stage90 PASS устранение ошибки Stage20.
+- [ ] При установленной причине выполнить **отдельный ограниченный Lab code fix**, который использует обычную оригинальную native service lifecycle, сохраняет Stop/Restore guard, FD9, restart/Voice/IPFW, и снабдить его направленными регрессионными проверками. Приёмка owner-live: Stage20 и Stage90 PASS, начальное состояние службы восстановлено, нормальный трафик и Voice действуют; ошибка не маскируется PASS. Пока этого нет, Lab остаётся FAIL даже если основной GUI уже работает.
+
+### 3. STEP 2 — Генератор двух уровней вместо завершающего observer
+
+- [ ] В исходном генераторе сначала произвести полный **оригинальный рабочий** ordered argv после Target Mode, --new, template/import, Python expansion, Extra и применимых global exclusions. Не вставлять native --hostlist-auto в первые профили, иначе известный User-домен будет перехвачен обучающим YouTube.
+- [ ] Только в Target Mode=auto добавить **после всех обычных исполняемых профилей** обучающие экземпляры для каждого однозначного HOSTLIST-профиля в том же relative source order и с теми же TCP/UDP/L7/L3 filters и user DPI args плюс нативный detector. На owner example: обычные YouTube TCP/QUIC, Telegram/IPSET, User TCP, Voice/STUN; затем обучающие YouTube TCP Auto, YouTube QUIC Auto, User TCP Auto. Номера примера не фиксировать; первый подходящий обучающий профиль законно приоритетен.
+- [ ] IPSET-only, mixed HOSTLIST+IPSET, Telegram и Voice/STUN **никогда не обучать**. Отказаться от дополнительного no-action trailing observer, но не удалять оригинальные P2/FD9 source mechanisms. Не добавлять скрытый <HOSTLIST:auto>. Для all/list не менять профильную семантику и не создавать learning-tier.
+- [ ] Расширить один существующий auto_detect_origin_map.py и native released generation manifest до native_number, role=working|learning|excluded, source profile, native selector, owner hostlist, found_source_id, native_auto_inbox, generation + exact final argv SHA. Привязать к единственному StrategiesHostlistCatalog и target registry; источником истины служит карта фактически сформированного поколения, **не** статические номера в config.xml.
+- [ ] Update original native owner check так, чтобы он подтверждал именно множество разрешённых learning profiles/inbox вместо обязательного observer_native_number; отрицать mismatched/stale/foreign profile, не угадывать по домену.
+- [ ] Выход: проверенный final argv/map, рабочие известные User-домены проходят до Auto-профилей, unknown TCP/TLS доходит до первой learning-копии; прежние IPSET/Voice/порядок остаются штатными.
+
+### 4. STEP 3 — Multi-inbox P2, нативная атрибуция и отказ при неопределённости
+
+- [ ] Для каждой обучающей native-копии выделить свой защищённый поколением --hostlist-auto input path, связанный с настоящим native profile ID. Не соединять в один неразмеченный файл, чтобы не терять provenance. Это и рабочий auto-HOSTLIST данного native-профиля, и input для existing P2, **не пассивный лог**.
+- [ ] Перенастроить original bounded one-minute P2 P2a→P2b→P2c/FD9→PHP Config/P1→destination WAL→ACK для N inputs/debug windows без новой daemon, cron, Config writer или второго dvtws2. Сохранять старую ограниченную file rotation, хеши/иноды, nofollow/FD scan, cursor, generation rollback, partial WAL recovery и прежние выполненные тесты. Не повторять всю историю P2k* заново.
+- [ ] Сопоставлять подтверждённый фактический native append (не одну debug строку) с profile number и собственным inbox того же поколения; затем через owner map выдавать hostname+hostlist. Профиль YouTube → youtube_found, User → user_found, raw-first неизвестный → shared_found после подтверждения факта находки; stale/untrusted evidence не объявлять известным. Никакой эвристики по SLD/IP/L7 и никакого автоматического выбора «самой успешной» DPI.
+- [ ] При old generation/Stop/Apply/reboot/upgrade применять original owner/ACK/retention, без SIGSTOP/SIGCONT, SIP/service interruption, manual IPFW touches или extra VM campaigns. Однозначная unknown fallback не должна неявно запускать стратегию shared.
+- [ ] Выход: natively captured profile → единственный корректный registered found_id, raw/debug window и ACK физически аттестованы; foreign profile и incomplete event дают refuse/fallback согласно действующей политике.
+
+### 5. STEP 4 — Постоянные Found и online transfer к managed HOSTLIST
+
+- [ ] Один existing domain_policy.py: **сначала source attribution, затем** PSL eTLD+1/IDNA, локальные ! и !^, global Exclude Domains, coverage/dedup/sort. Нативный dvtws2 до обработки P1 использует свой сырой hostname без нового парсера в движке. Не трогать manual OPNsense Config полями фонового worker.
+- [ ] Сразу после подтверждения P1 сохранить Found в защищённые существующие постоянные youtube.txt/user.txt или shared auto-domains.txt. Это НЕ новые pending approval и НЕ ожидание кнопки Apply. Метка принадлежности — через текущий catalog/owner/event map, а не #owner comments внутри native HOSTLIST.
+- [ ] В том же original FD9/P2 native live source writer применить confirmed known auto-owned к effective managed/hostlist-X.txt = manual+auto. Обычный dvtws2 подхватывает изменённый HOSTLIST без рестарта, а работающие Voice/IPFW и runtime PID не меняются.
+- [ ] **Сначала** достоверный commit active managed и его защищённый контекст, **потом** удаление перенесённой конкретной hostname-строки из соответствующего временного native --hostlist-auto file. Не существует отдельной documented команды dvtws2 delete-domain: правится файл; защищаться от concurrent append/другого inode/old FD и произвольного обнуления чужих находок. При ошибке cleanup сохранять native строку + восстанавливаемое P2 состояние (не наоборот). Repeated event idempotent.
+- [ ] Для shared fallback отсутствие явного <HOSTLIST:auto> сохраняет только запись/GUI, без online-strategy. Старые постоянные found и пользовательские manual переживают обычный restart/upgrade/uninstall. Не мигрировать legacy zapret-hosts-auto.txt.
+- [ ] Выход: User learning event www.example.com → persistent user_found example.com → live User managed hot reload (same owner/PID) → safe native-auto row removal. Global/manual negative veto и duplicate не создают записи.
+
+### 6. STEP 5 — Сохранить действующий GUI, Apply, Auto Restart
+
+- [ ] GUI пять источников; текущие два ручных textarea, найденные YouTube/User и общий, Help/RU-EN/F5, revision statuses, existing root read и FormData + JSON/strategies_lists_manifest/found-intent/compactStrategies unchanged by default.
+- [ ] Сохранить существующее 3-way baseline/user-draft/current merge и конфликтные сообщения. Новую сложную систему guaranteed delivery и вторую очередь подтверждений НЕ разрабатывать; редкая потеря гоняющейся находки допустима владельцем. Не делать silent loss committed entries или перезапись несохранённого пользовательского текста.
+- [ ] Нижний «Применить» по прежнему делает штатный original shared Apply+restart для ручных правок всех пяти списков. Фоновая минута ни Apply, ни рестарт не делает. Отдельный Auto Restart Advanced-only default Off, deliberate STOPPED не стартовать. Большие неизменённые ручные списки не пересылать вторым JSON через configd.
+- [ ] Выход: GUI показывает постоянные автонаходки после F5, manual deletion/modifier/addition сохраняется обычной кнопкой, работа не останавливается минутным сборщиком.
+
+### 7. STEP 6 — Точечная проверка, приёмка и .pkg
+
+- [ ] Source tests прежде всего на final-order/first-match implications, exact native map/unknown, одинаковые TCP/L7 и known User protection, YouTube TCP/QUIC, IPSET/Voice unchanged, all/list no learning clones, no implicit <HOSTLIST:auto>. Не пытаться экспериментально заново доказывать upstream manual.
+- [ ] Ограниченные P1/P2/FD9/native integration cases для двух native inbox, per-profile origin, changed inode/epoch/FD9, duplicate/PSL/!, raw-first unknown, mixed targets refusal, concurrent native append, partial WAL/ACK and active-before-raw cleanup. Повторно использовать прежние PASS и их тесты.
+- [ ] Реальный native smoke: same process PID, truly changed managed HOSTLIST, без SIGSTOP/SIGCONT и прерывания divert/Voice, исходный статус после обычного GUI Apply. Ни один лабораторный сценарий не подменяет real ISP discovery.
+- [ ] Разработку Auto-detect вести одним целевым PR для #1052, а исправление Lab — отдельным scoped PR для #1203 (чтобы не смешивать отказы Stop с новым генератором). Не включать performance #1207 в тот же рискованный diff без диагностики.
+- [ ] Выпустить после exact-head CI/достаточного native OPNsense 26.7 подтверждения **только тестовый .pkg**, с точной версией, immutable release link, принятым защищённым pkg-update; никаких SH установщиков, автоматической установки, штатного repo push или бесконтрольного pkg add над RUNNING. Перед установкой учитывать текущий original FD9 service.
+- [ ] На OPNsense владельца: реальная установка/обновление, status/Voice/Telegram/WAN, known User работает несмотря на обучающие YouTube, native source owner в нужном Found, постоянство GUI, manual Apply/restart, explicit shared isolation, исключения и hot reload; отсутствие реальной DPI находки в облаке НЕ считается дефектом. Отдельно подтвердить исправленную Lab Stage20+Stage90 и работоспособность исходной стратегии.
+- [ ] Сохранять Lab issue #1203 OPEN до её собственного owner PASS; #1052 не закрывать по одним source tests. #1207 perf независимо по фактическим временам, не «ускорять» без точной трассы двух build. Только затем обновить PROJECT_STATE/ROADMAP/START_HERE с настоящими фактами.
+
+### 8. Инварианты, обязательные на всех шагах
+
+- Manual upstream Zapret2 v1.0.7 — нормативное описание first-match, --hostlist-auto, исключений и native hot reload. Проверяем **только нашу интеграцию**, а не корректность формулировок upstream многократными экспериментами.
+- Один dvtws2, один original FD9, один Config lock/writer, существующие durable queues/P1/WAL и target registry; никакого SQLite/второго процесса/ненужного лаб-монитора.
+- Никакого циклического останова, SIGSTOP/SIGCONT, самопроизвольного restart ради Auto-detect, pfctl -d/-e или прямого IPFW изменения вместо штатного lifecycle.
+- Не считать доказанным успех DPI-обхода по native событию; пользователь разрешил давать шанс первому подходящему обучающему профилю. Пользователь вправе исправить назначение/исключения через GUI.
+- Историческая часть ниже — архив выполненных и не завершённых на тот момент шагов; **не удалять её в рамках нового плана**.
+
+---
+
+
+## RETAINED HISTORICAL — ТЗ_6v3: реестр/API/FormData пяти источников Стратегий (19 ноября 2026)
 
 **ТЗ_6v3 — S0–S3 слиты в `_98`/`_99`/`_100`; S4 квалифицирован нативной OPNsense 26.7, S5 тестовый пакет опубликован.** Целевые PHP/Node, G03 HTTPS Apply RUNNING/STOPPED, конфликт вкладок, F5 всех пяти редакторов, P5c/FD9 и Chromium прошли на точном head PR #1196. [Тестовый `v0.6.5_100.pkg`](https://github.com/Tolian82/os-zapret2-restyle/releases/download/v0.6.5_100/os-zapret2-restyle-0.6.5_100.pkg) собран штатным OPNsense Mk от `ea0585ab9160b0687d25c68aa26f1f1e0afe4753`, ABI `FreeBSD:15:amd64`, SHA-256 `220c6e76d9e6577f2b34fc4425eaba97450984288329ff23a5ed233fbc828045`. Обязательный publication-record PR повышает ревизию исходников до `_101` только для документации, без нового `.pkg`. **Owner-live установка/Apply/журнал в #1190 ещё OPEN.** Не расширять scope до Voice/IPSET/Exclude, pfSense или дополнительных списков.
 

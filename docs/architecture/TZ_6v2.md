@@ -1,6 +1,6 @@
 # ТЗ_6v2 (TZ_6v2) — Five HOSTLIST editors and native Apply, release line 0.6.x
 
-**Сохранённая предыдущая редакция от 16 ноября.** Активная редакция требований — [ТЗ_6v3](TZ_6v3.md), 19 ноября 2026: старые GUI/FD9/Auto-detect инварианты сохраняются, но требования к реестру/API чтения/`FormData + JSON` и порядок текущего внедрения обновлены. Исторические фразы «текущая очередь» ниже не заменяют новый план.
+**Сохранённая предыдущая редакция от 16 ноября.** Активная редакция требований — [ТЗ_6v4](TZ_6v4.md), 20 ноября 2026 (ТЗ_6v3 сохраняется как промежуточная утверждённая редакция): старые GUI/FD9/Auto-detect инварианты сохраняются, но требования к реестру/API чтения/`FormData + JSON` и порядок текущего внедрения обновлены. Исторические фразы «текущая очередь» ниже не заменяют новый план.
 
 **Status:** OWNER APPROVED, **REQUIREMENTS / IMPLEMENTATION PLAN ONLY**, 16 November 2026. This version of the technical assignment applies to the `v0.6.x` line (the numeral **6** is the release-line identifier, **v2** is the requirements revision, not `VERSION` or `PLUGIN_REVISION`). This document **does not** claim that the new GUI/Apply behavior has been implemented, tested, or published in a package.
 
