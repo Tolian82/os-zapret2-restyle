@@ -202,6 +202,56 @@ def exclusive_destination_lock(gui_lock: Path, owner_uid: int):
         os.close(fd)
 
 
+def _original_source_plan_fields(folder: Path, intent: dict,
+                                 uid: int) -> dict:
+    """Bind ONE destination WAL to its original immutable source intent.
+
+    Schema2 is the detached original P2a pending inode. Schema3's FIRST
+    physical N-inbox epoch is a virtual source slot, not a detached pending
+    inode; its exact protected original cursor intent SHA is part of the
+    very same plan and prevents the two provenance kinds being confused.
+    Neither mode grants a native-source cleanup or ACK capability.
+    """
+    if not isinstance(intent, dict):
+        raise DestinationRefused("invalid_original_source_intent")
+    if intent.get("schema") != 3:
+        return {
+            "schema": 2, "kind": "durable-destination-plan",
+            "generation": intent["generation"],
+            "pending_name": intent["pending_name"],
+            "pending_sha256": intent["pending_sha256"],
+            "evidence": intent["evidence"],
+            "debug_end_offset": intent["debug_end_offset"],
+            "debug_end_sha256": intent["debug_end_sha256"],
+        }
+    if (folder.name != "00000000" or
+            folder.parent.name != "cursor-chain-v2" or
+            folder.parent.parent.name != intent.get("generation") or
+            intent.get("schema") != 3 or
+            intent.get("kind") != "original-learning-cursor-prepared" or
+            intent.get("sequence") != 0 or
+            intent.get("ack_authorized") is not False):
+        raise DestinationRefused("learning_wal_not_original_first_slot")
+    raw = _read(folder / "intent.json", uid)
+    try:
+        saved = json.loads(raw)
+    except (ValueError, UnicodeError, TypeError) as exc:
+        raise DestinationRefused("learning_wal_source_invalid") from exc
+    if saved != intent:
+        raise DestinationRefused("learning_wal_source_intent_changed")
+    return {
+        "schema": 3, "kind": "durable-destination-plan",
+        "generation": intent["generation"],
+        # This is an original cursor slot name, NOT a real pending inode.
+        "pending_name": "learning-00000000",
+        "pending_sha256": _sha(_canonical({"observations": intent["observations"]})),
+        "evidence": "learning-native-debug",
+        "debug_end_offset": intent["debug_end_offset"],
+        "debug_end_sha256": intent["debug_end_sha256"],
+        "source_intent_sha256": _sha(raw),
+    }
+
+
 def qualified_destination_plan(folder: Path, intent: dict, uid: int,
                                targets: dict[str, Path] | None = None
                                ) -> tuple[dict, bytes]:
@@ -222,15 +272,7 @@ def qualified_destination_plan(folder: Path, intent: dict, uid: int,
         plan = json.loads(plan_raw)
     except (ValueError, UnicodeError) as exc:
         raise DestinationRefused("corrupt_destination_plan") from exc
-    expected = {
-        "schema": 2, "kind": "durable-destination-plan",
-        "generation": intent["generation"],
-        "pending_name": intent["pending_name"],
-        "pending_sha256": intent["pending_sha256"],
-        "evidence": intent["evidence"],
-        "debug_end_offset": intent["debug_end_offset"],
-        "debug_end_sha256": intent["debug_end_sha256"],
-    }
+    expected = _original_source_plan_fields(folder, intent, uid)
     if (not isinstance(plan, dict) or
             set(plan) not in (set(expected) | {"writes"},
                              set(expected) | {"writes", "live"}) or
@@ -331,6 +373,14 @@ class DestinationCommit:
                        effects: dict, *, live: dict | None = None) -> dict:
         if not getattr(self, "_gui_held", False):
             raise DestinationRefused("gui_lock_required")
+        source = _original_source_plan_fields(folder, intent, self.receipts.uid)
+        if source["schema"] == 3:
+            # Schema3 MUST provide an exact live-managed preimage plan even
+            # for a zero-change P1 batch. A source-only known Found write
+            # without the active same-PID counterpart cannot be accepted.
+            if live is None or raw != _canonical(
+                    {"observations": intent["observations"]}):
+                raise DestinationRefused("learning_wal_requires_live_and_source")
         # Callers may supply canonical after-BYTES, never a callback or a
         # stale file path alone. The original Config/P2 owner must derive
         # these bytes from its currently locked native manual/owned sources.
@@ -389,14 +439,7 @@ class DestinationCommit:
                     "before_mtime_ns": active_st.st_mtime_ns,
                     "before_size": active_st.st_size,
                 }
-            plan = {"schema": 2, "kind": "durable-destination-plan",
-                    "generation": intent["generation"],
-                    "pending_name": intent["pending_name"],
-                    "pending_sha256": intent["pending_sha256"],
-                    "evidence": intent["evidence"],
-                    "debug_end_offset": intent["debug_end_offset"],
-                    "debug_end_sha256": intent["debug_end_sha256"],
-                    "writes": writes}
+            plan = {**source, "writes": writes}
             if live is not None:
                 plan["live"] = live_rows
             _write_once(journal, "plan.json", _canonical(plan), self.receipts.uid)
@@ -422,8 +465,8 @@ class DestinationCommit:
         if checkpoint_path.exists() or checkpoint_path.is_symlink():
             checkpoint = json.loads(_read(checkpoint_path, self.receipts.uid))
             if (checkpoint.get("plan_sha256") != _sha(plan_raw) or
-                    checkpoint.get("evidence") != intent["evidence"] or
-                    checkpoint.get("committed_cursor_offset") != intent["debug_end_offset"] or
+                    checkpoint.get("evidence") != source["evidence"] or
+                    checkpoint.get("committed_cursor_offset") != source["debug_end_offset"] or
                     checkpoint.get("committed_cursor_sha256") != intent["debug_end_sha256"]):
                 raise DestinationRefused("checkpoint_differs_from_plan")
             return checkpoint  # never undo later GUI deletion on acknowledged replay
@@ -478,11 +521,11 @@ class DestinationCommit:
             if _sha(current) != row["after"]:
                 raise DestinationRefused("live_managed_postimage_not_installed")
         checkpoint = {"schema": 1, "kind": "destination-and-cursor-committed",
-                      "generation": intent["generation"], "pending_name": intent["pending_name"],
+                      "generation": source["generation"], "pending_name": source["pending_name"],
                       "plan_sha256": _sha(plan_raw),
-                      "evidence": intent["evidence"],
-                      "committed_cursor_offset": intent["debug_end_offset"],
-                      "committed_cursor_sha256": intent["debug_end_sha256"],
+                      "evidence": source["evidence"],
+                      "committed_cursor_offset": source["debug_end_offset"],
+                      "committed_cursor_sha256": source["debug_end_sha256"],
                       "ack_authorized": False}
         _write_once(journal, "checkpoint.json", _canonical(checkpoint), self.receipts.uid)
         return checkpoint
