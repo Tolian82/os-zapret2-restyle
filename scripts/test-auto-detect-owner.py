@@ -415,21 +415,26 @@ class OwnerGenerationTests(unittest.TestCase):
         with patch.object(owner_mod.sys, "platform", "linux"):
             with self.assertRaises(owner_mod.GenerationRefused):
                 owner_mod.attest_learning_running_generation()
-        with patch.object(owner_mod.sys, "platform", "freebsd15"), (
-                patch.object(owner_mod.os, "geteuid", return_value=0)), (
-                patch("voice_ipfw_adapter.require_lifecycle_lock") as held), (
-                patch.object(owner_mod, "_attest_core", return_value=confirmed) as core):
-            self.assertEqual(
-                owner_mod.attest_learning_running_generation(), confirmed)
-            self.assertTrue(held.called)
-            self.assertTrue(core.call_args.kwargs["learning_schema3"])
-            self.assertNotIn("epoch_finalizing_operation", core.call_args.kwargs)
-            core.return_value = object()
-            with self.assertRaises(owner_mod.GenerationRefused):
-                owner_mod.attest_learning_running_generation()
-            held.side_effect = RuntimeError("FD9_missing")
-            with self.assertRaises(RuntimeError):
-                owner_mod.attest_learning_running_generation()
+        with patch.object(owner_mod.sys, "platform", "freebsd15"):
+            with patch.object(owner_mod.os, "geteuid", return_value=0):
+                with patch("voice_ipfw_adapter.require_lifecycle_lock") as held:
+                    with patch.object(owner_mod, "_attest_core",
+                                      return_value=confirmed) as core:
+                        self.assertEqual(
+                            owner_mod.attest_learning_running_generation(),
+                            confirmed)
+                        self.assertTrue(held.called)
+                        self.assertTrue(
+                            core.call_args.kwargs["learning_schema3"])
+                        self.assertNotIn(
+                            "epoch_finalizing_operation",
+                            core.call_args.kwargs)
+                        core.return_value = object()
+                        with self.assertRaises(owner_mod.GenerationRefused):
+                            owner_mod.attest_learning_running_generation()
+                        held.side_effect = RuntimeError("FD9_missing")
+                        with self.assertRaises(RuntimeError):
+                            owner_mod.attest_learning_running_generation()
 
     def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
         long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,
