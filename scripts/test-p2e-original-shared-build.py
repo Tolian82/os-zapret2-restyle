@@ -1018,10 +1018,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         "ack_authorized": False,
                     }
                 if sys.platform.startswith("freebsd"):
-                    # FreeBSD production accepts ONLY the genuine /conf
-                    # Config FD, never our disposable fixture. Verify
-                    # refusal rather than weakening that security gate or
-                    # opening/saving real OPNsense config in source CI.
+                    # Native product accepts ONLY genuine /conf Config FD.
+                    # Never weaken that protection for this disposable test.
                     with self.assertRaisesRegex(
                             V2OriginalConfigRefused,
                             "learning_original_config_fd9_model_required"):
@@ -1034,28 +1032,91 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             global_exclude="", attest=lambda: proof,
                             inspect=drained,
                             psl=self._tz6v4_psl_for_fixtures())
-                    # The same original P2k2b writer proves the actual
-                    # native filesystem Found→managed CAS/epoch/checkpoint.
-                    # This private fixture is NOT a product Config owner.
-                    with writer.exclusive_targets():
-                        saved_checkpoint = writer._locked_commit(
-                            slot, persisted, source_raw,
-                            p1["p1"]["effects"], live=working)
-                else:
+
+                from auto_detect_destination_commit import _replace as real_replace
+                from auto_detect_original_v2_model import (
+                    _recover_original_learning_partial_locked,
+                )
+                def commit_fixture_once(*, global_exclude=""):
                     with patch(
                             "auto_detect_original_v2_model.COMMON_ACTIVE",
                             active_root), patch(
                             "auto_detect_original_v2_model.preview_live_known_after_readonly",
                             side_effect=native_live_preview):
-                        saved_checkpoint = commit_with_original_learning_first_slot(
+                        if sys.platform.startswith("freebsd"):
+                            # Original private P2k2b/partial-P1 primitives
+                            # only; no test may impersonate PHP Config FD4.
+                            with writer.exclusive_targets():
+                                if (slot / "destination" / "plan.json").exists():
+                                    return _recover_original_learning_partial_locked(
+                                        writer, proof, self.work, slot, persisted,
+                                        owned_root=owned_dir,
+                                        manual_hostlists={
+                                            "youtube": "youtube.com\n", "user": ""},
+                                        global_exclude=global_exclude,
+                                        attest=lambda: proof, inspect=drained,
+                                        psl=self._tz6v4_psl_for_fixtures())
+                                return writer._locked_commit(
+                                    slot, persisted, source_raw,
+                                    p1["p1"]["effects"], live=working)
+                        return commit_with_original_learning_first_slot(
                             writer, proof, self.work,
                             config_fd=cfg_fd, config_path=config_path,
                             owned_root=owned_dir,
                             manual_hostlists={
                                 "youtube": "youtube.com\n", "user": ""},
-                            global_exclude="", attest=lambda: proof,
+                            global_exclude=global_exclude,
+                            attest=lambda: proof,
                             inspect=drained,
                             psl=self._tz6v4_psl_for_fixtures())
+
+                # Crash just AFTER the first permanent Found rename/fsync.
+                # The original WAL plan exists, but there is NO checkpoint
+                # and still NO managed update or native row cleanup/ACK.
+                replacements = [0]
+                def crash_after_first_cas(*args, **kwargs):
+                    real_replace(*args, **kwargs)
+                    replacements[0] += 1
+                    if replacements[0] == 1:
+                        raise DestinationRefused(
+                            "synthetic_crash_after_first_original_found")
+                with patch("auto_detect_destination_commit._replace",
+                           side_effect=crash_after_first_cas):
+                    with self.assertRaises(
+                            (V2OriginalConfigRefused, DestinationRefused)):
+                        commit_fixture_once()
+                self.assertEqual(replacements, [1])
+                self.assertTrue((slot / "destination" / "plan.json").exists())
+                self.assertFalse(
+                    (slot / "destination" / "checkpoint.json").exists())
+                self.assertEqual(targets["youtube"].read_bytes(),
+                                 b"example.com\n")
+                self.assertEqual(targets["user"].read_bytes(), b"")
+                self.assertEqual(working["youtube"]["path"].read_bytes(),
+                                 b"youtube.com\n")
+                self.assertFalse((slot / "ack.json").exists())
+
+                # This native writer ignores P2a flock: a NEW append must
+                # remain preserved and not be added to the old WAL slot.
+                with user_native.open("ab") as out:
+                    out.write(b"later.example.org\n")
+                self.assertEqual(
+                    chain.prepare_learning_first_slot(
+                        proof, self.work, attest=lambda: proof,
+                        inspect=drained)["intent_sha256"],
+                    saved["intent_sha256"])
+                # Reprocessing with changed current P1/exclusion is not
+                # an excuse to reauthorize the previously sealed effects.
+                with self.assertRaises(
+                        (V2OriginalConfigRefused, DestinationRefused)):
+                    commit_fixture_once(global_exclude="example.com\n")
+                self.assertFalse(
+                    (slot / "destination" / "checkpoint.json").exists())
+                saved_checkpoint = commit_fixture_once()
+                self.assertEqual(user_native.read_bytes(),
+                                 b"mail.example.org\nlater.example.org\n")
+                # Reset only disposable fixture tail for later source tests.
+                user_native.write_bytes(b"mail.example.org\n")
                 self.assertFalse(saved_checkpoint["ack_authorized"])
                 expected_plan, plan_raw = qualified_destination_plan(
                     slot, persisted, epoch.uid, targets=writer.targets)
