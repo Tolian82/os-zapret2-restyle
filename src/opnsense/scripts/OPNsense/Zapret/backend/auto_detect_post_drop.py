@@ -10,6 +10,7 @@ No second start route, collector, Config writer, ACK or daemon.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -386,6 +387,147 @@ def _witness_read(line: str) -> OriginalProducer:
         ROOT, 0, 0, native_user.pw_uid, native_user.pw_gid,
         (values[:3], values[3:]),
     )
+
+
+
+# TZ6v4: versioned, complete post-drop evidence across the same original
+# launch argument. The existing six-u64 p2k8i wire stays LEGACY-ONLY and
+# cannot silently truncate N learning inodes. These codecs are NOT new CLI
+# operations: the actual FD9 entrypoint must first verify a sealed schema3
+# map, resolve the expected tuples, and seal a matching original epoch.
+_LEARNING_WITNESS = re.compile(
+    r"^p2k8i3:([0-9a-f]{32}):([1-9][0-9]{0,2}):([0-9a-f]{64}):([0-9:]+)$")
+_MAX_LEARNING_WITNESS = 16384
+_U64_MAX = (1 << 64) - 1
+
+
+def _qualified_learning_sources(
+    sources: tuple[tuple[int, str, str], ...], root: Path,
+) -> tuple[str, tuple[str, ...]]:
+    """Only an independently attested native-number/hostlist/path map fits.
+
+    The caller must obtain these tuples from _valid_learning_proposal (and
+    later the sealed active schema3 owner), not by trusting debug or argv
+    guesses. The codec checks exact paths and numbering but cannot by
+    itself authorize that caller or a new runtime.
+    """
+    if (type(sources) is not tuple or not 1 <= len(sources) <= 255 or
+            not isinstance(root, Path) or not root.is_absolute()):
+        raise PostDropRefused("unqualified_learning_fd9_source_set")
+    names = []
+    for row in sources:
+        if (type(row) is not tuple or len(row) != 3 or
+                type(row[0]) is not int or not 1 <= row[0] <= 255 or
+                type(row[1]) is not str or not
+                re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", row[1]) or
+                type(row[2]) is not str):
+            raise PostDropRefused("unqualified_learning_fd9_profile")
+        path = Path(row[2])
+        if (not path.is_absolute() or path.parent != root or
+                path.name != f"learning-{path.name[9:41]}-{row[0]}.txt"):
+            raise PostDropRefused("unqualified_learning_fd9_path")
+        names.append(path.name)
+    try:
+        _learning_names(tuple(names))
+    except StorageRefused as exc:
+        raise PostDropRefused("unqualified_learning_fd9_names") from exc
+    generation = names[0][9:41]
+    if any(name[9:41] != generation for name in names):
+        raise PostDropRefused("mixed_learning_fd9_generations")
+    return generation, tuple(names)
+
+
+def _learning_source_digest(sources: tuple[tuple[int, str, str], ...]) -> str:
+    # Pin attribution as well as native paths; changing hostlist while
+    # keeping the same inode names must invalidate the FD9 witness.
+    canonical = "\x00".join(
+        f"{number}: {hostlist}: {path}" for number, hostlist, path in sources)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _learning_identity_values(identities: tuple[tuple[int, int, int], ...],
+                              count: int) -> tuple[int, ...]:
+    if (type(identities) is not tuple or len(identities) != count + 2 or
+            len(identities) > 257):
+        raise PostDropRefused("incomplete_learning_fd9_inode_set")
+    values = []
+    seen = set()
+    for item in identities:
+        if (type(item) is not tuple or len(item) != 3 or
+                any(type(n) is not int or n < 0 or n > _U64_MAX for n in item) or
+                item[1] == 0 or item[2] != 1 or item[:2] in seen):
+            raise PostDropRefused("unqualified_learning_fd9_inode")
+        seen.add(item[:2])
+        values.extend(item)
+    return tuple(values)
+
+
+def _witness_line_learning(
+    witness: OriginalProducer, sources: tuple[tuple[int, str, str], ...],
+) -> str:
+    """Encode the FULL original producer inode set; never drop N identities."""
+    if not isinstance(witness, OriginalProducer):
+        raise PostDropRefused("missing_learning_fd9_capture")
+    generation, names = _qualified_learning_sources(sources, witness.root)
+    if witness.learning_names != names:
+        raise PostDropRefused("learning_fd9_capture_not_source_bound")
+    values = _learning_identity_values(witness.identities, len(names))
+    digest = _learning_source_digest(sources)
+    line = f"p2k8i3:{generation}:{len(names)}:{digest}:" + ":".join(map(str, values))
+    if len(line) > _MAX_LEARNING_WITNESS:
+        raise PostDropRefused("learning_fd9_wire_exceeds_limit")
+    return line
+
+
+def _witness_decode_learning(
+    line: str, sources: tuple[tuple[int, str, str], ...], *,
+    root: Path, root_uid: int, root_gid: int,
+    engine_uid: int, engine_gid: int,
+) -> OriginalProducer:
+    """Refuse missing, extra, reordered or cross-generation prelaunch inodes.
+
+    The names are obtained separately from the sealed native profile map.
+    This primitive performs NO file repair; _reattest reopens every path
+    and verifies each inode under the original process/FD9 authority.
+    """
+    generation, names = _qualified_learning_sources(sources, root)
+    if (type(line) is not str or len(line) > _MAX_LEARNING_WITNESS):
+        raise PostDropRefused("invalid_learning_fd9_witness")
+    found = _LEARNING_WITNESS.fullmatch(line)
+    if (found is None or found[1] != generation or
+            int(found[2]) != len(names) or str(int(found[2])) != found[2] or
+            found[3] != _learning_source_digest(sources)):
+        raise PostDropRefused("learning_fd9_witness_generation_or_count")
+    tokens = found[4].split(":")
+    if len(tokens) != 3 * (len(names) + 2) or any(
+            not token or len(token) > 20 or
+            str(int(token)) != token for token in tokens):
+        raise PostDropRefused("learning_fd9_witness_inode_count")
+    values = tuple(int(token) for token in tokens)
+    identities = tuple(tuple(values[i:i + 3])
+                       for i in range(0, len(values), 3))
+    _learning_identity_values(identities, len(names))
+    if (type(root_uid) is not int or type(root_gid) is not int or
+            type(engine_uid) is not int or type(engine_gid) is not int or
+            root_uid < 0 or root_gid < 0 or engine_uid <= 0 or
+            engine_gid <= 0 or root_uid == engine_uid):
+        raise PostDropRefused("invalid_learning_fd9_engine_identity")
+    return OriginalProducer(root, root_uid, root_gid, engine_uid, engine_gid,
+                            identities, names)
+
+
+def _witness_read_learning(
+    line: str, sources: tuple[tuple[int, str, str], ...],
+) -> OriginalProducer:
+    """Native FD9-only companion to the sealed, schema3 qualified map."""
+    _parent(ROOT, 0)
+    native_user = pwd.getpwnam(ENGINE_USER)
+    if native_user.pw_uid <= 0 or native_user.pw_gid <= 0:
+        raise PostDropRefused("unqualified_original_engine_user")
+    return _witness_decode_learning(
+        line, sources, root=ROOT, root_uid=0, root_gid=0,
+        engine_uid=native_user.pw_uid, engine_gid=native_user.pw_gid)
+
 
 
 def _original_owner_from_pid(pid_text: str, executable: str) -> OwnerToken:

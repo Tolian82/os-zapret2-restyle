@@ -19,6 +19,8 @@ from unittest.mock import patch
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
 from auto_detect_post_drop import _capture, _reattest, _witness_line, _witness_read, original_fd9_command, PostDropRefused, native_capture_before_launch, native_restore_before_ipfw
+from auto_detect_post_drop import (_witness_line_learning, _witness_decode_learning,
+    _witness_read_learning, _qualified_learning_sources)
 from auto_detect_queue import DurableInbox
 from auto_detect_original_v2_source import (LearningCursor, OriginalSourceRefused,
     preview_original_learning_windows_locked)
@@ -100,6 +102,112 @@ class PostDropContract(unittest.TestCase):
         self.assertEqual(capture(names).learning_names, names)
         self.assertEqual(p.read_bytes(), b"")
 
+
+    def test_tz6v4_versioned_full_fd9_witness_roundtrip_and_original_unchanged(self):
+        generation = "a" * 32
+        names = (
+            f"learning-{generation}-3.txt",
+            f"learning-{generation}-4.txt",
+        )
+        sources = ((3, "youtube", str(self.root / names[0])),
+                   (4, "user", str(self.root / names[1])))
+        for name in names:
+            p = self.root / name
+            p.write_bytes(b"")
+            p.chmod(0o660)
+        captured = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid, learning_names=names)
+        wire = _witness_line_learning(captured, sources)
+        self.assertTrue(wire.startswith("p2k8i3:" + generation + ":2:"))
+        self.assertEqual(len(wire.split(":")), 4 + 4 * 3)
+        restored = _witness_decode_learning(
+            wire, sources, root=self.root, root_uid=self.owner,
+            root_gid=self.gid, engine_uid=self.engine, engine_gid=self.gid)
+        self.assertEqual(restored, captured)
+        self.assertEqual(_reattest(restored, lambda: True), ())
+        with self.assertRaises(PostDropRefused):
+            _witness_read(wire)
+        with self.assertRaises(PostDropRefused):
+            _witness_line(captured)
+        # The root production helper additionally takes only ROOT + known
+        # nobody identity; no alternate path accepted by the public CLI.
+        with patch("auto_detect_post_drop.ROOT", self.root), \
+             patch("auto_detect_post_drop._parent"), \
+             patch("auto_detect_post_drop.pwd.getpwnam") as nobody:
+            nobody.return_value.pw_uid = self.engine
+            nobody.return_value.pw_gid = self.gid
+            native = _witness_read_learning(wire, sources)
+            self.assertEqual(native.identities, captured.identities)
+            self.assertEqual(native.learning_names, names)
+
+    def test_tz6v4_fd9_witness_refuses_cross_profile_or_partial_evidence(self):
+        generation = "a" * 32
+        names = (f"learning-{generation}-3.txt",
+                 f"learning-{generation}-4.txt")
+        sources = ((3, "youtube", str(self.root / names[0])),
+                   (4, "user", str(self.root / names[1])))
+        for name in names:
+            p = self.root / name
+            p.write_bytes(b"")
+            p.chmod(0o660)
+        captured = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid, learning_names=names)
+        wire = _witness_line_learning(captured, sources)
+        wrong_sources = (
+            ("same-path-other-hostlist", ((3, "user", str(self.root / names[0])),
+                                          (4, "user", str(self.root / names[1])))),
+            ("wrong-owner", ((3, "youtube", str(self.root / names[0])),
+                             (5, "user", str(self.root / names[1])))),
+            ("wrong-path", ((3, "youtube", str(self.root / names[0])),
+                            (4, "user", str(self.root / "inbox.txt")))),
+            ("wrong-generation", ((3, "youtube",
+                                   str(self.root / ("learning-" + "b"*32 + "-3.txt"))),
+                                  (4, "user",
+                                   str(self.root / ("learning-" + "b"*32 + "-4.txt"))))),
+            ("reordered", tuple(reversed(sources))),
+            ("one-missing", sources[:1]),
+        )
+        for kind, invalid in wrong_sources:
+            with self.subTest(kind=kind), self.assertRaises(PostDropRefused):
+                _witness_decode_learning(
+                    wire, invalid, root=self.root, root_uid=self.owner,
+                    root_gid=self.gid, engine_uid=self.engine,
+                    engine_gid=self.gid)
+        for kind, corrupted in (
+            ("extra inode", wire + ":1:1:1"),
+            ("shortened", wire.rsplit(":", 1)[0]),
+            ("bad generation", wire.replace(generation, "b"*32, 1)),
+            ("bad count", wire.replace(":2:", ":1:", 1)),
+            ("no count", wire.replace(":2:", ":0:", 1)),
+            ("leading zero", wire.replace(":2:", ":02:", 1)),
+            ("negative", wire.replace(":2:", ":2:-", 1)),
+            ("too long", wire + "0" * 17000),
+            ("foreign old format", "p2k8i:" + ":".join(
+                str(v) for identity in captured.identities[:2] for v in identity)),
+        ):
+            with self.subTest(kind=kind), self.assertRaises(PostDropRefused):
+                _witness_decode_learning(
+                    corrupted, sources, root=self.root, root_uid=self.owner,
+                    root_gid=self.gid, engine_uid=self.engine,
+                    engine_gid=self.gid)
+        # The exact pre-drop bytes have no side effect: corrupted wire
+        # cannot mutate or remove any of the four native files.
+        self.assertTrue(all((self.root / n).exists()
+                            for n in ("inbox.txt", "debug.log", *names)))
+        self.assertTrue(all((self.root / n).read_bytes() == b""
+                            for n in ("inbox.txt", "debug.log", *names)))
+        # A valid envelope cannot pass its protected inode to a new file.
+        restored = _witness_decode_learning(
+            wire, sources, root=self.root, root_uid=self.owner,
+            root_gid=self.gid, engine_uid=self.engine, engine_gid=self.gid)
+        replacement = self.root / "replacement"
+        replacement.write_bytes(b"")
+        replacement.chmod(0o660)
+        replacement.replace(self.root / names[1])
+        with self.assertRaisesRegex(PostDropRefused, "original_producer_inode_drift"):
+            _reattest(restored, lambda: True)
 
     def learning_files(self):
         names = ("learning-" + "a" * 32 + "-3.txt",
