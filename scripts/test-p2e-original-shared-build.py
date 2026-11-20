@@ -447,7 +447,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 engine_uid=engine_uid, engine_gid=writer_gid,
                 learning_names=names)
             wire = post_drop._witness_line_learning(captured, learning)
-            with queue.exclusive():
+            # Native CI has no inherited original FD9. Mock ONLY that
+            # FD9 presence check in this explicitly source-only fixture;
+            # the actual FreeBSD producer inodes, P2a lock and bundle seal
+            # remain physically enforced by production code.
+            with queue.exclusive(), patch("voice_ipfw_adapter.require_lifecycle_lock"):
                 epoch = EpochReceipts(self.root / "epochs",
                                       owner_uid=os.geteuid(),
                                       writer_gid=writer_gid)
