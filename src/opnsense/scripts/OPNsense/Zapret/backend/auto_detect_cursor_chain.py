@@ -930,6 +930,48 @@ class CursorChain:
             self.queue._verify()
             if self.queue.segments():
                 raise CursorChainRefused("learning_first_slot_existing_pending")
+            # A prior WRITE-ONCE intent wins even if dvtws2 has added
+            # more rows in the meantime. Original FD9/P2b must prove
+            # the exact stored native+debug PREFIX, never recreate intent
+            # from a newly grown producer tail. Future rows stay live and
+            # retained for the next cursor slot, not this transaction.
+            existing_root = (self.receipts.root / proof.generation / CHAIN)
+            if existing_root.exists() or existing_root.is_symlink():
+                _directory(existing_root, self.receipts.uid)
+                if set(os.listdir(existing_root)) != {"00000000"}:
+                    raise CursorChainRefused("learning_first_slot_foreign_chain_state")
+                existing_slot = existing_root / "00000000"
+                _directory(existing_slot, self.receipts.uid)
+                entries = set(os.listdir(existing_slot))
+                if "intent.json" in entries:
+                    if not entries.issubset({"intent.json", "destination"}):
+                        raise CursorChainRefused("learning_first_slot_foreign_artifacts")
+                    source_raw = _read(existing_slot / "intent.json",
+                                       self.receipts.uid)
+                    source = json.loads(source_raw)
+                    from auto_detect_original_v2_source import (
+                        attest_original_learning_sealed_prefix_locked,
+                    )
+                    prefix = attest_original_learning_sealed_prefix_locked(
+                        self.queue, self.receipts, proof, workspace, source,
+                        attest=attest, inspect=inspect)
+                    if (prefix["source_intent_sha256"] != _digest(source_raw)
+                            or not prefix["p2b_drained"] or
+                            prefix["commit_authorized"] is not False or
+                            prefix["ack_authorized"] is not False):
+                        raise CursorChainRefused("learning_first_slot_prefix_not_original")
+                    return {
+                        "slot": existing_slot,
+                        "intent_sha256": _digest(source_raw),
+                        "generation": proof.generation, "sequence": 0,
+                        "commit_authorized": False,
+                        "cleanup_authorized": False,
+                        "ack_authorized": False,
+                    }
+                if entries:
+                    raise CursorChainRefused("learning_first_slot_incomplete_prior")
+                # Empty slot is a recoverable interrupted original mkdir.
+                # It still requires the FULL new P2b/source cut below.
             candidate = attest_original_learning_drained_candidate_locked(
                 self.queue, self.receipts, proof, workspace,
                 attest=attest, inspect=inspect)
