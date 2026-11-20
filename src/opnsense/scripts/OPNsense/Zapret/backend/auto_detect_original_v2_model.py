@@ -127,8 +127,8 @@ def preview_learning_domains(map_raw: bytes, owner: dict, original: bytes,
             set(native_rows) != {path for _, _, path in approved} or
             type(debug_window) is not bytes or
             len(debug_window) > MAX_WINDOW or
-            (debug_window and not debug_window.endswith(b"\\n")) or
-            b"\\x00" in debug_window or b"\\r" in debug_window):
+            (debug_window and not debug_window.endswith(b"\n")) or
+            b"\x00" in debug_window or b"\r" in debug_window):
         raise V2OriginalConfigRefused("unqualified_learning_native_window")
 
     known_by_path = {path: (number, hostlist) for number, hostlist, path in approved}
@@ -148,7 +148,7 @@ def preview_learning_domains(map_raw: bytes, owner: dict, original: bytes,
     paired: dict[str, list[str]] = {path: [] for path in known_by_path}
     observations: list[dict[str, str]] = []
     for line in debug_window.splitlines(keepends=True):
-        if not line.endswith(b"\\n"):
+        if not line.endswith(b"\n"):
             raise V2OriginalConfigRefused("incomplete_learning_debug_line")
         try:
             decoded = line[:-1].decode("ascii")
