@@ -1001,6 +1001,14 @@ class CursorChain:
                 "ack_authorized": False,
             }
             encoded = _canonical(record)  # bounded original receipt writer
+            # Recheck the entire N-source window BEFORE creating even an
+            # empty durable slot. A native append racing this cut must
+            # never strand a new root-private uncommitted intent directory.
+            second = attest_original_learning_drained_candidate_locked(
+                self.queue, self.receipts, proof, workspace,
+                attest=attest, inspect=inspect)
+            if second != candidate or attest() != proof:
+                raise CursorChainRefused("learning_first_slot_changed_during_prepare")
             root = folder / CHAIN
             if root.exists() or root.is_symlink():
                 _directory(root, self.receipts.uid)
@@ -1008,9 +1016,23 @@ class CursorChain:
                     raise CursorChainRefused("learning_first_slot_foreign_chain_state")
                 slot = root / "00000000"
                 _directory(slot, self.receipts.uid)
-                if set(os.listdir(slot)) != {"intent.json"} or (
+                names = set(os.listdir(slot))
+                if names not in (set(), {"intent.json"},
+                                 {"intent.json", "destination"}):
+                    raise CursorChainRefused("learning_first_slot_foreign_artifacts")
+                if "intent.json" in names and (
                         _read(slot / "intent.json", self.receipts.uid) != encoded):
                     raise CursorChainRefused("learning_first_slot_prior_source_conflict")
+                if "destination" in names:
+                    journal = slot / "destination"
+                    _directory(journal, self.receipts.uid)
+                    files = set(os.listdir(journal))
+                    if (not files.issubset({"plan.json", "checkpoint.json"}) or
+                            "checkpoint.json" in files and
+                            "plan.json" not in files):
+                        raise CursorChainRefused("learning_first_slot_foreign_plan")
+                    # The original Config/P1 owner, not the source reader,
+                    # validates the full existing plan and checkpoint.
             else:
                 # This is the ORIGINAL generation cursor-chain location,
                 # not an independent WAL, SQLite or second queue.
@@ -1021,13 +1043,9 @@ class CursorChain:
                 slot = root / "00000000"
                 slot.mkdir(mode=0o700)
                 _sync(root)
-            # Refuse a raced append after the initial P2b, before any
-            # persistent authority. No native source is ever truncated.
-            second = attest_original_learning_drained_candidate_locked(
-                self.queue, self.receipts, proof, workspace,
-                attest=attest, inspect=inspect)
-            if second != candidate or attest() != proof:
-                raise CursorChainRefused("learning_first_slot_changed_during_prepare")
+            # A crash after mkdir but before hardlinking the intent leaves
+            # an exact *empty* slot; no previous durable source exists.
+            # It may seal this same fully re-attested first candidate.
             _write_once(slot, "intent.json", encoded, self.receipts.uid)
             if _read(slot / "intent.json", self.receipts.uid) != encoded:
                 raise CursorChainRefused("learning_first_slot_not_durable")
