@@ -210,19 +210,24 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
             authored_has_ipset=origin.get("authored_has_ipset", False),
             source_has_ipset=origin.get("source_has_ipset", False),
             selector=origin.get("selector"), hostlist=hostlist, status=status,
+            native_row_sha256=_sha("\\x00".join(row).encode("utf-8")),
+            native_hostlist_token=(selector_bindings.get(origin.get("selector"))
+                                   if status == "known-hostlist" else None),
         ))
     # Upstream appends a separate low-priority no_action profile numbered 0.
     records.append(dict(id=f"{generation}:default", native_number=0,
                         role="native-default", source_number=None, source_sha256=None,
                         source_selectors=[], authored_has_ipset=False, source_has_ipset=False,
-                        selector=None, hostlist=None, status="unknown-native-default"))
+                        selector=None, hostlist=None, status="unknown-native-default",
+                        native_row_sha256=None, native_hostlist_token=None))
     digest = hashlib.sha256()
     for capture in captures:
         digest.update(len(capture).to_bytes(8, "big"))
         digest.update(capture)
     return dict(schema=1, generation=generation, mode=mode,
                 evidence="P0_DETACHED_GENERATOR_ONLY", final_args_sha256=_sha(final),
-                strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(), profiles=records)
+                strategy_sha256=_sha(strategy), captures_sha256=digest.hexdigest(),
+                native_selector_bindings=selector_bindings, profiles=records)
 
 
 def _original_global_policy_paths(release: Path) -> tuple:
@@ -317,6 +322,13 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
         raise AttributionError("invalid final native profile sequence") from exc
     if any(t.startswith("--hostlist-auto") for t in original_text.split()):
         raise AttributionError("original native argv already includes auto detector")
+    bindings = mapping.get("native_selector_bindings")
+    if (not isinstance(bindings, dict) or any(
+            not isinstance(k, str) or not profile_policy.SELECTOR.fullmatch(k)
+            or not isinstance(v, str) or not v.startswith((
+                "--hostlist=/", "--ipset=/"))
+            for k, v in bindings.items())):
+        raise AttributionError("unqualified canonical target bindings")
     records = mapping.get("profiles")
     if (not isinstance(records, list) or len(records) != len(rows) + 1
             or not isinstance(records[-1], dict)
@@ -332,6 +344,13 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
         if (not isinstance(source, dict)
                 or source.get("id") != f"{owner_id}:{ordinal}"):
             raise AttributionError("stale original source profile identity")
+        if source.get("native_row_sha256") != _sha("\\x00".join(row).encode("utf-8")):
+            raise AttributionError("native source row changed after mapping")
+        if (source.get("status") == "known-hostlist" and
+                (source.get("native_hostlist_token") !=
+                 bindings.get(source.get("selector")) or
+                 source.get("native_hostlist_token") not in row)):
+            raise AttributionError("source hostlist differs from native binding")
         number = source.get("native_number")
         if number is not None:
             if (type(number) is not int or number != next_number + 1
@@ -350,6 +369,8 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
             and isinstance(hostlist, str)
             and hostlist in KNOWN_HOSTLISTS
             and source.get("selector") == f"<HOSTLIST:{hostlist}>"
+            and source.get("native_hostlist_token") == bindings.get(
+                f"<HOSTLIST:{hostlist}>")
             and source.get("source_selectors") == [f"<HOSTLIST:{hostlist}>"]
             and sum(t.startswith("--hostlist=") for t in row) == 1
             and not any(t.startswith(("--ipset=", "--ipset-ip=",
@@ -744,6 +765,41 @@ def preflight_original_observer(workspace: Path, candidate_digest: str) -> dict:
     }
 
 
+
+def preflight_learning_tier(workspace: Path, candidate_digest: str) -> dict:
+    """Read-only, candidate-locked TZ6v4 projection under the original FD9.
+
+    This is deliberately separate from promote_original_preview(): it cannot
+    create an executable generation map, native producer or runtime epoch.
+    Existing FD9 source/Config preflight is reused, never relaxed.
+    """
+    original_proof = preflight_original_observer(workspace, candidate_digest)
+    work = Path(workspace)
+    release = work / "release"
+    source = json.loads(_capture_file(release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    original = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    if _sha(original) != original_proof["original_args_sha256"]:
+        raise AttributionError("original FD9 source changed during preflight")
+    planned, proposal = plan_learning_tier(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    if (proposal["evidence"] != LEARNING_PROPOSAL
+            or proposal["activation_authorized"] is not False
+            or proposal["final_args_sha256"] != _sha(planned)):
+        raise AttributionError("learning preflight unexpectedly authorized runtime")
+    learning = [row for row in proposal["profiles"] if row["role"] == "learning"]
+    return {
+        "evidence": "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING",
+        "generation": work.name,
+        "native_candidate_sha256": candidate_digest,
+        "original_args_sha256": original_proof["original_args_sha256"],
+        "proposed_args_sha256": _sha(planned),
+        "learning_native_numbers": [row["native_number"] for row in learning],
+        "learning_hostlists": [row["hostlist"] for row in learning],
+    }
+
+
+
 def _secure_new_file(path: Path, content: bytes) -> None:
     """Sealed-candidate workspace only; never replace an existing witness."""
     if path.exists() or path.is_symlink() or not isinstance(content, bytes):
@@ -977,7 +1033,7 @@ def _require_original_fd9_cli(work: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preview", "verify-preview", "promote", "verify-active"}:
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preflight-learning", "preview", "verify-preview", "promote", "verify-active"}:
         return 64
     workspace = Path(argv[2])
     try:
@@ -992,6 +1048,10 @@ def main(argv: list[str]) -> int:
             record = operations[argv[1]](workspace, argv[3])
             print(json.dumps({"observer_native_number": record["observer_native_number"],
                               "generation": workspace.name}, sort_keys=True))
+        elif argv[1] == "preflight-learning":
+            _require_original_fd9_cli(workspace)
+            print(json.dumps(preflight_learning_tier(workspace, argv[3]),
+                             sort_keys=True, separators=(",", ":")))
         elif argv[1] == "preflight":
             print(json.dumps(preflight_original_observer(workspace, argv[3]),
                              sort_keys=True, separators=(",", ":")))

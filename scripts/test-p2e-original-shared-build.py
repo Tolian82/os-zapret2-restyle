@@ -228,6 +228,59 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertNotIn(b"--hostlist-auto=", args.read_bytes())
         self.assertFalse((self.release / owner.MAP_NAME).exists())
 
+    def test_tz6v4_resolved_target_and_native_row_are_bound(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        real = next(p for p in source["profiles"] if p["status"] == "known-hostlist")
+        self.assertEqual(
+            real["native_hostlist_token"],
+            source["native_selector_bindings"]["<HOSTLIST:youtube>"])
+        self.assertIn(real["native_hostlist_token"].encode(), original)
+        for kind in ("row-sha", "native-token", "cross-target"):
+            altered = json.loads(json.dumps(source))
+            row = next(p for p in altered["profiles"]
+                       if p["status"] == "known-hostlist")
+            if kind == "row-sha":
+                row["native_row_sha256"] = "0" * 64
+            elif kind == "native-token":
+                row["native_hostlist_token"] = "--hostlist=/tmp/foreign"
+            else:
+                row["selector"] = "<HOSTLIST:user>"
+                row["hostlist"] = "user"
+                row["source_selectors"] = ["<HOSTLIST:user>"]
+            with self.subTest(kind=kind), self.assertRaises(origin.AttributionError):
+                origin.plan_learning_tier(
+                    altered, original, owner_id=self.work.name,
+                    owner_candidate_sha256="d" * 64)
+
+    def test_tz6v4_original_fd9_preflight_is_read_only(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        source_before = mapped.read_bytes()
+        argv_before = args.read_bytes()
+        digest = "d" * 64
+        record = origin.preflight_learning_tier(self.work, digest)
+        self.assertEqual(
+            record["evidence"],
+            "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING")
+        self.assertEqual(record["learning_hostlists"], ["youtube"])
+        self.assertEqual(record["learning_native_numbers"], [2])
+        self.assertEqual(record["native_candidate_sha256"], digest)
+        self.assertNotEqual(record["original_args_sha256"],
+                            record["proposed_args_sha256"])
+        self.assertEqual(args.read_bytes(), argv_before)
+        self.assertEqual(mapped.read_bytes(), source_before)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        self.assertFalse((self.release / "auto-detect-learning-preview.args").exists())
+        with self.assertRaises(origin.AttributionError):
+            origin.preflight_learning_tier(self.work, "wrong")
+
     def test_tz6v4_stale_or_forged_source_map_is_refused(self):
         mapped, args = self.build(
             "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
