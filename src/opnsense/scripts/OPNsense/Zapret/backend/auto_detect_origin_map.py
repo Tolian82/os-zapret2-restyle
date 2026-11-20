@@ -210,7 +210,7 @@ def build_map(*, generation: str, mode: str, strategy: bytes, bindings: bytes,
             authored_has_ipset=origin.get("authored_has_ipset", False),
             source_has_ipset=origin.get("source_has_ipset", False),
             selector=origin.get("selector"), hostlist=hostlist, status=status,
-            native_row_sha256=_sha("\\x00".join(row).encode("utf-8")),
+            native_row_sha256=_sha("\x00".join(row).encode("utf-8")),
             native_hostlist_token=(selector_bindings.get(origin.get("selector"))
                                    if status == "known-hostlist" else None),
         ))
@@ -344,7 +344,7 @@ def plan_learning_tier(mapping: dict, original: bytes, *,
         if (not isinstance(source, dict)
                 or source.get("id") != f"{owner_id}:{ordinal}"):
             raise AttributionError("stale original source profile identity")
-        if source.get("native_row_sha256") != _sha("\\x00".join(row).encode("utf-8")):
+        if source.get("native_row_sha256") != _sha("\x00".join(row).encode("utf-8")):
             raise AttributionError("native source row changed after mapping")
         if (source.get("status") == "known-hostlist" and
                 (source.get("native_hostlist_token") !=
