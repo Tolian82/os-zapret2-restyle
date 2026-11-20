@@ -901,3 +901,145 @@ class CursorChain:
                 DestinationRefused, GenerationRefused, OSError, ValueError,
                 TypeError, KeyError, AttributeError) as exc:
             raise CursorChainRefused("original_cursor_ack_evidence_unavailable") from exc
+
+    def prepare_learning_first_slot(
+            self, proof, workspace: Path, *,
+            attest, inspect=probe_pending_fd,
+    ) -> dict:
+        """Source-only original schema3 WAL seed: one immutable N-file slot.
+
+        Store the FIRST authenticated N-native/debug input in the original
+        generation's cursor-chain-v2/00000000, under the same existing P2a
+        FD and original FD9 owner. It is deliberately NOT an ACK, a second
+        queue or a destination writer. An interrupted or different source
+        cannot overwrite the first durable intent. Subsequent cursor slots
+        and destination commits require a separate qualified continuation.
+        """
+        from auto_detect_owner import LearningGenerationProof
+        from auto_detect_original_v2_source import (
+            attest_original_learning_drained_candidate_locked,
+        )
+        from auto_detect_epoch_receipts import _read
+        if (not isinstance(proof, LearningGenerationProof) or
+                not isinstance(workspace, Path) or not workspace.is_absolute() or
+                workspace.name != proof.generation or not self.queue._held or
+                not callable(attest) or not callable(inspect) or
+                attest() != proof):
+            raise CursorChainRefused("learning_first_slot_original_owner_required")
+        try:
+            self.queue._verify()
+            if self.queue.segments():
+                raise CursorChainRefused("learning_first_slot_existing_pending")
+            candidate = attest_original_learning_drained_candidate_locked(
+                self.queue, self.receipts, proof, workspace,
+                attest=attest, inspect=inspect)
+            folder, seed, _ = self.receipts._learning_pretraffic(
+                proof, self.queue, workspace)
+            epoch_raw = _read(folder / "epoch.json", self.receipts.uid)
+            epoch = json.loads(epoch_raw)
+            if (epoch.get("schema") != 3 or
+                    epoch.get("generation") != proof.generation or
+                    epoch.get("owner_pid") != proof.owner.pid or
+                    epoch.get("owner_start") != proof.owner.started or
+                    epoch.get("learning") != seed["learning"] or
+                    not candidate["p2b_drained"] or
+                    candidate["commit_authorized"] is not False or
+                    candidate["ack_authorized"] is not False):
+                raise CursorChainRefused("learning_first_slot_epoch_not_original")
+            native = []
+            for number, hostlist, path in proof.learning:
+                after = candidate["native_cursors"][path]
+                seeded = next(
+                    (r for r in seed["learning"] if r["path"] == path),
+                    None)
+                if (seeded is None or
+                        (seeded["native_number"], seeded["hostlist"]) !=
+                        (number, hostlist) or
+                        after.generation != proof.generation or
+                        after.native_number != number or
+                        after.hostlist != hostlist or after.path != path or
+                        (after.device, after.inode) !=
+                        (seeded["device"], seeded["inode"]) or
+                        seeded["offset"] != 0 or
+                        seeded["prefix_sha256"] != EMPTY_HASH or
+                        after.offset < 0 or
+                        not HEX64.fullmatch(after.prefix_sha256)):
+                    raise CursorChainRefused("learning_first_slot_native_cursor_not_zero")
+                native.append({
+                    "native_number": number, "hostlist": hostlist,
+                    "path": path, "device": after.device, "inode": after.inode,
+                    "start_offset": 0, "start_sha256": EMPTY_HASH,
+                    "end_offset": after.offset,
+                    "end_sha256": after.prefix_sha256,
+                })
+            observations = candidate["observations"]
+            if (not isinstance(observations, list) or not observations or
+                    len(observations) > 128 or
+                    any(not isinstance(row, dict) or
+                        set(row) != {"hostname", "hostlist"} or
+                        row["hostlist"] not in {name for _, name, _ in proof.learning}
+                        for row in observations)):
+                raise CursorChainRefused("learning_first_slot_unbounded_observations")
+            record = {
+                "schema": 3, "kind": "original-learning-cursor-prepared",
+                "generation": proof.generation, "sequence": 0,
+                "operation_id": proof.operation_id,
+                "owner_candidate_sha256": proof.owner_candidate_sha256,
+                "owner_pid": proof.owner.pid,
+                "owner_start": proof.owner.started,
+                "final_args_sha256": proof.final_args_sha256,
+                "native_map_sha256": proof.native_map_sha256,
+                "epoch_sha256": _digest(epoch_raw),
+                "previous_ack_sha256": _digest(epoch_raw),
+                "debug_device": seed["files"][1]["device"],
+                "debug_inode": seed["files"][1]["inode"],
+                "debug_start_offset": 0,
+                "debug_start_sha256": EMPTY_HASH,
+                "debug_end_offset": candidate["debug_end_offset"],
+                "debug_end_sha256": candidate["debug_end_sha256"],
+                "native": native, "observations": observations,
+                "ack_authorized": False,
+            }
+            encoded = _canonical(record)  # bounded original receipt writer
+            root = folder / CHAIN
+            if root.exists() or root.is_symlink():
+                _directory(root, self.receipts.uid)
+                if set(os.listdir(root)) != {"00000000"}:
+                    raise CursorChainRefused("learning_first_slot_foreign_chain_state")
+                slot = root / "00000000"
+                _directory(slot, self.receipts.uid)
+                if set(os.listdir(slot)) != {"intent.json"} or (
+                        _read(slot / "intent.json", self.receipts.uid) != encoded):
+                    raise CursorChainRefused("learning_first_slot_prior_source_conflict")
+            else:
+                # This is the ORIGINAL generation cursor-chain location,
+                # not an independent WAL, SQLite or second queue.
+                if attest() != proof:
+                    raise CursorChainRefused("learning_first_slot_owner_changed_before_seed")
+                root.mkdir(mode=0o700)
+                _sync(folder)
+                slot = root / "00000000"
+                slot.mkdir(mode=0o700)
+                _sync(root)
+            # Refuse a raced append after the initial P2b, before any
+            # persistent authority. No native source is ever truncated.
+            second = attest_original_learning_drained_candidate_locked(
+                self.queue, self.receipts, proof, workspace,
+                attest=attest, inspect=inspect)
+            if second != candidate or attest() != proof:
+                raise CursorChainRefused("learning_first_slot_changed_during_prepare")
+            _write_once(slot, "intent.json", encoded, self.receipts.uid)
+            if _read(slot / "intent.json", self.receipts.uid) != encoded:
+                raise CursorChainRefused("learning_first_slot_not_durable")
+            return {
+                "slot": slot, "intent_sha256": _digest(encoded),
+                "generation": proof.generation, "sequence": 0,
+                "commit_authorized": False, "cleanup_authorized": False,
+                "ack_authorized": False,
+            }
+        except CursorChainRefused:
+            raise
+        except (ReceiptRefused, QueueSafetyError, DebugWindowRefused,
+                DestinationRefused, GenerationRefused, OSError, ValueError,
+                TypeError, KeyError, AttributeError, RuntimeError) as exc:
+            raise CursorChainRefused("original_learning_first_slot_refused") from exc
