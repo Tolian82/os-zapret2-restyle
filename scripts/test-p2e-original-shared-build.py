@@ -955,16 +955,21 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertFalse((slot / "ack.json").exists())
                 self.assertFalse((slot / "destination").exists())
 
-                # Original schema3 destination writer reuse: write-once
-                # SOURCE-BOUND plan + existing multi-file CAS. This invokes
-                # the private writer only in a disposable source fixture;
-                # no real FD4/FD9 Config, engine or product minute is wired.
+                # One original Config-FD-held P1→source-bound WAL→real
+                # permanent Found and live managed CAS on disposable files.
+                # Config FD + P2a and P2b here are synthetic source-only
+                # witnesses; the production PHP/FD9 dispatcher is NOT wired.
+                import fcntl
                 from auto_detect_destination_commit import (
                     DestinationRefused, qualified_destination_plan,
                 )
                 from auto_detect_epoch_receipts import _canonical
-                active_managed = self.root / "synthetic-active-managed"
-                active_managed.mkdir(mode=0o700)
+                from auto_detect_original_v2_model import (
+                    commit_with_original_learning_first_slot,
+                )
+                active_root = self.root / "synthetic-active-runtime"
+                active_managed = active_root / "managed"
+                active_managed.mkdir(mode=0o700, parents=True)
                 working = {}
                 for name, before in (
                     ("youtube", b"youtube.com\n"), ("user", b"")):
@@ -985,18 +990,56 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         writer._locked_commit(
                             slot, persisted, source_raw,
                             p1["p1"]["effects"], live=None)
-                    saved_checkpoint = writer._locked_commit(
-                        slot, persisted, source_raw,
-                        p1["p1"]["effects"], live=working)
-                    self.assertFalse(saved_checkpoint["ack_authorized"])
-                    expected_plan, plan_raw = qualified_destination_plan(
-                        slot, persisted, epoch.uid, targets=writer.targets)
-                    self.assertEqual(expected_plan["schema"], 3)
-                    self.assertEqual(
-                        expected_plan["source_intent_sha256"],
-                        hashlib.sha256(durable).hexdigest())
-                    self.assertEqual(
-                        expected_plan["pending_name"], "learning-00000000")
+                config_path = self.root / "original-test-config.xml"
+                config_path.write_bytes(b"<opnsense/>\n")
+                config_path.chmod(0o600)
+                cfg_fd = os.open(config_path, os.O_RDWR | os.O_NOFOLLOW)
+                fcntl.flock(cfg_fd, fcntl.LOCK_EX)
+                def native_live_preview(*args, **kwargs):
+                    self.assertEqual(kwargs["active"], active_root)
+                    self.assertEqual(kwargs["attest"](), proof)
+                    return {
+                        "owner_schema": 3,
+                        "generation": proof.generation,
+                        "operation": proof.operation_id,
+                        "pid": proof.owner.pid,
+                        "started": proof.owner.started,
+                        "changed": ["youtube", "user"],
+                        "files": {
+                            name: {
+                                "path": str(item["path"]),
+                                "before_sha256": item["before_sha256"],
+                                "after_sha256": hashlib.sha256(
+                                    item["after"]).hexdigest(),
+                            }
+                            for name, item in working.items()
+                        },
+                        "commit_authorized": False,
+                        "ack_authorized": False,
+                    }
+                with patch(
+                        "auto_detect_original_v2_model.COMMON_ACTIVE",
+                        active_root), patch(
+                        "auto_detect_original_v2_model.preview_live_known_after_readonly",
+                        side_effect=native_live_preview):
+                    saved_checkpoint = commit_with_original_learning_first_slot(
+                        writer, proof, self.work,
+                        config_fd=cfg_fd, config_path=config_path,
+                        owned_root=owned_dir,
+                        manual_hostlists={
+                            "youtube": "youtube.com\n", "user": ""},
+                        global_exclude="", attest=lambda: proof,
+                        inspect=drained,
+                        psl=self._tz6v4_psl_for_fixtures())
+                self.assertFalse(saved_checkpoint["ack_authorized"])
+                expected_plan, plan_raw = qualified_destination_plan(
+                    slot, persisted, epoch.uid, targets=writer.targets)
+                self.assertEqual(expected_plan["schema"], 3)
+                self.assertEqual(
+                    expected_plan["source_intent_sha256"],
+                    hashlib.sha256(durable).hexdigest())
+                self.assertEqual(
+                    expected_plan["pending_name"], "learning-00000000")
                 self.assertEqual(targets["youtube"].read_bytes(),
                                  b"example.com\n")
                 self.assertEqual(targets["user"].read_bytes(),
@@ -1017,11 +1060,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 # Checkpoint means the original event cannot be reapplied
                 # after an explicit GUI deletion of that permanent Found.
                 targets["youtube"].write_bytes(b"")
-                with writer.exclusive_targets():
-                    repeated = writer._locked_commit(
-                        slot, persisted, source_raw,
-                        p1["p1"]["effects"], live=working)
+                repeated = commit_with_original_learning_first_slot(
+                    writer, proof, self.work,
+                    config_fd=cfg_fd, config_path=config_path,
+                    owned_root=owned_dir,
+                    manual_hostlists={
+                        "youtube": "youtube.com\n", "user": ""},
+                    global_exclude="", attest=lambda: proof,
+                    inspect=drained,
+                    psl=self._tz6v4_psl_for_fixtures())
                 self.assertEqual(repeated, saved_checkpoint)
+                os.close(cfg_fd)
                 self.assertEqual(targets["youtube"].read_bytes(), b"")
                 self.assertEqual((slot / "intent.json").read_bytes(), durable)
                 self.assertFalse((slot / "ack.json").exists())
