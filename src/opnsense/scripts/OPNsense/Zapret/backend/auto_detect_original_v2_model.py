@@ -401,6 +401,7 @@ def _recover_original_learning_partial_locked(
         attest_original_learning_sealed_prefix_locked,
     )
     from auto_detect_destination_commit import _file_identity
+    from auto_detect_epoch_receipts import _canonical
     if (not isinstance(writer, DestinationCommit) or
             not writer.queue._held or not getattr(writer, "_gui_held", False)
             or not isinstance(intent, dict) or intent.get("schema") != 3 or
