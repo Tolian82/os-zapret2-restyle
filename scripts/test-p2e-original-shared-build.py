@@ -365,6 +365,99 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 proposed, rows, window)
 
 
+
+    def test_tz6v4_real_generator_promotes_exact_learning_candidate(self):
+        """One original common builder -> active schema3 release, no process.
+
+        Unlike the epoch source fixture this test promotes the actual
+        generated release using the production function, then verifies it
+        independently and seals it under the shared Apply bundle contract.
+        """
+        mapped, args = self.build(
+            "--filter-tcp=443\n--filter-l7=tls\n<HOSTLIST:youtube>\n"
+            "--lua-desync=fake\n--new\n--filter-tcp=443\n"
+            "<HOSTLIST:user>\n--lua-desync=fake\n", voice_on=True)
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        candidate = "d" * 64
+        preflight = origin.preflight_learning_tier(self.work, candidate)
+        self.assertEqual(preflight["evidence"],
+                         "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING")
+        self.assertEqual(len(preflight["learning_native_numbers"]), 2)
+        promoted = origin.promote_learning_release(self.work, candidate)
+        self.assertEqual(promoted["schema"], 3)
+        self.assertTrue(promoted["activation_authorized"])
+        self.assertEqual(promoted["mode"], "auto")
+        self.assertEqual(
+            [row["hostlist"] for row in promoted["profiles"]
+             if row["role"] == "learning"], ["youtube", "user"])
+        self.assertEqual(origin.verify_learning_promotion(self.work, candidate),
+                         promoted)
+        self.assertEqual((self.release / "dvtws.original.args").read_bytes(),
+                         original)
+        self.assertNotEqual(args.read_bytes(), original)
+        self.assertEqual(
+            promoted["final_args_sha256"],
+            hashlib.sha256(args.read_bytes()).hexdigest())
+        self.assertEqual(
+            promoted["original_args_sha256"], hashlib.sha256(original).hexdigest())
+        self.assertTrue(args.read_bytes().startswith(original.split(b"--new")[0]
+                                                   .split(b"\n", 1)[0]))
+        self.assertEqual(
+            [row["source_profile"] for row in promoted["profiles"]
+             if row["role"] == "learning"],
+            [row["source_profile"] for row in promoted["profiles"]
+             if row["role"] == "working" and row["found_source_id"]])
+        self.assertEqual(
+            [row["hostlist"] for row in promoted["profiles"]
+             if row["role"] == "working" and row["found_source_id"]],
+            ["youtube", "user"])
+        self.assertFalse((self.release / "auto-detect-observer-preview.args").exists())
+        with self.assertRaises(origin.AttributionError):
+            origin.promote_learning_release(self.work, candidate)
+        self.assertEqual(origin.verify_learning_promotion(self.work, candidate),
+                         promoted)
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
+        create_seal(self.work, owner=os.geteuid())
+        from shared_apply_seal import verify_seal
+        self.assertIsNotNone(verify_seal(self.work, owner=os.geteuid()))
+        self.assertEqual(json.loads((self.release / owner.MAP_NAME).read_bytes()),
+                         promoted)
+        # No native inbox/epoch/Config/IPFW writes are a promoter side effect.
+        self.assertFalse((self.release / "inbox.txt").exists())
+        self.assertFalse((self.root / "producer").exists())
+
+    def test_tz6v4_promoted_generation_fails_closed_on_tamper(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        self.check_nonactivating(mapped, args)
+        candidate = "d" * 64
+        promoted = origin.promote_learning_release(self.work, candidate)
+        self.assertEqual(origin.verify_learning_promotion(self.work, candidate),
+                         promoted)
+        original_bytes = (self.release / "dvtws.original.args").read_bytes()
+        with args.open("ab") as file:
+            file.write(b"--new\n--filter-tcp=80\n")
+        with self.assertRaises(origin.AttributionError):
+            origin.verify_learning_promotion(self.work, candidate)
+        self.assertEqual((self.release / "dvtws.original.args").read_bytes(),
+                         original_bytes)
+
+    def test_tz6v4_reject_unlearnable_only_source_before_promotion(self):
+        mapped, args = self.build(
+            "--filter-udp=443\n<IPSET:telegram>\n--lua-desync=fake\n",
+            voice_on=True)
+        self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        with self.assertRaises(origin.AttributionError):
+            origin.promote_learning_release(self.work, "d" * 64)
+        self.assertEqual(args.read_bytes(), original)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+        self.assertFalse((self.release / "dvtws.original.args").exists())
+
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
 

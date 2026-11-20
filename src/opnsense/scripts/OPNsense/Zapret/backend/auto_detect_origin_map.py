@@ -1033,6 +1033,192 @@ def promote_original_preview(workspace: Path, candidate_digest: str) -> dict:
     return record
 
 
+
+
+# TZ6v4: sealed candidate promotion now has an exact *schema3* counterpart.
+# This is the original shared release candidate writer (BEFORE bundle seal),
+# not a second runtime launcher, public Config writer or background worker.
+# No installed flow invokes it until the same original FD9/P2a/P2c/ACK
+# lifecycle can fully own the promoted native generation.
+def _learning_promotion_projection(
+    workspace: Path, candidate_digest: str,
+) -> tuple[bytes, bytes, bytes, dict, dict]:
+    from auto_detect_owner import _valid_learning_active, LEARNING_ACTIVE
+    work = Path(workspace)
+    # The original source/Config-candidate gate still runs first. It proves
+    # the original candidate BEFORE any promotion or executable argv edits.
+    original_preflight = preflight_learning_tier(work, candidate_digest)
+    release = work / "release"
+    original = _capture_file(release / "dvtws.args", owner_uid=os.geteuid())
+    if _sha(original) != original_preflight["original_args_sha256"]:
+        raise AttributionError("learning_original_candidate_changed")
+    source = json.loads(_capture_file(
+        release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    projected, proposal = plan_learning_tier(
+        source, original, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    learning = [row for row in proposal["profiles"]
+                if row["role"] == "learning"]
+    if (not learning or proposal["mode"] != "auto" or
+            [row["native_number"] for row in learning] !=
+            original_preflight["learning_native_numbers"] or
+            _sha(projected) != original_preflight["proposed_args_sha256"]):
+        raise AttributionError("learning_active_candidate_is_not_qualified")
+    # Reuse Stage 3 global IPSET/domain exclusion audit; ordinary working
+    # profiles and clones must retain the same effective global exclusion.
+    policy_file = release / "dvtws.args.global-policy.json"
+    has_policy = policy_file.exists() or policy_file.is_symlink()
+    if has_policy:
+        from global_exclusions import audit
+        details = json.loads(_capture_file(
+            policy_file, limit=16384, owner_uid=os.geteuid()))
+        if (not isinstance(details, dict) or set(details) !=
+                {"schema", "argv_sha256", "profiles"} or
+                details["schema"] != 1 or
+                details["argv_sha256"] != _sha(original) or
+                details["profiles"] != len(segments(_text(original)))):
+            raise AttributionError("learning_original_global_policy_mismatch")
+        args = _original_global_policy_paths(release)
+        audit(_text(original), *args)
+        audit(_text(projected), *args)
+    active = {
+        **proposal, "evidence": LEARNING_ACTIVE,
+        "activation_authorized": True,
+    }
+    encoded = (json.dumps(
+        active, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    independent = _valid_learning_active(
+        encoded, {"id": work.name, "candidate": candidate_digest},
+        source, original, projected)
+    if ([row["native_number"] for row in learning] !=
+            [number for number, _, _ in independent]):
+        raise AttributionError("learning_active_not_independently_verified")
+    return original, projected, encoded, active, details if has_policy else None
+
+
+def verify_learning_promotion(workspace: Path, candidate_digest: str) -> dict:
+    """Read-only exact verification of one *promoted* schema3 release.
+
+    This does not grant process or FD9 permission. The live attester must
+    independently verify the SAME sealed candidate and active runtime.
+    """
+    from auto_detect_owner import _valid_learning_active, MAP_NAME
+    work = Path(workspace)
+    if (not re.fullmatch(r"[0-9a-f]{32}", work.name) or
+            not re.fullmatch(r"[0-9a-f]{64}", candidate_digest)):
+        raise AttributionError("invalid_learning_promoted_generation")
+    release = work / "release"
+    old = _capture_file(release / "dvtws.original.args",
+                        owner_uid=os.geteuid())
+    final = _capture_file(release / "dvtws.args",
+                          owner_uid=os.geteuid())
+    mapping_raw = _capture_file(release / MAP_NAME,
+                                owner_uid=os.geteuid())
+    source = json.loads(_capture_file(
+        release / ORIGIN_FILE, owner_uid=os.geteuid()))
+    from auto_detect_owner import LEARNING_ACTIVE
+    projected, expected = plan_learning_tier(
+        source, old, owner_id=work.name,
+        owner_candidate_sha256=candidate_digest)
+    expected = {**expected, "evidence": LEARNING_ACTIVE,
+                "activation_authorized": True}
+    if (final != projected or
+            json.loads(mapping_raw) != expected or
+            not _valid_learning_active(
+                mapping_raw,
+                {"id": work.name, "candidate": candidate_digest},
+                source, old, final)):
+        raise AttributionError("learning_promotion_differs_from_original_native_source")
+    forbidden = (
+        ".dvtws.original.args.learning.pending",
+        ".dvtws.args.learning.pending",
+        ".auto-detect-generation.learning.pending",
+        ".dvtws.args.global-policy.learning.pending",
+        "auto-detect-observer-preview.args",
+        "auto-detect-observer-preview.json",
+    )
+    if any((release / name).exists() or (release / name).is_symlink()
+           for name in forbidden):
+        raise AttributionError("incomplete_learning_candidate_promotion")
+    # If Stage3 created a global policy marker, the existing one remains
+    # binding for all ordinary and learning native profiles.
+    policy_path = release / "dvtws.args.global-policy.json"
+    if policy_path.exists() or policy_path.is_symlink():
+        from global_exclusions import audit
+        policy = json.loads(_capture_file(
+            policy_path, limit=16384, owner_uid=os.geteuid()))
+        if (not isinstance(policy, dict) or set(policy) !=
+                {"schema", "argv_sha256", "profiles"} or
+                policy["schema"] != 1 or
+                policy["argv_sha256"] != _sha(final) or
+                policy["profiles"] != len(segments(_text(final)))):
+            raise AttributionError("learning_promoted_global_policy_mismatch")
+        audit(_text(final), *_original_global_policy_paths(release))
+    return expected
+
+
+def promote_learning_release(workspace: Path, candidate_digest: str) -> dict:
+    """Promote native two-tier candidate in the ORIGINAL shared workspace.
+
+    Before the original bundle is sealed, save the original argv, install
+    final argv and the exact active schema3 map. The existing shared Apply
+    owns later atomic tree activation, process, Config, and IPFW. A crash
+    leaves an unsealed/torn candidate that the verifier rejects. The old
+    P2f observer promoter stays a separate unchanged schema2 path.
+    """
+    from auto_detect_owner import MAP_NAME
+    work = Path(workspace)
+    original, projected, encoded, active, policy = (
+        _learning_promotion_projection(work, candidate_digest))
+    release = work / "release"
+    old_args = release / "dvtws.original.args"
+    argv = release / "dvtws.args"
+    active_map = release / MAP_NAME
+    stage_old = release / ".dvtws.original.args.learning.pending"
+    stage_final = release / ".dvtws.args.learning.pending"
+    stage_map = release / ".auto-detect-generation.learning.pending"
+    policy_path = release / "dvtws.args.global-policy.json"
+    stage_policy = release / ".dvtws.args.global-policy.learning.pending"
+    if (any(p.exists() or p.is_symlink() for p in (
+            old_args, active_map, stage_old, stage_final,
+            stage_map, stage_policy)) or
+            _capture_file(argv, owner_uid=os.geteuid()) != original):
+        raise AttributionError("learning_original_candidate_already_promoted")
+    _secure_new_file(stage_old, original)
+    _secure_new_file(stage_final, projected)
+    _secure_new_file(stage_map, encoded)
+    if policy is not None:
+        renewed = {
+            "schema": 1, "argv_sha256": _sha(projected),
+            "profiles": len(segments(_text(projected))),
+        }
+        _secure_new_file(
+            stage_policy, (json.dumps(
+                renewed, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    if ( _capture_file(argv, owner_uid=os.geteuid()) != original or
+         _capture_file(stage_old, owner_uid=os.geteuid()) != original or
+         _capture_file(stage_final, owner_uid=os.geteuid()) != projected or
+         _capture_file(stage_map, owner_uid=os.geteuid()) != encoded or
+         (policy is not None and json.loads(_capture_file(
+             policy_path, limit=16384, owner_uid=os.geteuid())) != policy)):
+        raise AttributionError("learning_original_candidate_drifted_during_promotion")
+    os.replace(stage_old, old_args)
+    os.replace(stage_final, argv)
+    os.replace(stage_map, active_map)
+    if policy is not None:
+        os.replace(stage_policy, policy_path)
+    directory = os.open(release, os.O_RDONLY |
+                        getattr(os, "O_DIRECTORY", 0) |
+                        getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    if verify_learning_promotion(work, candidate_digest) != active:
+        raise AttributionError("learning_candidate_failed_promotion_verify")
+    return active
+
+
 def _require_original_fd9_cli(work: Path) -> None:
     if (not sys.platform.startswith("freebsd") or os.geteuid() != 0
             or work.parent != Path("/var/db/zapret2/shared-work")):
@@ -1042,21 +1228,30 @@ def _require_original_fd9_cli(work: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preflight-learning", "preview", "verify-preview", "promote", "verify-active"}:
+    if len(argv) != 4 or argv[1] not in {"emit", "preflight", "preflight-learning", "preview", "verify-preview", "promote", "verify-active", "promote-learning", "verify-learning-active"}:
         return 64
     workspace = Path(argv[2])
     try:
-        if argv[1] in {"preview", "verify-preview", "promote", "verify-active"}:
+        if argv[1] in {"preview", "verify-preview", "promote", "verify-active", "promote-learning", "verify-learning-active"}:
             _require_original_fd9_cli(workspace)
             operations = {
                 "preview": stage_original_preview,
                 "verify-preview": verify_original_preview,
                 "promote": promote_original_preview,
                 "verify-active": verify_original_promotion,
+                "promote-learning": promote_learning_release,
+                "verify-learning-active": verify_learning_promotion,
             }
             record = operations[argv[1]](workspace, argv[3])
-            print(json.dumps({"observer_native_number": record["observer_native_number"],
-                              "generation": workspace.name}, sort_keys=True))
+            print(json.dumps({
+                "schema": record["schema"],
+                "generation": workspace.name,
+                "learning_native_numbers": [
+                    p["native_number"] for p in record["profiles"]
+                    if p.get("role") == "learning",
+                ] if record["schema"] == 3 else [],
+                "observer_native_number": record.get("observer_native_number"),
+            }, sort_keys=True))
         elif argv[1] == "preflight-learning":
             _require_original_fd9_cli(workspace)
             print(json.dumps(preflight_learning_tier(workspace, argv[3]),
