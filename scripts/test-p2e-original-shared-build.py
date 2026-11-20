@@ -1118,10 +1118,24 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     chain.prepare_learning_first_slot(
                         proof, self.work, attest=lambda: proof,
                         inspect=lambda *args, **kwargs: FDState.UNKNOWN)
-                # An unjournaled second native append may NOT replace a
-                # write-once first intent even while original P2a is held.
+                # A later native append is NOT a conflict with the
+                # original immutable first slot. It remains unprocessed:
+                # reattest the original inode/PREFIX and never consume the
+                # new suffix before a separately acknowledged next slot.
                 with user_native.open("ab") as out:
                     out.write(b"late.example.org\n")
+                replayed_slot = chain.prepare_learning_first_slot(
+                    proof, self.work, attest=lambda: proof, inspect=drained)
+                self.assertEqual(replayed_slot["intent_sha256"],
+                                 saved["intent_sha256"])
+                self.assertEqual((slot / "intent.json").read_bytes(), durable)
+                self.assertEqual(user_native.read_bytes(),
+                                 b"mail.example.org\nlate.example.org\n")
+                # Same-size in-place corruption of an ALREADY sealed
+                # original native prefix must refuse; the queued suffix
+                # must not be used to repair or replace that first intent.
+                user_native.write_bytes(
+                    b"evil.example.org\nlate.example.org\n")
                 with self.assertRaises(CursorChainRefused):
                     chain.prepare_learning_first_slot(
                         proof, self.work, attest=lambda: proof,
