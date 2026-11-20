@@ -620,10 +620,10 @@ def attest_original_learning_sealed_prefix_locked(
         if not matches_prefix():
             raise OriginalSourceRefused("learning_original_source_prefix_changed")
         for path, device, inode, _end, _digest in pinned:
-            if attest() != proof or inspect(
+            if (attest() != proof or inspect(
                     path, device, inode, owner=proof.owner,
                     writer_gid=queue.writer_gid) is not FDState.DRAINED or
-                    attest() != proof:
+                    attest() != proof):
                 raise OriginalSourceRefused("learning_sealed_prefix_p2b_busy")
         if not matches_prefix() or queue.segments() or attest() != proof:
             raise OriginalSourceRefused("learning_original_source_prefix_raced")
