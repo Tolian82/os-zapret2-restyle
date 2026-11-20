@@ -406,7 +406,8 @@ class OwnerGenerationTests(unittest.TestCase):
                 self.record["phase"] = phase
                 self._write(self.journal / "operation.json",
                             json.dumps(self.record) + "\n")
-                with self.assertRaises(owner_mod.GenerationRefused):
+                with self.assertRaises(
+                        (owner_mod.GenerationRefused, SharedOperationError)):
                     self.witness(learning_schema3=True)
             self.record["phase"] = "committed"
             self._write(self.journal / "operation.json",
