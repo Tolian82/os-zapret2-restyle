@@ -200,6 +200,63 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                              {"id": self.work.name, "candidate": "d" * 64},
                              projected)
 
+
+    def test_tz6v4_learning_map_has_independent_native_proof(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+            "--new\n--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        owner_ref = {"id": self.work.name, "candidate": "d" * 64}
+        encode = lambda record: json.dumps(record, sort_keys=True).encode()
+        authorized = owner._valid_learning_proposal(
+            encode(proposal), owner_ref, original, projected)
+        self.assertEqual(
+            [(n, host) for n, host, _ in authorized],
+            [(3, "youtube"), (4, "user")])
+        self.assertTrue(all(path.startswith("/var/db/zapret2-auto-detect/")
+                            for _, _, path in authorized))
+        for kind in ("role", "source", "found", "inbox", "number",
+                     "args", "ordinary", "debug", "extra"):
+            tampered = json.loads(json.dumps(proposal))
+            changed_args = projected
+            changed_original = original
+            learner = next(p for p in tampered["profiles"]
+                           if p["role"] == "learning")
+            if kind == "role":
+                learner["role"] = "working"
+            elif kind == "source":
+                learner["source_profile"] = self.work.name + ":2"
+            elif kind == "found":
+                learner["found_source_id"] = "user_found"
+            elif kind == "inbox":
+                learner["auto_inbox"] = "/var/db/zapret2-auto-detect/inbox.txt"
+            elif kind == "number":
+                learner["native_number"] = 4
+            elif kind == "args":
+                changed_args = projected.replace(
+                    b"--lua-desync=fake", b"--lua-desync=none", 1)
+                tampered["final_args_sha256"] = hashlib.sha256(changed_args).hexdigest()
+            elif kind == "ordinary":
+                changed_original = original.replace(
+                    b"--filter-tcp=443", b"--filter-tcp=80", 1)
+                tampered["original_args_sha256"] = hashlib.sha256(changed_original).hexdigest()
+            elif kind == "debug":
+                changed_args = projected.replace(
+                    b"--hostlist-auto-debug=", b"--hostlist-auto-debug-rogue=", 1)
+                tampered["final_args_sha256"] = hashlib.sha256(changed_args).hexdigest()
+            else:
+                tampered["profiles"].append({"role": "observer"})
+            with self.subTest(kind=kind), self.assertRaises(owner.GenerationRefused):
+                owner._valid_learning_proposal(
+                    encode(tampered), owner_ref, changed_original, changed_args)
+        # No standalone proposal is ever accepted as an active owner map.
+        with self.assertRaises(owner.GenerationRefused):
+            owner._valid_map(encode(proposal), owner_ref, projected)
+
     def test_tz6v4_mixed_ipset_and_voice_not_learned(self):
         mapped, args = self.build(
             "--filter-tcp=443\n<HOSTLIST:user>\n<IPSET:telegram>\n"

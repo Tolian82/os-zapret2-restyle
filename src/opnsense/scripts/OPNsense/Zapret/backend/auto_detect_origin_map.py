@@ -787,7 +787,16 @@ def preflight_learning_tier(workspace: Path, candidate_digest: str) -> dict:
             or proposal["activation_authorized"] is not False
             or proposal["final_args_sha256"] != _sha(planned)):
         raise AttributionError("learning preflight unexpectedly authorized runtime")
+    from auto_detect_owner import _valid_learning_proposal
+    serialized = json.dumps(proposal, sort_keys=True, separators=(",", ":")).encode()
+    # A second exact native-order reader independently rejects map/argv
+    # mismatches. It cannot unlock the installed schema-2 production owner.
+    verified = _valid_learning_proposal(
+        serialized, {"id": work.name, "candidate": candidate_digest},
+        original, planned)
     learning = [row for row in proposal["profiles"] if row["role"] == "learning"]
+    if [row["native_number"] for row in learning] != [n for n, _, _ in verified]:
+        raise AttributionError("learning proposal differs from native attestation")
     return {
         "evidence": "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING",
         "generation": work.name,

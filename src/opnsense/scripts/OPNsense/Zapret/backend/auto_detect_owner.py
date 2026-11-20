@@ -148,6 +148,163 @@ def _snapshot(runner, pid: int) -> tuple[str, list[str]]:
     return " ".join(parts[:5]), parts[5].split()
 
 
+
+def _valid_learning_proposal(raw: bytes, owner: dict, original: bytes,
+                             argv: bytes) -> tuple[tuple[int, str, str], ...]:
+    """Read-only exact native-order proof for TZ6v4 drafts; NEVER authorizes.
+
+    Unlike the installed schema-2 _valid_map this primitive does not permit
+    runtime, FD9 producer access, queue rotation, epoch sealing, or ACK.
+    It independently checks the exact executable argv semantics of the
+    canonical source-map proposal before the original owner may eventually
+    promote a *different*, fully protected active-generation format.
+    """
+    from auto_detect_origin_map import LEARNING_PROPOSAL
+    from auto_detect_owned_sources import KNOWN_HOSTLISTS
+    from auto_detect_storage import DEBUG_PATH, ROOT
+    from global_exclusions import BASE, visible
+
+    if (not isinstance(raw, bytes) or len(raw) > MAX_MAP or
+            not isinstance(original, bytes) or not isinstance(argv, bytes) or
+            not 0 < len(original) <= MAX_ARGS or not 0 < len(argv) <= MAX_ARGS or
+            not isinstance(owner, dict) or
+            not HEX32.fullmatch(str(owner.get("id", ""))) or
+            not HEX64.fullmatch(str(owner.get("candidate", "")))):
+        raise GenerationRefused("invalid_learning_proposal_input")
+    try:
+        record = json.loads(raw)
+        src_tokens = original.decode("utf-8").split()
+        dst_tokens = argv.decode("utf-8").split()
+        original_rows = segments(original.decode("utf-8"))
+        proposed_rows = segments(argv.decode("utf-8"))
+    except (ValueError, TypeError, UnicodeError) as exc:
+        raise GenerationRefused("invalid_learning_native_projection") from exc
+    expected_keys = {
+        "schema", "evidence", "activation_authorized", "generation",
+        "owner_operation_id", "owner_candidate_sha256", "mode",
+        "original_args_sha256", "final_args_sha256", "profiles",
+    }
+    if (not isinstance(record, dict) or set(record) != expected_keys or
+            type(record["schema"]) is not int or record["schema"] != 3 or
+            record["evidence"] != LEARNING_PROPOSAL or
+            record["activation_authorized"] is not False or
+            record["mode"] != "auto" or
+            record["generation"] != owner["id"] or
+            record["owner_operation_id"] != owner["id"] or
+            record["owner_candidate_sha256"] != owner["candidate"] or
+            record["original_args_sha256"] != hashlib.sha256(original).hexdigest() or
+            record["final_args_sha256"] != hashlib.sha256(argv).hexdigest()):
+        raise GenerationRefused("untrusted_learning_generation")
+    profiles = record["profiles"]
+    if not isinstance(profiles, list) or not 1 < len(profiles) <= 257:
+        raise GenerationRefused("invalid_learning_profile_map")
+    fields = {"native_number", "role", "source_profile",
+              "source_sha256", "selector", "hostlist", "found_source_id",
+              "auto_inbox", "debug_identity", "origin_status"}
+    if any(not isinstance(p, dict) or set(p) != fields for p in profiles):
+        raise GenerationRefused("invalid_learning_profile_fields")
+    ordinary = profiles[:len(original_rows)]
+    learning = profiles[len(original_rows):-1]
+    last = profiles[-1]
+    if (len(profiles) != len(original_rows) + len(learning) + 1 or
+            last != {
+                "native_number": 0, "role": "excluded",
+                "source_profile": f"{owner['id']}:default",
+                "source_sha256": None, "selector": None, "hostlist": None,
+                "found_source_id": None, "auto_inbox": None,
+                "debug_identity": None, "origin_status": "unknown-native-default",
+            }):
+        raise GenerationRefused("invalid_learning_default_profile")
+    numbers = []
+    sources = {}
+    for ordinal, item in enumerate(ordinary, 1):
+        native_number = item["native_number"]
+        if (item["role"] not in ("working", "excluded") or
+                item["source_profile"] != f"{owner['id']}:{ordinal}" or
+                item["auto_inbox"] is not None or
+                item["debug_identity"] is not None or
+                item["found_source_id"] not in (None, "youtube_found", "user_found") or
+                not isinstance(item["origin_status"], str) or
+                item["origin_status"] not in ALLOWED or
+                (item["role"] == "working") !=
+                (item["origin_status"] == "known-hostlist") or
+                (native_number is not None and
+                 (type(native_number) is not int or native_number <= 0))):
+            raise GenerationRefused("unqualified_ordinary_learning_source")
+        if native_number is not None:
+            numbers.append(native_number)
+        sources[item["source_profile"]] = (item, original_rows[ordinal - 1])
+    if numbers != list(range(1, len(numbers) + 1)):
+        raise GenerationRefused("invalid_ordinary_native_numbering")
+    if len(learning) > 255 - len(numbers):
+        raise GenerationRefused("learning_native_profile_limit")
+    debug_flag = "--hostlist-auto-debug=" + str(DEBUG_PATH)
+    if learning:
+        if (dst_tokens.count(debug_flag) != 1 or
+                len(dst_tokens) < 2 or dst_tokens[1] != debug_flag or
+                not src_tokens or not src_tokens[0].startswith("--port=")):
+            raise GenerationRefused("unqualified_learning_debug")
+    elif argv != original:
+        raise GenerationRefused("unwarranted_learning_argv_change")
+    if any(t.startswith("--hostlist-auto") for t in src_tokens):
+        raise GenerationRefused("original_argv_contains_native_auto")
+    if len(proposed_rows) != len(original_rows) + len(learning):
+        raise GenerationRefused("learning_argv_profile_count_changed")
+    for ordinal, row in enumerate(original_rows):
+        planned = list(proposed_rows[ordinal])
+        if ordinal == 0 and learning:
+            if planned.count(debug_flag) != 1:
+                raise GenerationRefused("ordinary_native_debug_placement")
+            planned.remove(debug_flag)
+        if planned != row:
+            raise GenerationRefused("ordinary_first_match_order_changed")
+
+    attested = []
+    seen = set()
+    for index, item in enumerate(learning):
+        native_number = len(numbers) + index + 1
+        hostlist = item["hostlist"]
+        source = sources.get(item["source_profile"])
+        if (item["role"] != "learning" or
+                type(item["native_number"]) is not int or
+                item["native_number"] != native_number or
+                item["origin_status"] != "qualified-source-proposal" or
+                not isinstance(hostlist, str) or
+                hostlist not in KNOWN_HOSTLISTS or
+                item["selector"] != f"<HOSTLIST:{hostlist}>" or
+                item["found_source_id"] != f"{hostlist}_found" or
+                item["debug_identity"] != str(DEBUG_PATH) or
+                source is None):
+            raise GenerationRefused("unauthorized_learning_destination")
+        original_item, original_row = source
+        if (original_item["role"] != "working" or
+                original_item["hostlist"] != hostlist or
+                original_item["selector"] != item["selector"] or
+                original_item["source_sha256"] != item["source_sha256"]):
+            raise GenerationRefused("learning_source_identity_mismatch")
+        expected_inbox = str(ROOT / f"learning-{owner['id']}-{native_number}.txt")
+        if item["auto_inbox"] != expected_inbox or expected_inbox in seen:
+            raise GenerationRefused("unqualified_learning_native_inbox")
+        seen.add(expected_inbox)
+        clone = [token for token in visible(original_row)
+                 if token.partition("=")[0] not in BASE]
+        actual = proposed_rows[len(original_rows) + index]
+        # --new is the boundary token and is deliberately not in segments().
+        if (not clone or
+                actual != clone + [
+                    f"--hostlist-auto={expected_inbox}",
+                    "--hostlist-auto-retrans-reset=0",
+                ] or sum(token.startswith("--hostlist=") for token in clone) != 1 or
+                any(token.startswith("--hostlist-auto") for token in clone)):
+            raise GenerationRefused("learning_native_profile_is_not_exact_clone")
+        attested.append((native_number, hostlist, expected_inbox))
+    if sum(t.startswith("--hostlist-auto=") for t in dst_tokens) != len(learning):
+        raise GenerationRefused("unexpected_native_learning_producers")
+    if sum(t.startswith("--hostlist-auto-debug=") for t in dst_tokens) != int(bool(learning)):
+        raise GenerationRefused("unexpected_native_learning_debug")
+    return tuple(attested)
+
+
 def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
     try:
         data = json.loads(raw)
