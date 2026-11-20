@@ -270,7 +270,7 @@ def preview_original_learning_p1_locked(
     writer: DestinationCommit, proof, workspace: Path, *,
     owned_root: Path, manual_hostlists: dict[str, str],
     global_exclude: str, attest, inspect=probe_pending_fd,
-    psl: PublicSuffixList | None = None,
+    psl: PublicSuffixList | None = None, running_live: bool = False,
 ) -> dict:
     """Original P2a/P2b/P2c + GUI locked native → P1 → live plan, NO writes.
 
@@ -292,6 +292,7 @@ def preview_original_learning_p1_locked(
             or not isinstance(workspace, Path) or not workspace.is_absolute()
             or not isinstance(owned_root, Path) or not owned_root.is_absolute()
             or not callable(attest) or not callable(inspect) or
+            type(running_live) is not bool or
             set(writer.targets) != {"auto", *KNOWN_HOSTLISTS} or
             writer.targets["auto"].parent == owned_root or
             any(writer.targets[name] != owned_root / (name + ".txt")
@@ -310,6 +311,40 @@ def preview_original_learning_p1_locked(
         projection = preview_learning_p1_effects(
             candidate["observations"], manual_hostlists, original_owned,
             shared_bytes.decode("utf-8"), global_exclude, psl=psl)
+        live = None
+        if running_live:
+            canonical = {}
+            for name in KNOWN_HOSTLISTS:
+                normalized = normalize(manual_hostlists[name], name)["normalized"]
+                canonical[name] = normalized + ("\n" if normalized else "")
+            # Reuse the SAME live preimage inspector and managed composer;
+            # this is neither a new Config writer nor a standalone reload.
+            aligned = preview_live_known_after_readonly(
+                canonical, projection["effects"],
+                active=COMMON_ACTIVE, owned_root=owned_root,
+                owner_uid=writer.receipts.uid, attest=attest)
+            if (aligned["owner_schema"] != 3 or
+                    aligned["generation"] != proof.generation or
+                    aligned["operation"] != proof.operation_id or
+                    aligned["pid"] != proof.owner.pid or
+                    aligned["started"] != proof.owner.started or
+                    aligned["commit_authorized"] is not False or
+                    aligned["ack_authorized"] is not False):
+                raise V2OriginalConfigRefused("learning_p1_live_generation_not_same")
+            live = {}
+            for name in aligned["changed"]:
+                row = aligned["files"][name]
+                path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+                after_bytes = projection["managed_after"][name]
+                if (row["path"] != str(path) or
+                        row["after_sha256"] !=
+                        hashlib.sha256(after_bytes).hexdigest()):
+                    raise V2OriginalConfigRefused("learning_p1_live_after_not_exact")
+                live[name] = {
+                    "path": path,
+                    "before_sha256": row["before_sha256"],
+                    "after": after_bytes,
+                }
         # The native writer ignores the P2a flock. P1/PSL can take time:
         # prove the SAME debug+N native physical windows again before
         # returning the proposal to the original Config/WAL owner.
@@ -332,6 +367,7 @@ def preview_original_learning_p1_locked(
         return {
             "source": candidate,
             "p1": projection,
+            "live": live,
             "commit_authorized": False,
             "cleanup_authorized": False,
             "ack_authorized": False,
