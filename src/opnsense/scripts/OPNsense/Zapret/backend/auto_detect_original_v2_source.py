@@ -20,7 +20,6 @@ from auto_detect_debug_window import MAX_RAW, _raw_hosts, DebugWindowRefused
 from auto_detect_owner import GenerationProof
 from auto_detect_queue import DurableInbox, QueueSafetyError, MAX_SEGMENT, _identity, _stat_regular
 from auto_detect_storage import _learning_names, StorageRefused
-from auto_detect_owned_sources import KNOWN_HOSTLISTS
 
 GEN = re.compile(r"[0-9a-f]{32}\Z")
 MAX_READ = min(MAX_RAW, MAX_SEGMENT)
@@ -89,6 +88,9 @@ def preview_original_learning_windows_locked(
     that exact running engine/epoch; injected callbacks serve tests only.
     No cursor persistence, rotation, writer-FD drain or ACK occurs here.
     """
+    # Resolve the registered hostlists only when this inert preview runs.
+    # Import-time resolution forms a cycle through EpochReceipts/P2 destination.
+    from auto_detect_owned_sources import KNOWN_HOSTLISTS
     if (not isinstance(queue, DurableInbox) or not queue._held or
             queue.writer_gid is None or not callable(attest) or
             type(learning) is not tuple or not 1 <= len(learning) <= 255 or
