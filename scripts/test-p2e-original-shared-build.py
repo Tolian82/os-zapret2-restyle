@@ -380,6 +380,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         source = self.check_nonactivating(mapped, args)
         original = args.read_bytes()
         candidate = "d" * 64
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
         preflight = origin.preflight_learning_tier(self.work, candidate)
         self.assertEqual(preflight["evidence"],
                          "TZ6V4_ORIGINAL_FD9_LEARNING_PREFLIGHT_NONACTIVATING")
@@ -435,6 +439,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
         self.check_nonactivating(mapped, args)
         candidate = "d" * 64
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
         promoted = origin.promote_learning_release(self.work, candidate)
         self.assertEqual(origin.verify_learning_promotion(self.work, candidate),
                          promoted)
@@ -452,6 +460,10 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             voice_on=True)
         self.check_nonactivating(mapped, args)
         original = args.read_bytes()
+        (self.work / "plan.json").write_text(json.dumps({
+            "page": "strategies", "candidate": {"general": {"enabled": "1"}},
+            "changed_fields": [], "dependencies": "a" * 64,
+        }))
         with self.assertRaises(origin.AttributionError):
             origin.promote_learning_release(self.work, "d" * 64)
         self.assertEqual(args.read_bytes(), original)
