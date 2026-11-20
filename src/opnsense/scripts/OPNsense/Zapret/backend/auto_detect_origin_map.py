@@ -1248,7 +1248,7 @@ def main(argv: list[str]) -> int:
                 "generation": workspace.name,
                 "learning_native_numbers": [
                     p["native_number"] for p in record["profiles"]
-                    if p.get("role") == "learning",
+                    if p.get("role") == "learning"
                 ] if record["schema"] == 3 else [],
                 "observer_native_number": record.get("observer_native_number"),
             }, sort_keys=True))
