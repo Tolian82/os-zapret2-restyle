@@ -59,10 +59,67 @@ class DurableInboxTests(unittest.TestCase):
                                 queue._identity(pending))
             self.assertEqual(pending.stat().st_nlink, 1)
             self.assertEqual(pending.parent, self.queue.pending)
+            self.assertRegex(
+                pending.name,
+                r"^native-" + generation + r"-1-[0-9a-f]{32}\.txt$")
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_pending_requires_qualified_ack"):
+                self.queue.acknowledge(
+                    pending, drained=lambda *args: True,
+                    committed=lambda data: True)
             # This physical primitive CANNOT authorize any native ACK;
             # the protected source inode persists until ALL late rows
             # have a separately durable original destination receipt.
             self.assertEqual(self.queue.segments(), [pending])
+
+    def test_original_native_append_during_hardlink_preserves_inode(self):
+        import hashlib
+        generation = "d" * 32
+        native = self.root / ("learning-" + generation + "-4.txt")
+        original = b"known.example.com\nkeep.example.com\n"
+        late = b"racing.example.net\n"
+        native.write_bytes(original)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(original[:cut]).hexdigest())
+        native_link = queue.os.link
+
+        def append_during_link(*args, **kwargs):
+            native_link(*args, **kwargs)
+            with native.open("ab", buffering=0) as output:
+                output.write(late)
+                os.fsync(output.fileno())
+
+        with self.queue.exclusive():
+            with patch.object(queue.os, "link", side_effect=append_during_link):
+                with self.assertRaisesRegex(
+                        queue.QueueSafetyError,
+                        "raw_changed_between_link_and_replace"):
+                    self.queue._rotate_original_source(
+                        native, replacement=b"keep.example.com\n",
+                        generation=generation, expected_identity=identity,
+                        sealed_prefix=prefix)
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertRegex(
+                pending[0].name,
+                r"^native-" + generation + r"-4-[0-9a-f]{32}\.txt$")
+            self.assertEqual(queue._identity(native), identity)
+            self.assertEqual(queue._identity(pending[0]), identity)
+            self.assertEqual(native.read_bytes(), original + late)
+            self.assertEqual(pending[0].read_bytes(), original + late)
+            self.assertEqual(pending[0].stat().st_nlink, 2)
+            recovered = self.queue._rotate_original_source(
+                native, replacement=b"keep.example.com\nracing.example.net\n",
+                generation=generation, expected_identity=identity,
+                sealed_prefix=prefix)
+            self.assertEqual(recovered, pending[0])
+            self.assertEqual(native.read_bytes(),
+                             b"keep.example.com\nracing.example.net\n")
+            self.assertEqual(recovered.read_bytes(), original + late)
+            self.assertEqual(recovered.stat().st_nlink, 1)
 
     def test_original_native_refuses_bad_epoch_and_non_subset(self):
         import hashlib

@@ -17,6 +17,9 @@ import stat
 
 MAX_PENDING = 512
 MAX_SEGMENT = 4 * 1024 * 1024
+# Native old inodes share the original P2a pending directory, but MUST
+# never be interpreted as the raw inbox batch by the original raw ACK.
+NATIVE_PENDING = re.compile(r"native-([0-9a-f]{32})-([1-9][0-9]{0,2})-([0-9a-f]{32})\.txt\Z")
 
 
 class QueueSafetyError(RuntimeError):
@@ -218,6 +221,10 @@ class DurableInbox:
         for path in files:
             if not path.name.endswith(".txt") or path.name.startswith("."):
                 raise QueueSafetyError("unknown_pending_entry")
+            if path.name.startswith("native-"):
+                match = NATIVE_PENDING.fullmatch(path.name)
+                if match is None or int(match[2]) > 255:
+                    raise QueueSafetyError("foreign_native_pending_name")
             _stat_regular(path, self.uid, writer_gid=self.writer_gid)
         return files
 
@@ -285,7 +292,7 @@ class DurableInbox:
             import hashlib
             found = LEARNING_NAME.fullmatch(source.name)
             if (found is None or generation is None or
-                    found[1] != generation or
+                    found[1] != generation or int(found[2]) > 255 or
                     expected_identity is None or
                     len(expected_identity) != 2 or
                     any(type(item) is not int or item <= 0
@@ -354,8 +361,11 @@ class DurableInbox:
             if old.st_nlink != 2:
                 raise QueueSafetyError("unexpected_live_links")
             segment = same[0]
-            if generation is not None and not segment.name.startswith(generation + "-"):
-                raise QueueSafetyError("crash_recovery_generation_changed")
+            if generation is not None:
+                expected_tag = (f"native-{generation}-{found[2]}-"
+                                if is_native else generation + "-")
+                if not segment.name.startswith(expected_tag):
+                    raise QueueSafetyError("crash_recovery_generation_changed")
             if old.st_size == 0:
                 # Interrupted link() before replace() with no raw event.
                 # This is only a second NAME for the live inode, not a
@@ -383,15 +393,25 @@ class DurableInbox:
                 return None
             if old.st_nlink != 1 or len(existing) >= MAX_PENDING:
                 raise QueueSafetyError("unsafe_inbox_links_or_capacity")
-            suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
-                      if cycle is not None else secrets.token_hex(16))
-            segment = self.pending / ((generation + "-" if generation is not None else "") +
-                                      suffix + ".txt")
+            if is_native:
+                # Original P2a directory, distinct profile-bound retained
+                # class; never accepted by original raw acknowledge().
+                segment = self.pending / (
+                    f"native-{generation}-{found[2]}-"
+                    f"{secrets.token_hex(16)}.txt")
+            else:
+                suffix = (f"{cycle:08x}{sequence:06x}{secrets.token_hex(9)}"
+                          if cycle is not None else secrets.token_hex(16))
+                segment = self.pending / (
+                    (generation + "-" if generation is not None else "") +
+                    suffix + ".txt")
         # A changed source cannot silently borrow an alias of a different
         # native profile or a different source generation. All aliases are
         # validated by the original segments() and by exact old inode.
-        if is_native and generation is not None and same and (
-                not same[0].name.startswith(generation + "-")):
+        if is_native and same and (
+                NATIVE_PENDING.fullmatch(same[0].name) is None or
+                not same[0].name.startswith(
+                    f"native-{generation}-{found[2]}-")):
             raise QueueSafetyError("native_foreign_pending_alias")
         # A new inode is fully synced before the live name is replaced.
         temp = self.root / (".new-inbox-" + secrets.token_hex(16))
@@ -467,6 +487,10 @@ class DurableInbox:
         segment = Path(segment)
         if segment.parent != self.pending or segment not in self.segments():
             raise QueueSafetyError("foreign_segment")
+        if NATIVE_PENDING.fullmatch(segment.name):
+            # Only a FUTURE original per-N cursor ACK may unlink this inode
+            # after every late producer append has been reconciled.
+            raise QueueSafetyError("native_pending_requires_qualified_ack")
         before = _stat_regular(segment, self.uid, max_size=MAX_SEGMENT,
                                writer_gid=self.writer_gid)
         if _identity(self.inbox) == (before.st_dev, before.st_ino):
