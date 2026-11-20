@@ -543,9 +543,28 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         post_drop.original_fd9_command(
                             [action] + ["bogus"] * (n - 1)), 64)
 
+    @staticmethod
+    def _tz6v4_psl_for_fixtures() -> PublicSuffixList:
+        """Hash-verified ICANN+PRIVATE fixture; no runner idna dependency.
+
+        Production P1 still loads the complete pinned PSL and refuses
+        if its qualified IDNA2008 provider is absent. This tiny PSL is
+        intentionally test-only and covers the example.com/org roots.
+        """
+        raw = (
+            b"// ===BEGIN ICANN DOMAINS===\n"
+            b"com\norg\n"
+            b"// ===END ICANN DOMAINS===\n"
+            b"// ===BEGIN PRIVATE DOMAINS===\n"
+            b"blogspot.com\n"
+            b"// ===END PRIVATE DOMAINS===\n"
+        )
+        return PublicSuffixList(raw, hashlib.sha256(raw).hexdigest())
+
     def test_tz6v4_p1_routes_confirmed_native_sources_to_found(self):
         """Existing P1 PSL and composer, no invented model for known Found."""
         from auto_detect_original_v2_model import preview_learning_p1_effects
+        psl = self._tz6v4_psl_for_fixtures()
         manual = {"youtube": "", "user": ""}
         owned = {"youtube": "", "user": ""}
         observations = [
@@ -553,7 +572,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             {"hostname": "mail.example.org", "hostlist": "user"},
         ]
         planned = preview_learning_p1_effects(
-            observations, manual, owned, "", "")
+            observations, manual, owned, "", "", psl=psl)
         self.assertEqual(planned["effects"], {
             "youtube": {"add": ["example.com"], "remove": []},
             "user": {"add": ["example.org"], "remove": []},
@@ -573,7 +592,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         ambiguity = preview_learning_p1_effects(
             [observations[0],
              {"hostname": "www.example.com", "hostlist": "user"}],
-            manual, owned, "", "")
+            manual, owned, "", "", psl=psl)
         self.assertEqual(ambiguity["effects"], {
             "auto": {"add": ["example.com"], "remove": []},
         })
@@ -586,7 +605,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         # original manual content nor a negative modifier may be deleted.
         moved = preview_learning_p1_effects(
             [{"hostname": "www.example.com", "hostlist": "user"}],
-            manual, {"youtube": "example.com\n", "user": ""}, "", "")
+            manual, {"youtube": "example.com\n", "user": ""}, "", "", psl=psl)
         self.assertEqual(moved["effects"], {
             "youtube": {"add": [], "remove": ["example.com"]},
             "auto": {"add": ["example.com"], "remove": []},
@@ -595,20 +614,20 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         self.assertEqual(moved["managed_after"]["youtube"], b"")
         excluded = preview_learning_p1_effects(
             observations, {"youtube": "!example.com\n", "user": ""},
-            owned, "", "")
+            owned, "", "", psl=psl)
         self.assertEqual(excluded["effects"], {
             "user": {"add": ["example.org"], "remove": []},
         })
         self.assertEqual(excluded["managed_after"]["youtube"],
                          b"!example.com\n")
         globally_excluded = preview_learning_p1_effects(
-            observations, manual, owned, "", "example.com\n")
+            observations, manual, owned, "", "example.com\n", psl=psl)
         self.assertEqual(globally_excluded["effects"], {
             "user": {"add": ["example.org"], "remove": []},
         })
         repeat = preview_learning_p1_effects(
             observations, manual,
-            {"youtube": "example.com\n", "user": "example.org\n"}, "", "")
+            {"youtube": "example.com\n", "user": "example.org\n"}, "", "", psl=psl)
         self.assertEqual(repeat["effects"], {})
         for bad in (
             [{"hostname": "invalid_host", "hostlist": "youtube"}],
@@ -619,7 +638,7 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         ):
             with self.subTest(bad=bad):
                 with self.assertRaises(V2OriginalConfigRefused):
-                    preview_learning_p1_effects(bad, manual, owned, "", "")
+                    preview_learning_p1_effects(bad, manual, owned, "", "", psl=psl)
 
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
@@ -870,7 +889,8 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         manual_hostlists={
                             "youtube": "youtube.com\n", "user": ""},
                         global_exclude="", attest=lambda: proof,
-                        inspect=drained)
+                        inspect=drained,
+                        psl=self._tz6v4_psl_for_fixtures())
                 self.assertEqual(p1["p1"]["effects"], {
                     "youtube": {"add": ["example.com"], "remove": []},
                     "user": {"add": ["example.org"], "remove": []},
