@@ -428,6 +428,71 @@ def preview_original_learning_candidates_locked(
             "learning_original_native_debug_candidate_refused") from exc
 
 
+# One original P2b all-PID FD scan for the qualified schema3 candidate.
+# Deliberately not a commit/ACK capability: native auto files are active
+# working HOSTLISTs. Nothing may unlink, truncate or replace them here.
+def attest_original_learning_drained_candidate_locked(
+    queue: DurableInbox, receipts, proof, workspace: Path, *,
+    attest, inspect=None,
+) -> dict:
+    """Recheck N native + debug inodes through original P2b, before P1 WAL.
+
+    The existing P2b inspector scans ALL FreeBSD processes, not only dvtws2.
+    A merely readable file or its current PID cannot prove a drained writer.
+    Source snapshots are repeated after every inode's global FD check to
+    reject any native append / epoch or owner switch across the scan.
+    """
+    from auto_detect_fd import FDState, probe_pending_fd
+    from auto_detect_epoch_receipts import EpochReceipts
+    from auto_detect_owner import LearningGenerationProof
+
+    if inspect is None:
+        inspect = probe_pending_fd
+    if (not isinstance(queue, DurableInbox) or not queue._held or
+            not isinstance(receipts, EpochReceipts) or
+            not isinstance(proof, LearningGenerationProof) or
+            not callable(attest) or not callable(inspect) or
+            attest() != proof):
+        raise OriginalSourceRefused("learning_original_p2b_owner_and_lock_required")
+    before = preview_original_learning_candidates_locked(
+        queue, receipts, proof, workspace, attest=attest)
+    if not before["observations"]:
+        raise OriginalSourceRefused("learning_no_native_candidate_to_drain")
+    # The original epoch was already rechecked by the physical preview;
+    # a second independent read pins the authentic prelaunch inode numbers
+    # to the ONE current same-generation P2b drain inspection.
+    _, seed, _ = receipts._learning_pretraffic(proof, queue, workspace)
+    pinned = [
+        (queue.root / row["name"], row["device"], row["inode"])
+        for row in seed["files"][1:]  # debug + every N native profile
+    ]
+    if (len(pinned) != len(proof.learning) + 1 or
+            pinned[0][0] != queue.root / "debug.log" or
+            any(path != Path(source[2]) for (path, _, _), source in
+                zip(pinned[1:], proof.learning))):
+        raise OriginalSourceRefused("learning_p2b_epoch_sources_not_exact")
+    for path, device, inode in pinned:
+        if attest() != proof:
+            raise OriginalSourceRefused("learning_p2b_owner_switched")
+        state = inspect(path, device, inode, owner=proof.owner,
+                        writer_gid=queue.writer_gid)
+        if state is not FDState.DRAINED or attest() != proof:
+            raise OriginalSourceRefused("learning_p2b_global_fd_not_drained")
+    after = preview_original_learning_candidates_locked(
+        queue, receipts, proof, workspace, attest=attest)
+    if before != after or attest() != proof:
+        raise OriginalSourceRefused("learning_p2b_sources_changed_during_scan")
+    return {
+        "observations": after["observations"],
+        "native_cursors": after["native_cursors"],
+        "debug_end_offset": after["debug_end_offset"],
+        "debug_end_sha256": after["debug_end_sha256"],
+        "p2b_drained": True,
+        "commit_authorized": False,
+        "ack_authorized": False,
+    }
+
+
 def detached_original_raw(queue: DurableInbox, pending: Path) -> bytes:
     """Read exact, detached original P2a raw inode with no symlink/truncation.
 
