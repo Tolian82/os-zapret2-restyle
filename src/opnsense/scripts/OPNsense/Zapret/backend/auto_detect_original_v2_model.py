@@ -380,6 +380,144 @@ def preview_original_learning_p1_locked(
         raise V2OriginalConfigRefused("original_learning_p1_preview_refused") from exc
 
 
+def commit_with_original_learning_first_slot(
+        writer: DestinationCommit, proof, workspace: Path, *,
+        config_fd: int, config_path: Path,
+        owned_root: Path, manual_hostlists: dict[str, str],
+        global_exclude: str, attest, inspect=probe_pending_fd,
+        psl: PublicSuffixList | None = None,
+) -> dict:
+    """Import-only original FD4/FD9 schema3 P1 → SAME destination WAL.
+
+    Original PHP must own the actual Config::lock, inherited Config OFD,
+    original P2a queue lock and original terminal FD9 running generation.
+    The existing DestinationCommit writes PERMANENT Found first and live
+    managed after, with one source-bound plan/checkpoint. The source is a
+    working native HOSTLIST: this method NEVER removes native rows, moves
+    a cursor, acknowledges or restarts dvtws2. The original minute does
+    not dispatch this method until full cleanup/recovery is proven.
+    """
+    import sys
+    from auto_detect_owner import LearningGenerationProof
+    from auto_detect_original_lock_handoff import (
+        CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
+    )
+    from auto_detect_epoch_receipts import _canonical
+    from auto_detect_cursor_chain import CursorChain
+
+    if (not isinstance(writer, DestinationCommit) or
+            not isinstance(proof, LearningGenerationProof) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(owned_root, Path) or not owned_root.is_absolute() or
+            not isinstance(config_path, Path) or not config_path.is_absolute() or
+            type(config_fd) is not int or config_fd < 3 or
+            not callable(attest) or not callable(inspect) or
+            not writer.queue._held or
+            (sys.platform.startswith("freebsd") and
+             (config_path != CONFIG_PATH or
+              writer.receipts.uid != 0 or writer.queue.uid != 0)) or
+            attest() != proof):
+        raise V2OriginalConfigRefused("learning_original_config_fd9_model_required")
+
+    def config_held():
+        assert_inherited_config_fd(
+            config_fd, config_path,
+            owner_uid=None if config_path == CONFIG_PATH else writer.receipts.uid)
+        if attest() != proof:
+            raise V2OriginalConfigRefused("learning_original_config_owner_changed")
+
+    try:
+        config_held()
+        chain = CursorChain(writer.receipts, writer.queue)
+        prepared = chain.prepare_learning_first_slot(
+            proof, workspace, attest=attest, inspect=inspect)
+        slot = prepared["slot"]
+        encoded = _read(slot / "intent.json", writer.receipts.uid)
+        if hashlib.sha256(encoded).hexdigest() != prepared["intent_sha256"]:
+            raise V2OriginalConfigRefused("learning_original_intent_changed")
+        intent = json.loads(encoded)
+        raw = _canonical({"observations": intent["observations"]})
+        with writer.exclusive_targets():
+            config_held()
+            plan_file = slot / "destination" / "plan.json"
+            checkpoint_file = slot / "destination" / "checkpoint.json"
+            if checkpoint_file.exists() or checkpoint_file.is_symlink():
+                # A *completed* original checkpoint cannot be recomputed
+                # after the GUI removes a Found entry. Return exactly the
+                # already committed result, no new writes or policy replay.
+                plan, plan_raw = qualified_destination_plan(
+                    slot, intent, writer.receipts.uid, targets=writer.targets)
+                checkpoint = json.loads(_read(checkpoint_file, writer.receipts.uid))
+                expected = {
+                    "schema": 1, "kind": "destination-and-cursor-committed",
+                    "generation": intent["generation"],
+                    "pending_name": "learning-00000000",
+                    "plan_sha256": hashlib.sha256(plan_raw).hexdigest(),
+                    "evidence": "learning-native-debug",
+                    "committed_cursor_offset": intent["debug_end_offset"],
+                    "committed_cursor_sha256": intent["debug_end_sha256"],
+                    "ack_authorized": False,
+                }
+                if checkpoint != expected or attest() != proof:
+                    raise V2OriginalConfigRefused("learning_checkpoint_replay_mismatch")
+                config_held()
+                return checkpoint
+            if plan_file.exists() or plan_file.is_symlink():
+                # Partial original WAL is durable and must be explicitly
+                # recovered by its SAME source-bound preimage CAS. Do not
+                # re-derive a different P1 effect from a half-written Found.
+                raise V2OriginalConfigRefused("learning_partial_wal_requires_recovery")
+            projection = preview_original_learning_p1_locked(
+                writer, proof, workspace, owned_root=owned_root,
+                manual_hostlists=manual_hostlists,
+                global_exclude=global_exclude, attest=attest,
+                inspect=inspect, psl=psl, running_live=True)
+            source = projection["source"]
+            if (source["observations"] != intent["observations"] or
+                    source["debug_end_offset"] != intent["debug_end_offset"] or
+                    source["debug_end_sha256"] != intent["debug_end_sha256"] or
+                    len(intent["native"]) != len(proof.learning) or
+                    any(
+                        row["path"] not in source["native_cursors"] or
+                        row["end_offset"] != source["native_cursors"][
+                            row["path"]].offset or
+                        row["end_sha256"] != source["native_cursors"][
+                            row["path"]].prefix_sha256 or
+                        (row["device"], row["inode"]) != (
+                            source["native_cursors"][row["path"]].device,
+                            source["native_cursors"][row["path"]].inode)
+                        for row in intent["native"]) or
+                    projection["live"] is None or
+                    projection["commit_authorized"] is not False or
+                    projection["cleanup_authorized"] is not False or
+                    projection["ack_authorized"] is not False):
+                raise V2OriginalConfigRefused("learning_original_p1_not_same_sealed_source")
+            config_held()
+            result = writer._locked_commit(
+                slot, intent, raw, projection["p1"]["effects"],
+                live=projection["live"])
+            plan, plan_raw = qualified_destination_plan(
+                slot, intent, writer.receipts.uid, targets=writer.targets)
+            if (not (slot / "destination" / "checkpoint.json").exists() or
+                    result.get("plan_sha256") !=
+                    hashlib.sha256(plan_raw).hexdigest() or
+                    result.get("ack_authorized") is not False or
+                    attest() != proof):
+                raise V2OriginalConfigRefused("learning_original_destination_not_durable")
+            config_held()
+            return result
+    except V2OriginalConfigRefused:
+        raise
+    except (ReceiptRefused, OriginalLockRefused, CursorChainRefused,
+            OriginalSourceRefused, ValueError,
+            DestinationRefused, OwnedSourcesRefused, EffectiveKnownRefused,
+            AutoDomainPolicyError, DomainPolicyError, OSError, TypeError,
+            KeyError, AttributeError, UnicodeError) as exc:
+        raise V2OriginalConfigRefused(
+            "learning_original_config_wal_commit_refused") from exc
+
+
 def _validate_partial_plan(folder: Path, writer: DestinationCommit,
                            effects: dict, eligible: set[str]) -> None:
     """Original P2k8d fail-closed interrupted physical plan replay.
