@@ -45,6 +45,56 @@ class PostDropContract(unittest.TestCase):
                         root_gid=self.gid, engine_uid=self.engine,
                         engine_gid=self.gid)
 
+    def test_learning_inboxes_preserve_prelaunch_and_postdrop_inodes(self):
+        names = ("learning-" + "a" * 32 + "-3.txt",
+                 "learning-" + "a" * 32 + "-4.txt")
+        for name in names:
+            p = self.root / name
+            p.write_bytes(b"")
+            p.chmod(0o660)
+        witness = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid,
+            learning_names=names)
+        self.assertEqual(witness.learning_names, names)
+        self.assertEqual(len(witness.identities), 4)
+        (self.root / names[0]).write_bytes(b"video.example.com\n")
+        self.assertEqual(_reattest(witness, lambda: True), ())
+        self.assertEqual((self.root / names[0]).read_bytes(),
+                         b"video.example.com\n")
+        # The old six-u64 witness must refuse, never silently drop N inodes.
+        with self.assertRaisesRegex(
+                PostDropRefused, "legacy_fd9_witness_cannot_encode_learning_inboxes"):
+            _witness_line(witness)
+        temp = self.root / "replacement"
+        temp.write_bytes(b"")
+        temp.chmod(0o660)
+        temp.replace(self.root / names[1])
+        with patch("auto_detect_post_drop.os.fchown") as chown:
+            with self.assertRaisesRegex(
+                    PostDropRefused, "original_producer_inode_drift"):
+                _reattest(witness, lambda: True)
+            chown.assert_not_called()
+
+    def test_learning_inboxes_refuse_unexpected_generation_before_changes(self):
+        names = ("learning-" + "a" * 32 + "-3.txt",)
+        p = self.root / names[0]
+        p.write_bytes(b"")
+        p.chmod(0o660)
+        def capture(names_to_check):
+            return _capture(
+                self.root, root_uid=self.owner, root_gid=self.gid,
+                engine_uid=self.engine, engine_gid=self.gid,
+                learning_names=names_to_check)
+        for invalid in (
+            (), ("../escape",), (names[0], names[0]),
+            ("learning-" + "b" * 32 + "-3.txt",),
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(PostDropRefused):
+                capture(invalid)
+        self.assertEqual(capture(names).learning_names, names)
+        self.assertEqual(p.read_bytes(), b"")
+
     def test_existing_protected_files_before_and_after_same_owner(self):
         stamp = self.capture()
         raw = (self.root / 'inbox.txt').lstat()

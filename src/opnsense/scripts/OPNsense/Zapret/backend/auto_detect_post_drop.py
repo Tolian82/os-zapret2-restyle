@@ -25,6 +25,7 @@ from auto_detect_queue import DurableInbox, QueueSafetyError
 from auto_detect_storage import (
     ROOT, RAW_PATH, DEBUG_PATH, ENGINE_USER,
     ROOT_MODE, FILE_MODE, PENDING_MODE, _parent,
+    _learning_names, StorageRefused,
 )
 
 class PostDropRefused(RuntimeError):
@@ -39,10 +40,18 @@ class OriginalProducer:
     engine_uid: int
     engine_gid: int
     # One ordered identity per actual original producer file, never raw data.
-    identities: tuple[tuple[int, int, int], tuple[int, int, int]]
+    identities: tuple[tuple[int, int, int], ...]
+    # Additional learning files are structural-only until original FD9
+    # runtime seal, multiple-inbox receipts, and ACK are connected.
+    learning_names: tuple[str, ...] = ()
 
 
-def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int) -> None:
+def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int,
+                  learning_names: tuple[str, ...] = ()) -> None:
+    try:
+        names = _learning_names(learning_names)
+    except StorageRefused as exc:
+        raise PostDropRefused("unsafe_original_learning_source_names") from exc
     try:
         info = root.lstat()
         pending = (root / "pending").lstat()
@@ -52,7 +61,8 @@ def _check_layout(root: Path, root_uid: int, root_gid: int, engine_gid: int) -> 
                 not stat.S_ISDIR(pending.st_mode) or pending.st_uid != root_uid or
                 pending.st_gid != root_gid or
                 stat.S_IMODE(pending.st_mode) != PENDING_MODE or
-                set(os.listdir(root)) - {"pending", "inbox.txt", "debug.log", "worker.lock"}):
+                set(os.listdir(root)) -
+                ({"pending", "inbox.txt", "debug.log", "worker.lock"} | set(names))):
             raise PostDropRefused("unsafe_original_producer_layout")
         lock = root / "worker.lock"
         if lock.exists() or lock.is_symlink():
@@ -81,7 +91,7 @@ def _identity(path: Path, *, uid: tuple[int, ...], gid: int,
 
 
 def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
-             engine_gid: int) -> OriginalProducer:
+             engine_gid: int, learning_names: tuple[str, ...] = ()) -> OriginalProducer:
     """Testable scoped precursor. Does not change either producer file."""
     if (not isinstance(root, Path) or not root.is_absolute() or
             type(root_uid) is not int or root_uid < 0 or
@@ -96,14 +106,14 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
     # Neither a nonempty prior native debug history nor foreign-generation
     # pending may be inherited by a new original shared-FD9 observer.
     try:
-        _check_layout(root, root_uid, root_gid, engine_gid)
+        _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
         queue = DurableInbox(root, owner_uid=root_uid, writer_gid=engine_gid)
         with queue.exclusive():
-            _check_layout(root, root_uid, root_gid, engine_gid)
+            _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             if queue.segments():
                 raise PostDropRefused("unprocessed_original_pending_prelaunch")
             identities = []
-            for name in ("inbox.txt", "debug.log"):
+            for name in ("inbox.txt", "debug.log", *learning_names):
                 path = root / name
                 stat_before, bytes_before = _read_exact(
                     path, owner_uid=root_uid, writer_gid=engine_gid)
@@ -114,9 +124,12 @@ def _capture(root: Path, *, root_uid: int, root_gid: int, engine_uid: int,
                 identities.append(identity)
             if identities[0][:2] == identities[1][:2]:
                 raise PostDropRefused("aliased_original_raw_and_debug")
-            _check_layout(root, root_uid, root_gid, engine_gid)
+            if len({ident[:2] for ident in identities}) != len(identities):
+                raise PostDropRefused("aliased_original_producer_inode")
+            _check_layout(root, root_uid, root_gid, engine_gid, learning_names)
             return OriginalProducer(root, root_uid, root_gid,
-                                    engine_uid, engine_gid, tuple(identities))
+                                    engine_uid, engine_gid, tuple(identities),
+                                    learning_names)
     except (QueueSafetyError, DebugWindowRefused, OSError) as exc:
         raise PostDropRefused("original_pretraffic_queue_or_inode_unavailable") from exc
 
@@ -131,8 +144,15 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
     if not isinstance(witness, OriginalProducer) or not callable(owner_alive):
         raise PostDropRefused("missing_original_fd9_witness")
     root = witness.root
-    _check_layout(root, witness.root_uid, witness.root_gid, witness.engine_gid)
-    paths = (root / "inbox.txt", root / "debug.log")
+    try:
+        names = _learning_names(witness.learning_names)
+    except StorageRefused as exc:
+        raise PostDropRefused("untrusted_original_learning_witness") from exc
+    if len(witness.identities) != 2 + len(names):
+        raise PostDropRefused("incomplete_original_producer_witness")
+    _check_layout(root, witness.root_uid, witness.root_gid,
+                  witness.engine_gid, names)
+    paths = tuple(root / name for name in ("inbox.txt", "debug.log", *names))
     for path, prior in zip(paths, witness.identities):
         _identity(path, uid=(witness.root_uid, witness.engine_uid),
                   gid=witness.engine_gid, expected=prior)
@@ -171,7 +191,8 @@ def _reattest(witness: OriginalProducer, owner_alive: Callable[[], bool]) -> tup
             os.close(fd)
         _identity(path, uid=(witness.root_uid,), gid=witness.engine_gid,
                   expected=prior)
-    _check_layout(root, witness.root_uid, witness.root_gid, witness.engine_gid)
+    _check_layout(root, witness.root_uid, witness.root_gid,
+                  witness.engine_gid, names)
     for path, prior in zip(paths, witness.identities):
         _identity(path, uid=(witness.root_uid,), gid=witness.engine_gid,
                   expected=prior)
@@ -337,6 +358,9 @@ _WITNESS = re.compile(r"^p2k8i:([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-
 
 
 def _witness_line(witness: OriginalProducer) -> str:
+    if (not isinstance(witness, OriginalProducer) or
+            witness.learning_names or len(witness.identities) != 2):
+        raise PostDropRefused("legacy_fd9_witness_cannot_encode_learning_inboxes")
     a, b = witness.identities
     return "p2k8i:" + ":".join(str(v) for v in (*a, *b))
 
