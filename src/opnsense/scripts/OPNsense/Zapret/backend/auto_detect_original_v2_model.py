@@ -380,6 +380,154 @@ def preview_original_learning_p1_locked(
         raise V2OriginalConfigRefused("original_learning_p1_preview_refused") from exc
 
 
+def _recover_original_learning_partial_locked(
+        writer: DestinationCommit, proof, workspace: Path,
+        slot: Path, intent: dict, *, owned_root: Path,
+        manual_hostlists: dict[str, str], global_exclude: str,
+        attest, inspect, psl: PublicSuffixList | None,
+) -> dict:
+    """Resume ONE already-published original WAL preimage, never a new P1.
+
+    The caller holds the original Config OFD, P2a and GUI locks and FD9.
+    Reconstruct old automatic sources ONLY when the exact originally
+    published CAS hashes permit a deterministic inverse. Recompute the
+    existing P1 policy against THOSE old sources, require identical
+    add/remove effects, exact managed before+after images and file paths.
+    A completed or foreign plan, changed manual/excludes, altered inode,
+    ambiguous inverse, or native-prefix mutation refuses rather than
+    overwriting a GUI edit. No live native row removal or ACK occurs.
+    """
+    from auto_detect_original_v2_source import (
+        attest_original_learning_sealed_prefix_locked,
+    )
+    from auto_detect_destination_commit import _file_identity
+    if (not isinstance(writer, DestinationCommit) or
+            not writer.queue._held or not getattr(writer, "_gui_held", False)
+            or not isinstance(intent, dict) or intent.get("schema") != 3 or
+            not isinstance(slot, Path) or
+            not isinstance(owned_root, Path) or
+            not owned_root.is_absolute() or
+            set(writer.targets) != {"auto", *KNOWN_HOSTLISTS} or
+            any(writer.targets[name] != owned_root / (name + ".txt")
+                for name in KNOWN_HOSTLISTS) or
+            not callable(attest) or attest() != proof):
+        raise V2OriginalConfigRefused("learning_partial_original_locks_required")
+    plan, raw_plan = qualified_destination_plan(
+        slot, intent, writer.receipts.uid, targets=writer.targets)
+    if (plan.get("schema") != 3 or "live" not in plan or
+            (slot / "destination" / "checkpoint.json").exists() or
+            (slot / "destination" / "checkpoint.json").is_symlink()):
+        raise V2OriginalConfigRefused("learning_partial_sealed_plan_required")
+    prefix = attest_original_learning_sealed_prefix_locked(
+        writer.queue, writer.receipts, proof, workspace, intent,
+        attest=attest, inspect=inspect)
+    if (prefix["source_intent_sha256"] != plan["source_intent_sha256"]
+            or not prefix["p2b_drained"]):
+        raise V2OriginalConfigRefused("learning_partial_source_changed")
+
+    # Original auto-owned P1 sources cannot be recomputed from a partly
+    # installed Found. Reconstruct the BEFORE snapshot from the sealed
+    # per-target plan only. If edits/reordering make it ambiguous, REFUSE.
+    original = {}
+    all_names = (*KNOWN_HOSTLISTS, "auto")
+    for name in all_names:
+        path = writer.targets[name]
+        data, st = _target(path, writer.receipts.uid)
+        write = plan["writes"].get(name)
+        if write is None:
+            original[name] = data.decode("utf-8")
+            continue
+        saved = (
+            write["before_device"], write["before_inode"],
+            write["before_ctime_ns"], write["before_mtime_ns"],
+            write["before_size"],
+        )
+        current_sha = hashlib.sha256(data).hexdigest()
+        if current_sha == write["before"] and _file_identity(st) == saved:
+            before = data
+        elif current_sha == write["after"] and (
+                write["after"] != write["before"]):
+            before = _edit(data, write["remove"], write["add"])
+            if hashlib.sha256(before).hexdigest() != write["before"]:
+                raise V2OriginalConfigRefused(
+                    "learning_partial_nonreversible_old_found")
+        else:
+            raise V2OriginalConfigRefused(
+                "learning_partial_foreign_found_edit")
+        original[name] = before.decode("utf-8")
+    if read_owned(owned_root, owner_uid=writer.receipts.uid) is None:
+        raise V2OriginalConfigRefused("learning_partial_owned_ledger_absent")
+
+    projected = preview_learning_p1_effects(
+        intent["observations"], manual_hostlists,
+        {name: original[name] for name in KNOWN_HOSTLISTS},
+        original["auto"], global_exclude, psl=psl)
+    expected_effects = {
+        name: {"add": item["add"], "remove": item["remove"]}
+        for name, item in plan["writes"].items()
+    }
+    if projected["effects"] != expected_effects:
+        raise V2OriginalConfigRefused(
+            "learning_partial_p1_differs_from_sealed_plan")
+    canonical = {}
+    for name in KNOWN_HOSTLISTS:
+        normalized = normalize(manual_hostlists[name], name)["normalized"]
+        canonical[name] = normalized + ("\n" if normalized else "")
+    before_managed = compose_known(
+        canonical, {name: original[name] for name in KNOWN_HOSTLISTS})
+    live = {}
+    for name in KNOWN_HOSTLISTS:
+        expected_before = before_managed[name].encode("utf-8")
+        expected_after = projected["managed_after"][name]
+        row = plan["live"].get(name)
+        if row is None:
+            if expected_before != expected_after:
+                raise V2OriginalConfigRefused(
+                    "learning_partial_missing_live_after")
+            continue
+        path = COMMON_ACTIVE / "managed" / ("hostlist-" + name + ".txt")
+        if (row["path"] != str(path) or
+                row["before"] != hashlib.sha256(expected_before).hexdigest() or
+                row["after"] != hashlib.sha256(expected_after).hexdigest() or
+                expected_before == expected_after):
+            raise V2OriginalConfigRefused(
+                "learning_partial_live_plan_not_original")
+        current, st = _target(path, writer.receipts.uid)
+        if hashlib.sha256(current).hexdigest() == row["before"]:
+            if _file_identity(st) != (
+                    row["before_device"], row["before_inode"],
+                    row["before_ctime_ns"], row["before_mtime_ns"],
+                    row["before_size"]):
+                raise V2OriginalConfigRefused(
+                    "learning_partial_gui_live_preimage_changed")
+        elif hashlib.sha256(current).hexdigest() != row["after"]:
+            raise V2OriginalConfigRefused(
+                "learning_partial_foreign_live_image")
+        live[name] = {
+            "path": path, "before_sha256": row["before"],
+            "after": expected_after,
+        }
+    recheck = attest_original_learning_sealed_prefix_locked(
+        writer.queue, writer.receipts, proof, workspace, intent,
+        attest=attest, inspect=inspect)
+    if recheck != prefix or attest() != proof:
+        raise V2OriginalConfigRefused("learning_partial_source_raced")
+    # The EXISTING original CAS writer checks physical per-target inode
+    # identity again and writes Found before managed then one checkpoint.
+    completion = writer._locked_commit(
+        slot, intent, _canonical({"observations": intent["observations"]}),
+        projected["effects"], live=live)
+    verified, checkpoint_raw = qualified_destination_plan(
+        slot, intent, writer.receipts.uid, targets=writer.targets)
+    if (verified != plan or checkpoint_raw != raw_plan or
+            completion.get("plan_sha256") !=
+            hashlib.sha256(raw_plan).hexdigest() or
+            completion.get("ack_authorized") is not False or
+            attest() != proof):
+        raise V2OriginalConfigRefused("learning_partial_checkpoint_not_original")
+    return completion
+
+
 def commit_with_original_learning_first_slot(
         writer: DestinationCommit, proof, workspace: Path, *,
         config_fd: int, config_path: Path,
@@ -464,10 +612,17 @@ def commit_with_original_learning_first_slot(
                 config_held()
                 return checkpoint
             if plan_file.exists() or plan_file.is_symlink():
-                # Partial original WAL is durable and must be explicitly
-                # recovered by its SAME source-bound preimage CAS. Do not
-                # re-derive a different P1 effect from a half-written Found.
-                raise V2OriginalConfigRefused("learning_partial_wal_requires_recovery")
+                # The ONLY original WAL partial-replay path. It restores
+                # the previous P1 snapshot from the protected published
+                # preimages and refuses ambiguous GUI edits; never treats
+                # postlaunch native suffixes as part of this old intent.
+                resumed = _recover_original_learning_partial_locked(
+                    writer, proof, workspace, slot, intent,
+                    owned_root=owned_root, manual_hostlists=manual_hostlists,
+                    global_exclude=global_exclude, attest=attest,
+                    inspect=inspect, psl=psl)
+                config_held()
+                return resumed
             projection = preview_original_learning_p1_locked(
                 writer, proof, workspace, owned_root=owned_root,
                 manual_hostlists=manual_hostlists,
