@@ -378,6 +378,59 @@ class OwnerGenerationTests(unittest.TestCase):
                 self.witness(
                     reviewed_operation=OP_ID, learning_schema3=True)
 
+    def test_schema3_committed_original_fd9_running_owner_gate(self):
+        """Running P2c uses original terminal owner; never epoch-finalizing.
+
+        The full process check is the existing original _attest_core with
+        a stubbed schema3 map validator; the wrapper independently insists
+        on FreeBSD root and the existing lifecycle FD9.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        self._write(self.release / "dvtws.original.args", "--port=989\n")
+        self._write(self.active / "dvtws.original.args", "--port=989\n")
+        self._write(self.release / ORIGIN_FILE, "{}\n")
+        self._write(self.active / ORIGIN_FILE, "{}\n")
+        learning = ((2, "youtube", "/var/db/zapret2-restyle/auto-detect/"
+                     f"learning-{OP_ID}-2.txt"),)
+        self.map = {"schema": 3, "activation_authorized": True,
+                    "generation": OP_ID, "evidence": owner_mod.LEARNING_ACTIVE}
+        self.refresh()
+        with patch.object(owner_mod, "_valid_learning_active",
+                          return_value=learning):
+            confirmed = self.witness(learning_schema3=True)
+            self.assertIsInstance(confirmed, owner_mod.LearningGenerationProof)
+            self.assertEqual(confirmed.learning, learning)
+            with self.assertRaises(owner_mod.GenerationRefused):
+                self.witness()
+            for phase in ("mutating", "epoch-finalizing"):
+                self.record["phase"] = phase
+                self._write(self.journal / "operation.json",
+                            json.dumps(self.record) + "\n")
+                with self.assertRaises(owner_mod.GenerationRefused):
+                    self.witness(learning_schema3=True)
+            self.record["phase"] = "committed"
+            self._write(self.journal / "operation.json",
+                        json.dumps(self.record) + "\n")
+            self.assertEqual(self.witness(learning_schema3=True), confirmed)
+        with patch.object(owner_mod.sys, "platform", "linux"):
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod.attest_learning_running_generation()
+        with patch.object(owner_mod.sys, "platform", "freebsd15"), (
+                patch.object(owner_mod.os, "geteuid", return_value=0)), (
+                patch("voice_ipfw_adapter.require_lifecycle_lock") as held), (
+                patch.object(owner_mod, "_attest_core", return_value=confirmed) as core):
+            self.assertEqual(
+                owner_mod.attest_learning_running_generation(), confirmed)
+            self.assertTrue(held.called)
+            self.assertTrue(core.call_args.kwargs["learning_schema3"])
+            self.assertNotIn("epoch_finalizing_operation", core.call_args.kwargs)
+            core.return_value = object()
+            with self.assertRaises(owner_mod.GenerationRefused):
+                owner_mod.attest_learning_running_generation()
+            held.side_effect = RuntimeError("FD9_missing")
+            with self.assertRaises(RuntimeError):
+                owner_mod.attest_learning_running_generation()
+
     def test_freebsd_kernel_argv_above_ps_limit_and_malformed_refusal(self):
         long_argv = [EXE, "--port=989", "--lua-init=@" + "x" * 2200,
                      "--sockarg=0x200", "--user=nobody"]
