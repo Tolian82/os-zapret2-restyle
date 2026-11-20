@@ -31,6 +31,9 @@ sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
 import auto_detect_post_drop as post_drop
+from auto_detect_original_v2_model import (preview_learning_domains,
+                                           V2OriginalConfigRefused)
+from domain_policy import PublicSuffixList, plan_auto_additions
 from shared_apply_seal import create_seal, SharedBundleError
 from unittest.mock import patch
 
@@ -257,6 +260,104 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         # No standalone proposal is ever accepted as an active owner map.
         with self.assertRaises(owner.GenerationRefused):
             owner._valid_map(encode(proposal), owner_ref, projected)
+
+    def test_tz6v4_native_per_profile_append_to_existing_p1(self):
+        # User journey, source-only: real shared generator --> proposed
+        # native profile and file -> matching debug + physically recorded
+        # lines -> ORIGINAL P1 origin-before-PSL routing. NO cursor, ACK,
+        # FD9, Config or active hostlist mutation is authorized here.
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+            "--new\n--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        proposed, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        owner_ref = {"id": self.work.name, "candidate": "d" * 64}
+        payload = json.dumps(proposal, sort_keys=True).encode()
+        native = owner._valid_learning_proposal(
+            payload, owner_ref, original, proposed)
+        self.assertEqual([(n, host) for n, host, _ in native],
+                         [(3, "youtube"), (4, "user")])
+
+        yt = "video.example.co.uk"
+        user = "cdn.service-example.com"
+        first, second = native[0][2], native[1][2]
+        rows = {first: (yt + "\n").encode(),
+                second: (user + "\n").encode()}
+        def debug(number, hostname, path):
+            return (
+                "2026-11-20 11:00:00 : " + hostname
+                + " : profile " + str(number)
+                + " (learning) : client 127.0.0.1:1234 : proto tls : adding to "
+                + path + "\n"
+            ).encode()
+        positive_a = debug(3, yt, first)
+        positive_b = debug(4, user, second)
+        window = (b"native diagnostic not adding\n"
+                  + positive_a + positive_b)
+        # The bytes supplied here model bounded physical append windows.
+        # Real P2 must obtain them from exact protected FD9/P2b-owned inodes.
+        observations = preview_learning_domains(
+            payload, owner_ref, original, proposed, rows, window)
+        self.assertEqual(observations, [
+            {"hostname": yt, "hostlist": "youtube"},
+            {"hostname": user, "hostlist": "user"},
+        ])
+        psl_source = (
+            b"// ===BEGIN ICANN DOMAINS===\ncom\nuk\nco.uk\n"
+            b"// ===END ICANN DOMAINS===\n"
+            b"// ===BEGIN PRIVATE DOMAINS===\nblogspot.com\n"
+            b"// ===END PRIVATE DOMAINS===\n"
+        )
+        psl = PublicSuffixList(psl_source,
+                               hashlib.sha256(psl_source).hexdigest())
+        policy = plan_auto_additions(
+            observations,
+            {"youtube": "youtube.com\n", "user": "", "auto": ""},
+            {"youtube": "", "user": ""},
+            global_exclude="", psl=psl)
+        self.assertEqual(policy["result"], "ok")
+        self.assertEqual(policy["additions"],
+                         {"youtube": ["example.co.uk"],
+                          "user": ["service-example.com"]})
+        self.assertNotIn("auto", policy["additions"])
+        self.assertEqual(args.read_bytes(), original)
+        self.assertFalse((self.release / owner.MAP_NAME).exists())
+
+        # Upstream logs before appending. A debug-only event must never be
+        # enough to write Found or acknowledge an unread native record.
+        wrongs = (
+            ("debug-before-append", {first: b"", second: rows[second]}, window),
+            ("raw-without-debug", rows, positive_a),
+            ("cross-profile-number", rows,
+             debug(4, yt, first) + positive_b),
+            ("foreign-file", rows,
+             debug(3, yt, "/tmp/foreign.txt") + positive_b),
+            ("wrong-raw-host", {first: b"other.example.co.uk\n",
+                                second: rows[second]}, window),
+            ("partial-raw", {first: rows[first][:-1],
+                             second: rows[second]}, window),
+            ("incomplete-debug", rows, window[:-1]),
+            ("duplicate-debug", rows, positive_a + positive_a + positive_b),
+            ("raw-first-is-not-guessed-known", rows, b""),
+        )
+        for kind, changes, debug_bytes in wrongs:
+            with self.subTest(kind=kind), self.assertRaises(
+                    V2OriginalConfigRefused):
+                preview_learning_domains(
+                    payload, owner_ref, original, proposed,
+                    changes, debug_bytes)
+        # A tampered proposal still cannot become valid solely because the
+        # physical lines and debug window happen to match its invented owner.
+        wrong_map = json.loads(json.dumps(proposal))
+        next(p for p in wrong_map["profiles"]
+             if p["role"] == "learning")["found_source_id"] = "user_found"
+        with self.assertRaises(V2OriginalConfigRefused):
+            preview_learning_domains(
+                json.dumps(wrong_map).encode(), owner_ref, original,
+                proposed, rows, window)
 
     def test_tz6v4_mixed_ipset_and_voice_not_learned(self):
         mapped, args = self.build(

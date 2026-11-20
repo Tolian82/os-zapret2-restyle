@@ -19,7 +19,7 @@ from typing import Callable
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
                                       _checkpoint, _evidence_unchanged,
                                       _completed_debug_evidence_unchanged)
-from auto_detect_debug_window import ADD, _raw_hosts, _read_exact, _hostname
+from auto_detect_debug_window import ADD, MAX_RAW, MAX_WINDOW, _raw_hosts, _read_exact, _hostname
 from auto_detect_destination_commit import (DestinationCommit, DestinationRefused,
                                             _edit, _target, qualified_destination_plan)
 from auto_detect_epoch_receipts import ReceiptRefused, _read
@@ -97,6 +97,88 @@ def _domains(proof: GenerationProof, intent: dict, raw: bytes, *,
     # The genuine trailing native observer has no known HOSTLIST selector.
     # Never guess YouTube/User by spelling or earlier native profile numbers.
     return [{"hostname": host, "hostlist": None} for host in candidates]
+
+
+
+# ТЗ_6v4 / #1052: one existing P2 model's candidate decoder, not a writer.
+# Its caller must first pin physical native file ranges through original
+# FD9/epoch/P2b and must not advance ANY cursor merely from this preview.
+def preview_learning_domains(map_raw: bytes, owner: dict, original: bytes,
+                             argv: bytes, native_rows: dict[str, bytes],
+                             debug_window: bytes) -> list[dict[str, str]]:
+    """Map exact native append windows to the already-existing P1 format.
+
+    Each native_rows value must be the unread, independently attested byte
+    window for ONE live --hostlist-auto file, not the full historical file.
+    Debug lines alone do not establish a native append. Conversely, raw
+    rows cannot gain known HOSTLIST attribution without this strict positive
+    debug pairing. On uncertainty the outer original P2 must retain source
+    bytes, cursor and pending/ACK state and retry or use its *separately
+    qualified* raw-first path. This function performs NO filesystem, Config,
+    service, cursor, inode or network writes.
+    """
+    from auto_detect_owner import GenerationRefused, _valid_learning_proposal
+
+    try:
+        approved = _valid_learning_proposal(map_raw, owner, original, argv)
+    except (GenerationRefused, ValueError, TypeError, KeyError) as exc:
+        raise V2OriginalConfigRefused("unqualified_learning_native_map") from exc
+    if (not approved or type(native_rows) is not dict or
+            set(native_rows) != {path for _, _, path in approved} or
+            type(debug_window) is not bytes or
+            len(debug_window) > MAX_WINDOW or
+            (debug_window and not debug_window.endswith(b"\\n")) or
+            b"\\x00" in debug_window or b"\\r" in debug_window):
+        raise V2OriginalConfigRefused("unqualified_learning_native_window")
+
+    known_by_path = {path: (number, hostlist) for number, hostlist, path in approved}
+    raw_by_path: dict[str, list[str]] = {}
+    total = len(debug_window)
+    for path, segment in native_rows.items():
+        if type(segment) is not bytes or len(segment) > MAX_RAW:
+            raise V2OriginalConfigRefused("unbounded_learning_native_raw")
+        total += len(segment)
+        if total > MAX_RAW:
+            raise V2OriginalConfigRefused("oversized_combined_learning_window")
+        try:
+            raw_by_path[path] = _raw_hosts(segment) if segment else []
+        except (ValueError, TypeError) as exc:
+            raise V2OriginalConfigRefused("invalid_learning_native_raw") from exc
+
+    paired: dict[str, list[str]] = {path: [] for path in known_by_path}
+    observations: list[dict[str, str]] = []
+    for line in debug_window.splitlines(keepends=True):
+        if not line.endswith(b"\\n"):
+            raise V2OriginalConfigRefused("incomplete_learning_debug_line")
+        try:
+            decoded = line[:-1].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise V2OriginalConfigRefused("untrusted_learning_debug_encoding") from exc
+        if " : adding to " not in decoded:
+            continue
+        event = ADD.fullmatch(decoded)
+        if event is None:
+            raise V2OriginalConfigRefused("invalid_learning_native_debug_event")
+        path = event["path"]
+        identity = known_by_path.get(path)
+        if identity is None or int(event["profile"]) != identity[0]:
+            raise V2OriginalConfigRefused("foreign_learning_profile_or_path")
+        host = event["host"]
+        if not _hostname(host):
+            raise V2OriginalConfigRefused("invalid_learning_positive_host")
+        paired[path].append(host)
+        if len(paired[path]) > len(raw_by_path[path]) or (
+                paired[path][-1] != raw_by_path[path][len(paired[path]) - 1]):
+            # A debug positive emitted before the native write cannot
+            # advance the source; a different or reordered row cannot
+            # borrow provenance from another profile.
+            raise V2OriginalConfigRefused("learning_positive_without_matching_raw")
+        observations.append({"hostname": host, "hostlist": identity[1]})
+
+    if any(paired[path] != rows for path, rows in raw_by_path.items()):
+        raise V2OriginalConfigRefused("learning_raw_without_exact_debug_evidence")
+    return observations
+
 
 
 def _validate_partial_plan(folder: Path, writer: DestinationCommit,
