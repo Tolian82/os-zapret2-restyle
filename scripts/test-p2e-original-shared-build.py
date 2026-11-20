@@ -1074,9 +1074,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual(targets["youtube"].read_bytes(), b"")
                 self.assertEqual((slot / "intent.json").read_bytes(), durable)
                 self.assertFalse((slot / "ack.json").exists())
-                self.assertEqual(
-                    {str(path): path.read_bytes() for path in protected},
-                    originals)
+                # Permanent Found and effective managed MUST have changed
+                # during the original CAS; only the physically live native
+                # producer/debug sources remain untouched until cleanup.
+                for path in (debug_path, native, user_native):
+                    self.assertEqual(path.read_bytes(), originals[str(path)])
                 with self.assertRaises(CursorChainRefused):
                     chain.prepare_learning_first_slot(
                         proof, self.work, attest=lambda: None,
