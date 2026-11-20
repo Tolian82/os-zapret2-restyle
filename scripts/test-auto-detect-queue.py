@@ -28,6 +28,113 @@ class DurableInboxTests(unittest.TestCase):
         self.root = root
         self.queue = queue.DurableInbox(root, owner_uid=os.geteuid())
 
+    def test_original_native_rotation_retains_open_fd_and_new_append(self):
+        import hashlib
+        generation = "a" * 32
+        native = self.root / ("learning-" + generation + "-1.txt")
+        source = b"known.example.com\nstay.example.org\n"
+        native.write_bytes(source)
+        initial = native.stat()
+        cut = len(b"known.example.com\n")
+        prefix = hashlib.sha256(source[:cut]).hexdigest()
+        with self.queue.exclusive():
+            with native.open("ab", buffering=0) as producer:
+                pending = self.queue._rotate_original_source(
+                    native, replacement=b"stay.example.org\n",
+                    generation=generation,
+                    expected_identity=(initial.st_dev, initial.st_ino),
+                    sealed_prefix=(cut, prefix))
+                producer.write(b"new-after-rename.example.net\n")
+                os.fsync(producer.fileno())
+            self.assertIsNotNone(pending)
+            self.assertEqual(native.read_bytes(), b"stay.example.org\n")
+            self.assertEqual(
+                pending.read_bytes(),
+                source + b"new-after-rename.example.net\n")
+            self.assertNotEqual(queue._identity(native),
+                                queue._identity(pending))
+            self.assertEqual(pending.stat().st_nlink, 1)
+            self.assertEqual(pending.parent, self.queue.pending)
+            # This physical primitive CANNOT authorize any native ACK;
+            # the protected source inode persists until ALL late rows
+            # have a separately durable original destination receipt.
+            self.assertEqual(self.queue.segments(), [pending])
+
+    def test_original_native_refuses_bad_epoch_and_non_subset(self):
+        import hashlib
+        generation = "b" * 32
+        native = self.root / ("learning-" + generation + "-2.txt")
+        body = b"known.example.com\nother.example.com\n"
+        native.write_bytes(body)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(body[:cut]).hexdigest())
+        with self.queue.exclusive():
+            for kwargs in (
+                {"expected_identity": (st.st_dev, st.st_ino + 1),
+                 "sealed_prefix": prefix},
+                {"expected_identity": identity,
+                 "sealed_prefix": (cut, "0" * 64)},
+                {"expected_identity": identity,
+                 "sealed_prefix": prefix},
+            ):
+                replacement = (b"not-an-original-row.example.com\n"
+                               if kwargs["sealed_prefix"] == prefix and
+                               kwargs["expected_identity"] == identity
+                               else b"other.example.com\n")
+                with self.assertRaises(queue.QueueSafetyError):
+                    self.queue._rotate_original_source(
+                        native, replacement=replacement,
+                        generation=generation, **kwargs)
+            self.assertEqual(self.queue.segments(), [])
+            self.assertEqual(native.read_bytes(), body)
+
+    def test_original_native_rotate_crash_after_link_retries_without_loss(self):
+        import hashlib
+        generation = "c" * 32
+        native = self.root / ("learning-" + generation + "-3.txt")
+        initial = b"known.example.com\nkeep.example.com\n"
+        native.write_bytes(initial)
+        st = native.stat()
+        identity = (st.st_dev, st.st_ino)
+        cut = len(b"known.example.com\n")
+        prefix = (cut, hashlib.sha256(initial[:cut]).hexdigest())
+        original_replace = queue.os.replace
+
+        def crash_before_replace(*args, **kwargs):
+            raise OSError("injected_before_native_replace")
+        with self.queue.exclusive():
+            with patch.object(queue.os, "replace",
+                              side_effect=crash_before_replace):
+                with self.assertRaises(OSError):
+                    self.queue._rotate_original_source(
+                        native, replacement=b"keep.example.com\n",
+                        generation=generation, expected_identity=identity,
+                        sealed_prefix=prefix)
+            pending = self.queue.segments()
+            self.assertEqual(len(pending), 1)
+            self.assertEqual(queue._identity(pending[0]), identity)
+            self.assertEqual(queue._identity(native), identity)
+            with native.open("ab") as producer:
+                producer.write(b"late.example.com\n")
+                producer.flush()
+                os.fsync(producer.fileno())
+            # The original prefix remains sealed, but this native source
+            # changed during the old link. The next isolated original P2a
+            # attempt may resume ONLY after a fresh full native snapshot:
+            # no implicit ACK or lost late producer writes.
+            restored = self.queue._rotate_original_source(
+                native, replacement=b"keep.example.com\nlate.example.com\n",
+                generation=generation, expected_identity=identity,
+                sealed_prefix=prefix)
+            self.assertEqual(restored, pending[0])
+            self.assertEqual(native.read_bytes(),
+                             b"keep.example.com\nlate.example.com\n")
+            self.assertEqual(restored.read_bytes(),
+                             initial + b"late.example.com\n")
+            self.assertEqual(restored.stat().st_nlink, 1)
+
     def test_rotation_preserves_data_and_keeps_live_path(self):
         with self.queue.exclusive():
             p = self.queue.rotate()
