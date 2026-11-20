@@ -493,6 +493,152 @@ def attest_original_learning_drained_candidate_locked(
     }
 
 
+def attest_original_learning_sealed_prefix_locked(
+    queue: DurableInbox, receipts, proof, workspace: Path, intent: dict,
+    *, attest, inspect=None,
+) -> dict:
+    """Reattest an EXISTING original schema3 WAL source despite later appends.
+
+    The native producer ignores our queue flock. Once its first N-prefix
+    has been durably sealed, subsequent append-only rows MUST NOT prevent
+    completing that same original WAL. Verify original FD9/P2c, prelaunch
+    inode identity, pinned debug+N prefix digests, original P2b all-PID
+    drain and independent repeated prefix reads. This never authorizes a
+    destination write, producer replacement, row removal or ACK.
+    """
+    import json
+    from auto_detect_debug_window import _read_exact
+    from auto_detect_epoch_receipts import EpochReceipts, _read
+    from auto_detect_fd import FDState, probe_pending_fd
+    from auto_detect_owner import LearningGenerationProof
+    if inspect is None:
+        inspect = probe_pending_fd
+    if (not isinstance(queue, DurableInbox) or not queue._held or
+            not isinstance(receipts, EpochReceipts) or
+            queue.uid != receipts.uid or
+            queue.writer_gid != receipts.writer_gid or
+            not isinstance(proof, LearningGenerationProof) or
+            not isinstance(workspace, Path) or not workspace.is_absolute() or
+            workspace.name != proof.generation or
+            not isinstance(intent, dict) or not callable(attest) or
+            not callable(inspect) or attest() != proof):
+        raise OriginalSourceRefused("learning_sealed_prefix_original_owner_required")
+    try:
+        if sys.platform.startswith("freebsd"):
+            from voice_ipfw_adapter import require_lifecycle_lock
+            require_lifecycle_lock()
+        queue._verify()
+        if queue.segments():
+            raise OriginalSourceRefused("learning_sealed_prefix_has_pending")
+        folder, seed, _ = receipts._learning_pretraffic(proof, queue, workspace)
+        epoch_raw = _read(folder / "epoch.json", receipts.uid)
+        epoch = json.loads(epoch_raw)
+        if (epoch.get("schema") != 3 or
+                epoch.get("generation") != proof.generation or
+                epoch.get("owner_pid") != proof.owner.pid or
+                epoch.get("owner_start") != proof.owner.started or
+                epoch.get("learning") != seed["learning"] or
+                set(intent) != {
+                    "schema", "kind", "generation", "sequence", "operation_id",
+                    "owner_candidate_sha256", "owner_pid", "owner_start",
+                    "final_args_sha256", "native_map_sha256", "epoch_sha256",
+                    "previous_ack_sha256", "debug_device", "debug_inode",
+                    "debug_start_offset", "debug_start_sha256",
+                    "debug_end_offset", "debug_end_sha256", "native",
+                    "observations", "ack_authorized",
+                } or
+                intent["schema"] != 3 or
+                intent["kind"] != "original-learning-cursor-prepared" or
+                intent["generation"] != proof.generation or
+                intent["sequence"] != 0 or
+                intent["operation_id"] != proof.operation_id or
+                intent["owner_candidate_sha256"] != proof.owner_candidate_sha256 or
+                (intent["owner_pid"], intent["owner_start"]) !=
+                (proof.owner.pid, proof.owner.started) or
+                intent["final_args_sha256"] != proof.final_args_sha256 or
+                intent["native_map_sha256"] != proof.native_map_sha256 or
+                intent["epoch_sha256"] != hashlib.sha256(epoch_raw).hexdigest() or
+                intent["previous_ack_sha256"] != intent["epoch_sha256"] or
+                intent["debug_start_offset"] != 0 or
+                intent["debug_start_sha256"] != hashlib.sha256(b"").hexdigest() or
+                (intent["debug_device"], intent["debug_inode"]) != (
+                    seed["files"][1]["device"], seed["files"][1]["inode"]) or
+                intent["ack_authorized"] is not False or
+                not isinstance(intent["native"], list) or
+                len(intent["native"]) != len(proof.learning) or
+                not isinstance(intent["observations"], list) or
+                not 0 < len(intent["observations"]) <= 128):
+            raise OriginalSourceRefused("learning_sealed_prefix_not_original_epoch")
+        pinned = []
+        debug = seed["files"][1]
+        pinned.append((queue.root / "debug.log",
+                       debug["device"], debug["inode"],
+                       intent["debug_end_offset"], intent["debug_end_sha256"]))
+        for i, (number, hostlist, path) in enumerate(proof.learning):
+            row, original, file_id = (intent["native"][i],
+                                      seed["learning"][i], seed["files"][i + 2])
+            if (not isinstance(row, dict) or
+                    set(row) != {
+                        "native_number", "hostlist", "path", "device", "inode",
+                        "start_offset", "start_sha256", "end_offset",
+                        "end_sha256"} or
+                    (row["native_number"], row["hostlist"], row["path"]) !=
+                    (number, hostlist, path) or
+                    (row["device"], row["inode"]) !=
+                    (original["device"], original["inode"]) or
+                    (row["device"], row["inode"]) !=
+                    (file_id["device"], file_id["inode"]) or
+                    row["start_offset"] != 0 or
+                    row["start_sha256"] != hashlib.sha256(b"").hexdigest()):
+                raise OriginalSourceRefused("learning_sealed_prefix_native_map_changed")
+            pinned.append((Path(path), row["device"], row["inode"],
+                           row["end_offset"], row["end_sha256"]))
+        for row in intent["observations"]:
+            if (not isinstance(row, dict) or
+                    set(row) != {"hostname", "hostlist"} or
+                    not isinstance(row["hostname"], str) or
+                    row["hostlist"] not in {h for _, h, _ in proof.learning}):
+                raise OriginalSourceRefused("learning_sealed_prefix_unqualified_observation")
+        def matches_prefix() -> bool:
+            for path, device, inode, end, digest in pinned:
+                st, data = _read_exact(
+                    path, owner_uid=receipts.uid, writer_gid=queue.writer_gid)
+                if (st.st_dev != device or st.st_ino != inode or
+                        st.st_nlink != 1 or type(end) is not int or
+                        end < 0 or end > len(data) or
+                        not isinstance(digest, str) or
+                        not re.fullmatch(r"[0-9a-f]{64}", digest) or
+                        hashlib.sha256(data[:end]).hexdigest() != digest or
+                        (end and data[end - 1:end] != b"\n")):
+                    return False
+            return True
+        if not matches_prefix():
+            raise OriginalSourceRefused("learning_original_source_prefix_changed")
+        for path, device, inode, _end, _digest in pinned:
+            if attest() != proof or inspect(
+                    path, device, inode, owner=proof.owner,
+                    writer_gid=queue.writer_gid) is not FDState.DRAINED or
+                    attest() != proof:
+                raise OriginalSourceRefused("learning_sealed_prefix_p2b_busy")
+        if not matches_prefix() or queue.segments() or attest() != proof:
+            raise OriginalSourceRefused("learning_original_source_prefix_raced")
+        return {
+            "generation": proof.generation,
+            "source_intent_sha256": hashlib.sha256(
+                _read(folder / "cursor-chain-v2" / "00000000" /
+                      "intent.json", receipts.uid)).hexdigest(),
+            "p2b_drained": True,
+            "commit_authorized": False,
+            "cleanup_authorized": False,
+            "ack_authorized": False,
+        }
+    except OriginalSourceRefused:
+        raise
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError,
+            QueueSafetyError, DebugWindowRefused) as exc:
+        raise OriginalSourceRefused("learning_sealed_prefix_read_refused") from exc
+
+
 def detached_original_raw(queue: DurableInbox, pending: Path) -> bytes:
     """Read exact, detached original P2a raw inode with no symlink/truncation.
 
