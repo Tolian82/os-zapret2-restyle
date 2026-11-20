@@ -23,7 +23,7 @@ from auto_detect_post_drop import (_witness_line_learning, _witness_decode_learn
     _witness_read_learning, _qualified_learning_sources)
 from auto_detect_queue import DurableInbox
 from auto_detect_original_v2_source import (LearningCursor, OriginalSourceRefused,
-    preview_original_learning_windows_locked)
+    preview_original_learning_windows_locked, preview_learning_pretraffic_cursors_locked)
 
 
 class PostDropContract(unittest.TestCase):
@@ -228,6 +228,109 @@ class PostDropContract(unittest.TestCase):
                 hashlib.sha256(b"").hexdigest())
         return DurableInbox(self.root, owner_uid=self.owner,
                             writer_gid=self.gid), sources, cursors
+
+
+    def test_learning_pretraffic_fd9_seed_to_physical_append(self):
+        queue, sources, _ = self.learning_files()
+        names = tuple(Path(path).name for _, _, path in sources)
+        captured = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid,
+            learning_names=names)
+        wire = _witness_line_learning(captured, sources)
+        def seeded(*, source_rows=sources, wire_data=wire, attest=lambda: True):
+            return preview_learning_pretraffic_cursors_locked(
+                queue, wire_data, source_rows, root_gid=self.gid,
+                engine_uid=self.engine, attest=attest)
+        with self.assertRaisesRegex(
+                OriginalSourceRefused, "learning_pretraffic_original_fd9_queue_required"):
+            seeded()
+        with queue.exclusive():
+            start = seeded()
+            self.assertEqual(set(start), {path for _, _, path in sources})
+            self.assertEqual([v.native_number for v in start.values()], [3, 4])
+            self.assertEqual([v.hostlist for v in start.values()],
+                             ["youtube", "user"])
+            self.assertEqual([v.offset for v in start.values()], [0, 0])
+            self.assertTrue(all(v.prefix_sha256 ==
+                                hashlib.sha256(b"").hexdigest()
+                                for v in start.values()))
+            first, second = (Path(row[2]) for row in sources)
+            first.write_bytes(b"video.example.co.uk\n")
+            second.write_bytes(b"cdn.example.com\n")
+            captured_window = preview_original_learning_windows_locked(
+                queue, sources, start, attest=lambda: True)
+            self.assertEqual(captured_window[str(first)].rows,
+                             b"video.example.co.uk\n")
+            self.assertEqual(captured_window[str(second)].rows,
+                             b"cdn.example.com\n")
+            # A second attempt to mint new zero cursors AFTER launch
+            # cannot forget already-appended bytes.
+            with self.assertRaises(OriginalSourceRefused):
+                seeded()
+            self.assertEqual(first.read_bytes(), b"video.example.co.uk\n")
+
+    def test_learning_pretraffic_rejects_foreign_map_inode_and_raw(self):
+        queue, sources, _ = self.learning_files()
+        names = tuple(Path(path).name for _, _, path in sources)
+        captured = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid,
+            learning_names=names)
+        wire = _witness_line_learning(captured, sources)
+        def seeded(source_rows=sources, wire_data=wire, attest=lambda: True):
+            return preview_learning_pretraffic_cursors_locked(
+                queue, wire_data, source_rows, root_gid=self.gid,
+                engine_uid=self.engine, attest=attest)
+        with queue.exclusive():
+            swapped = ((3, "user", sources[0][2]),
+                       (4, "youtube", sources[1][2]))
+            with self.assertRaises(OriginalSourceRefused):
+                seeded(swapped)
+            with self.assertRaises(OriginalSourceRefused):
+                seeded(wire_data=wire.rsplit(":", 1)[0])
+            with self.assertRaises(OriginalSourceRefused):
+                seeded(attest=lambda: False)
+            # Stale native file swap must refuse without resetting it.
+            source = Path(sources[1][2])
+            replacement = self.root / "replacement"
+            replacement.write_bytes(b"")
+            replacement.chmod(0o660)
+            replacement.replace(source)
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "learning_pretraffic_inode_not_empty_or_same"):
+                seeded()
+            self.assertTrue(source.exists())
+            self.assertEqual(source.read_bytes(), b"")
+
+    def test_learning_pretraffic_refuses_concurrent_native_append(self):
+        queue, sources, _ = self.learning_files()
+        names = tuple(Path(path).name for _, _, path in sources)
+        captured = _capture(
+            self.root, root_uid=self.owner, root_gid=self.gid,
+            engine_uid=self.engine, engine_gid=self.gid,
+            learning_names=names)
+        wire = _witness_line_learning(captured, sources)
+        from auto_detect_debug_window import _read_exact
+        calls = [0]
+        first = Path(sources[0][2])
+        def raced(path, **kw):
+            item = _read_exact(path, **kw)
+            calls[0] += 1
+            if path == first and calls[0] == 3:
+                with first.open("ab") as out:
+                    out.write(b"appended.example.com\n")
+            return item
+        with queue.exclusive():
+            with patch("auto_detect_debug_window._read_exact",
+                       side_effect=raced):
+                with self.assertRaises(OriginalSourceRefused):
+                    preview_learning_pretraffic_cursors_locked(
+                        queue, wire, sources, root_gid=self.gid,
+                        engine_uid=self.engine, attest=lambda: True)
+            self.assertEqual(first.read_bytes(), b"appended.example.com\n")
+            self.assertTrue(all(Path(path).exists()
+                                for _, _, path in sources))
 
     def test_learning_physical_native_inboxes_are_read_under_original_queue(self):
         queue, sources, cursors = self.learning_files()

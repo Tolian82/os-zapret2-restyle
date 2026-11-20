@@ -73,6 +73,89 @@ class LearningWindow:
     physical: tuple[int, int, int, int, int, int]
 
 
+
+def preview_learning_pretraffic_cursors_locked(
+    queue: DurableInbox,
+    wire: str,
+    learning: tuple[tuple[int, str, str], ...],
+    *,
+    root_gid: int,
+    engine_uid: int,
+    attest,
+) -> dict[str, LearningCursor]:
+    """Recreate zero-offset N-inbox cursors from the FULL original FD9 wire.
+
+    This is the prelaunch *read-only* source half of a future single epoch
+    seed, NOT a production autorun command or a cursor store. The original
+    held FD9 + independently verified sealed schema3 owner must supply the
+    wire, mapping, and attest callback. It refuses files touched before
+    the pretraffic cut and never repairs/truncates an old producer.
+    """
+    from auto_detect_post_drop import (
+        _witness_decode_learning, _check_layout, PostDropRefused)
+    from auto_detect_debug_window import _read_exact
+    if (not isinstance(queue, DurableInbox) or not queue._held or
+            queue.writer_gid is None or type(root_gid) is not int or
+            root_gid < 0 or type(engine_uid) is not int or engine_uid <= 0 or
+            not callable(attest)):
+        raise OriginalSourceRefused("learning_pretraffic_original_fd9_queue_required")
+    try:
+        witness = _witness_decode_learning(
+            wire, learning, root=queue.root, root_uid=queue.uid,
+            root_gid=root_gid, engine_uid=engine_uid,
+            engine_gid=queue.writer_gid)
+        if len(witness.identities) != 2 + len(learning) or attest() is not True:
+            raise OriginalSourceRefused("learning_pretraffic_owner_or_source_changed")
+        _check_layout(queue.root, queue.uid, root_gid, queue.writer_gid,
+                      witness.learning_names)
+        queue._verify()
+        if queue.segments():
+            raise OriginalSourceRefused("learning_pretraffic_has_unacknowledged_queue")
+        paths = (queue.inbox, queue.root / "debug.log",
+                 *(queue.root / name for name in witness.learning_names))
+        seen = set()
+        first = []
+        for path, expected in zip(paths, witness.identities):
+            physical, content = _read_exact(
+                path, owner_uid=queue.uid, writer_gid=queue.writer_gid)
+            identity = physical.st_dev, physical.st_ino, physical.st_nlink
+            if (content or physical.st_size != 0 or identity != expected or
+                    identity[:2] in seen):
+                raise OriginalSourceRefused("learning_pretraffic_inode_not_empty_or_same")
+            seen.add(identity[:2])
+            first.append((identity, physical.st_mtime_ns, physical.st_ctime_ns))
+        # Even with the original queue locked, dvtws2 can append without
+        # this flock. Validate all N names/contents again as a single cut.
+        for index, path in enumerate(paths):
+            physical, content = _read_exact(
+                path, owner_uid=queue.uid, writer_gid=queue.writer_gid)
+            if (content or physical.st_size != 0 or
+                    (physical.st_dev, physical.st_ino, physical.st_nlink,
+                     physical.st_mtime_ns, physical.st_ctime_ns) !=
+                    (*first[index][0], first[index][1], first[index][2])):
+                raise OriginalSourceRefused("learning_pretraffic_raced_native_writer")
+        _check_layout(queue.root, queue.uid, root_gid, queue.writer_gid,
+                      witness.learning_names)
+        queue._verify()
+        if queue.segments() or attest() is not True:
+            raise OriginalSourceRefused("learning_pretraffic_owner_changed_after_cut")
+        return {
+            path: LearningCursor(
+                generation=witness.learning_names[0][9:41],
+                native_number=number, hostlist=hostlist, path=path,
+                device=witness.identities[index + 2][0],
+                inode=witness.identities[index + 2][1],
+                offset=0, prefix_sha256=hashlib.sha256(b"").hexdigest(),
+            )
+            for index, (number, hostlist, path) in enumerate(learning)
+        }
+    except OriginalSourceRefused:
+        raise
+    except (OSError, ValueError, TypeError, KeyError, QueueSafetyError,
+            DebugWindowRefused, PostDropRefused) as exc:
+        raise OriginalSourceRefused("learning_pretraffic_witness_refused") from exc
+
+
 def preview_original_learning_windows_locked(
     queue: DurableInbox,
     learning: tuple[tuple[int, str, str], ...],
