@@ -7,6 +7,7 @@ calls orchestrator_build_release() with existing canonical shell/Python modules.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
