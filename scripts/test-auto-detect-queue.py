@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 MODULE = Path(__file__).resolve().parents[1] / "src/opnsense/scripts/OPNsense/Zapret/backend/auto_detect_queue.py"
+# The original module is loaded by path in this standalone test; its
+# established backend siblings must stay importable without copying them.
+sys.path.insert(0, str(MODULE.parent))
 spec = importlib.util.spec_from_file_location("auto_detect_queue", MODULE)
 queue = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(queue)
