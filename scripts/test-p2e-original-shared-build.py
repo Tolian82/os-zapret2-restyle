@@ -735,6 +735,53 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertEqual(native.read_bytes(), b"video.example.com\n")
                 self.assertEqual(user_native.read_bytes(), b"mail.example.org\n")
                 self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+                # One original P2b all-PID per-inode scan is a prerequisite
+                # for any future durable transfer. The injected inspector
+                # simulates the native FreeBSD fstat result ONLY; this is
+                # not an installed FD9/Config or dvtws2 acceptance test.
+                from auto_detect_original_v2_source import (
+                    attest_original_learning_drained_candidate_locked,
+                )
+                from auto_detect_fd import FDState
+                scans = []
+                def drained(path, device, inode, *, owner, writer_gid):
+                    scans.append((path, device, inode, owner, writer_gid))
+                    return FDState.DRAINED
+                qualified = attest_original_learning_drained_candidate_locked(
+                    queue, epoch, proof, self.work, attest=lambda: proof,
+                    inspect=drained)
+                self.assertEqual(qualified["observations"],
+                                 observed["observations"])
+                self.assertTrue(qualified["p2b_drained"])
+                self.assertFalse(qualified["commit_authorized"])
+                self.assertFalse(qualified["ack_authorized"])
+                self.assertEqual([row[0] for row in scans],
+                                 [debug_path, native, user_native])
+                self.assertTrue(all(row[3] == proof.owner and
+                                    row[4] == writer_gid for row in scans))
+                for not_drained in (FDState.BUSY, FDState.UNKNOWN, True):
+                    with self.subTest(not_drained=not_drained):
+                        with self.assertRaises(OriginalSourceRefused):
+                            attest_original_learning_drained_candidate_locked(
+                                queue, epoch, proof, self.work,
+                                attest=lambda: proof,
+                                inspect=lambda *args, **kwargs: not_drained)
+                # Native writers DO NOT take P2a flock. If one appends while
+                # fstat scans, second snapshots must refuse, not checkpoint.
+                def append_during_scan(path, *args, **kwargs):
+                    if path == native:
+                        with user_native.open("ab") as out:
+                            out.write(b"racing.example.org\n")
+                    return FDState.DRAINED
+                with self.assertRaises(OriginalSourceRefused):
+                    attest_original_learning_drained_candidate_locked(
+                        queue, epoch, proof, self.work,
+                        attest=lambda: proof, inspect=append_during_scan)
+                user_native.write_bytes(b"mail.example.org\n")
+                self.assertEqual((folder / "epoch.json").read_bytes(), epoch_bytes)
+                self.assertEqual(native.read_bytes(), b"video.example.com\n")
+                self.assertEqual(user_native.read_bytes(), b"mail.example.org\n")
+
                 # A positive emitted before its matching native append
                 # cannot create a Found entry. Neither can wrong-profile
                 # debug, an incomplete debug window or a stale owner.
