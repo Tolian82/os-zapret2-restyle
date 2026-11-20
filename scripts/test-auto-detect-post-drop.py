@@ -5,7 +5,9 @@ No native service, Model, dvtws2, IPFW or scheduler changes. The existing
 single disposable P2i VM covers actual dropped-credential fchown.
 """
 from __future__ import annotations
+from dataclasses import replace
 import fcntl
+import hashlib
 import os
 from pathlib import Path
 import stat
@@ -17,6 +19,9 @@ from unittest.mock import patch
 BACKEND = Path(__file__).resolve().parents[1] / 'src/opnsense/scripts/OPNsense/Zapret/backend'
 sys.path.insert(0, str(BACKEND))
 from auto_detect_post_drop import _capture, _reattest, _witness_line, _witness_read, original_fd9_command, PostDropRefused, native_capture_before_launch, native_restore_before_ipfw
+from auto_detect_queue import DurableInbox
+from auto_detect_original_v2_source import (LearningCursor, OriginalSourceRefused,
+    preview_original_learning_windows_locked)
 
 
 class PostDropContract(unittest.TestCase):
@@ -94,6 +99,150 @@ class PostDropContract(unittest.TestCase):
                 capture(invalid)
         self.assertEqual(capture(names).learning_names, names)
         self.assertEqual(p.read_bytes(), b"")
+
+
+    def learning_files(self):
+        names = ("learning-" + "a" * 32 + "-3.txt",
+                 "learning-" + "a" * 32 + "-4.txt")
+        sources = (
+            (3, "youtube", str(self.root / names[0])),
+            (4, "user", str(self.root / names[1])),
+        )
+        cursors = {}
+        for number, hostlist, filename in sources:
+            p = Path(filename)
+            p.write_bytes(b"")
+            p.chmod(0o660)
+            physical = p.stat()
+            cursors[filename] = LearningCursor(
+                "a" * 32, number, hostlist, filename,
+                physical.st_dev, physical.st_ino, 0,
+                hashlib.sha256(b"").hexdigest())
+        return DurableInbox(self.root, owner_uid=self.owner,
+                            writer_gid=self.gid), sources, cursors
+
+    def test_learning_physical_native_inboxes_are_read_under_original_queue(self):
+        queue, sources, cursors = self.learning_files()
+        with self.assertRaisesRegex(
+                OriginalSourceRefused, "original_learning_queue_and_epoch_required"):
+            preview_original_learning_windows_locked(
+                queue, sources, cursors, attest=lambda: True)
+        with queue.exclusive():
+            empty = preview_original_learning_windows_locked(
+                queue, sources, cursors, attest=lambda: True)
+            self.assertTrue(all(v.rows == b"" for v in empty.values()))
+            self.assertEqual({p: v.after for p, v in empty.items()}, cursors)
+
+            first, second = (Path(s[2]) for s in sources)
+            first.write_bytes(b"video.example.com\n")
+            second.write_bytes(b"cdn.example.net\n")
+            changed = preview_original_learning_windows_locked(
+                queue, sources, cursors, attest=lambda: True)
+            self.assertEqual(changed[str(first)].rows, b"video.example.com\n")
+            self.assertEqual(changed[str(second)].rows, b"cdn.example.net\n")
+            next_cursor = {p: w.after for p, w in changed.items()}
+            self.assertEqual(changed[str(first)].after.offset, first.stat().st_size)
+            self.assertEqual(
+                changed[str(first)].after.prefix_sha256,
+                hashlib.sha256(first.read_bytes()).hexdigest())
+            again = preview_original_learning_windows_locked(
+                queue, sources, next_cursor, attest=lambda: True)
+            self.assertEqual([w.rows for w in again.values()], [b"", b""])
+
+            with first.open("ab") as out:
+                out.write(b"later.example.com\n")
+            fresh = preview_original_learning_windows_locked(
+                queue, sources, next_cursor, attest=lambda: True)
+            self.assertEqual(fresh[str(first)].rows, b"later.example.com\n")
+            self.assertEqual(fresh[str(second)].rows, b"")
+            self.assertEqual(first.read_bytes(),
+                             b"video.example.com\nlater.example.com\n")
+            # A same-inode overwrite after the persisted cursor is fatal.
+            first.write_bytes(b"forged.example.com\nlater.example.com\n")
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "native_learning_content_or_prefix_changed"):
+                preview_original_learning_windows_locked(
+                    queue, sources, next_cursor, attest=lambda: True)
+            self.assertTrue(first.exists())  # No implicit source cleanup.
+
+    def test_learning_physical_partial_and_forged_cursor_rejected(self):
+        queue, sources, cursors = self.learning_files()
+        first, second = (Path(s[2]) for s in sources)
+        first.write_bytes(b"video.example.com\n")
+        second.write_bytes(b"cdn.example.net")  # Native writer not finished.
+        with queue.exclusive():
+            with self.assertRaises(OriginalSourceRefused):
+                preview_original_learning_windows_locked(
+                    queue, sources, cursors, attest=lambda: True)
+            self.assertEqual(second.read_bytes(), b"cdn.example.net")
+            second.write_bytes(b"cdn.example.net\n")
+            damaged = dict(cursors)
+            damaged[str(first)] = replace(
+                cursors[str(first)], generation="b" * 32)
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "unqualified_learning_sealed_cursor"):
+                preview_original_learning_windows_locked(
+                    queue, sources, damaged, attest=lambda: True)
+            mismatched = (
+                (3, "user", str(first)), (4, "youtube", str(second)))
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "unqualified_learning_sealed_cursor"):
+                preview_original_learning_windows_locked(
+                    queue, mismatched, cursors, attest=lambda: True)
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "unqualified_learning_current_owner"):
+                preview_original_learning_windows_locked(
+                    queue, sources, cursors, attest=lambda: False)
+
+    def test_learning_physical_inode_swap_and_foreign_generation_refused(self):
+        queue, sources, cursors = self.learning_files()
+        first, second = (Path(s[2]) for s in sources)
+        with queue.exclusive():
+            outsider = self.root / ("learning-" + "b" * 32 + "-5.txt")
+            outsider.write_bytes(b"")
+            outsider.chmod(0o660)
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "foreign_learning_producer_entry"):
+                preview_original_learning_windows_locked(
+                    queue, sources, cursors, attest=lambda: True)
+            outsider.unlink()
+            replacement = self.root / "replacement"
+            replacement.write_bytes(b"")
+            replacement.chmod(0o660)
+            replacement.replace(second)
+            with self.assertRaisesRegex(
+                    OriginalSourceRefused, "native_learning_inode_or_cursor_drift"):
+                preview_original_learning_windows_locked(
+                    queue, sources, cursors, attest=lambda: True)
+            self.assertEqual(first.read_bytes(), b"")
+            self.assertEqual(second.read_bytes(), b"")
+
+    def test_learning_physical_racing_native_append_is_retained(self):
+        queue, sources, cursors = self.learning_files()
+        first = Path(sources[0][2])
+        first.write_bytes(b"video.example.com\n")
+        original_read = os.read
+        raced = [False]
+        def concurrent_append(fd, length):
+            data = original_read(fd, length)
+            if not raced[0]:
+                raced[0] = True
+                with first.open("ab") as out:
+                    out.write(b"later.example.com\n")
+            return data
+        with queue.exclusive():
+            with patch("auto_detect_original_v2_source.os.read",
+                       side_effect=concurrent_append):
+                with self.assertRaisesRegex(
+                        OriginalSourceRefused, "native_learning_content_or_prefix_changed"):
+                    preview_original_learning_windows_locked(
+                        queue, sources, cursors, attest=lambda: True)
+            # No cleanup and no fabricated cursor: both lines remain.
+            self.assertEqual(first.read_bytes(),
+                             b"video.example.com\nlater.example.com\n")
+            accepted = preview_original_learning_windows_locked(
+                queue, sources, cursors, attest=lambda: True)
+            self.assertEqual(accepted[str(first)].rows, first.read_bytes())
 
     def test_existing_protected_files_before_and_after_same_owner(self):
         stamp = self.capture()
