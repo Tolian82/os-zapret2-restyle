@@ -305,6 +305,53 @@ def _valid_learning_proposal(raw: bytes, owner: dict, original: bytes,
     return tuple(attested)
 
 
+
+LEARNING_ACTIVE = "ORIGINAL_SHARED_GENERATOR_LEARNING_ACTIVE"
+
+
+def _valid_learning_active(raw: bytes, owner: dict, source: dict,
+                           original: bytes, argv: bytes
+                           ) -> tuple[tuple[int, str, str], ...]:
+    """Qualify a *hypothetically sealed* active schema3 map, not an owner.
+
+    This is a prerequisite for original FD9 pretraffic. It CANNOT grant
+    running process identity, P2c/epoch permission, engine start or ACK.
+    A caller must independently verify the exact original shared bundle
+    seal, root-owned source/argv/map and inherited FD9 before trusting it.
+    """
+    from auto_detect_origin_map import (
+        AttributionError, LEARNING_PROPOSAL, plan_learning_tier,
+    )
+    if (not isinstance(raw, bytes) or len(raw) > MAX_MAP or
+            not isinstance(source, dict) or not isinstance(owner, dict)):
+        raise GenerationRefused("unqualified_learning_active_map")
+    try:
+        actual = json.loads(raw)
+        if (not isinstance(actual, dict) or
+                actual.get("evidence") != LEARNING_ACTIVE or
+                actual.get("activation_authorized") is not True or
+                actual.get("schema") != 3):
+            raise GenerationRefused("learning_active_not_explicitly_authorized")
+        proposed, projection = plan_learning_tier(
+            source, original, owner_id=owner["id"],
+            owner_candidate_sha256=owner["candidate"])
+        if (not isinstance(argv, bytes) or argv != proposed or
+                actual != {**projection, "evidence": LEARNING_ACTIVE,
+                           "activation_authorized": True}):
+            raise GenerationRefused("learning_active_not_original_projection")
+        nonactivating = {**actual, "evidence": LEARNING_PROPOSAL,
+                         "activation_authorized": False}
+        encoded = json.dumps(
+            nonactivating, sort_keys=True, separators=(",", ":")).encode()
+        approved = _valid_learning_proposal(encoded, owner, original, argv)
+        if not approved:
+            raise GenerationRefused("learning_active_no_qualified_profiles")
+        return approved
+    except (ValueError, TypeError, KeyError, UnicodeError,
+            AttributionError) as exc:
+        raise GenerationRefused("learning_active_source_or_argv_refused") from exc
+
+
 def _valid_map(raw: bytes, owner: dict, argv: bytes) -> tuple[dict, tuple]:
     try:
         data = json.loads(raw)

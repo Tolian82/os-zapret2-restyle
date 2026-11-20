@@ -31,6 +31,9 @@ sys.path.insert(0, str(BACKEND))
 import auto_detect_origin_map as origin
 import auto_detect_owner as owner
 import auto_detect_post_drop as post_drop
+import auto_detect_storage as producer_storage
+from auto_detect_queue import DurableInbox
+from auto_detect_epoch_receipts import EpochReceipts, ReceiptRefused
 from auto_detect_original_v2_model import (preview_learning_domains,
                                            V2OriginalConfigRefused)
 from domain_policy import PublicSuffixList, plan_auto_additions
@@ -358,6 +361,145 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
             preview_learning_domains(
                 json.dumps(wrong_map).encode(), owner_ref, original,
                 proposed, rows, window)
+
+
+    def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
+        """Real shared generator + sealed active schema3 + protected inodes.
+
+        This source-only fixture explicitly constructs the FUTURE promoted
+        release, not an original FD9 CLI invocation. No engine runs, and
+        _epoch still refuses schema3 until a genuine P2c owner path exists.
+        """
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n"
+            "--new\n--filter-tcp=443\n<HOSTLIST:user>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        producer_parent = self.root / "producer-parent"
+        producer_parent.mkdir(mode=0o711)
+        data_root = producer_parent / "producer"
+        data_root.mkdir(mode=0o710)
+        writer_gid = max(os.getegid(), 1)
+        if os.geteuid() == 0:
+            os.chown(data_root, 0, writer_gid)
+        pending = data_root / "pending"
+        pending.mkdir(mode=0o700)
+        for name in ("inbox.txt", "debug.log"):
+            item = data_root / name
+            item.write_bytes(b"")
+            item.chmod(0o660)
+            if os.geteuid() == 0:
+                os.chown(item, 0, writer_gid)
+        queue = DurableInbox(data_root, owner_uid=os.geteuid(),
+                             writer_gid=writer_gid)
+        root_gid = os.getegid()
+        engine_uid = os.geteuid() + 2
+        candidate = "d" * 64
+        with patch.object(origin, "RAW_PATH", queue.inbox), \
+             patch.object(origin, "DEBUG_PATH", data_root / "debug.log"), \
+             patch.object(producer_storage, "ROOT", data_root), \
+             patch.object(producer_storage, "DEBUG_PATH", data_root / "debug.log"):
+            projected, proposal = origin.plan_learning_tier(
+                source, original, owner_id=self.work.name,
+                owner_candidate_sha256=candidate)
+            self.assertEqual(
+                owner._valid_learning_proposal(
+                    json.dumps(proposal).encode(),
+                    {"id": self.work.name, "candidate": candidate},
+                    original, projected)[0][1],
+                "youtube")
+            active = {**proposal,
+                      "evidence": owner.LEARNING_ACTIVE,
+                      "activation_authorized": True}
+            learning = owner._valid_learning_active(
+                json.dumps(active).encode(),
+                {"id": self.work.name, "candidate": candidate},
+                source, original, projected)
+            self.assertEqual([name for _, name, _ in learning],
+                             ["youtube", "user"])
+            args_original = self.release / "dvtws.original.args"
+            args_original.write_bytes(original)
+            args.write_bytes(projected)
+            (self.release / owner.MAP_NAME).write_bytes(
+                json.dumps(active, sort_keys=True).encode())
+            create_seal(self.work, owner=os.geteuid())
+            for _, _, filename in learning:
+                path = Path(filename)
+                path.write_bytes(b"")
+                path.chmod(0o660)
+                if os.geteuid() == 0:
+                    os.chown(path, 0, writer_gid)
+            names = tuple(Path(path).name for _, _, path in learning)
+            with queue.exclusive():
+                captured = post_drop._capture(
+                    data_root, root_uid=os.geteuid(), root_gid=root_gid,
+                    engine_uid=engine_uid, engine_gid=writer_gid,
+                    learning_names=names)
+                wire = post_drop._witness_line_learning(captured, learning)
+                epoch = EpochReceipts(self.root / "epochs",
+                                      owner_uid=os.geteuid(),
+                                      writer_gid=writer_gid)
+                seed = epoch.seal_learning_pretraffic(
+                    queue, workspace=self.work, candidate_sha256=candidate,
+                    wire=wire, root_gid=root_gid, engine_uid=engine_uid,
+                    attest=lambda: True)
+                self.assertEqual(seed["schema"], 3)
+                self.assertFalse(seed["ack_authorized"])
+                self.assertEqual(len(seed["files"]), len(learning) + 2)
+                self.assertEqual([row["offset"] for row in seed["learning"]],
+                                 [0, 0])
+                folder = epoch.root / self.work.name
+                raw = (folder / "pretraffic.json").read_bytes()
+                self.assertEqual(json.loads(raw), seed)
+                self.assertFalse((folder / "epoch.json").exists())
+                # Original schema2 deliberately cannot use this receipt.
+                legacy = self.root / "legacy-does-not-exist"
+                self.assertFalse(legacy.exists())
+                native = Path(learning[0][2])
+                native.write_bytes(b"video.example.com\n")
+                with self.assertRaises(ReceiptRefused):
+                    epoch.seal_learning_pretraffic(
+                        queue, workspace=self.work,
+                        candidate_sha256=candidate, wire=wire,
+                        root_gid=root_gid, engine_uid=engine_uid,
+                        attest=lambda: True)
+                self.assertEqual((folder / "pretraffic.json").read_bytes(), raw)
+                self.assertEqual(native.read_bytes(), b"video.example.com\n")
+
+    def test_tz6v4_active_source_refuses_forged_found_owner(self):
+        mapped, args = self.build(
+            "--filter-tcp=443\n<HOSTLIST:youtube>\n--lua-desync=fake\n")
+        source = self.check_nonactivating(mapped, args)
+        original = args.read_bytes()
+        projected, proposal = origin.plan_learning_tier(
+            source, original, owner_id=self.work.name,
+            owner_candidate_sha256="d" * 64)
+        active = {**proposal, "evidence": owner.LEARNING_ACTIVE,
+                  "activation_authorized": True}
+        check = lambda value: owner._valid_learning_active(
+            json.dumps(value).encode(),
+            {"id": self.work.name, "candidate": "d" * 64},
+            source, original, projected)
+        self.assertEqual(check(active)[0][1], "youtube")
+        for kind in ("wrong-source", "wrong-final-hash", "wrong-role",
+                     "false-active", "observer-proof", "wrong-hostlist"):
+            row = json.loads(json.dumps(active))
+            learn = next(p for p in row["profiles"] if p["role"] == "learning")
+            if kind == "wrong-source":
+                learn["source_profile"] = self.work.name + ":777"
+            elif kind == "wrong-final-hash":
+                row["final_args_sha256"] = "f" * 64
+            elif kind == "wrong-role":
+                learn["role"] = "working"
+            elif kind == "false-active":
+                row["activation_authorized"] = False
+            elif kind == "observer-proof":
+                row["evidence"] = "ORIGINAL_SHARED_GENERATOR_CAPTURE"
+            else:
+                learn["hostlist"] = "user"
+            with self.subTest(kind=kind), self.assertRaises(
+                    owner.GenerationRefused):
+                check(row)
 
     def test_tz6v4_mixed_ipset_and_voice_not_learned(self):
         mapped, args = self.build(

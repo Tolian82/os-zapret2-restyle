@@ -515,6 +515,131 @@ class EpochReceipts:
                 GenerationRefused, DebugWindowRefused, SharedBundleError) as exc:
             raise ReceiptRefused("original_sealed_pretraffic_not_attested") from exc
 
+
+    def seal_learning_pretraffic(self, queue: DurableInbox, *,
+                                 workspace: Path, candidate_sha256: str,
+                                 wire: str, root_gid: int, engine_uid: int,
+                                 attest) -> dict:
+        """Durable N-file zero-cut in the ORIGINAL epoch store; no activation.
+
+        The proposed final argv must already be accompanied by the same
+        fully sealed original args/source and an explicit active schema3 map.
+        Even such a seed is NOT a P2c owner: the installed schema2 _epoch()
+        will reject it, and no CLI currently exposes this entrypoint. It
+        may only be called by the future original held-FD9 launcher BEFORE
+        its native traffic and after original sealed-release promotion.
+        """
+        from auto_detect_origin_map import ORIGIN_FILE
+        from auto_detect_owner import _valid_learning_active
+        from auto_detect_post_drop import (
+            PostDropRefused, _witness_decode_learning,
+        )
+        from auto_detect_original_v2_source import (
+            preview_learning_pretraffic_cursors_locked,
+        )
+        if (not isinstance(queue, DurableInbox) or not queue._held or
+                queue.uid != self.uid or queue.writer_gid != self.writer_gid or
+                self.writer_gid is None or
+                not isinstance(workspace, Path) or
+                not workspace.is_absolute() or not HEX32.fullmatch(workspace.name) or
+                not isinstance(candidate_sha256, str) or
+                not HEX64.fullmatch(candidate_sha256) or
+                not isinstance(wire, str) or type(root_gid) is not int or
+                root_gid < 0 or type(engine_uid) is not int or
+                engine_uid <= 0 or not callable(attest)):
+            raise ReceiptRefused("learning_original_fd9_pretraffic_required")
+        try:
+            if sys.platform.startswith("freebsd"):
+                if self.uid != 0 or os.geteuid() != 0:
+                    raise ReceiptRefused("learning_root_original_fd9_required")
+                from voice_ipfw_adapter import require_lifecycle_lock
+                require_lifecycle_lock()
+            queue._verify()
+            if queue.segments():
+                raise ReceiptRefused("learning_unacknowledged_pending_before_launch")
+            seal = verify_seal(workspace, owner=self.uid)
+            release = workspace / "release"
+            original = _secure_bytes(
+                release / "dvtws.original.args", MAX_ARGS, self.uid)
+            final = _secure_bytes(release / "dvtws.args", MAX_ARGS, self.uid)
+            native_map = _secure_bytes(
+                release / "auto-detect-generation.json", MAX_MAP, self.uid)
+            source_bytes = _secure_bytes(
+                release / ORIGIN_FILE, MAX_MAP, self.uid)
+            source = json.loads(source_bytes)
+            approved = _valid_learning_active(
+                native_map, {"id": workspace.name,
+                             "candidate": candidate_sha256},
+                source, original, final)
+            if (not approved or
+                    any(Path(path).parent != queue.root for _, _, path in approved)):
+                raise ReceiptRefused("learning_original_native_paths_changed")
+            producer = _witness_decode_learning(
+                wire, approved, root=queue.root, root_uid=self.uid,
+                root_gid=root_gid, engine_uid=engine_uid,
+                engine_gid=self.writer_gid)
+            cursors = preview_learning_pretraffic_cursors_locked(
+                queue, wire, approved, root_gid=root_gid,
+                engine_uid=engine_uid, attest=attest)
+            if (attest() is not True or queue.segments() or
+                    verify_seal(workspace, owner=self.uid) != seal or
+                    _secure_bytes(release / "dvtws.args", MAX_ARGS, self.uid) != final or
+                    _secure_bytes(release / "auto-detect-generation.json",
+                                  MAX_MAP, self.uid) != native_map or
+                    _secure_bytes(release / ORIGIN_FILE, MAX_MAP, self.uid) !=
+                    source_bytes):
+                raise ReceiptRefused("learning_pretraffic_release_or_owner_changed")
+            # Repeat every physical zero check after verifying the exact
+            # sealed map: no new append or changed inode can be silently
+            # turned into an already-committed cursor.
+            if (preview_learning_pretraffic_cursors_locked(
+                    queue, wire, approved, root_gid=root_gid,
+                    engine_uid=engine_uid, attest=attest) != cursors):
+                raise ReceiptRefused("learning_pretraffic_zero_cut_changed")
+            names = ("inbox.txt", "debug.log", *producer.learning_names)
+            seed = {
+                "schema": 3, "kind": "original-fd9-learning-pretraffic-zero",
+                "generation": workspace.name,
+                "owner_candidate_sha256": candidate_sha256,
+                "release_seal_sha256": hashlib.sha256(
+                    _canonical(seal)).hexdigest(),
+                "original_args_sha256": hashlib.sha256(original).hexdigest(),
+                "final_args_sha256": hashlib.sha256(final).hexdigest(),
+                "native_map_sha256": hashlib.sha256(native_map).hexdigest(),
+                "source_map_sha256": hashlib.sha256(source_bytes).hexdigest(),
+                "witness_sha256": hashlib.sha256(wire.encode()).hexdigest(),
+                "files": [
+                    {"name": name, "device": identity[0],
+                     "inode": identity[1], "nlink": identity[2]}
+                    for name, identity in zip(names, producer.identities)
+                ],
+                "learning": [
+                    {"native_number": number, "hostlist": hostlist,
+                     "path": path, "device": cursors[path].device,
+                     "inode": cursors[path].inode,
+                     "offset": cursors[path].offset,
+                     "prefix_sha256": cursors[path].prefix_sha256}
+                    for number, hostlist, path in approved
+                ],
+                "ack_authorized": False,
+            }
+            encoded = _canonical(seed)  # Bound by existing 16 KiB receipt.
+            # No history pruning, cursor file or runtime journal. The old
+            # schema2 _pretraffic and _epoch intentionally refuse schema3.
+            folder = self._generation(workspace.name, create=True)
+            if ((folder / "epoch.json").exists() or
+                    (folder / "cursor-chain-v2").exists()):
+                raise ReceiptRefused("learning_pretraffic_epoch_already_consumed")
+            _write_once(folder, "pretraffic.json", encoded, self.uid)
+            return seed
+        except ReceiptRefused:
+            raise
+        except (OSError, ValueError, TypeError, KeyError,
+                QueueSafetyError, GenerationRefused, DebugWindowRefused,
+                SharedBundleError, PostDropRefused, OriginalSourceRefused) as exc:
+            raise ReceiptRefused("learning_sealed_pretraffic_not_attested") from exc
+
+
     def finish_running(self, proof: GenerationProof, queue: DurableInbox, *,
                        attest=attest_running_generation) -> None:
         """Complete the exact original pretraffic seed AFTER live P2c attest.
