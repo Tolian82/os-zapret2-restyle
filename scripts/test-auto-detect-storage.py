@@ -79,7 +79,54 @@ def scenario(parent: Path, uid: int, gid: int):
     return work
 
 
-def native_nobody_access(root: Path, nobody):
+
+def learning_scenario(parent: Path, uid: int, gid: int):
+    """TZ6v4 inert storage proof: two unique generation-bound native files."""
+    work = parent / "learning-producer"
+    names = ("learning-" + "a" * 32 + "-4.txt",
+             "learning-" + "a" * 32 + "-5.txt")
+    _prepare(work, uid=uid, engine_gid=gid, learning_inboxes=names)
+    snapshots = {}
+    for name in names:
+        p = work / name
+        need(stat.S_IMODE(p.stat().st_mode) == 0o660,
+             "LEARNING_WRITER_FILE_MODE")
+        snapshots[name] = (p.stat().st_dev, p.stat().st_ino)
+    (work / names[0]).write_bytes(b"host.example\n")
+    _prepare(work, uid=uid, engine_gid=gid, learning_inboxes=names)
+    need((work / names[0]).read_bytes() == b"host.example\n",
+         "LEARNING_APPEND_NOT_TRUNCATED")
+    need(all((work / name).stat().st_ino == snapshots[name][1]
+             for name in names), "LEARNING_EXISTING_INODE_REPLACED")
+    for invalid in (
+        ("../host.txt",), ("learning-" + "a" * 32 + "-0.txt",),
+        (names[0], names[0]), (names[0], "learning-" + "b" * 32 + "-5.txt"),
+        (names[1], names[0]), (names[0], "learning-" + "a" * 32 + "-7.txt"),
+    ):
+        try:
+            _prepare(work, uid=uid, engine_gid=gid, learning_inboxes=invalid)
+        except StorageRefused:
+            pass
+        else:
+            raise RuntimeError("P2G_UNTRUSTED_LEARNING_SET_ADMITTED")
+    # A different valid generation cannot create its own artifacts over
+    # retained files of the first generation, even before engine launch.
+    foreign = "learning-" + "b" * 32 + "-6.txt"
+    try:
+        _prepare(work, uid=uid, engine_gid=gid,
+                 learning_inboxes=(foreign,))
+    except StorageRefused:
+        pass
+    else:
+        raise RuntimeError("P2G_FOREIGN_LEARNING_GENERATION_ADMITTED")
+    need(not (work / foreign).exists(), "LEARNING_FOREIGN_WRITE_OCCURRED")
+    # Dropped owner cannot write to the directory or private queue.
+    need(stat.S_IMODE(work.stat().st_mode) == 0o710,
+         "LEARNING_ROOT_MODE")
+    return work, names
+
+
+def native_nobody_access(root: Path, nobody, named: tuple[str, ...] = ()):
     # Never switch UID in the parent; child can only open known names.
     pid = os.fork()
     if pid == 0:
@@ -87,7 +134,7 @@ def native_nobody_access(root: Path, nobody):
             os.setgroups([])
             os.setgid(nobody.pw_gid)
             os.setuid(nobody.pw_uid)
-            for name in ("inbox.txt", "debug.log"):
+            for name in ("inbox.txt", "debug.log", *named):
                 fd = os.open(root / name, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
                 os.close(fd)
             for denied in ("pending", "worker.lock"):
@@ -126,7 +173,8 @@ def portable():
         parent = Path(tmp)
         parent.chmod(0o755)
         scenario(parent, uid, gid)
-    print("P2G_PORTABLE=PASS_PROTECTED_PRODUCER_AND_PENDING_NO_ACK")
+        learning_scenario(parent, uid, gid)
+    print("P2G_PORTABLE=PASS_PROTECTED_PRODUCER_PENDING_AND_INERT_MULTI_INBOX")
 
 
 def native():
@@ -153,11 +201,16 @@ def native():
              original.st_nlink == 1 and stat.S_IMODE(original.st_mode) == 0o600,
              "NATIVE_ORIGINAL_QUEUE_LOCK_OWNER")
         native_nobody_access(PRODUCER, nobody)
+        names = ("learning-" + "a" * 32 + "-4.txt",
+                 "learning-" + "a" * 32 + "-5.txt")
+        _prepare(PRODUCER, uid=0, engine_gid=nobody.pw_gid,
+                 learning_inboxes=names)
+        native_nobody_access(PRODUCER, nobody, named=names)
         with DurableInbox(PRODUCER, writer_gid=nobody.pw_gid).exclusive() as queue:
             need(queue.segments() == [], "NATIVE_PENDING_NOT_EMPTY")
         need((PRODUCER / "worker.lock").lstat().st_ino == original.st_ino,
              "NATIVE_ORIGINAL_QUEUE_LOCK_REPLACED")
-        print("P2G_NATIVE=PASS_FREEBSD_NOBODY_READ_APPEND_NO_CREATE_NO_PENDING")
+        print("P2G_NATIVE=PASS_FREEBSD_NOBODY_MULTI_INBOX_APPEND_NO_CREATE_NO_PENDING")
     finally:
         # Only the explicitly created disposable root, never its parent.
         if PRODUCER.is_dir() and not PRODUCER.is_symlink():
