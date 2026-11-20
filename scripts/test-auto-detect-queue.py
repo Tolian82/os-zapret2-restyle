@@ -148,6 +148,12 @@ class DurableInboxTests(unittest.TestCase):
                     self.queue._rotate_original_source(
                         native, replacement=replacement,
                         generation=generation, **kwargs)
+            with self.assertRaisesRegex(
+                    queue.QueueSafetyError,
+                    "native_compaction_must_shrink_hostlist"):
+                self.queue._rotate_original_source(
+                    native, replacement=body, generation=generation,
+                    expected_identity=identity, sealed_prefix=prefix)
             self.assertEqual(self.queue.segments(), [])
             self.assertEqual(native.read_bytes(), body)
 

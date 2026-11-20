@@ -350,6 +350,12 @@ class DurableInbox:
                 index += 1
             if replacement and not old_bytes:
                 raise QueueSafetyError("native_replacement_outside_original")
+            # Upstream zapret2 v1.0.7 compares only mtime+SIZE in its
+            # file_mod_signature, not inode. A real native compaction MUST
+            # shrink the working image to guarantee same-PID reload even
+            # when a replacement happens inside one timestamp quantum.
+            if len(replacement) >= len(old_bytes):
+                raise QueueSafetyError("native_compaction_must_shrink_hostlist")
 
         if is_native and (old.st_dev, old.st_ino) != expected_identity:
             raise QueueSafetyError("native_original_inode_changed")
