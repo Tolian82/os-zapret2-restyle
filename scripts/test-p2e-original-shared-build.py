@@ -1089,9 +1089,11 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                 self.assertTrue((slot / "destination" / "plan.json").exists())
                 self.assertFalse(
                     (slot / "destination" / "checkpoint.json").exists())
-                self.assertEqual(targets["youtube"].read_bytes(),
-                                 b"example.com\n")
-                self.assertEqual(targets["user"].read_bytes(), b"")
+                # Original writer orders destination names lexically:
+                # 'user' is the first physical CAS, 'youtube' is pending.
+                self.assertEqual(targets["user"].read_bytes(),
+                                 b"example.org\n")
+                self.assertEqual(targets["youtube"].read_bytes(), b"")
                 self.assertEqual(working["youtube"]["path"].read_bytes(),
                                  b"youtube.com\n")
                 self.assertFalse((slot / "ack.json").exists())
