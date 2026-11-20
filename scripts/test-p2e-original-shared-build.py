@@ -543,6 +543,84 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         post_drop.original_fd9_command(
                             [action] + ["bogus"] * (n - 1)), 64)
 
+    def test_tz6v4_p1_routes_confirmed_native_sources_to_found(self):
+        """Existing P1 PSL and composer, no invented model for known Found."""
+        from auto_detect_original_v2_model import preview_learning_p1_effects
+        manual = {"youtube": "", "user": ""}
+        owned = {"youtube": "", "user": ""}
+        observations = [
+            {"hostname": "video.example.com", "hostlist": "youtube"},
+            {"hostname": "mail.example.org", "hostlist": "user"},
+        ]
+        planned = preview_learning_p1_effects(
+            observations, manual, owned, "", "")
+        self.assertEqual(planned["effects"], {
+            "youtube": {"add": ["example.com"], "remove": []},
+            "user": {"add": ["example.org"], "remove": []},
+        })
+        self.assertEqual(planned["found_after"]["youtube"], b"example.com\n")
+        self.assertEqual(planned["found_after"]["user"], b"example.org\n")
+        self.assertEqual(planned["managed_after"]["youtube"], b"example.com\n")
+        self.assertEqual(planned["managed_after"]["user"], b"example.org\n")
+        self.assertEqual(planned["found_after"]["auto"], b"")
+        self.assertFalse(planned["commit_authorized"])
+        self.assertFalse(planned["cleanup_authorized"])
+        self.assertFalse(planned["ack_authorized"])
+
+        # First-match attribution is from the sealed native map, never a
+        # hostname guess. Two independently proven sources for the SAME
+        # PSL root are ambiguous and belong in the explicit shared Found.
+        ambiguity = preview_learning_p1_effects(
+            [observations[0],
+             {"hostname": "www.example.com", "hostlist": "user"}],
+            manual, owned, "", "")
+        self.assertEqual(ambiguity["effects"], {
+            "auto": {"add": ["example.com"], "remove": []},
+        })
+        self.assertEqual(ambiguity["found_after"]["auto"],
+                         b"example.com\n")
+        self.assertEqual(ambiguity["managed_after"]["youtube"], b"")
+        self.assertEqual(ambiguity["managed_after"]["user"], b"")
+
+        # Existing auto-owned rows may move to shared, but neither the
+        # original manual content nor a negative modifier may be deleted.
+        moved = preview_learning_p1_effects(
+            [{"hostname": "www.example.com", "hostlist": "user"}],
+            manual, {"youtube": "example.com\n", "user": ""}, "", "")
+        self.assertEqual(moved["effects"], {
+            "youtube": {"add": [], "remove": ["example.com"]},
+            "auto": {"add": ["example.com"], "remove": []},
+        })
+        self.assertEqual(moved["found_after"]["youtube"], b"")
+        self.assertEqual(moved["managed_after"]["youtube"], b"")
+        excluded = preview_learning_p1_effects(
+            observations, {"youtube": "!example.com\n", "user": ""},
+            owned, "", "")
+        self.assertEqual(excluded["effects"], {
+            "user": {"add": ["example.org"], "remove": []},
+        })
+        self.assertEqual(excluded["managed_after"]["youtube"],
+                         b"!example.com\n")
+        globally_excluded = preview_learning_p1_effects(
+            observations, manual, owned, "", "example.com\n")
+        self.assertEqual(globally_excluded["effects"], {
+            "user": {"add": ["example.org"], "remove": []},
+        })
+        repeat = preview_learning_p1_effects(
+            observations, manual,
+            {"youtube": "example.com\n", "user": "example.org\n"}, "", "")
+        self.assertEqual(repeat["effects"], {})
+        for bad in (
+            [{"hostname": "invalid_host", "hostlist": "youtube"}],
+            [{"hostname": "example.com", "hostlist": None}],
+            [{"hostname": "example.com", "hostlist": "unmapped"}],
+            [{"hostname": "example.com", "hostlist": "youtube",
+              "invented": True}],
+        ):
+            with self.subTest(bad=bad):
+                with self.assertRaises(V2OriginalConfigRefused):
+                    preview_learning_p1_effects(bad, manual, owned, "", "")
+
     def test_tz6v4_sealed_full_n_pretraffic_is_one_original_epoch(self):
         """Real shared generator + sealed active schema3 + protected inodes.
 
