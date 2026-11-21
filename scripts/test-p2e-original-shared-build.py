@@ -5369,12 +5369,19 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
         # Config saved/readback, IPFW and final FD9 epoch attestation.
         self.assertLess(applied.index('shared_apply_native_config save'),
                         applied.index('shared_apply_record_current_service epoch-finalizing'))
+        # Schema2 uses its original epoch verifier; schema3 uses the
+        # separate independently authenticated full N-inbox verifier.
+        # Both must finish before the terminal shared Apply record.
+        self.assertIn('_shared_epoch_verb=finish-epoch', applied)
+        self.assertIn('_shared_epoch_verb=finish-learning-epoch', applied)
+        self.assertIn('select(. == 2 or . == 3)', applied)
+        finish_call = applied.index('"$_shared_epoch_verb" "$_shared_apply_id"')
         self.assertLess(applied.index('shared_apply_record_current_service epoch-finalizing'),
-                        applied.index('finish-epoch "$_shared_apply_id"'))
-        self.assertLess(applied.index('finish-epoch "$_shared_apply_id"'),
+                        finish_call)
+        self.assertLess(finish_call,
                         applied.index('shared_apply_record_current_service committed'))
         self.assertLess(applied.index('apply_runtime_probe "$_shared_apply_root/release"'),
-                        applied.index('finish-epoch "$_shared_apply_id"'))
+                        finish_call)
 
     def test_p2f_native_candidate_preview_and_promotion_precede_original_seal(self):
         service = (BACKEND.parent / "zapret_service.sh").read_text()
