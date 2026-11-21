@@ -175,7 +175,11 @@ class EpochReceipts:
             _sync(self.root.parent)
         _directory(self.root, self.uid)
         entries = os.listdir(self.root)
-        if len(entries) > MAX_EPOCHS or any(not HEX32.fullmatch(v) for v in entries):
+        if len(entries) > MAX_EPOCHS or any(
+                not (HEX32.fullmatch(v) or
+                     (v.startswith(".gc-") and HEX32.fullmatch(v[4:])) or
+                     (v.startswith(".gc3-") and HEX32.fullmatch(v[5:])))
+                for v in entries):
             raise ReceiptRefused("foreign_or_excessive_epoch_entries")
 
     def prune_completed(self, queue: DurableInbox, *, protect: str,
@@ -205,15 +209,21 @@ class EpochReceipts:
         all_names = os.listdir(self.root)
         if (len(all_names) > MAX_EPOCHS or
                 any(not (HEX32.fullmatch(n) or
-                         (n.startswith(".gc-") and HEX32.fullmatch(n[4:])))
+                         (n.startswith(".gc-") and HEX32.fullmatch(n[4:])) or
+                         (n.startswith(".gc3-") and HEX32.fullmatch(n[5:])))
                     for n in all_names)):
             raise ReceiptRefused("foreign_historical_epoch_before_reclaim")
 
         # Finish only exact, already-renamed root-private deletion. A .gc
         # name is never an owner, log or ACK. Its allowed children are
         # checked without following symlinks after partial prior deletion.
-        for name in sorted(n for n in all_names if n.startswith(".gc-")):
-            self._erase_completed_tree(self.root / name, "generation")
+        for name in sorted(n for n in all_names
+                           if n.startswith(".gc-") or n.startswith(".gc3-")):
+            if name.startswith(".gc3-"):
+                from auto_detect_learning_gc import erase_completed_learning
+                erase_completed_learning(self, queue, self.root / name)
+            else:
+                self._erase_completed_tree(self.root / name, "generation")
 
         completed = []
         for name in sorted(os.listdir(self.root)):
@@ -222,7 +232,18 @@ class EpochReceipts:
             folder = self.root / name
             _directory(folder, self.uid)
             if not (folder / "retired.json").exists():
-                # An unfinished or aborted source is never reclaimed.
+                # Schema3 uses its own terminal receipt and exact N/debug
+                # archives. Never reclaim unfinished/aborted learning runs.
+                from auto_detect_learning_retirement import _entry as _learning_entry
+                if _learning_entry(folder / "learning-retirement" / "ready.json"):
+                    from auto_detect_learning_gc import qualified_completed_learning
+                    try:
+                        stamp = qualified_completed_learning(self, queue, name)
+                    except (OSError, ValueError, TypeError, KeyError,
+                            RuntimeError) as exc:
+                        raise ReceiptRefused(
+                            "historical_learning_not_qualified_for_reclaim") from exc
+                    completed.append((stamp, name, "learning"))
                 continue
             try:
                 epoch = json.loads(_read(folder / "epoch.json", self.uid))
@@ -306,7 +327,7 @@ class EpochReceipts:
                              hashlib.sha256(data).hexdigest()] != expected or
                             (key == "inbox" and data)):
                         raise ReceiptRefused("changed_historical_archive")
-                completed.append((folder.stat().st_mtime_ns, name))
+                completed.append((folder.stat().st_mtime_ns, name, "schema2"))
             except (OSError, ValueError, TypeError, KeyError, IndexError,
                     CursorChainRefused, GenerationRefused,
                     OriginalSourceRefused) as exc:
@@ -316,14 +337,19 @@ class EpochReceipts:
         # runs never enter the deletion set. No date-only TTL.
         completed.sort()
         removed = 0
-        for _, name in completed[:-keep]:
+        for _, name, kind in completed[:-keep]:
             original = self.root / name
-            tombstone = self.root / (".gc-" + name)
+            tombstone = self.root / (
+                (".gc3-" if kind == "learning" else ".gc-") + name)
             if tombstone.exists() or tombstone.is_symlink():
                 raise ReceiptRefused("concurrent_historical_reclaim")
             original.rename(tombstone)
             _sync(self.root)
-            self._erase_completed_tree(tombstone, "generation")
+            if kind == "learning":
+                from auto_detect_learning_gc import erase_completed_learning
+                erase_completed_learning(self, queue, tombstone)
+            else:
+                self._erase_completed_tree(tombstone, "generation")
             removed += 1
         return removed
 
@@ -629,8 +655,10 @@ class EpochReceipts:
                 "ack_authorized": False,
             }
             encoded = _canonical(seed)  # Bound by existing 16 KiB receipt.
-            # No history pruning, cursor file or runtime journal. The old
-            # schema2 _pretraffic and _epoch intentionally refuse schema3.
+            # The same original FD9/P2a reclaims only independently qualified
+            # terminal schema2/schema3 history older than the last four.
+            # It never touches current producer/Found/managed/Config.
+            self.prune_completed(queue, protect=workspace.name)
             folder = self._generation(workspace.name, create=True)
             if ((folder / "epoch.json").exists() or
                     (folder / "cursor-chain-v2").exists()):

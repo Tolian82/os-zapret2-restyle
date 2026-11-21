@@ -182,5 +182,116 @@ class StoppedLearningRetirementTests(unittest.TestCase):
             self.run_retire(tip=tip, repair=False)
 
 
+    def _completed_learning_history(self, count=6):
+        """Six physically retired old epochs; only tip/PID is test-injected."""
+        from auto_detect_epoch_receipts import _canonical
+        history = {}
+        parent = self.work.parent
+        # The base fixture has an unrelated native producer; never let it
+        # masquerade as a source belonging to this six-generation journey.
+        self.native.unlink()
+        for idx in range(count):
+            gen = f"{idx + 1:032x}"
+            self.epoch = self.epoch_root / gen
+            self.epoch.mkdir(mode=0o700)
+            self.work = parent / gen
+            self.work.mkdir(mode=0o700)
+            self.native = self.root / f"learning-{gen}-1.txt"
+            self._file(self.native, f"domain-{idx}.example.test\n".encode())
+            self._file(self.root / "debug.log", b"diagnostic-only\n")
+            self.proof = LearningGenerationProof(
+                OwnerToken(1002, "Fri Nov 13 07:00:00 2026",
+                           "/usr/local/bin/dvtws2"),
+                gen, gen, "a" * 64, "b" * 64, "c" * 64,
+                ((1, "youtube", str(self.native)),))
+            tip = self.tip()
+            self.assertTrue(self.run_retire(tip=tip))
+            old = self.epoch / "learning-retirement"
+            self.assertTrue((old / "ready.json").exists())
+            epoch = {
+                "schema": 3, "kind": "original-native-learning-epoch",
+                "generation": gen, "operation_id": gen,
+                "owner_candidate_sha256": "a" * 64,
+                "final_args_sha256": "b" * 64,
+                "native_map_sha256": "c" * 64,
+                "pretraffic_sha256": "f" * 64,
+                "owner_pid": self.proof.owner.pid,
+                "owner_start": self.proof.owner.started,
+                "owner_executable": self.proof.owner.executable,
+                "files": [], "learning": [
+                    {"native_number": 1, "hostlist": "youtube",
+                     "path": str(self.native)}],
+                "ack_authorized": False,
+            }
+            entry = self.epoch / "epoch.json"
+            self._file(entry, _canonical(epoch))
+            entry.chmod(0o600)
+            # Stable independent ordering, not a wall-clock claim.
+            stamp = 1_800_000_000_000_000_000 + idx * 1_000_000_000
+            os.utime(self.epoch, ns=(stamp, stamp))
+            history[gen] = tip
+        return history
+
+    def _prune_learning_history(self, tips):
+        with self.queue.exclusive(), patch.object(
+                CursorChain, "learning_tip",
+                side_effect=lambda proof, workspace: tips[proof.generation]):
+            return self.receipts.prune_completed(
+                self.queue, protect="f" * 32, keep=4)
+
+    def test_original_four_completed_learning_generations_retained(self):
+        tips = self._completed_learning_history()
+        self.assertEqual(self._prune_learning_history(tips), 2)
+        names = list(tips)
+        self.assertFalse((self.epoch_root / names[0]).exists())
+        self.assertFalse((self.epoch_root / names[1]).exists())
+        for gen in names[2:]:
+            self.assertTrue((self.epoch_root / gen /
+                             "learning-retirement" / "ready.json").exists())
+        self.assertEqual(self._prune_learning_history(tips), 0)
+        self.assertFalse(any(p.name.startswith(".gc3-")
+                             for p in self.epoch_root.iterdir()))
+
+    def test_changed_retired_learning_source_refuses_pruning(self):
+        tips = self._completed_learning_history()
+        first = next(iter(tips))
+        archive = self.epoch_root / first / "learning-retirement" / (
+            f"old-learning-{first}-1.txt")
+        self._file(archive, b"foreign-change\n")
+        with self.assertRaises(LearningRetirementRefused):
+            # The qualified native snapshot may reject with its own
+            # original model/receipt exception, not only this class.
+            from auto_detect_learning_gc import qualified_completed_learning
+            with self.queue.exclusive(), patch.object(
+                    CursorChain, "learning_tip",
+                    side_effect=lambda proof, workspace: tips[proof.generation]):
+                qualified_completed_learning(self.receipts, self.queue, first)
+        self.assertTrue((self.epoch_root / first).exists())
+
+    def test_interrupted_learning_gc_tombstone_resumes_without_source(self):
+        tips = self._completed_learning_history()
+        first = next(iter(tips))
+        original = __import__("auto_detect_learning_gc")._sync
+        hit = False
+
+        def crash_after_archive_sync(path):
+            nonlocal hit
+            original(path)
+            if not hit and Path(path).name == "learning-retirement":
+                hit = True
+                raise OSError("injected-after-partial-retired-archive-delete")
+        with patch("auto_detect_learning_gc._sync",
+                   side_effect=crash_after_archive_sync):
+            with self.assertRaises(OSError):
+                self._prune_learning_history(tips)
+        self.assertFalse((self.epoch_root / first).exists())
+        self.assertTrue((self.epoch_root / (".gc3-" + first)).exists())
+        self.assertEqual(self._prune_learning_history(tips), 1)
+        self.assertFalse((self.epoch_root / (".gc3-" + first)).exists())
+        self.assertEqual(len([
+            name for name in tips if (self.epoch_root / name).exists()
+        ]), 4)
+
+
 if __name__ == "__main__":
     unittest.main()
