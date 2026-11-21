@@ -1825,6 +1825,17 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 writer, proof, self.work,
                                 config_fd=cfg_fd, config_path=config_path,
                                 attest=lambda: proof)
+                    from auto_detect_original_history_wal import (
+                        preview_original_learning_independent_wal_locked,
+                    )
+                    def preview_independent_wal(*, inspect_witness=drained):
+                        with writer.exclusive_targets(), patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            return preview_original_learning_independent_wal_locked(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                attest=lambda: proof, inspect=inspect_witness)
                     self.assertFalse(second_slot.exists())
                     with self.assertRaises(V2OriginalConfigRefused):
                         archive_release_preview()
@@ -2671,6 +2682,34 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 read_independent_history(), history_image)
                             self.assertEqual(
                                 archive_release_preview(), release_preview)
+                            committed_wal = preview_independent_wal()
+                            self.assertTrue(committed_wal[
+                                "all_three_original_wal_checkpoints_verified"])
+                            self.assertTrue(committed_wal[
+                                "third_destination_postimages_verified"])
+                            self.assertFalse(committed_wal[
+                                "source_independent_transaction_replay_available"])
+                            self.assertFalse(committed_wal[
+                                "archive_unlink_authorized"])
+                            self.assertEqual(
+                                preview_independent_wal(), committed_wal)
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                preview_independent_wal(
+                                    inspect_witness=lambda *_a, **_kw:
+                                        FDState.BUSY)
+                            # A corrupt committed checkpoint is a hard
+                            # refusal, not a reason to re-run P1 or rewrite.
+                            checkpoint_path = (
+                                third_slot / "destination" / "checkpoint.json")
+                            checkpoint_original = checkpoint_path.read_bytes()
+                            checkpoint_path.write_bytes(b"{}\n")
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    preview_independent_wal()
+                            finally:
+                                checkpoint_path.write_bytes(checkpoint_original)
+                            self.assertEqual(
+                                preview_independent_wal(), committed_wal)
                             # Deliberately simulate a missing archived
                             # inode ONLY inside this disposable fixture:
                             # old first/second/third source replay must
@@ -2693,6 +2732,13 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 # replay is still safely blocked.
                                 self.assertEqual(
                                     read_independent_history(), history_image)
+                                # After the archive inode disappears, the
+                                # ORIGINAL 3-slot immutable WAL/checkpoint
+                                # and current postimages remain independently
+                                # inspectable. Original old-inode replay still
+                                # has to refuse; NO ACK/unlink is granted.
+                                self.assertEqual(
+                                    preview_independent_wal(), committed_wal)
                                 with self.assertRaises(
                                         V2OriginalConfigRefused):
                                     seal_third_slot()
