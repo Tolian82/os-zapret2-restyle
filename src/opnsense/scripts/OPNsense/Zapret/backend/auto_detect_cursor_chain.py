@@ -1393,6 +1393,7 @@ class CursorChain:
                 attest() != proof):
             raise CursorChainRefused("learning_debug_cut_original_fd9_required")
         self.queue._verify()
+        _recover_learning_debug_cut_staged(self.receipts, proof)
         tip = self.learning_tip(
             proof, workspace, allow_unfinished_debug_cut=True)
         if tip["sequence"] == 0 or tip["intent"] is not None:
@@ -1984,6 +1985,91 @@ def _learning_native_records(folder, intent, uid, *, progress=False):
 
 def _entry(path):
     return path.exists() or path.is_symlink()
+
+
+
+def _recover_learning_debug_cut_staged(receipts, proof):
+    """Recover ONLY an exact original debug-cut _write_once .part stage.
+
+    The standard root-private write-once receipt uses a temporary inode
+    hardlinked to its final name. A crash may leave one name or two links.
+    Before any new debug pathname action, finish ONLY a canonical, exact
+    same-generation cut receipt in its already ACKed original cursor slot.
+    No arbitrary .part cleanup, Config, native source or ACK mutation.
+    """
+    folder = receipts._generation(proof.generation, create=False)
+    root = folder / CHAIN
+    if not _entry(root):
+        return
+    _directory(root, receipts.uid)
+    kinds = {
+        "original-learning-debug-cut-intent": DEBUG_CUT_INTENT,
+        "original-learning-debug-cut-complete": DEBUG_CUT_COMPLETE,
+        "original-learning-debug-cut-retired": DEBUG_CUT_RETIRE,
+        "original-learning-debug-cut-aborted": DEBUG_CUT_ABORT,
+    }
+    for slot in root.iterdir():
+        if not STEP.fullmatch(slot.name):
+            if slot.name not in {ANCHOR, "anchor-native"}:
+                raise CursorChainRefused("learning_debug_cut_foreign_chain_entry")
+            continue
+        _directory(slot, receipts.uid)
+        parts = sorted(path for path in slot.iterdir()
+                       if re.fullmatch(r"\.[0-9a-f]{32}\.part", path.name))
+        if not parts:
+            continue
+        if len(parts) != 1:
+            raise CursorChainRefused("learning_debug_cut_ambiguous_staged_receipts")
+        part = parts[0]
+        named = part.lstat()
+        if (not stat.S_ISREG(named.st_mode) or
+                named.st_uid != receipts.uid or
+                stat.S_IMODE(named.st_mode) != 0o600 or
+                named.st_nlink not in (1, 2) or
+                not _entry(slot / "ack.json")):
+            raise CursorChainRefused("learning_debug_cut_untrusted_stage")
+        fd = os.open(part, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            opened = os.fstat(fd)
+            raw = os.read(fd, 16385)
+            closed = os.fstat(fd)
+        finally:
+            os.close(fd)
+        if ((named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns) !=
+                (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns) or
+                (opened.st_dev, opened.st_ino, opened.st_size, opened.st_mtime_ns) !=
+                (closed.st_dev, closed.st_ino, closed.st_size, closed.st_mtime_ns) or
+                len(raw) != named.st_size or
+                len(raw) > 16384):
+            raise CursorChainRefused("learning_debug_cut_changed_staged_record")
+        try:
+            record = json.loads(raw)
+        except (ValueError, UnicodeError, TypeError) as exc:
+            raise CursorChainRefused("learning_debug_cut_staged_json_invalid") from exc
+        if (not isinstance(record, dict) or
+                raw != _canonical(record) or
+                record.get("schema") != 3 or
+                record.get("generation") != proof.generation or
+                record.get("ack_authorized") is not False or
+                record.get("kind") not in kinds):
+            raise CursorChainRefused("learning_debug_cut_foreign_staged_receipt")
+        target = slot / kinds[record["kind"]]
+        if _entry(target):
+            attached = target.lstat()
+            if ((attached.st_dev, attached.st_ino) !=
+                    (named.st_dev, named.st_ino) or
+                    attached.st_nlink != 2 or named.st_nlink != 2):
+                raise CursorChainRefused("learning_debug_cut_staged_link_changed")
+        elif named.st_nlink == 1:
+            os.link(part, target, follow_symlinks=False)
+        else:
+            raise CursorChainRefused("learning_debug_cut_staged_link_missing")
+        part.unlink()
+        _sync(slot)
+        if _read(target, receipts.uid) != raw:
+            raise CursorChainRefused("learning_debug_cut_staged_recovery_failed")
+
+
 
 
 def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False):
