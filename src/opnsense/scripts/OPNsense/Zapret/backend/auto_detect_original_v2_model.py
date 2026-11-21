@@ -14,6 +14,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Callable
 
 from auto_detect_cursor_chain import (CursorChain, CursorChainRefused,
