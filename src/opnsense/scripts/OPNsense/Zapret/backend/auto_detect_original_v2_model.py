@@ -2828,9 +2828,13 @@ def preview_original_learning_third_pending_retirement_locked(
                 config_path=config_path, attest=attest, inspect=inspect,
                 sealed_window=window)
         frozen = inspect_snapshot(sealed)
+        # The forward physical preview deliberately accumulates all
+        # post-FIRST observations, whereas the third source contains
+        # only the SECOND->THIRD delta. The existing qualified third
+        # source/plan/progress binds that delta; here compare only exact
+        # physical inode/debug cuts. Do not equate the two scopes.
         if (frozen["native"] != frozen_native or
                 frozen["debug"] != sealed["debug"] or
-                frozen["observations"] != source["observations"] or
                 frozen["p2b_drained"] is not True):
             raise V2OriginalConfigRefused(
                 "learning_third_retirement_sealed_N_changed")
