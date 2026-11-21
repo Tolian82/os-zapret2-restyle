@@ -2051,6 +2051,7 @@ def _recover_learning_debug_cut_staged(receipts, proof):
         "original-learning-debug-cut-complete": DEBUG_CUT_COMPLETE,
         "original-learning-debug-cut-retired": DEBUG_CUT_RETIRE,
         "original-learning-debug-cut-aborted": DEBUG_CUT_ABORT,
+        "original-learning-debug-cut-rollback": DEBUG_CUT_ROLLBACK,
     }
     for slot in root.iterdir():
         if not STEP.fullmatch(slot.name):
@@ -2216,9 +2217,15 @@ def _learning_debug_cut_receipts(slot, proof, tip, uid, *, allow_unsealed=False)
                 "generation": proof.generation, "intent_sha256": digest,
                 "ack_authorized": False} or
                 any(_entry(path) for path in
-                    (complete_path, retire_path, fresh_path, old_path,
-                     backup_path))):
+                    (complete_path, retire_path, fresh_path, old_path))):
             raise CursorChainRefused("learning_debug_cut_abort_ambiguous")
+        if _entry(backup_path):
+            # The original abort was durably sealed BEFORE unlinking the
+            # empty NEW backup. A crash here must resume under the same
+            # FD9/P2a owner; normal source WAL remains strictly blocked.
+            if not allow_unsealed or rollback is None:
+                raise CursorChainRefused("learning_debug_cut_abort_backup_not_retired")
+            return None
         return False
     if rollback is not None:
         # The only successful rollback is a final, immutable abort.
