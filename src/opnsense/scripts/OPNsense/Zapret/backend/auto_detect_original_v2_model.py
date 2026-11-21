@@ -1829,6 +1829,12 @@ def prepare_original_learning_forward_second_slot_locked(
             "observations_count": len(candidate["observations"]),
             "observations_sha256": observation_digest(
                 candidate["observations"]),
+            # The original P2k2b DestinationCommit consumes the exact
+            # immutable observation stream. A digest alone is NOT enough
+            # to reconstruct P1 after a partial Found/managed CAS crash.
+            # The existing 16 KiB original receipt bound refuses large
+            # batches, retaining every source byte for a smaller future cut.
+            "observations": candidate["observations"],
             "deduped_cross_inode": candidate["deduped_cross_inode"],
             "cursor_advanced": False,
             "commit_authorized": False,
@@ -1846,8 +1852,16 @@ def prepare_original_learning_forward_second_slot_locked(
         slot = chain / "00000001"
         if slot.exists() or slot.is_symlink():
             _directory(slot, writer.receipts.uid)
-            if set(os.listdir(slot)) - {"native", "intent.json"}:
+            if set(os.listdir(slot)) - {"native", "intent.json", "destination"}:
                 raise V2OriginalConfigRefused("learning_second_slot_foreign_journal")
+            if ((slot / "destination").exists() or
+                    (slot / "destination").is_symlink()):
+                _directory(slot / "destination", writer.receipts.uid)
+                if "intent.json" not in os.listdir(slot) or (
+                        set(os.listdir(slot / "destination")) -
+                        {"plan.json", "checkpoint.json"}):
+                    raise V2OriginalConfigRefused(
+                        "learning_second_slot_destination_before_source_intent")
         else:
             slot.mkdir(mode=0o700)
             _sync(chain)
@@ -1884,7 +1898,9 @@ def prepare_original_learning_forward_second_slot_locked(
                         data != _canonical(row)):
                     raise V2OriginalConfigRefused("learning_second_slot_corrupt_native_record")
                 rows.append(row)
-            if (set(os.listdir(slot)) != {"native", "intent.json"} or
+            slot_names = set(os.listdir(slot))
+            if (slot_names not in ({"native", "intent.json"},
+                                   {"native", "intent.json", "destination"}) or
                     set(os.listdir(native)) != set(expected_names) or
                     record_raw != _canonical(record)):
                 raise V2OriginalConfigRefused("learning_second_slot_incomplete_sealed_journal")
