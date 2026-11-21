@@ -25,7 +25,7 @@ from auto_detect_fd import FDState, probe_pending_fd
 from auto_detect_original_lock_handoff import (
     CONFIG_PATH, assert_inherited_config_fd, OriginalLockRefused,
 )
-from auto_detect_queue import QueueSafetyError
+from auto_detect_queue import QueueSafetyError, NATIVE_PENDING
 
 
 def _archive_paths(writer, proof):
@@ -50,6 +50,11 @@ def _read_archive_plan(writer, proof):
     uid = writer.receipts.uid
     _directory(slot, uid)
     _directory(archive, uid)
+    # An os.rename() cannot be an atomic source-preserving transition
+    # across filesystems. Reject a separate/mounted epoch archive
+    # BEFORE attempting any per-N move, never resort to copy/unlink.
+    if archive.stat().st_dev != writer.queue.pending.stat().st_dev:
+        raise V2OriginalConfigRefused("native_archive_cross_device_refused")
     names = set(os.listdir(archive))
     expected_archives = {f"{n:03d}.txt" for n, _, _ in proof.learning}
     if names - (expected_archives | {"manifest.json"}):
@@ -89,11 +94,14 @@ def _read_archive_plan(writer, proof):
         native_raw = _read(slot / "native" / nfile, uid)
         native = json.loads(native_raw)
         cursor = native["cursor"]
-        old_path = writer.queue.pending / f"native-{proof.generation}-{number}-"
-        # Use the original fully source-bound pending name from the
-        # prepared receipt, not a guessed suffix for this N.
+        # The original pending identity is read from the immutable
+        # prepared receipt and checked against the ENTIRE native-name
+        # grammar, not a permissive prefix or caller-derived basename.
         pending = Path(row["old_pending_path"])
+        match = NATIVE_PENDING.fullmatch(pending.name)
         if (old_raw != _canonical(row) or
+                match is None or match[1] != proof.generation or
+                int(match[2]) != number or
                 row.get("kind") != "original-learning-third-pending-ack-N" or
                 row.get("schema") != 3 or
                 row.get("sequence") != 2 or
@@ -106,8 +114,6 @@ def _read_archive_plan(writer, proof):
                 row.get("ack_authorized") is not False or
                 row.get("unlink_authorized") is not False or
                 pending.parent != writer.queue.pending or
-                not pending.name.startswith(f"native-{proof.generation}-{number}-") or
-                not pending.name.endswith(".txt") or
                 native_raw != _canonical(native) or
                 native.get("kind") != "original-learning-third-native-cut" or
                 native.get("generation") != proof.generation or
@@ -186,8 +192,14 @@ def _read_archive_plan(writer, proof):
     plan_raw = _read(archive / "manifest.json", uid)
     if plan_raw != _canonical(expected_plan):
         raise V2OriginalConfigRefused("native_archive_manifest_changed")
-    if names != expected_lines | {"manifest.json"}:
-        raise V2OriginalConfigRefused("native_archive_orphan_inode")
+    # Re-list only AFTER every inode has been opened and inspected:
+    # the original P2a serializes the owner, but a native writer does
+    # not obey that flock. Reject path or manifest swaps mid-read.
+    if (names != expected_lines | {"manifest.json"} or
+            set(os.listdir(archive)) != names or
+            _read(archive / "manifest.json", uid) != plan_raw or
+            _read(prepared / "manifest.json", uid) != prepared_raw):
+        raise V2OriginalConfigRefused("native_archive_orphan_or_raced_inode")
     return current, expected_plan
 
 

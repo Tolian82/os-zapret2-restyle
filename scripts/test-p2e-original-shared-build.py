@@ -2546,6 +2546,118 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                             self.assertEqual(
                                 user_native.read_bytes(),
                                 observed_files[user_native])
+                            # STEP 13: archived OLD remains covered
+                            # while a NEW live native/positive-debug pair
+                            # is still unread. Replaying an old cursor or
+                            # archive MUST NOT consume, move or remove it.
+                            late_live_domain = "post-archive-new.example.net"
+                            with user_native.open("ab", buffering=0) as live:
+                                live.write(
+                                    (late_live_domain + "\n").encode())
+                                os.fsync(live.fileno())
+                            with debug_path.open("ab", buffering=0) as debug:
+                                debug.write(native_debug(
+                                    user_num, late_live_domain,
+                                    learning[1][2]))
+                                os.fsync(debug.fileno())
+                            archive_late = pending_retirement()
+                            late_user = next(
+                                item for item in archive_late["profiles"]
+                                if item["native_number"] == user_num)
+                            self.assertEqual(
+                                late_user["status"],
+                                "covered-old-pending-no-ACK")
+                            self.assertEqual(
+                                late_user["unprocessed_old_bytes"], 0)
+                            self.assertGreater(
+                                late_user["unprocessed_new_bytes"], 0)
+                            archive_live_observations = (
+                                preview_late_tails()["native_observations"])
+                            self.assertIn({
+                                "native_number": user_num,
+                                "hostlist": "user",
+                                "hostname": late_live_domain,
+                            }, archive_live_observations)
+                            self.assertEqual(
+                                advance_third_cursor(), third_advanced)
+                            self.assertEqual(seal_third_slot(), third)
+                            self.assertEqual(
+                                archive_pending(), archived_result)
+                            self.assertEqual(queue.segments(), [])
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                prepare_native_ack()
+                            self.assertEqual(
+                                (archive_folder / f"{user_num:03d}.txt").read_bytes(),
+                                observed_files[user_pending])
+                            self.assertIn(
+                                (late_live_domain + "\n").encode(),
+                                user_native.read_bytes())
+                            self.assertFalse(
+                                (third_slot / "ack.json").exists())
+                            # Mismatched N on positive debug is NOT proof
+                            # of the new native User observation. Reject
+                            # it instead of confirming a YouTube find.
+                            new_live_copy = user_native.read_bytes()
+                            debug_copy = debug_path.read_bytes()
+                            wrong_domain = "post-archive-wrong-n.example.net"
+                            with user_native.open("ab", buffering=0) as live:
+                                live.write((wrong_domain + "\n").encode())
+                                os.fsync(live.fileno())
+                            with debug_path.open("ab", buffering=0) as debug:
+                                debug.write(native_debug(
+                                    youtube_num, wrong_domain,
+                                    learning[0][2]))
+                                os.fsync(debug.fileno())
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                pending_retirement()
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                archive_pending()
+                            self.assertEqual(queue.segments(), [])
+                            self.assertEqual(
+                                (archive_folder / f"{user_num:03d}.txt").read_bytes(),
+                                observed_files[user_pending])
+                            # Test-only restoration of the unconfirmed
+                            # misattributed pair, NOT a production truncate.
+                            user_native.write_bytes(new_live_copy)
+                            debug_path.write_bytes(debug_copy)
+                            self.assertEqual(
+                                archive_pending(), archived_result)
+                            # Foreign archive entry and a hardlink alias
+                            # must NEVER qualify as a root-private N.
+                            archived_user = (
+                                archive_folder / f"{user_num:03d}.txt")
+                            foreign = archive_folder / "shadow-old.txt"
+                            os.link(archived_user, foreign)
+                            try:
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    archive_pending()
+                            finally:
+                                foreign.unlink()
+                            self.assertEqual(
+                                archive_pending(), archived_result)
+                            # Genuine OLD archive append after its
+                            # committed cut invalidates ACK/retirement;
+                            # no silent deletion of the late source.
+                            with archived_user.open("ab", buffering=0) as old:
+                                old.write(b"post-archive-old.example.net\n")
+                                os.fsync(old.fileno())
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                archive_pending()
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                pending_retirement()
+                            self.assertEqual(queue.segments(), [])
+                            self.assertIn(
+                                b"post-archive-old.example.net\n",
+                                archived_user.read_bytes())
+                            # Test-only restore before the independent
+                            # pre-archive late-tail fixture below; the
+                            # immutable production archive is NOT edited.
+                            archived_user.write_bytes(
+                                observed_files[user_pending])
+                            user_native.write_bytes(
+                                observed_files[user_native])
+                            debug_path.write_bytes(
+                                observed_files[debug_path])
                             # Fixture-only reset to continue the legacy
                             # late-append test on physical pending names.
                             for number, pending in (
