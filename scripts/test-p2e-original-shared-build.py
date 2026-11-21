@@ -1400,6 +1400,37 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                     self.assertEqual(
                         physical_state()["profiles"][1]["phase"],
                         "replaced-with-unprocessed-tails")
+                    # An old-FD late-tail modification that damages the
+                    # sealed old preimage is NOT a valid pending source.
+                    saved_retained = retained.read_bytes()
+                    retained.write_bytes(b"forged-retained.example.net\n")
+                    with self.assertRaises(V2OriginalConfigRefused):
+                        physical_state()
+                    retained.write_bytes(saved_retained)
+                    # A change to an EARLIER N profile during a later N
+                    # read must be caught by the all-N second pass.
+                    import auto_detect_original_v2_model as original_model
+                    actual_native_snapshot = (
+                        original_model._native_rebind_stable_snapshot)
+                    injected_race = [False]
+                    def race_between_profiles(path, *args, **kwargs):
+                        result = actual_native_snapshot(path, *args, **kwargs)
+                        if path == retained and not injected_race[0]:
+                            injected_race[0] = True
+                            with native.open("ab", buffering=0) as producer:
+                                producer.write(b"raced.example.com\n")
+                                os.fsync(producer.fileno())
+                        return result
+                    with patch.object(
+                            original_model, "_native_rebind_stable_snapshot",
+                            side_effect=race_between_profiles):
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            physical_state()
+                    self.assertTrue(injected_race[0])
+                    native.write_bytes(b"video.example.com\n")
+                    self.assertEqual(
+                        physical_state()["profiles"][1]["phase"],
+                        "replaced-with-unprocessed-tails")
                     # Restore the original OLD inode only in this disposable
                     # test fixture; production MUST retain both until its
                     # future qualified cursor+ACK lifecycle is implemented.
