@@ -642,12 +642,6 @@ def seal_original_learning_native_rebind_locked(
             not isinstance(owned_root, Path) or
             not owned_root.is_absolute() or
             not callable(attest) or not callable(inspect) or
-            (sealed_window is not None and (
-                type(sealed_window) is not dict or
-                set(sealed_window) != {"debug", "native"} or
-                type(sealed_window.get("debug")) is not dict or
-                type(sealed_window.get("native")) is not list or
-                len(sealed_window["native"]) != len(proof.learning))) or
             (sys.platform.startswith("freebsd") and
              (config_path != CONFIG_PATH or
               writer.receipts.uid != 0 or writer.queue.uid != 0)) or
@@ -1439,6 +1433,12 @@ def preview_original_learning_forward_windows_locked(
             not isinstance(config_path, Path) or not config_path.is_absolute() or
             type(config_fd) is not int or config_fd < 3 or
             not callable(attest) or not callable(inspect) or
+            (sealed_window is not None and (
+                type(sealed_window) is not dict or
+                set(sealed_window) != {"debug", "native"} or
+                type(sealed_window.get("debug")) is not dict or
+                type(sealed_window.get("native")) is not list or
+                len(sealed_window["native"]) != len(proof.learning))) or
             (sys.platform.startswith("freebsd") and
              (config_path != CONFIG_PATH or writer.receipts.uid != 0 or
               writer.queue.uid != 0)) or attest() != proof):
