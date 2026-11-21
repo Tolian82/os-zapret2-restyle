@@ -1673,6 +1673,11 @@ class CursorChain:
                 # retired cut or an original abort. Do not report a second
                 # successful rotation on every idle one-minute callback.
                 return False
+            if _entry(last / DEBUG_CUT_ROLLBACK):
+                # A previous minute crashed before/after the guarded
+                # rollback's atomic replacement. Finish its SAME sealed
+                # intent before any new debug source WAL can be prepared.
+                return rollback_late_positive(intent)
             if _entry(abort_file):
                 # The immutable abort permits only normal source replay;
                 # never re-use its prepared inode or ACK slot.
@@ -1744,6 +1749,12 @@ class CursorChain:
             if not drained(archive, old_stat):
                 raise CursorChainRefused("learning_debug_cut_old_fd_not_drained")
             late = old_data[old_size:]
+            # A genuine late-positive OLD event may be replayed by the
+            # original P1/Config path: with a truly empty/drained NEW inode,
+            # durably abort the cut and restore the old live inode. Never
+            # synthesize a source event or write to managed HOSTLIST here.
+            if b" : adding to " in late:
+                return rollback_late_positive(intent, old_stat, old_data)
             # Native v1.0.7 may have opened the old inode between the
             # last global FD census and rename. A fully written, strictly
             # non-positive diagnostic suffix cannot name a discovered
