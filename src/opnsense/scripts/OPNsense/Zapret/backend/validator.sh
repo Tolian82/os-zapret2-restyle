@@ -674,7 +674,7 @@ try:
                             source_root.name != "release" or
                             source_root.parent.name != generation or
                             not isinstance(profiles, list) or
-                            len(profiles) > 255):
+                            len(profiles) > 257):
                         raise ValueError("unqualified native learning generation")
                     numbers = set()
                     for profile in profiles:

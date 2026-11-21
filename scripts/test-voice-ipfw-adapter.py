@@ -74,12 +74,12 @@ class SimulateFreeBSD:
 class IPFWAdapterTests(unittest.TestCase):
     def test_schema3_native_RST_matches_only_fully_attested_TCP_capture(self):
         from voice_ipfw_adapter import _verified_learning_rst_scope
-        args = ("--port=989\\n"
-                "--filter-tcp=80\\n"
-                "--new\\n"
-                "--filter-tcp=443\\n"
-                "--new\\n"
-                "--filter-udp=443\\n").encode("ascii")
+        args = ("--port=989\n"
+                "--filter-tcp=80\n"
+                "--new\n"
+                "--filter-tcp=443\n"
+                "--new\n"
+                "--filter-udp=443\n").encode("ascii")
         learning = ((1, "youtube", "/var/db/zapret2-auto-detect/learning-a-1.txt"),
                     (2, "user", "/var/db/zapret2-auto-detect/learning-a-2.txt"),
                     (3, "youtube", "/var/db/zapret2-auto-detect/learning-a-3.txt"))
