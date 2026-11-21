@@ -1,3 +1,5 @@
+**21 November / bounded schema3 history reclamation (SOURCE INTEGRATED; exact-head CI/native OPEN):** The original `EpochReceipts.prune_completed` now qualifies retired schema3 epochs alongside schema2 by full dynamic `CursorChain` terminal ACK, immutable STOPPED terminal intent/ready and stable physical archived N/debug inode/size/SHA. It retains the four newest completed generations (mixed schema2/3), excludes active and unretired generations, and renames older schema3 receipts to original-root `.gc3-<generation>` tombstones before strict fsync deletion and interrupted replay. The existing FD9/P2a pretraffic path is the only entrypoint: no second Config writer, daemon, scheduling, automatic Stop or live source cleanup. Portable six-generation retention/tamper/crash fixtures are included, with injected owner/cursor witnesses. Exact-head checks and real disposable FreeBSD Stop/Boot/Recovery remain open; do not merge or publish `_109.pkg` based on this source-only change.
+
 # Native Auto-detect, Target Mode, HOSTLIST and Auto Restart — ordered plan P0–P5
 
 ## Latest integration decision — 21 November 2026 (schema3 Stop/Boot terminal, source-only)
