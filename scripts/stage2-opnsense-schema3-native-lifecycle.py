@@ -235,9 +235,19 @@ def execute() -> dict:
     # The SAME official-Mk physical archive, pkg installation and real
     # upstream v1.0.7 as ordinary G04/G07. No direct Config XML editing.
     g04.verify_native_pkg_and_first_config()
+    require(not ENGINE.exists() and not JOURNAL.exists() and
+            not PID.exists(), "CANARY_NOT_COLD_INSTALLED_NATIVE")
+    # A native plugin .pkg intentionally does NOT bundle upstream dvtws2.
+    # Reuse the already-accepted G04 genuine configctl setup/release witness,
+    # without invoking its later ordinary GUI Apply or modifying Config.
+    config_before_upstream = CONFIG.read_bytes()
+    g04_runtime = module("stage2-opnsense-g04-native-runtime.py")
+    engine_sha = g04_runtime.setup_upstream()
     require(ENGINE.is_file() and not ENGINE.is_symlink() and
+            hashlib.sha256(ENGINE.read_bytes()).hexdigest() == engine_sha and
+            CONFIG.read_bytes() == config_before_upstream and
             not JOURNAL.exists() and not PID.exists(),
-            "CANARY_NOT_COLD_INSTALLED_NATIVE")
+            "CANARY_UPSTREAM_SETUP_CHANGED_ORIGINAL_COLD_OWNER")
     before = ET.fromstring(CONFIG.read_bytes()).find("./OPNsense/Zapret")
     require(before is not None and
             before.findtext("general/enabled") == "0" and
