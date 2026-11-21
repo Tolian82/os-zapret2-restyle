@@ -1514,6 +1514,11 @@ class CursorChain:
             intent, raw = _load(intent_file, uid)
             if raw != _canonical(intent):
                 raise CursorChainRefused("learning_debug_cut_intent_not_canonical")
+            if "debug_cut_pending" not in tip:
+                # This exact immutable ACK already contains either a fully
+                # retired cut or an original abort. Do not report a second
+                # successful rotation on every idle one-minute callback.
+                return False
             if _entry(abort_file):
                 # The immutable abort permits only normal source replay;
                 # never re-use its prepared inode or ACK slot.
