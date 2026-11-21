@@ -3095,6 +3095,183 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                                 with self.assertRaises(V2OriginalConfigRefused):
                                     preview_original_destination_reconcile()
 
+
+                            # STEP 15b3f: one original FD9 STOPPED OLD-only
+                            # retirement, not operator Stop and NOT all N
+                            # native ACK. Test the actual OS unlink helper
+                            # separately, then park original OLD inodes
+                            # through rename to preserve this larger fixture.
+                            import auto_detect_original_history_stop_retirement as sr
+                            from unittest.mock import patch as retire_patch
+                            def stop_retire(*, identity=proof,
+                                            witness=drained):
+                                with writer.exclusive_targets(), patch(
+                                        "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                        active_root), retire_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof), retire_patch(
+                                        "auto_detect_original_history_stop_retirement.attest_learning_stopped_generation",
+                                        return_value=identity):
+                                    return sr.retire_original_learning_stopped_OLD_locked(
+                                        writer, proof, self.work,
+                                        config_fd=cfg_fd, config_path=config_path,
+                                        attest=lambda: proof, inspect=witness)
+                            retire_dir = third_slot / "pending-old-retirement"
+                            self.assertFalse(retire_dir.exists())
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                stop_retire(witness=lambda *_a, **_kw:
+                                            FDState.BUSY)
+                            self.assertFalse(retire_dir.exists())
+                            original_new_bytes = user_native.read_bytes()
+                            original_debug_bytes = debug_path.read_bytes()
+                            original_found_bytes = {
+                                row["path"]: Path(row["path"]).read_bytes()
+                                for row in original_saved_rows}
+                            # Unlink primitive with one disposable inode:
+                            # a BUSY original FD refuses, DRAINED actually
+                            # removes the file and fsyncs its directory.
+                            primitive_archive = self.root / "test-only-OLD-unlink"
+                            primitive_archive.mkdir(mode=0o700)
+                            try:
+                                imported_guard_rows = original_json.loads(
+                                    release_path.read_bytes())["profiles"]
+                                source_old = archive_folder / f"{user_num:03d}.txt"
+                                dummy_old = primitive_archive / f"{user_num:03d}.txt"
+                                import shutil as stop_shutil
+                                stop_shutil.copy2(source_old, dummy_old)
+                                dummy_old.chmod(0o660)
+                                if os.geteuid() == 0:
+                                    os.chown(dummy_old, 0, writer_gid)
+                                dummy_stat = dummy_old.stat()
+                                dummy_row = dict(next(
+                                    x for x in imported_guard_rows
+                                    if x["native_number"] == user_num))
+                                dummy_row.update(
+                                    old_device=dummy_stat.st_dev,
+                                    old_inode=dummy_stat.st_ino,
+                                    old_size=dummy_stat.st_size,
+                                    old_mtime_ns=dummy_stat.st_mtime_ns)
+                                with retire_patch.object(
+                                        sr, "_archive_paths",
+                                        return_value=(
+                                            third_slot,
+                                            third_slot / "pending-ack-prepare",
+                                            primitive_archive)):
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        sr._unlink_original_OLD_only(
+                                            dummy_old, dummy_row, writer, proof,
+                                            lambda *_a, **_k: FDState.BUSY)
+                                    self.assertTrue(dummy_old.exists())
+                                    sr._unlink_original_OLD_only(
+                                        dummy_old, dummy_row, writer, proof,
+                                        drained)
+                                    self.assertFalse(dummy_old.exists())
+                            finally:
+                                if dummy_old.exists():
+                                    dummy_old.unlink()
+                                primitive_archive.rmdir()
+                            # No receipt can be published from an unproven
+                            # STOPPED owner even with fully retained OLD.
+                            with self.assertRaises(V2OriginalConfigRefused):
+                                stop_retire(identity=None)
+                            self.assertFalse(retire_dir.exists())
+                            parked_old_for_restore = {}
+                            interrupted = [False]
+                            def disposable_OLD_drop(path, row, *_args):
+                                backup = self.root / (
+                                    "test-only-retired-OLD-%03d.txt" %
+                                    row["native_number"])
+                                os.rename(path, backup)
+                                parked_old_for_restore[row["native_number"]] = (
+                                    backup, path)
+                                if not interrupted[0]:
+                                    interrupted[0] = True
+                                    raise RuntimeError(
+                                        "synthetic_after_first_old_inode_disappeared")
+                            try:
+                                with retire_patch.object(
+                                        sr, "_unlink_original_OLD_only",
+                                        side_effect=disposable_OLD_drop):
+                                    with self.assertRaisesRegex(
+                                            RuntimeError,
+                                            "synthetic_after_first_old_inode_disappeared"):
+                                        stop_retire()
+                                self.assertTrue(interrupted[0])
+                                self.assertEqual(len(parked_old_for_restore), 1)
+                                self.assertTrue((retire_dir / "intent.json").exists())
+                                self.assertFalse((retire_dir / "complete.json").exists())
+                                with retire_patch(
+                                        "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                        return_value=proof):
+                                    partial_retirement = (
+                                        preview_original_stopped_guard())
+                                self.assertEqual(partial_retirement[
+                                    "old_archive_state"], "partially-missing")
+                                # A changed or missing intent after one
+                                # unlink is fatal: never guess a new plan.
+                                original_intent = (
+                                    retire_dir / "intent.json").read_bytes()
+                                (retire_dir / "intent.json").write_bytes(
+                                    b"{}\n")
+                                try:
+                                    with self.assertRaises(V2OriginalConfigRefused):
+                                        stop_retire()
+                                    self.assertEqual(
+                                        len(parked_old_for_restore), 1)
+                                finally:
+                                    (retire_dir / "intent.json").write_bytes(
+                                        original_intent)
+                                # Engine/owner reappears between unlink
+                                # attempts: do not touch the remaining OLD.
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    stop_retire(identity=None)
+                                self.assertEqual(len(parked_old_for_restore), 1)
+                                with retire_patch.object(
+                                        sr, "_unlink_original_OLD_only",
+                                        side_effect=disposable_OLD_drop):
+                                    retired_old_only = stop_retire()
+                                    self.assertEqual(stop_retire(),
+                                                     retired_old_only)
+                                self.assertTrue(retired_old_only[
+                                    "original_OLD_archive_physically_retired"])
+                                self.assertEqual(retired_old_only[
+                                    "old_archive_state"], "all-missing")
+                                self.assertEqual(len(parked_old_for_restore),
+                                                 len(proof.learning))
+                                self.assertTrue((retire_dir / "complete.json").exists())
+                                for field in ("native_pending_ack_authorized",
+                                              "generation_retired",
+                                              "operator_stop_may_be_blocked",
+                                              "new_native_live_files_touched",
+                                              "new_native_debug_touched"):
+                                    self.assertFalse(retired_old_only[field])
+                                self.assertEqual(user_native.read_bytes(),
+                                                 original_new_bytes)
+                                self.assertEqual(debug_path.read_bytes(),
+                                                 original_debug_bytes)
+                                self.assertEqual({
+                                    row["path"]: Path(row["path"]).read_bytes()
+                                    for row in original_saved_rows},
+                                    original_found_bytes)
+                            finally:
+                                # Disposable fixture ONLY: restore the same
+                                # original dev/inode by rename and delete
+                                # synthetic test receipts. No production
+                                # replay ever resurrects an archived OLD.
+                                for _, (backup, oldpath) in sorted(
+                                        parked_old_for_restore.items()):
+                                    backup.rename(oldpath)
+                                if retire_dir.exists():
+                                    for filename in retire_dir.iterdir():
+                                        filename.unlink()
+                                    retire_dir.rmdir()
+                            with retire_patch(
+                                    "auto_detect_original_history_stopped.attest_learning_stopped_generation",
+                                    return_value=proof):
+                                self.assertEqual(
+                                    preview_original_stopped_guard(), stopped)
+                            self.assertFalse(retire_dir.exists())
+
                             self.assertTrue(stopped[
                                 "all_three_original_historical_wal_checkpoints_verified"])
                             self.assertEqual(stopped["old_archive_state"],
