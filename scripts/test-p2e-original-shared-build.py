@@ -1781,6 +1781,158 @@ orchestrator_build_release "$1" "$2" "$3" "$4" "$5" "$6" shared-candidate "$7"
                         second_result["intent_sha256"],
                         hashlib.sha256(intent_second_raw).hexdigest())
                     self.assertEqual(seal_second_slot(), second_result)
+                    # STEP 7: this is STILL the same original
+                    # DestinationCommit Found -> managed CAS, never a new
+                    # writer. The forward second-slot source is committed
+                    # from the exact bound observations, not from any
+                    # later native/debug append. Source-only fixture.
+                    from auto_detect_original_v2_model import (
+                        preview_learning_p1_effects,
+                        commit_with_original_learning_forward_second_slot,
+                    )
+                    from auto_detect_owned_sources import read_owned
+                    second_intent = json.loads(intent_second_raw)
+                    self.assertEqual(
+                        second_intent["observations_count"],
+                        len(second_intent["observations"]))
+                    second_p1 = preview_learning_p1_effects(
+                        second_intent["observations"],
+                        {"youtube": "youtube.com\n", "user": ""},
+                        read_owned(owned_dir, owner_uid=os.geteuid()),
+                        shared.read_text(), "",
+                        psl=self._tz6v4_psl_for_fixtures())
+                    self.assertEqual(
+                        second_p1["effects"], {
+                            "user": {"add": ["example.net"], "remove": []},
+                        })
+                    next_active = (
+                        active_managed / "hostlist-user.txt")
+                    before_next = next_active.read_bytes()
+                    after_next = second_p1["managed_after"]["user"]
+                    self.assertNotEqual(before_next, after_next)
+                    def forward_live_preview(*_args, **kwargs):
+                        self.assertEqual(kwargs["active"], active_root)
+                        return {
+                            "owner_schema": 3,
+                            "generation": proof.generation,
+                            "operation": proof.operation_id,
+                            "pid": proof.owner.pid,
+                            "started": proof.owner.started,
+                            "changed": ["user"],
+                            "files": {
+                                "user": {
+                                    "path": str(next_active),
+                                    "before_sha256": hashlib.sha256(
+                                        before_next).hexdigest(),
+                                    "after_sha256": hashlib.sha256(
+                                        after_next).hexdigest(),
+                                },
+                            },
+                            "commit_authorized": False,
+                            "ack_authorized": False,
+                        }
+                    def forward_commit_fixture():
+                        with patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root), patch(
+                                "auto_detect_original_v2_model.preview_live_known_after_readonly",
+                                side_effect=forward_live_preview):
+                            return commit_with_original_learning_forward_second_slot(
+                                writer, proof, self.work,
+                                config_fd=cfg_fd, config_path=config_path,
+                                owned_root=owned_dir,
+                                manual_hostlists={
+                                    "youtube": "youtube.com\n", "user": ""},
+                                global_exclude="", attest=lambda: proof,
+                                inspect=drained,
+                                psl=self._tz6v4_psl_for_fixtures())
+                    if sys.platform.startswith("freebsd"):
+                        # No synthetic /conf FD4, so product entrypoint
+                        # MUST refuse. Linux disposable-file source
+                        # fixture runs the complete P1/WAL crash path.
+                        with self.assertRaises(V2OriginalConfigRefused):
+                            forward_commit_fixture()
+                    else:
+                        from auto_detect_destination_commit import (
+                            _replace as original_second_replace,
+                        )
+                        second_writes = [0]
+                        def crash_after_forward_found(*args, **kwargs):
+                            original_second_replace(*args, **kwargs)
+                            second_writes[0] += 1
+                            if second_writes[0] == 1:
+                                raise DestinationRefused(
+                                    "fixture_second_found_write_crash")
+                        with patch(
+                                "auto_detect_destination_commit._replace",
+                                side_effect=crash_after_forward_found):
+                            with self.assertRaises(
+                                    (DestinationRefused,
+                                     V2OriginalConfigRefused)):
+                                forward_commit_fixture()
+                        self.assertEqual(second_writes, [1])
+                        self.assertTrue(
+                            (second_slot / "destination" /
+                             "plan.json").exists())
+                        self.assertFalse(
+                            (second_slot / "destination" /
+                             "checkpoint.json").exists())
+                        self.assertIn(
+                            b"example.net\n",
+                            targets["user"].read_bytes())
+                        self.assertEqual(next_active.read_bytes(),
+                                         before_next)
+                        self.assertEqual(
+                            seal_second_slot(), second_result)
+                        # A recovery with changed P1 policy is unsafe.
+                        with patch(
+                                "auto_detect_original_v2_model.COMMON_ACTIVE",
+                                active_root):
+                            with writer.exclusive_targets():
+                                with self.assertRaises(V2OriginalConfigRefused):
+                                    _recover_original_learning_partial_locked(
+                                        writer, proof, self.work,
+                                        second_slot, second_intent,
+                                        owned_root=owned_dir,
+                                        manual_hostlists={
+                                            "youtube": "youtube.com\n",
+                                            "user": ""},
+                                        global_exclude="example.net\n",
+                                        attest=lambda: proof, inspect=drained,
+                                        psl=self._tz6v4_psl_for_fixtures(),
+                                        config_fd=cfg_fd,
+                                        config_path=config_path)
+                        recovered_second = forward_commit_fixture()
+                        self.assertEqual(
+                            recovered_second["pending_name"],
+                            "learning-00000001")
+                        self.assertFalse(recovered_second["ack_authorized"])
+                        self.assertEqual(next_active.read_bytes(), after_next)
+                        self.assertEqual(
+                            recovered_second, forward_commit_fixture())
+                        second_plan, raw_second_plan = (
+                            qualified_destination_plan(
+                                second_slot, second_intent,
+                                os.geteuid(), targets=writer.targets))
+                        self.assertEqual(
+                            second_plan["source_intent_sha256"],
+                            hashlib.sha256(intent_second_raw).hexdigest())
+                        self.assertEqual(
+                            recovered_second["plan_sha256"],
+                            hashlib.sha256(raw_second_plan).hexdigest())
+                        self.assertFalse(
+                            (second_slot / "ack.json").exists())
+                        self.assertEqual(queue.segments(),
+                                         [youtube_pending, user_pending])
+                        # This fixture alone restores its disposable P1
+                        # physical files before unrelated old-slot tests.
+                        # The real original product must NEVER erase a
+                        # checkpoint or reverse completed Found writes.
+                        targets["user"].write_bytes(b"example.org\n")
+                        next_active.write_bytes(before_next)
+                        for artifact in (second_slot / "destination").iterdir():
+                            artifact.unlink()
+                        (second_slot / "destination").rmdir()
                     # After the durable second intent, appends on BOTH
                     # native inodes and debug are permitted. Read-only
                     # replay verifies historical source prefixes and
